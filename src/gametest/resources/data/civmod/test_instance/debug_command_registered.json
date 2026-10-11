@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:debug_command_registered",
+  "max_ticks": 20,
+  "structure": "minecraft:empty",
+  "padding": 4
+}

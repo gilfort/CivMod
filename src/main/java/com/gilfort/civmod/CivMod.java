@@ -6,6 +6,7 @@ import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModCreativeModeTabs;
 import com.gilfort.civmod.registry.ModItems;
+import com.gilfort.civmod.registry.ModMenuTypes;
 import com.mojang.logging.LogUtils;
 
 import net.minecraft.resources.Identifier;
@@ -40,6 +41,7 @@ public final class CivMod {
         ModBlocks.register(modEventBus);
         ModItems.register(modEventBus);
         ModCreativeModeTabs.register(modEventBus);
+        ModMenuTypes.register(modEventBus);
 
         modContainer.registerConfig(ModConfig.Type.SERVER, CivModConfig.SPEC);
 

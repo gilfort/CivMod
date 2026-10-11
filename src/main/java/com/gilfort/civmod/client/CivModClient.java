@@ -1,6 +1,8 @@
 package com.gilfort.civmod.client;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.client.gui.DebugScreen;
+import com.gilfort.civmod.registry.ModMenuTypes;
 
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
@@ -9,6 +11,7 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 
@@ -39,5 +42,15 @@ public final class CivModClient {
     @SubscribeEvent
     static void onClientSetup(FMLClientSetupEvent event) {
         CivMod.LOGGER.info("CivMod client setup");
+    }
+
+    /**
+     * Binds the menu types to their screens.
+     *
+     * @param event the menu screen registration event
+     */
+    @SubscribeEvent
+    static void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
+        event.register(ModMenuTypes.DEBUG.get(), DebugScreen::new);
     }
 }

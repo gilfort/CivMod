@@ -21,6 +21,15 @@ sourceSets.main.resources {
     exclude("src/generated/**/.cache") // datagen cache files
 }
 
+// GameTests and their test datapack live in a separate source set so they never ship in the mod jar.
+// They are bound to the mod in dev runs only (see neoForge.mods below).
+sourceSets {
+    gametest {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
 base {
     archivesName = mod_id
 }
@@ -65,8 +74,12 @@ neoForge {
     mods {
         "${mod_id}" {
             sourceSet(sourceSets.main)
+            sourceSet(sourceSets.gametest)
         }
     }
+
+    // Give the gametest source set access to Minecraft and NeoForge classes.
+    addModdingDependenciesTo(sourceSets.gametest)
 }
 
 // 'localRuntime': runtime-only dependencies for dev runs that are not published as dependencies of this mod.
