@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.gilfort.civmod.menu.CivMenu;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -100,7 +101,7 @@ public abstract class CivContainerScreen<T extends CivMenu> extends AbstractCont
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (tabBar != null && event.button() == 0) {
+        if (tabBar != null && event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
             int tab = tabBar.tabAt(event.x(), event.y());
             if (tab >= 0) {
                 selectTab(tab);
