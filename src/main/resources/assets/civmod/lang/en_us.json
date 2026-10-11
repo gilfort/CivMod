@@ -1,5 +1,19 @@
 {
   "itemGroup.civmod.main": "CivMod",
   "civmod.configuration.title": "CivMod Configuration",
-  "civmod.configuration.debugLogging": "Debug Logging"
+  "civmod.configuration.debugLogging": "Debug Logging",
+
+  "civmod.gui.debug.title": "CivMod Debug GUI",
+  "civmod.gui.debug.tab.widgets": "Widgets",
+  "civmod.gui.debug.tab.slots": "Slots",
+  "civmod.gui.debug.tab.info": "Info",
+  "civmod.gui.debug.progress": "Progress: %s%%",
+  "civmod.gui.debug.progress.narration": "Debug progress bar",
+  "civmod.gui.debug.button.progress": "Advance progress",
+  "civmod.gui.debug.button.disabled": "Disabled button",
+  "civmod.gui.debug.button.popup": "Open popup",
+  "civmod.gui.debug.info": "This screen shows the shared GUI building blocks of CivMod: vanilla-style panel, tabs, tab-bound slots, buttons, progress bar and wrapped text. It is only available in development environments.",
+  "civmod.gui.debug.popup.title": "Debug Popup",
+  "civmod.gui.debug.popup.text": "A screen without container, used for popups and selections.",
+  "civmod.gui.debug.popup.back": "Back"
 }

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:menu_tabs_toggle_slots",
+  "max_ticks": 20,
+  "structure": "minecraft:empty",
+  "padding": 4
+}
