@@ -9,6 +9,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.job.Fatigue;
 import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.job.LumberjackOutput;
+import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.job.ToolTiers;
 import com.gilfort.civmod.job.WoodScan;
 import com.gilfort.civmod.npc.Settler;
@@ -63,6 +64,7 @@ public final class LumberjackGameTests {
             register(helper, "lumberjack_fatigue", LumberjackGameTests::fatigue);
             register(helper, "lumberjack_sampled_scan", LumberjackGameTests::sampledScan);
             register(helper, "lumberjack_works_in_world", LumberjackGameTests::worksInWorld);
+            register(helper, "lumberjack_work_state_persistence", LumberjackGameTests::workStatePersistence);
         });
     }
 
@@ -217,6 +219,25 @@ public final class LumberjackGameTests {
                     "No wood produced yet (status " + settler.getWork().status(jobBlock) + ")");
             settler.discard();
         });
+    }
+
+    /** Buffers and the work place of the day survive saving; the earlier save format still loads. */
+    private static void workStatePersistence(GameTestHelper helper) {
+        JobBuffer buffer = new JobBuffer();
+        buffer.add(new ItemStack(Items.OAK_LOG, 12));
+        BlockPos jobBlock = new BlockPos(1, 2, 3);
+        SettlerWork.BuffersSnapshot snapshot = new SettlerWork.BuffersSnapshot(java.util.List.of(new SettlerWork.BufferEntry(jobBlock, buffer)),
+                java.util.List.of(new SettlerWork.WorkPlaceEntry(jobBlock, new BlockPos(4, 5, 6), 7L)));
+        var ops = helper.getLevel().registryAccess().createSerializationContext(com.mojang.serialization.JsonOps.INSTANCE);
+        var json = SettlerWork.BuffersSnapshot.CODEC.encodeStart(ops, snapshot).getOrThrow();
+        SettlerWork.BuffersSnapshot loaded = SettlerWork.BuffersSnapshot.CODEC.parse(ops, json).getOrThrow();
+        helper.assertTrue(loaded.entries().get(0).buffer().count() == 12, "Buffer lost");
+        helper.assertTrue(loaded.workPlaces().get(0).poi().equals(new BlockPos(4, 5, 6)) && loaded.workPlaces().get(0).day() == 7L,
+                "Work place of the day lost");
+        var legacy = SettlerWork.BuffersSnapshot.CODEC.encodeStart(ops, snapshot).getOrThrow().getAsJsonObject().get("buffers");
+        SettlerWork.BuffersSnapshot fromLegacy = SettlerWork.BuffersSnapshot.CODEC.parse(ops, legacy).getOrThrow();
+        helper.assertTrue(fromLegacy.entries().get(0).buffer().count() == 12, "Earlier save format (plain buffer list) not readable");
+        helper.succeed();
     }
 
     /** The sampled scan counts a 4×4×3 block of logs and a 4×4 layer of leaves exactly. */

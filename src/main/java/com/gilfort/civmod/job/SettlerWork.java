@@ -124,17 +124,41 @@ public final class SettlerWork {
      * @return the codec value of the buffers
      */
     public BuffersSnapshot snapshot() {
-        return new BuffersSnapshot(buffers.entrySet().stream().map(e -> new BufferEntry(e.getKey(), e.getValue())).toList());
+        return new BuffersSnapshot(buffers.entrySet().stream().map(e -> new BufferEntry(e.getKey(), e.getValue())).toList(),
+                poiOfDay.entrySet().stream().map(e -> new WorkPlaceEntry(e.getKey(), e.getValue(), poiDay.getOrDefault(e.getKey(), -1L))).toList());
     }
 
     /**
-     * Saved buffers.
+     * The work place of the day of a job.
      *
-     * @param entries the entries
+     * @param jobBlock the JobBlock of the job
+     * @param poi      the work place
+     * @param day      the day it was chosen for
      */
-    public record BuffersSnapshot(List<BufferEntry> entries) {
+    public record WorkPlaceEntry(BlockPos jobBlock, BlockPos poi, long day) {
         /** Save codec. */
-        public static final Codec<BuffersSnapshot> CODEC = BUFFERS_CODEC.xmap(BuffersSnapshot::new, BuffersSnapshot::entries);
+        public static final Codec<WorkPlaceEntry> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                BlockPos.CODEC.fieldOf("job_block").forGetter(WorkPlaceEntry::jobBlock),
+                BlockPos.CODEC.fieldOf("poi").forGetter(WorkPlaceEntry::poi),
+                Codec.LONG.fieldOf("day").forGetter(WorkPlaceEntry::day)
+        ).apply(instance, WorkPlaceEntry::new));
+    }
+
+    /**
+     * Saved work state: buffers and the work places of the day.
+     *
+     * @param entries    the buffers
+     * @param workPlaces the work places of the day
+     */
+    public record BuffersSnapshot(List<BufferEntry> entries, List<WorkPlaceEntry> workPlaces) {
+        private static final Codec<BuffersSnapshot> CURRENT = RecordCodecBuilder.create(instance -> instance.group(
+                BUFFERS_CODEC.optionalFieldOf("buffers", List.of()).forGetter(BuffersSnapshot::entries),
+                WorkPlaceEntry.CODEC.listOf().optionalFieldOf("work_places", List.of()).forGetter(BuffersSnapshot::workPlaces)
+        ).apply(instance, BuffersSnapshot::new));
+
+        /** Save codec; also reads the earlier format (a plain list of buffers). */
+        public static final Codec<BuffersSnapshot> CODEC = Codec.withAlternative(CURRENT,
+                BUFFERS_CODEC.xmap(entries -> new BuffersSnapshot(entries, List.of()), BuffersSnapshot::entries));
     }
 
     /**
@@ -145,6 +169,12 @@ public final class SettlerWork {
     public void restore(BuffersSnapshot snapshot) {
         buffers.clear();
         snapshot.entries().forEach(entry -> buffers.put(entry.jobBlock(), entry.buffer()));
+        poiOfDay.clear();
+        poiDay.clear();
+        snapshot.workPlaces().forEach(entry -> {
+            poiOfDay.put(entry.jobBlock(), entry.poi());
+            poiDay.put(entry.jobBlock(), entry.day());
+        });
     }
 
     // ---------------------------------------------------------------- queries for the GUI
