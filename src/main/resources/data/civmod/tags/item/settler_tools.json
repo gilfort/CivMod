@@ -1,0 +1,23 @@
+{
+  "values": [
+    "#minecraft:axes",
+    "#minecraft:pickaxes",
+    "#minecraft:shovels",
+    "#minecraft:hoes",
+    "#minecraft:swords",
+    "#minecraft:spears",
+    {
+      "id": "#c:tools",
+      "required": false
+    },
+    "minecraft:shears",
+    "minecraft:fishing_rod",
+    "minecraft:bucket",
+    "minecraft:brush",
+    "minecraft:bow",
+    "minecraft:crossbow",
+    "minecraft:trident",
+    "minecraft:flint_and_steel",
+    "minecraft:glass_bottle"
+  ]
+}

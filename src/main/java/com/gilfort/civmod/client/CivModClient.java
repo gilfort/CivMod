@@ -3,8 +3,10 @@ package com.gilfort.civmod.client;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.client.gui.DebugScreen;
 import com.gilfort.civmod.client.gui.JobBlockScreen;
+import com.gilfort.civmod.client.gui.SettlerScreen;
 import com.gilfort.civmod.registry.ModBlockEntityTypes;
 import com.gilfort.civmod.registry.ModDataComponents;
+import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModMenuTypes;
 import com.gilfort.civmod.settlement.SettlementOutline;
 import com.gilfort.civmod.settlement.SettlementRules;
@@ -65,16 +67,18 @@ public final class CivModClient {
     static void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
         event.register(ModMenuTypes.DEBUG.get(), DebugScreen::new);
         event.register(ModMenuTypes.JOB_BLOCK.get(), JobBlockScreen::new);
+        event.register(ModMenuTypes.SETTLER.get(), SettlerScreen::new);
     }
 
     /**
-     * Registers block entity renderers.
+     * Registers entity and block entity renderers.
      *
      * @param event the renderer registration event
      */
     @SubscribeEvent
     static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(ModBlockEntityTypes.JOB_BLOCK.get(), JobBlockRenderer::new);
+        event.registerEntityRenderer(ModEntityTypes.SETTLER.get(), SettlerRenderer::new);
     }
 
     /**

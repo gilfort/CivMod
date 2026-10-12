@@ -18,7 +18,8 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Draws the combined join-radius outline of nearby settlements as a green particle line at foot height.
+ * Draws the combined join-radius outline of nearby settlements as a particle line at foot height, in the
+ * settlement colour.
  * <p>
  * Only arcs of a JobBlock's circle that are not covered by another circle of the same settlement are drawn, so each
  * settlement shows one outer outline. Points farther than {@value #DRAW_DISTANCE} blocks from the player are skipped.
@@ -28,9 +29,7 @@ public final class SettlementOutlineRenderer {
 
     private static final int INTERVAL = 10;
     private static final double DRAW_DISTANCE = 64.0;
-    private static final DustParticleOptions PARTICLE = new DustParticleOptions(0x33DD33, 1.0F);
-
-    private static List<List<SettlementOutline.OutlineBlock>> settlements = List.of();
+    private static List<SettlementOutline.OutlineSettlement> settlements = List.of();
     private static boolean alwaysShow;
 
     private SettlementOutlineRenderer() {
@@ -61,14 +60,16 @@ public final class SettlementOutlineRenderer {
             return;
         }
         double y = player.getY() + 0.1;
-        for (List<SettlementOutline.OutlineBlock> blocks : settlements) {
-            for (SettlementOutline.OutlineBlock block : blocks) {
-                drawArcs(level, block, blocks, player.getX(), y, player.getZ());
+        for (SettlementOutline.OutlineSettlement settlement : settlements) {
+            DustParticleOptions particle = new DustParticleOptions(settlement.color(), 1.0F);
+            for (SettlementOutline.OutlineBlock block : settlement.blocks()) {
+                drawArcs(level, particle, block, settlement.blocks(), player.getX(), y, player.getZ());
             }
         }
     }
 
-    private static void drawArcs(ClientLevel level, SettlementOutline.OutlineBlock block, List<SettlementOutline.OutlineBlock> others,
+    private static void drawArcs(ClientLevel level, DustParticleOptions particle, SettlementOutline.OutlineBlock block,
+            List<SettlementOutline.OutlineBlock> others,
             double playerX, double y, double playerZ) {
         double centerX = block.pos().getX() + 0.5;
         double centerZ = block.pos().getZ() + 0.5;
@@ -83,7 +84,7 @@ public final class SettlementOutlineRenderer {
             if (dx * dx + dz * dz > DRAW_DISTANCE * DRAW_DISTANCE || isCovered(block, others, x, z)) {
                 continue;
             }
-            level.addParticle(PARTICLE, x, y, z, 0.0, 0.0, 0.0);
+            level.addParticle(particle, x, y, z, 0.0, 0.0, 0.0);
         }
     }
 

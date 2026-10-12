@@ -3,10 +3,13 @@ package com.gilfort.civmod.settlement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.block.JobBlockEntity;
+import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.npc.Settler;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
@@ -16,6 +19,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
 
 /**
@@ -41,7 +45,7 @@ public final class SettlementWorld {
      * @return how the block was integrated
      */
     public static SettlementManager.Placement place(ServerLevel level, BlockPos pos, JobType jobType, int jobLevel) {
-        return SettlementManager.place(SettlementData.get(level), pos, jobType, jobLevel, level.getGameTime(), listener(level));
+        return SettlementManager.place(SettlementData.get(level), pos, jobType, jobLevel, level.getGameTime(), level.getRandom(), listener(level));
     }
 
     /**
@@ -70,12 +74,25 @@ public final class SettlementWorld {
         player.sendOverlayMessage(message);
     }
 
-    private static SettlementManager.Listener listener(ServerLevel level) {
+    /**
+     * @param level the dimension
+     * @return a listener applying settlement side effects to that dimension
+     */
+    public static SettlementManager.Listener listener(ServerLevel level) {
         return new SettlementManager.Listener() {
             @Override
             public void blockChanged(BlockPos pos, int settlementId, boolean connected) {
                 if (level.isLoaded(pos) && level.getBlockEntity(pos) instanceof JobBlockEntity jobBlock) {
                     jobBlock.setSettlement(settlementId, connected);
+                }
+            }
+
+            @Override
+            public void dissolved(Settlement settlement) {
+                for (UUID member : settlement.members()) {
+                    if (level.getEntity(member) instanceof Settler settler) {
+                        settler.becomeHomeless();
+                    }
                 }
             }
 
@@ -89,6 +106,39 @@ public final class SettlementWorld {
                 }
             }
         };
+    }
+
+    /**
+     * Enforces the optional founding limit (one settlement per player per in-game day).
+     *
+     * @param event the block place event
+     */
+    @SubscribeEvent
+    static void onPlace(BlockEvent.EntityPlaceEvent event) {
+        if (!CivModConfig.LIMIT_FOUNDING_PER_DAY.get() || !(event.getLevel() instanceof ServerLevel level)
+                || !(event.getEntity() instanceof ServerPlayer player) || !(event.getPlacedBlock().getBlock() instanceof JobBlock)) {
+            return;
+        }
+        SettlementData data = SettlementData.get(level);
+        if (SettlementManager.wouldFound(data, event.getPos())
+                && data.lastFoundingDay(player.getUUID()).filter(day -> day == day(level)).isPresent()) {
+            event.setCanceled(true);
+            player.sendOverlayMessage(Component.translatable("civmod.settlement.founding_limit").withStyle(net.minecraft.ChatFormatting.RED));
+        }
+    }
+
+    /**
+     * Records that a player founded a settlement (for the founding limit).
+     *
+     * @param level  the dimension
+     * @param player the player
+     */
+    public static void recordFounding(ServerLevel level, ServerPlayer player) {
+        SettlementData.get(level).recordFounding(player.getUUID(), day(level));
+    }
+
+    private static long day(ServerLevel level) {
+        return level.getGameTime() / 24000L;
     }
 
     /**

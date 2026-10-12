@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:settler_scheduling_and_fill_up",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 4
+}

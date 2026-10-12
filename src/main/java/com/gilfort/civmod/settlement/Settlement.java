@@ -3,44 +3,65 @@ package com.gilfort.civmod.settlement;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextColor;
 
 /**
- * A settlement: a chain of JobBlocks in one dimension (vault {@code Systems/Settlement.md}).
+ * A settlement: a chain of JobBlocks in one dimension with its settlers (vault {@code Systems/Settlement.md}).
  */
 public final class Settlement {
+
+    /** Value of {@link #settlersDue()} once the starting settlers have arrived. */
+    public static final long SETTLERS_ARRIVED = -1L;
 
     /** Save codec. */
     public static final Codec<Settlement> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.INT.fieldOf("id").forGetter(Settlement::id),
             Codec.STRING.optionalFieldOf("name").forGetter(Settlement::name),
             Codec.LONG.fieldOf("founded").forGetter(Settlement::foundedAt),
+            Codec.INT.optionalFieldOf("color", SettlementColors.DEFAULT).forGetter(Settlement::color),
+            Codec.LONG.optionalFieldOf("settlers_due", SETTLERS_ARRIVED).forGetter(Settlement::settlersDue),
+            UUIDUtil.CODEC.listOf().optionalFieldOf("members", List.of()).forGetter(settlement -> List.copyOf(settlement.members)),
             SettlementBlock.CODEC.listOf().fieldOf("blocks").forGetter(settlement -> List.copyOf(settlement.blocks.values()))
     ).apply(instance, Settlement::new));
 
     private final int id;
     private Optional<String> name;
     private final long foundedAt;
+    private int color;
+    private long settlersDue;
+    private final Set<UUID> members = new LinkedHashSet<>();
     private final Map<BlockPos, SettlementBlock> blocks = new LinkedHashMap<>();
 
     /**
-     * @param id        the settlement id (unique per dimension)
-     * @param name      the name, empty until the settlers choose one
-     * @param foundedAt the game time of founding
-     * @param blocks    the JobBlocks
+     * @param id          the settlement id (unique per dimension)
+     * @param name        the name, empty until the settlers choose one
+     * @param foundedAt   the game time of founding
+     * @param color       the settlement colour (RGB)
+     * @param settlersDue game time at which the starting settlers arrive, {@link #SETTLERS_ARRIVED} once they did
+     * @param members     UUIDs of the settlement's NPCs
+     * @param blocks      the JobBlocks
      */
-    public Settlement(int id, Optional<String> name, long foundedAt, List<SettlementBlock> blocks) {
+    public Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
+            List<SettlementBlock> blocks) {
         this.id = id;
         this.name = name;
         this.foundedAt = foundedAt;
+        this.color = color;
+        this.settlersDue = settlersDue;
+        this.members.addAll(members);
         blocks.forEach(block -> this.blocks.put(block.pos(), block));
     }
 
@@ -59,10 +80,11 @@ public final class Settlement {
     }
 
     /**
-     * @return the name to show to players
+     * @return the name to show to players, in the settlement colour
      */
     public Component displayName() {
-        return name.<Component>map(Component::literal).orElseGet(() -> Component.translatable("civmod.settlement.unnamed"));
+        Component text = name.<Component>map(Component::literal).orElseGet(() -> Component.translatable("civmod.settlement.unnamed"));
+        return text.copy().withStyle(style -> style.withColor(TextColor.fromRgb(color)));
     }
 
     /**
@@ -70,6 +92,29 @@ public final class Settlement {
      */
     public long foundedAt() {
         return foundedAt;
+    }
+
+    /**
+     * The single colour of the settlement; every settlement visual must use it (vault {@code Jobs/Administrator.md}).
+     *
+     * @return the colour as RGB
+     */
+    public int color() {
+        return color;
+    }
+
+    /**
+     * @return game time at which the starting settlers arrive, {@link #SETTLERS_ARRIVED} once they did
+     */
+    public long settlersDue() {
+        return settlersDue;
+    }
+
+    /**
+     * @return UUIDs of the settlement's NPCs (read-only)
+     */
+    public Set<UUID> members() {
+        return Collections.unmodifiableSet(members);
     }
 
     /**
@@ -88,6 +133,13 @@ public final class Settlement {
     }
 
     /**
+     * @return the first connected JobBlock (normally the founding block)
+     */
+    public Optional<SettlementBlock> anchor() {
+        return blocks.values().stream().filter(SettlementBlock::connected).findFirst();
+    }
+
+    /**
      * @return whether the settlement has no JobBlocks left
      */
     public boolean isEmpty() {
@@ -103,6 +155,18 @@ public final class Settlement {
 
     void setName(Optional<String> name) {
         this.name = name;
+    }
+
+    void setSettlersDue(long settlersDue) {
+        this.settlersDue = settlersDue;
+    }
+
+    boolean addMember(UUID member) {
+        return members.add(member);
+    }
+
+    boolean removeMember(UUID member) {
+        return members.remove(member);
     }
 
     void put(SettlementBlock block) {
