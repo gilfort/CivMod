@@ -6,6 +6,7 @@ import java.util.Optional;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
+import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
@@ -29,6 +30,7 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -38,6 +40,7 @@ import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
@@ -82,6 +85,7 @@ public class Settler extends PathfinderMob {
     private Identifier race = Races.HUMAN;
     private int settlementId = -1;
     private List<SettlerJob> jobs = List.of();
+    private final SettlerWork work = new SettlerWork(this);
 
     /**
      * @param type  the entity type
@@ -91,6 +95,9 @@ public class Settler extends PathfinderMob {
         super(type, level);
         setPersistenceRequired();
         getNavigation().setCanOpenDoors(true);
+        // Registered here, not in registerGoals(): that runs in the super constructor before fields exist.
+        goalSelector.addGoal(2, work.goal());
+        setDropChance(EquipmentSlot.MAINHAND, 0.0F);
     }
 
     /**
@@ -171,7 +178,9 @@ public class Settler extends PathfinderMob {
      * @param jobs the assigned jobs in priority order
      */
     public void setJobs(List<SettlerJob> jobs) {
+        List<SettlerJob> removed = this.jobs.stream().filter(job -> !jobs.contains(job)).toList();
         this.jobs = List.copyOf(jobs);
+        removed.forEach(job -> work.forget(job.jobBlock()));
     }
 
     /**
@@ -192,6 +201,14 @@ public class Settler extends PathfinderMob {
      */
     public void removeJob(BlockPos jobBlock) {
         jobs = jobs.stream().filter(job -> !job.jobBlock().equals(jobBlock)).toList();
+        work.forget(jobBlock);
+    }
+
+    /**
+     * @return the work behaviour (job status, buffers)
+     */
+    public SettlerWork getWork() {
+        return work;
     }
 
     /**
@@ -230,6 +247,7 @@ public class Settler extends PathfinderMob {
     @Override
     protected void customServerAiStep(ServerLevel level) {
         super.customServerAiStep(level);
+        work.aiStep(level);
         if ((tickCount + getId()) % CHECK_INTERVAL == 0) {
             checkMembership(level);
         }
@@ -244,7 +262,10 @@ public class Settler extends PathfinderMob {
             } else {
                 updateHome(settlement.get());
                 // Drop jobs whose JobBlock vanished or was given to someone else while this settler was unloaded.
-                jobs = jobs.stream().filter(job -> JobAssignments.isAssignee(data, job.jobBlock(), getUUID())).toList();
+                List<SettlerJob> valid = jobs.stream().filter(job -> JobAssignments.isAssignee(data, job.jobBlock(), getUUID())).toList();
+                if (valid.size() != jobs.size()) {
+                    setJobs(valid);
+                }
             }
             return;
         }
@@ -255,7 +276,12 @@ public class Settler extends PathfinderMob {
      * @return the status shown in the GUI
      */
     public Component statusText() {
-        return Component.translatable(isHomeless() ? "civmod.settler.status.homeless" : "civmod.settler.status.idle");
+        if (isHomeless()) {
+            return Component.translatable("civmod.settler.status.homeless");
+        }
+        return work.activeJob()
+                .map(job -> Component.translatable("civmod.settler.status.job", work.status(job.jobBlock()).displayName(), job.jobType().displayName()))
+                .orElse(Component.translatable("civmod.settler.status.idle"));
     }
 
     @Override
@@ -294,7 +320,12 @@ public class Settler extends PathfinderMob {
 
     @Override
     protected void addAdditionalSaveData(ValueOutput output) {
+        // The held tool is only a display copy of a tool belt item; never save it.
+        ItemStack held = getItemBySlot(EquipmentSlot.MAINHAND);
+        setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
         super.addAdditionalSaveData(output);
+        setItemSlot(EquipmentSlot.MAINHAND, held);
+        output.store("buffers", SettlerWork.BuffersSnapshot.CODEC, work.snapshot());
         output.putString("race", race.toString());
         output.putInt("skin", getSkin());
         output.putInt("settlement", settlementId);
@@ -309,6 +340,8 @@ public class Settler extends PathfinderMob {
         setSkin(input.getIntOr("skin", 0));
         settlementId = input.getIntOr("settlement", -1);
         jobs = input.read("jobs", SettlerJob.CODEC.listOf()).map(List::copyOf).orElse(List.of());
+        input.read("buffers", SettlerWork.BuffersSnapshot.CODEC).ifPresent(work::restore);
+        setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
         ContainerHelper.loadAllItems(input, inventory.getItems());
     }
 }

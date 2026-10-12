@@ -31,7 +31,8 @@ public final class SettlementBlock {
             BlockPos.CODEC.optionalFieldOf("collect").forGetter(SettlementBlock::collect),
             BlockPos.CODEC.optionalFieldOf("drop_off").forGetter(SettlementBlock::dropOff),
             UUIDUtil.CODEC.optionalFieldOf("assignee").forGetter(SettlementBlock::assignee),
-            Codec.STRING.optionalFieldOf("assignee_name").forGetter(SettlementBlock::assigneeName)
+            Codec.STRING.optionalFieldOf("assignee_name").forGetter(SettlementBlock::assigneeName),
+            Codec.BOOL.optionalFieldOf("collect_leaves", false).forGetter(SettlementBlock::collectLeaves)
     ).apply(instance, SettlementBlock::new));
 
     private final BlockPos pos;
@@ -43,6 +44,7 @@ public final class SettlementBlock {
     private Optional<BlockPos> dropOff;
     private Optional<UUID> assignee;
     private Optional<String> assigneeName;
+    private boolean collectLeaves;
 
     /**
      * @param pos       the block position
@@ -51,11 +53,12 @@ public final class SettlementBlock {
      * @param connected whether the block is connected to the settlement chain
      */
     public SettlementBlock(BlockPos pos, JobType jobType, int level, boolean connected) {
-        this(pos, jobType, level, connected, List.of(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        this(pos, jobType, level, connected, List.of(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), false);
     }
 
     private SettlementBlock(BlockPos pos, JobType jobType, int level, boolean connected, List<BlockPos> workPoints,
-            Optional<BlockPos> collect, Optional<BlockPos> dropOff, Optional<UUID> assignee, Optional<String> assigneeName) {
+            Optional<BlockPos> collect, Optional<BlockPos> dropOff, Optional<UUID> assignee, Optional<String> assigneeName,
+            boolean collectLeaves) {
         this.pos = pos.immutable();
         this.jobType = jobType;
         this.level = SettlementRules.clampLevel(level);
@@ -65,6 +68,18 @@ public final class SettlementBlock {
         this.dropOff = dropOff;
         this.assignee = assignee;
         this.assigneeName = assigneeName;
+        this.collectLeaves = collectLeaves;
+    }
+
+    /**
+     * @return whether a Lumberjack also collects leaves (with shears)
+     */
+    public boolean collectLeaves() {
+        return collectLeaves;
+    }
+
+    void setCollectLeaves(boolean collectLeaves) {
+        this.collectLeaves = collectLeaves;
     }
 
     /**

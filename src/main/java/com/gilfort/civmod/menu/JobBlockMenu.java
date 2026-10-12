@@ -3,6 +3,8 @@ package com.gilfort.civmod.menu;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.registry.ModMenuTypes;
 
+import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -26,6 +28,8 @@ public class JobBlockMenu extends CivMenu {
 
     /** Button id: free the JobBlock (remove the job from its settler). */
     public static final int BUTTON_UNASSIGN = 50;
+    /** Button id: toggle leaf collection (Lumberjack). */
+    public static final int BUTTON_TOGGLE_LEAVES = 51;
 
     private final Container container;
     private JobBlockInfo info;
@@ -75,6 +79,13 @@ public class JobBlockMenu extends CivMenu {
             info = info.withoutAssignee();
             if (container instanceof JobBlockEntity jobBlock && jobBlock.getLevel() instanceof ServerLevel level) {
                 SettlementWorld.unassign(level, jobBlock.getBlockPos());
+            }
+            return true;
+        }
+        if (buttonId == BUTTON_TOGGLE_LEAVES) {
+            info = info.withLeavesToggled();
+            if (container instanceof JobBlockEntity jobBlock && jobBlock.getLevel() instanceof ServerLevel level) {
+                JobAssignments.toggleLeaves(SettlementData.get(level), jobBlock.getBlockPos());
             }
             return true;
         }

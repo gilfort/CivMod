@@ -22,7 +22,7 @@ import net.minecraft.world.item.Items;
  */
 public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
 
-    private static final int ROW_HEIGHT = 20;
+    private static final int ROW_HEIGHT = 30;
     private static final int SMALL_BUTTON = 16;
 
     /**
@@ -47,7 +47,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         List<SettlerJob> jobs = info.jobs();
         int right = leftPos + imageWidth - CivGui.PADDING;
         for (int i = 0; i < jobs.size(); i++) {
-            int y = topPos + 20 + i * ROW_HEIGHT;
+            int y = topPos + 22 + i * ROW_HEIGHT;
             Button up = jobButton("▲", "civmod.gui.settler.job.up", SettlerJobs.MOVE_UP + i, right - 3 * SMALL_BUTTON - 4, y);
             up.active = i > 0;
             Button down = jobButton("▼", "civmod.gui.settler.job.down", SettlerJobs.MOVE_DOWN + i, right - 2 * SMALL_BUTTON - 2, y);
@@ -92,8 +92,19 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
             }
             case SettlerMenu.TAB_JOBS -> {
                 int y = 24;
-                for (SettlerJob job : info.jobs()) {
+                for (int i = 0; i < info.jobs().size(); i++) {
+                    SettlerJob job = info.jobs().get(i);
+                    SettlerInfo.JobState state = i < info.jobStates().size() ? info.jobStates().get(i) : null;
                     graphics.text(font, job.jobType().displayName(), CivGui.PADDING, y, CivGui.LABEL_COLOR, false);
+                    if (state != null) {
+                        graphics.text(font, state.status().displayName(), CivGui.PADDING, y + 10, CivGui.HINT_COLOR, false);
+                        int x = 80;
+                        for (ItemStack stack : state.preview()) {
+                            graphics.item(stack, x, y + 2);
+                            graphics.itemDecorations(font, stack, x, y + 2);
+                            x += 17;
+                        }
+                    }
                     y += ROW_HEIGHT;
                 }
                 graphics.text(font, Component.translatable("civmod.gui.settler.laborer"), CivGui.PADDING, y, CivGui.HINT_COLOR, false);
