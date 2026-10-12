@@ -4,14 +4,12 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.settlement.JobType;
-import com.gilfort.civmod.settlement.SettlementData;
-import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
@@ -26,8 +24,8 @@ import net.minecraft.world.phys.BlockHitResult;
 /**
  * A JobBlock: offers one job to one NPC and anchors the settlement (vault {@code Systems/JobBlock.md}).
  * <p>
- * Registration in the settlement happens in {@link #setPlacedBy} for player placement (with item level and
- * feedback) and one tick after any other placement (commands, structures) via a scheduled tick.
+ * Registration in the settlement happens in {@link #onPlace} for every placement (players, commands, structures);
+ * {@link #setPlacedBy} then applies the item level and gives the placing player feedback.
  */
 public class JobBlock extends BaseEntityBlock {
 
@@ -66,15 +64,10 @@ public class JobBlock extends BaseEntityBlock {
     @Override
     protected void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
         super.onPlace(state, level, pos, oldState, movedByPiston);
-        if (!level.isClientSide() && !oldState.is(this)) {
-            level.scheduleTick(pos, this, 1);
-        }
-    }
-
-    @Override
-    protected void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
-        if (SettlementData.get(level).settlementAt(pos).isEmpty() && level.getBlockEntity(pos) instanceof JobBlockEntity jobBlock) {
-            SettlementWorld.place(level, pos, jobType, jobBlock.getJobLevel());
+        if (level instanceof ServerLevel serverLevel && !oldState.is(this)) {
+            // For commands / structures the block entity does not exist yet; its level is synced in onLoad.
+            int jobLevel = level.getBlockEntity(pos) instanceof JobBlockEntity jobBlock ? jobBlock.getJobLevel() : SettlementRules.MIN_LEVEL;
+            SettlementWorld.place(serverLevel, pos, jobType, jobLevel);
         }
     }
 
@@ -82,12 +75,10 @@ public class JobBlock extends BaseEntityBlock {
     public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity by, ItemStack itemStack) {
         super.setPlacedBy(level, pos, state, by, itemStack);
         if (level instanceof ServerLevel serverLevel && level.getBlockEntity(pos) instanceof JobBlockEntity jobBlock) {
-            var placement = SettlementWorld.place(serverLevel, pos, jobType, jobBlock.getJobLevel());
             if (by instanceof ServerPlayer player) {
-                SettlementWorld.notifyPlacement(player, placement);
-                if (placement.outcome() == SettlementManager.Outcome.FOUNDED) {
-                    SettlementWorld.recordFounding(serverLevel, player);
-                }
+                SettlementWorld.placedByPlayer(serverLevel, pos, player, jobBlock.getJobLevel());
+            } else {
+                SettlementWorld.setLevel(serverLevel, pos, jobBlock.getJobLevel());
             }
         }
     }
