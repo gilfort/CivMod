@@ -35,7 +35,8 @@ public final class Settlement {
             Codec.LONG.optionalFieldOf("settlers_due", SETTLERS_ARRIVED).forGetter(Settlement::settlersDue),
             UUIDUtil.CODEC.listOf().optionalFieldOf("members", List.of()).forGetter(settlement -> List.copyOf(settlement.members)),
             SettlementBlock.CODEC.listOf().fieldOf("blocks").forGetter(settlement -> List.copyOf(settlement.blocks.values())),
-            Codec.unboundedMap(Codec.STRING, UUIDUtil.CODEC).optionalFieldOf("beds", Map.of()).forGetter(Settlement::bedsForCodec)
+            Codec.unboundedMap(Codec.STRING, UUIDUtil.CODEC).optionalFieldOf("beds", Map.of()).forGetter(Settlement::bedsForCodec),
+            BlockPos.CODEC.listOf().optionalFieldOf("pantries", List.of()).forGetter(settlement -> List.copyOf(settlement.pantries))
     ).apply(instance, Settlement::new));
 
     private final int id;
@@ -46,6 +47,7 @@ public final class Settlement {
     private final Set<UUID> members = new LinkedHashSet<>();
     private final Map<BlockPos, SettlementBlock> blocks = new LinkedHashMap<>();
     private final Map<BlockPos, UUID> beds = new LinkedHashMap<>();
+    private final Set<BlockPos> pantries = new LinkedHashSet<>();
 
     /**
      * @param id          the settlement id (unique per dimension)
@@ -58,12 +60,13 @@ public final class Settlement {
      */
     public Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
             List<SettlementBlock> blocks) {
-        this(id, name, foundedAt, color, settlersDue, members, blocks, Map.of());
+        this(id, name, foundedAt, color, settlersDue, members, blocks, Map.of(), List.of());
     }
 
     private Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
-            List<SettlementBlock> blocks, Map<String, UUID> beds) {
+            List<SettlementBlock> blocks, Map<String, UUID> beds, List<BlockPos> pantries) {
         beds.forEach((key, owner) -> this.beds.put(BlockPos.of(Long.parseLong(key)), owner));
+        this.pantries.addAll(pantries);
         this.id = id;
         this.name = name;
         this.foundedAt = foundedAt;
@@ -174,6 +177,21 @@ public final class Settlement {
      */
     public Optional<BlockPos> bedOf(UUID settler) {
         return beds.entrySet().stream().filter(entry -> entry.getValue().equals(settler)).map(Map.Entry::getKey).findFirst();
+    }
+
+    /**
+     * @return the pantry containers (read-only)
+     */
+    public Set<BlockPos> pantries() {
+        return Collections.unmodifiableSet(pantries);
+    }
+
+    boolean addPantry(BlockPos pos) {
+        return pantries.add(pos.immutable());
+    }
+
+    boolean removePantry(BlockPos pos) {
+        return pantries.remove(pos);
     }
 
     private Map<String, UUID> bedsForCodec() {

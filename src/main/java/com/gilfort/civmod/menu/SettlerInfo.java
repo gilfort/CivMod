@@ -27,9 +27,27 @@ import net.minecraft.world.item.ItemStack;
  * @param jobs           the assigned jobs in priority order (Laborer excluded)
  * @param jobStates      status and buffer per job, aligned with {@code jobs}
  * @param bed            where the settler sleeps
+ * @param food           food level, saturation and appetite
  */
 public record SettlerInfo(Component name, Component status, boolean homeless, Component settlementName, List<SettlerJob> jobs,
-        List<JobState> jobStates, Component bed) {
+        List<JobState> jobStates, Component bed, FoodInfo food) {
+
+    /**
+     * Food state shown in the overview.
+     *
+     * @param level      the food level (0–20)
+     * @param saturation the saturation buffer
+     * @param appetite   the appetite multiplier
+     */
+    public record FoodInfo(int level, float saturation, float appetite) {
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, FoodInfo> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, FoodInfo::level,
+                ByteBufCodecs.FLOAT, FoodInfo::saturation,
+                ByteBufCodecs.FLOAT, FoodInfo::appetite,
+                FoodInfo::new);
+    }
 
     /**
      * Status and buffer of a job.
@@ -57,6 +75,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
             SettlerJob.STREAM_CODEC.apply(ByteBufCodecs.list()), SettlerInfo::jobs,
             JobState.STREAM_CODEC.apply(ByteBufCodecs.list()), SettlerInfo::jobStates,
             ComponentSerialization.STREAM_CODEC, SettlerInfo::bed,
+            FoodInfo.STREAM_CODEC, SettlerInfo::food,
             SettlerInfo::new);
 
     /**
@@ -81,7 +100,11 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
             return new JobState(settler.getWork().status(job.jobBlock()), buffer.count(),
                     buffer.stacks().stream().limit(18).map(ItemStack::copy).toList());
         }).toList();
-        return new SettlerInfo(settler.getName(), settler.statusText(), settler.isHomeless(), settlementName, settler.getJobs(), states, bed);
+        com.gilfort.civmod.food.SettlerFood food = settler.getFood();
+        float appetite = food.appetite(settler.getRandom(), com.gilfort.civmod.config.CivModConfig.APPETITE_MIN.get(),
+                com.gilfort.civmod.config.CivModConfig.APPETITE_MAX.get());
+        return new SettlerInfo(settler.getName(), settler.statusText(), settler.isHomeless(), settlementName, settler.getJobs(), states, bed,
+                new FoodInfo(food.level(), food.saturation(), appetite));
     }
 
     /**
@@ -93,6 +116,6 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
             int index = this.jobs.indexOf(job);
             return index >= 0 && index < jobStates.size() ? jobStates.get(index) : new JobState(JobStatus.IDLE, 0, List.of());
         }).toList();
-        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(jobs), states, bed);
+        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(jobs), states, bed, food);
     }
 }

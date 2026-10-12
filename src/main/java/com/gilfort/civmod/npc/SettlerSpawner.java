@@ -128,6 +128,8 @@ public final class SettlerSpawner {
         String name = RaceNames.pick(RaceNames.get(race).npc(), usedNames, random).orElse("Settler");
         settler.setCustomName(Component.literal(name));
         settler.joinSettlement(data, settlement);
+        // Provisions for the first days, before a pantry exists.
+        settler.getInventory().setItem(Settler.POCKETS_START, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.BREAD, 2));
         level.addFreshEntity(settler);
         level.sendParticles(ParticleTypes.CLOUD, pos.x, pos.y + 1.0, pos.z, 12, 0.3, 0.5, 0.3, 0.02);
         level.playSound(null, pos.x, pos.y, pos.z, SoundEvents.ITEM_PICKUP, SoundSource.NEUTRAL, 0.4F, 0.8F);

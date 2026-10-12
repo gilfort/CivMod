@@ -85,7 +85,7 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
     @Override
     protected boolean shouldShowName(Settler settler, double distanceToCameraSq) {
         Minecraft minecraft = Minecraft.getInstance();
-        return settler.hasCustomName() && distanceToCameraSq <= NAME_DISTANCE * NAME_DISTANCE
+        return settler.hasCustomName() && !settler.isInvisible() && distanceToCameraSq <= NAME_DISTANCE * NAME_DISTANCE
                 && minecraft.player != null && minecraft.player.hasLineOfSight(settler);
     }
 }

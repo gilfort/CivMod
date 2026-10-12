@@ -2,6 +2,7 @@ package com.gilfort.civmod.client.gui;
 
 import java.util.List;
 
+import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
@@ -29,6 +30,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
     private static final int BUFFER_Y = 56;
     private static final int BUFFER_COLUMNS = 9;
     private static final int SMALL_BUTTON = 16;
+    private static final int FOOD_Y = 72;
 
     /**
      * @param menu      the menu
@@ -97,6 +99,9 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                 if (!info.homeless()) {
                     graphics.text(font, Component.translatable("civmod.gui.settler.bed", info.bed()), CivGui.PADDING, 58, CivGui.LABEL_COLOR, false);
                 }
+                graphics.text(font, Component.translatable("civmod.gui.settler.food"), CivGui.PADDING, FOOD_Y, CivGui.LABEL_COLOR, false);
+                graphics.text(font, Component.translatable(SettlerFood.appetiteKey(info.food().appetite())), CivGui.PADDING, FOOD_Y + 12,
+                        CivGui.HINT_COLOR, false);
             }
             case SettlerMenu.TAB_JOBS -> {
                 int y = 24;
@@ -140,6 +145,10 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
 
     @Override
     protected void extractTabBackground(GuiGraphicsExtractor graphics, int tab, int mouseX, int mouseY) {
+        if (tab == SettlerMenu.TAB_OVERVIEW) {
+            int x = leftPos + CivGui.PADDING + font.width(Component.translatable("civmod.gui.settler.food")) + 4;
+            CivGui.foodBar(graphics, x, topPos + FOOD_Y - 1, menu.getInfo().food().level(), menu.getInfo().food().saturation());
+        }
         if (tab >= SettlerMenu.FIRST_JOB_TAB) {
             for (int i = 0; i < 18; i++) {
                 CivGui.slot(graphics, leftPos + CivGui.PADDING + (i % BUFFER_COLUMNS) * 18, topPos + BUFFER_Y + (i / BUFFER_COLUMNS) * 18);

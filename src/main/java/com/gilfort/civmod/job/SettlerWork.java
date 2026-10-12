@@ -12,6 +12,8 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.food.Pantries;
+import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -73,7 +75,17 @@ public final class SettlerWork {
     /** Skill level used until EXP exists (Story 8). */
     private static final int SKILL_LEVEL = 1;
 
-    private enum Activity { IDLE, FETCH_TOOL, WORK, DELIVER, GO_TO_BED, SLEEP }
+    private enum Activity { IDLE, FETCH_TOOL, WORK, DELIVER, GO_TO_BED, SLEEP, FETCH_FOOD, EATING, FORAGE }
+
+    /** Why a settler walks to a pantry. */
+    private enum MealPurpose { MORNING, HUNGRY, EVENING }
+
+    /** Ticks a meal from the pockets takes. */
+    private static final int EAT_TICKS = 30;
+    /** Ticks a foraging settler walks before it vanishes. */
+    private static final int FORAGE_WALK_TICKS = 600;
+    /** Players within this distance get the hunger message. */
+    private static final double COMPLAIN_RANGE = 32.0;
 
     /** Day time at which settlers go to sleep (20:00). */
     public static final long SLEEP_TIME = 14000;
@@ -128,6 +140,12 @@ public final class SettlerWork {
     private long lastClock = -1;
     private @Nullable RestPlace restPlace;
     private long restPlaceDay = -1;
+    private double weightedWorkTicks;
+    private int eatTimer;
+    private boolean eatUntilFull;
+    private boolean hungryNoFood;
+    private long forageStart;
+    private @Nullable MealPurpose mealPurpose;
 
     /**
      * @param settler the settler
@@ -248,12 +266,13 @@ public final class SettlerWork {
     // ---------------------------------------------------------------- decisions
 
     /**
-     * Called every tick from the settler's AI step; decides every {@value #DECISION_INTERVAL} ticks.
+     * Called every tick from the settler's AI step; settles hunger and decides every {@value #DECISION_INTERVAL} ticks.
      *
      * @param level the level
      */
     public void aiStep(ServerLevel level) {
         if ((settler.tickCount + settler.getId()) % DECISION_INTERVAL == 0) {
+            accountHunger(level);
             decide(level);
         }
     }
@@ -273,17 +292,29 @@ public final class SettlerWork {
         lastClock = clock;
         boolean night = dayTime >= SLEEP_TIME;
         boolean evening = dayTime >= WORK_END && !night;
+        SettlerFood food = settler.getFood();
 
         if (settler.isSleeping()) {
             if (night) {
                 return;
             }
             wake();
-        } else if (jumped && !night && !settler.isHomeless()) {
+        } else if (jumped && !night && !settler.isHomeless() && !food.isForaging()) {
             // The night was skipped while this settler was not in bed: appear at the bed as if it slept there.
             teleportToRestPlace(level, day);
         }
+        if (food.isForaging()) {
+            forage(level, day, dayTime);
+            return;
+        }
+        if (food.level() >= SettlerFood.HUNGRY) {
+            hungryNoFood = false;
+        }
         checkStuck(level);
+        if (activity == Activity.EATING || activity == Activity.FETCH_FOOD) {
+            // A meal in progress is finished first (also after 20:00).
+            return;
+        }
 
         if (activity == Activity.WORK && activeJob != null) {
             if (fatigue.advance(DECISION_INTERVAL, level.getRandom())) {
@@ -296,16 +327,38 @@ public final class SettlerWork {
         if (settler.isHomeless()) {
             restPlace = null;
             stop();
+            if (food.level() < SettlerFood.HUNGRY && !startPocketMeal(false)) {
+                complain(level, day);
+            }
             return;
         }
         if (evening || night) {
-            // After work: deliver what is left, then rest near the bed and sleep from 20:00.
+            // After work: deliver what is left, eat, then rest near the bed and sleep from 20:00.
             for (SettlerJob job : settler.getJobs()) {
                 if (!buffer(job.jobBlock()).isEmpty() && status(job.jobBlock()) != JobStatus.DROP_OFF_FULL) {
                     startDelivery(level, job);
                     return;
                 }
                 statuses.put(job.jobBlock(), JobStatus.IDLE);
+            }
+            if (evening && food.eatenDay() != day) {
+                food.setEatenDay(day);
+                if (food.level() < SettlerFood.MAX) {
+                    Optional<BlockPos> pantry = pantryWithFood(level);
+                    if (pantry.isPresent()) {
+                        stop();
+                        startFetchFood(level, pantry.get(), MealPurpose.EVENING);
+                        return;
+                    }
+                    // Provisions are only eaten in the evening if no pantry has food.
+                    if (startPocketMeal(true)) {
+                        return;
+                    }
+                }
+            }
+            if (food.level() < SettlerFood.HUNGRY && SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE) == 0
+                    && pantryWithFood(level).isEmpty()) {
+                complain(level, day);
             }
             RestPlace rest = ensureRestPlace(level, day);
             if (rest != null) {
@@ -322,6 +375,39 @@ public final class SettlerWork {
             return;
         }
         restPlace = null;
+
+        if (food.morningDay() != day) {
+            food.setMorningDay(day);
+            int provisions = SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE);
+            Optional<BlockPos> pantry = pantryWithFood(level);
+            MorningPlan plan = morningPlan(food.level(), provisions, CivModConfig.PROVISION_NUTRITION.get(), pantry.isPresent());
+            if (plan == MorningPlan.FORAGE) {
+                startForaging(level, day);
+                return;
+            }
+            if (plan == MorningPlan.FETCH_PROVISIONS) {
+                stop();
+                startFetchFood(level, pantry.get(), MealPurpose.MORNING);
+                return;
+            }
+        }
+        if (food.level() < SettlerFood.HUNGRY) {
+            if (startPocketMeal(false)) {
+                return;
+            }
+            Optional<BlockPos> pantry = pantryWithFood(level);
+            if (pantry.isPresent()) {
+                stop();
+                startFetchFood(level, pantry.get(), MealPurpose.HUNGRY);
+                return;
+            }
+            complain(level, day);
+            if (food.level() <= 0) {
+                // Starving: no work until there is food again; forages the next day.
+                stop();
+                return;
+            }
+        }
 
         for (SettlerJob job : settler.getJobs()) {
             if (blockedUntil.getOrDefault(job.jobBlock(), 0L) > level.getGameTime()) {
@@ -594,6 +680,327 @@ public final class SettlerWork {
         return dx * dx + dz * dz <= REACH * REACH && Math.abs(settler.getY() - target.getY()) <= 3.0;
     }
 
+    // ---------------------------------------------------------------- food
+
+    /** What a settler does at the start of a workday regarding food. */
+    public enum MorningPlan {
+        /** Nothing to do, go to work. */
+        WORK,
+        /** Fetch provisions from a pantry before work. */
+        FETCH_PROVISIONS,
+        /** Hungry and no food anywhere: forage all day. */
+        FORAGE
+    }
+
+    /**
+     * Morning decision (vault {@code Systems/Needs.md}).
+     *
+     * @param level      the food level
+     * @param provisions nutrition carried in the pockets
+     * @param wanted     nutrition the settler wants to carry
+     * @param pantryFood whether a pantry has food
+     * @return the plan
+     */
+    public static MorningPlan morningPlan(int level, int provisions, int wanted, boolean pantryFood) {
+        if (level < SettlerFood.HUNGRY && provisions == 0 && !pantryFood) {
+            return MorningPlan.FORAGE;
+        }
+        return provisions < wanted && pantryFood ? MorningPlan.FETCH_PROVISIONS : MorningPlan.WORK;
+    }
+
+    private void accountHunger(ServerLevel level) {
+        SettlerFood food = settler.getFood();
+        if (food.isAway()) {
+            weightedWorkTicks = 0.0;
+            return;
+        }
+        long dayTime = Math.floorMod(level.getOverworldClockTime(), 24000L);
+        long awake = dayTime < SLEEP_TIME && !settler.isSleeping() ? DECISION_INTERVAL : 0L;
+        float appetite = food.appetite(level.getRandom(), CivModConfig.APPETITE_MIN.get(), CivModConfig.APPETITE_MAX.get());
+        food.exhaust(SettlerFood.exhaustionFor(awake, weightedWorkTicks, CivModConfig.HUNGER_BASE_PER_DAY.get(),
+                CivModConfig.HUNGER_PER_WORK_MINUTE.get(), appetite));
+        weightedWorkTicks = 0.0;
+    }
+
+    /**
+     * @return a food-related status that replaces the job status, if any
+     */
+    public Optional<net.minecraft.network.chat.Component> foodStatus() {
+        SettlerFood food = settler.getFood();
+        String key = null;
+        if (food.isForaging()) {
+            key = "foraging";
+        } else if (activity == Activity.EATING) {
+            key = "eating";
+        } else if (activity == Activity.FETCH_FOOD) {
+            key = "fetching_food";
+        } else if (hungryNoFood) {
+            key = food.level() <= 0 ? "starving" : "hungry";
+        }
+        return Optional.ofNullable(key).map(k -> net.minecraft.network.chat.Component.translatable("civmod.settler.status." + k));
+    }
+
+    private Optional<BlockPos> pantryWithFood(ServerLevel level) {
+        SettlementData data = SettlementData.get(level);
+        return data.settlement(settler.getSettlementId())
+                .flatMap(settlement -> Pantries.nearestWithFood(level, data, settlement, settler.blockPosition()));
+    }
+
+    private void startFetchFood(ServerLevel level, BlockPos pantry, MealPurpose purpose) {
+        mealPurpose = purpose;
+        hungryNoFood = false;
+        moveTo(level, Activity.FETCH_FOOD, pantry);
+    }
+
+    /**
+     * At a pantry: eats until full (not in the morning unless hungry), puts back leftover containers and refills the
+     * provisions.
+     */
+    private void visitPantry(ServerLevel level, BlockPos pantry) {
+        Optional<ResourceHandler<ItemResource>> found = Pantries.handler(level, pantry);
+        if (found.isEmpty()) {
+            return;
+        }
+        ResourceHandler<ItemResource> handler = found.get();
+        SettlerFood food = settler.getFood();
+        for (int i = Settler.POCKETS_START; i < Settler.POCKETS_START + Settler.POCKETS_SIZE; i++) {
+            ItemStack stack = settler.getInventory().getItem(i);
+            if (stack.is(Items.BOWL) || stack.is(Items.GLASS_BOTTLE)) {
+                settler.getInventory().setItem(i, Pantries.insert(handler, stack));
+            }
+        }
+        if (mealPurpose != MealPurpose.MORNING || food.level() < SettlerFood.HUNGRY) {
+            while (food.level() < SettlerFood.MAX) {
+                Optional<Integer> slot = SettlerFood.choose(Pantries.contents(handler), food.level());
+                if (slot.isEmpty()) {
+                    break;
+                }
+                ItemStack item = Pantries.takeOne(handler, slot.get());
+                if (item.isEmpty()) {
+                    break;
+                }
+                eatItem(level, item, handler);
+            }
+        }
+        int wanted = CivModConfig.PROVISION_NUTRITION.get();
+        while (SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE) < wanted) {
+            List<ItemStack> contents = Pantries.contents(handler);
+            int slot = -1;
+            for (int i = 0; i < contents.size(); i++) {
+                if (SettlerFood.isEdible(contents.get(i))) {
+                    slot = i;
+                    break;
+                }
+            }
+            if (slot < 0) {
+                break;
+            }
+            ItemStack item = Pantries.takeOne(handler, slot);
+            ItemStack rest = addToPockets(item);
+            if (!rest.isEmpty()) {
+                Pantries.insert(handler, rest);
+                break;
+            }
+        }
+    }
+
+    private void eatItem(ServerLevel level, ItemStack item, @Nullable ResourceHandler<ItemResource> pantry) {
+        net.minecraft.world.food.FoodProperties properties = item.get(net.minecraft.core.component.DataComponents.FOOD);
+        if (properties == null) {
+            return;
+        }
+        settler.getFood().eat(properties);
+        hungryNoFood = false;
+        eatingEffects(level, item);
+        ItemStack rest = SettlerFood.remainder(item);
+        if (pantry != null) {
+            rest = Pantries.insert(pantry, rest);
+        }
+        rest = addToPockets(rest);
+        if (!rest.isEmpty()) {
+            settler.spawnAtLocation(level, rest);
+        }
+    }
+
+    /**
+     * Feeds the settler one item by a player: eaten if allowed, otherwise stored as provisions.
+     *
+     * @param level the level
+     * @param item  one food item
+     * @return what is left of the item (not eaten and not stored), plus any leftover container
+     */
+    public ItemStack feed(ServerLevel level, ItemStack item) {
+        SettlerFood food = settler.getFood();
+        if (SettlerFood.mayEat(food.level(), SettlerFood.nutrition(item))) {
+            net.minecraft.world.food.FoodProperties properties = item.get(net.minecraft.core.component.DataComponents.FOOD);
+            if (properties != null) {
+                food.eat(properties);
+                hungryNoFood = false;
+                eatingEffects(level, item);
+                return SettlerFood.remainder(item);
+            }
+        }
+        return addToPockets(item);
+    }
+
+    private void eatingEffects(ServerLevel level, ItemStack item) {
+        level.playSound(null, settler.getX(), settler.getY(), settler.getZ(), net.minecraft.sounds.SoundEvents.GENERIC_EAT.value(),
+                net.minecraft.sounds.SoundSource.NEUTRAL, 0.6F, 0.9F + level.getRandom().nextFloat() * 0.2F);
+        if (!item.isEmpty()) {
+            level.sendParticles(new net.minecraft.core.particles.ItemParticleOption(net.minecraft.core.particles.ParticleTypes.ITEM,
+                    net.minecraft.world.item.ItemStackTemplate.fromNonEmptyStack(item)),
+                    settler.getX(), settler.getEyeY() - 0.2, settler.getZ(), 6, 0.2, 0.1, 0.2, 0.05);
+        }
+    }
+
+    /**
+     * @param stack a stack
+     * @return what did not fit into the pockets
+     */
+    private ItemStack addToPockets(ItemStack stack) {
+        ItemStack rest = stack.copy();
+        for (int i = Settler.POCKETS_START; i < Settler.POCKETS_START + Settler.POCKETS_SIZE && !rest.isEmpty(); i++) {
+            ItemStack slot = settler.getInventory().getItem(i);
+            if (!slot.isEmpty() && ItemStack.isSameItemSameComponents(slot, rest) && slot.getCount() < slot.getMaxStackSize()) {
+                int move = Math.min(rest.getCount(), slot.getMaxStackSize() - slot.getCount());
+                slot.grow(move);
+                rest.shrink(move);
+            }
+        }
+        for (int i = Settler.POCKETS_START; i < Settler.POCKETS_START + Settler.POCKETS_SIZE && !rest.isEmpty(); i++) {
+            if (settler.getInventory().getItem(i).isEmpty()) {
+                settler.getInventory().setItem(i, rest);
+                rest = ItemStack.EMPTY;
+            }
+        }
+        settler.getInventory().setChanged();
+        return rest;
+    }
+
+    private List<ItemStack> pocketStacks() {
+        List<ItemStack> stacks = new ArrayList<>(Settler.POCKETS_SIZE);
+        for (int i = Settler.POCKETS_START; i < Settler.POCKETS_START + Settler.POCKETS_SIZE; i++) {
+            stacks.add(settler.getInventory().getItem(i));
+        }
+        return stacks;
+    }
+
+    /**
+     * Starts eating provisions on the spot.
+     *
+     * @param untilFull keep eating until full (evening) instead of one item
+     * @return whether there was something to eat
+     */
+    private boolean startPocketMeal(boolean untilFull) {
+        if (SettlerFood.choose(pocketStacks(), settler.getFood().level()).isEmpty()) {
+            return false;
+        }
+        stop();
+        activity = Activity.EATING;
+        eatTimer = EAT_TICKS;
+        eatUntilFull = untilFull;
+        hungryNoFood = false;
+        return true;
+    }
+
+    private void tickEating(ServerLevel level) {
+        settler.getNavigation().stop();
+        Optional<Integer> choice = SettlerFood.choose(pocketStacks(), settler.getFood().level());
+        if (choice.isEmpty()) {
+            activity = Activity.IDLE;
+            return;
+        }
+        ItemStack stack = settler.getInventory().getItem(Settler.POCKETS_START + choice.get());
+        if (--eatTimer % 6 == 0 && eatTimer > 0) {
+            eatingEffects(level, stack);
+        }
+        if (eatTimer > 0) {
+            return;
+        }
+        ItemStack one = stack.split(1);
+        settler.getInventory().setChanged();
+        eatItem(level, one, null);
+        if (eatUntilFull && SettlerFood.choose(pocketStacks(), settler.getFood().level()).isPresent()) {
+            eatTimer = EAT_TICKS;
+            return;
+        }
+        activity = Activity.IDLE;
+        decide(level);
+    }
+
+    private void complain(ServerLevel level, long day) {
+        hungryNoFood = true;
+        level.sendParticles(net.minecraft.core.particles.ParticleTypes.ANGRY_VILLAGER, settler.getX(), settler.getY() + 2.1, settler.getZ(),
+                1, 0.3, 0.1, 0.3, 0.0);
+        if (settler.getFood().complainToday(day)) {
+            net.minecraft.network.chat.Component message = net.minecraft.network.chat.Component.translatable("civmod.settler.hungry_message",
+                    settler.getName());
+            for (net.minecraft.server.level.ServerPlayer player : level.players()) {
+                if (player.distanceToSqr(settler) <= COMPLAIN_RANGE * COMPLAIN_RANGE) {
+                    player.sendOverlayMessage(message);
+                }
+            }
+        }
+    }
+
+    private void startForaging(ServerLevel level, long day) {
+        stop();
+        settler.getFood().startForaging(day);
+        forageStart = level.getGameTime();
+        moveTo(level, Activity.FORAGE, foragingTarget(level));
+    }
+
+    /**
+     * Foraging: walk towards the border, vanish after at most {@value #FORAGE_WALK_TICKS} ticks or at the border,
+     * reappear there at 17:30 with some food.
+     */
+    private void forage(ServerLevel level, long day, long dayTime) {
+        SettlerFood food = settler.getFood();
+        boolean over = dayTime >= WORK_END || day > food.forageDay();
+        if (over) {
+            if (food.isAway()) {
+                settler.setInvisible(false);
+            }
+            food.addFood(CivModConfig.FORAGING_FOOD.get());
+            food.endForaging();
+            stop();
+            return;
+        }
+        if (food.isAway()) {
+            return;
+        }
+        if (activity != Activity.FORAGE || target == null) {
+            forageStart = level.getGameTime();
+            moveTo(level, Activity.FORAGE, foragingTarget(level));
+        }
+        checkStuck(level);
+        if (isAtTarget() || level.getGameTime() - forageStart >= FORAGE_WALK_TICKS) {
+            food.vanish(settler.blockPosition());
+            settler.getNavigation().stop();
+            settler.setInvisible(true);
+            target = null;
+        }
+    }
+
+    private BlockPos foragingTarget(ServerLevel level) {
+        Optional<SettlementBlock> anchor = SettlementData.get(level).settlement(settler.getSettlementId()).flatMap(s -> s.anchor());
+        if (anchor.isEmpty()) {
+            return settler.blockPosition();
+        }
+        Vec3 center = Vec3.atCenterOf(anchor.get().pos());
+        Vec3 direction = settler.position().subtract(center).multiply(1.0, 0.0, 1.0);
+        if (direction.lengthSqr() < 1.0) {
+            double angle = level.getRandom().nextDouble() * Math.PI * 2.0;
+            direction = new Vec3(Math.cos(angle), 0.0, Math.sin(angle));
+        }
+        direction = direction.normalize().scale(SettlementRules.joinRadius(anchor.get().level()) + 4.0);
+        BlockPos column = BlockPos.containing(center.x + direction.x, center.y, center.z + direction.z);
+        if (!level.isLoaded(column)) {
+            return settler.blockPosition();
+        }
+        return level.getHeightmapPos(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, column);
+    }
+
     // ---------------------------------------------------------------- work places and scans
 
     private @Nullable BlockPos poiOfDay(ServerLevel level, SettlementBlock block, long day) {
@@ -753,6 +1160,10 @@ public final class SettlerWork {
     // ---------------------------------------------------------------- per-tick work
 
     private void workTick(ServerLevel level) {
+        if (activity == Activity.EATING) {
+            tickEating(level);
+            return;
+        }
         if (activity == Activity.IDLE || activity == Activity.SLEEP || target == null) {
             return;
         }
@@ -761,6 +1172,16 @@ public final class SettlerWork {
         }
         if (activity == Activity.GO_TO_BED) {
             sleep(level);
+            return;
+        }
+        if (activity == Activity.FETCH_FOOD) {
+            visitPantry(level, target);
+            activity = Activity.IDLE;
+            mealPurpose = null;
+            decide(level);
+            return;
+        }
+        if (activity == Activity.FORAGE) {
             return;
         }
         if (activeJob == null) {
@@ -786,6 +1207,7 @@ public final class SettlerWork {
                 if (fatigue.onBreak()) {
                     return;
                 }
+                weightedWorkTicks += activeJob.jobType().hungerFactor();
                 produce(level, jobBlock, target);
             }
             default -> {

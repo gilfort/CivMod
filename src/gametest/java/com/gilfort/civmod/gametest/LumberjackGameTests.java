@@ -255,7 +255,7 @@ public final class LumberjackGameTests {
         });
     }
 
-    private static List<long[]> forceChunks(GameTestHelper helper) {
+    static List<long[]> forceChunks(GameTestHelper helper) {
         BlockPos min = helper.absolutePos(BlockPos.ZERO);
         BlockPos max = helper.absolutePos(new BlockPos(8, 0, 8));
         List<long[]> chunks = new java.util.ArrayList<>();

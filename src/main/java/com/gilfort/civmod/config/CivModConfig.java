@@ -56,6 +56,51 @@ public final class CivModConfig {
             .comment("A settler that makes no progress towards its target for this many seconds teleports there.")
             .defineInRange("antiStuckSeconds", 60, 5, 600);
 
+    /** Food points lost per awake day (06:00–20:00) without work. */
+    public static final ModConfigSpec.DoubleValue HUNGER_BASE_PER_DAY = BUILDER
+            .comment("Food points a settler loses per awake day (06:00-20:00), independent of work.")
+            .defineInRange("hungerBasePerDay", 8.0, 0.0, 100.0);
+
+    /** Additional food points lost per real minute of actual work (× job factor). */
+    public static final ModConfigSpec.DoubleValue HUNGER_PER_WORK_MINUTE = BUILDER
+            .comment("Additional food points a settler loses per real minute of actual work (multiplied by the job factor).")
+            .defineInRange("hungerPerWorkMinute", 0.6, 0.0, 20.0);
+
+    /** Job factor of the Lumberjack. */
+    public static final ModConfigSpec.DoubleValue HUNGER_FACTOR_LUMBERJACK = BUILDER
+            .comment("Work hunger factor of the Lumberjack.")
+            .defineInRange("hungerFactorLumberjack", 1.0, 0.0, 10.0);
+
+    /** Job factor of the Miner. */
+    public static final ModConfigSpec.DoubleValue HUNGER_FACTOR_MINER = BUILDER
+            .comment("Work hunger factor of the Miner.")
+            .defineInRange("hungerFactorMiner", 1.0, 0.0, 10.0);
+
+    /** Job factor of the Fisherman. */
+    public static final ModConfigSpec.DoubleValue HUNGER_FACTOR_FISHERMAN = BUILDER
+            .comment("Work hunger factor of the Fisherman.")
+            .defineInRange("hungerFactorFisherman", 0.5, 0.0, 10.0);
+
+    /** Lowest appetite a settler can roll. */
+    public static final ModConfigSpec.DoubleValue APPETITE_MIN = BUILDER
+            .comment("Lowest appetite multiplier a new settler can roll.")
+            .defineInRange("appetiteMin", 0.8, 0.1, 1.0);
+
+    /** Highest appetite a settler can roll. */
+    public static final ModConfigSpec.DoubleValue APPETITE_MAX = BUILDER
+            .comment("Highest appetite multiplier a new settler can roll.")
+            .defineInRange("appetiteMax", 1.25, 1.0, 10.0);
+
+    /** Nutrition a settler wants to carry as provisions. */
+    public static final ModConfigSpec.IntValue PROVISION_NUTRITION = BUILDER
+            .comment("Settlers carrying less food than this (nutrition) fetch provisions from a pantry in the morning.")
+            .defineInRange("provisionNutrition", 6, 0, 100);
+
+    /** Food points regained by a day of foraging. */
+    public static final ModConfigSpec.IntValue FORAGING_FOOD = BUILDER
+            .comment("Food points a settler regains by foraging for a day when no food is available.")
+            .defineInRange("foragingFood", 5, 0, 20);
+
     /** The built config spec, registered in the mod constructor. */
     public static final ModConfigSpec SPEC = BUILDER.build();
 

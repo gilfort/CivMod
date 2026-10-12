@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:food_forages_without_food",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
