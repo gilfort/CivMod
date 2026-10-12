@@ -7,6 +7,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.registry.ModEntityTypes;
@@ -51,6 +52,7 @@ public final class ScheduleGameTests {
             register(helper, "schedule_straw_spots", ScheduleGameTests::strawSpots);
             register(helper, "schedule_time_jump", ScheduleGameTests::timeJump);
             register(helper, "schedule_sleeping", ScheduleGameTests::sleeping);
+            register(helper, "schedule_standing_spot", ScheduleGameTests::standingSpot);
         });
     }
 
@@ -148,11 +150,39 @@ public final class ScheduleGameTests {
         helper.succeed();
     }
 
-    /** A skipped night is detected from the clock jump between two decisions. */
+    /** A skipped night is detected from the clock jump between two decisions; other clock changes are not. */
     private static void timeJump(GameTestHelper helper) {
-        helper.assertFalse(SettlerBeds.timeJumped(1000, 1100, 100), "Normal decision step");
-        helper.assertFalse(SettlerBeds.timeJumped(-1, 50000, 100), "No previous decision");
-        helper.assertTrue(SettlerBeds.timeJumped(14000, 24100, 100), "Night skipped");
+        long workEnd = SettlerWork.WORK_END;
+        helper.assertFalse(SettlerBeds.nightSkipped(1000, 1100, 100, workEnd), "Normal decision step");
+        helper.assertFalse(SettlerBeds.nightSkipped(-1, 50000, 100, workEnd), "No previous decision");
+        helper.assertTrue(SettlerBeds.nightSkipped(14000, 24100, 100, workEnd), "Night skipped");
+        helper.assertTrue(SettlerBeds.nightSkipped(12600, 24000, 100, workEnd), "Player slept before the settlers went to bed");
+        helper.assertFalse(SettlerBeds.nightSkipped(1000, 11500, 100, workEnd), "/time set to the evening is no skipped night");
+        helper.assertFalse(SettlerBeds.nightSkipped(11500, 14000, 100, workEnd), "/time set to the night is no skipped night");
+        helper.succeed();
+    }
+
+    /** Teleports land on a free spot next to the target: not inside the trunk, not on the bed, within reach. */
+    private static void standingSpot(GameTestHelper helper) {
+        for (int x = 0; x < 9; x++) {
+            for (int z = 0; z < 9; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
+        for (int y = 1; y <= 6; y++) {
+            helper.setBlock(new BlockPos(4, y, 4), Blocks.OAK_LOG);
+        }
+        ServerLevel level = helper.getLevel();
+        BlockPos log = helper.absolutePos(new BlockPos(4, 1, 4));
+        Vec3 spot = SettlerWork.standingSpot(level, log);
+        BlockPos feet = BlockPos.containing(spot);
+        helper.assertTrue(level.getBlockState(feet).isAir() && level.getBlockState(feet.above()).isAir(), "Spot must be free: " + feet);
+        helper.assertTrue(feet.getY() == log.getY() && feet.distSqr(log) <= 4, "Spot must be next to the log: " + feet);
+
+        BlockPos head = placeBed(helper, new BlockPos(1, 1, 1));
+        BlockPos bedSpot = BlockPos.containing(SettlerWork.standingSpot(level, head));
+        helper.assertFalse(level.getBlockState(bedSpot).getBlock() instanceof BedBlock || level.getBlockState(bedSpot.below()).getBlock() instanceof BedBlock,
+                "Must not stand on the bed: " + bedSpot);
         helper.succeed();
     }
 

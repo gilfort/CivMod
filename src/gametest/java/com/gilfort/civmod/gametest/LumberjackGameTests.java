@@ -190,6 +190,12 @@ public final class LumberjackGameTests {
 
     /** A settler with a Lumberjack job and a stone axe walks to the trees and produces wood into its buffer. */
     private static void worksInWorld(GameTestHelper helper) {
+        // Own floor: test places are spread over the world and the terrain below them varies.
+        for (int x = 0; x < 9; x++) {
+            for (int z = 0; z < 9; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
         BlockPos jobBlockRelative = new BlockPos(1, 1, 1);
         helper.setBlock(jobBlockRelative, ModBlocks.LUMBERJACK_BLOCK.get());
         for (int x = 4; x < 8; x++) {

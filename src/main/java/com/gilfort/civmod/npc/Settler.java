@@ -84,6 +84,8 @@ public class Settler extends PathfinderMob {
     private static final EntityDataAccessor<Integer> SKIN = SynchedEntityData.defineId(Settler.class, EntityDataSerializers.INT);
     /** Sleeping without bed: -1 = no, 0–3 = straw bed facing (2D value), 4–7 = bare ground facing. */
     private static final EntityDataAccessor<Integer> STRAW = SynchedEntityData.defineId(Settler.class, EntityDataSerializers.INT);
+    /** Height of the vanilla straw bed base (4 px). */
+    private static final double STRAW_BED_HEIGHT = 4.0 / 16.0;
 
     private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE);
     private Identifier race = Races.HUMAN;
@@ -252,7 +254,8 @@ public class Settler extends PathfinderMob {
      */
     public void sleepOnStraw(SettlerBeds.StrawSpot spot, boolean straw) {
         Vec3 pos = Vec3.atBottomCenterOf(spot.pos());
-        setPos(pos.x, pos.y + 0.1, pos.z);
+        // Like vanilla beds: lying height on top of the (4 px) straw bed plus 0.125, otherwise the body is hidden in it.
+        setPos(pos.x, pos.y + (straw ? STRAW_BED_HEIGHT : 0.0) + 0.125, pos.z);
         setSleepingPos(spot.pos());
         setPose(Pose.SLEEPING);
         setDeltaMovement(Vec3.ZERO);

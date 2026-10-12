@@ -15,6 +15,7 @@ import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
@@ -22,6 +23,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -37,6 +39,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.block.AbstractBedBlock;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -75,6 +79,8 @@ public final class SettlerWork {
     public static final long SLEEP_TIME = 14000;
     /** Stroll radius around the bed in the evening. */
     private static final int REST_RADIUS = 5;
+    /** Horizontal search radius for a free spot next to a teleport target (within {@link #REACH}). */
+    private static final int STAND_SEARCH = 2;
 
     /**
      * Where a settler spends the night.
@@ -263,7 +269,7 @@ public final class SettlerWork {
         long clock = level.getOverworldClockTime();
         long dayTime = Math.floorMod(clock, 24000L);
         long day = Math.floorDiv(clock, 24000L);
-        boolean jumped = SettlerBeds.timeJumped(lastClock, clock, DECISION_INTERVAL);
+        boolean jumped = SettlerBeds.nightSkipped(lastClock, clock, DECISION_INTERVAL, WORK_END);
         lastClock = clock;
         boolean night = dayTime >= SLEEP_TIME;
         boolean evening = dayTime >= WORK_END && !night;
@@ -431,7 +437,7 @@ public final class SettlerWork {
     private void teleportToRestPlace(ServerLevel level, long day) {
         RestPlace rest = ensureRestPlace(level, day - 1);
         if (rest != null) {
-            Vec3 spot = Vec3.atBottomCenterOf(rest.bed() ? rest.pos().above() : rest.pos());
+            Vec3 spot = rest.straw() != null ? Vec3.atBottomCenterOf(rest.pos()) : standingSpot(level, rest.pos());
             settler.teleportTo(spot.x, spot.y, spot.z);
             settler.getNavigation().stop();
         }
@@ -442,7 +448,7 @@ public final class SettlerWork {
         RestPlace rest = restPlace;
         settler.getNavigation().stop();
         activity = Activity.SLEEP;
-        if (rest != null && rest.bed() && !level.getBlockState(rest.pos()).getValue(net.minecraft.world.level.block.BedBlock.OCCUPIED)
+        if (rest != null && rest.bed() && !level.getBlockState(rest.pos()).getValue(BedBlock.OCCUPIED)
                 && settler.startSleeping(rest.pos())) {
             return;
         }
@@ -500,13 +506,63 @@ public final class SettlerWork {
             bestDistance = distance;
             lastProgressTick = level.getGameTime();
         } else if (level.getGameTime() - lastProgressTick > CivModConfig.ANTI_STUCK_SECONDS.get() * 20L) {
-            Vec3 spot = Vec3.atBottomCenterOf(target.above());
+            Vec3 spot = standingSpot(level, target);
             settler.teleportTo(spot.x, spot.y, spot.z);
             settler.getNavigation().stop();
             lastProgressTick = level.getGameTime();
         } else if (settler.getNavigation().isDone()) {
             settler.getNavigation().moveTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5, 0.6);
         }
+    }
+
+    /**
+     * Finds a free spot to stand on next to a target (work place, container, bed), so a teleport never puts the
+     * settler inside a block (e.g. into the trunk above a log) or on top of a bed. Spots are within reach of the
+     * target, so the settler can work from there.
+     *
+     * @param level  the level
+     * @param target the target block
+     * @return the feet position
+     */
+    public static Vec3 standingSpot(ServerLevel level, BlockPos target) {
+        BlockState state = level.getBlockState(target);
+        if (state.getBlock() instanceof AbstractBedBlock && state.hasProperty(BedBlock.FACING)) {
+            Optional<Vec3> standUp = AbstractBedBlock.findStandUpPosition(ModEntityTypes.SETTLER.get(), level, target,
+                    state.getValue(BedBlock.FACING), 0.0F);
+            if (standUp.isPresent()) {
+                return standUp.get();
+            }
+        }
+        BlockPos best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (BlockPos pos : BlockPos.betweenClosed(target.offset(-STAND_SEARCH, -2, -STAND_SEARCH), target.offset(STAND_SEARCH, 3, STAND_SEARCH))) {
+            int dx = pos.getX() - target.getX();
+            int dz = pos.getZ() - target.getZ();
+            if (dx * dx + dz * dz <= REACH * REACH && canStand(level, pos)) {
+                // Prefer spots at the target's height.
+                double distance = pos.distSqr(target) + 2.0 * Math.abs(pos.getY() - target.getY());
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    best = pos.immutable();
+                }
+            }
+        }
+        if (best != null) {
+            return Vec3.atBottomCenterOf(best);
+        }
+        BlockPos up = target.above();
+        for (int i = 0; i < 32 && !canStand(level, up); i++) {
+            up = up.above();
+        }
+        return Vec3.atBottomCenterOf(up);
+    }
+
+    private static boolean canStand(ServerLevel level, BlockPos pos) {
+        BlockPos below = pos.below();
+        return level.getBlockState(pos).getCollisionShape(level, pos).isEmpty()
+                && level.getBlockState(pos.above()).getCollisionShape(level, pos.above()).isEmpty()
+                && level.getFluidState(pos).isEmpty()
+                && level.getBlockState(below).isFaceSturdy(level, below, Direction.UP);
     }
 
     private boolean isAtTarget() {

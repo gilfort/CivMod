@@ -280,14 +280,22 @@ public final class SettlerBeds {
     }
 
     /**
-     * Detects a skipped night: the clock advanced much more than the time between two decisions.
+     * Detects a skipped night: the clock jumped forward (much more than the time between two decisions) from the
+     * evening or night into the working hours of a later day. Other clock changes (e.g. {@code /time set} during the
+     * day) are not a skipped night.
      *
      * @param previousTicks clock ticks at the previous decision
      * @param currentTicks  clock ticks now
      * @param interval      expected ticks between decisions
-     * @return whether time jumped
+     * @param workEnd       day time at which work ends
+     * @return whether the night was skipped
      */
-    public static boolean timeJumped(long previousTicks, long currentTicks, long interval) {
-        return previousTicks >= 0 && currentTicks - previousTicks > interval + 1000;
+    public static boolean nightSkipped(long previousTicks, long currentTicks, long interval, long workEnd) {
+        if (previousTicks < 0 || currentTicks - previousTicks <= interval + 1000) {
+            return false;
+        }
+        boolean wasEvening = Math.floorMod(previousTicks, 24000L) >= workEnd;
+        boolean laterDay = Math.floorDiv(currentTicks, 24000L) > Math.floorDiv(previousTicks, 24000L);
+        return (wasEvening || laterDay) && Math.floorMod(currentTicks, 24000L) < workEnd;
     }
 }
