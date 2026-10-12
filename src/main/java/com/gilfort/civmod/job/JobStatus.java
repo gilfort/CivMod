@@ -25,7 +25,9 @@ public enum JobStatus {
     /** No (reachable) work place. */
     NO_WORK_PLACE("no_work_place"),
     /** The drop-off inventory is full. */
-    DROP_OFF_FULL("drop_off_full");
+    DROP_OFF_FULL("drop_off_full"),
+    /** The scan found nothing this job can produce. */
+    NO_RESOURCES("no_resources");
 
     /** Network codec. */
     public static final StreamCodec<ByteBuf, JobStatus> STREAM_CODEC = ByteBufCodecs.idMapper(i -> values()[i], JobStatus::ordinal);
@@ -40,7 +42,7 @@ public enum JobStatus {
      * @return whether the job can currently not work (the settler switches to its next priority)
      */
     public boolean isBlocked() {
-        return this == NO_TOOL || this == NO_WORK_PLACE || this == DROP_OFF_FULL;
+        return this == NO_TOOL || this == NO_WORK_PLACE || this == DROP_OFF_FULL || this == NO_RESOURCES;
     }
 
     /**

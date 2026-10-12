@@ -144,5 +144,8 @@
   "civmod.settler.appetite.light": "Light eater",
   "civmod.settler.appetite.normal": "Normal appetite",
   "civmod.settler.appetite.big": "Big eater",
-  "civmod.gui.settler.food": "Food"
+  "civmod.gui.settler.food": "Food",
+  "civmod.job.status.no_resources": "No resources",
+  "civmod.gui.settler.found": "Found:",
+  "civmod.gui.settler.found.needs_tool": "Needs a better tool"
 }

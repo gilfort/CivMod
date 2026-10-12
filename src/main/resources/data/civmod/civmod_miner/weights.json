@@ -1,0 +1,42 @@
+{
+  "stone_share": {
+    "level_1": 99.7,
+    "per_level": -0.34
+  },
+  "stones": {
+    "minecraft:stone": 100,
+    "minecraft:deepslate": 60,
+    "minecraft:andesite": 12,
+    "minecraft:diorite": 12,
+    "minecraft:granite": 12,
+    "minecraft:tuff": 8,
+    "minecraft:calcite": 1,
+    "minecraft:netherrack": 100,
+    "minecraft:blackstone": 10,
+    "minecraft:basalt": 10,
+    "minecraft:end_stone": 100
+  },
+  "ores": {
+    "minecraft:coal_ore": 100,
+    "minecraft:deepslate_coal_ore": 100,
+    "minecraft:iron_ore": 70,
+    "minecraft:deepslate_iron_ore": 70,
+    "minecraft:copper_ore": 60,
+    "minecraft:deepslate_copper_ore": 60,
+    "minecraft:redstone_ore": 25,
+    "minecraft:deepslate_redstone_ore": 25,
+    "minecraft:gold_ore": 12,
+    "minecraft:deepslate_gold_ore": 12,
+    "minecraft:lapis_ore": 8,
+    "minecraft:deepslate_lapis_ore": 8,
+    "minecraft:diamond_ore": 3,
+    "minecraft:deepslate_diamond_ore": 3,
+    "minecraft:emerald_ore": 1,
+    "minecraft:deepslate_emerald_ore": 1,
+    "minecraft:nether_quartz_ore": 40,
+    "minecraft:nether_gold_ore": 15,
+    "minecraft:ancient_debris": 0.5
+  },
+  "unknown_stone": 10,
+  "unknown_ore": 10
+}
