@@ -5,6 +5,7 @@ import java.util.function.Supplier;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.menu.DebugMenu;
 import com.gilfort.civmod.menu.JobBlockMenu;
+import com.gilfort.civmod.menu.SettlerMenu;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.flag.FeatureFlags;
@@ -28,6 +29,10 @@ public final class ModMenuTypes {
     /** Menu of all JobBlocks; the client receives a {@link com.gilfort.civmod.menu.JobBlockInfo} snapshot. */
     public static final Supplier<MenuType<JobBlockMenu>> JOB_BLOCK = MENU_TYPES.register(
             "job_block", () -> IMenuTypeExtension.create(JobBlockMenu::new));
+
+    /** Menu of settlers; the client receives a {@link com.gilfort.civmod.menu.SettlerInfo} snapshot. */
+    public static final Supplier<MenuType<SettlerMenu>> SETTLER = MENU_TYPES.register(
+            "settler", () -> IMenuTypeExtension.create(SettlerMenu::new));
 
     private ModMenuTypes() {
     }

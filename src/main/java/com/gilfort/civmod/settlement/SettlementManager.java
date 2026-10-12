@@ -8,6 +8,7 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.RandomSource;
 
 /**
  * Settlement rules for placing and removing JobBlocks (vault {@code Systems/Settlement.md}).
@@ -17,7 +18,42 @@ import net.minecraft.core.BlockPos;
  */
 public final class SettlementManager {
 
+    /** Delay between founding and the arrival of the starting settlers. */
+    public static final long SETTLER_DELAY_TICKS = 600L;
+
     private SettlementManager() {
+    }
+
+    /**
+     * @param data the dimension's settlement data
+     * @param pos  a position
+     * @return whether a JobBlock placed there would found a new settlement (outside every exclusion zone)
+     */
+    public static boolean wouldFound(SettlementData data, BlockPos pos) {
+        return nearestConnected(data, pos, (block, distance) -> distance <= SettlementRules.exclusionRadius(block.level())) == null;
+    }
+
+    /**
+     * Finds the settlement a homeless NPC at the given position can join.
+     *
+     * @param data     the dimension's settlement data
+     * @param pos      the NPC position
+     * @param distance the maximum horizontal distance to a connected JobBlock
+     * @return the settlement with the nearest connected JobBlock within that distance
+     */
+    public static Optional<Settlement> settlementNear(SettlementData data, BlockPos pos, double distance) {
+        Nearest nearest = nearestConnected(data, pos, (block, d) -> d <= distance);
+        return nearest == null ? Optional.empty() : Optional.of(nearest.settlement());
+    }
+
+    /**
+     * @param settlement a settlement
+     * @param pos        a position
+     * @return the connected JobBlock of the settlement nearest to the position
+     */
+    public static Optional<SettlementBlock> nearestBlock(Settlement settlement, BlockPos pos) {
+        return settlement.blocks().stream().filter(SettlementBlock::connected)
+                .min(Comparator.comparingDouble(block -> SettlementRules.horizontalDistance(pos, block.pos())));
     }
 
     /**
@@ -40,6 +76,14 @@ public final class SettlementManager {
          * @param pos the block position
          */
         void autoConnected(BlockPos pos);
+
+        /**
+         * A settlement was dissolved because its last JobBlock was removed; its NPCs become homeless.
+         *
+         * @param settlement the dissolved settlement
+         */
+        default void dissolved(Settlement settlement) {
+        }
 
         /** Listener that ignores everything. */
         Listener NONE = new Listener() {
@@ -99,10 +143,12 @@ public final class SettlementManager {
      * @param jobType  the offered job
      * @param level    the JobBlock level
      * @param gameTime the current game time
+     * @param random   random source for the colour of a new settlement
      * @param listener receives side effects
      * @return how the block was integrated
      */
-    public static Placement place(SettlementData data, BlockPos pos, JobType jobType, int level, long gameTime, Listener listener) {
+    public static Placement place(SettlementData data, BlockPos pos, JobType jobType, int level, long gameTime, RandomSource random,
+            Listener listener) {
         data.removeBlock(pos);
         int clamped = SettlementRules.clampLevel(level);
 
@@ -122,7 +168,7 @@ public final class SettlementManager {
             return new Placement(exclusion.settlement(), Outcome.UNCONNECTED, status.distance(), status.required());
         }
 
-        Settlement settlement = data.create(gameTime);
+        Settlement settlement = data.create(gameTime, SettlementColors.random(random), gameTime + SETTLER_DELAY_TICKS);
         data.addBlock(settlement, new SettlementBlock(pos, jobType, clamped, true));
         listener.blockChanged(pos, settlement.id(), true);
         return new Placement(settlement, Outcome.FOUNDED, 0, 0);
@@ -142,6 +188,7 @@ public final class SettlementManager {
         removed.ifPresent(settlement -> {
             if (settlement.isEmpty()) {
                 data.dissolve(settlement);
+                listener.dissolved(settlement);
             } else if (settlement.connectedCount() == 0) {
                 SettlementBlock anchor = settlement.blocks().iterator().next();
                 anchor.setConnected(true);

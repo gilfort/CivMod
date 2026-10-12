@@ -68,19 +68,34 @@ public final class SettlementOutline {
     }
 
     /**
-     * Server → client: the connected JobBlocks of nearby settlements, grouped per settlement.
+     * The connected JobBlocks of one settlement.
      *
-     * @param settlements one list of blocks per settlement
+     * @param color  the settlement colour (RGB)
+     * @param blocks the connected JobBlocks
+     */
+    public record OutlineSettlement(int color, List<OutlineBlock> blocks) {
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, OutlineSettlement> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.INT, OutlineSettlement::color,
+                OutlineBlock.STREAM_CODEC.apply(ByteBufCodecs.list()), OutlineSettlement::blocks,
+                OutlineSettlement::new);
+    }
+
+    /**
+     * Server → client: the connected JobBlocks of nearby settlements.
+     *
+     * @param settlements the settlements
      * @param alwaysShow  whether to show the outline without holding a JobBlock (debug)
      */
-    public record Sync(List<List<OutlineBlock>> settlements, boolean alwaysShow) implements CustomPacketPayload {
+    public record Sync(List<OutlineSettlement> settlements, boolean alwaysShow) implements CustomPacketPayload {
 
         /** Payload type. */
         public static final Type<Sync> TYPE = new Type<>(CivMod.id("settlement_outline"));
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Sync> STREAM_CODEC = StreamCodec.composite(
-                OutlineBlock.STREAM_CODEC.apply(ByteBufCodecs.list()).apply(ByteBufCodecs.list()), Sync::settlements,
+                OutlineSettlement.STREAM_CODEC.apply(ByteBufCodecs.list()), Sync::settlements,
                 ByteBufCodecs.BOOL, Sync::alwaysShow,
                 Sync::new);
 
@@ -147,8 +162,8 @@ public final class SettlementOutline {
         LAST_SENT.remove(event.getEntity().getUUID());
     }
 
-    private static List<List<OutlineBlock>> collect(SettlementData data, BlockPos center) {
-        List<List<OutlineBlock>> result = new ArrayList<>();
+    private static List<OutlineSettlement> collect(SettlementData data, BlockPos center) {
+        List<OutlineSettlement> result = new ArrayList<>();
         for (Settlement settlement : data.settlements()) {
             List<OutlineBlock> blocks = settlement.blocks().stream()
                     .filter(SettlementBlock::connected)
@@ -156,7 +171,7 @@ public final class SettlementOutline {
                     .toList();
             boolean near = blocks.stream().anyMatch(block -> SettlementRules.horizontalDistance(block.pos(), center) <= RANGE);
             if (near) {
-                result.add(blocks);
+                result.add(new OutlineSettlement(settlement.color(), blocks));
             }
         }
         return result;

@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import com.gilfort.civmod.CivMod;
 import com.mojang.serialization.Codec;
@@ -17,6 +18,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.saveddata.SavedData;
@@ -33,7 +35,9 @@ public final class SettlementData extends SavedData {
     /** Save codec. */
     public static final Codec<SettlementData> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.INT.optionalFieldOf("next_id", 1).forGetter(data -> data.nextId),
-            Settlement.CODEC.listOf().optionalFieldOf("settlements", List.of()).forGetter(data -> List.copyOf(data.settlements.values()))
+            Settlement.CODEC.listOf().optionalFieldOf("settlements", List.of()).forGetter(data -> List.copyOf(data.settlements.values())),
+            Codec.unboundedMap(UUIDUtil.STRING_CODEC, Codec.LONG).optionalFieldOf("last_founding_day", Map.of())
+                    .forGetter(data -> Map.copyOf(data.lastFoundingDay))
     ).apply(instance, SettlementData::new));
 
     /** Saved data type (one file per dimension). */
@@ -43,17 +47,19 @@ public final class SettlementData extends SavedData {
     private final Map<Integer, Settlement> settlements = new LinkedHashMap<>();
     private final Map<BlockPos, Settlement> byPos = new HashMap<>();
     private final Long2ObjectMap<Set<BlockPos>> byChunk = new Long2ObjectOpenHashMap<>();
+    private final Map<UUID, Long> lastFoundingDay = new HashMap<>();
     private int revision;
 
     /**
      * Creates empty data.
      */
     public SettlementData() {
-        this(1, List.of());
+        this(1, List.of(), Map.of());
     }
 
-    private SettlementData(int nextId, List<Settlement> settlements) {
+    private SettlementData(int nextId, List<Settlement> settlements, Map<UUID, Long> lastFoundingDay) {
         this.nextId = nextId;
+        this.lastFoundingDay.putAll(lastFoundingDay);
         for (Settlement settlement : settlements) {
             this.settlements.put(settlement.id(), settlement);
             settlement.blocks().forEach(block -> index(settlement, block.pos()));
@@ -109,8 +115,72 @@ public final class SettlementData extends SavedData {
         return revision;
     }
 
-    Settlement create(long gameTime) {
-        Settlement settlement = new Settlement(nextId++, Optional.empty(), gameTime, List.of());
+    /**
+     * Adds an NPC to a settlement.
+     *
+     * @param settlement the settlement
+     * @param member     the NPC UUID
+     */
+    public void addMember(Settlement settlement, UUID member) {
+        if (settlement.addMember(member)) {
+            changed();
+        }
+    }
+
+    /**
+     * Removes an NPC from a settlement.
+     *
+     * @param settlement the settlement
+     * @param member     the NPC UUID
+     */
+    public void removeMember(Settlement settlement, UUID member) {
+        if (settlement.removeMember(member)) {
+            changed();
+        }
+    }
+
+    /**
+     * Sets the settlement name chosen by the settlers.
+     *
+     * @param settlement the settlement
+     * @param name       the name
+     */
+    public void setName(Settlement settlement, String name) {
+        settlement.setName(Optional.of(name));
+        changed();
+    }
+
+    /**
+     * Marks the starting settlers of a settlement as arrived.
+     *
+     * @param settlement the settlement
+     */
+    public void settlersArrived(Settlement settlement) {
+        settlement.setSettlersDue(Settlement.SETTLERS_ARRIVED);
+        changed();
+    }
+
+    /**
+     * @param player a player UUID
+     * @return the in-game day on which the player last founded a settlement
+     */
+    public Optional<Long> lastFoundingDay(UUID player) {
+        return Optional.ofNullable(lastFoundingDay.get(player));
+    }
+
+    /**
+     * Records that a player founded a settlement.
+     *
+     * @param player the player UUID
+     * @param day    the in-game day
+     */
+    public void recordFounding(UUID player, long day) {
+        lastFoundingDay.put(player, day);
+        setDirty();
+    }
+
+    Settlement create(long gameTime, int color, long settlersDue) {
+        Settlement settlement = new Settlement(nextId++, Optional.empty(), gameTime, color, settlersDue, List.of(), List.of());
         settlements.put(settlement.id(), settlement);
         changed();
         return settlement;

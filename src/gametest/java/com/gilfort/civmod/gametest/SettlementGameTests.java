@@ -21,6 +21,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
@@ -71,7 +72,7 @@ public final class SettlementGameTests {
     }
 
     private static Placement place(SettlementData data, int x, int level, SettlementManager.Listener listener) {
-        return SettlementManager.place(data, new BlockPos(x, 64, 0), JobType.LUMBERJACK, level, 0L, listener);
+        return SettlementManager.place(data, new BlockPos(x, 64, 0), JobType.LUMBERJACK, level, 0L, RandomSource.create(0L), listener);
     }
 
     /** A first JobBlock founds a settlement; a block within 10 × level joins it (height is ignored). */
@@ -79,7 +80,7 @@ public final class SettlementGameTests {
         SettlementData data = new SettlementData();
         Placement first = place(data, 0, 1, SettlementManager.Listener.NONE);
         helper.assertTrue(first.outcome() == Outcome.FOUNDED, "First block should found a settlement");
-        Placement second = SettlementManager.place(data, new BlockPos(10, 100, 0), JobType.MINER, 1, 0L, SettlementManager.Listener.NONE);
+        Placement second = SettlementManager.place(data, new BlockPos(10, 100, 0), JobType.MINER, 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
         helper.assertTrue(second.outcome() == Outcome.JOINED && second.settlement() == first.settlement(),
                 "Block at horizontal distance 10 should join, regardless of height");
         helper.assertTrue(data.settlements().size() == 1, "Expected exactly one settlement");

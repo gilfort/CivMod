@@ -5,6 +5,7 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.settlement.JobType;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
 import net.minecraft.core.BlockPos;
@@ -84,6 +85,9 @@ public class JobBlock extends BaseEntityBlock {
             var placement = SettlementWorld.place(serverLevel, pos, jobType, jobBlock.getJobLevel());
             if (by instanceof ServerPlayer player) {
                 SettlementWorld.notifyPlacement(player, placement);
+                if (placement.outcome() == SettlementManager.Outcome.FOUNDED) {
+                    SettlementWorld.recordFounding(serverLevel, player);
+                }
             }
         }
     }
