@@ -22,9 +22,8 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.phys.AABB;
+import net.minecraft.world.level.block.Block;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.registries.RegisterEvent;
@@ -160,16 +159,16 @@ public final class SettlementGameTests {
         ItemStack levelStack = new ItemStack(ModItems.MINER_BLOCK.get());
         levelStack.set(ModDataComponents.JOB_LEVEL.get(), 3);
         helper.getBlockEntity(relative, JobBlockEntity.class).applyComponentsFromItemStack(levelStack);
-        helper.runAfterDelay(2, () -> {
-            helper.assertTrue(SettlementData.get(helper.getLevel()).settlementAt(absolute).isPresent(), "JobBlock was not registered");
-            helper.getLevel().destroyBlock(absolute, true);
+        helper.startSequence().thenWaitUntil(() -> helper.assertTrue(
+                SettlementData.get(helper.getLevel()).settlementAt(absolute).isPresent(), "JobBlock was not registered")).thenExecute(() -> {
+            // Check the loot table result directly; item entities are unreliable in non-ticking test chunks.
+            List<ItemStack> drops = Block.getDrops(helper.getLevel().getBlockState(absolute), helper.getLevel(), absolute,
+                    helper.getLevel().getBlockEntity(absolute));
+            boolean dropped = drops.stream().anyMatch(stack -> stack.is(ModItems.MINER_BLOCK.get())
+                    && stack.getOrDefault(ModDataComponents.JOB_LEVEL.get(), 1) == 3);
+            helper.assertTrue(dropped, "JobBlock would not drop itself with level 3: " + drops);
+            helper.getLevel().destroyBlock(absolute, false);
             helper.assertTrue(SettlementData.get(helper.getLevel()).settlementAt(absolute).isEmpty(), "Destroyed JobBlock still registered");
-            List<ItemEntity> drops = helper.getLevel().getEntitiesOfClass(ItemEntity.class, new AABB(absolute).inflate(2.0));
-            boolean dropped = drops.stream().anyMatch(item -> item.getItem().is(ModItems.MINER_BLOCK.get())
-                    && item.getItem().getOrDefault(ModDataComponents.JOB_LEVEL.get(), 1) == 3);
-            helper.assertTrue(dropped, "JobBlock did not drop itself with level 3: "
-                    + drops.stream().map(item -> item.getItem() + " " + item.getItem().getComponentsPatch()).toList());
-            helper.succeed();
-        });
+        }).thenSucceed();
     }
 }

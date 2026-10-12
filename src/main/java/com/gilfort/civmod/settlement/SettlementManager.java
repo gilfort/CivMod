@@ -175,6 +175,27 @@ public final class SettlementManager {
     }
 
     /**
+     * Changes the level of a registered JobBlock. A connected block with a larger radius may connect waiting blocks.
+     *
+     * @param data     the dimension settlement data
+     * @param pos      the JobBlock position
+     * @param level    the new level
+     * @param listener receives side effects
+     */
+    public static void setLevel(SettlementData data, BlockPos pos, int level, Listener listener) {
+        data.settlementAt(pos).ifPresent(settlement -> settlement.block(pos).ifPresent(block -> {
+            if (block.level() == SettlementRules.clampLevel(level)) {
+                return;
+            }
+            block.setLevel(level);
+            data.changed();
+            if (block.connected()) {
+                connectChain(data, settlement, listener);
+            }
+        }));
+    }
+
+    /**
      * Unregisters a removed JobBlock. An empty settlement is dissolved; if only unconnected blocks remain, the
      * first one becomes the new anchor and pulls in all blocks in reach.
      *

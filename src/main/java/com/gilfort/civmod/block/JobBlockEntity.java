@@ -146,6 +146,13 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
             SettlementWorld.settlementAt(serverLevel, worldPosition).ifPresent(settlement -> {
                 settlementId = settlement.id();
                 connected = settlement.block(worldPosition).map(SettlementBlock::connected).orElse(true);
+                // Placement registers with the default level before the block entity exists; sync the real level.
+                if (settlement.block(worldPosition).map(block -> block.level() != jobLevel).orElse(false)) {
+                    // Deferred: onLoad may run during chunk loading, where other blocks must not be touched.
+                    BlockPos pos = worldPosition;
+                    int level = jobLevel;
+                    serverLevel.getServer().execute(() -> SettlementWorld.setLevel(serverLevel, pos, level));
+                }
             });
         }
     }

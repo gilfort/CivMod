@@ -1,7 +1,9 @@
 package com.gilfort.civmod.settlement;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -12,6 +14,7 @@ import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.npc.Settler;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -21,6 +24,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /**
  * Connects {@link SettlementManager} to the world: syncs JobBlock entities, notifies players and cleans up
@@ -31,6 +35,11 @@ public final class SettlementWorld {
 
     /** Players within this distance are notified about automatic connections. */
     private static final double NOTIFY_DISTANCE = 32.0;
+
+    /** Placement results of the current tick waiting for their placing player ({@code onPlace} came first). */
+    private static final Map<GlobalPos, SettlementManager.Placement> PENDING_PLACEMENTS = new HashMap<>();
+    /** Placing players of the current tick waiting for the placement result ({@code setPlacedBy} came first). */
+    private static final Map<GlobalPos, UUID> PENDING_PLACERS = new HashMap<>();
 
     private SettlementWorld() {
     }
@@ -45,7 +54,61 @@ public final class SettlementWorld {
      * @return how the block was integrated
      */
     public static SettlementManager.Placement place(ServerLevel level, BlockPos pos, JobType jobType, int jobLevel) {
-        return SettlementManager.place(SettlementData.get(level), pos, jobType, jobLevel, level.getGameTime(), level.getRandom(), listener(level));
+        SettlementManager.Placement placement = SettlementManager.place(SettlementData.get(level), pos, jobType, jobLevel,
+                level.getGameTime(), level.getRandom(), listener(level));
+        GlobalPos key = GlobalPos.of(level.dimension(), pos.immutable());
+        UUID placer = PENDING_PLACERS.remove(key);
+        ServerPlayer player = placer == null ? null : level.getServer().getPlayerList().getPlayer(placer);
+        if (player != null) {
+            feedback(level, player, placement);
+        } else {
+            PENDING_PLACEMENTS.put(key, placement);
+        }
+        return placement;
+    }
+
+    /**
+     * Handles a JobBlock placed by a player: applies the item level and gives feedback. Works in both orders of
+     * {@code onPlace} and {@code setPlacedBy} (NeoForge defers {@code onPlace} for player placement).
+     *
+     * @param level    the dimension
+     * @param pos      the JobBlock position
+     * @param player   the placing player
+     * @param jobLevel the level of the placed item
+     */
+    public static void placedByPlayer(ServerLevel level, BlockPos pos, ServerPlayer player, int jobLevel) {
+        setLevel(level, pos, jobLevel);
+        GlobalPos key = GlobalPos.of(level.dimension(), pos.immutable());
+        SettlementManager.Placement placement = PENDING_PLACEMENTS.remove(key);
+        if (placement != null) {
+            feedback(level, player, placement);
+        } else {
+            PENDING_PLACERS.put(key, player.getUUID());
+        }
+    }
+
+    private static void feedback(ServerLevel level, ServerPlayer player, SettlementManager.Placement placement) {
+        notifyPlacement(player, placement);
+        if (placement.outcome() == SettlementManager.Outcome.FOUNDED) {
+            recordFounding(level, player);
+        }
+    }
+
+    /**
+     * Applies a JobBlock level to its settlement entry.
+     *
+     * @param level    the dimension
+     * @param pos      the JobBlock position
+     * @param jobLevel the level
+     */
+    public static void setLevel(ServerLevel level, BlockPos pos, int jobLevel) {
+        SettlementManager.setLevel(SettlementData.get(level), pos, jobLevel, listener(level));
+    }
+
+    @SubscribeEvent
+    static void onServerTick(ServerTickEvent.Post event) {
+        PENDING_PLACEMENTS.clear();
+        PENDING_PLACERS.clear();
     }
 
     /**
@@ -119,6 +182,7 @@ public final class SettlementWorld {
                 || !(event.getEntity() instanceof ServerPlayer player) || !(event.getPlacedBlock().getBlock() instanceof JobBlock)) {
             return;
         }
+        // For player placement NeoForge defers onPlace until after this event, so the block is not registered yet.
         SettlementData data = SettlementData.get(level);
         if (SettlementManager.wouldFound(data, event.getPos())
                 && data.lastFoundingDay(player.getUUID()).filter(day -> day == day(level)).isPresent()) {
