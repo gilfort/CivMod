@@ -490,6 +490,7 @@ public final class SettlerWork {
     }
 
     private void moveTo(ServerLevel level, Activity next, BlockPos pos) {
+        stepOffBed(level);
         activity = next;
         target = pos.immutable();
         bestDistance = Double.MAX_VALUE;
@@ -511,6 +512,7 @@ public final class SettlerWork {
             settler.getNavigation().stop();
             lastProgressTick = level.getGameTime();
         } else if (settler.getNavigation().isDone()) {
+            stepOffBed(level);
             settler.getNavigation().moveTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5, 0.6);
         }
     }
@@ -563,6 +565,23 @@ public final class SettlerWork {
                 && level.getBlockState(pos.above()).getCollisionShape(level, pos.above()).isEmpty()
                 && level.getFluidState(pos).isEmpty()
                 && level.getBlockState(below).isFaceSturdy(level, below, Direction.UP);
+    }
+
+    /**
+     * Gets down from a bed the settler stands on (beds are blocked for the pathfinder): moves to the vanilla stand-up
+     * position, like waking up.
+     */
+    private void stepOffBed(ServerLevel level) {
+        if (settler.isSleeping()) {
+            return;
+        }
+        BlockPos feet = settler.blockPosition();
+        BlockPos bed = level.getBlockState(feet).getBlock() instanceof AbstractBedBlock ? feet
+                : level.getBlockState(feet.below()).getBlock() instanceof AbstractBedBlock ? feet.below() : null;
+        if (bed != null) {
+            Vec3 spot = standingSpot(level, bed);
+            settler.teleportTo(spot.x, spot.y, spot.z);
+        }
     }
 
     private boolean isAtTarget() {

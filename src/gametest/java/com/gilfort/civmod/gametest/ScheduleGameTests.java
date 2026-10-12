@@ -193,7 +193,7 @@ public final class ScheduleGameTests {
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
         Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(2, 1, 4)));
         settler.snapTo(spawn.x, spawn.y, spawn.z, 0.0F, 0.0F);
-        // No AI: the test level is at day time, the schedule would wake the settler.
+        // No AI: the test level is at day time, the schedule would wake the settler (physics still apply).
         settler.setNoAi(true);
         level.addFreshEntity(settler);
         helper.assertTrue(settler.startSleeping(head) && settler.isSleeping(), "Settler should sleep in the bed");
@@ -206,8 +206,11 @@ public final class ScheduleGameTests {
         helper.runAfterDelay(1, () -> {
             settler.sleepOnStraw(new SettlerBeds.StrawSpot(spot, Direction.EAST), true);
             helper.assertTrue(settler.isSleeping() && settler.strawBedFacing().filter(Direction.EAST::equals).isPresent(), "Sleeping on straw");
+            double lyingHeight = settler.getY();
             helper.runAfterDelay(5, () -> {
                 helper.assertTrue(settler.isSleeping(), "Settler must keep sleeping without a bed block");
+                helper.assertTrue(settler.getY() == lyingHeight && lyingHeight - spot.getY() > 0.25,
+                        "Settler must lie on top of the straw bed, not sink into it: " + (settler.getY() - spot.getY()));
                 settler.wakeUp();
                 helper.assertFalse(settler.isSleeping() || settler.isSleepingWithoutBed(), "Woke up from straw");
                 settler.discard();

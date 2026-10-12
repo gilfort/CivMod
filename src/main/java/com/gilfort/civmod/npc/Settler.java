@@ -288,6 +288,12 @@ public class Settler extends PathfinderMob {
     }
 
     @Override
+    public boolean isNoGravity() {
+        // A straw bed is never placed, nothing holds the settler at its lying height.
+        return super.isNoGravity() || isSleepingWithoutBed();
+    }
+
+    @Override
     public net.minecraft.core.@org.jspecify.annotations.Nullable Direction getBedOrientation() {
         int value = entityData.get(STRAW);
         return value >= 0 ? net.minecraft.core.Direction.from2DDataValue(value % 4) : super.getBedOrientation();

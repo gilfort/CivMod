@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:lumberjack_works_from_bed",
+  "max_ticks": 2400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
