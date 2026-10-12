@@ -120,5 +120,16 @@
   "civmod.configuration.breakMaxSeconds": "Maximum Break (s)",
   "civmod.configuration.toolWearMultiplier": "Tool Wear Multiplier",
   "civmod.configuration.antiStuckSeconds": "Anti-Stuck Teleport (s)",
-  "civmod.gui.settler.buffer": "Buffer: %s / %s"
+  "civmod.gui.settler.buffer": "Buffer: %s / %s",
+  "item.civmod.bed_marker": "Bed",
+  "civmod.settler.status.sleeping": "Sleeping",
+  "civmod.gui.settler.bed": "Bed: %s",
+  "civmod.gui.settler.bed.none": "none yet",
+  "civmod.gui.settler.bed.straw": "straw bed",
+  "civmod.scroll.bed.assigned": "Bed assigned to %s",
+  "civmod.scroll.bed.transferred": "Bed assigned to %s – taken from %s",
+  "civmod.scroll.bed.released": "Bed released – will choose automatically",
+  "civmod.scroll.bed.not_a_bed": "Not a bed",
+  "civmod.scroll.bed.spawn_bed": "This bed is a player's spawn point",
+  "civmod.scroll.bed.homeless": "%s does not belong to a settlement"
 }

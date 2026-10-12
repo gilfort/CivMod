@@ -45,8 +45,14 @@ public final class JobPointsRenderer {
     private static final int DROP_OFF_COLOR = 0xFF8C1A;
     private static final float DEGREES_PER_TICK = 3.0F;
 
+    private static final int BED_COLOR = 0xE8E8E8;
+
     private static List<JobPointsDisplay.JobPoints> points = List.of();
     private static Optional<BlockPos> bound = Optional.empty();
+    private static List<BlockPos> beds = List.of();
+    private static Optional<BlockPos> ownBed = Optional.empty();
+    private static Optional<java.util.UUID> boundSettler = Optional.empty();
+    private static Optional<Vec3> settlerPos = Optional.empty();
     private static List<Marker> frame = List.of();
     private static float rotation;
 
@@ -65,6 +71,9 @@ public final class JobPointsRenderer {
     public static void handle(JobPointsDisplay.Sync payload, IPayloadContext context) {
         points = payload.points();
         bound = payload.bound();
+        beds = payload.beds();
+        ownBed = payload.ownBed();
+        boundSettler = payload.settler();
     }
 
     @SubscribeEvent
@@ -89,6 +98,13 @@ public final class JobPointsRenderer {
             jobPoints.dropOff().ifPresent(pos -> markers.add(marker(minecraft, pos, jobPoints.jobBlock(), DROP_OFF_COLOR, dimmed,
                     ModItems.DROP_OFF_MARKER.get().getDefaultInstance())));
         }
+        for (BlockPos bed : beds) {
+            boolean own = ownBed.filter(bed::equals).isPresent();
+            markers.add(marker(minecraft, bed, bed, BED_COLOR, !own, ModItems.BED_MARKER.get().getDefaultInstance()));
+        }
+        settlerPos = boundSettler.flatMap(uuid -> java.util.stream.StreamSupport.stream(event.getLevel().entitiesForRendering().spliterator(), false)
+                .filter(entity -> entity.getUUID().equals(uuid)).findFirst()
+                .map(entity -> entity.getPosition(event.getDeltaTracker().getGameTimeDeltaPartialTick(false)).add(0, 1.0, 0)));
         frame = markers;
     }
 
@@ -123,18 +139,21 @@ public final class JobPointsRenderer {
             }
             poseStack.popPose();
             if (bound.filter(marker.jobBlock()::equals).isPresent()) {
-                submitLine(poseStack, collector, camera, marker.jobBlock(), marker.pos(), argb);
+                submitLine(poseStack, collector, camera, Vec3.atCenterOf(marker.jobBlock()), Vec3.atCenterOf(marker.pos()), argb);
+            }
+            if (ownBed.filter(marker.pos()::equals).isPresent() && settlerPos.isPresent()) {
+                submitLine(poseStack, collector, camera, settlerPos.get(), Vec3.atCenterOf(marker.pos()), argb);
             }
         }
     }
 
-    private static void submitLine(PoseStack poseStack, SubmitNodeCollector collector, Vec3 camera, BlockPos from, BlockPos to, int argb) {
-        float x1 = (float) (from.getX() + 0.5 - camera.x);
-        float y1 = (float) (from.getY() + 0.5 - camera.y);
-        float z1 = (float) (from.getZ() + 0.5 - camera.z);
-        float x2 = (float) (to.getX() + 0.5 - camera.x);
-        float y2 = (float) (to.getY() + 0.5 - camera.y);
-        float z2 = (float) (to.getZ() + 0.5 - camera.z);
+    private static void submitLine(PoseStack poseStack, SubmitNodeCollector collector, Vec3 camera, Vec3 from, Vec3 to, int argb) {
+        float x1 = (float) (from.x - camera.x);
+        float y1 = (float) (from.y - camera.y);
+        float z1 = (float) (from.z - camera.z);
+        float x2 = (float) (to.x - camera.x);
+        float y2 = (float) (to.y - camera.y);
+        float z2 = (float) (to.z - camera.z);
         float dx = x2 - x1;
         float dy = y2 - y1;
         float dz = z2 - z1;

@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.settlement.JobAssignments;
@@ -83,6 +84,16 @@ public class ScrollOfAssignmentItem extends Item {
             }
             return InteractionResult.SUCCESS;
         }
+        Optional<java.util.UUID> boundSettler = binding(stack).flatMap(ScrollBinding::settler);
+        if (boundSettler.isPresent()) {
+            if (!(level.getBlockState(pos).getBlock() instanceof net.minecraft.world.level.block.AbstractBedBlock)) {
+                return InteractionResult.PASS;
+            }
+            if (player instanceof ServerPlayer serverPlayer) {
+                assignBed(stack, serverPlayer, boundSettler.get(), pos);
+            }
+            return InteractionResult.SUCCESS;
+        }
         Optional<BlockPos> bound = binding(stack).flatMap(ScrollBinding::jobBlock);
         if (bound.isEmpty()) {
             return InteractionResult.PASS;
@@ -134,6 +145,28 @@ public class ScrollOfAssignmentItem extends Item {
             }
         }
         return InteractionResult.SUCCESS;
+    }
+
+    private static void assignBed(ItemStack stack, ServerPlayer player, java.util.UUID settler, BlockPos clicked) {
+        ServerLevel level = player.level();
+        SettlementData data = SettlementData.get(level);
+        Optional<com.gilfort.civmod.settlement.Settlement> settlement = data.settlements().stream()
+                .filter(s -> s.members().contains(settler)).findFirst();
+        Optional<java.util.UUID> previous = SettlerBeds.head(level, clicked)
+                .flatMap(head -> settlement.map(s -> s.beds().get(head)));
+        String label = binding(stack).map(ScrollBinding::label).orElse("?");
+        SettlerBeds.AssignResult result = SettlerBeds.assign(level, data, settlement, settler, clicked);
+        Component message = switch (result) {
+            case ASSIGNED -> Component.translatable("civmod.scroll.bed.assigned", label);
+            case TRANSFERRED -> Component.translatable("civmod.scroll.bed.transferred", label,
+                    previous.map(level::getEntity).map(entity -> entity.getName()).orElse(Component.literal("?")));
+            case RELEASED -> Component.translatable("civmod.scroll.bed.released");
+            case NOT_A_BED -> Component.translatable("civmod.scroll.bed.not_a_bed").withStyle(ChatFormatting.RED);
+            case OUTSIDE -> Component.translatable("civmod.scroll.point.outside").withStyle(ChatFormatting.RED);
+            case SPAWN_BED -> Component.translatable("civmod.scroll.bed.spawn_bed").withStyle(ChatFormatting.RED);
+            case HOMELESS -> Component.translatable("civmod.scroll.bed.homeless", label).withStyle(ChatFormatting.RED);
+        };
+        player.sendOverlayMessage(message);
     }
 
     private static void bindJobBlock(ItemStack stack, ServerPlayer player, BlockPos pos, JobType jobType) {

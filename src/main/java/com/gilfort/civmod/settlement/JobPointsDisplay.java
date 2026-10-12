@@ -39,7 +39,7 @@ public final class JobPointsDisplay {
     private static final int RANGE = 32;
     private static final Map<UUID, Key> LAST_SENT = new HashMap<>();
 
-    private record Key(String dimension, int revision, long chunk, Optional<BlockPos> bound, boolean holding) {
+    private record Key(String dimension, int revision, long chunk, Optional<BlockPos> bound, Optional<UUID> settler, boolean holding) {
     }
 
     private JobPointsDisplay() {
@@ -67,10 +67,14 @@ public final class JobPointsDisplay {
     /**
      * Server → client: points to display.
      *
-     * @param points the JobBlocks with their points
-     * @param bound  the JobBlock the scroll is bound to (its points are highlighted)
+     * @param points  the JobBlocks with their points
+     * @param bound   the JobBlock the scroll is bound to (its points are highlighted)
+     * @param beds    owned beds of the bound settler's settlement (only when bound to a settler)
+     * @param ownBed  the bed of the bound settler
+     * @param settler the bound settler
      */
-    public record Sync(List<JobPoints> points, Optional<BlockPos> bound) implements CustomPacketPayload {
+    public record Sync(List<JobPoints> points, Optional<BlockPos> bound, List<BlockPos> beds, Optional<BlockPos> ownBed,
+            Optional<UUID> settler) implements CustomPacketPayload {
 
         /** Payload type. */
         public static final Type<Sync> TYPE = new Type<>(CivMod.id("job_points"));
@@ -79,6 +83,9 @@ public final class JobPointsDisplay {
         public static final StreamCodec<RegistryFriendlyByteBuf, Sync> STREAM_CODEC = StreamCodec.composite(
                 JobPoints.STREAM_CODEC.apply(ByteBufCodecs.list()), Sync::points,
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs::optional), Sync::bound,
+                BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), Sync::beds,
+                BlockPos.STREAM_CODEC.apply(ByteBufCodecs::optional), Sync::ownBed,
+                net.minecraft.core.UUIDUtil.STREAM_CODEC.apply(ByteBufCodecs::optional), Sync::settler,
                 Sync::new);
 
         @Override
@@ -106,19 +113,23 @@ public final class JobPointsDisplay {
         Key last = LAST_SENT.get(player.getUUID());
         if (!holding) {
             if (last != null && last.holding()) {
-                LAST_SENT.put(player.getUUID(), new Key("", -1, 0L, Optional.empty(), false));
+                LAST_SENT.put(player.getUUID(), new Key("", -1, 0L, Optional.empty(), Optional.empty(), false));
             }
             return;
         }
         ServerLevel level = player.level();
         SettlementData data = SettlementData.get(level);
         Optional<BlockPos> bound = ScrollOfAssignmentItem.binding(scroll).flatMap(ScrollBinding::jobBlock);
-        Key key = new Key(level.dimension().identifier().toString(), data.revision(), player.chunkPosition().pack(), bound, true);
+        Optional<UUID> settler = ScrollOfAssignmentItem.binding(scroll).flatMap(ScrollBinding::settler);
+        Key key = new Key(level.dimension().identifier().toString(), data.revision(), player.chunkPosition().pack(), bound, settler, true);
         if (Objects.equals(last, key)) {
             return;
         }
         LAST_SENT.put(player.getUUID(), key);
-        PacketDistributor.sendToPlayer(player, new Sync(collect(data, player.blockPosition(), bound), bound));
+        Optional<Settlement> settlement = settler.flatMap(uuid -> data.settlements().stream().filter(s -> s.members().contains(uuid)).findFirst());
+        List<BlockPos> beds = settlement.map(s -> List.copyOf(s.beds().keySet())).orElse(List.of());
+        Optional<BlockPos> ownBed = settlement.flatMap(s -> s.bedOf(settler.get()));
+        PacketDistributor.sendToPlayer(player, new Sync(collect(data, player.blockPosition(), bound), bound, beds, ownBed, settler));
     }
 
     @SubscribeEvent

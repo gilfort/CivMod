@@ -1,0 +1,188 @@
+package com.gilfort.civmod.gametest;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Consumer;
+
+import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerBeds;
+import com.gilfort.civmod.registry.ModEntityTypes;
+import com.gilfort.civmod.settlement.JobType;
+import com.gilfort.civmod.settlement.Settlement;
+import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.SettlementManager;
+
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.phys.Vec3;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.registries.RegisterEvent;
+
+/**
+ * GameTests for Story 6 (daily schedule and beds).
+ */
+@EventBusSubscriber(modid = CivMod.MOD_ID)
+public final class ScheduleGameTests {
+
+    private ScheduleGameTests() {
+    }
+
+    @SubscribeEvent
+    static void onRegister(RegisterEvent event) {
+        event.register(Registries.TEST_FUNCTION, helper -> {
+            register(helper, "schedule_bed_claim", ScheduleGameTests::bedClaim);
+            register(helper, "schedule_bed_assign", ScheduleGameTests::bedAssign);
+            register(helper, "schedule_straw_spots", ScheduleGameTests::strawSpots);
+            register(helper, "schedule_time_jump", ScheduleGameTests::timeJump);
+            register(helper, "schedule_sleeping", ScheduleGameTests::sleeping);
+        });
+    }
+
+    private static void register(RegisterEvent.RegisterHelper<Consumer<GameTestHelper>> helper, String name, Consumer<GameTestHelper> test) {
+        helper.register(ResourceKey.create(Registries.TEST_FUNCTION, CivMod.id(name)), test);
+    }
+
+    /** Places a bed (both halves) with its head at the given relative position, facing north. */
+    private static BlockPos placeBed(GameTestHelper helper, BlockPos relativeHead) {
+        ServerLevel level = helper.getLevel();
+        BlockPos head = helper.absolutePos(relativeHead);
+        BlockState bed = Blocks.BED.pick(DyeColor.RED).defaultBlockState().setValue(BedBlock.FACING, Direction.NORTH);
+        int flags = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
+        level.setBlock(head.relative(Direction.SOUTH), bed.setValue(BedBlock.PART, BedPart.FOOT), flags);
+        level.setBlock(head, bed.setValue(BedBlock.PART, BedPart.HEAD), flags);
+        return head;
+    }
+
+    private static Settlement settlementAt(SettlementData data, BlockPos pos) {
+        return SettlementManager.place(data, pos, JobType.LUMBERJACK, 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE).settlement();
+    }
+
+    /** The nearest free bed is claimed, beds are never shared, a destroyed bed is released. */
+    private static void bedClaim(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos near = placeBed(helper, new BlockPos(2, 1, 1));
+        BlockPos far = placeBed(helper, new BlockPos(6, 1, 1));
+        SettlementData data = new SettlementData();
+        Settlement settlement = settlementAt(data, helper.absolutePos(new BlockPos(3, 1, 4)));
+        UUID alice = UUID.randomUUID();
+        UUID bob = UUID.randomUUID();
+        UUID carol = UUID.randomUUID();
+        try {
+            BlockPos from = helper.absolutePos(new BlockPos(1, 1, 3));
+            helper.assertTrue(SettlerBeds.ensureBed(level, data, settlement, alice, from).filter(near::equals).isPresent(), "Alice should get the nearest bed");
+            helper.assertTrue(SettlerBeds.ensureBed(level, data, settlement, bob, from).filter(far::equals).isPresent(), "Bob should get the other bed");
+            helper.assertTrue(SettlerBeds.ensureBed(level, data, settlement, carol, from).isEmpty(), "No bed left for Carol");
+            helper.assertTrue(SettlerBeds.ensureBed(level, data, settlement, alice, from).filter(near::equals).isPresent(), "Alice keeps her bed");
+
+            level.setBlock(near, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+            level.setBlock(near.relative(Direction.SOUTH), Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+            helper.assertTrue(SettlerBeds.ensureBed(level, data, settlement, alice, from).isEmpty(), "Destroyed bed must be released, no free bed left");
+            helper.assertTrue(settlement.bedOf(alice).isEmpty() && settlement.beds().size() == 1, "Only Bob's bed is still owned");
+            helper.succeed();
+        } finally {
+            SettlerBeds.releasePoi(level, near);
+            SettlerBeds.releasePoi(level, far);
+        }
+    }
+
+    /** Assigning via the scroll: foot click works, transfer from another settler, second click releases. */
+    private static void bedAssign(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos head = placeBed(helper, new BlockPos(2, 1, 1));
+        SettlementData data = new SettlementData();
+        Settlement settlement = settlementAt(data, helper.absolutePos(new BlockPos(3, 1, 4)));
+        UUID alice = UUID.randomUUID();
+        UUID bob = UUID.randomUUID();
+        try {
+            helper.assertTrue(SettlerBeds.assign(level, data, Optional.of(settlement), alice, head.relative(Direction.SOUTH))
+                    == SettlerBeds.AssignResult.ASSIGNED, "Clicking the foot should assign the bed");
+            helper.assertTrue(settlement.bedOf(alice).filter(head::equals).isPresent(), "Bed stored by its head");
+            helper.assertTrue(SettlerBeds.assign(level, data, Optional.of(settlement), bob, head) == SettlerBeds.AssignResult.TRANSFERRED,
+                    "Bed should be transferred to Bob");
+            helper.assertTrue(settlement.bedOf(alice).isEmpty() && settlement.bedOf(bob).isPresent(), "Alice lost the bed to Bob");
+            helper.assertTrue(SettlerBeds.assign(level, data, Optional.of(settlement), bob, head) == SettlerBeds.AssignResult.RELEASED,
+                    "Second click releases");
+            helper.assertTrue(SettlerBeds.assign(level, data, Optional.of(settlement), bob, helper.absolutePos(new BlockPos(5, 1, 5)))
+                    == SettlerBeds.AssignResult.NOT_A_BED, "Air is not a bed");
+            helper.assertTrue(SettlerBeds.assign(level, data, Optional.empty(), bob, head) == SettlerBeds.AssignResult.HOMELESS, "Homeless");
+            helper.succeed();
+        } finally {
+            SettlerBeds.releasePoi(level, head);
+        }
+    }
+
+    /** Straw spots spread around the JobBlock: free, distinct and not adjacent to each other. */
+    private static void strawSpots(GameTestHelper helper) {
+        for (int x = 0; x < 9; x++) {
+            for (int z = 0; z < 9; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
+        BlockPos jobBlock = helper.absolutePos(new BlockPos(4, 1, 4));
+        helper.setBlock(new BlockPos(4, 1, 4), Blocks.STONE);
+        List<BlockPos> taken = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            SettlerBeds.StrawSpot spot = SettlerBeds.findStrawSpot(helper.getLevel(), jobBlock, taken).orElseThrow();
+            helper.assertTrue(spot.pos().distManhattan(jobBlock) <= 2 * SettlerBeds.STRAW_RADIUS, "Spot too far away");
+            for (BlockPos other : taken) {
+                helper.assertTrue(other.distManhattan(spot.pos()) > 1, "Spots must not be adjacent: " + taken + " / " + spot);
+            }
+            taken.add(spot.pos());
+        }
+        helper.succeed();
+    }
+
+    /** A skipped night is detected from the clock jump between two decisions. */
+    private static void timeJump(GameTestHelper helper) {
+        helper.assertFalse(SettlerBeds.timeJumped(1000, 1100, 100), "Normal decision step");
+        helper.assertFalse(SettlerBeds.timeJumped(-1, 50000, 100), "No previous decision");
+        helper.assertTrue(SettlerBeds.timeJumped(14000, 24100, 100), "Night skipped");
+        helper.succeed();
+    }
+
+    /** A settler sleeps in a bed (bed occupied) and on a straw bed (keeps sleeping without bed block) and wakes up. */
+    private static void sleeping(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos head = placeBed(helper, new BlockPos(2, 1, 1));
+        Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
+        Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(2, 1, 4)));
+        settler.snapTo(spawn.x, spawn.y, spawn.z, 0.0F, 0.0F);
+        // No AI: the test level is at day time, the schedule would wake the settler.
+        settler.setNoAi(true);
+        level.addFreshEntity(settler);
+        helper.assertTrue(settler.startSleeping(head) && settler.isSleeping(), "Settler should sleep in the bed");
+        helper.assertTrue(level.getBlockState(head).getValue(BedBlock.OCCUPIED), "Bed should be occupied");
+        settler.wakeUp();
+        helper.assertFalse(settler.isSleeping() || level.getBlockState(head).getValue(BedBlock.OCCUPIED), "Woke up, bed free");
+
+        BlockPos spot = helper.absolutePos(new BlockPos(5, 1, 4));
+        // Wait one tick: on its very first tick vanilla puts a sleeping entity "into its bed" and wakes it without bed.
+        helper.runAfterDelay(1, () -> {
+            settler.sleepOnStraw(new SettlerBeds.StrawSpot(spot, Direction.EAST), true);
+            helper.assertTrue(settler.isSleeping() && settler.strawBedFacing().filter(Direction.EAST::equals).isPresent(), "Sleeping on straw");
+            helper.runAfterDelay(5, () -> {
+                helper.assertTrue(settler.isSleeping(), "Settler must keep sleeping without a bed block");
+                settler.wakeUp();
+                helper.assertFalse(settler.isSleeping() || settler.isSleepingWithoutBed(), "Woke up from straw");
+                settler.discard();
+                helper.succeed();
+            });
+        });
+    }
+}
