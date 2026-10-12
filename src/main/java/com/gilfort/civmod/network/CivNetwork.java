@@ -2,6 +2,7 @@ package com.gilfort.civmod.network;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.command.CivModCommand;
+import com.gilfort.civmod.settlement.SettlementOutline;
 
 import net.minecraft.commands.Commands;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -62,5 +63,7 @@ public final class CivNetwork {
                 CivModCommand.openDebugMenu(player);
             }
         });
+        // Client handler is registered in CivModClient (RegisterClientPayloadHandlersEvent).
+        registrar.playToClient(SettlementOutline.Sync.TYPE, SettlementOutline.Sync.STREAM_CODEC);
     }
 }

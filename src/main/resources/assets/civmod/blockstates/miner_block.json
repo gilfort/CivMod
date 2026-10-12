@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "civmod:block/miner_block"
+    }
+  }
+}

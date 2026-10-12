@@ -3,8 +3,10 @@ package com.gilfort.civmod;
 import org.slf4j.Logger;
 
 import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.registry.ModBlockEntityTypes;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModCreativeModeTabs;
+import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.registry.ModItems;
 import com.gilfort.civmod.registry.ModMenuTypes;
 import com.mojang.logging.LogUtils;
@@ -42,6 +44,8 @@ public final class CivMod {
         ModItems.register(modEventBus);
         ModCreativeModeTabs.register(modEventBus);
         ModMenuTypes.register(modEventBus);
+        ModBlockEntityTypes.register(modEventBus);
+        ModDataComponents.register(modEventBus);
 
         modContainer.registerConfig(ModConfig.Type.SERVER, CivModConfig.SPEC);
 

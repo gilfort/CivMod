@@ -2,6 +2,10 @@ package com.gilfort.civmod.command;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.menu.DebugMenu;
+import com.gilfort.civmod.settlement.Settlement;
+import com.gilfort.civmod.settlement.SettlementBlock;
+import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.SettlementOutline;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 
 import net.minecraft.commands.CommandSourceStack;
@@ -43,7 +47,15 @@ public final class CivModCommand {
                             .executes(context -> {
                                 openDebugMenu(context.getSource().getPlayerOrException());
                                 return 1;
-                            })));
+                            }))
+                    .then(Commands.literal("settlement")
+                            .then(Commands.literal("list").executes(context -> listSettlements(context.getSource())))
+                            .then(Commands.literal("outline").executes(context -> {
+                                boolean enabled = SettlementOutline.toggleAlwaysShow(context.getSource().getPlayerOrException());
+                                context.getSource().sendSuccess(() -> Component.translatable(
+                                        enabled ? "civmod.command.outline.on" : "civmod.command.outline.off"), false);
+                                return 1;
+                            }))));
         }
         event.getDispatcher().register(root);
     }
@@ -63,5 +75,24 @@ public final class CivModCommand {
     public static void openDebugMenu(ServerPlayer player) {
         player.openMenu(new SimpleMenuProvider((containerId, inventory, p) -> new DebugMenu(containerId, inventory),
                 Component.translatable("civmod.gui.debug.title")));
+    }
+
+    private static int listSettlements(CommandSourceStack source) {
+        SettlementData data = SettlementData.get(source.getLevel());
+        if (data.settlements().isEmpty()) {
+            source.sendSuccess(() -> Component.translatable("civmod.command.settlement.none"), false);
+            return 0;
+        }
+        for (Settlement settlement : data.settlements()) {
+            source.sendSuccess(() -> Component.translatable("civmod.command.settlement.entry", settlement.id(), settlement.displayName(),
+                    settlement.blocks().size(), settlement.connectedCount()), false);
+            for (SettlementBlock block : settlement.blocks()) {
+                source.sendSuccess(() -> Component.translatable("civmod.command.settlement.block", block.pos().toShortString(),
+                        block.jobType().displayName(), block.level(),
+                        Component.translatable(block.connected() ? "civmod.command.settlement.connected" : "civmod.command.settlement.unconnected")),
+                        false);
+            }
+        }
+        return data.settlements().size();
     }
 }
