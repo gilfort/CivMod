@@ -31,6 +31,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
     private static final int BUFFER_COLUMNS = 9;
     private static final int SMALL_BUTTON = 16;
     private static final int FOOD_Y = 72;
+    private static final int FOUND_Y = BUFFER_Y + 2 * 18 + 14;
 
     /**
      * @param menu      the menu
@@ -175,6 +176,28 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                 graphics.itemDecorations(font, stack, x, y);
                 if (mouseX >= leftPos + x && mouseX < leftPos + x + 16 && mouseY >= topPos + y && mouseY < topPos + y + 16) {
                     graphics.setTooltipForNextFrame(font, stack, mouseX, mouseY);
+                }
+            }
+            if (state.found().isEmpty()) {
+                return;
+            }
+            graphics.text(font, Component.translatable("civmod.gui.settler.found"), CivGui.PADDING, FOUND_Y - 10, CivGui.LABEL_COLOR, false);
+            for (int i = 0; i < state.found().size(); i++) {
+                ItemStack stack = state.found().get(i);
+                boolean missing = i < state.missing().size() && state.missing().get(i);
+                int x = CivGui.PADDING + (i % BUFFER_COLUMNS) * 18;
+                int y = FOUND_Y + (i / BUFFER_COLUMNS) * 18;
+                graphics.item(stack, x, y);
+                if (missing) {
+                    // Greyed out: the current tool cannot obtain this type.
+                    graphics.fill(x, y, x + 16, y + 16, 0xA0C6C6C6);
+                }
+                if (mouseX >= leftPos + x && mouseX < leftPos + x + 16 && mouseY >= topPos + y && mouseY < topPos + y + 16) {
+                    List<Component> lines = new java.util.ArrayList<>(List.of(stack.getHoverName()));
+                    if (missing) {
+                        lines.add(Component.translatable("civmod.gui.settler.found.needs_tool").withStyle(net.minecraft.ChatFormatting.RED));
+                    }
+                    graphics.setComponentTooltipForNextFrame(font, lines, mouseX, mouseY);
                 }
             }
         });

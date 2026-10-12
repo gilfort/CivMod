@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
@@ -70,8 +71,6 @@ public final class SettlerWork {
     public static final long WORK_END = 11500;
     private static final double REACH = 2.5;
     private static final int SWING_INTERVAL = 10;
-    private static final int AUTO_SEARCH_HORIZONTAL = 20;
-    private static final int AUTO_SEARCH_VERTICAL = 30;
     /** Skill level used until EXP exists (Story 8). */
     private static final int SKILL_LEVEL = 1;
 
@@ -123,12 +122,16 @@ public final class SettlerWork {
     private final Map<BlockPos, JobBuffer> buffers = new HashMap<>();
     private final Map<BlockPos, JobStatus> statuses = new HashMap<>();
     private final Map<BlockPos, Long> blockedUntil = new HashMap<>();
-    private final Map<BlockPos, WoodScan.Result> scans = new HashMap<>();
-    private final Map<BlockPos, Long> scanDay = new HashMap<>();
+    private final Map<BlockPos, ScanResult> scans = new HashMap<>();
+    private final Map<BlockPos, ScanKey> scanKeys = new HashMap<>();
     private final Set<BlockPos> scanning = new HashSet<>();
     private final Map<BlockPos, BlockPos> poiOfDay = new HashMap<>();
     private final Map<BlockPos, Long> poiDay = new HashMap<>();
     private final Fatigue fatigue = new Fatigue();
+
+    /** What a cached scan was made for; a different key triggers a rescan. */
+    private record ScanKey(BlockPos center, int radius, long day) {
+    }
 
     private Activity activity = Activity.IDLE;
     private @Nullable SettlerJob activeJob;
@@ -438,25 +441,36 @@ public final class SettlerWork {
         if (buffer.shouldDeliver()) {
             return startDelivery(level, job);
         }
-        if (bestTool(level, ItemStackPredicates.AXE).isEmpty()) {
-            return fetchTool(level, job, block.get(), ItemStackPredicates.AXE);
+        Optional<JobProfile> found = JobProfiles.of(job.jobType());
+        if (found.isEmpty()) {
+            return false;
         }
-        if (block.get().collectLeaves() && bestTool(level, ItemStackPredicates.SHEARS).isEmpty()
-                && findInContainer(level, collectPos(block.get()), ItemStackPredicates.SHEARS).isPresent()) {
-            return fetchTool(level, job, block.get(), ItemStackPredicates.SHEARS);
+        JobProfile profile = found.get();
+        if (bestTool(profile::isTool).isEmpty()) {
+            return fetchTool(level, job, block.get(), profile::isTool);
         }
-        BlockPos poi = poiOfDay(level, block.get(), day);
+        Optional<Predicate<ItemStack>> secondary = profile.secondaryTool(block.get());
+        if (secondary.isPresent() && bestTool(secondary.get()).isEmpty()
+                && findInContainer(level, collectPos(block.get()), secondary.get()).isPresent()) {
+            return fetchTool(level, job, block.get(), secondary.get());
+        }
+        BlockPos poi = poiOfDay(level, profile, block.get(), day);
         if (poi == null) {
             block(level, jobBlock, JobStatus.NO_WORK_PLACE);
             return false;
         }
-        ensureScan(level, block.get(), day, dayTime);
+        ensureScan(level, profile, block.get(), poi, day, dayTime);
+        ScanResult scan = scans.get(jobBlock);
+        if (profile.needsResources() && scan != null && scan.isEmpty() && !scanning.contains(jobBlock)) {
+            block(level, jobBlock, JobStatus.NO_RESOURCES);
+            return false;
+        }
         activeJob = job;
         if (activity != Activity.WORK || !poi.equals(target)) {
             moveTo(level, Activity.WORK, poi);
         }
         statuses.put(jobBlock, JobStatus.WORKING);
-        showTool(level, ItemStackPredicates.AXE);
+        showTool(profile::isTool);
         return true;
     }
 
@@ -471,7 +485,7 @@ public final class SettlerWork {
         return true;
     }
 
-    private boolean fetchTool(ServerLevel level, SettlerJob job, SettlementBlock block, ItemStackPredicates kind) {
+    private boolean fetchTool(ServerLevel level, SettlerJob job, SettlementBlock block, Predicate<ItemStack> kind) {
         BlockPos collect = collectPos(block);
         if (findInContainer(level, collect, kind).isEmpty()) {
             block(level, job.jobBlock(), JobStatus.NO_TOOL);
@@ -645,7 +659,7 @@ public final class SettlerWork {
         return Vec3.atBottomCenterOf(up);
     }
 
-    private static boolean canStand(ServerLevel level, BlockPos pos) {
+    static boolean canStand(ServerLevel level, BlockPos pos) {
         BlockPos below = pos.below();
         return level.getBlockState(pos).getCollisionShape(level, pos).isEmpty()
                 && level.getBlockState(pos.above()).getCollisionShape(level, pos.above()).isEmpty()
@@ -1003,13 +1017,13 @@ public final class SettlerWork {
 
     // ---------------------------------------------------------------- work places and scans
 
-    private @Nullable BlockPos poiOfDay(ServerLevel level, SettlementBlock block, long day) {
+    private @Nullable BlockPos poiOfDay(ServerLevel level, JobProfile profile, SettlementBlock block, long day) {
         BlockPos current = poiOfDay.get(block.pos());
-        if (current != null && poiDay.getOrDefault(block.pos(), -1L) == day && isLog(level, current)) {
+        if (current != null && poiDay.getOrDefault(block.pos(), -1L) == day && profile.isWorkPlace(level, current)) {
             return current;
         }
-        List<BlockPos> candidates = new ArrayList<>(block.workPoints().stream().filter(pos -> isLog(level, pos)).toList());
-        BlockPos chosen = candidates.isEmpty() ? autoSearch(level, block.pos())
+        List<BlockPos> candidates = new ArrayList<>(block.workPoints().stream().filter(pos -> profile.isWorkPlace(level, pos)).toList());
+        BlockPos chosen = candidates.isEmpty() ? profile.autoSearch(level, block.pos())
                 : candidates.get(level.getRandom().nextInt(candidates.size()));
         if (chosen != null) {
             poiOfDay.put(block.pos(), chosen);
@@ -1018,81 +1032,50 @@ public final class SettlerWork {
         return chosen;
     }
 
-    private static boolean isLog(ServerLevel level, BlockPos pos) {
-        return level.isLoaded(pos) && level.getBlockState(pos).is(BlockTags.LOGS);
-    }
-
-    /**
-     * Finds the nearest log around a JobBlock (±{@value #AUTO_SEARCH_HORIZONTAL} / ±{@value #AUTO_SEARCH_VERTICAL});
-     * runs at most once per day and job, sections without logs are skipped via their palette.
-     */
-    private static @Nullable BlockPos autoSearch(ServerLevel level, BlockPos center) {
-        BlockPos best = null;
-        double bestDistance = Double.MAX_VALUE;
-        for (int sx = SectionPos.blockToSectionCoord(center.getX() - AUTO_SEARCH_HORIZONTAL);
-                sx <= SectionPos.blockToSectionCoord(center.getX() + AUTO_SEARCH_HORIZONTAL); sx++) {
-            for (int sz = SectionPos.blockToSectionCoord(center.getZ() - AUTO_SEARCH_HORIZONTAL);
-                    sz <= SectionPos.blockToSectionCoord(center.getZ() + AUTO_SEARCH_HORIZONTAL); sz++) {
-                if (!level.hasChunk(sx, sz)) {
-                    continue;
-                }
-                LevelChunk chunk = level.getChunk(sx, sz);
-                for (int sy = SectionPos.blockToSectionCoord(center.getY() - AUTO_SEARCH_VERTICAL);
-                        sy <= SectionPos.blockToSectionCoord(center.getY() + AUTO_SEARCH_VERTICAL); sy++) {
-                    int index = level.getSectionIndexFromSectionY(sy);
-                    if (index < 0 || index >= chunk.getSectionsCount()) {
-                        continue;
-                    }
-                    LevelChunkSection section = chunk.getSection(index);
-                    if (section.hasOnlyAir() || !section.maybeHas(state -> state.is(BlockTags.LOGS))) {
-                        continue;
-                    }
-                    for (int x = 0; x < 16; x++) {
-                        for (int y = 0; y < 16; y++) {
-                            for (int z = 0; z < 16; z++) {
-                                if (!section.getBlockState(x, y, z).is(BlockTags.LOGS)) {
-                                    continue;
-                                }
-                                BlockPos pos = new BlockPos(SectionPos.sectionToBlockCoord(sx) + x, SectionPos.sectionToBlockCoord(sy) + y,
-                                        SectionPos.sectionToBlockCoord(sz) + z);
-                                if (Math.abs(pos.getX() - center.getX()) > AUTO_SEARCH_HORIZONTAL
-                                        || Math.abs(pos.getZ() - center.getZ()) > AUTO_SEARCH_HORIZONTAL
-                                        || Math.abs(pos.getY() - center.getY()) > AUTO_SEARCH_VERTICAL) {
-                                    continue;
-                                }
-                                double distance = pos.distSqr(center);
-                                if (distance < bestDistance) {
-                                    bestDistance = distance;
-                                    best = pos;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return best;
-    }
-
-    private void ensureScan(ServerLevel level, SettlementBlock block, long day, long dayTime) {
+    private void ensureScan(ServerLevel level, JobProfile profile, SettlementBlock block, BlockPos poi, long day, long dayTime) {
         BlockPos jobBlock = block.pos();
-        if (scanDay.getOrDefault(jobBlock, -1L) == day || scanning.contains(jobBlock)) {
+        ScanKey key = new ScanKey(profile.scanCenter(block, poi), SettlementRules.joinRadius(block.level()), profile.rescanDaily() ? day : -1L);
+        if (key.equals(scanKeys.get(jobBlock)) || scanning.contains(jobBlock)) {
             return;
         }
-        BlockPos origin = block.workPoints().isEmpty() ? poiOfDay.getOrDefault(jobBlock, jobBlock) : block.workPoints().get(0);
         scanning.add(jobBlock);
-        // Spread scans over the first real minute of the workday; later starts (e.g. after loading) begin at once.
-        long delay = dayTime < 1200 ? level.getRandom().nextInt(1200) : 0;
-        ScanScheduler.submit(level, new WoodScan(origin, SettlementRules.joinRadius(block.level())), delay, result -> {
+        // Spread daily scans over the first real minute of the workday; later starts (e.g. after loading) begin at once.
+        long delay = profile.rescanDaily() && dayTime < 1200 ? level.getRandom().nextInt(1200) : 0;
+        ScanScheduler.submit(level, profile.createScan(key.center(), key.radius()), delay, result -> {
             scans.put(jobBlock, result);
-            scanDay.put(jobBlock, day);
+            scanKeys.put(jobBlock, key);
             scanning.remove(jobBlock);
         });
     }
 
+    /**
+     * Found resources of a job for the GUI.
+     *
+     * @param job the job
+     * @return the found block types with whether the current tool can obtain them
+     */
+    public List<Found> found(SettlerJob job) {
+        ScanResult scan = scans.get(job.jobBlock());
+        Optional<JobProfile> profile = JobProfiles.of(job.jobType());
+        if (scan == null || profile.isEmpty()) {
+            return List.of();
+        }
+        ItemStack tool = bestTool(profile.get()::isTool).orElse(ItemStack.EMPTY);
+        return scan.foundBlocks().stream().map(block -> new Found(block, profile.get().canObtain(tool, block))).toList();
+    }
+
+    /**
+     * A found resource type.
+     *
+     * @param block     the block type
+     * @param available whether the current tool can obtain it
+     */
+    public record Found(Identifier block, boolean available) {
+    }
+
     // ---------------------------------------------------------------- tools
 
-    private Optional<ItemStack> bestTool(ServerLevel level, ItemStackPredicates kind) {
+    private Optional<ItemStack> bestTool(Predicate<ItemStack> kind) {
         ItemStack best = ItemStack.EMPTY;
         int maxTier = ToolTiers.maxAllowedTier(SKILL_LEVEL);
         for (int i = Settler.BELT_START; i < Settler.BELT_START + Settler.BELT_SIZE; i++) {
@@ -1107,14 +1090,14 @@ public final class SettlerWork {
         return best.isEmpty() ? Optional.empty() : Optional.of(best);
     }
 
-    private void showTool(ServerLevel level, ItemStackPredicates kind) {
-        ItemStack tool = bestTool(level, kind).map(ItemStack::copy).orElse(ItemStack.EMPTY);
+    private void showTool(Predicate<ItemStack> kind) {
+        ItemStack tool = bestTool(kind).map(ItemStack::copy).orElse(ItemStack.EMPTY);
         if (!ItemStack.matches(tool, settler.getItemBySlot(EquipmentSlot.MAINHAND))) {
             settler.setItemSlot(EquipmentSlot.MAINHAND, tool);
         }
     }
 
-    private static Optional<Integer> findInContainer(ServerLevel level, BlockPos pos, ItemStackPredicates kind) {
+    private static Optional<Integer> findInContainer(ServerLevel level, BlockPos pos, Predicate<ItemStack> kind) {
         ResourceHandler<ItemResource> handler = level.getCapability(Capabilities.Item.BLOCK, pos, null);
         if (handler == null) {
             return Optional.empty();
@@ -1135,7 +1118,7 @@ public final class SettlerWork {
         return bestIndex < 0 ? Optional.empty() : Optional.of(bestIndex);
     }
 
-    private void takeTool(ServerLevel level, BlockPos pos, ItemStackPredicates kind) {
+    private void takeTool(ServerLevel level, BlockPos pos, Predicate<ItemStack> kind) {
         int freeSlot = -1;
         for (int i = Settler.BELT_START; i < Settler.BELT_START + Settler.BELT_SIZE; i++) {
             if (settler.getInventory().getItem(i).isEmpty()) {
@@ -1190,10 +1173,16 @@ public final class SettlerWork {
         BlockPos jobBlock = activeJob.jobBlock();
         switch (activity) {
             case FETCH_TOOL -> {
-                takeTool(level, target, ItemStackPredicates.AXE);
+                Optional<JobProfile> profile = JobProfiles.of(activeJob.jobType());
                 Optional<SettlementBlock> block = SettlementData.get(level).settlementAt(jobBlock).flatMap(s -> s.block(jobBlock));
-                if (block.map(SettlementBlock::collectLeaves).orElse(false) && bestTool(level, ItemStackPredicates.SHEARS).isEmpty()) {
-                    takeTool(level, target, ItemStackPredicates.SHEARS);
+                if (profile.isPresent()) {
+                    if (bestTool(profile.get()::isTool).isEmpty()) {
+                        takeTool(level, target, profile.get()::isTool);
+                    }
+                    Optional<Predicate<ItemStack>> secondary = block.flatMap(b -> profile.get().secondaryTool(b));
+                    if (secondary.isPresent() && bestTool(secondary.get()).isEmpty()) {
+                        takeTool(level, target, secondary.get());
+                    }
                 }
                 activity = Activity.IDLE;
                 decide(level);
@@ -1238,36 +1227,36 @@ public final class SettlerWork {
             BlockState state = level.getBlockState(poi);
             level.playSound(null, poi, state.getSoundType().getHitSound(), net.minecraft.sounds.SoundSource.NEUTRAL, 0.5F, 1.0F);
         }
-        WoodScan.Result scan = scans.getOrDefault(jobBlock, WoodScan.Result.EMPTY);
-        JobBuffer buffer = buffers.computeIfAbsent(jobBlock, pos -> new JobBuffer());
-        Optional<ItemStack> axe = bestTool(level, ItemStackPredicates.AXE);
-        if (axe.isEmpty() || buffer.isFull()) {
+        Optional<JobProfile> found = activeJob == null ? Optional.empty() : JobProfiles.of(activeJob.jobType());
+        Optional<SettlementBlock> block = SettlementData.get(level).settlementAt(jobBlock).flatMap(s -> s.block(jobBlock));
+        if (found.isEmpty() || block.isEmpty()) {
             return;
         }
-        double perSecond = LumberjackOutput.speed(SKILL_LEVEL) * ToolTiers.multiplier(ToolTiers.tier(axe.get()))
-                * LumberjackOutput.productivity(scan.totalLogs());
+        JobProfile profile = found.get();
+        ScanResult scan = scans.get(jobBlock);
+        JobBuffer buffer = buffers.computeIfAbsent(jobBlock, pos -> new JobBuffer());
+        Optional<ItemStack> tool = bestTool(profile::isTool);
+        if (tool.isEmpty() || buffer.isFull()) {
+            return;
+        }
+        double perSecond = LumberjackOutput.speed(SKILL_LEVEL) * ToolTiers.multiplier(ToolTiers.tier(tool.get())) * profile.productivity(scan);
         production += perSecond / 20.0;
-        Optional<SettlementBlock> block = SettlementData.get(level).settlementAt(jobBlock).flatMap(s -> s.block(jobBlock));
-        boolean leavesEnabled = block.map(SettlementBlock::collectLeaves).orElse(false);
-        Identifier poiLog = BuiltInRegistries.BLOCK.getKey(level.getBlockState(poi).getBlock());
         while (production >= 1.0) {
             production -= 1.0;
-            Optional<ItemStack> currentAxe = bestTool(level, ItemStackPredicates.AXE);
-            if (currentAxe.isEmpty()) {
+            Optional<ItemStack> current = bestTool(profile::isTool);
+            if (current.isEmpty()) {
                 return;
             }
-            Optional<ItemStack> shears = bestTool(level, ItemStackPredicates.SHEARS);
-            boolean silkTouch = hasSilkTouch(level, currentAxe.get());
-            Optional<LumberjackOutput.Produced> produced = LumberjackOutput.produce(scan, poiLog,
-                    leavesEnabled && shears.isPresent(), silkTouch, level.getRandom());
+            Optional<ItemStack> secondary = profile.secondaryTool(block.get()).flatMap(this::bestTool);
+            Optional<JobProfile.Produced> produced = profile.produce(new JobProfile.Context(level, settler, scan, poi, current.get(), secondary,
+                    block.get(), SKILL_LEVEL));
             if (produced.isEmpty()) {
-                return;
+                continue;
             }
-            buffer.add(produced.get().stack());
-            ItemStack worn = produced.get().kind() == LumberjackOutput.Kind.LEAVES && !silkTouch ? shears.orElse(currentAxe.get()) : currentAxe.get();
-            wear(level, worn);
+            produced.get().stacks().forEach(buffer::add);
+            wear(level, produced.get().worn());
         }
-        showTool(level, ItemStackPredicates.AXE);
+        showTool(profile::isTool);
     }
 
     private void wear(ServerLevel level, ItemStack tool) {
@@ -1275,26 +1264,6 @@ public final class SettlerWork {
         int damage = (int) multiplier + (level.getRandom().nextDouble() < multiplier - Math.floor(multiplier) ? 1 : 0);
         if (damage > 0) {
             tool.hurtAndBreak(damage, level, settler, item -> { });
-        }
-    }
-
-    private static boolean hasSilkTouch(ServerLevel level, ItemStack stack) {
-        Holder<Enchantment> silkTouch = level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.SILK_TOUCH);
-        return stack.getEnchantmentLevel(silkTouch) > 0;
-    }
-
-    /** Tool kinds used by the Lumberjack. */
-    enum ItemStackPredicates {
-        /** Axes. */
-        AXE,
-        /** Shears. */
-        SHEARS;
-
-        boolean test(ItemStack stack) {
-            return switch (this) {
-                case AXE -> stack.is(net.minecraft.tags.ItemTags.AXES);
-                case SHEARS -> stack.is(Items.SHEARS) || stack.is(net.neoforged.neoforge.common.Tags.Items.TOOLS_SHEAR);
-            };
         }
     }
 

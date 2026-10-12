@@ -20,7 +20,7 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
  * Processes one chunk section per {@link #step} call, skips sections without logs or leaves (palette pre-filter)
  * and unloaded chunks, and samples every 4th block (2×2 grid in x/z), extrapolating ×4.
  */
-public final class WoodScan {
+public final class WoodScan implements SectionScan<WoodScan.Result> {
 
     /** Vertical half height of the scan. */
     public static final int HALF_HEIGHT = 10;
@@ -33,7 +33,7 @@ public final class WoodScan {
      * @param logs   estimated log count per block id
      * @param leaves estimated leaf count per block id
      */
-    public record Result(Map<Identifier, Integer> logs, Map<Identifier, Integer> leaves) {
+    public record Result(Map<Identifier, Integer> logs, Map<Identifier, Integer> leaves) implements ScanResult {
 
         /** Empty result. */
         public static final Result EMPTY = new Result(Map.of(), Map.of());
@@ -43,6 +43,11 @@ public final class WoodScan {
          */
         public int totalLogs() {
             return logs.values().stream().mapToInt(Integer::intValue).sum();
+        }
+
+        @Override
+        public java.util.List<Identifier> foundBlocks() {
+            return logs.keySet().stream().sorted().toList();
         }
     }
 
@@ -79,25 +84,17 @@ public final class WoodScan {
         this.sectionZ = minSectionZ;
     }
 
-    /**
-     * @return whether the scan is complete
-     */
+    @Override
     public boolean isDone() {
         return done;
     }
 
-    /**
-     * @return the (partial until done) result
-     */
+    @Override
     public Result result() {
         return new Result(Map.copyOf(logs), Map.copyOf(leaves));
     }
 
-    /**
-     * Scans the next chunk section.
-     *
-     * @param level the level
-     */
+    @Override
     public void step(ServerLevel level) {
         if (done) {
             return;
@@ -112,19 +109,6 @@ public final class WoodScan {
                 }
             }
         }
-    }
-
-    /**
-     * Runs the whole scan at once (tests and catch-up only).
-     *
-     * @param level the level
-     * @return the result
-     */
-    public Result runAll(ServerLevel level) {
-        while (!done) {
-            step(level);
-        }
-        return result();
     }
 
     private void scanSection(ServerLevel level, int sx, int sy, int sz) {

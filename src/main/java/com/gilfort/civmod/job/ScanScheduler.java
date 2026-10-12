@@ -25,7 +25,7 @@ public final class ScanScheduler {
 
     private static final List<Pending> QUEUE = new ArrayList<>();
 
-    private record Pending(ServerLevel level, WoodScan scan, long startTick, Consumer<WoodScan.Result> onDone) {
+    private record Pending(ServerLevel level, SectionScan<?> scan, long startTick, Runnable onDone) {
     }
 
     private ScanScheduler() {
@@ -38,9 +38,10 @@ public final class ScanScheduler {
      * @param scan       the scan
      * @param delayTicks ticks to wait before starting (spreads scans at the start of the workday)
      * @param onDone     receives the result
+     * @param <R>        the result type
      */
-    public static void submit(ServerLevel level, WoodScan scan, long delayTicks, Consumer<WoodScan.Result> onDone) {
-        QUEUE.add(new Pending(level, scan, level.getGameTime() + delayTicks, onDone));
+    public static <R extends ScanResult> void submit(ServerLevel level, SectionScan<R> scan, long delayTicks, Consumer<R> onDone) {
+        QUEUE.add(new Pending(level, scan, level.getGameTime() + delayTicks, () -> onDone.accept(scan.result())));
     }
 
     @SubscribeEvent
@@ -58,7 +59,7 @@ public final class ScanScheduler {
             }
             if (pending.scan().isDone()) {
                 iterator.remove();
-                pending.onDone().accept(pending.scan().result());
+                pending.onDone().run();
             }
         }
     }

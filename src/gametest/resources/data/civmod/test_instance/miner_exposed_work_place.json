@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:miner_exposed_work_place",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 24
+}
