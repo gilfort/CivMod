@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
+import com.gilfort.civmod.settlement.JobType;
 import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -41,6 +42,15 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
                 .bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 28, imageWidth - 2 * CivGui.PADDING, 20).build());
         upgrade.active = false;
         upgrade.setTooltip(Tooltip.create(Component.translatable("civmod.gui.job_block.upgrade.coming_soon")));
+        if (menu.getInfo().jobType() == JobType.LUMBERJACK && menu.getInfo().inSettlement()) {
+            Component label = Component.translatable(menu.getInfo().collectLeaves() ? "civmod.gui.job_block.leaves.on" : "civmod.gui.job_block.leaves.off");
+            Button leaves = addTabWidget(JobBlockMenu.TAB_INFO, Button.builder(label, button -> {
+                menu.clickMenuButton(minecraft.player, JobBlockMenu.BUTTON_TOGGLE_LEAVES);
+                minecraft.gameMode.handleInventoryButtonClick(menu.containerId, JobBlockMenu.BUTTON_TOGGLE_LEAVES);
+                rebuildWidgets();
+            }).bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 72, imageWidth - 2 * CivGui.PADDING, 20).build());
+            leaves.setTooltip(Tooltip.create(Component.translatable("civmod.gui.job_block.leaves.tooltip")));
+        }
         if (!menu.getInfo().assignee().isEmpty()) {
             addTabWidget(JobBlockMenu.TAB_INFO, Button.builder(Component.translatable("civmod.gui.job_block.unassign"), button -> {
                 menu.clickMenuButton(minecraft.player, JobBlockMenu.BUTTON_UNASSIGN);

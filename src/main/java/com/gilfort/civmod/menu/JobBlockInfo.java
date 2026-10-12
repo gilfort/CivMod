@@ -27,9 +27,10 @@ import net.minecraft.server.level.ServerLevel;
  * @param distance       distance to the nearest connected JobBlock (unconnected only)
  * @param required       distance needed to connect (unconnected only)
  * @param assignee       name of the settler working this JobBlock, empty if free
+ * @param collectLeaves  whether a Lumberjack also collects leaves
  */
 public record JobBlockInfo(JobType jobType, int level, Component settlementName, boolean inSettlement, boolean connected,
-        int distance, int required, String assignee) {
+        int distance, int required, String assignee, boolean collectLeaves) {
 
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, JobBlockInfo> STREAM_CODEC = StreamCodec.composite(
@@ -41,6 +42,7 @@ public record JobBlockInfo(JobType jobType, int level, Component settlementName,
             ByteBufCodecs.VAR_INT, JobBlockInfo::distance,
             ByteBufCodecs.VAR_INT, JobBlockInfo::required,
             ByteBufCodecs.STRING_UTF8, JobBlockInfo::assignee,
+            ByteBufCodecs.BOOL, JobBlockInfo::collectLeaves,
             JobBlockInfo::new);
 
     /**
@@ -56,14 +58,22 @@ public record JobBlockInfo(JobType jobType, int level, Component settlementName,
         return new JobBlockInfo(jobType, jobLevel,
                 settlement.map(Settlement::displayName).orElse(Component.empty()),
                 settlement.isPresent(), status.connected(), status.distance(), status.required(),
-                settlement.flatMap(s -> s.block(pos)).flatMap(SettlementBlock::assigneeName).orElse(""));
+                settlement.flatMap(s -> s.block(pos)).flatMap(SettlementBlock::assigneeName).orElse(""),
+                settlement.flatMap(s -> s.block(pos)).map(SettlementBlock::collectLeaves).orElse(false));
     }
 
     /**
      * @return a copy without assignee
      */
     public JobBlockInfo withoutAssignee() {
-        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, "");
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, "", collectLeaves);
+    }
+
+    /**
+     * @return a copy with leaf collection toggled
+     */
+    public JobBlockInfo withLeavesToggled() {
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignee, !collectLeaves);
     }
 
     /**
@@ -72,6 +82,6 @@ public record JobBlockInfo(JobType jobType, int level, Component settlementName,
      * @return info without settlement data
      */
     public static JobBlockInfo unknown(JobType jobType, int jobLevel) {
-        return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, "");
+        return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, "", false);
     }
 }

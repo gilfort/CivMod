@@ -1,0 +1,174 @@
+package com.gilfort.civmod.job;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+
+/**
+ * Lumberjack scan (vault {@code Jobs/Lumberjack.md}): counts logs per block type and leaves per block type in a
+ * cylinder around the primary work place.
+ * <p>
+ * Processes one chunk section per {@link #step} call, skips sections without logs or leaves (palette pre-filter)
+ * and unloaded chunks, and samples every 4th block (2×2 grid in x/z), extrapolating ×4.
+ */
+public final class WoodScan {
+
+    /** Vertical half height of the scan. */
+    public static final int HALF_HEIGHT = 10;
+    /** Sampling factor (every 4th block). */
+    private static final int SAMPLE_FACTOR = 4;
+
+    /**
+     * Result of a scan.
+     *
+     * @param logs   estimated log count per block id
+     * @param leaves estimated leaf count per block id
+     */
+    public record Result(Map<Identifier, Integer> logs, Map<Identifier, Integer> leaves) {
+
+        /** Empty result. */
+        public static final Result EMPTY = new Result(Map.of(), Map.of());
+
+        /**
+         * @return the estimated total number of logs
+         */
+        public int totalLogs() {
+            return logs.values().stream().mapToInt(Integer::intValue).sum();
+        }
+    }
+
+    private final BlockPos center;
+    private final int radius;
+    private final int minSectionX;
+    private final int maxSectionX;
+    private final int minSectionY;
+    private final int maxSectionY;
+    private final int minSectionZ;
+    private final int maxSectionZ;
+    private int sectionX;
+    private int sectionY;
+    private int sectionZ;
+    private boolean done;
+    private final Map<Identifier, Integer> logs = new HashMap<>();
+    private final Map<Identifier, Integer> leaves = new HashMap<>();
+
+    /**
+     * @param center the primary work place
+     * @param radius the horizontal radius (10 × JobBlock level)
+     */
+    public WoodScan(BlockPos center, int radius) {
+        this.center = center.immutable();
+        this.radius = radius;
+        this.minSectionX = SectionPos.blockToSectionCoord(center.getX() - radius);
+        this.maxSectionX = SectionPos.blockToSectionCoord(center.getX() + radius);
+        this.minSectionY = SectionPos.blockToSectionCoord(center.getY() - HALF_HEIGHT);
+        this.maxSectionY = SectionPos.blockToSectionCoord(center.getY() + HALF_HEIGHT);
+        this.minSectionZ = SectionPos.blockToSectionCoord(center.getZ() - radius);
+        this.maxSectionZ = SectionPos.blockToSectionCoord(center.getZ() + radius);
+        this.sectionX = minSectionX;
+        this.sectionY = minSectionY;
+        this.sectionZ = minSectionZ;
+    }
+
+    /**
+     * @return whether the scan is complete
+     */
+    public boolean isDone() {
+        return done;
+    }
+
+    /**
+     * @return the (partial until done) result
+     */
+    public Result result() {
+        return new Result(Map.copyOf(logs), Map.copyOf(leaves));
+    }
+
+    /**
+     * Scans the next chunk section.
+     *
+     * @param level the level
+     */
+    public void step(ServerLevel level) {
+        if (done) {
+            return;
+        }
+        scanSection(level, sectionX, sectionY, sectionZ);
+        if (++sectionY > maxSectionY) {
+            sectionY = minSectionY;
+            if (++sectionZ > maxSectionZ) {
+                sectionZ = minSectionZ;
+                if (++sectionX > maxSectionX) {
+                    done = true;
+                }
+            }
+        }
+    }
+
+    /**
+     * Runs the whole scan at once (tests and catch-up only).
+     *
+     * @param level the level
+     * @return the result
+     */
+    public Result runAll(ServerLevel level) {
+        while (!done) {
+            step(level);
+        }
+        return result();
+    }
+
+    private void scanSection(ServerLevel level, int sx, int sy, int sz) {
+        if (!level.hasChunk(sx, sz)) {
+            return;
+        }
+        LevelChunk chunk = level.getChunk(sx, sz);
+        int index = level.getSectionIndexFromSectionY(sy);
+        if (index < 0 || index >= chunk.getSectionsCount()) {
+            return;
+        }
+        LevelChunkSection section = chunk.getSection(index);
+        if (section.hasOnlyAir() || !section.maybeHas(WoodScan::isRelevant)) {
+            return;
+        }
+        int baseX = SectionPos.sectionToBlockCoord(sx);
+        int baseY = SectionPos.sectionToBlockCoord(sy);
+        int baseZ = SectionPos.sectionToBlockCoord(sz);
+        long radiusSquared = (long) radius * radius;
+        // Sample on an even grid in world coordinates so neighbouring sections line up.
+        for (int x = 0; x < 16; x += 2) {
+            for (int z = 0; z < 16; z += 2) {
+                int dx = baseX + x - center.getX();
+                int dz = baseZ + z - center.getZ();
+                if ((long) dx * dx + (long) dz * dz > radiusSquared) {
+                    continue;
+                }
+                for (int y = 0; y < 16; y++) {
+                    int worldY = baseY + y;
+                    if (Math.abs(worldY - center.getY()) > HALF_HEIGHT) {
+                        continue;
+                    }
+                    BlockState state = section.getBlockState(x, y, z);
+                    if (state.is(BlockTags.LOGS)) {
+                        logs.merge(BuiltInRegistries.BLOCK.getKey(state.getBlock()), SAMPLE_FACTOR, Integer::sum);
+                    } else if (state.is(BlockTags.LEAVES)) {
+                        leaves.merge(BuiltInRegistries.BLOCK.getKey(state.getBlock()), SAMPLE_FACTOR, Integer::sum);
+                    }
+                }
+            }
+        }
+    }
+
+    private static boolean isRelevant(BlockState state) {
+        return state.is(BlockTags.LOGS) || state.is(BlockTags.LEAVES);
+    }
+}

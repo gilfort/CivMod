@@ -212,6 +212,22 @@ public final class JobAssignments {
     }
 
     /**
+     * Toggles leaf collection of a Lumberjack Block.
+     *
+     * @param data     the dimension's settlement data
+     * @param jobBlock the JobBlock position
+     * @return the new state
+     */
+    public static boolean toggleLeaves(SettlementData data, BlockPos jobBlock) {
+        Optional<SettlementBlock> block = data.settlementAt(jobBlock).flatMap(s -> s.block(jobBlock));
+        block.ifPresent(b -> {
+            b.setCollectLeaves(!b.collectLeaves());
+            data.changed();
+        });
+        return block.map(SettlementBlock::collectLeaves).orElse(false);
+    }
+
+    /**
      * @param data     the dimension's settlement data
      * @param jobBlock a JobBlock position
      * @param settler  a settler UUID
