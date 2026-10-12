@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:scroll_work_place_validity",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 4
+}

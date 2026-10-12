@@ -4,11 +4,17 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.npc.Settler;
+import java.util.List;
+
+import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.SettlerJobs;
+import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.registry.ModMenuTypes;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.Container;
@@ -110,9 +116,13 @@ public class SettlerMenu extends CivMenu {
     @Override
     public boolean clickMenuButton(Player player, int buttonId) {
         if (buttonId >= SettlerJobs.MOVE_UP && buttonId < SettlerJobs.END) {
-            info = info.withJobs(SettlerJobs.apply(info.jobs(), buttonId));
-            if (settler != null) {
+            List<SettlerJob> before = info.jobs();
+            info = info.withJobs(SettlerJobs.apply(before, buttonId));
+            if (settler != null && settler.level() instanceof ServerLevel level) {
                 settler.setJobs(info.jobs());
+                // Free JobBlocks of removed jobs.
+                before.stream().filter(job -> !info.jobs().contains(job))
+                        .forEach(job -> JobAssignments.unassign(SettlementData.get(level), job.jobBlock()));
             }
             return true;
         }

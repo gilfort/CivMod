@@ -41,6 +41,13 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
                 .bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 28, imageWidth - 2 * CivGui.PADDING, 20).build());
         upgrade.active = false;
         upgrade.setTooltip(Tooltip.create(Component.translatable("civmod.gui.job_block.upgrade.coming_soon")));
+        if (!menu.getInfo().assignee().isEmpty()) {
+            addTabWidget(JobBlockMenu.TAB_INFO, Button.builder(Component.translatable("civmod.gui.job_block.unassign"), button -> {
+                menu.clickMenuButton(minecraft.player, JobBlockMenu.BUTTON_UNASSIGN);
+                minecraft.gameMode.handleInventoryButtonClick(menu.containerId, JobBlockMenu.BUTTON_UNASSIGN);
+                rebuildWidgets();
+            }).bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 50, imageWidth - 2 * CivGui.PADDING, 20).build());
+        }
     }
 
     @Override
@@ -63,6 +70,9 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (info.inSettlement()) {
             graphics.text(font, Component.translatable("civmod.gui.job_block.settlement", info.settlementName()), CivGui.PADDING, y, color, false);
         }
+        y += LINE_HEIGHT;
+        Component worker = info.assignee().isEmpty() ? Component.translatable("civmod.gui.job_block.no_worker") : Component.literal(info.assignee());
+        graphics.text(font, Component.translatable("civmod.gui.job_block.worker", worker), CivGui.PADDING, y, color, false);
         y += LINE_HEIGHT + 4;
         if (!info.inSettlement()) {
             graphics.textWithWordWrap(font, Component.translatable("civmod.gui.job_block.not_registered"),

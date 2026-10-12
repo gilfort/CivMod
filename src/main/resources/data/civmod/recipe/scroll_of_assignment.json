@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "F": "minecraft:feather",
+    "P": "minecraft:paper",
+    "T": "minecraft:black_dye"
+  },
+  "pattern": [
+    "FPT",
+    " P ",
+    " P "
+  ],
+  "result": {
+    "id": "civmod:scroll_of_assignment"
+  }
+}

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.jspecify.annotations.Nullable;
 
@@ -83,6 +84,15 @@ public final class SettlementManager {
          * @param settlement the dissolved settlement
          */
         default void dissolved(Settlement settlement) {
+        }
+
+        /**
+         * A JobBlock with an assigned settler was removed; the settler loses the job.
+         *
+         * @param settler  the settler UUID
+         * @param jobBlock the removed JobBlock position
+         */
+        default void jobRemoved(UUID settler, BlockPos jobBlock) {
         }
 
         /** Listener that ignores everything. */
@@ -205,7 +215,9 @@ public final class SettlementManager {
      * @return the settlement the block belonged to, if any
      */
     public static Optional<Settlement> remove(SettlementData data, BlockPos pos, Listener listener) {
+        Optional<UUID> assignee = data.settlementAt(pos).flatMap(s -> s.block(pos)).flatMap(SettlementBlock::assignee);
         Optional<Settlement> removed = data.removeBlock(pos);
+        assignee.ifPresent(settler -> listener.jobRemoved(settler, pos));
         removed.ifPresent(settlement -> {
             if (settlement.isEmpty()) {
                 data.dissolve(settlement);

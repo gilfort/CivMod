@@ -3,6 +3,7 @@ package com.gilfort.civmod.registry;
 import java.util.function.Supplier;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.item.ScrollBinding;
 import com.mojang.serialization.Codec;
 
 import net.minecraft.core.component.DataComponentType;
@@ -22,6 +23,10 @@ public final class ModDataComponents {
     /** Level of a JobBlock item; kept when the block is broken and re-placed. */
     public static final Supplier<DataComponentType<Integer>> JOB_LEVEL = DATA_COMPONENTS.registerComponentType("job_level",
             builder -> builder.persistent(Codec.intRange(1, 5)).networkSynchronized(ByteBufCodecs.VAR_INT));
+
+    /** What a Scroll of Assignment is bound to. */
+    public static final Supplier<DataComponentType<ScrollBinding>> SCROLL_BINDING = DATA_COMPONENTS.registerComponentType("scroll_binding",
+            builder -> builder.persistent(ScrollBinding.CODEC).networkSynchronized(ScrollBinding.STREAM_CODEC));
 
     private ModDataComponents() {
     }

@@ -4,10 +4,12 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.client.gui.DebugScreen;
 import com.gilfort.civmod.client.gui.JobBlockScreen;
 import com.gilfort.civmod.client.gui.SettlerScreen;
+import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 import com.gilfort.civmod.registry.ModBlockEntityTypes;
 import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModMenuTypes;
+import com.gilfort.civmod.settlement.JobPointsDisplay;
 import com.gilfort.civmod.settlement.SettlementOutline;
 import com.gilfort.civmod.settlement.SettlementRules;
 
@@ -89,9 +91,19 @@ public final class CivModClient {
     @SubscribeEvent
     static void onRegisterClientPayloads(RegisterClientPayloadHandlersEvent event) {
         event.register(SettlementOutline.Sync.TYPE, SettlementOutlineRenderer::handle);
+        event.register(JobPointsDisplay.Sync.TYPE, JobPointsRenderer::handle);
     }
 
     private static void onItemTooltip(ItemTooltipEvent event) {
+        if (JobPointsDisplay.isScroll(event.getItemStack())) {
+            Component line = ScrollOfAssignmentItem.binding(event.getItemStack())
+                    .map(binding -> binding.jobBlock().isPresent()
+                            ? Component.translatable("civmod.tooltip.scroll.bound_job_block", binding.label())
+                            : Component.translatable("civmod.tooltip.scroll.bound_settler", binding.label()))
+                    .orElse(Component.translatable("civmod.tooltip.scroll.unbound"));
+            event.getToolTip().add(1, line.copy().withStyle(ChatFormatting.GRAY));
+            event.getToolTip().add(2, Component.translatable("civmod.tooltip.scroll.help").withStyle(ChatFormatting.DARK_GRAY));
+        }
         if (SettlementOutline.isJobBlockItem(event.getItemStack())) {
             int level = event.getItemStack().getOrDefault(ModDataComponents.JOB_LEVEL.get(), SettlementRules.MIN_LEVEL);
             event.getToolTip().add(1, Component.translatable("civmod.tooltip.job_level", level, SettlementRules.MAX_LEVEL)
