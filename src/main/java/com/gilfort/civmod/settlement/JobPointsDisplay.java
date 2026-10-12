@@ -71,10 +71,11 @@ public final class JobPointsDisplay {
      * @param bound   the JobBlock the scroll is bound to (its points are highlighted)
      * @param beds    owned beds of the bound settler's settlement (only when bound to a settler)
      * @param ownBed  the bed of the bound settler
-     * @param settler the bound settler
+     * @param settler  the bound settler
+     * @param pantries pantries within range
      */
     public record Sync(List<JobPoints> points, Optional<BlockPos> bound, List<BlockPos> beds, Optional<BlockPos> ownBed,
-            Optional<UUID> settler) implements CustomPacketPayload {
+            Optional<UUID> settler, List<BlockPos> pantries) implements CustomPacketPayload {
 
         /** Payload type. */
         public static final Type<Sync> TYPE = new Type<>(CivMod.id("job_points"));
@@ -86,6 +87,7 @@ public final class JobPointsDisplay {
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), Sync::beds,
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs::optional), Sync::ownBed,
                 net.minecraft.core.UUIDUtil.STREAM_CODEC.apply(ByteBufCodecs::optional), Sync::settler,
+                BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), Sync::pantries,
                 Sync::new);
 
         @Override
@@ -129,7 +131,9 @@ public final class JobPointsDisplay {
         Optional<Settlement> settlement = settler.flatMap(uuid -> data.settlements().stream().filter(s -> s.members().contains(uuid)).findFirst());
         List<BlockPos> beds = settlement.map(s -> List.copyOf(s.beds().keySet())).orElse(List.of());
         Optional<BlockPos> ownBed = settlement.flatMap(s -> s.bedOf(settler.get()));
-        PacketDistributor.sendToPlayer(player, new Sync(collect(data, player.blockPosition(), bound), bound, beds, ownBed, settler));
+        List<BlockPos> pantries = data.settlements().stream().flatMap(s -> s.pantries().stream())
+                .filter(pos -> SettlementRules.horizontalDistance(pos, player.blockPosition()) <= RANGE).toList();
+        PacketDistributor.sendToPlayer(player, new Sync(collect(data, player.blockPosition(), bound), bound, beds, ownBed, settler, pantries));
     }
 
     @SubscribeEvent

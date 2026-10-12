@@ -43,4 +43,15 @@ public enum JobType implements StringRepresentable {
     public Component displayName() {
         return Component.translatable("job.civmod." + id);
     }
+
+    /**
+     * @return how much harder than standing around this job makes hungry per work minute (server config)
+     */
+    public double hungerFactor() {
+        return switch (this) {
+            case LUMBERJACK -> com.gilfort.civmod.config.CivModConfig.HUNGER_FACTOR_LUMBERJACK.get();
+            case MINER -> com.gilfort.civmod.config.CivModConfig.HUNGER_FACTOR_MINER.get();
+            case FISHERMAN -> com.gilfort.civmod.config.CivModConfig.HUNGER_FACTOR_FISHERMAN.get();
+        };
+    }
 }

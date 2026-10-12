@@ -3,6 +3,7 @@ package com.gilfort.civmod.npc;
 import java.util.List;
 import java.util.Optional;
 
+import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
@@ -92,6 +93,7 @@ public class Settler extends PathfinderMob {
     private int settlementId = -1;
     private List<SettlerJob> jobs = List.of();
     private final SettlerWork work = new SettlerWork(this);
+    private final SettlerFood food = new SettlerFood();
 
     /**
      * @param type  the entity type
@@ -219,6 +221,13 @@ public class Settler extends PathfinderMob {
     }
 
     /**
+     * @return the food state (food level, saturation, appetite, meals of the day)
+     */
+    public SettlerFood getFood() {
+        return food;
+    }
+
+    /**
      * @return the equipment (tool belt, offhand, pockets, armor; see the slot constants)
      */
     public SimpleContainer getInventory() {
@@ -289,7 +298,7 @@ public class Settler extends PathfinderMob {
 
     @Override
     public void travel(Vec3 input) {
-        if (isSleeping()) {
+        if (isSleeping() || food.isAway()) {
             // Lying still: leftover movement (move control, pushes) would slide the settler out of its bed.
             setDeltaMovement(Vec3.ZERO);
             return;
@@ -299,13 +308,19 @@ public class Settler extends PathfinderMob {
 
     @Override
     public boolean isPushable() {
-        return !isSleeping() && super.isPushable();
+        return !isSleeping() && !isInvisible() && super.isPushable();
+    }
+
+    @Override
+    public boolean isPickable() {
+        // Invisible only while away foraging: not interactable.
+        return !isInvisible() && super.isPickable();
     }
 
     @Override
     public boolean isNoGravity() {
         // A straw bed is never placed, nothing holds the settler at its lying height.
-        return super.isNoGravity() || isSleepingWithoutBed();
+        return super.isNoGravity() || isSleepingWithoutBed() || food.isAway();
     }
 
     @Override
@@ -362,6 +377,10 @@ public class Settler extends PathfinderMob {
         if (isSleeping()) {
             return Component.translatable("civmod.settler.status.sleeping");
         }
+        Optional<Component> foodStatus = work.foodStatus();
+        if (foodStatus.isPresent()) {
+            return foodStatus.get();
+        }
         return work.activeJob()
                 .map(job -> Component.translatable("civmod.settler.status.job", work.status(job.jobBlock()).displayName(), job.jobType().displayName()))
                 .orElse(Component.translatable("civmod.settler.status.idle"));
@@ -369,9 +388,16 @@ public class Settler extends PathfinderMob {
 
     @Override
     protected InteractionResult mobInteract(Player player, InteractionHand hand) {
-        if (player.getItemInHand(hand).getItem() instanceof ScrollOfAssignmentItem) {
-            // Let the scroll handle the interaction (assign / bind).
+        if (player.getItemInHand(hand).getItem() instanceof ScrollOfAssignmentItem || isInvisible()) {
+            // Let the scroll handle the interaction (assign / bind); foraging settlers are away.
             return InteractionResult.PASS;
+        }
+        ItemStack held = player.getItemInHand(hand);
+        if (hand == InteractionHand.MAIN_HAND && SettlerFood.isEdible(held)) {
+            if (player instanceof ServerPlayer serverPlayer) {
+                feedBy(serverPlayer, held);
+            }
+            return InteractionResult.SUCCESS;
         }
         if (player instanceof ServerPlayer serverPlayer && hand == InteractionHand.MAIN_HAND) {
             SettlerInfo info = SettlerInfo.of(this);
@@ -379,6 +405,19 @@ public class Settler extends PathfinderMob {
                     buffer -> SettlerInfo.STREAM_CODEC.encode(buffer, info));
         }
         return InteractionResult.SUCCESS;
+    }
+
+    private void feedBy(ServerPlayer player, ItemStack held) {
+        ItemStack one = held.copyWithCount(1);
+        ItemStack rest = work.feed(player.level(), one);
+        if (ItemStack.matches(rest, one)) {
+            player.sendOverlayMessage(Component.translatable("civmod.settler.full", getName()));
+            return;
+        }
+        held.consume(1, player);
+        if (!rest.isEmpty() && !ItemStack.isSameItemSameComponents(rest, one) && !player.getInventory().add(rest)) {
+            player.spawnAtLocation(player.level(), rest);
+        }
     }
 
     /**
@@ -414,6 +453,7 @@ public class Settler extends PathfinderMob {
         output.putInt("settlement", settlementId);
         output.store("jobs", SettlerJob.CODEC.listOf(), jobs);
         ContainerHelper.saveAllItems(output, inventory.getItems());
+        food.save(output);
     }
 
     @Override
@@ -426,5 +466,7 @@ public class Settler extends PathfinderMob {
         input.read("buffers", SettlerWork.BuffersSnapshot.CODEC).ifPresent(work::restore);
         setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
         ContainerHelper.loadAllItems(input, inventory.getItems());
+        food.load(input);
+        setInvisible(food.isAway());
     }
 }

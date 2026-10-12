@@ -77,7 +77,13 @@ public class ScrollOfAssignmentItem extends Item {
         }
         if (player.isSecondaryUseActive()) {
             if (!(level.getBlockState(pos).getBlock() instanceof JobBlock jobBlock)) {
-                return InteractionResult.PASS;
+                if (!isContainer(level, pos)) {
+                    return InteractionResult.PASS;
+                }
+                if (player instanceof ServerPlayer serverPlayer) {
+                    togglePantry(serverPlayer, pos);
+                }
+                return InteractionResult.SUCCESS;
             }
             if (player instanceof ServerPlayer serverPlayer) {
                 bindJobBlock(stack, serverPlayer, pos, jobBlock.getJobType());
@@ -167,6 +173,19 @@ public class ScrollOfAssignmentItem extends Item {
             case HOMELESS -> Component.translatable("civmod.scroll.bed.homeless", label).withStyle(ChatFormatting.RED);
         };
         player.sendOverlayMessage(message);
+    }
+
+    private static void togglePantry(ServerPlayer player, BlockPos pos) {
+        ServerLevel level = player.level();
+        SettlementData data = SettlementData.get(level);
+        Optional<com.gilfort.civmod.settlement.Settlement> settlement = data.settlementContaining(pos);
+        if (settlement.isEmpty()) {
+            player.sendOverlayMessage(Component.translatable("civmod.scroll.point.outside").withStyle(ChatFormatting.RED));
+            return;
+        }
+        boolean added = data.togglePantry(settlement.get(), com.gilfort.civmod.food.Pantries.canonical(level, settlement.get(), pos));
+        player.sendOverlayMessage(Component.translatable(added ? "civmod.scroll.pantry.added" : "civmod.scroll.pantry.removed",
+                settlement.get().displayName()));
     }
 
     private static void bindJobBlock(ItemStack stack, ServerPlayer player, BlockPos pos, JobType jobType) {

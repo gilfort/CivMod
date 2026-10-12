@@ -34,8 +34,8 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  * Draws the work points of JobBlocks while a Scroll of Assignment is held: a coloured outline plus a small floating
  * icon above each point (like the unconnected X), and lines from the bound JobBlock to its points.
  * <p>
- * Colours: work = blue (primary marked "1"), collect = turquoise, drop-off = orange; points of other JobBlocks are
- * dimmed while the scroll is bound.
+ * Colours: work = blue (primary marked "1"), collect = turquoise, drop-off = orange, beds and pantries (bread icon)
+ * neutral; points of other JobBlocks are dimmed while the scroll is bound.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID, value = Dist.CLIENT)
 public final class JobPointsRenderer {
@@ -46,10 +46,12 @@ public final class JobPointsRenderer {
     private static final float DEGREES_PER_TICK = 3.0F;
 
     private static final int BED_COLOR = 0xE8E8E8;
+    private static final int PANTRY_COLOR = 0xE8E8E8;
 
     private static List<JobPointsDisplay.JobPoints> points = List.of();
     private static Optional<BlockPos> bound = Optional.empty();
     private static List<BlockPos> beds = List.of();
+    private static List<BlockPos> pantries = List.of();
     private static Optional<BlockPos> ownBed = Optional.empty();
     private static Optional<java.util.UUID> boundSettler = Optional.empty();
     private static Optional<Vec3> settlerPos = Optional.empty();
@@ -74,6 +76,7 @@ public final class JobPointsRenderer {
         beds = payload.beds();
         ownBed = payload.ownBed();
         boundSettler = payload.settler();
+        pantries = payload.pantries();
     }
 
     @SubscribeEvent
@@ -101,6 +104,9 @@ public final class JobPointsRenderer {
         for (BlockPos bed : beds) {
             boolean own = ownBed.filter(bed::equals).isPresent();
             markers.add(marker(minecraft, bed, bed, BED_COLOR, !own, ModItems.BED_MARKER.get().getDefaultInstance()));
+        }
+        for (BlockPos pantry : pantries) {
+            markers.add(marker(minecraft, pantry, pantry, PANTRY_COLOR, false, new ItemStack(net.minecraft.world.item.Items.BREAD)));
         }
         settlerPos = boundSettler.flatMap(uuid -> java.util.stream.StreamSupport.stream(event.getLevel().entitiesForRendering().spliterator(), false)
                 .filter(entity -> entity.getUUID().equals(uuid)).findFirst()

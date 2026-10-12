@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:food_pantry_toggle_and_persistence",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 24
+}
