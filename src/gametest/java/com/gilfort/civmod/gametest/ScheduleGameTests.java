@@ -206,11 +206,14 @@ public final class ScheduleGameTests {
         helper.runAfterDelay(1, () -> {
             settler.sleepOnStraw(new SettlerBeds.StrawSpot(spot, Direction.EAST), true);
             helper.assertTrue(settler.isSleeping() && settler.strawBedFacing().filter(Direction.EAST::equals).isPresent(), "Sleeping on straw");
-            double lyingHeight = settler.getY();
+            Vec3 lying = settler.position();
+            // Leftover movement must not slide the settler away (travel is called directly: without AI it is skipped).
+            settler.setDeltaMovement(0.3, 0.0, 0.3);
+            settler.travel(new Vec3(0.0, 0.0, 1.0));
             helper.runAfterDelay(5, () -> {
                 helper.assertTrue(settler.isSleeping(), "Settler must keep sleeping without a bed block");
-                helper.assertTrue(settler.getY() == lyingHeight && lyingHeight - spot.getY() > 0.25,
-                        "Settler must lie on top of the straw bed, not sink into it: " + (settler.getY() - spot.getY()));
+                helper.assertTrue(settler.position().equals(lying) && lying.y - spot.getY() > 0.25,
+                        "Settler must lie still on top of the straw bed: " + settler.position().subtract(lying) + ", height " + (lying.y - spot.getY()));
                 settler.wakeUp();
                 helper.assertFalse(settler.isSleeping() || settler.isSleepingWithoutBed(), "Woke up from straw");
                 settler.discard();

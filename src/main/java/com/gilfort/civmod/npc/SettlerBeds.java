@@ -91,8 +91,8 @@ public final class SettlerBeds {
     }
 
     /**
-     * Returns the settler's bed if it still exists; otherwise releases it and claims the nearest free bed inside the
-     * settlement border.
+     * Returns the settler's bed if it still exists and is no player's respawn bed; otherwise releases it and claims the
+     * nearest free bed inside the settlement border.
      *
      * @param level      the level
      * @param data       the dimension's settlement data
@@ -103,15 +103,15 @@ public final class SettlerBeds {
      */
     public static Optional<BlockPos> ensureBed(ServerLevel level, SettlementData data, Settlement settlement, UUID settler, BlockPos from) {
         Optional<BlockPos> current = settlement.bedOf(settler);
+        Set<BlockPos> spawnBeds = spawnBeds(level);
         if (current.isPresent()) {
-            if (head(level, current.get()).filter(current.get()::equals).isPresent()) {
+            if (head(level, current.get()).filter(current.get()::equals).isPresent() && !spawnBeds.contains(current.get())) {
                 return current;
             }
             data.releaseBed(settlement, current.get());
             releasePoi(level, current.get());
         }
         Set<BlockPos> owned = settlement.beds().keySet();
-        Set<BlockPos> spawnBeds = spawnBeds(level);
         Optional<BlockPos> claimed = level.getPoiManager().findAllClosestFirstWithType(
                 type -> type.is(PoiTypes.HOME),
                 pos -> !owned.contains(pos) && !spawnBeds.contains(pos) && JobAssignments.insideBorder(settlement, pos),

@@ -288,6 +288,21 @@ public class Settler extends PathfinderMob {
     }
 
     @Override
+    public void travel(Vec3 input) {
+        if (isSleeping()) {
+            // Lying still: leftover movement (move control, pushes) would slide the settler out of its bed.
+            setDeltaMovement(Vec3.ZERO);
+            return;
+        }
+        super.travel(input);
+    }
+
+    @Override
+    public boolean isPushable() {
+        return !isSleeping() && super.isPushable();
+    }
+
+    @Override
     public boolean isNoGravity() {
         // A straw bed is never placed, nothing holds the settler at its lying height.
         return super.isNoGravity() || isSleepingWithoutBed();
