@@ -119,5 +119,6 @@
   "civmod.configuration.breakMinSeconds": "Minimum Break (s)",
   "civmod.configuration.breakMaxSeconds": "Maximum Break (s)",
   "civmod.configuration.toolWearMultiplier": "Tool Wear Multiplier",
-  "civmod.configuration.antiStuckSeconds": "Anti-Stuck Teleport (s)"
+  "civmod.configuration.antiStuckSeconds": "Anti-Stuck Teleport (s)",
+  "civmod.gui.settler.buffer": "Buffer: %s / %s"
 }

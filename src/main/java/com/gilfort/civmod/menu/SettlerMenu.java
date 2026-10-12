@@ -38,6 +38,10 @@ public class SettlerMenu extends CivMenu {
     public static final int TAB_JOBS = 1;
     /** Inventory tab. */
     public static final int TAB_INVENTORY = 2;
+    /** First of the job tabs (one per job, shown below the panel). */
+    public static final int FIRST_JOB_TAB = 3;
+    /** Maximum number of job tabs. */
+    public static final int MAX_JOB_TABS = 6;
 
     /** Button id: dismiss a homeless settler. */
     public static final int BUTTON_DISMISS = 900;
@@ -83,7 +87,7 @@ public class SettlerMenu extends CivMenu {
     }
 
     private SettlerMenu(int containerId, Inventory inventory, @Nullable Settler settler, Container container, SettlerInfo info) {
-        super(ModMenuTypes.SETTLER.get(), containerId, 3);
+        super(ModMenuTypes.SETTLER.get(), containerId, FIRST_JOB_TAB + MAX_JOB_TABS);
         this.settler = settler;
         this.info = info;
         for (int i = 0; i < Settler.BELT_SIZE; i++) {

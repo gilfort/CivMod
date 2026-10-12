@@ -12,9 +12,10 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Vanilla-style tab row on top of a panel, using the creative inventory tab sprites.
+ * Vanilla-style tab rows above and below a panel, using the creative inventory tab sprites.
  * <p>
- * Unselected tabs are drawn behind the panel, the selected tab in front of it so it merges with the panel.
+ * Tab indices are global: first the top tabs, then the bottom tabs. Unselected tabs are drawn behind the panel, the
+ * selected tab in front of it so it merges with the panel.
  */
 public final class TabBar {
 
@@ -22,13 +23,15 @@ public final class TabBar {
     public static final int TAB_WIDTH = 26;
     /** Height of a tab sprite. */
     public static final int TAB_HEIGHT = 32;
-    /** How far a tab sticks out above the panel. */
+    /** How far a tab sticks out of the panel. */
     public static final int TAB_OFFSET = 28;
     /** Horizontal distance between two tabs. */
     private static final int TAB_SPACING = 27;
 
-    private static final Identifier[] SELECTED = sprites("selected");
-    private static final Identifier[] UNSELECTED = sprites("unselected");
+    private static final Identifier[] TOP_SELECTED = sprites("top_selected");
+    private static final Identifier[] TOP_UNSELECTED = sprites("top_unselected");
+    private static final Identifier[] BOTTOM_SELECTED = sprites("bottom_selected");
+    private static final Identifier[] BOTTOM_UNSELECTED = sprites("bottom_unselected");
 
     /**
      * A tab definition.
@@ -39,27 +42,40 @@ public final class TabBar {
     public record Tab(Component title, ItemStack icon) {
     }
 
-    private final List<Tab> tabs;
+    private final List<Tab> top;
+    private final List<Tab> bottom;
     private final int panelX;
     private final int panelY;
+    private final int panelHeight;
 
     /**
-     * @param tabs   the tabs, left to right
-     * @param panelX the left edge of the panel
-     * @param panelY the top edge of the panel
+     * @param top         the tabs above the panel, left to right
+     * @param bottom      the tabs below the panel, left to right (indices continue after the top tabs)
+     * @param panelX      the left edge of the panel
+     * @param panelY      the top edge of the panel
+     * @param panelHeight the height of the panel
      */
-    public TabBar(List<Tab> tabs, int panelX, int panelY) {
-        this.tabs = List.copyOf(tabs);
+    public TabBar(List<Tab> top, List<Tab> bottom, int panelX, int panelY, int panelHeight) {
+        this.top = List.copyOf(top);
+        this.bottom = List.copyOf(bottom);
         this.panelX = panelX;
         this.panelY = panelY;
+        this.panelHeight = panelHeight;
     }
 
     private static Identifier[] sprites(String state) {
         Identifier[] sprites = new Identifier[7];
         for (int i = 0; i < sprites.length; i++) {
-            sprites[i] = Identifier.withDefaultNamespace("container/creative_inventory/tab_top_" + state + "_" + (i + 1));
+            sprites[i] = Identifier.withDefaultNamespace("container/creative_inventory/tab_" + state + "_" + (i + 1));
         }
         return sprites;
+    }
+
+    /**
+     * @return the total number of tabs
+     */
+    public int size() {
+        return top.size() + bottom.size();
     }
 
     /**
@@ -71,7 +87,7 @@ public final class TabBar {
      * @param mouseY   the mouse y position
      */
     public void extractUnselected(GuiGraphicsExtractor graphics, int selected, int mouseX, int mouseY) {
-        for (int i = 0; i < tabs.size(); i++) {
+        for (int i = 0; i < size(); i++) {
             if (i != selected) {
                 extractTab(graphics, i, false);
                 if (isOver(i, mouseX, mouseY)) {
@@ -88,7 +104,7 @@ public final class TabBar {
      * @param selected the selected tab index
      */
     public void extractSelected(GuiGraphicsExtractor graphics, int selected) {
-        if (selected >= 0 && selected < tabs.size()) {
+        if (selected >= 0 && selected < size()) {
             extractTab(graphics, selected, true);
         }
     }
@@ -104,7 +120,7 @@ public final class TabBar {
     public void extractTooltip(GuiGraphicsExtractor graphics, Font font, int mouseX, int mouseY) {
         int tab = tabAt(mouseX, mouseY);
         if (tab >= 0) {
-            graphics.setTooltipForNextFrame(font, tabs.get(tab).title(), mouseX, mouseY);
+            graphics.setTooltipForNextFrame(font, tab(tab).title(), mouseX, mouseY);
         }
     }
 
@@ -114,7 +130,7 @@ public final class TabBar {
      * @return the index of the tab under the mouse, or {@code -1}
      */
     public int tabAt(double mouseX, double mouseY) {
-        for (int i = 0; i < tabs.size(); i++) {
+        for (int i = 0; i < size(); i++) {
             if (isOver(i, mouseX, mouseY)) {
                 return i;
             }
@@ -122,21 +138,32 @@ public final class TabBar {
         return -1;
     }
 
-    private boolean isOver(int tab, double mouseX, double mouseY) {
-        int x = tabX(tab);
-        int y = panelY - TAB_OFFSET;
-        return mouseX >= x && mouseX < x + TAB_WIDTH && mouseY >= y && mouseY < panelY;
+    private Tab tab(int index) {
+        return index < top.size() ? top.get(index) : bottom.get(index - top.size());
     }
 
-    private int tabX(int tab) {
-        return panelX + tab * TAB_SPACING;
+    private boolean isTop(int index) {
+        return index < top.size();
     }
 
-    private void extractTab(GuiGraphicsExtractor graphics, int tab, boolean selected) {
-        int x = tabX(tab);
-        int y = panelY - TAB_OFFSET;
-        Identifier[] sprites = selected ? SELECTED : UNSELECTED;
-        graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprites[Math.min(tab, sprites.length - 1)], x, y, TAB_WIDTH, TAB_HEIGHT);
-        graphics.item(tabs.get(tab).icon(), x + TAB_WIDTH / 2 - 8, y + TAB_HEIGHT / 2 - 7);
+    private int column(int index) {
+        return isTop(index) ? index : index - top.size();
+    }
+
+    private boolean isOver(int index, double mouseX, double mouseY) {
+        int x = panelX + column(index) * TAB_SPACING;
+        int y0 = isTop(index) ? panelY - TAB_OFFSET : panelY + panelHeight;
+        int y1 = isTop(index) ? panelY : panelY + panelHeight + TAB_OFFSET;
+        return mouseX >= x && mouseX < x + TAB_WIDTH && mouseY >= y0 && mouseY < y1;
+    }
+
+    private void extractTab(GuiGraphicsExtractor graphics, int index, boolean selected) {
+        boolean isTop = isTop(index);
+        int column = column(index);
+        int x = panelX + column * TAB_SPACING;
+        int y = isTop ? panelY - TAB_OFFSET : panelY + panelHeight - (TAB_HEIGHT - TAB_OFFSET);
+        Identifier[] sprites = isTop ? (selected ? TOP_SELECTED : TOP_UNSELECTED) : (selected ? BOTTOM_SELECTED : BOTTOM_UNSELECTED);
+        graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprites[Math.min(column, sprites.length - 1)], x, y, TAB_WIDTH, TAB_HEIGHT);
+        graphics.item(tab(index).icon(), x + TAB_WIDTH / 2 - 8, y + TAB_HEIGHT / 2 - 8 + (isTop ? 1 : -1));
     }
 }

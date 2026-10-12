@@ -2,10 +2,13 @@ package com.gilfort.civmod.client.gui;
 
 import java.util.List;
 
+import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.SettlerJobs;
+import com.gilfort.civmod.registry.ModItems;
+import com.gilfort.civmod.settlement.JobType;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -17,12 +20,14 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 /**
- * Screen of a settler: Overview (name, status, settlement, dismiss when homeless), Jobs (priority list) and
- * Inventory (tool belt, offhand, pockets).
+ * Screen of a settler: Overview (name, status, settlement, dismiss when homeless), Jobs (priority list), Inventory
+ * (tool belt, offhand, pockets) and one tab per job below the panel (status and buffer).
  */
 public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
 
-    private static final int ROW_HEIGHT = 30;
+    private static final int ROW_HEIGHT = 22;
+    private static final int BUFFER_Y = 56;
+    private static final int BUFFER_COLUMNS = 9;
     private static final int SMALL_BUTTON = 16;
 
     /**
@@ -94,17 +99,9 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                 int y = 24;
                 for (int i = 0; i < info.jobs().size(); i++) {
                     SettlerJob job = info.jobs().get(i);
-                    SettlerInfo.JobState state = i < info.jobStates().size() ? info.jobStates().get(i) : null;
-                    graphics.text(font, job.jobType().displayName(), CivGui.PADDING, y, CivGui.LABEL_COLOR, false);
-                    if (state != null) {
-                        graphics.text(font, state.status().displayName(), CivGui.PADDING, y + 10, CivGui.HINT_COLOR, false);
-                        int x = 80;
-                        for (ItemStack stack : state.preview()) {
-                            graphics.item(stack, x, y + 2);
-                            graphics.itemDecorations(font, stack, x, y + 2);
-                            x += 17;
-                        }
-                    }
+                    int rowY = y;
+                    graphics.text(font, job.jobType().displayName(), CivGui.PADDING, rowY, CivGui.LABEL_COLOR, false);
+                    state(info, i).ifPresent(state -> graphics.text(font, state.status().displayName(), CivGui.PADDING + 70, rowY, CivGui.HINT_COLOR, false));
                     y += ROW_HEIGHT;
                 }
                 graphics.text(font, Component.translatable("civmod.gui.settler.laborer"), CivGui.PADDING, y, CivGui.HINT_COLOR, false);
@@ -116,8 +113,58 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                 graphics.text(font, Component.translatable("civmod.gui.settler.pockets"), CivGui.PADDING, SettlerMenu.POCKETS_Y - 10,
                         CivGui.LABEL_COLOR, false);
             }
-            default -> {
+            default -> extractJobTab(graphics, info, tab - SettlerMenu.FIRST_JOB_TAB, mouseX, mouseY);
+        }
+    }
+
+    private static java.util.Optional<SettlerInfo.JobState> state(SettlerInfo info, int index) {
+        return index >= 0 && index < info.jobStates().size() ? java.util.Optional.of(info.jobStates().get(index)) : java.util.Optional.empty();
+    }
+
+    @Override
+    protected List<TabBar.Tab> bottomTabs() {
+        return menu.getInfo().jobs().stream().limit(SettlerMenu.MAX_JOB_TABS)
+                .map(job -> new TabBar.Tab(job.jobType().displayName(), jobIcon(job.jobType()))).toList();
+    }
+
+    private static ItemStack jobIcon(JobType jobType) {
+        return switch (jobType) {
+            case LUMBERJACK -> new ItemStack(ModItems.LUMBERJACK_BLOCK.get());
+            case MINER -> new ItemStack(ModItems.MINER_BLOCK.get());
+            case FISHERMAN -> new ItemStack(ModItems.FISHERMAN_BLOCK.get());
+        };
+    }
+
+    @Override
+    protected void extractTabBackground(GuiGraphicsExtractor graphics, int tab, int mouseX, int mouseY) {
+        if (tab >= SettlerMenu.FIRST_JOB_TAB) {
+            for (int i = 0; i < 18; i++) {
+                CivGui.slot(graphics, leftPos + CivGui.PADDING + (i % BUFFER_COLUMNS) * 18, topPos + BUFFER_Y + (i / BUFFER_COLUMNS) * 18);
             }
         }
+    }
+
+    private void extractJobTab(GuiGraphicsExtractor graphics, SettlerInfo info, int index, int mouseX, int mouseY) {
+        if (index < 0 || index >= info.jobs().size()) {
+            return;
+        }
+        SettlerJob job = info.jobs().get(index);
+        graphics.text(font, job.jobType().displayName(), CivGui.PADDING, 22, CivGui.LABEL_COLOR, false);
+        state(info, index).ifPresent(state -> {
+            graphics.text(font, Component.translatable("civmod.gui.settler.status", state.status().displayName()), CivGui.PADDING, 34,
+                    CivGui.LABEL_COLOR, false);
+            graphics.text(font, Component.translatable("civmod.gui.settler.buffer", state.buffered(), JobBuffer.CAPACITY), CivGui.PADDING,
+                    BUFFER_Y - 10, CivGui.LABEL_COLOR, false);
+            for (int i = 0; i < state.preview().size(); i++) {
+                ItemStack stack = state.preview().get(i);
+                int x = CivGui.PADDING + (i % BUFFER_COLUMNS) * 18;
+                int y = BUFFER_Y + (i / BUFFER_COLUMNS) * 18;
+                graphics.item(stack, x, y);
+                graphics.itemDecorations(font, stack, x, y);
+                if (mouseX >= leftPos + x && mouseX < leftPos + x + 16 && mouseY >= topPos + y && mouseY < topPos + y + 16) {
+                    graphics.setTooltipForNextFrame(font, stack, mouseX, mouseY);
+                }
+            }
+        });
     }
 }

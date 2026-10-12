@@ -35,7 +35,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
      *
      * @param status   the job status
      * @param buffered the number of buffered items
-     * @param preview  up to five buffered stacks
+     * @param preview  the buffered stacks (up to 18)
      */
     public record JobState(JobStatus status, int buffered, List<ItemStack> preview) {
 
@@ -70,7 +70,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
         List<JobState> states = settler.getJobs().stream().map(job -> {
             JobBuffer buffer = settler.getWork().buffer(job.jobBlock());
             return new JobState(settler.getWork().status(job.jobBlock()), buffer.count(),
-                    buffer.stacks().stream().limit(5).map(ItemStack::copy).toList());
+                    buffer.stacks().stream().limit(18).map(ItemStack::copy).toList());
         }).toList();
         return new SettlerInfo(settler.getName(), settler.statusText(), settler.isHomeless(), settlementName, settler.getJobs(), states);
     }
