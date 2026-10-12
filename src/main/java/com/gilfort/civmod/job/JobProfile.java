@@ -102,6 +102,56 @@ public interface JobProfile {
     }
 
     /**
+     * @return whether the settler strikes its work place continuously (axe / pickaxe); otherwise the profile animates
+     *         itself in {@link #produce}
+     */
+    default boolean swings() {
+        return true;
+    }
+
+    /**
+     * @return how close (horizontally) the settler must be to its work place
+     */
+    default double reach() {
+        return 2.5;
+    }
+
+    /**
+     * @param skillLevel the skill level
+     * @param tool       the tool
+     * @return resources per second (before the area productivity)
+     */
+    default double speed(int skillLevel, ItemStack tool) {
+        return LumberjackOutput.speed(skillLevel) * ToolTiers.multiplier(ToolTiers.tier(tool));
+    }
+
+    /**
+     * What the job tab shows as found: by default the found block types.
+     *
+     * @param scan       the scan result
+     * @param tool       the current tool (may be empty)
+     * @param skillLevel the skill level
+     * @return the entries
+     */
+    default List<Found> found(ScanResult scan, ItemStack tool, int skillLevel) {
+        return scan.foundBlocks().stream()
+                .map(block -> new Found(new ItemStack(net.minecraft.core.registries.BuiltInRegistries.BLOCK.getValue(block)), canObtain(tool, block),
+                        List.<net.minecraft.network.chat.Component>of()))
+                .filter(found -> !found.icon().isEmpty())
+                .toList();
+    }
+
+    /**
+     * A found resource shown in the job tab.
+     *
+     * @param icon      the icon
+     * @param available whether the current tool can obtain it
+     * @param tooltip   tooltip lines (empty: the item name)
+     */
+    record Found(ItemStack icon, boolean available, List<net.minecraft.network.chat.Component> tooltip) {
+    }
+
+    /**
      * What one production step needs.
      *
      * @param level      the level

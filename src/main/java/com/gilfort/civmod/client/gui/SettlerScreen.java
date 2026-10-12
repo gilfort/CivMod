@@ -193,7 +193,8 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                     graphics.fill(x, y, x + 16, y + 16, 0xA0C6C6C6);
                 }
                 if (mouseX >= leftPos + x && mouseX < leftPos + x + 16 && mouseY >= topPos + y && mouseY < topPos + y + 16) {
-                    List<Component> lines = new java.util.ArrayList<>(List.of(stack.getHoverName()));
+                    List<Component> notes = i < state.notes().size() ? state.notes().get(i) : List.of();
+                    List<Component> lines = new java.util.ArrayList<>(notes.isEmpty() ? List.of(stack.getHoverName()) : notes);
                     if (missing) {
                         lines.add(Component.translatable("civmod.gui.settler.found.needs_tool").withStyle(net.minecraft.ChatFormatting.RED));
                     }
