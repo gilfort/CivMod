@@ -2,7 +2,10 @@ package com.gilfort.civmod.registry;
 
 import com.gilfort.civmod.CivMod;
 
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 /**
@@ -14,6 +17,16 @@ public final class ModItems {
 
     /** Deferred register for items in the {@code civmod} namespace. */
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(CivMod.MOD_ID);
+
+    /** Item of the {@link ModBlocks#LUMBERJACK_BLOCK}. */
+    public static final DeferredItem<BlockItem> LUMBERJACK_BLOCK = ITEMS.registerSimpleBlockItem(ModBlocks.LUMBERJACK_BLOCK);
+    /** Item of the {@link ModBlocks#MINER_BLOCK}. */
+    public static final DeferredItem<BlockItem> MINER_BLOCK = ITEMS.registerSimpleBlockItem(ModBlocks.MINER_BLOCK);
+    /** Item of the {@link ModBlocks#FISHERMAN_BLOCK}. */
+    public static final DeferredItem<BlockItem> FISHERMAN_BLOCK = ITEMS.registerSimpleBlockItem(ModBlocks.FISHERMAN_BLOCK);
+
+    /** Render-only item for the red X above unconnected JobBlocks; not obtainable. */
+    public static final DeferredItem<Item> UNCONNECTED_MARKER = ITEMS.registerSimpleItem("unconnected_marker");
 
     private ModItems() {
     }

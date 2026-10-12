@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "T": "minecraft:fishing_rod",
+    "B": "minecraft:barrel",
+    "P": "#minecraft:planks"
+  },
+  "pattern": [
+    "PTP",
+    "PBP",
+    "PPP"
+  ],
+  "result": {
+    "id": "civmod:fisherman_block"
+  }
+}

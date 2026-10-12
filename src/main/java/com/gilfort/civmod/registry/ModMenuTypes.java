@@ -4,11 +4,13 @@ import java.util.function.Supplier;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.menu.DebugMenu;
+import com.gilfort.civmod.menu.JobBlockMenu;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.common.extensions.IMenuTypeExtension;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 /**
@@ -22,6 +24,10 @@ public final class ModMenuTypes {
     /** Development-only debug menu showcasing the GUI building blocks. */
     public static final Supplier<MenuType<DebugMenu>> DEBUG = MENU_TYPES.register(
             "debug", () -> new MenuType<>(DebugMenu::new, FeatureFlags.VANILLA_SET));
+
+    /** Menu of all JobBlocks; the client receives a {@link com.gilfort.civmod.menu.JobBlockInfo} snapshot. */
+    public static final Supplier<MenuType<JobBlockMenu>> JOB_BLOCK = MENU_TYPES.register(
+            "job_block", () -> IMenuTypeExtension.create(JobBlockMenu::new));
 
     private ModMenuTypes() {
     }

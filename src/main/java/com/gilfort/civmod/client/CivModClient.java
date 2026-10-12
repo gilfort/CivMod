@@ -2,8 +2,15 @@ package com.gilfort.civmod.client;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.client.gui.DebugScreen;
+import com.gilfort.civmod.client.gui.JobBlockScreen;
+import com.gilfort.civmod.registry.ModBlockEntityTypes;
+import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.registry.ModMenuTypes;
+import com.gilfort.civmod.settlement.SettlementOutline;
+import com.gilfort.civmod.settlement.SettlementRules;
 
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -11,9 +18,13 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
+import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
 
 /**
  * Client-only entry point of CivMod.
@@ -32,6 +43,7 @@ public final class CivModClient {
      */
     public CivModClient(IEventBus modEventBus, ModContainer modContainer) {
         modContainer.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
+        NeoForge.EVENT_BUS.addListener(CivModClient::onItemTooltip);
     }
 
     /**
@@ -52,5 +64,34 @@ public final class CivModClient {
     @SubscribeEvent
     static void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
         event.register(ModMenuTypes.DEBUG.get(), DebugScreen::new);
+        event.register(ModMenuTypes.JOB_BLOCK.get(), JobBlockScreen::new);
+    }
+
+    /**
+     * Registers block entity renderers.
+     *
+     * @param event the renderer registration event
+     */
+    @SubscribeEvent
+    static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
+        event.registerBlockEntityRenderer(ModBlockEntityTypes.JOB_BLOCK.get(), JobBlockRenderer::new);
+    }
+
+    /**
+     * Registers handlers for server → client payloads.
+     *
+     * @param event the client payload registration event
+     */
+    @SubscribeEvent
+    static void onRegisterClientPayloads(RegisterClientPayloadHandlersEvent event) {
+        event.register(SettlementOutline.Sync.TYPE, SettlementOutlineRenderer::handle);
+    }
+
+    private static void onItemTooltip(ItemTooltipEvent event) {
+        if (SettlementOutline.isJobBlockItem(event.getItemStack())) {
+            int level = event.getItemStack().getOrDefault(ModDataComponents.JOB_LEVEL.get(), SettlementRules.MIN_LEVEL);
+            event.getToolTip().add(1, Component.translatable("civmod.tooltip.job_level", level, SettlementRules.MAX_LEVEL)
+                    .withStyle(ChatFormatting.GRAY));
+        }
     }
 }

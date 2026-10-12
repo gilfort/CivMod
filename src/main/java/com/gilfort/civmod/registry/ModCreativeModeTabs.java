@@ -6,7 +6,6 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
-import net.minecraft.world.item.Items;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -21,16 +20,18 @@ public final class ModCreativeModeTabs {
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, CivMod.MOD_ID);
 
     /**
-     * The main creative tab. Automatically lists every item registered in {@link ModItems#ITEMS}.
-     * The icon is a vanilla placeholder until the mod has its own signature item.
+     * The main creative tab. Automatically lists every item registered in {@link ModItems#ITEMS} except render-only
+     * items.
      */
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> MAIN_TAB =
             CREATIVE_MODE_TABS.register("main", () -> CreativeModeTab.builder()
                     .title(Component.translatable("itemGroup.civmod.main"))
                     .withTabsBefore(CreativeModeTabs.SPAWN_EGGS)
-                    .icon(() -> Items.BELL.getDefaultInstance())
+                    .icon(() -> ModItems.LUMBERJACK_BLOCK.get().getDefaultInstance())
                     .displayItems((parameters, output) ->
-                            ModItems.ITEMS.getEntries().forEach(item -> output.accept(item.get())))
+                            ModItems.ITEMS.getEntries().stream()
+                                    .filter(item -> item != ModItems.UNCONNECTED_MARKER)
+                                    .forEach(item -> output.accept(item.get())))
                     .build());
 
     private ModCreativeModeTabs() {
