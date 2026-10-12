@@ -92,11 +92,11 @@ public final class SettlementGameTests {
     private static void nearestChoice(GameTestHelper helper) {
         SettlementData data = new SettlementData();
         Settlement west = place(data, 0, 1, SettlementManager.Listener.NONE).settlement();
-        Settlement east = place(data, 31, 1, SettlementManager.Listener.NONE).settlement();
+        Settlement east = place(data, 31, 3, SettlementManager.Listener.NONE).settlement();
         helper.assertTrue(west != east, "Block at 31 is outside the exclusion radius of 30 and should found a second settlement");
-        Placement between = place(data, 14, 2, SettlementManager.Listener.NONE);
+        Placement between = place(data, 9, 1, SettlementManager.Listener.NONE);
         helper.assertTrue(between.outcome() == Outcome.JOINED && between.settlement() == west,
-                "Level-2 block at 14 reaches both (radius 20) and should join the nearer west settlement");
+                "Block at 9 is covered by west (radius 10) and east (radius 30) and should join the nearer west settlement");
         helper.succeed();
     }
 
@@ -110,11 +110,14 @@ public final class SettlementGameTests {
                 "Block at 20 is in the exclusion zone but out of reach");
         helper.assertTrue(waiting.distance() == 20 && waiting.required() == 10, "Unexpected distance info: " + waiting);
         helper.assertTrue(data.settlements().size() == 1, "No second settlement may be founded in the exclusion zone");
+        Placement highLevel = place(data, -25, 3, recorder);
+        helper.assertTrue(highLevel.outcome() == Outcome.UNCONNECTED && highLevel.required() == 10,
+                "A level-3 block outside the border must not connect via its own radius: " + highLevel);
 
         Placement bridge = place(data, 10, 1, recorder);
         helper.assertTrue(bridge.outcome() == Outcome.JOINED, "Bridge block should join");
         helper.assertTrue(recorder.autoConnected.equals(List.of(new BlockPos(20, 64, 0))), "Waiting block should auto-connect: " + recorder.autoConnected);
-        helper.assertTrue(settlement.connectedCount() == 3, "All three blocks should be connected");
+        helper.assertTrue(settlement.connectedCount() == 3, "The three blocks at 0, 10 and 20 should be connected");
         helper.succeed();
     }
 

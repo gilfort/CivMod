@@ -30,20 +30,11 @@ public final class SettlementRules {
     }
 
     /**
-     * Two JobBlocks are linked if their horizontal distance is within the join radius of the higher-level one,
-     * so linking is symmetric.
+     * A new or waiting JobBlock connects if it lies within the join radius of an already connected JobBlock; its own
+     * level only counts once it is connected (so the outline shown to players is exactly the border).
      *
-     * @param levelA level of the first block
-     * @param levelB level of the second block
-     * @return the maximum linking distance in blocks
-     */
-    public static int joinRadius(int levelA, int levelB) {
-        return JOIN_RADIUS_PER_LEVEL * Math.max(levelA, levelB);
-    }
-
-    /**
-     * @param level the JobBlock level
-     * @return the join radius of a single JobBlock (used for the outline display)
+     * @param level the level of the connected JobBlock
+     * @return the join radius around that JobBlock
      */
     public static int joinRadius(int level) {
         return JOIN_RADIUS_PER_LEVEL * level;

@@ -62,7 +62,7 @@ public class JobBlockRenderer implements BlockEntityRenderer<JobBlockEntity, Job
         poseStack.pushPose();
         poseStack.translate(0.5F, 1.5F, 0.5F);
         poseStack.rotateDegrees(Axis.YP, state.rotation);
-        poseStack.scale(0.75F, 0.75F, 0.75F);
+        poseStack.scale(0.25F, 0.25F, 0.25F);
         state.marker.submit(poseStack, collector, LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
         poseStack.popPose();
     }

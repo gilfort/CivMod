@@ -89,7 +89,8 @@ public final class SettlementManager {
     }
 
     /**
-     * Registers a placed JobBlock: joins the settlement with the nearest connected JobBlock in reach, else waits
+     * Registers a placed JobBlock: joins the settlement with the nearest connected JobBlock whose join radius covers
+     * it (the new block's own level does not count), else waits
      * unconnected inside the nearest exclusion zone, else founds a new settlement. Joining connects further
      * waiting blocks of the same settlement that come into reach.
      *
@@ -105,7 +106,7 @@ public final class SettlementManager {
         data.removeBlock(pos);
         int clamped = SettlementRules.clampLevel(level);
 
-        Nearest join = nearestConnected(data, pos, (block, distance) -> distance <= SettlementRules.joinRadius(block.level(), clamped));
+        Nearest join = nearestConnected(data, pos, (block, distance) -> distance <= SettlementRules.joinRadius(block.level()));
         if (join != null) {
             data.addBlock(join.settlement(), new SettlementBlock(pos, jobType, clamped, true));
             listener.blockChanged(pos, join.settlement().id(), true);
@@ -172,7 +173,7 @@ public final class SettlementManager {
                 .min(Comparator.comparingDouble(other -> SettlementRules.horizontalDistance(pos, other.pos())))
                 .map(nearest -> new Status(settlement, false,
                         (int) Math.ceil(SettlementRules.horizontalDistance(pos, nearest.pos())),
-                        SettlementRules.joinRadius(nearest.level(), self.level())))
+                        SettlementRules.joinRadius(nearest.level())))
                 .orElse(new Status(settlement, false, 0, 0));
     }
 
@@ -183,7 +184,7 @@ public final class SettlementManager {
             List<SettlementBlock> waiting = new ArrayList<>(settlement.blocks().stream().filter(block -> !block.connected()).toList());
             for (SettlementBlock candidate : waiting) {
                 boolean inReach = settlement.blocks().stream().anyMatch(other -> other.connected()
-                        && SettlementRules.horizontalDistance(candidate.pos(), other.pos()) <= SettlementRules.joinRadius(other.level(), candidate.level()));
+                        && SettlementRules.horizontalDistance(candidate.pos(), other.pos()) <= SettlementRules.joinRadius(other.level()));
                 if (inReach) {
                     candidate.setConnected(true);
                     data.changed();
