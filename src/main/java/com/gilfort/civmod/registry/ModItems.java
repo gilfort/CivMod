@@ -43,9 +43,12 @@ public final class ModItems {
     /** Render-only icon: drop-off inventory. */
     public static final DeferredItem<Item> DROP_OFF_MARKER = ITEMS.registerSimpleItem("drop_off_marker");
 
+    /** Render-only icon: bed. */
+    public static final DeferredItem<Item> BED_MARKER = ITEMS.registerSimpleItem("bed_marker");
+
     /** Items that are only used for rendering and never shown in the creative tab. */
     public static final Set<DeferredItem<Item>> RENDER_ONLY = Set.of(UNCONNECTED_MARKER, WORK_MARKER, PRIMARY_WORK_MARKER, COLLECT_MARKER,
-            DROP_OFF_MARKER);
+            DROP_OFF_MARKER, BED_MARKER);
 
     private ModItems() {
     }

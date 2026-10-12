@@ -34,7 +34,8 @@ public final class Settlement {
             Codec.INT.optionalFieldOf("color", SettlementColors.DEFAULT).forGetter(Settlement::color),
             Codec.LONG.optionalFieldOf("settlers_due", SETTLERS_ARRIVED).forGetter(Settlement::settlersDue),
             UUIDUtil.CODEC.listOf().optionalFieldOf("members", List.of()).forGetter(settlement -> List.copyOf(settlement.members)),
-            SettlementBlock.CODEC.listOf().fieldOf("blocks").forGetter(settlement -> List.copyOf(settlement.blocks.values()))
+            SettlementBlock.CODEC.listOf().fieldOf("blocks").forGetter(settlement -> List.copyOf(settlement.blocks.values())),
+            Codec.unboundedMap(Codec.STRING, UUIDUtil.CODEC).optionalFieldOf("beds", Map.of()).forGetter(Settlement::bedsForCodec)
     ).apply(instance, Settlement::new));
 
     private final int id;
@@ -44,6 +45,7 @@ public final class Settlement {
     private long settlersDue;
     private final Set<UUID> members = new LinkedHashSet<>();
     private final Map<BlockPos, SettlementBlock> blocks = new LinkedHashMap<>();
+    private final Map<BlockPos, UUID> beds = new LinkedHashMap<>();
 
     /**
      * @param id          the settlement id (unique per dimension)
@@ -56,6 +58,12 @@ public final class Settlement {
      */
     public Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
             List<SettlementBlock> blocks) {
+        this(id, name, foundedAt, color, settlersDue, members, blocks, Map.of());
+    }
+
+    private Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
+            List<SettlementBlock> blocks, Map<String, UUID> beds) {
+        beds.forEach((key, owner) -> this.beds.put(BlockPos.of(Long.parseLong(key)), owner));
         this.id = id;
         this.name = name;
         this.foundedAt = foundedAt;
@@ -151,6 +159,36 @@ public final class Settlement {
      */
     public long connectedCount() {
         return blocks.values().stream().filter(SettlementBlock::connected).count();
+    }
+
+    /**
+     * @return bed (head position) → owning settler (read-only)
+     */
+    public Map<BlockPos, UUID> beds() {
+        return Collections.unmodifiableMap(beds);
+    }
+
+    /**
+     * @param settler a settler UUID
+     * @return the bed (head position) owned by the settler
+     */
+    public Optional<BlockPos> bedOf(UUID settler) {
+        return beds.entrySet().stream().filter(entry -> entry.getValue().equals(settler)).map(Map.Entry::getKey).findFirst();
+    }
+
+    private Map<String, UUID> bedsForCodec() {
+        Map<String, UUID> result = new LinkedHashMap<>();
+        beds.forEach((pos, owner) -> result.put(Long.toString(pos.asLong()), owner));
+        return result;
+    }
+
+    Optional<UUID> putBed(BlockPos head, UUID owner) {
+        beds.entrySet().removeIf(entry -> entry.getValue().equals(owner));
+        return Optional.ofNullable(beds.put(head.immutable(), owner));
+    }
+
+    Optional<UUID> removeBed(BlockPos head) {
+        return Optional.ofNullable(beds.remove(head));
     }
 
     void setName(Optional<String> name) {

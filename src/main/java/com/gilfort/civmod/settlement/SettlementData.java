@@ -140,6 +140,35 @@ public final class SettlementData extends SavedData {
     }
 
     /**
+     * Gives a bed to a settler (it loses any other bed; a previous owner of this bed loses it).
+     *
+     * @param settlement the settlement
+     * @param head       the bed head position
+     * @param owner      the settler UUID
+     * @return the previous owner of this bed
+     */
+    public Optional<UUID> assignBed(Settlement settlement, BlockPos head, UUID owner) {
+        Optional<UUID> previous = settlement.putBed(head, owner).filter(uuid -> !uuid.equals(owner));
+        changed();
+        return previous;
+    }
+
+    /**
+     * Releases a bed.
+     *
+     * @param settlement the settlement
+     * @param head       the bed head position
+     * @return the previous owner
+     */
+    public Optional<UUID> releaseBed(Settlement settlement, BlockPos head) {
+        Optional<UUID> previous = settlement.removeBed(head);
+        if (previous.isPresent()) {
+            changed();
+        }
+        return previous;
+    }
+
+    /**
      * Sets the settlement name chosen by the settlers.
      *
      * @param settlement the settlement

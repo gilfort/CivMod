@@ -13,7 +13,9 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
@@ -21,6 +23,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -36,6 +39,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.block.AbstractBedBlock;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -68,7 +73,24 @@ public final class SettlerWork {
     /** Skill level used until EXP exists (Story 8). */
     private static final int SKILL_LEVEL = 1;
 
-    private enum Activity { IDLE, FETCH_TOOL, WORK, DELIVER }
+    private enum Activity { IDLE, FETCH_TOOL, WORK, DELIVER, GO_TO_BED, SLEEP }
+
+    /** Day time at which settlers go to sleep (20:00). */
+    public static final long SLEEP_TIME = 14000;
+    /** Stroll radius around the bed in the evening. */
+    private static final int REST_RADIUS = 5;
+    /** Horizontal search radius for a free spot next to a teleport target (within {@link #REACH}). */
+    private static final int STAND_SEARCH = 2;
+
+    /**
+     * Where a settler spends the night.
+     *
+     * @param pos   the bed head, straw bed spot or ground spot
+     * @param bed   whether it is a real bed
+     * @param straw the straw bed spot (null for a bed or the bare ground)
+     */
+    public record RestPlace(BlockPos pos, boolean bed, SettlerBeds.@Nullable StrawSpot straw) {
+    }
 
     /** Save codec of the per-job buffers. */
     private static final Codec<List<BufferEntry>> BUFFERS_CODEC = RecordCodecBuilder.<BufferEntry>create(instance -> instance.group(
@@ -103,6 +125,9 @@ public final class SettlerWork {
     private int swingTimer;
     private double bestDistance = Double.MAX_VALUE;
     private long lastProgressTick;
+    private long lastClock = -1;
+    private @Nullable RestPlace restPlace;
+    private long restPlaceDay = -1;
 
     /**
      * @param settler the settler
@@ -233,9 +258,31 @@ public final class SettlerWork {
         }
     }
 
+    /**
+     * @return where the settler spends (or spent) the night, if already decided
+     */
+    public Optional<RestPlace> restPlace() {
+        return Optional.ofNullable(restPlace);
+    }
+
     private void decide(ServerLevel level) {
-        long dayTime = Math.floorMod(level.getOverworldClockTime(), 24000L);
-        long day = Math.floorDiv(level.getOverworldClockTime(), 24000L);
+        long clock = level.getOverworldClockTime();
+        long dayTime = Math.floorMod(clock, 24000L);
+        long day = Math.floorDiv(clock, 24000L);
+        boolean jumped = SettlerBeds.nightSkipped(lastClock, clock, DECISION_INTERVAL, WORK_END);
+        lastClock = clock;
+        boolean night = dayTime >= SLEEP_TIME;
+        boolean evening = dayTime >= WORK_END && !night;
+
+        if (settler.isSleeping()) {
+            if (night) {
+                return;
+            }
+            wake();
+        } else if (jumped && !night && !settler.isHomeless()) {
+            // The night was skipped while this settler was not in bed: appear at the bed as if it slept there.
+            teleportToRestPlace(level, day);
+        }
         checkStuck(level);
 
         if (activity == Activity.WORK && activeJob != null) {
@@ -246,8 +293,13 @@ public final class SettlerWork {
             }
         }
 
-        if (dayTime >= WORK_END || settler.isHomeless()) {
-            // After work: deliver what is left, then free time.
+        if (settler.isHomeless()) {
+            restPlace = null;
+            stop();
+            return;
+        }
+        if (evening || night) {
+            // After work: deliver what is left, then rest near the bed and sleep from 20:00.
             for (SettlerJob job : settler.getJobs()) {
                 if (!buffer(job.jobBlock()).isEmpty() && status(job.jobBlock()) != JobStatus.DROP_OFF_FULL) {
                     startDelivery(level, job);
@@ -255,9 +307,21 @@ public final class SettlerWork {
                 }
                 statuses.put(job.jobBlock(), JobStatus.IDLE);
             }
-            stop();
+            RestPlace rest = ensureRestPlace(level, day);
+            if (rest != null) {
+                settler.setHomeTo(rest.pos(), REST_RADIUS);
+            }
+            if (night && rest != null) {
+                if (activity != Activity.GO_TO_BED && activity != Activity.SLEEP) {
+                    stop();
+                    moveTo(level, Activity.GO_TO_BED, rest.pos());
+                }
+            } else {
+                stop();
+            }
             return;
         }
+        restPlace = null;
 
         for (SettlerJob job : settler.getJobs()) {
             if (blockedUntil.getOrDefault(job.jobBlock(), 0L) > level.getGameTime()) {
@@ -347,6 +411,76 @@ public final class SettlerWork {
         }
     }
 
+    private @Nullable RestPlace ensureRestPlace(ServerLevel level, long day) {
+        if (restPlace != null && restPlaceDay == day && (!restPlace.bed() || SettlerBeds.head(level, restPlace.pos()).isPresent())) {
+            return restPlace;
+        }
+        SettlementData data = SettlementData.get(level);
+        Optional<com.gilfort.civmod.settlement.Settlement> settlement = data.settlement(settler.getSettlementId());
+        if (settlement.isEmpty()) {
+            return null;
+        }
+        Optional<BlockPos> bed = SettlerBeds.ensureBed(level, data, settlement.get(), settler.getUUID(), settler.blockPosition());
+        if (bed.isPresent()) {
+            restPlace = new RestPlace(bed.get(), true, null);
+        } else {
+            BlockPos jobBlock = settler.getJobs().stream().findFirst().map(SettlerJob::jobBlock)
+                    .or(() -> settlement.get().anchor().map(SettlementBlock::pos)).orElse(settler.blockPosition());
+            restPlace = SettlerBeds.reserveStrawSpot(level, jobBlock, settler.getUUID())
+                    .map(spot -> new RestPlace(spot.pos(), false, spot))
+                    .orElse(new RestPlace(jobBlock.above(), false, null));
+        }
+        restPlaceDay = day;
+        return restPlace;
+    }
+
+    private void teleportToRestPlace(ServerLevel level, long day) {
+        RestPlace rest = ensureRestPlace(level, day - 1);
+        if (rest != null) {
+            Vec3 spot = rest.straw() != null ? Vec3.atBottomCenterOf(rest.pos()) : standingSpot(level, rest.pos());
+            settler.teleportTo(spot.x, spot.y, spot.z);
+            settler.getNavigation().stop();
+        }
+        restPlace = null;
+    }
+
+    private void sleep(ServerLevel level) {
+        RestPlace rest = restPlace;
+        settler.getNavigation().stop();
+        activity = Activity.SLEEP;
+        if (rest != null && rest.bed() && !level.getBlockState(rest.pos()).getValue(BedBlock.OCCUPIED)
+                && settler.startSleeping(rest.pos())) {
+            return;
+        }
+        if (rest != null && rest.straw() != null) {
+            settler.sleepOnStraw(rest.straw(), true);
+        } else {
+            settler.sleepOnStraw(new SettlerBeds.StrawSpot(settler.blockPosition(), settler.getDirection()), false);
+        }
+    }
+
+    private void wake() {
+        settler.wakeUp();
+        SettlerBeds.releaseStrawSpot(settler.getUUID());
+        activity = Activity.IDLE;
+        target = null;
+        restPlace = null;
+    }
+
+    /**
+     * @return the area to stroll in during the evening (bed / straw bed spot), if any
+     */
+    public Optional<BlockPos> restArea() {
+        return Optional.ofNullable(restPlace).map(RestPlace::pos);
+    }
+
+    /**
+     * @return the stroll radius around the rest area
+     */
+    public static int restRadius() {
+        return REST_RADIUS;
+    }
+
     private void stop() {
         activity = Activity.IDLE;
         activeJob = null;
@@ -356,6 +490,7 @@ public final class SettlerWork {
     }
 
     private void moveTo(ServerLevel level, Activity next, BlockPos pos) {
+        stepOffBed(level);
         activity = next;
         target = pos.immutable();
         bestDistance = Double.MAX_VALUE;
@@ -372,12 +507,80 @@ public final class SettlerWork {
             bestDistance = distance;
             lastProgressTick = level.getGameTime();
         } else if (level.getGameTime() - lastProgressTick > CivModConfig.ANTI_STUCK_SECONDS.get() * 20L) {
-            Vec3 spot = Vec3.atBottomCenterOf(target.above());
+            Vec3 spot = standingSpot(level, target);
             settler.teleportTo(spot.x, spot.y, spot.z);
             settler.getNavigation().stop();
             lastProgressTick = level.getGameTime();
         } else if (settler.getNavigation().isDone()) {
+            stepOffBed(level);
             settler.getNavigation().moveTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5, 0.6);
+        }
+    }
+
+    /**
+     * Finds a free spot to stand on next to a target (work place, container, bed), so a teleport never puts the
+     * settler inside a block (e.g. into the trunk above a log) or on top of a bed. Spots are within reach of the
+     * target, so the settler can work from there.
+     *
+     * @param level  the level
+     * @param target the target block
+     * @return the feet position
+     */
+    public static Vec3 standingSpot(ServerLevel level, BlockPos target) {
+        BlockState state = level.getBlockState(target);
+        if (state.getBlock() instanceof AbstractBedBlock && state.hasProperty(BedBlock.FACING)) {
+            Optional<Vec3> standUp = AbstractBedBlock.findStandUpPosition(ModEntityTypes.SETTLER.get(), level, target,
+                    state.getValue(BedBlock.FACING), 0.0F);
+            if (standUp.isPresent()) {
+                return standUp.get();
+            }
+        }
+        BlockPos best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (BlockPos pos : BlockPos.betweenClosed(target.offset(-STAND_SEARCH, -2, -STAND_SEARCH), target.offset(STAND_SEARCH, 3, STAND_SEARCH))) {
+            int dx = pos.getX() - target.getX();
+            int dz = pos.getZ() - target.getZ();
+            if (dx * dx + dz * dz <= REACH * REACH && canStand(level, pos)) {
+                // Prefer spots at the target's height.
+                double distance = pos.distSqr(target) + 2.0 * Math.abs(pos.getY() - target.getY());
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    best = pos.immutable();
+                }
+            }
+        }
+        if (best != null) {
+            return Vec3.atBottomCenterOf(best);
+        }
+        BlockPos up = target.above();
+        for (int i = 0; i < 32 && !canStand(level, up); i++) {
+            up = up.above();
+        }
+        return Vec3.atBottomCenterOf(up);
+    }
+
+    private static boolean canStand(ServerLevel level, BlockPos pos) {
+        BlockPos below = pos.below();
+        return level.getBlockState(pos).getCollisionShape(level, pos).isEmpty()
+                && level.getBlockState(pos.above()).getCollisionShape(level, pos.above()).isEmpty()
+                && level.getFluidState(pos).isEmpty()
+                && level.getBlockState(below).isFaceSturdy(level, below, Direction.UP);
+    }
+
+    /**
+     * Gets down from a bed the settler stands on (beds are blocked for the pathfinder): moves to the vanilla stand-up
+     * position, like waking up.
+     */
+    private void stepOffBed(ServerLevel level) {
+        if (settler.isSleeping()) {
+            return;
+        }
+        BlockPos feet = settler.blockPosition();
+        BlockPos bed = level.getBlockState(feet).getBlock() instanceof AbstractBedBlock ? feet
+                : level.getBlockState(feet.below()).getBlock() instanceof AbstractBedBlock ? feet.below() : null;
+        if (bed != null) {
+            Vec3 spot = standingSpot(level, bed);
+            settler.teleportTo(spot.x, spot.y, spot.z);
         }
     }
 
@@ -550,10 +753,17 @@ public final class SettlerWork {
     // ---------------------------------------------------------------- per-tick work
 
     private void workTick(ServerLevel level) {
-        if (activity == Activity.IDLE || target == null || activeJob == null) {
+        if (activity == Activity.IDLE || activity == Activity.SLEEP || target == null) {
             return;
         }
         if (!isAtTarget()) {
+            return;
+        }
+        if (activity == Activity.GO_TO_BED) {
+            sleep(level);
+            return;
+        }
+        if (activeJob == null) {
             return;
         }
         BlockPos jobBlock = activeJob.jobBlock();
@@ -677,7 +887,7 @@ public final class SettlerWork {
 
         @Override
         public boolean canUse() {
-            return activity != Activity.IDLE;
+            return activity != Activity.IDLE || settler.isSleeping();
         }
 
         @Override

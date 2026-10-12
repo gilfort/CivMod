@@ -26,9 +26,10 @@ import net.minecraft.world.item.ItemStack;
  * @param settlementName the settlement name (empty if homeless)
  * @param jobs           the assigned jobs in priority order (Laborer excluded)
  * @param jobStates      status and buffer per job, aligned with {@code jobs}
+ * @param bed            where the settler sleeps
  */
 public record SettlerInfo(Component name, Component status, boolean homeless, Component settlementName, List<SettlerJob> jobs,
-        List<JobState> jobStates) {
+        List<JobState> jobStates, Component bed) {
 
     /**
      * Status and buffer of a job.
@@ -55,6 +56,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
             ComponentSerialization.STREAM_CODEC, SettlerInfo::settlementName,
             SettlerJob.STREAM_CODEC.apply(ByteBufCodecs.list()), SettlerInfo::jobs,
             JobState.STREAM_CODEC.apply(ByteBufCodecs.list()), SettlerInfo::jobStates,
+            ComponentSerialization.STREAM_CODEC, SettlerInfo::bed,
             SettlerInfo::new);
 
     /**
@@ -63,16 +65,23 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
      */
     public static SettlerInfo of(Settler settler) {
         Component settlementName = Component.empty();
+        Component bed = Component.translatable("civmod.gui.settler.bed.none");
         if (settler.level() instanceof ServerLevel level && !settler.isHomeless()) {
-            settlementName = SettlementData.get(level).settlement(settler.getSettlementId())
-                    .map(Settlement::displayName).orElse(Component.empty());
+            java.util.Optional<Settlement> settlement = SettlementData.get(level).settlement(settler.getSettlementId());
+            settlementName = settlement.map(Settlement::displayName).orElse(Component.empty());
+            java.util.Optional<net.minecraft.core.BlockPos> bedPos = settlement.flatMap(s -> s.bedOf(settler.getUUID()));
+            if (bedPos.isPresent()) {
+                bed = Component.literal(bedPos.get().toShortString());
+            } else if (settler.getWork().restPlace().isPresent() || settler.isSleepingWithoutBed()) {
+                bed = Component.translatable("civmod.gui.settler.bed.straw");
+            }
         }
         List<JobState> states = settler.getJobs().stream().map(job -> {
             JobBuffer buffer = settler.getWork().buffer(job.jobBlock());
             return new JobState(settler.getWork().status(job.jobBlock()), buffer.count(),
                     buffer.stacks().stream().limit(18).map(ItemStack::copy).toList());
         }).toList();
-        return new SettlerInfo(settler.getName(), settler.statusText(), settler.isHomeless(), settlementName, settler.getJobs(), states);
+        return new SettlerInfo(settler.getName(), settler.statusText(), settler.isHomeless(), settlementName, settler.getJobs(), states, bed);
     }
 
     /**
@@ -84,6 +93,6 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
             int index = this.jobs.indexOf(job);
             return index >= 0 && index < jobStates.size() ? jobStates.get(index) : new JobState(JobStatus.IDLE, 0, List.of());
         }).toList();
-        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(jobs), states);
+        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(jobs), states, bed);
     }
 }

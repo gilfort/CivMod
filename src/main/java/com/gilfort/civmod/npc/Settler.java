@@ -32,6 +32,7 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
@@ -44,6 +45,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * A settler NPC (vault {@code Systems/NPC Population.md}).
@@ -80,6 +82,10 @@ public class Settler extends PathfinderMob {
     private static final int HOMELESS_RADIUS = 8;
 
     private static final EntityDataAccessor<Integer> SKIN = SynchedEntityData.defineId(Settler.class, EntityDataSerializers.INT);
+    /** Sleeping without bed: -1 = no, 0–3 = straw bed facing (2D value), 4–7 = bare ground facing. */
+    private static final EntityDataAccessor<Integer> STRAW = SynchedEntityData.defineId(Settler.class, EntityDataSerializers.INT);
+    /** Height of the vanilla straw bed base (4 px). */
+    private static final double STRAW_BED_HEIGHT = 4.0 / 16.0;
 
     private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE);
     private Identifier race = Races.HUMAN;
@@ -114,6 +120,7 @@ public class Settler extends PathfinderMob {
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         super.defineSynchedData(builder);
         builder.define(SKIN, 0);
+        builder.define(STRAW, -1);
     }
 
     @Override
@@ -239,7 +246,80 @@ public class Settler extends PathfinderMob {
         setHomeTo(blockPosition(), HOMELESS_RADIUS);
     }
 
+    /**
+     * Lies down without a bed: on a straw bed (rendered client-side) or on the bare ground.
+     *
+     * @param spot  the spot and lying direction
+     * @param straw whether a straw bed is shown
+     */
+    public void sleepOnStraw(SettlerBeds.StrawSpot spot, boolean straw) {
+        Vec3 pos = Vec3.atBottomCenterOf(spot.pos());
+        // Like vanilla beds: lying height on top of the (4 px) straw bed plus 0.125, otherwise the body is hidden in it.
+        setPos(pos.x, pos.y + (straw ? STRAW_BED_HEIGHT : 0.0) + 0.125, pos.z);
+        setSleepingPos(spot.pos());
+        setPose(Pose.SLEEPING);
+        setDeltaMovement(Vec3.ZERO);
+        entityData.set(STRAW, spot.facing().get2DDataValue() + (straw ? 0 : 4));
+    }
+
+    /**
+     * Gets up from a bed, straw bed or the ground.
+     */
+    public void wakeUp() {
+        if (isSleeping()) {
+            stopSleeping();
+        }
+        entityData.set(STRAW, -1);
+    }
+
+    /**
+     * @return whether the settler sleeps without a real bed
+     */
+    public boolean isSleepingWithoutBed() {
+        return entityData.get(STRAW) >= 0;
+    }
+
+    /**
+     * @return the facing of the straw bed the settler lies on, empty if none is shown
+     */
+    public Optional<net.minecraft.core.Direction> strawBedFacing() {
+        int value = entityData.get(STRAW);
+        return value >= 0 && value < 4 ? Optional.of(net.minecraft.core.Direction.from2DDataValue(value)) : Optional.empty();
+    }
+
+    @Override
+    public void travel(Vec3 input) {
+        if (isSleeping()) {
+            // Lying still: leftover movement (move control, pushes) would slide the settler out of its bed.
+            setDeltaMovement(Vec3.ZERO);
+            return;
+        }
+        super.travel(input);
+    }
+
+    @Override
+    public boolean isPushable() {
+        return !isSleeping() && super.isPushable();
+    }
+
+    @Override
+    public boolean isNoGravity() {
+        // A straw bed is never placed, nothing holds the settler at its lying height.
+        return super.isNoGravity() || isSleepingWithoutBed();
+    }
+
+    @Override
+    public net.minecraft.core.@org.jspecify.annotations.Nullable Direction getBedOrientation() {
+        int value = entityData.get(STRAW);
+        return value >= 0 ? net.minecraft.core.Direction.from2DDataValue(value % 4) : super.getBedOrientation();
+    }
+
     private void updateHome(Settlement settlement) {
+        Optional<BlockPos> rest = work.restArea();
+        if (rest.isPresent()) {
+            setHomeTo(rest.get(), SettlerWork.restRadius());
+            return;
+        }
         SettlementManager.nearestBlock(settlement, blockPosition())
                 .ifPresent(block -> setHomeTo(block.pos(), SettlementRules.joinRadius(block.level())));
     }
@@ -278,6 +358,9 @@ public class Settler extends PathfinderMob {
     public Component statusText() {
         if (isHomeless()) {
             return Component.translatable("civmod.settler.status.homeless");
+        }
+        if (isSleeping()) {
+            return Component.translatable("civmod.settler.status.sleeping");
         }
         return work.activeJob()
                 .map(job -> Component.translatable("civmod.settler.status.job", work.status(job.jobBlock()).displayName(), job.jobType().displayName()))

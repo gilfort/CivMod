@@ -2,6 +2,7 @@ package com.gilfort.civmod.gametest;
 
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -22,6 +23,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
@@ -64,6 +66,7 @@ public final class LumberjackGameTests {
             register(helper, "lumberjack_fatigue", LumberjackGameTests::fatigue);
             register(helper, "lumberjack_sampled_scan", LumberjackGameTests::sampledScan);
             register(helper, "lumberjack_works_in_world", LumberjackGameTests::worksInWorld);
+            register(helper, "lumberjack_works_from_bed", LumberjackGameTests::worksFromBed);
             register(helper, "lumberjack_work_state_persistence", LumberjackGameTests::workStatePersistence);
         });
     }
@@ -190,6 +193,21 @@ public final class LumberjackGameTests {
 
     /** A settler with a Lumberjack job and a stone axe walks to the trees and produces wood into its buffer. */
     private static void worksInWorld(GameTestHelper helper) {
+        worksInWorld(helper, false);
+    }
+
+    /** Starting on top of a bed (beds are blocked for the pathfinder), the Lumberjack still reaches the tree in time. */
+    private static void worksFromBed(GameTestHelper helper) {
+        worksInWorld(helper, true);
+    }
+
+    private static void worksInWorld(GameTestHelper helper, boolean onBed) {
+        // Own floor: test places are spread over the world and the terrain below them varies.
+        for (int x = 0; x < 9; x++) {
+            for (int z = 0; z < 9; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
         BlockPos jobBlockRelative = new BlockPos(1, 1, 1);
         helper.setBlock(jobBlockRelative, ModBlocks.LUMBERJACK_BLOCK.get());
         for (int x = 4; x < 8; x++) {
@@ -200,11 +218,22 @@ public final class LumberjackGameTests {
             }
         }
         ServerLevel level = helper.getLevel();
+        // The test area is not always entity-ticking (the settler then never ticks): keep its chunks forced.
+        List<long[]> forced = forceChunks(helper);
         BlockPos jobBlock = helper.absolutePos(jobBlockRelative);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
-        Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(2, 1, 2)));
+        Vec3 start = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(2, 1, 2)));
+        if (onBed) {
+            // Far from the tree, on top of a bed.
+            net.minecraft.world.level.block.state.BlockState bed = Blocks.BED.pick(net.minecraft.world.item.DyeColor.RED).defaultBlockState()
+                    .setValue(net.minecraft.world.level.block.BedBlock.FACING, net.minecraft.core.Direction.NORTH);
+            helper.setBlock(new BlockPos(1, 1, 7), bed.setValue(net.minecraft.world.level.block.BedBlock.PART, net.minecraft.world.level.block.state.properties.BedPart.FOOT));
+            helper.setBlock(new BlockPos(1, 1, 6), bed.setValue(net.minecraft.world.level.block.BedBlock.PART, net.minecraft.world.level.block.state.properties.BedPart.HEAD));
+            start = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(1, 1, 6))).add(0.0, 0.5625, 0.0);
+        }
+        Vec3 spawn = start;
         settler.snapTo(spawn.x, spawn.y, spawn.z, 0.0F, 0.0F);
         settler.setCustomName(net.minecraft.network.chat.Component.literal("Tester"));
         level.addFreshEntity(settler);
@@ -214,11 +243,30 @@ public final class LumberjackGameTests {
         helper.assertTrue(JobAssignments.assign(data, jobBlock, settler.getUUID(), "Tester", settlement.id(), java.util.List.of())
                 == JobAssignments.AssignResult.OK, "Assignment failed");
         settler.addJob(new SettlerJob(JobType.LUMBERJACK, jobBlock));
+        if (onBed) {
+            helper.runAtTickTime(300, () -> helper.assertTrue(settler.position().distanceTo(spawn) > 2.0,
+                    "Still on the bed after 15 s (status " + settler.getWork().status(jobBlock) + ")"));
+        }
         helper.succeedWhen(() -> {
             helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0,
                     "No wood produced yet (status " + settler.getWork().status(jobBlock) + ")");
             settler.discard();
+            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });
+    }
+
+    private static List<long[]> forceChunks(GameTestHelper helper) {
+        BlockPos min = helper.absolutePos(BlockPos.ZERO);
+        BlockPos max = helper.absolutePos(new BlockPos(8, 0, 8));
+        List<long[]> chunks = new java.util.ArrayList<>();
+        for (int x = SectionPos.blockToSectionCoord(Math.min(min.getX(), max.getX())); x <= SectionPos.blockToSectionCoord(Math.max(min.getX(), max.getX())); x++) {
+            for (int z = SectionPos.blockToSectionCoord(Math.min(min.getZ(), max.getZ())); z <= SectionPos.blockToSectionCoord(Math.max(min.getZ(), max.getZ())); z++) {
+                if (helper.getLevel().setChunkForced(x, z, true)) {
+                    chunks.add(new long[] {x, z});
+                }
+            }
+        }
+        return chunks;
     }
 
     /** Buffers and the work place of the day survive saving; the earlier save format still loads. */

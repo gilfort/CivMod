@@ -94,6 +94,9 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                 graphics.text(font, Component.translatable("civmod.gui.settler.status", info.status()), CivGui.PADDING, 34, CivGui.LABEL_COLOR, false);
                 Component settlement = info.homeless() ? Component.translatable("civmod.gui.settler.no_settlement") : info.settlementName();
                 graphics.text(font, Component.translatable("civmod.gui.settler.settlement", settlement), CivGui.PADDING, 46, CivGui.LABEL_COLOR, false);
+                if (!info.homeless()) {
+                    graphics.text(font, Component.translatable("civmod.gui.settler.bed", info.bed()), CivGui.PADDING, 58, CivGui.LABEL_COLOR, false);
+                }
             }
             case SettlerMenu.TAB_JOBS -> {
                 int y = 24;
