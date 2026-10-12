@@ -75,7 +75,8 @@ public final class CivGui {
     public static void foodBar(GuiGraphicsExtractor graphics, int x, int y, int level, float saturation) {
         int saturationPoints = (int) Math.ceil(saturation);
         for (int i = 0; i < 10; i++) {
-            int iconX = x + i * FOOD_ICON_STEP;
+            // Like the player HUD: the first drumstick is the rightmost one, the bar empties from the left.
+            int iconX = x + (9 - i) * FOOD_ICON_STEP;
             graphics.blitSprite(RenderPipelines.GUI_TEXTURED, FOOD_EMPTY, iconX, y, 9, 9);
             int food = level - i * 2;
             if (food >= 2) {
