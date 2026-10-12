@@ -1,6 +1,9 @@
 package com.gilfort.civmod.registry;
 
+import java.util.Set;
+
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
@@ -25,8 +28,24 @@ public final class ModItems {
     /** Item of the {@link ModBlocks#FISHERMAN_BLOCK}. */
     public static final DeferredItem<BlockItem> FISHERMAN_BLOCK = ITEMS.registerSimpleBlockItem(ModBlocks.FISHERMAN_BLOCK);
 
+    /** The Scroll of Assignment. */
+    public static final DeferredItem<ScrollOfAssignmentItem> SCROLL_OF_ASSIGNMENT = ITEMS.registerItem("scroll_of_assignment",
+            ScrollOfAssignmentItem::new, properties -> properties.stacksTo(1));
+
     /** Render-only item for the red X above unconnected JobBlocks; not obtainable. */
     public static final DeferredItem<Item> UNCONNECTED_MARKER = ITEMS.registerSimpleItem("unconnected_marker");
+    /** Render-only icon: work POI. */
+    public static final DeferredItem<Item> WORK_MARKER = ITEMS.registerSimpleItem("work_marker");
+    /** Render-only icon: primary work POI. */
+    public static final DeferredItem<Item> PRIMARY_WORK_MARKER = ITEMS.registerSimpleItem("primary_work_marker");
+    /** Render-only icon: collect inventory. */
+    public static final DeferredItem<Item> COLLECT_MARKER = ITEMS.registerSimpleItem("collect_marker");
+    /** Render-only icon: drop-off inventory. */
+    public static final DeferredItem<Item> DROP_OFF_MARKER = ITEMS.registerSimpleItem("drop_off_marker");
+
+    /** Items that are only used for rendering and never shown in the creative tab. */
+    public static final Set<DeferredItem<Item>> RENDER_ONLY = Set.of(UNCONNECTED_MARKER, WORK_MARKER, PRIMARY_WORK_MARKER, COLLECT_MARKER,
+            DROP_OFF_MARKER);
 
     private ModItems() {
     }

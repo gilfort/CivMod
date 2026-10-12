@@ -2,6 +2,7 @@ package com.gilfort.civmod.network;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.command.CivModCommand;
+import com.gilfort.civmod.settlement.JobPointsDisplay;
 import com.gilfort.civmod.settlement.SettlementOutline;
 
 import net.minecraft.commands.Commands;
@@ -65,5 +66,6 @@ public final class CivNetwork {
         });
         // Client handler is registered in CivModClient (RegisterClientPayloadHandlersEvent).
         registrar.playToClient(SettlementOutline.Sync.TYPE, SettlementOutline.Sync.STREAM_CODEC);
+        registrar.playToClient(JobPointsDisplay.Sync.TYPE, JobPointsDisplay.Sync.STREAM_CODEC);
     }
 }

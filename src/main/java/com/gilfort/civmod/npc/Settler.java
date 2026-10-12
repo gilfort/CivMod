@@ -5,11 +5,14 @@ import java.util.Optional;
 
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
+import com.gilfort.civmod.item.ScrollOfAssignmentItem;
+import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementRules;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -172,6 +175,26 @@ public class Settler extends PathfinderMob {
     }
 
     /**
+     * Adds a job with the lowest priority (directly above the Laborer fallback).
+     *
+     * @param job the job
+     */
+    public void addJob(SettlerJob job) {
+        List<SettlerJob> updated = new java.util.ArrayList<>(jobs);
+        updated.add(job);
+        jobs = List.copyOf(updated);
+    }
+
+    /**
+     * Removes the job of a JobBlock.
+     *
+     * @param jobBlock the JobBlock position
+     */
+    public void removeJob(BlockPos jobBlock) {
+        jobs = jobs.stream().filter(job -> !job.jobBlock().equals(jobBlock)).toList();
+    }
+
+    /**
      * @return the equipment (tool belt, offhand, pockets, armor; see the slot constants)
      */
     public SimpleContainer getInventory() {
@@ -220,6 +243,8 @@ public class Settler extends PathfinderMob {
                 becomeHomeless();
             } else {
                 updateHome(settlement.get());
+                // Drop jobs whose JobBlock vanished or was given to someone else while this settler was unloaded.
+                jobs = jobs.stream().filter(job -> JobAssignments.isAssignee(data, job.jobBlock(), getUUID())).toList();
             }
             return;
         }
@@ -235,6 +260,10 @@ public class Settler extends PathfinderMob {
 
     @Override
     protected InteractionResult mobInteract(Player player, InteractionHand hand) {
+        if (player.getItemInHand(hand).getItem() instanceof ScrollOfAssignmentItem) {
+            // Let the scroll handle the interaction (assign / bind).
+            return InteractionResult.PASS;
+        }
         if (player instanceof ServerPlayer serverPlayer && hand == InteractionHand.MAIN_HAND) {
             SettlerInfo info = SettlerInfo.of(this);
             serverPlayer.openMenu(new SimpleMenuProvider((id, inventory, p) -> new SettlerMenu(id, inventory, this, info), getName()),

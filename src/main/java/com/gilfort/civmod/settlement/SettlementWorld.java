@@ -95,6 +95,20 @@ public final class SettlementWorld {
     }
 
     /**
+     * Frees a JobBlock and removes the job from its settler (if loaded; otherwise on its next membership check).
+     *
+     * @param level    the dimension
+     * @param jobBlock the JobBlock position
+     */
+    public static void unassign(ServerLevel level, BlockPos jobBlock) {
+        JobAssignments.unassign(SettlementData.get(level), jobBlock).ifPresent(settler -> {
+            if (level.getEntity(settler) instanceof Settler entity) {
+                entity.removeJob(jobBlock);
+            }
+        });
+    }
+
+    /**
      * Applies a JobBlock level to its settlement entry.
      *
      * @param level    the dimension
@@ -156,6 +170,13 @@ public final class SettlementWorld {
                     if (level.getEntity(member) instanceof Settler settler) {
                         settler.becomeHomeless();
                     }
+                }
+            }
+
+            @Override
+            public void jobRemoved(UUID settler, BlockPos jobBlock) {
+                if (level.getEntity(settler) instanceof Settler entity) {
+                    entity.removeJob(jobBlock);
                 }
             }
 

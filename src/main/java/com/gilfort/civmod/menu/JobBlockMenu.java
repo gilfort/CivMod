@@ -3,7 +3,10 @@ package com.gilfort.civmod.menu;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.registry.ModMenuTypes;
 
+import com.gilfort.civmod.settlement.SettlementWorld;
+
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
@@ -21,8 +24,11 @@ public class JobBlockMenu extends CivMenu {
     /** Info tab. */
     public static final int TAB_INFO = 1;
 
+    /** Button id: free the JobBlock (remove the job from its settler). */
+    public static final int BUTTON_UNASSIGN = 50;
+
     private final Container container;
-    private final JobBlockInfo info;
+    private JobBlockInfo info;
 
     /**
      * Client constructor.
@@ -61,6 +67,18 @@ public class JobBlockMenu extends CivMenu {
      */
     public JobBlockInfo getInfo() {
         return info;
+    }
+
+    @Override
+    public boolean clickMenuButton(Player player, int buttonId) {
+        if (buttonId == BUTTON_UNASSIGN) {
+            info = info.withoutAssignee();
+            if (container instanceof JobBlockEntity jobBlock && jobBlock.getLevel() instanceof ServerLevel level) {
+                SettlementWorld.unassign(level, jobBlock.getBlockPos());
+            }
+            return true;
+        }
+        return super.clickMenuButton(player, buttonId);
     }
 
     @Override

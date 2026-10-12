@@ -30,7 +30,7 @@ public final class ModCreativeModeTabs {
                     .icon(() -> ModItems.LUMBERJACK_BLOCK.get().getDefaultInstance())
                     .displayItems((parameters, output) ->
                             ModItems.ITEMS.getEntries().stream()
-                                    .filter(item -> item != ModItems.UNCONNECTED_MARKER)
+                                    .filter(item -> !ModItems.RENDER_ONLY.contains(item))
                                     .forEach(item -> output.accept(item.get())))
                     .build());
 
