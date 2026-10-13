@@ -23,7 +23,12 @@ import net.minecraft.world.item.Items;
 public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
 
     private static final int ERROR_COLOR = 0xFFAA0000;
-    private static final int HAVE_COLOR = 0xFF2E7D32;
+    private static final int COST_SLOTS = 7;
+    private static final int COST_X = CivGui.PADDING + 9;
+    private static final int MISSING_TINT = 0x80FF2020;
+
+    private int costOffset;
+    private int costRowY = -1;
     private static final int LINE_HEIGHT = 11;
 
     /**
@@ -87,7 +92,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         y += LINE_HEIGHT;
         Component worker = info.assignee().isEmpty() ? Component.translatable("civmod.gui.job_block.no_worker") : Component.literal(info.assignee());
         graphics.text(font, Component.translatable("civmod.gui.job_block.worker", worker), CivGui.PADDING, y, color, false);
-        y += LINE_HEIGHT + 2;
+        y += LINE_HEIGHT;
         y = extractCosts(graphics, info, y, mouseX, mouseY);
         if (!info.inSettlement()) {
             graphics.textWithWordWrap(font, Component.translatable("civmod.gui.job_block.not_registered"),
@@ -98,25 +103,54 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         }
     }
 
-    /** Draws the costs of the next level: item icon and "have / need" in green or red. */
+    /**
+     * Draws the costs of the next level as a row of slots (icon, needed count, red tint when missing); more than
+     * {@value #COST_SLOTS} entries scroll with the mouse wheel.
+     */
     private int extractCosts(GuiGraphicsExtractor graphics, JobBlockInfo info, int y, int mouseX, int mouseY) {
         List<JobBlockInfo.CostEntry> costs = info.nextCosts();
         if (costs.isEmpty() || info.level() >= SettlementRules.MAX_LEVEL) {
             return y;
         }
-        graphics.text(font, Component.translatable("civmod.gui.job_block.upgrade.costs"), CivGui.PADDING, y + 4, CivGui.LABEL_COLOR, false);
-        int x = CivGui.PADDING + font.width(Component.translatable("civmod.gui.job_block.upgrade.costs")) + 4;
+        graphics.text(font, Component.translatable("civmod.gui.job_block.upgrade.costs"), CivGui.PADDING, y, CivGui.LABEL_COLOR, false);
+        int rowY = y + 10;
+        costRowY = rowY;
+        costOffset = Math.clamp(costOffset, 0, Math.max(0, costs.size() - COST_SLOTS));
         boolean creative = minecraft.player.isCreative();
-        for (JobBlockInfo.CostEntry cost : costs) {
-            graphics.item(cost.icon(), x, y);
-            int have = cost.count(minecraft.player.getInventory());
-            String text = have + "/" + cost.count();
-            graphics.text(font, Component.literal(text), x + 17, y + 4, creative || have >= cost.count() ? HAVE_COLOR : ERROR_COLOR, false);
-            if (mouseX >= leftPos + x && mouseX < leftPos + x + 16 && mouseY >= topPos + y && mouseY < topPos + y + 16) {
-                graphics.setTooltipForNextFrame(font, cost.icon(), mouseX, mouseY);
-            }
-            x += 17 + font.width(text) + 6;
+        if (costOffset > 0) {
+            graphics.text(font, Component.literal("«"), CivGui.PADDING, rowY + 4, CivGui.LABEL_COLOR, false);
         }
-        return y + 20;
+        if (costOffset + COST_SLOTS < costs.size()) {
+            graphics.text(font, Component.literal("»"), COST_X + COST_SLOTS * 18 + 2, rowY + 4, CivGui.LABEL_COLOR, false);
+        }
+        for (int i = 0; i < Math.min(COST_SLOTS, costs.size() - costOffset); i++) {
+            JobBlockInfo.CostEntry cost = costs.get(costOffset + i);
+            int x = COST_X + i * 18;
+            CivGui.slot(graphics, x, rowY);
+            graphics.item(cost.icon(), x, rowY);
+            graphics.itemDecorations(font, cost.icon(), x, rowY, Integer.toString(cost.count()));
+            int have = cost.count(minecraft.player.getInventory());
+            if (!creative && have < cost.count()) {
+                graphics.fill(x, rowY, x + 16, rowY + 16, MISSING_TINT);
+            }
+            if (mouseX >= leftPos + x && mouseX < leftPos + x + 16 && mouseY >= topPos + rowY && mouseY < topPos + rowY + 16) {
+                graphics.setComponentTooltipForNextFrame(font, List.of(cost.icon().getHoverName(),
+                        Component.translatable("civmod.gui.job_block.upgrade.have", have, cost.count())
+                                .withStyle(creative || have >= cost.count() ? net.minecraft.ChatFormatting.GREEN : net.minecraft.ChatFormatting.RED)),
+                        mouseX, mouseY);
+            }
+        }
+        return rowY + 20;
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        int size = menu.getInfo().nextCosts().size();
+        if (menu.getActiveTab() == JobBlockMenu.TAB_INFO && size > COST_SLOTS && costRowY >= 0
+                && mouseY >= topPos + costRowY - 2 && mouseY < topPos + costRowY + 18) {
+            costOffset = Math.clamp(costOffset - (int) Math.signum(scrollY), 0, size - COST_SLOTS);
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 }
