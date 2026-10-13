@@ -60,6 +60,20 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     }
 
     /**
+     * Sets the level after an upgrade (the settlement entry is updated separately).
+     *
+     * @param jobLevel the new level
+     */
+    public void setJobLevel(int jobLevel) {
+        this.jobLevel = SettlementRules.clampLevel(jobLevel);
+        setChanged();
+        if (level != null) {
+            BlockState state = getBlockState();
+            level.sendBlockUpdated(worldPosition, state, state, Block.UPDATE_CLIENTS);
+        }
+    }
+
+    /**
      * @return the settlement id, {@code -1} if not registered yet
      */
     public int getSettlementId() {

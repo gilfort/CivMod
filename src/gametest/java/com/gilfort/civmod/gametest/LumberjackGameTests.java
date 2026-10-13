@@ -250,6 +250,8 @@ public final class LumberjackGameTests {
         helper.succeedWhen(() -> {
             helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0,
                     "No wood produced yet (status " + settler.getWork().status(jobBlock) + ")");
+            helper.assertTrue(settler.getSkills().get(JobType.LUMBERJACK).exp() > 0 || settler.getSkills().get(JobType.LUMBERJACK).level() > 1,
+                    "Producing gives EXP");
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });

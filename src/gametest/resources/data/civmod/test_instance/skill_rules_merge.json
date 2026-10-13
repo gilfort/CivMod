@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:skill_rules_merge",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 4
+}

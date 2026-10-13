@@ -16,6 +16,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -27,7 +28,12 @@ import net.minecraft.world.item.Items;
 public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
 
     private static final int ROW_HEIGHT = 22;
-    private static final int BUFFER_Y = 56;
+    private static final int BUFFER_Y = 78;
+    private static final int LIMITED_COLOR = 0xFFD07000;
+    private static final int EXP_BAR_Y = 56;
+    private static final int EXP_BAR_WIDTH = 90;
+    private static final Identifier EXP_BACKGROUND = Identifier.withDefaultNamespace("hud/experience_bar_background");
+    private static final Identifier EXP_PROGRESS = Identifier.withDefaultNamespace("hud/experience_bar_progress");
     private static final int BUFFER_COLUMNS = 9;
     private static final int SMALL_BUTTON = 16;
     private static final int FOOD_Y = 72;
@@ -108,9 +114,14 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                 int y = 24;
                 for (int i = 0; i < info.jobs().size(); i++) {
                     SettlerJob job = info.jobs().get(i);
-                    int rowY = y;
+                    int rowY = y - 2;
                     graphics.text(font, job.jobType().displayName(), CivGui.PADDING, rowY, CivGui.LABEL_COLOR, false);
-                    state(info, i).ifPresent(state -> graphics.text(font, state.status().displayName(), CivGui.PADDING + 70, rowY, CivGui.HINT_COLOR, false));
+                    int levelX = CivGui.PADDING + font.width(job.jobType().displayName()) + 4;
+                    state(info, i).ifPresent(state -> {
+                        graphics.text(font, Component.translatable("civmod.gui.settler.level_short", state.skill().level()), levelX, rowY,
+                                state.skill().limited() ? LIMITED_COLOR : CivGui.HINT_COLOR, false);
+                        graphics.text(font, state.status().displayName(), CivGui.PADDING, rowY + 10, CivGui.HINT_COLOR, false);
+                    });
                     y += ROW_HEIGHT;
                 }
                 graphics.text(font, Component.translatable("civmod.gui.settler.laborer"), CivGui.PADDING, y, CivGui.HINT_COLOR, false);
@@ -151,6 +162,20 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
             CivGui.foodBar(graphics, x, topPos + FOOD_Y - 1, menu.getInfo().food().level(), menu.getInfo().food().saturation());
         }
         if (tab >= SettlerMenu.FIRST_JOB_TAB) {
+            state(menu.getInfo(), tab - SettlerMenu.FIRST_JOB_TAB).ifPresent(state -> {
+                SettlerInfo.SkillInfo skill = state.skill();
+                if (!skill.limited() && !skill.atCap()) {
+                    int x = leftPos + CivGui.PADDING;
+                    int y = topPos + EXP_BAR_Y;
+                    graphics.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, EXP_BACKGROUND, x, y, EXP_BAR_WIDTH, 5);
+                    int filled = Math.round(EXP_BAR_WIDTH * Math.min(1.0F, skill.exp() / (float) Math.max(1, skill.needed())));
+                    if (filled > 0) {
+                        graphics.enableScissor(x, y, x + filled, y + 5);
+                        graphics.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, EXP_PROGRESS, x, y, EXP_BAR_WIDTH, 5);
+                        graphics.disableScissor();
+                    }
+                }
+            });
             for (int i = 0; i < 18; i++) {
                 CivGui.slot(graphics, leftPos + CivGui.PADDING + (i % BUFFER_COLUMNS) * 18, topPos + BUFFER_Y + (i / BUFFER_COLUMNS) * 18);
             }
@@ -166,6 +191,19 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         state(info, index).ifPresent(state -> {
             graphics.text(font, Component.translatable("civmod.gui.settler.status", state.status().displayName()), CivGui.PADDING, 34,
                     CivGui.LABEL_COLOR, false);
+            SettlerInfo.SkillInfo skill = state.skill();
+            if (skill.limited()) {
+                graphics.text(font, Component.translatable("civmod.gui.settler.limited", skill.level(), skill.effective(), skill.blockLevel()),
+                        CivGui.PADDING, 45, LIMITED_COLOR, false);
+            } else if (skill.atCap()) {
+                graphics.text(font, Component.translatable("civmod.gui.settler.level", skill.level()), CivGui.PADDING, 45, CivGui.LABEL_COLOR, false);
+                graphics.text(font, Component.translatable("civmod.gui.settler.max_level"), CivGui.PADDING, EXP_BAR_Y - 1,
+                        LIMITED_COLOR, false);
+            } else {
+                graphics.text(font, Component.translatable("civmod.gui.settler.level", skill.level()), CivGui.PADDING, 45, CivGui.LABEL_COLOR, false);
+                graphics.text(font, Component.translatable("civmod.gui.settler.exp", skill.exp(), skill.needed()), CivGui.PADDING + EXP_BAR_WIDTH + 4,
+                        EXP_BAR_Y - 1, CivGui.HINT_COLOR, false);
+            }
             graphics.text(font, Component.translatable("civmod.gui.settler.buffer", state.buffered(), JobBuffer.CAPACITY), CivGui.PADDING,
                     BUFFER_Y - 10, CivGui.LABEL_COLOR, false);
             for (int i = 0; i < state.preview().size(); i++) {

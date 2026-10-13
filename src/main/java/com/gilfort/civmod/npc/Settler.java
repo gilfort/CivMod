@@ -94,6 +94,7 @@ public class Settler extends PathfinderMob {
     private List<SettlerJob> jobs = List.of();
     private final SettlerWork work = new SettlerWork(this);
     private final SettlerFood food = new SettlerFood();
+    private final com.gilfort.civmod.job.SettlerSkills skills = new com.gilfort.civmod.job.SettlerSkills();
 
     /**
      * @param type  the entity type
@@ -218,6 +219,13 @@ public class Settler extends PathfinderMob {
      */
     public SettlerWork getWork() {
         return work;
+    }
+
+    /**
+     * @return the skill levels and EXP per job type
+     */
+    public com.gilfort.civmod.job.SettlerSkills getSkills() {
+        return skills;
     }
 
     /**
@@ -454,6 +462,7 @@ public class Settler extends PathfinderMob {
         output.store("jobs", SettlerJob.CODEC.listOf(), jobs);
         ContainerHelper.saveAllItems(output, inventory.getItems());
         food.save(output);
+        output.store("skills", com.gilfort.civmod.job.SettlerSkills.CODEC, skills.snapshot());
     }
 
     @Override
@@ -467,6 +476,7 @@ public class Settler extends PathfinderMob {
         setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
         ContainerHelper.loadAllItems(input, inventory.getItems());
         food.load(input);
+        input.read("skills", com.gilfort.civmod.job.SettlerSkills.CODEC).ifPresent(skills::restore);
         setInvisible(food.isAway());
     }
 }
