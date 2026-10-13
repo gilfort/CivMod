@@ -101,6 +101,16 @@ public final class CivModConfig {
             .comment("Food points a settler regains by foraging for a day when no food is available.")
             .defineInRange("foragingFood", 5, 0, 20);
 
+    /** Maximum number of in-game days caught up for unloaded settlers. */
+    public static final ModConfigSpec.IntValue CATCH_UP_MAX_DAYS = BUILDER
+            .comment("Unloaded settlers catch up at most this many in-game days of missed work.")
+            .defineInRange("catchUpMaxDays", 10, 0, 100);
+
+    /** Multiplier on the output caught up while unloaded. */
+    public static final ModConfigSpec.DoubleValue CATCH_UP_MULTIPLIER = BUILDER
+            .comment("Multiplier on the output settlers produce while unloaded (1.0 = as if the player was there).")
+            .defineInRange("catchUpMultiplier", 1.0, 0.0, 10.0);
+
     /** The built config spec, registered in the mod constructor. */
     public static final ModConfigSpec SPEC = BUILDER.build();
 
