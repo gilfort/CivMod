@@ -1,0 +1,9 @@
+{
+  "base": 15,
+  "per_level": 5,
+  "base_exp": {
+    "lumberjack": 1,
+    "miner": 1,
+    "fisherman": 5
+  }
+}

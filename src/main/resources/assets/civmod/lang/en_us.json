@@ -35,7 +35,6 @@
   "civmod.gui.job_block.skill_cap": "Skill cap: %s",
   "civmod.gui.job_block.settlement": "Settlement: %s",
   "civmod.gui.job_block.upgrade": "Upgrade",
-  "civmod.gui.job_block.upgrade.coming_soon": "Coming soon",
   "civmod.gui.job_block.not_registered": "Not registered in a settlement yet.",
   "civmod.gui.job_block.unconnected": "Not connected to a settlement – move within %s blocks of the nearest JobBlock (currently %s blocks away).",
   "civmod.command.outline.on": "Settlement outline: always shown",
@@ -150,5 +149,16 @@
   "civmod.gui.settler.found.needs_tool": "Needs a better tool",
   "civmod.gui.settler.found.water": "Open water: %s blocks",
   "civmod.gui.settler.found.water_penalty": "−%s %% productivity (less than 50)",
-  "civmod.gui.settler.found.treasure": "Treasure: %s %%"
+  "civmod.gui.settler.found.treasure": "Treasure: %s %%",
+  "civmod.gui.job_block.level_cap": "Level %s / %s – skill cap %s",
+  "civmod.gui.job_block.upgrade.to": "Upgrade to level %s",
+  "civmod.gui.job_block.upgrade.max": "Max level",
+  "civmod.gui.job_block.upgrade.costs": "Next level:",
+  "civmod.settler.level_up": "%s reached %s level %s",
+  "civmod.gui.settler.level": "Level %s",
+  "civmod.gui.settler.exp": "%s / %s EXP",
+  "civmod.gui.settler.max_level": "Max level – upgrade JobBlock",
+  "civmod.gui.settler.limited": "Level %s – works at %s (JobBlock level %s)",
+  "civmod.gui.settler.level_short": "Lv %s",
+  "civmod.gui.job_block.upgrade.have": "%s / %s"
 }

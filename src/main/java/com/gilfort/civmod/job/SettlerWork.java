@@ -71,8 +71,10 @@ public final class SettlerWork {
     public static final long WORK_END = 11500;
     private static final double REACH = 2.5;
     private static final int SWING_INTERVAL = 10;
-    /** Skill level used until EXP exists (Story 8). */
-    private static final int SKILL_LEVEL = 1;
+    /** Tool restrictions by skill level are not active in the PoC (see the open topic in the vault). */
+    private static final int TOOL_LEVEL = SkillRules.MAX_LEVEL;
+    /** Players within this distance get the level-up message. */
+    private static final double LEVEL_UP_RANGE = 32.0;
 
     private enum Activity { IDLE, FETCH_TOOL, WORK, DELIVER, GO_TO_BED, SLEEP, FETCH_FOOD, EATING, FORAGE }
 
@@ -1083,14 +1085,55 @@ public final class SettlerWork {
             return List.of();
         }
         ItemStack tool = bestTool(profile.get()::isTool).orElse(ItemStack.EMPTY);
-        return profile.get().found(scan, tool, SKILL_LEVEL);
+        return profile.get().found(scan, tool, effectiveLevel(job));
+    }
+
+    /**
+     * @param job a job
+     * @return the level of the JobBlock of that job (1 if unknown)
+     */
+    public int jobBlockLevel(SettlerJob job) {
+        if (!(settler.level() instanceof ServerLevel level)) {
+            return SettlementRules.MIN_LEVEL;
+        }
+        return SettlementData.get(level).settlementAt(job.jobBlock()).flatMap(s -> s.block(job.jobBlock()))
+                .map(SettlementBlock::level).orElse(SettlementRules.MIN_LEVEL);
+    }
+
+    /**
+     * @param job a job
+     * @return the level the settler works at in that job (its skill, at most the JobBlock cap)
+     */
+    public int effectiveLevel(SettlerJob job) {
+        return settler.getSkills().effectiveLevel(job.jobType(), SettlementRules.skillCap(jobBlockLevel(job)));
+    }
+
+    private void gainExp(ServerLevel level, SettlerJob job, int blockLevel) {
+        SkillRules rules = SkillRules.get();
+        int gained = settler.getSkills().addExp(job.jobType(), rules.baseExp(job.jobType()) * blockLevel,
+                SettlementRules.skillCap(blockLevel), rules);
+        if (gained <= 0) {
+            return;
+        }
+        int newLevel = settler.getSkills().get(job.jobType()).level();
+        level.sendParticles(net.minecraft.core.particles.ParticleTypes.HAPPY_VILLAGER, settler.getX(), settler.getY() + 2.0, settler.getZ(),
+                8, 0.4, 0.3, 0.4, 0.0);
+        level.playSound(null, settler.getX(), settler.getY(), settler.getZ(), net.minecraft.sounds.SoundEvents.PLAYER_LEVELUP,
+                net.minecraft.sounds.SoundSource.NEUTRAL, 0.3F, 1.2F);
+        net.minecraft.network.chat.Component message = net.minecraft.network.chat.Component.translatable("civmod.settler.level_up",
+                settler.getName(), job.jobType().displayName(), newLevel);
+        for (net.minecraft.server.level.ServerPlayer player : level.players()) {
+            if (player.distanceToSqr(settler) <= LEVEL_UP_RANGE * LEVEL_UP_RANGE) {
+                player.sendOverlayMessage(message);
+            }
+        }
     }
 
     // ---------------------------------------------------------------- tools
 
     private Optional<ItemStack> bestTool(Predicate<ItemStack> kind) {
         ItemStack best = ItemStack.EMPTY;
-        int maxTier = ToolTiers.maxAllowedTier(SKILL_LEVEL);
+        int maxTier = ToolTiers.maxAllowedTier(TOOL_LEVEL);
         for (int i = Settler.BELT_START; i < Settler.BELT_START + Settler.BELT_SIZE; i++) {
             ItemStack stack = settler.getInventory().getItem(i);
             if (stack.isEmpty() || !kind.test(stack) || ToolTiers.tier(stack) > maxTier) {
@@ -1123,7 +1166,7 @@ public final class SettlerWork {
                 continue;
             }
             ItemStack stack = resource.toStack();
-            if (kind.test(stack) && ToolTiers.tier(stack) <= ToolTiers.maxAllowedTier(SKILL_LEVEL) && ToolTiers.tier(stack) > bestTier) {
+            if (kind.test(stack) && ToolTiers.tier(stack) <= ToolTiers.maxAllowedTier(TOOL_LEVEL) && ToolTiers.tier(stack) > bestTier) {
                 bestTier = ToolTiers.tier(stack);
                 bestIndex = i;
             }
@@ -1253,7 +1296,8 @@ public final class SettlerWork {
         if (tool.isEmpty() || buffer.isFull()) {
             return;
         }
-        double perSecond = profile.speed(SKILL_LEVEL, tool.get()) * profile.productivity(scan);
+        int skillLevel = settler.getSkills().effectiveLevel(activeJob.jobType(), SettlementRules.skillCap(block.get().level()));
+        double perSecond = profile.speed(skillLevel, tool.get()) * profile.productivity(scan);
         production += perSecond / 20.0;
         while (production >= 1.0) {
             production -= 1.0;
@@ -1263,12 +1307,16 @@ public final class SettlerWork {
             }
             Optional<ItemStack> secondary = profile.secondaryTool(block.get()).flatMap(this::bestTool);
             Optional<JobProfile.Produced> produced = profile.produce(new JobProfile.Context(level, settler, scan, poi, current.get(), secondary,
-                    block.get(), SKILL_LEVEL));
+                    block.get(), skillLevel));
             if (produced.isEmpty()) {
                 continue;
             }
             produced.get().stacks().forEach(buffer::add);
             wear(level, produced.get().worn());
+            if (!produced.get().stacks().isEmpty()) {
+                gainExp(level, activeJob, block.get().level());
+                skillLevel = settler.getSkills().effectiveLevel(activeJob.jobType(), SettlementRules.skillCap(block.get().level()));
+            }
         }
         showTool(profile::isTool);
     }

@@ -30,6 +30,8 @@ public class JobBlockMenu extends CivMenu {
     public static final int BUTTON_UNASSIGN = 50;
     /** Button id: toggle leaf collection (Lumberjack). */
     public static final int BUTTON_TOGGLE_LEAVES = 51;
+    /** Button id: upgrade to the next level. */
+    public static final int BUTTON_UPGRADE = 52;
 
     private final Container container;
     private JobBlockInfo info;
@@ -82,6 +84,9 @@ public class JobBlockMenu extends CivMenu {
             }
             return true;
         }
+        if (buttonId == BUTTON_UPGRADE) {
+            return upgrade(player);
+        }
         if (buttonId == BUTTON_TOGGLE_LEAVES) {
             info = info.withLeavesToggled();
             if (container instanceof JobBlockEntity jobBlock && jobBlock.getLevel() instanceof ServerLevel level) {
@@ -90,6 +95,30 @@ public class JobBlockMenu extends CivMenu {
             return true;
         }
         return super.clickMenuButton(player, buttonId);
+    }
+
+    private boolean upgrade(Player player) {
+        int next = info.level() + 1;
+        if (next > com.gilfort.civmod.settlement.SettlementRules.MAX_LEVEL || (!player.isCreative() && !info.canAffordNext(player.getInventory()))) {
+            return false;
+        }
+        if (container instanceof JobBlockEntity jobBlock && jobBlock.getLevel() instanceof ServerLevel level) {
+            java.util.List<com.gilfort.civmod.block.UpgradeCosts.Cost> costs = com.gilfort.civmod.block.UpgradeCosts.get(info.jobType(), next);
+            if (!player.isCreative()) {
+                if (!com.gilfort.civmod.block.UpgradeCosts.canAfford(player.getInventory(), costs)) {
+                    return false;
+                }
+                com.gilfort.civmod.block.UpgradeCosts.pay(player.getInventory(), costs);
+            }
+            jobBlock.setJobLevel(next);
+            SettlementWorld.setLevel(level, jobBlock.getBlockPos(), next);
+            level.playSound(null, jobBlock.getBlockPos(), net.minecraft.sounds.SoundEvents.PLAYER_LEVELUP, net.minecraft.sounds.SoundSource.BLOCKS,
+                    0.6F, 1.0F);
+            info = JobBlockInfo.of(level, jobBlock.getBlockPos(), info.jobType(), next);
+        } else {
+            info = info.withLevel(next);
+        }
+        return true;
     }
 
     @Override
