@@ -20,6 +20,10 @@ public final class GameTestClock {
     @SubscribeEvent
     static void onServerStarted(ServerStartedEvent event) {
         MinecraftServer server = event.getServer();
+        // The gametest source set is part of every dev run: only touch the clock on the GameTest server.
+        if (!(server instanceof net.minecraft.gametest.framework.GameTestServer)) {
+            return;
+        }
         var source = server.createCommandSourceStack().withSuppressedOutput();
         server.getCommands().performPrefixedCommand(source, "gamerule advance_time false");
         server.getCommands().performPrefixedCommand(source, "time set 1000");
