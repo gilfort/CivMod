@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:catch_up_rules",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 4
+}

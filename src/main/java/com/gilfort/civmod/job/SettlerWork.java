@@ -12,6 +12,7 @@ import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.food.Pantries;
 import com.gilfort.civmod.food.SettlerFood;
@@ -150,6 +151,26 @@ public final class SettlerWork {
     private long forageStart;
     private @Nullable MealPurpose mealPurpose;
 
+    // Catch-up (vault Systems/Settlement.md): missed time while unloaded.
+    /** Minimum missed time that is caught up (2 real minutes). */
+    public static final long CATCH_UP_MIN_GAP = 2400;
+    /** Marks "no day" (days may be negative in tests with a frozen clock). */
+    private static final long NO_DAY = Long.MIN_VALUE;
+    private long savedClock = -1;
+    private long catchUpFrom = -1;
+    private long catchUpTo = -1;
+    private boolean catchUpRegistered;
+    private boolean quiet;
+    private double cuProduction;
+    private long cuForageDay = NO_DAY;
+    private long cuStarvingDay = NO_DAY;
+    private long cuMorningDay = NO_DAY;
+    private long cuEveningDay = NO_DAY;
+    private final Set<BlockPos> cuDone = new HashSet<>();
+    private int cuItems;
+    private int cuMeals;
+    private double cuDays;
+
     /**
      * @param settler the settler
      */
@@ -170,8 +191,36 @@ public final class SettlerWork {
      * @return the codec value of the buffers
      */
     public BuffersSnapshot snapshot() {
+        List<SavedScan> saved = new ArrayList<>();
+        scans.forEach((jobBlock, result) -> {
+            ScanKey key = scanKeys.get(jobBlock);
+            if (key != null) {
+                SavedScan.of(jobBlock, key.center(), key.radius(), key.day(), result).ifPresent(saved::add);
+            }
+        });
+        long clock = settler.level() instanceof ServerLevel level ? level.getOverworldClockTime() : -1L;
         return new BuffersSnapshot(buffers.entrySet().stream().map(e -> new BufferEntry(e.getKey(), e.getValue())).toList(),
-                poiOfDay.entrySet().stream().map(e -> new WorkPlaceEntry(e.getKey(), e.getValue(), poiDay.getOrDefault(e.getKey(), -1L))).toList());
+                poiOfDay.entrySet().stream().map(e -> new WorkPlaceEntry(e.getKey(), e.getValue(), poiDay.getOrDefault(e.getKey(), -1L))).toList(),
+                saved, new CatchUpState(clock, catchUpFrom, catchUpTo));
+    }
+
+    /**
+     * Catch-up bookkeeping saved with the settler.
+     *
+     * @param activeClock the clock at saving (the settler was active until then)
+     * @param from        start of missed time not caught up yet, -1 if none
+     * @param to          end of that missed time
+     */
+    public record CatchUpState(long activeClock, long from, long to) {
+        /** Save codec. */
+        public static final Codec<CatchUpState> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                Codec.LONG.fieldOf("active_clock").forGetter(CatchUpState::activeClock),
+                Codec.LONG.optionalFieldOf("from", -1L).forGetter(CatchUpState::from),
+                Codec.LONG.optionalFieldOf("to", -1L).forGetter(CatchUpState::to)
+        ).apply(instance, CatchUpState::new));
+
+        /** No catch-up information (older saves). */
+        public static final CatchUpState NONE = new CatchUpState(-1L, -1L, -1L);
     }
 
     /**
@@ -196,10 +245,21 @@ public final class SettlerWork {
      * @param entries    the buffers
      * @param workPlaces the work places of the day
      */
-    public record BuffersSnapshot(List<BufferEntry> entries, List<WorkPlaceEntry> workPlaces) {
+    public record BuffersSnapshot(List<BufferEntry> entries, List<WorkPlaceEntry> workPlaces, List<SavedScan> scans, CatchUpState catchUp) {
+
+        /**
+         * @param entries    the buffers
+         * @param workPlaces the work places of the day
+         */
+        public BuffersSnapshot(List<BufferEntry> entries, List<WorkPlaceEntry> workPlaces) {
+            this(entries, workPlaces, List.of(), CatchUpState.NONE);
+        }
+
         private static final Codec<BuffersSnapshot> CURRENT = RecordCodecBuilder.create(instance -> instance.group(
                 BUFFERS_CODEC.optionalFieldOf("buffers", List.of()).forGetter(BuffersSnapshot::entries),
-                WorkPlaceEntry.CODEC.listOf().optionalFieldOf("work_places", List.of()).forGetter(BuffersSnapshot::workPlaces)
+                WorkPlaceEntry.CODEC.listOf().optionalFieldOf("work_places", List.of()).forGetter(BuffersSnapshot::workPlaces),
+                SavedScan.CODEC.listOf().optionalFieldOf("scans", List.of()).forGetter(BuffersSnapshot::scans),
+                CatchUpState.CODEC.optionalFieldOf("catch_up", CatchUpState.NONE).forGetter(BuffersSnapshot::catchUp)
         ).apply(instance, BuffersSnapshot::new));
 
         /** Save codec; also reads the earlier format (a plain list of buffers). */
@@ -221,6 +281,16 @@ public final class SettlerWork {
             poiOfDay.put(entry.jobBlock(), entry.poi());
             poiDay.put(entry.jobBlock(), entry.day());
         });
+        snapshot.scans().forEach(saved -> {
+            ScanResult result = saved.result();
+            if (result != null) {
+                scans.put(saved.jobBlock(), result);
+                scanKeys.put(saved.jobBlock(), new ScanKey(saved.center(), saved.radius(), saved.day()));
+            }
+        });
+        savedClock = snapshot.catchUp().activeClock();
+        catchUpFrom = snapshot.catchUp().from();
+        catchUpTo = snapshot.catchUp().to();
     }
 
     // ---------------------------------------------------------------- queries for the GUI
@@ -274,8 +344,21 @@ public final class SettlerWork {
      * @param level the level
      */
     public void aiStep(ServerLevel level) {
+        if (savedClock >= 0) {
+            // First tick after loading: remember missed time for the catch-up simulation.
+            long now = level.getOverworldClockTime();
+            if (now - savedClock >= CATCH_UP_MIN_GAP && !settler.isHomeless()) {
+                catchUpFrom = catchUpFrom >= 0 ? Math.min(catchUpFrom, savedClock) : savedClock;
+                catchUpTo = now;
+            }
+            savedClock = -1;
+        }
         if ((settler.tickCount + settler.getId()) % DECISION_INTERVAL == 0) {
             accountHunger(level);
+            if (catchUpFrom >= 0 && !catchUpRegistered && catchUpReady(level)) {
+                catchUpRegistered = true;
+                CatchUp.register(level, settler);
+            }
             decide(level);
         }
     }
@@ -718,6 +801,313 @@ public final class SettlerWork {
         return REACH;
     }
 
+    // ---------------------------------------------------------------- catch-up
+
+    /**
+     * @return whether missed time is waiting to be caught up
+     */
+    public boolean hasPendingCatchUp() {
+        return catchUpFrom >= 0;
+    }
+
+    /**
+     * Sets missed time to catch up (tests).
+     *
+     * @param from clock at which the settler was unloaded
+     * @param to   clock at which it was loaded again
+     */
+    public void setCatchUp(long from, long to) {
+        catchUpFrom = from;
+        catchUpTo = to;
+        catchUpRegistered = false;
+    }
+
+    /**
+     * @return start of the missed time (capped to the maximum number of days)
+     */
+    public long catchUpFrom() {
+        long earliest = catchUpTo - CivModConfig.CATCH_UP_MAX_DAYS.get() * 24000L;
+        return Math.max(catchUpFrom, earliest);
+    }
+
+    /**
+     * @return end of the missed time
+     */
+    public long catchUpTo() {
+        return catchUpTo;
+    }
+
+    /**
+     * Whether all blocks the settler needs are loaded and a scan result exists (starts the scan otherwise).
+     */
+    private boolean catchUpReady(ServerLevel level) {
+        SettlementData data = SettlementData.get(level);
+        Optional<com.gilfort.civmod.settlement.Settlement> settlement = data.settlement(settler.getSettlementId());
+        if (settlement.isEmpty()) {
+            catchUpFrom = -1;
+            return false;
+        }
+        for (BlockPos pantry : settlement.get().pantries()) {
+            if (!level.isLoaded(pantry)) {
+                return false;
+            }
+        }
+        long day = Math.floorDiv(level.getOverworldClockTime(), 24000L);
+        for (SettlerJob job : settler.getJobs()) {
+            Optional<SettlementBlock> block = settlement.get().block(job.jobBlock());
+            Optional<JobProfile> profile = JobProfiles.of(job.jobType());
+            if (block.isEmpty() || profile.isEmpty()) {
+                continue;
+            }
+            if (!level.isLoaded(block.get().pos()) || !level.isLoaded(collectPos(block.get()))
+                    || !level.isLoaded(block.get().dropOff().orElse(block.get().pos()))) {
+                return false;
+            }
+            if (!scans.containsKey(job.jobBlock())) {
+                BlockPos poi = poiOfDay(level, profile.get(), block.get(), day);
+                if (poi == null) {
+                    continue;
+                }
+                ensureScan(level, profile.get(), block.get(), poi, day, Math.floorMod(level.getOverworldClockTime(), 24000L));
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Prepares a catch-up run.
+     */
+    void startCatchUp() {
+        cuDays = Math.max(0, catchUpTo - catchUpFrom()) / (double) 24000L;
+        quiet = true;
+        cuProduction = 0.0;
+        cuDone.clear();
+        cuItems = 0;
+        cuMeals = 0;
+        cuForageDay = NO_DAY;
+        cuStarvingDay = NO_DAY;
+        cuMorningDay = NO_DAY;
+        cuEveningDay = NO_DAY;
+    }
+
+    /**
+     * Ends a catch-up run and logs what happened.
+     *
+     * @param level the level
+     */
+    void finishCatchUp(ServerLevel level) {
+        CivMod.LOGGER.info("Catch-up {}: {} day(s), {} item(s), {} meal(s), skills {}", settler.getName().getString(),
+                String.format(java.util.Locale.ROOT, "%.1f", cuDays), cuItems, cuMeals,
+                settler.getSkills().snapshot());
+        catchUpFrom = -1;
+        catchUpTo = -1;
+        catchUpRegistered = false;
+        quiet = false;
+        cuDone.forEach(jobBlock -> statuses.put(jobBlock, JobStatus.DROP_OFF_FULL));
+    }
+
+    /**
+     * Simulates one hour of missed time (hour 0 = 06:00).
+     *
+     * @param level the level
+     * @param day   the day
+     * @param hour  the hour of the awake day (0–13)
+     * @return the number of production rolls
+     */
+    int simulateHour(ServerLevel level, long day, int hour) {
+        long hourStart = day * 24000L + hour * 1000L;
+        long from = Math.max(hourStart, catchUpFrom());
+        long to = Math.min(hourStart + 1000L, catchUpTo);
+        if (to <= from || settler.isHomeless()) {
+            return 0;
+        }
+        // Progress is saved: a settler unloaded during the run continues later instead of repeating hours.
+        catchUpFrom = Math.max(catchUpFrom, to);
+        long awake = to - from;
+        long workEnd = day * 24000L + WORK_END;
+        long work = Math.max(0, Math.min(to, workEnd) - from);
+        SettlerFood food = settler.getFood();
+        int provisionWanted = CivModConfig.PROVISION_NUTRITION.get();
+
+        if (cuMorningDay != day) {
+            cuMorningDay = day;
+            boolean pocketFood = SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE) > 0;
+            Optional<BlockPos> pantry = pantryWithFood(level);
+            if (food.level() < SettlerFood.HUNGRY && !pocketFood && pantry.isEmpty()) {
+                cuForageDay = day;
+            } else if (pantry.isPresent()
+                    && SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE) < provisionWanted) {
+                mealPurpose = MealPurpose.MORNING;
+                visitPantry(level, pantry.get());
+                mealPurpose = null;
+            }
+        }
+        if (cuForageDay == day) {
+            if (hour == 11) {
+                food.addFood(CivModConfig.FORAGING_FOOD.get());
+            }
+            return 0;
+        }
+
+        double share = Fatigue.expectedWorkShare();
+        double factor = settler.getJobs().stream().filter(job -> !cuDone.contains(job.jobBlock())).findFirst()
+                .map(job -> job.jobType().hungerFactor()).orElse(0.0);
+        float appetite = food.appetite(level.getRandom(), CivModConfig.APPETITE_MIN.get(), CivModConfig.APPETITE_MAX.get());
+        food.exhaust(SettlerFood.exhaustionFor(awake, work * share * factor, CivModConfig.HUNGER_BASE_PER_DAY.get(),
+                CivModConfig.HUNGER_PER_WORK_MINUTE.get(), appetite));
+        if (food.level() < SettlerFood.HUNGRY) {
+            simulateMeal(level, false);
+        }
+        if (food.level() <= 0) {
+            cuStarvingDay = day;
+        }
+        int rolls = 0;
+        if (work > 0 && cuStarvingDay != day) {
+            rolls = simulateWork(level, day, work * share * CivModConfig.CATCH_UP_MULTIPLIER.get());
+        }
+        if (hour >= 12 && cuEveningDay != day) {
+            cuEveningDay = day;
+            simulateMeal(level, true);
+            food.setEatenDay(day);
+        }
+        return rolls;
+    }
+
+    /** Eats during catch-up: provisions first (daytime) or the pantry first (evening). */
+    private void simulateMeal(ServerLevel level, boolean evening) {
+        SettlerFood food = settler.getFood();
+        int before = food.level();
+        if (!evening) {
+            while (food.level() < SettlerFood.HUNGRY) {
+                Optional<Integer> choice = SettlerFood.choose(pocketStacks(), food.level());
+                if (choice.isEmpty()) {
+                    break;
+                }
+                eatItem(level, settler.getInventory().getItem(Settler.POCKETS_START + choice.get()).split(1), null);
+            }
+        }
+        if (evening || food.level() < SettlerFood.HUNGRY) {
+            Optional<BlockPos> pantry = pantryWithFood(level);
+            if (pantry.isPresent()) {
+                mealPurpose = evening ? MealPurpose.EVENING : MealPurpose.HUNGRY;
+                visitPantry(level, pantry.get());
+                mealPurpose = null;
+            } else if (evening) {
+                Optional<Integer> choice;
+                while ((choice = SettlerFood.choose(pocketStacks(), food.level())).isPresent()) {
+                    eatItem(level, settler.getInventory().getItem(Settler.POCKETS_START + choice.get()).split(1), null);
+                }
+            }
+        }
+        if (food.level() > before) {
+            cuMeals++;
+        }
+        settler.getInventory().setChanged();
+    }
+
+    /**
+     * Produces the output of some work ticks during catch-up: directly into the drop-off, then the buffer.
+     *
+     * @return the number of rolls
+     */
+    private int simulateWork(ServerLevel level, long day, double workTicks) {
+        SettlementData data = SettlementData.get(level);
+        int rolls = 0;
+        double remaining = workTicks;
+        for (SettlerJob job : settler.getJobs()) {
+            if (cuDone.contains(job.jobBlock()) || remaining <= 0.0) {
+                continue;
+            }
+            Optional<SettlementBlock> found = data.settlementAt(job.jobBlock()).flatMap(s -> s.block(job.jobBlock()));
+            Optional<JobProfile> profile = JobProfiles.of(job.jobType());
+            ScanResult scan = scans.get(job.jobBlock());
+            if (found.isEmpty() || profile.isEmpty() || scan == null) {
+                cuDone.add(job.jobBlock());
+                continue;
+            }
+            SettlementBlock block = found.get();
+            BlockPos poi = poiOfDay(level, profile.get(), block, day);
+            if (poi == null || (profile.get().needsResources() && scan.isEmpty())) {
+                cuDone.add(job.jobBlock());
+                continue;
+            }
+            Optional<ItemStack> tool = toolForCatchUp(level, profile.get(), block);
+            if (tool.isEmpty()) {
+                cuDone.add(job.jobBlock());
+                continue;
+            }
+            int cap = SettlementRules.skillCap(block.level());
+            int skillLevel = settler.getSkills().effectiveLevel(job.jobType(), cap);
+            cuProduction += profile.get().speed(skillLevel, tool.get()) * profile.get().productivity(scan) * remaining / 20.0;
+            remaining = 0.0;
+            while (cuProduction >= 1.0) {
+                cuProduction -= 1.0;
+                tool = toolForCatchUp(level, profile.get(), block);
+                if (tool.isEmpty()) {
+                    cuDone.add(job.jobBlock());
+                    break;
+                }
+                Optional<ItemStack> secondary = profile.get().secondaryTool(block).flatMap(this::bestTool);
+                Optional<JobProfile.Produced> produced = profile.get().produce(new JobProfile.Context(level, settler, scan, poi, tool.get(),
+                        secondary, block, skillLevel));
+                rolls++;
+                if (produced.isEmpty()) {
+                    continue;
+                }
+                wear(level, produced.get().worn());
+                if (produced.get().stacks().isEmpty()) {
+                    continue;
+                }
+                if (!deliverDirect(level, block, produced.get().stacks())) {
+                    cuDone.add(job.jobBlock());
+                    // The next job takes over the rest of the time (approximated by the rest of this hour's output).
+                    remaining = cuProduction * 20.0;
+                    cuProduction = 0.0;
+                    break;
+                }
+                gainExp(level, job, block.level());
+                skillLevel = settler.getSkills().effectiveLevel(job.jobType(), cap);
+            }
+        }
+        return rolls;
+    }
+
+    private Optional<ItemStack> toolForCatchUp(ServerLevel level, JobProfile profile, SettlementBlock block) {
+        Optional<ItemStack> tool = bestTool(profile::isTool);
+        if (tool.isEmpty() && findInContainer(level, collectPos(block), profile::isTool).isPresent()) {
+            takeTool(level, collectPos(block), profile::isTool);
+            tool = bestTool(profile::isTool);
+        }
+        return tool;
+    }
+
+    /**
+     * Delivers output straight into the drop-off; what does not fit goes into the buffer.
+     *
+     * @return false when the buffer is full as well (the job ends)
+     */
+    private boolean deliverDirect(ServerLevel level, SettlementBlock block, List<ItemStack> stacks) {
+        ResourceHandler<ItemResource> handler = level.getCapability(Capabilities.Item.BLOCK, block.dropOff().orElse(block.pos()), null);
+        JobBuffer buffer = buffers.computeIfAbsent(block.pos(), pos -> new JobBuffer());
+        for (ItemStack stack : stacks) {
+            ItemStack rest = stack.copy();
+            if (handler != null) {
+                try (Transaction transaction = Transaction.openRoot()) {
+                    int inserted = ResourceHandlerUtil.insertStacking(handler, ItemResource.of(rest), rest.getCount(), transaction);
+                    transaction.commit();
+                    rest.shrink(inserted);
+                }
+            }
+            cuItems += stack.getCount() - rest.getCount();
+            if (!rest.isEmpty()) {
+                buffer.add(rest);
+                cuItems += rest.getCount();
+            }
+        }
+        return !buffer.isFull();
+    }
+
     // ---------------------------------------------------------------- food
 
     /** What a settler does at the start of a workday regarding food. */
@@ -882,6 +1272,9 @@ public final class SettlerWork {
     }
 
     private void eatingEffects(ServerLevel level, ItemStack item) {
+        if (quiet) {
+            return;
+        }
         level.playSound(null, settler.getX(), settler.getY(), settler.getZ(), net.minecraft.sounds.SoundEvents.GENERIC_EAT.value(),
                 net.minecraft.sounds.SoundSource.NEUTRAL, 0.6F, 0.9F + level.getRandom().nextFloat() * 0.2F);
         if (!item.isEmpty()) {
@@ -1116,6 +1509,9 @@ public final class SettlerWork {
             return;
         }
         int newLevel = settler.getSkills().get(job.jobType()).level();
+        if (quiet) {
+            return;
+        }
         level.sendParticles(net.minecraft.core.particles.ParticleTypes.HAPPY_VILLAGER, settler.getX(), settler.getY() + 2.0, settler.getZ(),
                 8, 0.4, 0.3, 0.4, 0.0);
         level.playSound(null, settler.getX(), settler.getY(), settler.getZ(), net.minecraft.sounds.SoundEvents.PLAYER_LEVELUP,

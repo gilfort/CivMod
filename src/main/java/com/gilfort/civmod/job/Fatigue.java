@@ -77,6 +77,26 @@ public final class Fatigue {
         return chance;
     }
 
+    /**
+     * Average share of work time without breaks, from the config values: after a break the settler works the free
+     * minutes, then each minute a break starts with a rising chance.
+     *
+     * @return the share of work time spent working (0–1)
+     */
+    public static double expectedWorkShare() {
+        double step = chanceStep();
+        double expectedMinutes = 0.0;
+        double noBreakYet = 1.0;
+        for (int minute = 1; noBreakYet > 1.0E-9 && minute <= 1000; minute++) {
+            expectedMinutes += noBreakYet;
+            noBreakYet *= Math.max(0.0, 1.0 - step * minute);
+        }
+        double work = CivModConfig.BREAK_FREE_MINUTES.get() + expectedMinutes;
+        double breakMinutes = (CivModConfig.BREAK_MIN_SECONDS.get() + Math.max(CivModConfig.BREAK_MIN_SECONDS.get(),
+                CivModConfig.BREAK_MAX_SECONDS.get())) / 2.0 / 60.0;
+        return work / (work + breakMinutes);
+    }
+
     private static double chanceStep() {
         return CivModConfig.BREAK_CHANCE_PERCENT.get() / 100.0;
     }
