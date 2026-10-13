@@ -160,5 +160,6 @@
   "civmod.gui.settler.max_level": "Max level – upgrade JobBlock",
   "civmod.gui.settler.limited": "Level %s – works at %s (JobBlock level %s)",
   "civmod.gui.settler.level_short": "Lv %s",
-  "civmod.gui.job_block.upgrade.have": "%s / %s"
+  "civmod.gui.job_block.upgrade.have": "%s / %s",
+  "civmod.command.benchmark.built": "Benchmark built: %s settlers. Wait a few minutes, then run /civmod debug benchmark report"
 }

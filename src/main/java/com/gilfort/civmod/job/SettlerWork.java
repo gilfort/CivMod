@@ -354,12 +354,14 @@ public final class SettlerWork {
             savedClock = -1;
         }
         if ((settler.tickCount + settler.getId()) % DECISION_INTERVAL == 0) {
+            long profile = com.gilfort.civmod.debug.CivProfiler.start();
             accountHunger(level);
             if (catchUpFrom >= 0 && !catchUpRegistered && catchUpReady(level)) {
                 catchUpRegistered = true;
                 CatchUp.register(level, settler);
             }
             decide(level);
+            com.gilfort.civmod.debug.CivProfiler.stop(com.gilfort.civmod.debug.CivProfiler.Section.DECISIONS, profile);
         }
     }
 
@@ -1747,7 +1749,9 @@ public final class SettlerWork {
         @Override
         public void tick() {
             if (settler.level() instanceof ServerLevel level) {
+                long profile = com.gilfort.civmod.debug.CivProfiler.start();
                 workTick(level);
+                com.gilfort.civmod.debug.CivProfiler.stop(com.gilfort.civmod.debug.CivProfiler.Section.WORK, profile);
             }
         }
     }

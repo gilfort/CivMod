@@ -348,11 +348,20 @@ public class Settler extends PathfinderMob {
     }
 
     @Override
+    public void tick() {
+        long profile = level().isClientSide() ? 0L : com.gilfort.civmod.debug.CivProfiler.start();
+        super.tick();
+        com.gilfort.civmod.debug.CivProfiler.stop(com.gilfort.civmod.debug.CivProfiler.Section.SETTLERS, profile);
+    }
+
+    @Override
     protected void customServerAiStep(ServerLevel level) {
         super.customServerAiStep(level);
         work.aiStep(level);
         if ((tickCount + getId()) % CHECK_INTERVAL == 0) {
+            long profile = com.gilfort.civmod.debug.CivProfiler.start();
             checkMembership(level);
+            com.gilfort.civmod.debug.CivProfiler.stop(com.gilfort.civmod.debug.CivProfiler.Section.DECISIONS, profile);
         }
     }
 

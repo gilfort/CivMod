@@ -147,6 +147,15 @@ public final class CatchUp {
 
     @SubscribeEvent
     static void onServerTick(ServerTickEvent.Post event) {
+        long profile = com.gilfort.civmod.debug.CivProfiler.start();
+        try {
+            runBatches();
+        } finally {
+            com.gilfort.civmod.debug.CivProfiler.stop(com.gilfort.civmod.debug.CivProfiler.Section.CATCH_UP, profile);
+        }
+    }
+
+    private static void runBatches() {
         int budget = ROLLS_PER_TICK;
         Iterator<Map.Entry<Key, Batch>> iterator = BATCHES.entrySet().iterator();
         while (iterator.hasNext() && budget > 0) {

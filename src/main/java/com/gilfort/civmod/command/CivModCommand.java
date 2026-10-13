@@ -48,6 +48,17 @@ public final class CivModCommand {
                                 openDebugMenu(context.getSource().getPlayerOrException());
                                 return 1;
                             }))
+                    .then(Commands.literal("benchmark")
+                            .executes(context -> {
+                                int spawned = com.gilfort.civmod.debug.Benchmark.build(context.getSource().getPlayerOrException());
+                                context.getSource().sendSuccess(() -> Component.translatable("civmod.command.benchmark.built", spawned), false);
+                                return spawned;
+                            })
+                            .then(Commands.literal("report").executes(context -> {
+                                com.gilfort.civmod.debug.CivProfiler.report().forEach(line ->
+                                        context.getSource().sendSuccess(() -> Component.literal(line), false));
+                                return 1;
+                            })))
                     .then(Commands.literal("settlement")
                             .then(Commands.literal("list").executes(context -> listSettlements(context.getSource())))
                             .then(Commands.literal("outline").executes(context -> {

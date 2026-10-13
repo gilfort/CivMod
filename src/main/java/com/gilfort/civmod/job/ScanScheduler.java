@@ -46,6 +46,15 @@ public final class ScanScheduler {
 
     @SubscribeEvent
     static void onServerTick(ServerTickEvent.Post event) {
+        long profile = com.gilfort.civmod.debug.CivProfiler.start();
+        try {
+            runScans();
+        } finally {
+            com.gilfort.civmod.debug.CivProfiler.stop(com.gilfort.civmod.debug.CivProfiler.Section.SCANS, profile);
+        }
+    }
+
+    private static void runScans() {
         int budget = SECTIONS_PER_TICK;
         Iterator<Pending> iterator = QUEUE.iterator();
         while (budget > 0 && iterator.hasNext()) {
