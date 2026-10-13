@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:benchmark_smoke",
+  "max_ticks": 2400,
+  "structure": "minecraft:empty",
+  "padding": 128
+}
