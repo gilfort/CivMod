@@ -176,7 +176,7 @@ public final class MinerGameTests {
                     "Nothing mined yet (status " + settler.getWork().status(jobBlock) + ")");
             helper.assertTrue(level.getBlockState(poi).is(Blocks.GRANITE), "The work place is never destroyed");
             helper.assertTrue(settler.getWork().found(settler.getJobs().get(0)).stream()
-                    .anyMatch(found -> found.block().equals(GRANITE)), "Found list contains granite");
+                    .anyMatch(found -> found.icon().is(Items.GRANITE)), "Found list contains granite");
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });

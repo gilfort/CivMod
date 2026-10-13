@@ -90,8 +90,6 @@ public final class SettlerWork {
     public static final long SLEEP_TIME = 14000;
     /** Stroll radius around the bed in the evening. */
     private static final int REST_RADIUS = 5;
-    /** Horizontal search radius for a free spot next to a teleport target (within {@link #REACH}). */
-    private static final int STAND_SEARCH = 2;
 
     /**
      * Where a settler spends the night.
@@ -607,7 +605,7 @@ public final class SettlerWork {
             bestDistance = distance;
             lastProgressTick = level.getGameTime();
         } else if (level.getGameTime() - lastProgressTick > CivModConfig.ANTI_STUCK_SECONDS.get() * 20L) {
-            Vec3 spot = standingSpot(level, target);
+            Vec3 spot = standingSpot(level, target, reach());
             settler.teleportTo(spot.x, spot.y, spot.z);
             settler.getNavigation().stop();
             lastProgressTick = level.getGameTime();
@@ -627,6 +625,18 @@ public final class SettlerWork {
      * @return the feet position
      */
     public static Vec3 standingSpot(ServerLevel level, BlockPos target) {
+        return standingSpot(level, target, REACH);
+    }
+
+    /**
+     * Finds a free spot to stand on within the given reach of a target.
+     *
+     * @param level  the level
+     * @param target the target block
+     * @param reach  the horizontal reach
+     * @return the feet position
+     */
+    public static Vec3 standingSpot(ServerLevel level, BlockPos target, double reach) {
         BlockState state = level.getBlockState(target);
         if (state.getBlock() instanceof AbstractBedBlock && state.hasProperty(BedBlock.FACING)) {
             Optional<Vec3> standUp = AbstractBedBlock.findStandUpPosition(ModEntityTypes.SETTLER.get(), level, target,
@@ -637,10 +647,11 @@ public final class SettlerWork {
         }
         BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
-        for (BlockPos pos : BlockPos.betweenClosed(target.offset(-STAND_SEARCH, -2, -STAND_SEARCH), target.offset(STAND_SEARCH, 3, STAND_SEARCH))) {
+        int search = (int) Math.floor(reach);
+        for (BlockPos pos : BlockPos.betweenClosed(target.offset(-search, -2, -search), target.offset(search, 3, search))) {
             int dx = pos.getX() - target.getX();
             int dz = pos.getZ() - target.getZ();
-            if (dx * dx + dz * dz <= REACH * REACH && canStand(level, pos)) {
+            if (dx * dx + dz * dz <= reach * reach && canStand(level, pos)) {
                 // Prefer spots at the target's height.
                 double distance = pos.distSqr(target) + 2.0 * Math.abs(pos.getY() - target.getY());
                 if (distance < bestDistance) {
@@ -688,10 +699,21 @@ public final class SettlerWork {
         if (target == null) {
             return false;
         }
+        double reach = reach();
         Vec3 center = Vec3.atCenterOf(target);
         double dx = settler.getX() - center.x;
         double dz = settler.getZ() - center.z;
-        return dx * dx + dz * dz <= REACH * REACH && Math.abs(settler.getY() - target.getY()) <= 3.0;
+        return dx * dx + dz * dz <= reach * reach && Math.abs(settler.getY() - target.getY()) <= 3.0;
+    }
+
+    /**
+     * @return the reach for the current target (the job's reach while working, otherwise {@value #REACH})
+     */
+    private double reach() {
+        if (activity == Activity.WORK && activeJob != null) {
+            return JobProfiles.of(activeJob.jobType()).map(JobProfile::reach).orElse(REACH);
+        }
+        return REACH;
     }
 
     // ---------------------------------------------------------------- food
@@ -1054,23 +1076,14 @@ public final class SettlerWork {
      * @param job the job
      * @return the found block types with whether the current tool can obtain them
      */
-    public List<Found> found(SettlerJob job) {
+    public List<JobProfile.Found> found(SettlerJob job) {
         ScanResult scan = scans.get(job.jobBlock());
         Optional<JobProfile> profile = JobProfiles.of(job.jobType());
         if (scan == null || profile.isEmpty()) {
             return List.of();
         }
         ItemStack tool = bestTool(profile.get()::isTool).orElse(ItemStack.EMPTY);
-        return scan.foundBlocks().stream().map(block -> new Found(block, profile.get().canObtain(tool, block))).toList();
-    }
-
-    /**
-     * A found resource type.
-     *
-     * @param block     the block type
-     * @param available whether the current tool can obtain it
-     */
-    public record Found(Identifier block, boolean available) {
+        return profile.get().found(scan, tool, SKILL_LEVEL);
     }
 
     // ---------------------------------------------------------------- tools
@@ -1220,8 +1233,9 @@ public final class SettlerWork {
     }
 
     private void produce(ServerLevel level, BlockPos jobBlock, BlockPos poi) {
+        settler.getNavigation().stop();
         settler.getLookControl().setLookAt(Vec3.atCenterOf(poi));
-        if (++swingTimer >= SWING_INTERVAL) {
+        if (++swingTimer >= SWING_INTERVAL && activeJob != null && JobProfiles.of(activeJob.jobType()).map(JobProfile::swings).orElse(true)) {
             swingTimer = 0;
             settler.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
             BlockState state = level.getBlockState(poi);
@@ -1239,7 +1253,7 @@ public final class SettlerWork {
         if (tool.isEmpty() || buffer.isFull()) {
             return;
         }
-        double perSecond = LumberjackOutput.speed(SKILL_LEVEL) * ToolTiers.multiplier(ToolTiers.tier(tool.get())) * profile.productivity(scan);
+        double perSecond = profile.speed(SKILL_LEVEL, tool.get()) * profile.productivity(scan);
         production += perSecond / 20.0;
         while (production >= 1.0) {
             production -= 1.0;

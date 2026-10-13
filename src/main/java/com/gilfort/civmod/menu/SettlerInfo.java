@@ -57,8 +57,10 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
      * @param preview  the buffered stacks (up to 18)
      * @param found    icons of the resource types found by the scan
      * @param missing  per found type: whether the current tool cannot obtain it
+     * @param notes    per found type: tooltip lines (empty: the item name)
      */
-    public record JobState(JobStatus status, int buffered, List<ItemStack> preview, List<ItemStack> found, List<Boolean> missing) {
+    public record JobState(JobStatus status, int buffered, List<ItemStack> preview, List<ItemStack> found, List<Boolean> missing,
+            List<List<Component>> notes) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, JobState> STREAM_CODEC = StreamCodec.composite(
@@ -67,6 +69,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
                 ItemStack.OPTIONAL_STREAM_CODEC.apply(ByteBufCodecs.list()), JobState::preview,
                 ItemStack.OPTIONAL_STREAM_CODEC.apply(ByteBufCodecs.list()), JobState::found,
                 ByteBufCodecs.BOOL.apply(ByteBufCodecs.list()), JobState::missing,
+                ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()).apply(ByteBufCodecs.list()), JobState::notes,
                 JobState::new);
     }
 
@@ -101,13 +104,12 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
         }
         List<JobState> states = settler.getJobs().stream().map(job -> {
             JobBuffer buffer = settler.getWork().buffer(job.jobBlock());
-            List<com.gilfort.civmod.job.SettlerWork.Found> found = settler.getWork().found(job).stream()
-                    .filter(entry -> net.minecraft.core.registries.BuiltInRegistries.BLOCK.getValue(entry.block()).asItem() != net.minecraft.world.item.Items.AIR)
-                    .toList();
+            List<com.gilfort.civmod.job.JobProfile.Found> found = settler.getWork().found(job);
             return new JobState(settler.getWork().status(job.jobBlock()), buffer.count(),
                     buffer.stacks().stream().limit(18).map(ItemStack::copy).toList(),
-                    found.stream().map(entry -> new ItemStack(net.minecraft.core.registries.BuiltInRegistries.BLOCK.getValue(entry.block()))).toList(),
-                    found.stream().map(entry -> !entry.available()).toList());
+                    found.stream().map(com.gilfort.civmod.job.JobProfile.Found::icon).toList(),
+                    found.stream().map(entry -> !entry.available()).toList(),
+                    found.stream().map(com.gilfort.civmod.job.JobProfile.Found::tooltip).toList());
         }).toList();
         com.gilfort.civmod.food.SettlerFood food = settler.getFood();
         float appetite = food.appetite(settler.getRandom(), com.gilfort.civmod.config.CivModConfig.APPETITE_MIN.get(),
@@ -123,7 +125,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
     public SettlerInfo withJobs(List<SettlerJob> jobs) {
         List<JobState> states = jobs.stream().map(job -> {
             int index = this.jobs.indexOf(job);
-            return index >= 0 && index < jobStates.size() ? jobStates.get(index) : new JobState(JobStatus.IDLE, 0, List.of(), List.of(), List.of());
+            return index >= 0 && index < jobStates.size() ? jobStates.get(index) : new JobState(JobStatus.IDLE, 0, List.of(), List.of(), List.of(), List.of());
         }).toList();
         return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(jobs), states, bed, food);
     }

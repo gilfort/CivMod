@@ -147,5 +147,8 @@
   "civmod.gui.settler.food": "Food",
   "civmod.job.status.no_resources": "No resources",
   "civmod.gui.settler.found": "Found:",
-  "civmod.gui.settler.found.needs_tool": "Needs a better tool"
+  "civmod.gui.settler.found.needs_tool": "Needs a better tool",
+  "civmod.gui.settler.found.water": "Open water: %s blocks",
+  "civmod.gui.settler.found.water_penalty": "−%s %% productivity (less than 50)",
+  "civmod.gui.settler.found.treasure": "Treasure: %s %%"
 }

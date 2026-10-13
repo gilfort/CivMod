@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:fisherman_open_water_and_shore",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 24
+}
