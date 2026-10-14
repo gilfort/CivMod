@@ -10,7 +10,7 @@ import com.gilfort.civmod.npc.RaceNames;
 import com.gilfort.civmod.npc.Races;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerSpawner;
-import com.gilfort.civmod.settlement.JobType;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementColors;
 import com.gilfort.civmod.settlement.SettlementData;
@@ -55,7 +55,7 @@ public final class SettlerGameTests {
     }
 
     private static Settlement found(SettlementData data, BlockPos pos, long gameTime) {
-        return SettlementManager.place(data, pos, JobType.LUMBERJACK, 1, gameTime, RandomSource.create(1L), SettlementManager.Listener.NONE)
+        return SettlementManager.place(data, pos, ModJobs.LUMBERJACK.get(), 1, gameTime, RandomSource.create(1L), SettlementManager.Listener.NONE)
                 .settlement();
     }
 

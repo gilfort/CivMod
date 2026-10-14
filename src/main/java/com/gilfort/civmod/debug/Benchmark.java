@@ -1,23 +1,27 @@
 package com.gilfort.civmod.debug;
 
 import java.util.List;
+import java.util.function.Supplier;
 
+import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.SettlerSkins;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModEntityTypes;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
-import com.gilfort.civmod.settlement.JobType;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -37,6 +41,13 @@ public final class Benchmark {
     private static final int LUMBERJACKS = 8;
     private static final int MINERS = 7;
     private static final int FLAGS = Block.UPDATE_CLIENTS;
+
+    private static final Scenario LUMBERJACK = new Scenario(ModJobs.LUMBERJACK, ModBlocks.LUMBERJACK_BLOCK, new Vec3i(2, 0, 4),
+            Blocks.OAK_LOG, 5, Items.IRON_AXE);
+    private static final Scenario MINER = new Scenario(ModJobs.MINER, ModBlocks.MINER_BLOCK, new Vec3i(2, 0, 3), Blocks.GRANITE, 1,
+            Items.IRON_PICKAXE);
+    private static final Scenario FISHERMAN = new Scenario(ModJobs.FISHERMAN, ModBlocks.FISHERMAN_BLOCK, new Vec3i(0, -1, 8), Blocks.WATER, 0,
+            Items.FISHING_ROD);
 
     private Benchmark() {
     }
@@ -80,15 +91,10 @@ public final class Benchmark {
         // JobBlocks (the first one founds the settlement) and their work places.
         for (int i = 0; i < SIZE; i++) {
             BlockPos pos = origin.offset(i * SPACING, 0, 0);
-            level.setBlock(pos, jobType(i) == JobType.LUMBERJACK ? ModBlocks.LUMBERJACK_BLOCK.get().defaultBlockState()
-                    : jobType(i) == JobType.MINER ? ModBlocks.MINER_BLOCK.get().defaultBlockState()
-                    : ModBlocks.FISHERMAN_BLOCK.get().defaultBlockState(), Block.UPDATE_ALL);
-            if (jobType(i) == JobType.LUMBERJACK) {
-                for (int y = 0; y < 5; y++) {
-                    level.setBlock(pos.offset(2, y, 4), Blocks.OAK_LOG.defaultBlockState(), FLAGS);
-                }
-            } else if (jobType(i) == JobType.MINER) {
-                level.setBlock(pos.offset(2, 0, 3), Blocks.GRANITE.defaultBlockState(), FLAGS);
+            Scenario scenario = scenario(i);
+            level.setBlock(pos, scenario.jobBlock().get().defaultBlockState(), Block.UPDATE_ALL);
+            for (int y = 0; y < scenario.workHeight(); y++) {
+                level.setBlock(pos.offset(scenario.workPlace()).above(y), scenario.workBlock().defaultBlockState(), FLAGS);
             }
         }
         SettlementData data = SettlementData.get(level);
@@ -106,12 +112,8 @@ public final class Benchmark {
         int spawned = 0;
         for (int i = 0; i < SIZE; i++) {
             BlockPos jobBlock = origin.offset(i * SPACING, 0, 0);
-            JobType type = jobType(i);
-            BlockPos workPlace = switch (type) {
-                case LUMBERJACK -> jobBlock.offset(2, 0, 4);
-                case MINER -> jobBlock.offset(2, 0, 3);
-                case FISHERMAN -> jobBlock.offset(0, -1, 8);
-            };
+            Scenario scenario = scenario(i);
+            BlockPos workPlace = jobBlock.offset(scenario.workPlace());
             Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.COMMAND);
             if (settler == null) {
                 continue;
@@ -123,25 +125,35 @@ public final class Benchmark {
             settler.setCustomName(Component.literal(name));
             level.addFreshEntity(settler);
             settler.joinSettlement(data, settlement);
-            settler.getInventory().setItem(Settler.BELT_START, new ItemStack(switch (type) {
-                case LUMBERJACK -> Items.IRON_AXE;
-                case MINER -> Items.IRON_PICKAXE;
-                case FISHERMAN -> Items.FISHING_ROD;
-            }));
+            settler.getInventory().setItem(Settler.BELT_START, new ItemStack(scenario.tool()));
             settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.BREAD, 8));
             JobAssignments.cyclePoint(data, jobBlock, workPlace, true, false);
             JobAssignments.assign(data, jobBlock, settler.getUUID(), name, settlement.id(), List.of());
-            settler.addJob(new SettlerJob(type, jobBlock));
+            settler.addJob(new SettlerJob(scenario.job().get(), jobBlock));
             spawned++;
         }
         CivProfiler.enable();
         return spawned;
     }
 
-    private static JobType jobType(int index) {
+    private static Scenario scenario(int index) {
         if (index < LUMBERJACKS) {
-            return JobType.LUMBERJACK;
+            return LUMBERJACK;
         }
-        return index < LUMBERJACKS + MINERS ? JobType.MINER : JobType.FISHERMAN;
+        return index < LUMBERJACKS + MINERS ? MINER : FISHERMAN;
+    }
+
+    /**
+     * What one benchmark JobBlock needs.
+     *
+     * @param job        the job
+     * @param jobBlock   its JobBlock
+     * @param workPlace  the work place relative to the JobBlock
+     * @param workBlock  the block placed as work place (stacked {@code workHeight} high)
+     * @param workHeight how many work blocks are stacked (0: none, e.g. the pond)
+     * @param tool       the tool the settler gets
+     */
+    private record Scenario(Supplier<Job> job, Supplier<? extends Block> jobBlock, Vec3i workPlace, Block workBlock, int workHeight,
+            Item tool) {
     }
 }

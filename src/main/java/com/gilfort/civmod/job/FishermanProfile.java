@@ -25,6 +25,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.LootTable;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
@@ -157,6 +158,11 @@ public final class FishermanProfile implements JobProfile {
     @Override
     public boolean isWorkPlace(ServerLevel level, BlockPos pos) {
         return isOpenWater(level, pos) && hasShore(level, pos);
+    }
+
+    @Override
+    public boolean isAssignableWorkPlace(Level level, BlockPos pos) {
+        return level.getFluidState(pos).is(FluidTags.WATER) && level.getFluidState(pos).isSource();
     }
 
     @Override

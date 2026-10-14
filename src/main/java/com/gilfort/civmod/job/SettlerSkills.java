@@ -1,9 +1,8 @@
 package com.gilfort.civmod.job;
 
-import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.Map;
 
-import com.gilfort.civmod.settlement.JobType;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
@@ -32,15 +31,15 @@ public final class SettlerSkills {
     }
 
     /** Save codec. */
-    public static final Codec<Map<JobType, Skill>> CODEC = Codec.unboundedMap(JobType.CODEC, Skill.CODEC);
+    public static final Codec<Map<Job, Skill>> CODEC = Codec.unboundedMap(Job.CODEC, Skill.CODEC);
 
-    private final Map<JobType, Skill> skills = new EnumMap<>(JobType.class);
+    private final Map<Job, Skill> skills = new HashMap<>();
 
     /**
      * @param jobType a job
      * @return the skill in that job
      */
-    public Skill get(JobType jobType) {
+    public Skill get(Job jobType) {
         return skills.getOrDefault(jobType, Skill.START);
     }
 
@@ -48,7 +47,7 @@ public final class SettlerSkills {
      * @param jobType a job
      * @param skill   the skill
      */
-    public void set(JobType jobType, Skill skill) {
+    public void set(Job jobType, Skill skill) {
         skills.put(jobType, skill);
     }
 
@@ -57,7 +56,7 @@ public final class SettlerSkills {
      * @param cap     the skill cap of the JobBlock
      * @return the level the settler works at (its level, at most the cap)
      */
-    public int effectiveLevel(JobType jobType, int cap) {
+    public int effectiveLevel(Job jobType, int cap) {
         return Math.min(get(jobType).level(), cap);
     }
 
@@ -70,7 +69,7 @@ public final class SettlerSkills {
      * @param rules   the skill rules
      * @return the number of levels gained
      */
-    public int addExp(JobType jobType, int amount, int cap, SkillRules rules) {
+    public int addExp(Job jobType, int amount, int cap, SkillRules rules) {
         Skill skill = get(jobType);
         int limit = Math.min(cap, SkillRules.MAX_LEVEL);
         if (skill.level() >= limit || amount <= 0) {
@@ -93,14 +92,14 @@ public final class SettlerSkills {
     /**
      * @return a copy of all skills (saving)
      */
-    public Map<JobType, Skill> snapshot() {
+    public Map<Job, Skill> snapshot() {
         return Map.copyOf(skills);
     }
 
     /**
      * @param saved saved skills
      */
-    public void restore(Map<JobType, Skill> saved) {
+    public void restore(Map<Job, Skill> saved) {
         skills.clear();
         skills.putAll(saved);
     }

@@ -17,8 +17,8 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModEntityTypes;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
-import com.gilfort.civmod.settlement.JobType;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 
@@ -242,7 +242,7 @@ public final class LumberjackGameTests {
         JobAssignments.cyclePoint(data, jobBlock, helper.absolutePos(new BlockPos(4, 1, 1)), true, false);
         helper.assertTrue(JobAssignments.assign(data, jobBlock, settler.getUUID(), "Tester", settlement.id(), java.util.List.of())
                 == JobAssignments.AssignResult.OK, "Assignment failed");
-        settler.addJob(new SettlerJob(JobType.LUMBERJACK, jobBlock));
+        settler.addJob(new SettlerJob(ModJobs.LUMBERJACK.get(), jobBlock));
         if (onBed) {
             helper.runAtTickTime(300, () -> helper.assertTrue(settler.position().distanceTo(spawn) > 2.0,
                     "Still on the bed after 15 s (status " + settler.getWork().status(jobBlock) + ")"));
@@ -250,7 +250,7 @@ public final class LumberjackGameTests {
         helper.succeedWhen(() -> {
             helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0,
                     "No wood produced yet (status " + settler.getWork().status(jobBlock) + ")");
-            helper.assertTrue(settler.getSkills().get(JobType.LUMBERJACK).exp() > 0 || settler.getSkills().get(JobType.LUMBERJACK).level() > 1,
+            helper.assertTrue(settler.getSkills().get(ModJobs.LUMBERJACK.get()).exp() > 0 || settler.getSkills().get(ModJobs.LUMBERJACK.get()).level() > 1,
                     "Producing gives EXP");
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));

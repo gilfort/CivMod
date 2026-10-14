@@ -1,10 +1,12 @@
 package com.gilfort.civmod.block;
 
+import org.jspecify.annotations.Nullable;
+
+import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.registry.ModBlockEntityTypes;
 import com.gilfort.civmod.registry.ModDataComponents;
-import com.gilfort.civmod.settlement.JobType;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
@@ -200,8 +202,11 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     }
 
     @Override
-    protected AbstractContainerMenu createMenu(int containerId, Inventory inventory) {
-        JobType jobType = getBlockState().getBlock() instanceof JobBlock jobBlock ? jobBlock.getJobType() : JobType.LUMBERJACK;
+    protected @Nullable AbstractContainerMenu createMenu(int containerId, Inventory inventory) {
+        if (!(getBlockState().getBlock() instanceof JobBlock jobBlock)) {
+            return null;
+        }
+        Job jobType = jobBlock.getJobType();
         JobBlockInfo info = level instanceof ServerLevel serverLevel
                 ? JobBlockInfo.of(serverLevel, worldPosition, jobType, jobLevel)
                 : JobBlockInfo.unknown(jobType, jobLevel);

@@ -9,12 +9,12 @@ import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.registry.ModItems;
-import com.gilfort.civmod.settlement.JobType;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
-import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementManager.Outcome;
 import com.gilfort.civmod.settlement.SettlementManager.Placement;
+import com.gilfort.civmod.settlement.SettlementManager;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -71,7 +71,7 @@ public final class SettlementGameTests {
     }
 
     private static Placement place(SettlementData data, int x, int level, SettlementManager.Listener listener) {
-        return SettlementManager.place(data, new BlockPos(x, 64, 0), JobType.LUMBERJACK, level, 0L, RandomSource.create(0L), listener);
+        return SettlementManager.place(data, new BlockPos(x, 64, 0), ModJobs.LUMBERJACK.get(), level, 0L, RandomSource.create(0L), listener);
     }
 
     /** A first JobBlock founds a settlement; a block within 10 × level joins it (height is ignored). */
@@ -79,7 +79,7 @@ public final class SettlementGameTests {
         SettlementData data = new SettlementData();
         Placement first = place(data, 0, 1, SettlementManager.Listener.NONE);
         helper.assertTrue(first.outcome() == Outcome.FOUNDED, "First block should found a settlement");
-        Placement second = SettlementManager.place(data, new BlockPos(10, 100, 0), JobType.MINER, 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
+        Placement second = SettlementManager.place(data, new BlockPos(10, 100, 0), ModJobs.MINER.get(), 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
         helper.assertTrue(second.outcome() == Outcome.JOINED && second.settlement() == first.settlement(),
                 "Block at horizontal distance 10 should join, regardless of height");
         helper.assertTrue(data.settlements().size() == 1, "Expected exactly one settlement");

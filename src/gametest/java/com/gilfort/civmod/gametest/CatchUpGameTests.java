@@ -14,8 +14,8 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModEntityTypes;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
-import com.gilfort.civmod.settlement.JobType;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.mojang.serialization.JsonOps;
@@ -120,7 +120,7 @@ public final class CatchUpGameTests {
         settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
         JobAssignments.cyclePoint(data, jobBlock, helper.absolutePos(new BlockPos(4, 1, 1)), true, false);
         JobAssignments.assign(data, jobBlock, settler.getUUID(), "Catcher", settlement.id(), List.of());
-        settler.addJob(new SettlerJob(JobType.LUMBERJACK, jobBlock));
+        settler.addJob(new SettlerJob(ModJobs.LUMBERJACK.get(), jobBlock));
         return settler;
     }
 
@@ -148,7 +148,7 @@ public final class CatchUpGameTests {
             Container container = (Container) level.getBlockEntity(jobBlock);
             int before = count(container) + settler.getWork().buffer(jobBlock).count();
             int damageBefore = settler.getInventory().getItem(Settler.BELT_START).getDamageValue();
-            int expBefore = settler.getSkills().get(JobType.LUMBERJACK).exp() + 1000 * settler.getSkills().get(JobType.LUMBERJACK).level();
+            int expBefore = settler.getSkills().get(ModJobs.LUMBERJACK.get()).exp() + 1000 * settler.getSkills().get(ModJobs.LUMBERJACK.get()).level();
             long clock = level.getOverworldClockTime();
             settler.getWork().setCatchUp(clock - DAY, clock);
             CatchUp.runNow(level, List.of(settler));
@@ -157,7 +157,7 @@ public final class CatchUpGameTests {
                     + ", tool " + settler.getInventory().getItem(Settler.BELT_START) + ", status " + settler.getWork().status(jobBlock) + ")");
             helper.assertTrue(settler.getInventory().getItem(Settler.BELT_START).isEmpty()
                     || settler.getInventory().getItem(Settler.BELT_START).getDamageValue() > damageBefore, "The axe wears");
-            int expAfter = settler.getSkills().get(JobType.LUMBERJACK).exp() + 1000 * settler.getSkills().get(JobType.LUMBERJACK).level();
+            int expAfter = settler.getSkills().get(ModJobs.LUMBERJACK.get()).exp() + 1000 * settler.getSkills().get(ModJobs.LUMBERJACK.get()).level();
             helper.assertTrue(expAfter > expBefore, "EXP gained");
             helper.assertFalse(settler.getWork().hasPendingCatchUp(), "Nothing pending afterwards");
             settler.discard();

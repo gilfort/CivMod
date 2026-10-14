@@ -1,0 +1,52 @@
+package com.gilfort.civmod.registry;
+
+import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.job.FishermanProfile;
+import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.job.LumberjackProfile;
+import com.gilfort.civmod.job.MinerProfile;
+
+import net.minecraft.core.Registry;
+import net.minecraft.resources.ResourceKey;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
+
+/**
+ * The {@code civmod:job} registry (vault {@code Systems/Jobs.md}): static, filled at mod load and synced to clients.
+ * Addons register their Jobs here with their own namespace.
+ */
+public final class ModJobs {
+
+    /** Registry key of {@code civmod:job}. */
+    public static final ResourceKey<Registry<Job>> KEY = ResourceKey.createRegistryKey(CivMod.id("job"));
+
+    /** Deferred register for jobs in the {@code civmod} namespace. */
+    public static final DeferredRegister<Job> JOBS = DeferredRegister.create(KEY, CivMod.MOD_ID);
+
+    /** The job registry. */
+    public static final Registry<Job> REGISTRY = JOBS.makeRegistry(builder -> builder.sync(true));
+
+    /** See vault {@code Jobs/Lumberjack.md}. */
+    public static final DeferredHolder<Job, Job> LUMBERJACK = JOBS.register("lumberjack", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
+            .icon(ModItems.LUMBERJACK_BLOCK).hungerFactor(1.0).baseExp(1).profile(LumberjackProfile::new).build());
+    /** See vault {@code Jobs/Miner.md}. */
+    public static final DeferredHolder<Job, Job> MINER = JOBS.register("miner", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
+            .icon(ModItems.MINER_BLOCK).hungerFactor(1.0).baseExp(1).profile(MinerProfile::new).build());
+    /** See vault {@code Jobs/Fisherman.md}. */
+    public static final DeferredHolder<Job, Job> FISHERMAN = JOBS.register("fisherman", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
+            .icon(ModItems.FISHERMAN_BLOCK).hungerFactor(0.5).baseExp(5).profile(FishermanProfile::new).build());
+
+    private ModJobs() {
+    }
+
+    /**
+     * Attaches the job register (and the registry itself) to the mod event bus.
+     *
+     * @param modEventBus the mod-specific event bus
+     */
+    public static void register(IEventBus modEventBus) {
+        JOBS.register(modEventBus);
+    }
+}

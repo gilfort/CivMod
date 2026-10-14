@@ -11,7 +11,7 @@ import com.gilfort.civmod.job.SkillRules;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.registry.ModBlocks;
-import com.gilfort.civmod.settlement.JobType;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.google.gson.JsonParser;
@@ -57,35 +57,34 @@ public final class SkillGameTests {
         SkillRules rules = SkillRules.FALLBACK;
         helper.assertTrue(rules.expToNext(1) == 20 && rules.expToNext(19) == 110, "EXP to next level = 15 + 5 × level");
         SettlerSkills skills = new SettlerSkills();
-        helper.assertTrue(skills.addExp(JobType.MINER, 20, 20, rules) == 1 && skills.get(JobType.MINER).level() == 2
-                && skills.get(JobType.MINER).exp() == 0, "20 EXP: level 2");
-        skills.addExp(JobType.MINER, 100000, 20, rules);
-        helper.assertTrue(skills.get(JobType.MINER).level() == 20 && skills.get(JobType.MINER).exp() == 0, "Stops at the cap, excess discarded");
-        helper.assertTrue(skills.addExp(JobType.MINER, 50, 20, rules) == 0 && skills.get(JobType.MINER).exp() == 0, "No EXP at the cap");
-        helper.assertTrue(skills.get(JobType.LUMBERJACK).level() == 1, "Skill is per job type");
+        helper.assertTrue(skills.addExp(ModJobs.MINER.get(), 20, 20, rules) == 1 && skills.get(ModJobs.MINER.get()).level() == 2
+                && skills.get(ModJobs.MINER.get()).exp() == 0, "20 EXP: level 2");
+        skills.addExp(ModJobs.MINER.get(), 100000, 20, rules);
+        helper.assertTrue(skills.get(ModJobs.MINER.get()).level() == 20 && skills.get(ModJobs.MINER.get()).exp() == 0, "Stops at the cap, excess discarded");
+        helper.assertTrue(skills.addExp(ModJobs.MINER.get(), 50, 20, rules) == 0 && skills.get(ModJobs.MINER.get()).exp() == 0, "No EXP at the cap");
+        helper.assertTrue(skills.get(ModJobs.LUMBERJACK.get()).level() == 1, "Skill is per job type");
 
-        skills.set(JobType.FISHERMAN, new SettlerSkills.Skill(45, 3));
-        helper.assertTrue(skills.effectiveLevel(JobType.FISHERMAN, SettlementRules.skillCap(1)) == 20, "Works at the cap of a level-1 JobBlock");
-        helper.assertTrue(skills.addExp(JobType.FISHERMAN, 50, 20, rules) == 0 && skills.get(JobType.FISHERMAN).level() == 45,
+        skills.set(ModJobs.FISHERMAN.get(), new SettlerSkills.Skill(45, 3));
+        helper.assertTrue(skills.effectiveLevel(ModJobs.FISHERMAN.get(), SettlementRules.skillCap(1)) == 20, "Works at the cap of a level-1 JobBlock");
+        helper.assertTrue(skills.addExp(ModJobs.FISHERMAN.get(), 50, 20, rules) == 0 && skills.get(ModJobs.FISHERMAN.get()).level() == 45,
                 "Higher skill is kept, no EXP below it");
-        helper.assertTrue(skills.effectiveLevel(JobType.FISHERMAN, SettlementRules.skillCap(3)) == 45, "Full skill at a level-3 JobBlock");
+        helper.assertTrue(skills.effectiveLevel(ModJobs.FISHERMAN.get(), SettlementRules.skillCap(3)) == 45, "Full skill at a level-3 JobBlock");
         helper.succeed();
     }
 
     /** Later files override earlier ones. */
     private static void rulesMerge(GameTestHelper helper) {
-        SkillRules merged = SkillRules.merge(List.of(JsonParser.parseString("{\"base\":10,\"base_exp\":{\"miner\":2}}"),
-                JsonParser.parseString("{\"per_level\":3,\"base_exp\":{\"miner\":4}}")));
-        helper.assertTrue(merged.base() == 10 && merged.perLevel() == 3 && merged.baseExp(JobType.MINER) == 4
-                && merged.baseExp(JobType.FISHERMAN) == 5, "Merged rules: " + merged);
-        helper.assertTrue(SkillRules.get().baseExp(JobType.FISHERMAN) == 5, "Loaded default data");
+        SkillRules merged = SkillRules.merge(List.of(JsonParser.parseString("{\"base\":10,\"per_level\":2}"),
+                JsonParser.parseString("{\"per_level\":3}")));
+        helper.assertTrue(merged.base() == 10 && merged.perLevel() == 3, "Merged rules: " + merged);
+        helper.assertTrue(SkillRules.get().equals(SkillRules.FALLBACK), "Loaded default data: " + SkillRules.get());
         helper.succeed();
     }
 
     /** Costs from the default data; item and tag costs are checked and paid. */
     private static void upgradeCosts(GameTestHelper helper) {
         Player player = helper.makeMockPlayer(GameType.SURVIVAL);
-        List<UpgradeCosts.Cost> miner = UpgradeCosts.get(JobType.MINER, 2);
+        List<UpgradeCosts.Cost> miner = UpgradeCosts.get(ModJobs.MINER.get(), 2);
         helper.assertTrue(miner.size() == 2, "Miner level 2 costs loaded: " + miner);
         player.getInventory().add(new ItemStack(Items.COBBLESTONE, 40));
         helper.assertFalse(UpgradeCosts.canAfford(player.getInventory(), miner), "Iron is missing");
@@ -95,12 +94,12 @@ public final class SkillGameTests {
         helper.assertTrue(player.getInventory().countItem(Items.COBBLESTONE) == 8 && player.getInventory().countItem(Items.IRON_INGOT) == 0,
                 "Paid exactly the costs");
 
-        List<UpgradeCosts.Cost> lumberjack = UpgradeCosts.get(JobType.LUMBERJACK, 2);
+        List<UpgradeCosts.Cost> lumberjack = UpgradeCosts.get(ModJobs.LUMBERJACK.get(), 2);
         player.getInventory().add(new ItemStack(Items.OAK_LOG, 20));
         player.getInventory().add(new ItemStack(Items.BIRCH_LOG, 12));
         player.getInventory().add(new ItemStack(Items.IRON_INGOT, 8));
         helper.assertTrue(UpgradeCosts.canAfford(player.getInventory(), lumberjack), "Any logs pay the tag cost");
-        helper.assertTrue(UpgradeCosts.get(JobType.FISHERMAN, 6).isEmpty(), "No level 6");
+        helper.assertTrue(UpgradeCosts.get(ModJobs.FISHERMAN.get(), 6).isEmpty(), "No level 6");
         helper.succeed();
     }
 
@@ -115,7 +114,7 @@ public final class SkillGameTests {
         player.getInventory().add(new ItemStack(Items.IRON_INGOT, 8));
         helper.runAfterDelay(1, () -> {
             JobBlockEntity entity = (JobBlockEntity) level.getBlockEntity(pos);
-            JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(level, pos, JobType.MINER, entity.getJobLevel()));
+            JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(level, pos, ModJobs.MINER.get(), entity.getJobLevel()));
             helper.assertTrue(menu.clickMenuButton(player, JobBlockMenu.BUTTON_UPGRADE), "Upgrade should succeed");
             helper.assertTrue(entity.getJobLevel() == 2 && menu.getInfo().level() == 2, "JobBlock level 2");
             int settlementLevel = SettlementData.get(level).settlementAt(pos).flatMap(s -> s.block(pos)).orElseThrow().level();

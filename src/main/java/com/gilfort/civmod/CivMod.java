@@ -9,6 +9,7 @@ import com.gilfort.civmod.registry.ModCreativeModeTabs;
 import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModItems;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.registry.ModMenuTypes;
 import com.mojang.logging.LogUtils;
 
@@ -48,6 +49,7 @@ public final class CivMod {
         ModBlockEntityTypes.register(modEventBus);
         ModDataComponents.register(modEventBus);
         ModEntityTypes.register(modEventBus);
+        ModJobs.register(modEventBus);
 
         modContainer.registerConfig(ModConfig.Type.SERVER, CivModConfig.SPEC);
 

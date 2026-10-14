@@ -10,8 +10,8 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModEntityTypes;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
-import com.gilfort.civmod.settlement.JobType;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 
@@ -124,7 +124,7 @@ public final class FishermanGameTests {
         JobAssignments.cyclePoint(data, jobBlock, helper.absolutePos(new BlockPos(6, 2, 6)), true, false);
         helper.assertTrue(JobAssignments.assign(data, jobBlock, settler.getUUID(), "Angler", settlement.id(), List.of())
                 == JobAssignments.AssignResult.OK, "Assignment failed");
-        settler.addJob(new SettlerJob(JobType.FISHERMAN, jobBlock));
+        settler.addJob(new SettlerJob(ModJobs.FISHERMAN.get(), jobBlock));
         helper.succeedWhen(() -> {
             helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0,
                     "Nothing caught yet (status " + settler.getWork().status(jobBlock) + ")");

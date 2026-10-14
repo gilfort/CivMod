@@ -11,7 +11,7 @@ import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.registry.ModEntityTypes;
-import com.gilfort.civmod.settlement.JobType;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
@@ -72,7 +72,7 @@ public final class ScheduleGameTests {
     }
 
     private static Settlement settlementAt(SettlementData data, BlockPos pos) {
-        return SettlementManager.place(data, pos, JobType.LUMBERJACK, 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE).settlement();
+        return SettlementManager.place(data, pos, ModJobs.LUMBERJACK.get(), 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE).settlement();
     }
 
     /** The nearest free bed is claimed, beds are never shared, a destroyed bed is released. */

@@ -7,10 +7,11 @@ import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
-import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments.AssignResult;
 import com.gilfort.civmod.settlement.JobAssignments.PointResult;
-import com.gilfort.civmod.settlement.JobType;
+import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
@@ -55,7 +56,7 @@ public final class ScrollGameTests {
         helper.register(ResourceKey.create(Registries.TEST_FUNCTION, CivMod.id(name)), test);
     }
 
-    private static SettlementManager.Placement place(SettlementData data, BlockPos pos, JobType jobType) {
+    private static SettlementManager.Placement place(SettlementData data, BlockPos pos, Job jobType) {
         return SettlementManager.place(data, pos, jobType, 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
     }
 
@@ -66,7 +67,7 @@ public final class ScrollGameTests {
     /** Cycling: work → removed (no container); collect → drop-off → removed; limits, border and own JobBlock. */
     private static void pointCycling(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        place(data, JOB_BLOCK, JobType.LUMBERJACK);
+        place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get());
         BlockPos log = new BlockPos(3, 64, 0);
         helper.assertTrue(JobAssignments.cyclePoint(data, JOB_BLOCK, log, true, false) == PointResult.WORK, "Log should become a work place");
         helper.assertTrue(JobAssignments.cyclePoint(data, JOB_BLOCK, log, true, false) == PointResult.REMOVED, "Non-container work place should be removed next");
@@ -109,12 +110,12 @@ public final class ScrollGameTests {
         helper.setBlock(water, Blocks.WATER);
         helper.setBlock(chest, Blocks.CHEST);
         var level = helper.getLevel();
-        helper.assertTrue(ScrollOfAssignmentItem.isValidWorkPlace(level, helper.absolutePos(log), JobType.LUMBERJACK), "Log for Lumberjack");
-        helper.assertFalse(ScrollOfAssignmentItem.isValidWorkPlace(level, helper.absolutePos(stone), JobType.LUMBERJACK), "Stone not for Lumberjack");
-        helper.assertTrue(ScrollOfAssignmentItem.isValidWorkPlace(level, helper.absolutePos(stone), JobType.MINER), "Stone for Miner");
-        helper.assertTrue(ScrollOfAssignmentItem.isValidWorkPlace(level, helper.absolutePos(ore), JobType.MINER), "Ore for Miner");
-        helper.assertTrue(ScrollOfAssignmentItem.isValidWorkPlace(level, helper.absolutePos(water), JobType.FISHERMAN), "Water for Fisherman");
-        helper.assertFalse(ScrollOfAssignmentItem.isValidWorkPlace(level, helper.absolutePos(log), JobType.FISHERMAN), "Log not for Fisherman");
+        helper.assertTrue(ScrollOfAssignmentItem.isValidWorkPlace(level, helper.absolutePos(log), ModJobs.LUMBERJACK.get()), "Log for Lumberjack");
+        helper.assertFalse(ScrollOfAssignmentItem.isValidWorkPlace(level, helper.absolutePos(stone), ModJobs.LUMBERJACK.get()), "Stone not for Lumberjack");
+        helper.assertTrue(ScrollOfAssignmentItem.isValidWorkPlace(level, helper.absolutePos(stone), ModJobs.MINER.get()), "Stone for Miner");
+        helper.assertTrue(ScrollOfAssignmentItem.isValidWorkPlace(level, helper.absolutePos(ore), ModJobs.MINER.get()), "Ore for Miner");
+        helper.assertTrue(ScrollOfAssignmentItem.isValidWorkPlace(level, helper.absolutePos(water), ModJobs.FISHERMAN.get()), "Water for Fisherman");
+        helper.assertFalse(ScrollOfAssignmentItem.isValidWorkPlace(level, helper.absolutePos(log), ModJobs.FISHERMAN.get()), "Log not for Fisherman");
         helper.assertTrue(ScrollOfAssignmentItem.isContainer(level, helper.absolutePos(chest)), "Chest is a container");
         helper.assertFalse(ScrollOfAssignmentItem.isContainer(level, helper.absolutePos(stone)), "Stone is no container");
         helper.succeed();
@@ -123,16 +124,16 @@ public final class ScrollGameTests {
     /** Assignment rules: ok, occupied, duplicate, unconnected, other settlement. */
     private static void assignmentRules(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement settlement = place(data, JOB_BLOCK, JobType.LUMBERJACK).settlement();
+        Settlement settlement = place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get()).settlement();
         BlockPos second = new BlockPos(5, 64, 0);
-        place(data, second, JobType.LUMBERJACK);
+        place(data, second, ModJobs.LUMBERJACK.get());
         BlockPos unconnected = new BlockPos(20, 64, 0);
-        place(data, unconnected, JobType.MINER);
+        place(data, unconnected, ModJobs.MINER.get());
 
         helper.assertTrue(JobAssignments.assign(data, JOB_BLOCK, ALICE, "Alice", settlement.id(), List.of()) == AssignResult.OK, "Alice assigned");
         helper.assertTrue(JobAssignments.assign(data, JOB_BLOCK, BOB, "Bob", settlement.id(), List.of()) == AssignResult.OCCUPIED, "Occupied");
         helper.assertTrue(block(data, JOB_BLOCK).assigneeName().orElse("").equals("Alice"), "Assignee name stored");
-        helper.assertTrue(JobAssignments.assign(data, second, ALICE, "Alice", settlement.id(), List.of(JobType.LUMBERJACK)) == AssignResult.DUPLICATE,
+        helper.assertTrue(JobAssignments.assign(data, second, ALICE, "Alice", settlement.id(), List.of(ModJobs.LUMBERJACK.get())) == AssignResult.DUPLICATE,
                 "Alice already is a Lumberjack");
         helper.assertTrue(JobAssignments.assign(data, unconnected, BOB, "Bob", settlement.id(), List.of()) == AssignResult.UNCONNECTED, "Unconnected");
         helper.assertTrue(JobAssignments.assign(data, second, BOB, "Bob", -1, List.of()) == AssignResult.OTHER_SETTLEMENT, "Homeless settler");
@@ -143,9 +144,9 @@ public final class ScrollGameTests {
     /** Unassign frees the block; removing an assigned JobBlock reports the settler that loses the job. */
     private static void unassignAndRemoval(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement settlement = place(data, JOB_BLOCK, JobType.LUMBERJACK).settlement();
+        Settlement settlement = place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get()).settlement();
         BlockPos second = new BlockPos(5, 64, 0);
-        place(data, second, JobType.MINER);
+        place(data, second, ModJobs.MINER.get());
         JobAssignments.assign(data, JOB_BLOCK, ALICE, "Alice", settlement.id(), List.of());
         helper.assertTrue(JobAssignments.unassign(data, JOB_BLOCK).filter(ALICE::equals).isPresent(), "Unassign returns the settler");
         helper.assertTrue(block(data, JOB_BLOCK).assignee().isEmpty(), "Block is free again");
@@ -174,7 +175,7 @@ public final class ScrollGameTests {
     /** Points and assignment survive a save / load round trip. */
     private static void pointsPersistence(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement settlement = place(data, JOB_BLOCK, JobType.LUMBERJACK).settlement();
+        Settlement settlement = place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get()).settlement();
         JobAssignments.cyclePoint(data, JOB_BLOCK, new BlockPos(3, 64, 0), true, false);
         JobAssignments.cyclePoint(data, JOB_BLOCK, new BlockPos(2, 64, 2), false, true);
         JobAssignments.cyclePoint(data, JOB_BLOCK, new BlockPos(2, 64, 2), false, true);

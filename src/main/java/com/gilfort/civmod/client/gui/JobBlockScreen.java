@@ -2,9 +2,9 @@ package com.gilfort.civmod.client.gui;
 
 import java.util.List;
 
+import com.gilfort.civmod.job.JobProfile;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
-import com.gilfort.civmod.settlement.JobType;
 import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -54,7 +54,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             rebuildWidgets();
         }).bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 28, imageWidth - 2 * CivGui.PADDING, 20).build());
         upgrade.active = !max && (minecraft.player.isCreative() || current.canAffordNext(minecraft.player.getInventory()));
-        if (menu.getInfo().jobType() == JobType.LUMBERJACK && menu.getInfo().inSettlement()) {
+        if (menu.getInfo().jobType().profile().map(JobProfile::hasLeavesOption).orElse(false) && menu.getInfo().inSettlement()) {
             Component label = Component.translatable(menu.getInfo().collectLeaves() ? "civmod.gui.job_block.leaves.on" : "civmod.gui.job_block.leaves.off");
             Button leaves = addTabWidget(JobBlockMenu.TAB_INFO, Button.builder(label, button -> {
                 menu.clickMenuButton(minecraft.player, JobBlockMenu.BUTTON_TOGGLE_LEAVES);

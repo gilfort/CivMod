@@ -16,8 +16,8 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModEntityTypes;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
-import com.gilfort.civmod.settlement.JobType;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.google.gson.JsonParser;
@@ -170,7 +170,7 @@ public final class MinerGameTests {
         JobAssignments.cyclePoint(data, jobBlock, poi, true, false);
         helper.assertTrue(JobAssignments.assign(data, jobBlock, settler.getUUID(), "Digger", settlement.id(), List.of())
                 == JobAssignments.AssignResult.OK, "Assignment failed");
-        settler.addJob(new SettlerJob(JobType.MINER, jobBlock));
+        settler.addJob(new SettlerJob(ModJobs.MINER.get(), jobBlock));
         helper.succeedWhen(() -> {
             helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0,
                     "Nothing mined yet (status " + settler.getWork().status(jobBlock) + ")");

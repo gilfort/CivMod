@@ -3,12 +3,12 @@ package com.gilfort.civmod.item;
 import java.util.Optional;
 
 import com.gilfort.civmod.block.JobBlock;
+import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.settlement.JobAssignments;
-import com.gilfort.civmod.settlement.JobType;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 
@@ -17,7 +17,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -28,11 +27,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.common.Tags;
 
 /**
  * The Scroll of Assignment (vault {@code Systems/Scroll of Assignment.md}).
@@ -188,7 +185,7 @@ public class ScrollOfAssignmentItem extends Item {
                 settlement.get().displayName()));
     }
 
-    private static void bindJobBlock(ItemStack stack, ServerPlayer player, BlockPos pos, JobType jobType) {
+    private static void bindJobBlock(ItemStack stack, ServerPlayer player, BlockPos pos, Job jobType) {
         if (SettlementData.get(player.level()).settlementAt(pos).isEmpty()) {
             player.sendOverlayMessage(Component.translatable("civmod.scroll.job_block_unregistered").withStyle(ChatFormatting.RED));
             return;
@@ -212,7 +209,7 @@ public class ScrollOfAssignmentItem extends Item {
             return;
         }
         ServerLevel level = player.level();
-        JobType jobType = block.get().jobType();
+        Job jobType = block.get().jobType();
         boolean validWork = isValidWorkPlace(level, target, jobType);
         boolean container = isContainer(level, target);
         JobAssignments.PointResult result = JobAssignments.cyclePoint(SettlementData.get(level), jobBlock, target, validWork, container);
@@ -225,7 +222,7 @@ public class ScrollOfAssignmentItem extends Item {
             case OUTSIDE -> Component.translatable("civmod.scroll.point.outside").withStyle(ChatFormatting.RED);
             case TOO_MANY -> Component.translatable("civmod.scroll.point.too_many", SettlementBlock.MAX_WORK_POINTS).withStyle(ChatFormatting.RED);
             case INVALID -> Component.translatable("civmod.scroll.point.invalid", jobType.displayName(),
-                    Component.translatable("civmod.scroll.work_place." + jobType.getSerializedName())).withStyle(ChatFormatting.RED);
+                    jobType.workPlaceName()).withStyle(ChatFormatting.RED);
         };
         player.sendOverlayMessage(message);
     }
@@ -238,7 +235,7 @@ public class ScrollOfAssignmentItem extends Item {
         SettlementData data = SettlementData.get(player.level());
         JobAssignments.AssignResult result = JobAssignments.assign(data, jobBlock, settler.getUUID(), settler.getName().getString(),
                 settler.getSettlementId(), settler.getJobs().stream().map(SettlerJob::jobType).toList());
-        JobType jobType = block.get().jobType();
+        Job jobType = block.get().jobType();
         Component message = switch (result) {
             case OK -> {
                 settler.addJob(new SettlerJob(jobType, jobBlock));
@@ -261,13 +258,8 @@ public class ScrollOfAssignmentItem extends Item {
      * @param jobType a job
      * @return whether the block is a valid work place for the job
      */
-    public static boolean isValidWorkPlace(Level level, BlockPos pos, JobType jobType) {
-        BlockState state = level.getBlockState(pos);
-        return switch (jobType) {
-            case LUMBERJACK -> state.is(BlockTags.LOGS);
-            case MINER -> state.is(Tags.Blocks.STONES) || state.is(Tags.Blocks.ORES);
-            case FISHERMAN -> level.getFluidState(pos).is(FluidTags.WATER) && level.getFluidState(pos).isSource();
-        };
+    public static boolean isValidWorkPlace(Level level, BlockPos pos, Job jobType) {
+        return jobType.isValidWorkPlace(level, pos);
     }
 
     /**
