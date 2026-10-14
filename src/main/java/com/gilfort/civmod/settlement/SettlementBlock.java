@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.gilfort.civmod.job.Job;
+
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
@@ -24,7 +26,7 @@ public final class SettlementBlock {
     /** Save codec. */
     public static final Codec<SettlementBlock> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             BlockPos.CODEC.fieldOf("pos").forGetter(SettlementBlock::pos),
-            JobType.CODEC.fieldOf("job").forGetter(SettlementBlock::jobType),
+            Job.CODEC.fieldOf("job").forGetter(SettlementBlock::jobType),
             Codec.INT.fieldOf("level").forGetter(SettlementBlock::level),
             Codec.BOOL.fieldOf("connected").forGetter(SettlementBlock::connected),
             BlockPos.CODEC.listOf().optionalFieldOf("work", List.of()).forGetter(SettlementBlock::workPoints),
@@ -36,7 +38,7 @@ public final class SettlementBlock {
     ).apply(instance, SettlementBlock::new));
 
     private final BlockPos pos;
-    private final JobType jobType;
+    private final Job jobType;
     private int level;
     private boolean connected;
     private final List<BlockPos> workPoints = new ArrayList<>();
@@ -52,11 +54,11 @@ public final class SettlementBlock {
      * @param level     the JobBlock level
      * @param connected whether the block is connected to the settlement chain
      */
-    public SettlementBlock(BlockPos pos, JobType jobType, int level, boolean connected) {
+    public SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected) {
         this(pos, jobType, level, connected, List.of(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), false);
     }
 
-    private SettlementBlock(BlockPos pos, JobType jobType, int level, boolean connected, List<BlockPos> workPoints,
+    private SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected, List<BlockPos> workPoints,
             Optional<BlockPos> collect, Optional<BlockPos> dropOff, Optional<UUID> assignee, Optional<String> assigneeName,
             boolean collectLeaves) {
         this.pos = pos.immutable();
@@ -92,7 +94,7 @@ public final class SettlementBlock {
     /**
      * @return the offered job
      */
-    public JobType jobType() {
+    public Job jobType() {
         return jobType;
     }
 

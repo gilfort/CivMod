@@ -3,7 +3,12 @@ package com.gilfort.civmod.menu;
 import java.util.List;
 
 import com.gilfort.civmod.block.UpgradeCosts;
+import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.settlement.Settlement;
+import com.gilfort.civmod.settlement.SettlementBlock;
+import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementRules;
+import com.gilfort.civmod.settlement.SettlementWorld;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -12,12 +17,6 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.Optional;
-
-import com.gilfort.civmod.settlement.JobType;
-import com.gilfort.civmod.settlement.Settlement;
-import com.gilfort.civmod.settlement.SettlementBlock;
-import com.gilfort.civmod.settlement.SettlementManager;
-import com.gilfort.civmod.settlement.SettlementWorld;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -41,7 +40,7 @@ import net.minecraft.server.level.ServerLevel;
  * @param collectLeaves  whether a Lumberjack also collects leaves
  * @param costs          upgrade costs per target level (index 0 = level 2)
  */
-public record JobBlockInfo(JobType jobType, int level, Component settlementName, boolean inSettlement, boolean connected,
+public record JobBlockInfo(Job jobType, int level, Component settlementName, boolean inSettlement, boolean connected,
         int distance, int required, String assignee, boolean collectLeaves, List<List<CostEntry>> costs) {
 
     /**
@@ -123,7 +122,7 @@ public record JobBlockInfo(JobType jobType, int level, Component settlementName,
      * @param jobType the job
      * @return the upgrade costs of all levels (index 0 = level 2)
      */
-    public static List<List<CostEntry>> costsOf(JobType jobType) {
+    public static List<List<CostEntry>> costsOf(Job jobType) {
         List<List<CostEntry>> result = new java.util.ArrayList<>();
         for (int target = SettlementRules.MIN_LEVEL + 1; target <= SettlementRules.MAX_LEVEL; target++) {
             result.add(UpgradeCosts.get(jobType, target).stream().map(CostEntry::of).toList());
@@ -133,7 +132,7 @@ public record JobBlockInfo(JobType jobType, int level, Component settlementName,
 
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, JobBlockInfo> STREAM_CODEC = StreamCodec.composite(
-            JobType.STREAM_CODEC, JobBlockInfo::jobType,
+            Job.STREAM_CODEC, JobBlockInfo::jobType,
             ByteBufCodecs.VAR_INT, JobBlockInfo::level,
             ComponentSerialization.STREAM_CODEC, JobBlockInfo::settlementName,
             ByteBufCodecs.BOOL, JobBlockInfo::inSettlement,
@@ -152,7 +151,7 @@ public record JobBlockInfo(JobType jobType, int level, Component settlementName,
      * @param jobLevel the JobBlock level
      * @return the current info of that JobBlock
      */
-    public static JobBlockInfo of(ServerLevel level, BlockPos pos, JobType jobType, int jobLevel) {
+    public static JobBlockInfo of(ServerLevel level, BlockPos pos, Job jobType, int jobLevel) {
         SettlementManager.Status status = SettlementWorld.status(level, pos);
         Optional<Settlement> settlement = status.settlement();
         return new JobBlockInfo(jobType, jobLevel,
@@ -181,7 +180,7 @@ public record JobBlockInfo(JobType jobType, int level, Component settlementName,
      * @param jobLevel the JobBlock level
      * @return info without settlement data
      */
-    public static JobBlockInfo unknown(JobType jobType, int jobLevel) {
+    public static JobBlockInfo unknown(Job jobType, int jobLevel) {
         return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, "", false, costsOf(jobType));
     }
 }

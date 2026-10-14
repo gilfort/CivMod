@@ -1,10 +1,11 @@
 package com.gilfort.civmod.registry;
 
 import java.util.List;
+import java.util.function.Supplier;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.block.JobBlock;
-import com.gilfort.civmod.settlement.JobType;
+import com.gilfort.civmod.job.Job;
 
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -27,11 +28,11 @@ public final class ModBlocks {
     public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(CivMod.MOD_ID);
 
     /** JobBlock offering the Lumberjack job. */
-    public static final DeferredBlock<JobBlock> LUMBERJACK_BLOCK = jobBlock("lumberjack_block", JobType.LUMBERJACK);
+    public static final DeferredBlock<JobBlock> LUMBERJACK_BLOCK = jobBlock("lumberjack_block", ModJobs.LUMBERJACK);
     /** JobBlock offering the Miner job. */
-    public static final DeferredBlock<JobBlock> MINER_BLOCK = jobBlock("miner_block", JobType.MINER);
+    public static final DeferredBlock<JobBlock> MINER_BLOCK = jobBlock("miner_block", ModJobs.MINER);
     /** JobBlock offering the Fisherman job. */
-    public static final DeferredBlock<JobBlock> FISHERMAN_BLOCK = jobBlock("fisherman_block", JobType.FISHERMAN);
+    public static final DeferredBlock<JobBlock> FISHERMAN_BLOCK = jobBlock("fisherman_block", ModJobs.FISHERMAN);
 
     /** All JobBlocks. */
     public static final List<DeferredBlock<JobBlock>> JOB_BLOCKS = List.of(LUMBERJACK_BLOCK, MINER_BLOCK, FISHERMAN_BLOCK);
@@ -39,7 +40,7 @@ public final class ModBlocks {
     private ModBlocks() {
     }
 
-    private static DeferredBlock<JobBlock> jobBlock(String name, JobType jobType) {
+    private static DeferredBlock<JobBlock> jobBlock(String name, Supplier<Job> jobType) {
         return BLOCKS.registerBlock(name, properties -> new JobBlock(jobType, properties), ModBlocks::jobBlockProperties);
     }
 

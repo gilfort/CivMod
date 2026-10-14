@@ -13,6 +13,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 
 /**
  * The job-specific parts of a Resource Collection Job (vault {@code Systems/Resource Collection Jobs.md}): tool,
@@ -40,6 +41,13 @@ public interface JobProfile {
      * @return whether it is a valid (loaded) work place
      */
     boolean isWorkPlace(ServerLevel level, BlockPos pos);
+
+    /**
+     * @param level the level
+     * @param pos   a position
+     * @return whether a player may set the block as work place with the Scroll of Assignment
+     */
+    boolean isAssignableWorkPlace(Level level, BlockPos pos);
 
     /**
      * Finds a work place when none is set (at most once per day).
@@ -107,6 +115,13 @@ public interface JobProfile {
      */
     default boolean swings() {
         return true;
+    }
+
+    /**
+     * @return whether the JobBlock offers the "collect leaves" option (shears as secondary tool)
+     */
+    default boolean hasLeavesOption() {
+        return false;
     }
 
     /**

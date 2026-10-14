@@ -8,8 +8,6 @@ import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.SettlerJobs;
-import com.gilfort.civmod.registry.ModItems;
-import com.gilfort.civmod.settlement.JobType;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -144,15 +142,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
     @Override
     protected List<TabBar.Tab> bottomTabs() {
         return menu.getInfo().jobs().stream().limit(SettlerMenu.MAX_JOB_TABS)
-                .map(job -> new TabBar.Tab(job.jobType().displayName(), jobIcon(job.jobType()))).toList();
-    }
-
-    private static ItemStack jobIcon(JobType jobType) {
-        return switch (jobType) {
-            case LUMBERJACK -> new ItemStack(ModItems.LUMBERJACK_BLOCK.get());
-            case MINER -> new ItemStack(ModItems.MINER_BLOCK.get());
-            case FISHERMAN -> new ItemStack(ModItems.FISHERMAN_BLOCK.get());
-        };
+                .map(job -> new TabBar.Tab(job.jobType().displayName(), job.jobType().icon())).toList();
     }
 
     @Override

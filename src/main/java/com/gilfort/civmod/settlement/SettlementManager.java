@@ -8,6 +8,8 @@ import java.util.UUID;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.job.Job;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
 
@@ -157,7 +159,7 @@ public final class SettlementManager {
      * @param listener receives side effects
      * @return how the block was integrated
      */
-    public static Placement place(SettlementData data, BlockPos pos, JobType jobType, int level, long gameTime, RandomSource random,
+    public static Placement place(SettlementData data, BlockPos pos, Job jobType, int level, long gameTime, RandomSource random,
             Listener listener) {
         data.removeBlock(pos);
         int clamped = SettlementRules.clampLevel(level);

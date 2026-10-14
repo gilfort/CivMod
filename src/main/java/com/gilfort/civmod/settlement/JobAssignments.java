@@ -4,6 +4,8 @@ import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.gilfort.civmod.job.Job;
+
 import net.minecraft.core.BlockPos;
 
 /**
@@ -171,7 +173,7 @@ public final class JobAssignments {
      * @return the result
      */
     public static AssignResult assign(SettlementData data, BlockPos jobBlock, UUID settler, String settlerName, int settlementId,
-            Collection<JobType> currentJobs) {
+            Collection<Job> currentJobs) {
         Optional<Settlement> settlement = data.settlementAt(jobBlock);
         Optional<SettlementBlock> block = settlement.flatMap(s -> s.block(jobBlock));
         if (block.isEmpty()) {

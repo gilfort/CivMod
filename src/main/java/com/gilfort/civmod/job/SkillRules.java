@@ -2,13 +2,11 @@ package com.gilfort.civmod.job;
 
 import java.io.Reader;
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import com.gilfort.civmod.CivMod;
-import com.gilfort.civmod.settlement.JobType;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;
@@ -26,31 +24,30 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 
 /**
- * Skill rules (vault {@code Systems/JobSkill Level.md}): EXP curve and base EXP per job from
- * {@code data/<namespace>/civmod_skill/levels.json}; files of all packs are merged, later entries override.
+ * Skill rules (vault {@code Systems/JobSkill Level.md}): EXP curve from {@code data/<namespace>/civmod_skill/levels.json};
+ * files of all packs are merged, later entries override. Base EXP per job comes from the {@link Job} and
+ * {@link JobBalancing}.
  *
  * @param base     EXP needed for level 1 → 2 minus {@code perLevel}
  * @param perLevel additional EXP per level
- * @param baseExp  base EXP per produced resource and job
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
-public record SkillRules(int base, int perLevel, Map<JobType, Integer> baseExp) {
+public record SkillRules(int base, int perLevel) {
 
     /** Highest skill level. */
     public static final int MAX_LEVEL = 100;
     /** Reload listener id. */
     public static final Identifier ID = CivMod.id("skill_rules");
     /** Values used when no file is loaded. */
-    public static final SkillRules FALLBACK = new SkillRules(15, 5, Map.of(JobType.LUMBERJACK, 1, JobType.MINER, 1, JobType.FISHERMAN, 5));
+    public static final SkillRules FALLBACK = new SkillRules(15, 5);
 
     private static final FileToIdConverter FILES = FileToIdConverter.json("civmod_skill");
     private static SkillRules current = FALLBACK;
 
-    private record Part(Optional<Integer> base, Optional<Integer> perLevel, Map<JobType, Integer> baseExp) {
+    private record Part(Optional<Integer> base, Optional<Integer> perLevel) {
         static final Codec<Part> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                 Codec.INT.optionalFieldOf("base").forGetter(Part::base),
-                Codec.INT.optionalFieldOf("per_level").forGetter(Part::perLevel),
-                Codec.unboundedMap(JobType.CODEC, Codec.INT).optionalFieldOf("base_exp", Map.of()).forGetter(Part::baseExp)
+                Codec.INT.optionalFieldOf("per_level").forGetter(Part::perLevel)
         ).apply(instance, Part::new));
     }
 
@@ -70,14 +67,6 @@ public record SkillRules(int base, int perLevel, Map<JobType, Integer> baseExp) 
     }
 
     /**
-     * @param jobType a job
-     * @return its base EXP per produced resource
-     */
-    public int baseExp(JobType jobType) {
-        return baseExp.getOrDefault(jobType, FALLBACK.baseExp().getOrDefault(jobType, 1));
-    }
-
-    /**
      * Merges JSON files in order (later ones override).
      *
      * @param files parsed JSON files
@@ -86,14 +75,15 @@ public record SkillRules(int base, int perLevel, Map<JobType, Integer> baseExp) 
     public static SkillRules merge(List<JsonElement> files) {
         int base = FALLBACK.base();
         int perLevel = FALLBACK.perLevel();
-        Map<JobType, Integer> baseExp = new EnumMap<>(FALLBACK.baseExp());
         for (JsonElement file : files) {
             Part part = Part.CODEC.parse(JsonOps.INSTANCE, file).getOrThrow();
+            if (file.isJsonObject() && file.getAsJsonObject().has("base_exp")) {
+                CivMod.LOGGER.warn("\"base_exp\" in civmod_skill/levels.json is ignored; set it per job in civmod_jobs/<job>.json");
+            }
             base = part.base().orElse(base);
             perLevel = part.perLevel().orElse(perLevel);
-            baseExp.putAll(part.baseExp());
         }
-        return new SkillRules(base, perLevel, Map.copyOf(baseExp));
+        return new SkillRules(base, perLevel);
     }
 
     @SubscribeEvent

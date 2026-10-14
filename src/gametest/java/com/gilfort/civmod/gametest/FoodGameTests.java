@@ -11,7 +11,7 @@ import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModEntityTypes;
-import com.gilfort.civmod.settlement.JobType;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
@@ -111,7 +111,7 @@ public final class FoodGameTests {
     private static void pantryToggleAndPersistence(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         SettlementData data = new SettlementData();
-        Settlement settlement = SettlementManager.place(data, helper.absolutePos(new BlockPos(1, 1, 1)), JobType.LUMBERJACK, 1, 0L,
+        Settlement settlement = SettlementManager.place(data, helper.absolutePos(new BlockPos(1, 1, 1)), ModJobs.LUMBERJACK.get(), 1, 0L,
                 RandomSource.create(0L), SettlementManager.Listener.NONE).settlement();
         BlockPos left = helper.absolutePos(new BlockPos(3, 1, 3));
         BlockPos right = left.relative(Direction.EAST);

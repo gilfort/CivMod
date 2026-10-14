@@ -11,6 +11,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.npc.Settler;
 
 import net.minecraft.core.BlockPos;
@@ -53,7 +54,7 @@ public final class SettlementWorld {
      * @param jobLevel the JobBlock level
      * @return how the block was integrated
      */
-    public static SettlementManager.Placement place(ServerLevel level, BlockPos pos, JobType jobType, int jobLevel) {
+    public static SettlementManager.Placement place(ServerLevel level, BlockPos pos, Job jobType, int jobLevel) {
         SettlementManager.Placement placement = SettlementManager.place(SettlementData.get(level), pos, jobType, jobLevel,
                 level.getGameTime(), level.getRandom(), listener(level));
         GlobalPos key = GlobalPos.of(level.dimension(), pos.immutable());

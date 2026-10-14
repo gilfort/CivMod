@@ -14,6 +14,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.common.Tags;
@@ -43,6 +44,12 @@ public final class MinerProfile implements JobProfile {
     @Override
     public boolean isWorkPlace(ServerLevel level, BlockPos pos) {
         return level.isLoaded(pos) && isMinable(level.getBlockState(pos));
+    }
+
+    @Override
+    public boolean isAssignableWorkPlace(Level level, BlockPos pos) {
+        BlockState state = level.getBlockState(pos);
+        return state.is(Tags.Blocks.STONES) || state.is(Tags.Blocks.ORES);
     }
 
     /**

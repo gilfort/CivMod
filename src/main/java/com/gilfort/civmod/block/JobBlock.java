@@ -1,9 +1,11 @@
 package com.gilfort.civmod.block;
 
+import java.util.function.Supplier;
+
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.menu.JobBlockInfo;
-import com.gilfort.civmod.settlement.JobType;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
@@ -29,13 +31,13 @@ import net.minecraft.world.phys.BlockHitResult;
  */
 public class JobBlock extends BaseEntityBlock {
 
-    private final JobType jobType;
+    private final Supplier<Job> jobType;
 
     /**
-     * @param jobType    the offered job
+     * @param jobType    the offered job (resolved lazily, jobs register after blocks)
      * @param properties the block properties
      */
-    public JobBlock(JobType jobType, Properties properties) {
+    public JobBlock(Supplier<Job> jobType, Properties properties) {
         super(properties);
         this.jobType = jobType;
     }
@@ -43,8 +45,8 @@ public class JobBlock extends BaseEntityBlock {
     /**
      * @return the offered job
      */
-    public JobType getJobType() {
-        return jobType;
+    public Job getJobType() {
+        return jobType.get();
     }
 
     @Override
@@ -55,7 +57,7 @@ public class JobBlock extends BaseEntityBlock {
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
         if (level instanceof ServerLevel serverLevel && level.getBlockEntity(pos) instanceof JobBlockEntity jobBlock) {
-            JobBlockInfo info = JobBlockInfo.of(serverLevel, pos, jobType, jobBlock.getJobLevel());
+            JobBlockInfo info = JobBlockInfo.of(serverLevel, pos, getJobType(), jobBlock.getJobLevel());
             player.openMenu(jobBlock, buffer -> JobBlockInfo.STREAM_CODEC.encode(buffer, info));
         }
         return InteractionResult.SUCCESS;
@@ -67,7 +69,7 @@ public class JobBlock extends BaseEntityBlock {
         if (level instanceof ServerLevel serverLevel && !oldState.is(this)) {
             // For commands / structures the block entity does not exist yet; its level is synced in onLoad.
             int jobLevel = level.getBlockEntity(pos) instanceof JobBlockEntity jobBlock ? jobBlock.getJobLevel() : SettlementRules.MIN_LEVEL;
-            SettlementWorld.place(serverLevel, pos, jobType, jobLevel);
+            SettlementWorld.place(serverLevel, pos, getJobType(), jobLevel);
         }
     }
 

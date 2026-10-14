@@ -21,6 +21,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.neoforged.neoforge.common.Tags;
@@ -29,7 +30,7 @@ import net.neoforged.neoforge.common.Tags;
  * Lumberjack (vault {@code Jobs/Lumberjack.md}): axe, logs as work places, daily wood scan, optional leaves with
  * shears.
  */
-final class LumberjackProfile implements JobProfile {
+public final class LumberjackProfile implements JobProfile {
 
     private static final int AUTO_SEARCH_HORIZONTAL = 20;
     private static final int AUTO_SEARCH_VERTICAL = 30;
@@ -48,6 +49,16 @@ final class LumberjackProfile implements JobProfile {
     @Override
     public boolean isWorkPlace(ServerLevel level, BlockPos pos) {
         return level.isLoaded(pos) && level.getBlockState(pos).is(BlockTags.LOGS);
+    }
+
+    @Override
+    public boolean isAssignableWorkPlace(Level level, BlockPos pos) {
+        return level.getBlockState(pos).is(BlockTags.LOGS);
+    }
+
+    @Override
+    public boolean hasLeavesOption() {
+        return true;
     }
 
     @Override

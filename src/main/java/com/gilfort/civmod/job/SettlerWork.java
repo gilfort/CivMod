@@ -528,7 +528,7 @@ public final class SettlerWork {
         if (buffer.shouldDeliver()) {
             return startDelivery(level, job);
         }
-        Optional<JobProfile> found = JobProfiles.of(job.jobType());
+        Optional<JobProfile> found = job.jobType().profile();
         if (found.isEmpty()) {
             return false;
         }
@@ -800,7 +800,7 @@ public final class SettlerWork {
      */
     private double reach() {
         if (activity == Activity.WORK && activeJob != null) {
-            return JobProfiles.of(activeJob.jobType()).map(JobProfile::reach).orElse(REACH);
+            return activeJob.jobType().profile().map(JobProfile::reach).orElse(REACH);
         }
         return REACH;
     }
@@ -859,7 +859,7 @@ public final class SettlerWork {
         long day = Math.floorDiv(level.getOverworldClockTime(), 24000L);
         for (SettlerJob job : settler.getJobs()) {
             Optional<SettlementBlock> block = settlement.get().block(job.jobBlock());
-            Optional<JobProfile> profile = JobProfiles.of(job.jobType());
+            Optional<JobProfile> profile = job.jobType().profile();
             if (block.isEmpty() || profile.isEmpty()) {
                 continue;
             }
@@ -1024,7 +1024,7 @@ public final class SettlerWork {
                 continue;
             }
             Optional<SettlementBlock> found = data.settlementAt(job.jobBlock()).flatMap(s -> s.block(job.jobBlock()));
-            Optional<JobProfile> profile = JobProfiles.of(job.jobType());
+            Optional<JobProfile> profile = job.jobType().profile();
             ScanResult scan = scans.get(job.jobBlock());
             if (found.isEmpty() || profile.isEmpty() || scan == null) {
                 cuDone.add(job.jobBlock());
@@ -1477,7 +1477,7 @@ public final class SettlerWork {
      */
     public List<JobProfile.Found> found(SettlerJob job) {
         ScanResult scan = scans.get(job.jobBlock());
-        Optional<JobProfile> profile = JobProfiles.of(job.jobType());
+        Optional<JobProfile> profile = job.jobType().profile();
         if (scan == null || profile.isEmpty()) {
             return List.of();
         }
@@ -1507,7 +1507,7 @@ public final class SettlerWork {
 
     private void gainExp(ServerLevel level, SettlerJob job, int blockLevel) {
         SkillRules rules = SkillRules.get();
-        int gained = settler.getSkills().addExp(job.jobType(), rules.baseExp(job.jobType()) * blockLevel,
+        int gained = settler.getSkills().addExp(job.jobType(), job.jobType().baseExp() * blockLevel,
                 SettlementRules.skillCap(blockLevel), rules);
         if (gained <= 0) {
             return;
@@ -1629,7 +1629,7 @@ public final class SettlerWork {
         BlockPos jobBlock = activeJob.jobBlock();
         switch (activity) {
             case FETCH_TOOL -> {
-                Optional<JobProfile> profile = JobProfiles.of(activeJob.jobType());
+                Optional<JobProfile> profile = activeJob.jobType().profile();
                 Optional<SettlementBlock> block = SettlementData.get(level).settlementAt(jobBlock).flatMap(s -> s.block(jobBlock));
                 if (profile.isPresent()) {
                     if (bestTool(profile.get()::isTool).isEmpty()) {
@@ -1678,13 +1678,13 @@ public final class SettlerWork {
     private void produce(ServerLevel level, BlockPos jobBlock, BlockPos poi) {
         settler.getNavigation().stop();
         settler.getLookControl().setLookAt(Vec3.atCenterOf(poi));
-        if (++swingTimer >= SWING_INTERVAL && activeJob != null && JobProfiles.of(activeJob.jobType()).map(JobProfile::swings).orElse(true)) {
+        if (++swingTimer >= SWING_INTERVAL && activeJob != null && activeJob.jobType().profile().map(JobProfile::swings).orElse(true)) {
             swingTimer = 0;
             settler.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
             BlockState state = level.getBlockState(poi);
             level.playSound(null, poi, state.getSoundType().getHitSound(), net.minecraft.sounds.SoundSource.NEUTRAL, 0.5F, 1.0F);
         }
-        Optional<JobProfile> found = activeJob == null ? Optional.empty() : JobProfiles.of(activeJob.jobType());
+        Optional<JobProfile> found = activeJob == null ? Optional.empty() : activeJob.jobType().profile();
         Optional<SettlementBlock> block = SettlementData.get(level).settlementAt(jobBlock).flatMap(s -> s.block(jobBlock));
         if (found.isEmpty() || block.isEmpty()) {
             return;

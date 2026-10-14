@@ -66,21 +66,6 @@ public final class CivModConfig {
             .comment("Additional food points a settler loses per real minute of actual work (multiplied by the job factor).")
             .defineInRange("hungerPerWorkMinute", 0.6, 0.0, 20.0);
 
-    /** Job factor of the Lumberjack. */
-    public static final ModConfigSpec.DoubleValue HUNGER_FACTOR_LUMBERJACK = BUILDER
-            .comment("Work hunger factor of the Lumberjack.")
-            .defineInRange("hungerFactorLumberjack", 1.0, 0.0, 10.0);
-
-    /** Job factor of the Miner. */
-    public static final ModConfigSpec.DoubleValue HUNGER_FACTOR_MINER = BUILDER
-            .comment("Work hunger factor of the Miner.")
-            .defineInRange("hungerFactorMiner", 1.0, 0.0, 10.0);
-
-    /** Job factor of the Fisherman. */
-    public static final ModConfigSpec.DoubleValue HUNGER_FACTOR_FISHERMAN = BUILDER
-            .comment("Work hunger factor of the Fisherman.")
-            .defineInRange("hungerFactorFisherman", 0.5, 0.0, 10.0);
-
     /** Lowest appetite a settler can roll. */
     public static final ModConfigSpec.DoubleValue APPETITE_MIN = BUILDER
             .comment("Lowest appetite multiplier a new settler can roll.")

@@ -2,14 +2,14 @@ package com.gilfort.civmod.block;
 
 import java.io.Reader;
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import com.gilfort.civmod.CivMod;
-import com.gilfort.civmod.settlement.JobType;
+import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.registry.ModJobs;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;
@@ -36,8 +36,8 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 
 /**
- * JobBlock upgrade costs (vault {@code Systems/JobBlock.md}) from {@code data/<namespace>/civmod_upgrades/<job>.json}:
- * per target level (2–5) a list of items or tags with counts. Files of all packs are merged per level.
+ * JobBlock upgrade costs (vault {@code Systems/JobBlock.md}) from {@code data/<namespace>/civmod_upgrades/<job>.json} for the
+ * job {@code <namespace>:<job>}: per target level (2–5) a list of items or tags with counts. Files of all packs are merged per level.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class UpgradeCosts {
@@ -46,7 +46,7 @@ public final class UpgradeCosts {
     public static final Identifier ID = CivMod.id("upgrade_costs");
 
     private static final FileToIdConverter FILES = FileToIdConverter.json("civmod_upgrades");
-    private static Map<JobType, Map<Integer, List<Cost>>> costs = Map.of();
+    private static Map<Job, Map<Integer, List<Cost>>> costs = Map.of();
 
     private UpgradeCosts() {
     }
@@ -87,12 +87,12 @@ public final class UpgradeCosts {
     }
 
     /**
-     * @param jobType  the job of the JobBlock
+     * @param job      the job of the JobBlock
      * @param newLevel the level to upgrade to
      * @return the costs (empty if none are defined)
      */
-    public static List<Cost> get(JobType jobType, int newLevel) {
-        return costs.getOrDefault(jobType, Map.of()).getOrDefault(newLevel, List.of());
+    public static List<Cost> get(Job job, int newLevel) {
+        return costs.getOrDefault(job, Map.of()).getOrDefault(newLevel, List.of());
     }
 
     /**
@@ -157,39 +157,38 @@ public final class UpgradeCosts {
         event.addListener(ID, new Loader());
     }
 
-    private static final class Loader extends SimplePreparableReloadListener<Map<JobType, Map<Integer, List<Cost>>>> {
+    private static final class Loader extends SimplePreparableReloadListener<Map<Job, Map<Integer, List<Cost>>>> {
 
         @Override
-        protected Map<JobType, Map<Integer, List<Cost>>> prepare(ResourceManager manager, ProfilerFiller profiler) {
-            Map<JobType, List<JsonElement>> files = new EnumMap<>(JobType.class);
+        protected Map<Job, Map<Integer, List<Cost>>> prepare(ResourceManager manager, ProfilerFiller profiler) {
+            Map<Job, List<JsonElement>> files = new HashMap<>();
             FILES.listMatchingResourceStacks(manager).entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
-                String job = FILES.fileToId(entry.getKey()).getPath();
-                JobType jobType = java.util.Arrays.stream(JobType.values()).filter(type -> type.getSerializedName().equals(job)).findFirst().orElse(null);
-                if (jobType == null) {
+                Job job = ModJobs.REGISTRY.getValue(FILES.fileToId(entry.getKey()));
+                if (job == null) {
                     CivMod.LOGGER.warn("Upgrade costs {} name no known job", entry.getKey());
                     return;
                 }
                 for (Resource resource : entry.getValue()) {
                     try (Reader reader = resource.openAsReader()) {
-                        files.computeIfAbsent(jobType, key -> new ArrayList<>()).add(JsonParser.parseReader(reader));
+                        files.computeIfAbsent(job, key -> new ArrayList<>()).add(JsonParser.parseReader(reader));
                     } catch (Exception e) {
                         CivMod.LOGGER.error("Failed to read upgrade costs {} from pack {}", entry.getKey(), resource.sourcePackId(), e);
                     }
                 }
             });
-            Map<JobType, Map<Integer, List<Cost>>> result = new EnumMap<>(JobType.class);
-            files.forEach((jobType, list) -> {
+            Map<Job, Map<Integer, List<Cost>>> result = new HashMap<>();
+            files.forEach((job, list) -> {
                 try {
-                    result.put(jobType, merge(list));
+                    result.put(job, merge(list));
                 } catch (Exception e) {
-                    CivMod.LOGGER.error("Invalid upgrade costs for {}", jobType.getSerializedName(), e);
+                    CivMod.LOGGER.error("Invalid upgrade costs for {}", job, e);
                 }
             });
             return result;
         }
 
         @Override
-        protected void apply(Map<JobType, Map<Integer, List<Cost>>> prepared, ResourceManager manager, ProfilerFiller profiler) {
+        protected void apply(Map<Job, Map<Integer, List<Cost>>> prepared, ResourceManager manager, ProfilerFiller profiler) {
             costs = Map.copyOf(prepared);
         }
     }
