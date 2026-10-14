@@ -70,6 +70,8 @@ public final class SettlerWork {
     private static final int BLOCKED_RETRY = 600;
     /** Work hours in day ticks (06:00–17:30; day time 0 = 06:00). */
     public static final long WORK_END = 11500;
+    /** Daily scans that start within this many day ticks are spread randomly over that window. */
+    public static final int SCAN_SPREAD_TICKS = 1200;
     private static final double REACH = 2.5;
     private static final int SWING_INTERVAL = 10;
     /** Tool restrictions by skill level are not active in the PoC (see the open topic in the vault). */
@@ -1459,7 +1461,7 @@ public final class SettlerWork {
         }
         scanning.add(jobBlock);
         // Spread daily scans over the first real minute of the workday; later starts (e.g. after loading) begin at once.
-        long delay = profile.rescanDaily() && dayTime < 1200 ? level.getRandom().nextInt(1200) : 0;
+        long delay = profile.rescanDaily() && dayTime < SCAN_SPREAD_TICKS ? level.getRandom().nextInt(SCAN_SPREAD_TICKS) : 0;
         ScanScheduler.submit(level, profile.createScan(key.center(), key.radius()), delay, result -> {
             scans.put(jobBlock, result);
             scanKeys.put(jobBlock, key);
