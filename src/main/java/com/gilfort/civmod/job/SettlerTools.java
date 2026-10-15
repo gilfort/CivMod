@@ -19,7 +19,7 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
  * Tools of a settler, a shared part used by the Job Category work loops (vault {@code Systems/Job Categories.md}):
  * the best tool on the belt, fetching tools from a container and tool wear.
  */
-public final class SettlerTools {
+final class SettlerTools {
 
     /** Tool restrictions by skill level are not active in the PoC (see the open topic in the vault). */
     private static final int TOOL_LEVEL = SkillRules.MAX_LEVEL;
@@ -32,7 +32,7 @@ public final class SettlerTools {
      * @param kind    the kind of tool
      * @return the best tool of that kind on the belt
      */
-    public static Optional<ItemStack> best(Settler settler, Predicate<ItemStack> kind) {
+    static Optional<ItemStack> best(Settler settler, Predicate<ItemStack> kind) {
         ItemStack best = ItemStack.EMPTY;
         int maxTier = ToolTiers.maxAllowedTier(TOOL_LEVEL);
         for (int i = Settler.BELT_START; i < Settler.BELT_START + Settler.BELT_SIZE; i++) {
@@ -53,7 +53,7 @@ public final class SettlerTools {
      * @param settler the settler
      * @param kind    the kind of tool
      */
-    public static void show(Settler settler, Predicate<ItemStack> kind) {
+    static void show(Settler settler, Predicate<ItemStack> kind) {
         ItemStack tool = best(settler, kind).map(ItemStack::copy).orElse(ItemStack.EMPTY);
         if (!ItemStack.matches(tool, settler.getItemBySlot(EquipmentSlot.MAINHAND))) {
             settler.setItemSlot(EquipmentSlot.MAINHAND, tool);
@@ -66,7 +66,7 @@ public final class SettlerTools {
      * @param kind  the kind of tool
      * @return the slot of the best tool of that kind in the container
      */
-    public static Optional<Integer> findInContainer(ServerLevel level, BlockPos pos, Predicate<ItemStack> kind) {
+    static Optional<Integer> findInContainer(ServerLevel level, BlockPos pos, Predicate<ItemStack> kind) {
         ResourceHandler<ItemResource> handler = level.getCapability(Capabilities.Item.BLOCK, pos, null);
         if (handler == null) {
             return Optional.empty();
@@ -95,7 +95,7 @@ public final class SettlerTools {
      * @param pos     the container position
      * @param kind    the kind of tool
      */
-    public static void take(ServerLevel level, Settler settler, BlockPos pos, Predicate<ItemStack> kind) {
+    static void take(ServerLevel level, Settler settler, BlockPos pos, Predicate<ItemStack> kind) {
         int freeSlot = -1;
         for (int i = Settler.BELT_START; i < Settler.BELT_START + Settler.BELT_SIZE; i++) {
             if (settler.getInventory().getItem(i).isEmpty()) {
@@ -124,7 +124,7 @@ public final class SettlerTools {
      * @param settler the settler using the tool
      * @param tool    the tool
      */
-    public static void wear(ServerLevel level, Settler settler, ItemStack tool) {
+    static void wear(ServerLevel level, Settler settler, ItemStack tool) {
         double multiplier = CivModConfig.TOOL_WEAR_MULTIPLIER.get();
         int damage = (int) multiplier + (level.getRandom().nextDouble() < multiplier - Math.floor(multiplier) ? 1 : 0);
         if (damage > 0) {

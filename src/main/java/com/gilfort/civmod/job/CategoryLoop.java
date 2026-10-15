@@ -13,7 +13,7 @@ import net.minecraft.server.level.ServerLevel;
  * {@code Systems/Job Categories.md}). The shell runs schedule, walking, food, sleep, job priorities, status, EXP and
  * the catch-up driver, picks the active Job by priority and hands control to the loop of that Job's category.
  * <p>
- * One instance per settler; a loop keeps its own per-job state (keyed by JobBlock position) and uses the shell's
+ * One instance per settler, shared by all of its jobs of that category; a loop keeps its own state and uses the shell's
  * shared parts (walking, buffers and delivery, statuses, EXP) through the {@link SettlerWork} it was created for.
  */
 interface CategoryLoop {
