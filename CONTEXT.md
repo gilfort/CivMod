@@ -9,11 +9,11 @@ A kind of work a settler can hold in its job list, e.g. Lumberjack. Code: `Job`,
 _Avoid_: Profession, occupation
 
 **Job Category**:
-The behaviour template a Job is built on (Resource Collection, Producing, Mission, Guard, Logistics, Service); it owns the work loop, the Job only fills in its specifics. Code: `JobCategory` (fixed enum); `JobProfile` is the Resource Collection contract.
+The behaviour template a Job is built on (Resource Collection, Producing, Mission, Guard, Logistics, Service); it owns the work loop, the Job only fills in its specifics. Code: `JobCategory` (fixed enum), work loop `CategoryLoop`; `JobProfile` is the Resource Collection contract.
 _Avoid_: Role, meta type, archetype
 
 **Settler Shell**:
-The part of a settler's behaviour shared by every Job Category (schedule, walking, food, sleep, job priorities, EXP, catch-up). Code: currently mixed with Resource Collection in `SettlerWork`.
+The part of a settler's behaviour shared by every Job Category (schedule, walking, food, sleep, job priorities, EXP, catch-up). Code: `SettlerWork`; it hands control to the `CategoryLoop` of the active Job's category (`ResourceCollectionLoop`). Shared parts the loops use: buffers / delivery and EXP in the shell, tools in `SettlerTools`, `Fatigue`.
 
 **Base Job**:
 A Job a Level 1 JobBlock offers; root of a specialization tree.
