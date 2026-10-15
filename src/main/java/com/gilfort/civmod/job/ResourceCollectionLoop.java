@@ -2,11 +2,9 @@ package com.gilfort.civmod.job;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
@@ -46,7 +44,8 @@ final class ResourceCollectionLoop implements CategoryLoop {
     private final Settler settler;
     private final Map<BlockPos, ScanResult> scans = new HashMap<>();
     private final Map<BlockPos, ScanKey> scanKeys = new HashMap<>();
-    private final Set<BlockPos> scanning = new HashSet<>();
+    /** Scans in flight per JobBlock; a result is only stored while its key is still the pending one. */
+    private final Map<BlockPos, ScanKey> scanning = new HashMap<>();
     private final Map<BlockPos, BlockPos> poiOfDay = new HashMap<>();
     private final Map<BlockPos, Long> poiDay = new HashMap<>();
     private final Fatigue fatigue = new Fatigue();
@@ -143,7 +142,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
         }
         ensureScan(level, profile, block, poi, day, dayTime);
         ScanResult scan = scans.get(jobBlock);
-        if (profile.needsResources() && scan != null && scan.isEmpty() && !scanning.contains(jobBlock)) {
+        if (profile.needsResources() && scan != null && scan.isEmpty() && !scanning.containsKey(jobBlock)) {
             shell.block(level, jobBlock, JobStatus.NO_RESOURCES);
             return false;
         }
@@ -383,13 +382,17 @@ final class ResourceCollectionLoop implements CategoryLoop {
     private void ensureScan(ServerLevel level, JobProfile profile, SettlementBlock block, BlockPos poi, long day, long dayTime) {
         BlockPos jobBlock = block.pos();
         ScanKey key = new ScanKey(profile.scanCenter(block, poi), SettlementRules.joinRadius(block.level()), profile.rescanDaily() ? day : -1L);
-        if (key.equals(scanKeys.get(jobBlock)) || scanning.contains(jobBlock)) {
+        if (key.equals(scanKeys.get(jobBlock)) || scanning.containsKey(jobBlock)) {
             return;
         }
-        scanning.add(jobBlock);
+        scanning.put(jobBlock, key);
         // Spread daily scans over the first real minute of the workday; later starts (e.g. after loading) begin at once.
         long delay = profile.rescanDaily() && dayTime < SettlerWork.SCAN_SPREAD_TICKS ? level.getRandom().nextInt(SettlerWork.SCAN_SPREAD_TICKS) : 0;
         ScanScheduler.submit(level, profile.createScan(key.center(), key.radius()), delay, result -> {
+            // Identity check: a scan of a forgotten job (possibly re-added since with an equal key) must not land.
+            if (scanning.get(jobBlock) != key) {
+                return;
+            }
             scans.put(jobBlock, result);
             scanKeys.put(jobBlock, key);
             scanning.remove(jobBlock);
@@ -399,7 +402,10 @@ final class ResourceCollectionLoop implements CategoryLoop {
     @Override
     public void forget(BlockPos jobBlock) {
         scans.remove(jobBlock);
+        scanKeys.remove(jobBlock);
+        scanning.remove(jobBlock);
         poiOfDay.remove(jobBlock);
+        poiDay.remove(jobBlock);
     }
 
     @Override
