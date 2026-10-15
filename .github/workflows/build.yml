@@ -1,7 +1,9 @@
 name: Build
 
 on:
+  # PR branches are built by pull_request only, so each PR shows one check instead of two.
   push:
+    branches: [main]
   pull_request:
 
 jobs:
