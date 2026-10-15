@@ -132,7 +132,7 @@ public final class ScrollGameTests {
 
         helper.assertTrue(JobAssignments.assign(data, JOB_BLOCK, ALICE, "Alice", settlement.id(), List.of()) == AssignResult.OK, "Alice assigned");
         helper.assertTrue(JobAssignments.assign(data, JOB_BLOCK, BOB, "Bob", settlement.id(), List.of()) == AssignResult.OCCUPIED, "Occupied");
-        helper.assertTrue(block(data, JOB_BLOCK).assigneeName().orElse("").equals("Alice"), "Assignee name stored");
+        helper.assertTrue(block(data, JOB_BLOCK).assignees().get(0).name().equals("Alice"), "Assignee name stored");
         helper.assertTrue(JobAssignments.assign(data, second, ALICE, "Alice", settlement.id(), List.of(ModJobs.LUMBERJACK.get())) == AssignResult.DUPLICATE,
                 "Alice already is a Lumberjack");
         helper.assertTrue(JobAssignments.assign(data, unconnected, BOB, "Bob", settlement.id(), List.of()) == AssignResult.UNCONNECTED, "Unconnected");
@@ -148,8 +148,8 @@ public final class ScrollGameTests {
         BlockPos second = new BlockPos(5, 64, 0);
         place(data, second, ModJobs.MINER.get());
         JobAssignments.assign(data, JOB_BLOCK, ALICE, "Alice", settlement.id(), List.of());
-        helper.assertTrue(JobAssignments.unassign(data, JOB_BLOCK).filter(ALICE::equals).isPresent(), "Unassign returns the settler");
-        helper.assertTrue(block(data, JOB_BLOCK).assignee().isEmpty(), "Block is free again");
+        helper.assertTrue(JobAssignments.unassign(data, JOB_BLOCK).equals(List.of(ALICE)), "Unassign returns the settler");
+        helper.assertTrue(block(data, JOB_BLOCK).assignees().isEmpty(), "Block is free again");
 
         JobAssignments.assign(data, second, BOB, "Bob", settlement.id(), List.of());
         List<UUID> lostJob = new ArrayList<>();
@@ -185,7 +185,7 @@ public final class ScrollGameTests {
         SettlementBlock copy = block(loaded, JOB_BLOCK);
         helper.assertTrue(copy.workPoints().equals(List.of(new BlockPos(3, 64, 0))), "Work points lost");
         helper.assertTrue(copy.dropOff().filter(new BlockPos(2, 64, 2)::equals).isPresent() && copy.collect().isEmpty(), "Drop-off lost");
-        helper.assertTrue(copy.assignee().filter(ALICE::equals).isPresent(), "Assignee lost");
+        helper.assertTrue(copy.isAssignee(ALICE), "Assignee lost");
         helper.succeed();
     }
 }

@@ -96,13 +96,13 @@ public final class SettlementWorld {
     }
 
     /**
-     * Frees a JobBlock and removes the job from its settler (if loaded; otherwise on its next membership check).
+     * Frees a JobBlock and removes the job from its settlers (if loaded; otherwise on their next membership check).
      *
      * @param level    the dimension
      * @param jobBlock the JobBlock position
      */
     public static void unassign(ServerLevel level, BlockPos jobBlock) {
-        JobAssignments.unassign(SettlementData.get(level), jobBlock).ifPresent(settler -> {
+        JobAssignments.unassign(SettlementData.get(level), jobBlock).forEach(settler -> {
             if (level.getEntity(settler) instanceof Settler entity) {
                 entity.removeJob(jobBlock);
             }

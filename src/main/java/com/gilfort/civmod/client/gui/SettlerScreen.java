@@ -21,7 +21,8 @@ import net.minecraft.world.item.Items;
 
 /**
  * Screen of a settler: Overview (name, status, settlement, dismiss when homeless), Jobs (priority list), Inventory
- * (tool belt, offhand, pockets) and one tab per job below the panel (status and buffer).
+ * (tool belt, offhand, pockets), Mission (the one Mission Job, chosen from those the Mission Board offers) and one tab
+ * per job below the panel (status and buffer).
  */
 public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
 
@@ -36,6 +37,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
     private static final int SMALL_BUTTON = 16;
     private static final int FOOD_Y = 72;
     private static final int FOUND_Y = BUFFER_Y + 2 * 18 + 14;
+    private static final int MISSION_OPTIONS_Y = 58;
 
     /**
      * @param menu      the menu
@@ -46,7 +48,8 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         super(menu, inventory, title, 176, SettlerMenu.IMAGE_HEIGHT, List.of(
                 new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.overview"), new ItemStack(Items.PLAYER_HEAD)),
                 new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.jobs"), new ItemStack(Items.IRON_PICKAXE)),
-                new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.inventory"), new ItemStack(Items.CHEST))));
+                new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.inventory"), new ItemStack(Items.CHEST)),
+                new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.mission"), new ItemStack(Items.MAP))));
     }
 
     @Override
@@ -65,6 +68,14 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
             Button down = jobButton("▼", "civmod.gui.settler.job.down", SettlerJobs.MOVE_DOWN + i, right - 2 * SMALL_BUTTON - 2, y);
             down.active = i < jobs.size() - 1;
             jobButton("✕", "civmod.gui.settler.job.remove", SettlerJobs.REMOVE + i, right - SMALL_BUTTON, y);
+        }
+        java.util.Optional<SettlerJob> missionJob = info.missionJob();
+        for (int i = 0; i < info.missionJobs().size() && missionJob.isPresent(); i++) {
+            com.gilfort.civmod.job.Job option = info.missionJobs().get(i);
+            int buttonId = SettlerJobs.SET_MISSION_JOB + i;
+            Button button = addTabWidget(SettlerMenu.TAB_MISSION, Button.builder(option.displayName(), b -> clickButton(buttonId))
+                    .bounds(leftPos + CivGui.PADDING, topPos + MISSION_OPTIONS_Y + i * ROW_HEIGHT, imageWidth - 2 * CivGui.PADDING, 20).build());
+            button.active = option != missionJob.get().jobType();
         }
     }
 
@@ -131,8 +142,24 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                 graphics.text(font, Component.translatable("civmod.gui.settler.pockets"), CivGui.PADDING, SettlerMenu.POCKETS_Y - 10,
                         CivGui.LABEL_COLOR, false);
             }
+            case SettlerMenu.TAB_MISSION -> extractMissionTab(graphics, info);
             default -> extractJobTab(graphics, info, tab - SettlerMenu.FIRST_JOB_TAB, mouseX, mouseY);
         }
+    }
+
+    private void extractMissionTab(GuiGraphicsExtractor graphics, SettlerInfo info) {
+        java.util.Optional<SettlerJob> missionJob = info.missionJob();
+        if (missionJob.isEmpty()) {
+            graphics.textWithWordWrap(font, Component.translatable("civmod.gui.settler.mission.none"), CivGui.PADDING, 22,
+                    imageWidth - 2 * CivGui.PADDING, CivGui.HINT_COLOR, false);
+            return;
+        }
+        graphics.text(font, Component.translatable("civmod.gui.settler.mission.job", missionJob.get().jobType().displayName()), CivGui.PADDING, 22,
+                CivGui.LABEL_COLOR, false);
+        graphics.text(font, Component.translatable("civmod.gui.settler.mission.board", missionJob.get().jobBlock().toShortString()), CivGui.PADDING,
+                34, CivGui.LABEL_COLOR, false);
+        graphics.text(font, Component.translatable("civmod.gui.settler.mission.offered"), CivGui.PADDING, MISSION_OPTIONS_Y - 11,
+                CivGui.LABEL_COLOR, false);
     }
 
     private static java.util.Optional<SettlerInfo.JobState> state(SettlerInfo info, int index) {

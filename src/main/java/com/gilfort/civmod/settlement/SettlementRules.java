@@ -1,5 +1,8 @@
 package com.gilfort.civmod.settlement;
 
+import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.job.JobCategory;
+
 import net.minecraft.core.BlockPos;
 
 /**
@@ -17,6 +20,8 @@ public final class SettlementRules {
     public static final int EXCLUSION_RADIUS_PER_LEVEL = 30;
     /** Maximum skill level per JobBlock level. */
     public static final int SKILL_CAP_PER_LEVEL = 20;
+    /** Settlers a Mission Board holds per level (index 0 = level 1). */
+    private static final int[] MISSION_BOARD_CAPACITY = {1, 2, 4, 6, 10};
 
     private SettlementRules() {
     }
@@ -54,6 +59,15 @@ public final class SettlementRules {
      */
     public static int skillCap(int level) {
         return SKILL_CAP_PER_LEVEL * level;
+    }
+
+    /**
+     * @param jobType the job a JobBlock offers
+     * @param level   the JobBlock level
+     * @return how many settlers the JobBlock holds: the Mission Board 1 / 2 / 4 / 6 / 10 by level, every other one 1
+     */
+    public static int capacity(Job jobType, int level) {
+        return jobType.category() == JobCategory.MISSION ? MISSION_BOARD_CAPACITY[clampLevel(level) - MIN_LEVEL] : 1;
     }
 
     /**

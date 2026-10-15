@@ -15,10 +15,26 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 
 /**
- * A JobBlock as recorded by its settlement, including its work points and the assigned settler
- * (vault {@code Systems/Scroll of Assignment.md}).
+ * A JobBlock as recorded by its settlement, including its work points and the assigned settlers
+ * (vault {@code Systems/Scroll of Assignment.md}); every JobBlock holds one settler, the Mission Board several
+ * ({@link SettlementRules#capacity}).
  */
 public final class SettlementBlock {
+
+    /**
+     * A settler working a JobBlock.
+     *
+     * @param id   the settler UUID
+     * @param name the settler name (for display while it is unloaded)
+     */
+    public record Assignee(UUID id, String name) {
+
+        /** Save codec. */
+        public static final Codec<Assignee> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                UUIDUtil.CODEC.fieldOf("id").forGetter(Assignee::id),
+                Codec.STRING.fieldOf("name").forGetter(Assignee::name)
+        ).apply(instance, Assignee::new));
+    }
 
     /** Maximum number of work POIs per JobBlock. */
     public static final int MAX_WORK_POINTS = 8;
@@ -32,8 +48,10 @@ public final class SettlementBlock {
             BlockPos.CODEC.listOf().optionalFieldOf("work", List.of()).forGetter(SettlementBlock::workPoints),
             BlockPos.CODEC.optionalFieldOf("collect").forGetter(SettlementBlock::collect),
             BlockPos.CODEC.optionalFieldOf("drop_off").forGetter(SettlementBlock::dropOff),
-            UUIDUtil.CODEC.optionalFieldOf("assignee").forGetter(SettlementBlock::assignee),
-            Codec.STRING.optionalFieldOf("assignee_name").forGetter(SettlementBlock::assigneeName),
+            Assignee.CODEC.listOf().optionalFieldOf("assignees", List.of()).forGetter(SettlementBlock::assignees),
+            // Saves before the Mission Board stored one assignee; read only.
+            UUIDUtil.CODEC.optionalFieldOf("assignee").forGetter(block -> Optional.empty()),
+            Codec.STRING.optionalFieldOf("assignee_name").forGetter(block -> Optional.empty()),
             Codec.BOOL.optionalFieldOf("collect_leaves", false).forGetter(SettlementBlock::collectLeaves)
     ).apply(instance, SettlementBlock::new));
 
@@ -44,8 +62,7 @@ public final class SettlementBlock {
     private final List<BlockPos> workPoints = new ArrayList<>();
     private Optional<BlockPos> collect;
     private Optional<BlockPos> dropOff;
-    private Optional<UUID> assignee;
-    private Optional<String> assigneeName;
+    private final List<Assignee> assignees = new ArrayList<>();
     private boolean collectLeaves;
 
     /**
@@ -55,12 +72,12 @@ public final class SettlementBlock {
      * @param connected whether the block is connected to the settlement chain
      */
     public SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected) {
-        this(pos, jobType, level, connected, List.of(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), false);
+        this(pos, jobType, level, connected, List.of(), Optional.empty(), Optional.empty(), List.of(), Optional.empty(), Optional.empty(), false);
     }
 
     private SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected, List<BlockPos> workPoints,
-            Optional<BlockPos> collect, Optional<BlockPos> dropOff, Optional<UUID> assignee, Optional<String> assigneeName,
-            boolean collectLeaves) {
+            Optional<BlockPos> collect, Optional<BlockPos> dropOff, List<Assignee> assignees, Optional<UUID> legacyAssignee,
+            Optional<String> legacyAssigneeName, boolean collectLeaves) {
         this.pos = pos.immutable();
         this.jobType = jobType;
         this.level = SettlementRules.clampLevel(level);
@@ -68,8 +85,8 @@ public final class SettlementBlock {
         this.workPoints.addAll(workPoints);
         this.collect = collect;
         this.dropOff = dropOff;
-        this.assignee = assignee;
-        this.assigneeName = assigneeName;
+        this.assignees.addAll(assignees);
+        legacyAssignee.filter(id -> assignees.isEmpty()).ifPresent(id -> this.assignees.add(new Assignee(id, legacyAssigneeName.orElse("?"))));
         this.collectLeaves = collectLeaves;
     }
 
@@ -134,17 +151,25 @@ public final class SettlementBlock {
     }
 
     /**
-     * @return the settler working this JobBlock
+     * @return the settlers working this JobBlock, in assignment order (read-only)
      */
-    public Optional<UUID> assignee() {
-        return assignee;
+    public List<Assignee> assignees() {
+        return Collections.unmodifiableList(assignees);
     }
 
     /**
-     * @return the name of the settler working this JobBlock (for display while it is unloaded)
+     * @return how many settlers this JobBlock holds at its level
      */
-    public Optional<String> assigneeName() {
-        return assigneeName;
+    public int capacity() {
+        return SettlementRules.capacity(jobType, level);
+    }
+
+    /**
+     * @param settler a settler UUID
+     * @return whether that settler works this JobBlock
+     */
+    public boolean isAssignee(UUID settler) {
+        return assignees.stream().anyMatch(assignee -> assignee.id().equals(settler));
     }
 
     void setLevel(int level) {
@@ -167,8 +192,7 @@ public final class SettlementBlock {
         this.dropOff = dropOff.map(BlockPos::immutable);
     }
 
-    void setAssignee(Optional<UUID> assignee, Optional<String> name) {
-        this.assignee = assignee;
-        this.assigneeName = name;
+    List<Assignee> mutableAssignees() {
+        return assignees;
     }
 }

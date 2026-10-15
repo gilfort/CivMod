@@ -35,6 +35,11 @@ public final class CivGui {
     /** Inner padding between the panel edge and its content. */
     public static final int PADDING = 8;
 
+    /** Vanilla slot colors used by {@link #inset}. */
+    private static final int INSET_DARK = 0xFF373737;
+    private static final int INSET_LIGHT = 0xFFFFFFFF;
+    private static final int INSET_FILL = 0xFF8B8B8B;
+
     private CivGui() {
     }
 
@@ -60,6 +65,22 @@ public final class CivGui {
      */
     public static void slot(GuiGraphicsExtractor graphics, int itemX, int itemY) {
         graphics.blitSprite(RenderPipelines.GUI_TEXTURED, SLOT, itemX - 1, itemY - 1, 18, 18);
+    }
+
+    /**
+     * Draws a sunken area in the colors of a vanilla slot (dark top-left edge, light bottom-right edge), e.g. for
+     * lists.
+     *
+     * @param graphics the graphics extractor
+     * @param x        the left edge
+     * @param y        the top edge
+     * @param width    the width
+     * @param height   the height
+     */
+    public static void inset(GuiGraphicsExtractor graphics, int x, int y, int width, int height) {
+        graphics.fill(x, y, x + width, y + height, INSET_LIGHT);
+        graphics.fill(x, y, x + width - 1, y + height - 1, INSET_DARK);
+        graphics.fill(x + 1, y + 1, x + width - 1, y + height - 1, INSET_FILL);
     }
 
     /**

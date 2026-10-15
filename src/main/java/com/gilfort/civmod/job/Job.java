@@ -1,5 +1,7 @@
 package com.gilfort.civmod.job;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -8,6 +10,7 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.SettlementRules;
 import com.google.common.base.Suppliers;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
@@ -90,6 +93,22 @@ public final class Job {
      */
     public Optional<Job> parent() {
         return parent == null ? Optional.empty() : Optional.of(parent.get());
+    }
+
+    /**
+     * The Jobs this Base Job's JobBlock offers at a level (vault {@code Systems/JobBlock.md}): the Base Job itself, plus
+     * its Specializations from level 2, in registry order.
+     *
+     * @param level the JobBlock level
+     * @return the offered Jobs, this Job first
+     */
+    public List<Job> offeredAt(int level) {
+        List<Job> offered = new ArrayList<>();
+        offered.add(this);
+        if (level > SettlementRules.MIN_LEVEL) {
+            ModJobs.REGISTRY.stream().filter(job -> job.parent().filter(this::equals).isPresent()).forEach(offered::add);
+        }
+        return List.copyOf(offered);
     }
 
     /**

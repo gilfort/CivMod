@@ -1,6 +1,7 @@
 package com.gilfort.civmod.menu;
 
 import com.gilfort.civmod.block.JobBlockEntity;
+import com.gilfort.civmod.job.JobCategory;
 import com.gilfort.civmod.registry.ModMenuTypes;
 
 import com.gilfort.civmod.settlement.JobAssignments;
@@ -17,7 +18,8 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Menu of a JobBlock: tab "Storage" (27 slots + player inventory) and tab "Info".
+ * Menu of a JobBlock: tab "Storage" (27 slots + player inventory), tab "Info" and, on the Mission Board, tab
+ * "Missions".
  */
 public class JobBlockMenu extends CivMenu {
 
@@ -25,6 +27,8 @@ public class JobBlockMenu extends CivMenu {
     public static final int TAB_STORAGE = 0;
     /** Info tab. */
     public static final int TAB_INFO = 1;
+    /** Missions tab (Mission Board only). */
+    public static final int TAB_MISSIONS = 2;
 
     /** Button id: free the JobBlock (remove the job from its settler). */
     public static final int BUTTON_UNASSIGN = 50;
@@ -56,7 +60,7 @@ public class JobBlockMenu extends CivMenu {
      * @param info        the info snapshot
      */
     public JobBlockMenu(int containerId, Inventory inventory, Container container, JobBlockInfo info) {
-        super(ModMenuTypes.JOB_BLOCK.get(), containerId, 2);
+        super(ModMenuTypes.JOB_BLOCK.get(), containerId, isMissionBoard(info) ? 3 : 2);
         checkContainerSize(container, JobBlockEntity.SLOTS);
         this.container = container;
         this.info = info;
@@ -69,6 +73,14 @@ public class JobBlockMenu extends CivMenu {
     }
 
     /**
+     * @param info a JobBlock info
+     * @return whether the JobBlock is a Mission Board (offers a Mission Job)
+     */
+    public static boolean isMissionBoard(JobBlockInfo info) {
+        return info.jobType().category() == JobCategory.MISSION;
+    }
+
+    /**
      * @return the info snapshot
      */
     public JobBlockInfo getInfo() {
@@ -78,7 +90,7 @@ public class JobBlockMenu extends CivMenu {
     @Override
     public boolean clickMenuButton(Player player, int buttonId) {
         if (buttonId == BUTTON_UNASSIGN) {
-            info = info.withoutAssignee();
+            info = info.withoutAssignees();
             if (container instanceof JobBlockEntity jobBlock && jobBlock.getLevel() instanceof ServerLevel level) {
                 SettlementWorld.unassign(level, jobBlock.getBlockPos());
             }

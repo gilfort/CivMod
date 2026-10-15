@@ -2,6 +2,7 @@
   "values": [
     "civmod:lumberjack_block",
     "civmod:miner_block",
-    "civmod:fisherman_block"
+    "civmod:fisherman_block",
+    "civmod:mission_board"
   ]
 }

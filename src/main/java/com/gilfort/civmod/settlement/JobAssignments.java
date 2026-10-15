@@ -1,10 +1,12 @@
 package com.gilfort.civmod.settlement;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.job.JobCategory;
 
 import net.minecraft.core.BlockPos;
 
@@ -59,8 +61,12 @@ public final class JobAssignments {
         NO_JOB_BLOCK,
         /** The JobBlock is not connected to its settlement. */
         UNCONNECTED,
-        /** Another settler works this JobBlock. */
+        /** Another settler works this JobBlock (it holds one settler). */
         OCCUPIED,
+        /** The JobBlock holds as many settlers as its level allows (Mission Board). */
+        FULL,
+        /** The settler already has a Mission Job (at most one). */
+        MISSION_JOB,
         /** The settler belongs to another settlement or is homeless. */
         OTHER_SETTLEMENT,
         /** The settler already has this job. */
@@ -162,7 +168,8 @@ public final class JobAssignments {
     }
 
     /**
-     * Assigns the job of a JobBlock to a settler.
+     * Assigns the job of a JobBlock to a settler. A settler holds at most one Mission Job; a JobBlock takes settlers up
+     * to its {@link SettlementBlock#capacity() capacity}.
      *
      * @param data         the dimension's settlement data
      * @param jobBlock     the JobBlock position
@@ -185,32 +192,53 @@ public final class JobAssignments {
         if (settlement.get().id() != settlementId) {
             return AssignResult.OTHER_SETTLEMENT;
         }
-        if (block.get().assignee().filter(uuid -> !uuid.equals(settler)).isPresent()) {
-            return AssignResult.OCCUPIED;
-        }
-        if (block.get().assignee().isPresent() || currentJobs.contains(block.get().jobType())) {
+        if (block.get().isAssignee(settler) || currentJobs.contains(block.get().jobType())) {
             return AssignResult.DUPLICATE;
         }
-        block.get().setAssignee(Optional.of(settler), Optional.of(settlerName));
+        boolean missionBoard = block.get().jobType().category() == JobCategory.MISSION;
+        if (block.get().assignees().size() >= block.get().capacity()) {
+            return missionBoard ? AssignResult.FULL : AssignResult.OCCUPIED;
+        }
+        if (missionBoard && currentJobs.stream().anyMatch(job -> job.category() == JobCategory.MISSION)) {
+            return AssignResult.MISSION_JOB;
+        }
+        block.get().mutableAssignees().add(new SettlementBlock.Assignee(settler, settlerName));
         data.changed();
         return AssignResult.OK;
     }
 
     /**
-     * Frees a JobBlock.
+     * Frees a JobBlock of all its settlers.
      *
      * @param data     the dimension's settlement data
      * @param jobBlock the JobBlock position
-     * @return the settler that worked it, if any
+     * @return the settlers that worked it
      */
-    public static Optional<UUID> unassign(SettlementData data, BlockPos jobBlock) {
+    public static List<UUID> unassign(SettlementData data, BlockPos jobBlock) {
         Optional<SettlementBlock> block = data.settlementAt(jobBlock).flatMap(s -> s.block(jobBlock));
-        Optional<UUID> previous = block.flatMap(SettlementBlock::assignee);
-        if (previous.isPresent()) {
-            block.get().setAssignee(Optional.empty(), Optional.empty());
+        List<UUID> previous = block.map(b -> b.assignees().stream().map(SettlementBlock.Assignee::id).toList()).orElse(List.of());
+        if (!previous.isEmpty()) {
+            block.get().mutableAssignees().clear();
             data.changed();
         }
         return previous;
+    }
+
+    /**
+     * Removes one settler from a JobBlock.
+     *
+     * @param data     the dimension's settlement data
+     * @param jobBlock the JobBlock position
+     * @param settler  the settler UUID
+     * @return whether the settler worked it
+     */
+    public static boolean unassign(SettlementData data, BlockPos jobBlock, UUID settler) {
+        Optional<SettlementBlock> block = data.settlementAt(jobBlock).flatMap(s -> s.block(jobBlock));
+        boolean removed = block.map(b -> b.mutableAssignees().removeIf(assignee -> assignee.id().equals(settler))).orElse(false);
+        if (removed) {
+            data.changed();
+        }
+        return removed;
     }
 
     /**
@@ -233,10 +261,9 @@ public final class JobAssignments {
      * @param data     the dimension's settlement data
      * @param jobBlock a JobBlock position
      * @param settler  a settler UUID
-     * @return whether the settler is the assignee of that JobBlock
+     * @return whether the settler is an assignee of that JobBlock
      */
     public static boolean isAssignee(SettlementData data, BlockPos jobBlock, UUID settler) {
-        return data.settlementAt(jobBlock).flatMap(s -> s.block(jobBlock)).flatMap(SettlementBlock::assignee)
-                .filter(settler::equals).isPresent();
+        return data.settlementAt(jobBlock).flatMap(s -> s.block(jobBlock)).filter(block -> block.isAssignee(settler)).isPresent();
     }
 }

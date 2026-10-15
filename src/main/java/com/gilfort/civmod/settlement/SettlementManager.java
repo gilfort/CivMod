@@ -217,9 +217,10 @@ public final class SettlementManager {
      * @return the settlement the block belonged to, if any
      */
     public static Optional<Settlement> remove(SettlementData data, BlockPos pos, Listener listener) {
-        Optional<UUID> assignee = data.settlementAt(pos).flatMap(s -> s.block(pos)).flatMap(SettlementBlock::assignee);
+        List<SettlementBlock.Assignee> assignees = data.settlementAt(pos).flatMap(s -> s.block(pos)).map(SettlementBlock::assignees)
+                .map(List::copyOf).orElse(List.of());
         Optional<Settlement> removed = data.removeBlock(pos);
-        assignee.ifPresent(settler -> listener.jobRemoved(settler, pos));
+        assignees.forEach(assignee -> listener.jobRemoved(assignee.id(), pos));
         removed.ifPresent(settlement -> {
             if (settlement.isEmpty()) {
                 data.dissolve(settlement);
