@@ -68,6 +68,7 @@ public final class LumberjackGameTests {
             register(helper, "lumberjack_works_in_world", LumberjackGameTests::worksInWorld);
             register(helper, "lumberjack_works_from_bed", LumberjackGameTests::worksFromBed);
             register(helper, "lumberjack_work_state_persistence", LumberjackGameTests::workStatePersistence);
+            register(helper, "lumberjack_rescans_after_readd", LumberjackGameTests::rescansAfterReadd);
         });
     }
 
@@ -255,6 +256,63 @@ public final class LumberjackGameTests {
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });
+    }
+
+    /**
+     * A job removed and assigned again at the same JobBlock (same radius, same day) gets a fresh scan: removing it must
+     * not leave the old scan key behind, or the new job never scans and never produces.
+     */
+    private static void rescansAfterReadd(GameTestHelper helper) {
+        for (int x = 0; x < 9; x++) {
+            for (int z = 0; z < 9; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
+        BlockPos jobBlockRelative = new BlockPos(1, 1, 1);
+        helper.setBlock(jobBlockRelative, ModBlocks.LUMBERJACK_BLOCK.get());
+        for (int x = 4; x < 8; x++) {
+            for (int z = 0; z < 4; z++) {
+                for (int y = 1; y <= 3; y++) {
+                    helper.setBlock(new BlockPos(x, y, z), Blocks.OAK_LOG);
+                }
+            }
+        }
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = forceChunks(helper);
+        BlockPos jobBlock = helper.absolutePos(jobBlockRelative);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
+        Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
+        Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(2, 1, 2)));
+        settler.snapTo(spawn.x, spawn.y, spawn.z, 0.0F, 0.0F);
+        settler.setCustomName(net.minecraft.network.chat.Component.literal("Tester"));
+        level.addFreshEntity(settler);
+        settler.joinSettlement(data, settlement);
+        settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_AXE));
+        JobAssignments.cyclePoint(data, jobBlock, helper.absolutePos(new BlockPos(4, 1, 1)), true, false);
+        helper.assertTrue(JobAssignments.assign(data, jobBlock, settler.getUUID(), "Tester", settlement.id(), java.util.List.of())
+                == JobAssignments.AssignResult.OK, "Assignment failed");
+        SettlerJob job = new SettlerJob(ModJobs.LUMBERJACK.get(), jobBlock);
+        settler.addJob(job);
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertFalse(settler.getWork().found(job).isEmpty(),
+                        "First job never scanned (status " + settler.getWork().status(jobBlock) + ")"))
+                .thenExecute(() -> {
+                    settler.removeJob(jobBlock);
+                    helper.assertTrue(settler.getWork().found(job).isEmpty(), "Removed job still has a scan");
+                    settler.addJob(job);
+                })
+                .thenWaitUntil(() -> {
+                    helper.assertFalse(settler.getWork().found(job).isEmpty(),
+                            "Re-added job never scanned (status " + settler.getWork().status(jobBlock) + ")");
+                    helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0,
+                            "Re-added job produced no wood (status " + settler.getWork().status(jobBlock) + ")");
+                })
+                .thenExecute(() -> {
+                    settler.discard();
+                    forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+                })
+                .thenSucceed();
     }
 
     static List<long[]> forceChunks(GameTestHelper helper) {
