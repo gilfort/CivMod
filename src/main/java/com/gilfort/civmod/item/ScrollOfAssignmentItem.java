@@ -244,7 +244,9 @@ public class ScrollOfAssignmentItem extends Item {
             case NO_JOB_BLOCK -> Component.translatable("civmod.scroll.binding_lost").withStyle(ChatFormatting.RED);
             case UNCONNECTED -> Component.translatable("civmod.scroll.assign.unconnected").withStyle(ChatFormatting.RED);
             case OCCUPIED -> Component.translatable("civmod.scroll.assign.occupied",
-                    block.get().assigneeName().orElse("?")).withStyle(ChatFormatting.RED);
+                    block.get().assignees().stream().findFirst().map(SettlementBlock.Assignee::name).orElse("?")).withStyle(ChatFormatting.RED);
+            case FULL -> Component.translatable("civmod.scroll.assign.full", block.get().capacity()).withStyle(ChatFormatting.RED);
+            case MISSION_JOB -> Component.translatable("civmod.scroll.assign.mission_job", settler.getName()).withStyle(ChatFormatting.RED);
             case OTHER_SETTLEMENT -> Component.translatable("civmod.scroll.assign.other_settlement", settler.getName()).withStyle(ChatFormatting.RED);
             case DUPLICATE -> Component.translatable("civmod.scroll.assign.duplicate", settler.getName(), jobType.displayName())
                     .withStyle(ChatFormatting.RED);

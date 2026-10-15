@@ -34,8 +34,11 @@ public final class ModBlocks {
     /** JobBlock offering the Fisherman job. */
     public static final DeferredBlock<JobBlock> FISHERMAN_BLOCK = jobBlock("fisherman_block", ModJobs.FISHERMAN);
 
+    /** The Mission Board: JobBlock of all Mission Jobs, offering the Adventurer and holding several settlers. */
+    public static final DeferredBlock<JobBlock> MISSION_BOARD = jobBlock("mission_board", ModJobs.ADVENTURER);
+
     /** All JobBlocks. */
-    public static final List<DeferredBlock<JobBlock>> JOB_BLOCKS = List.of(LUMBERJACK_BLOCK, MINER_BLOCK, FISHERMAN_BLOCK);
+    public static final List<DeferredBlock<JobBlock>> JOB_BLOCKS = List.of(LUMBERJACK_BLOCK, MINER_BLOCK, FISHERMAN_BLOCK, MISSION_BOARD);
 
     private ModBlocks() {
     }

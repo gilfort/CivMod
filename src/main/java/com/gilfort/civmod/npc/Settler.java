@@ -185,10 +185,14 @@ public class Settler extends PathfinderMob {
     }
 
     /**
+     * Replaces the job list; the work state of JobBlocks no longer in the list is forgotten (a changed Mission Job at the
+     * same board keeps it).
+     *
      * @param jobs the assigned jobs in priority order
      */
     public void setJobs(List<SettlerJob> jobs) {
-        List<SettlerJob> removed = this.jobs.stream().filter(job -> !jobs.contains(job)).toList();
+        List<BlockPos> kept = jobs.stream().map(SettlerJob::jobBlock).toList();
+        List<SettlerJob> removed = this.jobs.stream().filter(job -> !kept.contains(job.jobBlock())).toList();
         this.jobs = List.copyOf(jobs);
         removed.forEach(job -> work.forget(job.jobBlock()));
     }

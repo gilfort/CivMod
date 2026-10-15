@@ -161,5 +161,19 @@
   "civmod.gui.settler.limited": "Level %s – works at %s (JobBlock level %s)",
   "civmod.gui.settler.level_short": "Lv %s",
   "civmod.gui.job_block.upgrade.have": "%s / %s",
-  "civmod.command.benchmark.built": "Benchmark built: %s settlers. Wait a few minutes, then run /civmod debug benchmark report"
+  "civmod.command.benchmark.built": "Benchmark built: %s settlers. Wait a few minutes, then run /civmod debug benchmark report",
+  "block.civmod.mission_board": "Mission Board",
+  "job.civmod.adventurer": "Adventurer",
+  "civmod.scroll.work_place.adventurer": "no work place (missions are chosen on the board)",
+  "civmod.scroll.assign.full": "This Mission Board is full (%s settlers) – upgrade it or remove a settler",
+  "civmod.scroll.assign.mission_job": "%s already has a Mission Job",
+  "civmod.gui.job_block.tab.missions": "Missions",
+  "civmod.gui.job_block.settlers": "Settlers: %s / %s",
+  "civmod.gui.job_block.missions": "Missions",
+  "civmod.gui.job_block.missions.none": "No missions on offer yet.",
+  "civmod.gui.settler.tab.mission": "Mission",
+  "civmod.gui.settler.mission.none": "No Mission Job – assign this settler to a Mission Board with the Scroll of Assignment.",
+  "civmod.gui.settler.mission.job": "Mission Job: %s",
+  "civmod.gui.settler.mission.board": "Mission Board: %s",
+  "civmod.gui.settler.mission.offered": "Offered by the board:"
 }

@@ -36,12 +36,12 @@ import net.minecraft.server.level.ServerLevel;
  * @param connected      whether the block is connected to the settlement chain
  * @param distance       distance to the nearest connected JobBlock (unconnected only)
  * @param required       distance needed to connect (unconnected only)
- * @param assignee       name of the settler working this JobBlock, empty if free
+ * @param assignees      names of the settlers working this JobBlock
  * @param collectLeaves  whether a Lumberjack also collects leaves
  * @param costs          upgrade costs per target level (index 0 = level 2)
  */
 public record JobBlockInfo(Job jobType, int level, Component settlementName, boolean inSettlement, boolean connected,
-        int distance, int required, String assignee, boolean collectLeaves, List<List<CostEntry>> costs) {
+        int distance, int required, List<String> assignees, boolean collectLeaves, List<List<CostEntry>> costs) {
 
     /**
      * An upgrade cost as shown to the client.
@@ -115,7 +115,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      * @return a copy with another level
      */
     public JobBlockInfo withLevel(int newLevel) {
-        return new JobBlockInfo(jobType, newLevel, settlementName, inSettlement, connected, distance, required, assignee, collectLeaves, costs);
+        return new JobBlockInfo(jobType, newLevel, settlementName, inSettlement, connected, distance, required, assignees, collectLeaves, costs);
     }
 
     /**
@@ -139,7 +139,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
             ByteBufCodecs.BOOL, JobBlockInfo::connected,
             ByteBufCodecs.VAR_INT, JobBlockInfo::distance,
             ByteBufCodecs.VAR_INT, JobBlockInfo::required,
-            ByteBufCodecs.STRING_UTF8, JobBlockInfo::assignee,
+            ByteBufCodecs.STRING_UTF8.apply(ByteBufCodecs.list()), JobBlockInfo::assignees,
             ByteBufCodecs.BOOL, JobBlockInfo::collectLeaves,
             CostEntry.STREAM_CODEC.apply(ByteBufCodecs.list()).apply(ByteBufCodecs.list()), JobBlockInfo::costs,
             JobBlockInfo::new);
@@ -157,22 +157,30 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         return new JobBlockInfo(jobType, jobLevel,
                 settlement.map(Settlement::displayName).orElse(Component.empty()),
                 settlement.isPresent(), status.connected(), status.distance(), status.required(),
-                settlement.flatMap(s -> s.block(pos)).flatMap(SettlementBlock::assigneeName).orElse(""),
+                settlement.flatMap(s -> s.block(pos)).map(block -> block.assignees().stream().map(SettlementBlock.Assignee::name).toList())
+                        .orElse(List.of()),
                 settlement.flatMap(s -> s.block(pos)).map(SettlementBlock::collectLeaves).orElse(false), costsOf(jobType));
     }
 
     /**
-     * @return a copy without assignee
+     * @return how many settlers the JobBlock holds at its level
      */
-    public JobBlockInfo withoutAssignee() {
-        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, "", collectLeaves, costs);
+    public int capacity() {
+        return SettlementRules.capacity(jobType, level);
+    }
+
+    /**
+     * @return a copy without assignees
+     */
+    public JobBlockInfo withoutAssignees() {
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, List.of(), collectLeaves, costs);
     }
 
     /**
      * @return a copy with leaf collection toggled
      */
     public JobBlockInfo withLeavesToggled() {
-        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignee, !collectLeaves, costs);
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, !collectLeaves, costs);
     }
 
     /**
@@ -181,6 +189,6 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      * @return info without settlement data
      */
     public static JobBlockInfo unknown(Job jobType, int jobLevel) {
-        return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, "", false, costsOf(jobType));
+        return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, List.of(), false, costsOf(jobType));
     }
 }

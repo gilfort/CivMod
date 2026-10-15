@@ -29,7 +29,7 @@ The implicit lowest-priority fallback Job of every settler; not a Job Category a
 The block that offers a Base Job (and its Specializations) to one settler. Code: `JobBlock`, `JobBlockEntity`.
 
 **Mission Board**:
-The JobBlock of all Mission Jobs; holds several settlers and the list of selected Missions. Code: not yet built.
+The JobBlock of all Mission Jobs; holds several settlers and the list of selected Missions. Code: `ModBlocks.MISSION_BOARD` (a `JobBlock` offering the Adventurer), capacity in `SettlementRules.capacity`, settlers in `SettlementBlock.assignees()`; a settler's Mission Job is set with `SettlerJobs.withMissionJob`.
 
 **Mission**:
 A datapack-defined task a Mission Job settler leaves the settlement for (duration, difficulty, loot). Code: not yet built.

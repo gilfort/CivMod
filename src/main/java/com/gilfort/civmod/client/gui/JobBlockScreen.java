@@ -16,7 +16,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 /**
- * Screen of a JobBlock: storage tab and info tab (job, level, skill cap, settlement status, upgrade button).
+ * Screen of a JobBlock: storage tab and info tab (job, level, skill cap, settlement status, upgrade button); the
+ * Mission Board adds a missions tab (the mission list, empty until missions exist).
  * <p>
  * Unconnected JobBlocks show the info greyed out with a red hint; storage keeps working.
  */
@@ -30,6 +31,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     private int costOffset;
     private int costRowY = -1;
     private static final int LINE_HEIGHT = 11;
+    private static final int MISSION_LIST_Y = 34;
 
     /**
      * @param menu      the menu
@@ -37,9 +39,17 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      * @param title     the title
      */
     public JobBlockScreen(JobBlockMenu menu, Inventory inventory, Component title) {
-        super(menu, inventory, title, 176, 166, List.of(
+        super(menu, inventory, title, 176, 166, tabs(menu));
+    }
+
+    private static List<TabBar.Tab> tabs(JobBlockMenu menu) {
+        List<TabBar.Tab> tabs = new java.util.ArrayList<>(List.of(
                 new TabBar.Tab(Component.translatable("civmod.gui.job_block.tab.storage"), new ItemStack(Items.CHEST)),
                 new TabBar.Tab(Component.translatable("civmod.gui.job_block.tab.info"), new ItemStack(Items.BOOK))));
+        if (JobBlockMenu.isMissionBoard(menu.getInfo())) {
+            tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.job_block.tab.missions"), new ItemStack(Items.MAP)));
+        }
+        return tabs;
     }
 
     @Override
@@ -63,7 +73,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             }).bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 72, imageWidth - 2 * CivGui.PADDING, 20).build());
             leaves.setTooltip(Tooltip.create(Component.translatable("civmod.gui.job_block.leaves.tooltip")));
         }
-        if (!menu.getInfo().assignee().isEmpty()) {
+        if (!JobBlockMenu.isMissionBoard(current) && !current.assignees().isEmpty()) {
             addTabWidget(JobBlockMenu.TAB_INFO, Button.builder(Component.translatable("civmod.gui.job_block.unassign"), button -> {
                 menu.clickMenuButton(minecraft.player, JobBlockMenu.BUTTON_UNASSIGN);
                 minecraft.gameMode.handleInventoryButtonClick(menu.containerId, JobBlockMenu.BUTTON_UNASSIGN);
@@ -73,7 +83,19 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     }
 
     @Override
+    protected void extractTabBackground(GuiGraphicsExtractor graphics, int tab, int mouseX, int mouseY) {
+        if (tab == JobBlockMenu.TAB_MISSIONS) {
+            CivGui.inset(graphics, leftPos + CivGui.PADDING, topPos + MISSION_LIST_Y, imageWidth - 2 * CivGui.PADDING,
+                    imageHeight - MISSION_LIST_Y - CivGui.PADDING);
+        }
+    }
+
+    @Override
     protected void extractTabLabels(GuiGraphicsExtractor graphics, int tab, int mouseX, int mouseY) {
+        if (tab == JobBlockMenu.TAB_MISSIONS) {
+            extractMissions(graphics);
+            return;
+        }
         if (tab != JobBlockMenu.TAB_INFO) {
             return;
         }
@@ -90,8 +112,18 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             graphics.text(font, Component.translatable("civmod.gui.job_block.settlement", info.settlementName()), CivGui.PADDING, y, color, false);
         }
         y += LINE_HEIGHT;
-        Component worker = info.assignee().isEmpty() ? Component.translatable("civmod.gui.job_block.no_worker") : Component.literal(info.assignee());
-        graphics.text(font, Component.translatable("civmod.gui.job_block.worker", worker), CivGui.PADDING, y, color, false);
+        if (!JobBlockMenu.isMissionBoard(info)) {
+            Component worker = info.assignees().isEmpty() ? Component.translatable("civmod.gui.job_block.no_worker")
+                    : Component.literal(info.assignees().get(0));
+            graphics.text(font, Component.translatable("civmod.gui.job_block.worker", worker), CivGui.PADDING, y, color, false);
+        } else {
+            Component settlers = Component.translatable("civmod.gui.job_block.settlers", info.assignees().size(), info.capacity());
+            graphics.text(font, settlers, CivGui.PADDING, y, color, false);
+            if (!info.assignees().isEmpty() && mouseX >= leftPos + CivGui.PADDING && mouseX < leftPos + CivGui.PADDING + font.width(settlers)
+                    && mouseY >= topPos + y && mouseY < topPos + y + font.lineHeight) {
+                graphics.setComponentTooltipForNextFrame(font, info.assignees().stream().<Component>map(Component::literal).toList(), mouseX, mouseY);
+            }
+        }
         y += LINE_HEIGHT;
         y = extractCosts(graphics, info, y, mouseX, mouseY);
         if (!info.inSettlement()) {
@@ -101,6 +133,15 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             graphics.textWithWordWrap(font, Component.translatable("civmod.gui.job_block.unconnected", info.required(), info.distance()),
                     CivGui.PADDING, y, imageWidth - 2 * CivGui.PADDING, ERROR_COLOR, false);
         }
+    }
+
+    /**
+     * Draws the missions tab: the mission list (empty until missions exist).
+     */
+    private void extractMissions(GuiGraphicsExtractor graphics) {
+        graphics.text(font, Component.translatable("civmod.gui.job_block.missions"), CivGui.PADDING, 22, CivGui.LABEL_COLOR, false);
+        graphics.textWithWordWrap(font, Component.translatable("civmod.gui.job_block.missions.none"), CivGui.PADDING + CivGui.INSET_PADDING,
+                MISSION_LIST_Y + CivGui.INSET_PADDING, imageWidth - 2 * (CivGui.PADDING + CivGui.INSET_PADDING), CivGui.HINT_COLOR, false);
     }
 
     /**

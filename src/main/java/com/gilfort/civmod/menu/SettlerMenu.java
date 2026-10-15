@@ -26,7 +26,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Menu of a settler: tabs Overview, Jobs (priority list) and Inventory (tool belt, offhand, pockets).
+ * Menu of a settler: tabs Overview, Jobs (priority list), Inventory (tool belt, offhand, pockets) and Mission (the
+ * settler's one Mission Job).
  * <p>
  * Job edits and dismissal are menu button clicks; job edits are applied identically on client and server.
  */
@@ -38,8 +39,10 @@ public class SettlerMenu extends CivMenu {
     public static final int TAB_JOBS = 1;
     /** Inventory tab. */
     public static final int TAB_INVENTORY = 2;
+    /** Mission tab. */
+    public static final int TAB_MISSION = 3;
     /** First of the job tabs (one per job, shown below the panel). */
-    public static final int FIRST_JOB_TAB = 3;
+    public static final int FIRST_JOB_TAB = 4;
     /** Maximum number of job tabs. */
     public static final int MAX_JOB_TABS = 6;
 
@@ -126,7 +129,17 @@ public class SettlerMenu extends CivMenu {
                 settler.setJobs(info.jobs());
                 // Free JobBlocks of removed jobs.
                 before.stream().filter(job -> !info.jobs().contains(job))
-                        .forEach(job -> JobAssignments.unassign(SettlementData.get(level), job.jobBlock()));
+                        .forEach(job -> JobAssignments.unassign(SettlementData.get(level), job.jobBlock(), settler.getUUID()));
+            }
+            return true;
+        }
+        if (buttonId >= SettlerJobs.SET_MISSION_JOB && buttonId < SettlerJobs.SET_MISSION_JOB_END) {
+            int index = buttonId - SettlerJobs.SET_MISSION_JOB;
+            if (index < info.missionJobs().size()) {
+                info = info.withJobs(SettlerJobs.withMissionJob(info.jobs(), info.missionJobs().get(index)));
+                if (settler != null) {
+                    settler.setJobs(info.jobs());
+                }
             }
             return true;
         }

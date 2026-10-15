@@ -37,6 +37,9 @@ public final class ModJobs {
     /** See vault {@code Jobs/Fisherman.md}. */
     public static final DeferredHolder<Job, Job> FISHERMAN = JOBS.register("fisherman", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
             .icon(ModItems.FISHERMAN_BLOCK).hungerFactor(0.5).baseExp(5).profile(FishermanProfile::new).build());
+    /** See vault {@code Jobs/Adventurer.md}; the Base Job of the Mission Board. */
+    public static final DeferredHolder<Job, Job> ADVENTURER = JOBS.register("adventurer", () -> Job.builder(JobCategory.MISSION)
+            .icon(ModItems.MISSION_BOARD).hungerFactor(1.0).baseExp(10).build());
 
     private ModJobs() {
     }

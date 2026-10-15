@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "M": "minecraft:map",
+    "B": "minecraft:barrel",
+    "P": "#minecraft:planks"
+  },
+  "pattern": [
+    "PMP",
+    "PBP",
+    "PPP"
+  ],
+  "result": {
+    "id": "civmod:mission_board"
+  }
+}
