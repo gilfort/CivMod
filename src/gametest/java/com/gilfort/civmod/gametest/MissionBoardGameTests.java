@@ -138,8 +138,10 @@ public final class MissionBoardGameTests {
         helper.assertTrue(assign(data, settlement, 0, List.of(ModJobs.LUMBERJACK.get())) == AssignResult.OK, "A Lumberjack may join");
         helper.assertTrue(assign(data, settlement, 0, List.of(ModJobs.LUMBERJACK.get(), ModJobs.ADVENTURER.get())) == AssignResult.DUPLICATE,
                 "Already on this board");
+        helper.assertTrue(JobAssignments.assign(data, second, SETTLERS[0], "Settler 0", settlement.id(),
+                List.of(ModJobs.LUMBERJACK.get(), ModJobs.ADVENTURER.get())) == AssignResult.MISSION_JOB, "An Adventurer cannot join a second board");
         Job specialization = ModJobs.REGISTRY.getValue(CivMod.id("gametest_mission_specialization"));
-        helper.assertTrue(JobAssignments.assign(data, second, SETTLERS[0], "Settler 0", settlement.id(), List.of(specialization))
+        helper.assertTrue(JobAssignments.assign(data, second, SETTLERS[1], "Settler 1", settlement.id(), List.of(specialization))
                 == AssignResult.MISSION_JOB, "Any Mission Job blocks a second board");
         helper.succeed();
     }

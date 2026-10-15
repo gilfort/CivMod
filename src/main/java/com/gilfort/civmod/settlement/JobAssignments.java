@@ -192,15 +192,18 @@ public final class JobAssignments {
         if (settlement.get().id() != settlementId) {
             return AssignResult.OTHER_SETTLEMENT;
         }
-        if (block.get().isAssignee(settler) || currentJobs.contains(block.get().jobType())) {
+        if (block.get().isAssignee(settler)) {
             return AssignResult.DUPLICATE;
         }
         boolean missionBoard = block.get().jobType().category() == JobCategory.MISSION;
-        if (block.get().assignees().size() >= block.get().capacity()) {
-            return missionBoard ? AssignResult.FULL : AssignResult.OCCUPIED;
-        }
         if (missionBoard && currentJobs.stream().anyMatch(job -> job.category() == JobCategory.MISSION)) {
             return AssignResult.MISSION_JOB;
+        }
+        if (currentJobs.contains(block.get().jobType())) {
+            return AssignResult.DUPLICATE;
+        }
+        if (block.get().assignees().size() >= block.get().capacity()) {
+            return missionBoard ? AssignResult.FULL : AssignResult.OCCUPIED;
         }
         block.get().mutableAssignees().add(new SettlementBlock.Assignee(settler, settlerName));
         data.changed();

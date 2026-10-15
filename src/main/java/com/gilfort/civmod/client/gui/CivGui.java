@@ -35,6 +35,9 @@ public final class CivGui {
     /** Inner padding between the panel edge and its content. */
     public static final int PADDING = 8;
 
+    /** Padding of content inside an {@link #inset}. */
+    public static final int INSET_PADDING = 4;
+
     /** Vanilla slot colors used by {@link #inset}. */
     private static final int INSET_DARK = 0xFF373737;
     private static final int INSET_LIGHT = 0xFFFFFFFF;

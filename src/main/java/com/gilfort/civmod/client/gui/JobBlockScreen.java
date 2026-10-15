@@ -140,8 +140,8 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      */
     private void extractMissions(GuiGraphicsExtractor graphics) {
         graphics.text(font, Component.translatable("civmod.gui.job_block.missions"), CivGui.PADDING, 22, CivGui.LABEL_COLOR, false);
-        graphics.textWithWordWrap(font, Component.translatable("civmod.gui.job_block.missions.none"), CivGui.PADDING + 4, MISSION_LIST_Y + 4,
-                imageWidth - 2 * CivGui.PADDING - 8, CivGui.HINT_COLOR, false);
+        graphics.textWithWordWrap(font, Component.translatable("civmod.gui.job_block.missions.none"), CivGui.PADDING + CivGui.INSET_PADDING,
+                MISSION_LIST_Y + CivGui.INSET_PADDING, imageWidth - 2 * (CivGui.PADDING + CivGui.INSET_PADDING), CivGui.HINT_COLOR, false);
     }
 
     /**
