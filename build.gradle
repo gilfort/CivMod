@@ -3,6 +3,7 @@ plugins {
     id 'maven-publish'
     id 'net.neoforged.moddev' version '2.0.148'
     id 'idea'
+    id 'net.ltgt.errorprone' version '5.1.1'
 }
 
 tasks.named('wrapper', Wrapper).configure {
@@ -88,6 +89,8 @@ configurations {
 }
 
 dependencies {
+    // Static analysis on every compile (see tasks.withType(JavaCompile) below).
+    errorprone 'com.google.errorprone:error_prone_core:2.50.0'
 }
 
 // Expands the ${} properties in src/main/templates (e.g. neoforge.mods.toml).
@@ -124,6 +127,14 @@ publishing {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    // Warnings only for now: they show up in the build log without failing CI.
+    options.compilerArgs += ['-Xlint:all', '-Xlint:-processing', '-Xlint:-serial']
+    options.errorprone {
+        disableWarningsInGeneratedCode = true
+        excludedPaths = '.*/build/generated/.*'
+        // Javadoc phrasing style; 95 hits of noise that would bury the real findings.
+        disable('MissingSummary')
+    }
 }
 
 idea {
