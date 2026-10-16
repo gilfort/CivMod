@@ -349,14 +349,19 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         return MissionRules.chances(menu.getInfo().missionTab().rules(), mission.recommendedLevel(), settler.skill());
     }
 
-    /** "Success 75 % · Failed 22 % · Death 3 %", the death chance in red when it is high. */
+    /** "Success 75% · Failed 22% · Death 3%". */
     private static Component chancesLine(MissionRules.Chances chances) {
-        return Component.translatable("civmod.gui.mission.chances", percent(chances.success()), percent(chances.failed()), death(chances));
+        return chancesText("civmod.gui.mission.chances", chances);
     }
 
-    /** "75% / 22% / 3%" (success / failed / death), the death chance in red when it is high. */
+    /** "75% / 22% / 3%" (success / failed / death). */
     private static Component chancesShort(MissionRules.Chances chances) {
-        return Component.translatable("civmod.gui.mission.chances.short", percent(chances.success()), percent(chances.failed()), death(chances));
+        return chancesText("civmod.gui.mission.chances.short", chances);
+    }
+
+    /** Success, failed and death chance in a lang text, the death chance in red when it is high. */
+    private static Component chancesText(String key, MissionRules.Chances chances) {
+        return Component.translatable(key, percent(chances.success()), percent(chances.failed()), death(chances));
     }
 
     private static Component death(MissionRules.Chances chances) {
