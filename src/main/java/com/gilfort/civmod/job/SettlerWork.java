@@ -360,7 +360,7 @@ public final class SettlerWork {
     }
 
     /**
-     * Fixes the outcome of the next mission instead of rolling it (for tests).
+     * Fixes the outcome of every following mission instead of rolling it (for tests).
      *
      * @param outcome the outcome
      */
