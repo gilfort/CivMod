@@ -45,7 +45,50 @@ public final class CivGui {
     private static final int INSET_LIGHT = 0xFFFFFFFF;
     private static final int INSET_FILL = 0xFF8B8B8B;
 
+    /** Colour for error texts (vanilla dark red). */
+    public static final int ERROR_COLOR = 0xFFAA0000;
+
+    /** Translucent slot fill over a slot that cannot be used. */
+    private static final int INACTIVE_TINT = 0xA0000000 | (INSET_FILL & 0xFFFFFF);
+    /** Vanilla slot highlight under the mouse. */
+    private static final int HOVER_TINT = 0x80FFFFFF;
+    /** Frame of a selected slot. */
+    private static final int SELECTED_COLOR = INSET_LIGHT;
+
     private CivGui() {
+    }
+
+    /**
+     * Greys out a slot that cannot be used (e.g. above the JobBlock level).
+     *
+     * @param graphics the graphics extractor
+     * @param itemX    the x position of the item (slot position)
+     * @param itemY    the y position of the item (slot position)
+     */
+    public static void slotInactive(GuiGraphicsExtractor graphics, int itemX, int itemY) {
+        graphics.fill(itemX, itemY, itemX + 16, itemY + 16, INACTIVE_TINT);
+    }
+
+    /**
+     * Highlights a slot under the mouse like vanilla.
+     *
+     * @param graphics the graphics extractor
+     * @param itemX    the x position of the item (slot position)
+     * @param itemY    the y position of the item (slot position)
+     */
+    public static void slotHover(GuiGraphicsExtractor graphics, int itemX, int itemY) {
+        graphics.fill(itemX, itemY, itemX + 16, itemY + 16, HOVER_TINT);
+    }
+
+    /**
+     * Frames a selected slot.
+     *
+     * @param graphics the graphics extractor
+     * @param itemX    the x position of the item (slot position)
+     * @param itemY    the y position of the item (slot position)
+     */
+    public static void slotSelected(GuiGraphicsExtractor graphics, int itemX, int itemY) {
+        graphics.outline(itemX - 1, itemY - 1, 18, 18, SELECTED_COLOR);
     }
 
     /**
