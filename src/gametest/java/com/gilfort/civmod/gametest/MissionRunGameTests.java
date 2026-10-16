@@ -83,6 +83,7 @@ public final class MissionRunGameTests {
             register(helper, "mission_full_cycle", MissionRunGameTests::fullCycle);
             register(helper, "mission_catch_up", MissionRunGameTests::catchUp);
             register(helper, "mission_persistence", MissionRunGameTests::persistence);
+            register(helper, "mission_resume_leaving", MissionRunGameTests::resumeLeaving);
         });
     }
 
@@ -357,6 +358,23 @@ public final class MissionRunGameTests {
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
             helper.succeed();
+        });
+    }
+
+    /** A settler loaded while walking out (departed, not vanished) goes on leaving and vanishes. */
+    private static void resumeLeaving(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        Settler settler = adventurer(helper);
+        long clock = level.getOverworldClockTime();
+        MissionTrip leaving = new MissionTrip(helper.absolutePos(BOARD), CivMod.id("dungeon_raid"),
+                MissionRules.returnTime(Math.floorDiv(clock, DAY), 1));
+        settler.getWork().restore(new SettlerWork.BuffersSnapshot(List.of(), List.of(), List.of(), SettlerWork.CatchUpState.NONE,
+                Optional.of(leaving)));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(settler.getWork().isAway() && settler.isInvisible(), "The settler should go on leaving and vanish");
+            settler.discard();
+            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });
     }
 

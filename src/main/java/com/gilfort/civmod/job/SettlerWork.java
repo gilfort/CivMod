@@ -425,9 +425,16 @@ public final class SettlerWork {
         long day = Math.floorDiv(clock, 24000L);
         boolean jumped = SettlerBeds.nightSkipped(lastClock, clock, DECISION_INTERVAL, WORK_END);
         lastClock = clock;
-        if (missions.isAway() && (catchUpFrom >= 0 || !missions.returnIfDue(level, clock, false))) {
-            // Away: nothing to decide until the return (missed time is caught up first).
-            return;
+        if (missions.departed() && (catchUpFrom >= 0 || !missions.returnIfDue(level, clock, false))) {
+            if (missions.isAway()) {
+                // Away: nothing to decide until the return (missed time is caught up first).
+                return;
+            }
+            if (activity != Activity.JOB) {
+                // Walking out was interrupted (loaded again, or not started): it goes on before anything else.
+                missions.resumeLeaving(level);
+                return;
+            }
         }
         boolean night = dayTime >= SLEEP_TIME;
         boolean evening = dayTime >= WORK_END && !night;

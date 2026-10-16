@@ -211,16 +211,16 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
                 JobBlockInfo.TakenMission entry = taken.get(index - offer.size());
                 Optional<Mission> mission = mission(entry.mission());
                 graphics.item(mission.map(Mission::iconStack).orElse(ItemStack.EMPTY), left, y + 2);
-                graphics.text(font, fit(title(entry.mission(), mission), width - 20), left + 20, y + 1, CivGui.HINT_COLOR, false);
-                graphics.text(font, fit(takenText(entry), width - 20), left + 20, y + 11, CivGui.HINT_COLOR, false);
+                graphics.text(font, CivGui.fit(font, title(entry.mission(), mission), width - 20), left + 20, y + 1, CivGui.HINT_COLOR, false);
+                graphics.text(font, CivGui.fit(font, takenText(entry), width - 20), left + 20, y + 11, CivGui.HINT_COLOR, false);
                 continue;
             }
             MissionOffer.Entry entry = offer.get(index);
             Optional<Mission> mission = mission(entry.mission());
             graphics.item(mission.map(Mission::iconStack).orElse(ItemStack.EMPTY), left, y + 2);
             int textWidth = width - 20 - box - 2;
-            graphics.text(font, fit(title(entry.mission(), mission), textWidth), left + 20, y + 1, CivGui.LABEL_COLOR, false);
-            mission.ifPresent(found -> graphics.text(font, fit(Component.translatable("civmod.gui.mission.details", found.recommendedLevel(),
+            graphics.text(font, CivGui.fit(font, title(entry.mission(), mission), textWidth), left + 20, y + 1, CivGui.LABEL_COLOR, false);
+            mission.ifPresent(found -> graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.mission.details", found.recommendedLevel(),
                     found.days(), found.rolls()), textWidth), left + 20, y + 11, CivGui.HINT_COLOR, false));
             Identifier sprite = entry.marked()
                     ? (index == hovered ? CHECKBOX_SELECTED_HIGHLIGHTED : CHECKBOX_SELECTED)
@@ -244,13 +244,6 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
 
     private static Component takenText(JobBlockInfo.TakenMission entry) {
         return Component.translatable(entry.departed() ? "civmod.gui.mission.taken.departed" : "civmod.gui.mission.taken.reserved", entry.settler());
-    }
-
-    private Component fit(Component text, int width) {
-        if (font.width(text) <= width) {
-            return text;
-        }
-        return Component.literal(font.plainSubstrByWidth(text.getString(), width - font.width("…")) + "…");
     }
 
     /** Title, description, recommended level, duration and rolls of a mission. */

@@ -109,7 +109,8 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         switch (tab) {
             case SettlerMenu.TAB_OVERVIEW -> {
                 graphics.text(font, Component.translatable("civmod.gui.settler.name", info.name()), CivGui.PADDING, 22, CivGui.LABEL_COLOR, false);
-                graphics.text(font, Component.translatable("civmod.gui.settler.status", info.status()), CivGui.PADDING, 34, CivGui.LABEL_COLOR, false);
+                graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.settler.status", info.status()), imageWidth - 2 * CivGui.PADDING),
+                        CivGui.PADDING, 34, CivGui.LABEL_COLOR, false);
                 Component settlement = info.homeless() ? Component.translatable("civmod.gui.settler.no_settlement") : info.settlementName();
                 graphics.text(font, Component.translatable("civmod.gui.settler.settlement", settlement), CivGui.PADDING, 46, CivGui.LABEL_COLOR, false);
                 if (!info.homeless()) {
@@ -159,7 +160,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         graphics.text(font, Component.translatable("civmod.gui.settler.mission.board", missionJob.get().jobBlock().toShortString()), CivGui.PADDING,
                 34, CivGui.LABEL_COLOR, false);
         Component mission = info.mission().getString().isEmpty() ? Component.translatable("civmod.gui.settler.mission.no_mission") : info.mission();
-        graphics.text(font, mission, CivGui.PADDING, 46, CivGui.HINT_COLOR, false);
+        graphics.text(font, CivGui.fit(font, mission, imageWidth - 2 * CivGui.PADDING), CivGui.PADDING, 46, CivGui.HINT_COLOR, false);
         graphics.text(font, Component.translatable("civmod.gui.settler.mission.offered"), CivGui.PADDING, MISSION_OPTIONS_Y - 11,
                 CivGui.LABEL_COLOR, false);
     }

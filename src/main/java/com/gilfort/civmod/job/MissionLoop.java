@@ -175,6 +175,24 @@ final class MissionLoop implements CategoryLoop {
         return true;
     }
 
+    /**
+     * Goes on walking out after the walk was interrupted (e.g. the settler was saved while leaving).
+     *
+     * @param level the level
+     */
+    void resumeLeaving(ServerLevel level) {
+        MissionTrip current = trip;
+        if (current == null) {
+            return;
+        }
+        Optional<SettlerJob> job = missionJob(settler, current.board());
+        if (job.isEmpty()) {
+            forget(current.board());
+            return;
+        }
+        leave(level, job.get());
+    }
+
     /** Vanishes outside the settlement: from now on the settler is away. */
     private void vanish(SettlerJob job) {
         MissionTrip current = trip;
