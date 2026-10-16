@@ -16,7 +16,7 @@ _Avoid_: Role, meta type, archetype
 The part of a settler's behaviour shared by every Job Category (acting on the Schedule, walking, food, sleep, job priorities, EXP, catch-up). Code: `SettlerWork`; it hands control to the `CategoryLoop` of the active Job's category (`ResourceCollectionLoop`, `MissionLoop`). Shared parts the loops use: the job's Workplace, delivery and EXP in the shell, the Work rules, tools in `SettlerTools`, `Fatigue`.
 
 **Schedule (intent)**:
-The settler's daily rules (sleep and wake, skipped night, morning plan, hunger, evening delivery and meal, rest, bed at 20:00, homeless, foraging) as one pure decision: a snapshot of plain values (time, day, food level, provisions, pantry food, homeless, sleeping, foraging day, night skipped, current activity, per-day marks) goes in, an intent comes out (sleep, wake, eat from pockets, fetch food with a purpose, forage, end foraging, deliver, go to bed, rest, work a job, idle; complaining is a flag). Foraging ends at the end of work (17:30) or on a later day, with the day's food; whether a pantry visit is a meal (not the morning provisions trip unless hungry) is a Schedule rule too (`Schedule.eatsAtPantry`). It never touches the world; the Settler Shell builds the snapshot every decision and acts on the intent. Code: `Schedule` (`wakeUp`, `next`, `Schedule.Snapshot`, `Schedule.Intent`, `Schedule.Decision`, `Schedule.morningPlan`), acted on in `SettlerWork.decide`. Catch-up asks the same Schedule per simulated hour and simulates the intent on the spot (`SettlerWork.decideCatchUp`). The per-day marks (morning handled, evening meal eaten, foraging day) are one set for live play and catch-up, saved with the settler in `SettlerFood`.
+The settler's daily rules (sleep and wake, skipped night, morning plan, hunger, evening delivery and meal, rest, bed at 20:00, homeless, foraging) as one pure decision: a snapshot of plain values (time, day, food level, provisions, food point food, homeless, sleeping, foraging day, night skipped, current activity, per-day marks, work end) goes in, an intent comes out (sleep, wake, eat from pockets, fetch food with a purpose, forage, end foraging, deliver, go to bed, rest, work a job, idle; complaining is a flag). Work ends at 17:30 (a Clerk at 18:30, `SettlerWork.workEnd`); foraging ends at 17:30 or on a later day, with the day's food; whether a food point visit is a meal (not the morning provisions trip unless hungry) is a Schedule rule too (`Schedule.eatsAtFoodPoint`). It never touches the world; the Settler Shell builds the snapshot every decision and acts on the intent. Code: `Schedule` (`wakeUp`, `next`, `Schedule.Snapshot`, `Schedule.Intent`, `Schedule.Decision`, `Schedule.morningPlan`), acted on in `SettlerWork.decide`. Catch-up asks the same Schedule per simulated hour and simulates the intent on the spot (`SettlerWork.decideCatchUp`). The per-day marks (morning handled, evening meal eaten, foraging day) are one set for live play and catch-up, saved with the settler in `SettlerFood`.
 _Avoid_: Daily routine, AI tree; putting schedule rules into movement code; separate per-day marks for catch-up
 
 **Workplace**:
@@ -62,3 +62,28 @@ _Avoid_: Quest list, mission pool (the pool is all missions)
 **Mission Assignment**:
 A marked mission the player assigned to one settler of the board; it is **locked** for every other settler, and the lock outlives the assignee (death, leaving the board) until the player reassigns or unlocks it. Code: `MissionOffer.Entry.assignee()` / `locked()`, set through `MissionOffers.assign` / `unlock`; a reserved assigned mission: `MissionTrip.assigned()`.
 _Avoid_: Reservation (a settler reserves the mission it picked)
+
+## Logistics
+
+**Clerk**:
+The first Logistics Job: the settlement's store and food point. Code: `ModJobs.CLERK` on `ModBlocks.CLERK_BLOCK`, work loop `ClerkLoop` (stands on the stand spot of the day during its shift 06:00–18:30, `ClerkStorage.SHIFT_END`; `SettlerWork.workEnd`).
+
+**Clerk storage**:
+The Clerk JobBlock's own 27 slots plus the containers linked with the Scroll of Assignment (2 / 4 / 8 / 12 / 16 by level, `SettlementRules.clerkStorage`; extra ones after a downgrade are inactive, `ClerkStorage.activeStorage`). Code: `SettlementBlock.storage()`, linked through `JobAssignments.cycleClerkPoint`.
+_Avoid_: Pantry (removed), warehouse
+
+**Access rule**:
+Without a working Clerk (no settler assigned, or outside the shift) only the 27 block slots are reachable; the linked storage only through a working Clerk at its counter. Hoppers and pipes see the 27 slots (the block's item capability). Code: `ClerkStorage.working`, `ClerkStorage.stock`.
+
+**Stock**:
+What a visitor reaches at one place under the access rule, seen as one list of slots; counted on every access (no snapshot). Code: `Stock` (built by `ClerkStorage.stock`); `Stock.counter()` marks the whole storage of a working Clerk, where every take is a hand-out.
+
+**Counter**:
+Where a working Clerk serves: within 3 blocks of the stand spot of the day (or next to its JobBlock without spots). One customer at a time, service time by skill (`ClerkStorage.serviceTicks`); a hand-out gives the Clerk EXP. Code: `ClerkStorage.visit` (where a visitor walks), `ClerkCounter` (queue and hand-out), `SettlerWork.reachableVisit` (an unreachable counter offers only the block slots that day).
+
+**Stand spot**:
+A block a Clerk stands on, with a facing; up to 8 per Clerk JobBlock; one is picked each morning and at 12:00, never the same twice in a row. Code: `SettlementBlock.StandSpot`, `ClerkSpots.today`, saved as `SettlementBlock.spotOfDay()`.
+
+**Food point**:
+Every Clerk JobBlock; settlers take food from the nearest one whose reachable stock has food (a Clerk from its own storage first). Code: `ClerkStorage.nearestFood` → `ClerkStorage.FoodPoint`.
+_Avoid_: Pantry
