@@ -1549,17 +1549,6 @@ public final class SettlerWork {
     }
 
     /**
-     * Grants the EXP of one unit of work.
-     *
-     * @param level      the level
-     * @param job        the job
-     * @param blockLevel the level of the job's JobBlock
-     */
-    void gainExp(ServerLevel level, SettlerJob job, int blockLevel) {
-        gainExp(level, job, job.jobType().baseExp() * blockLevel, SettlementRules.skillCap(blockLevel));
-    }
-
-    /**
      * Grants EXP in a job; a level-up is shown to nearby players.
      *
      * @param level  the level
@@ -1570,13 +1559,20 @@ public final class SettlerWork {
     void gainExp(ServerLevel level, SettlerJob job, int amount, int cap) {
         SkillRules rules = SkillRules.get();
         int gained = settler.getSkills().addExp(job.jobType(), amount, cap, rules);
-        if (gained <= 0) {
+        if (gained <= 0 || quiet) {
             return;
         }
+        showLevelUp(level, job);
+    }
+
+    /**
+     * Shows a level-up in a job to nearby players (particles, sound, overlay message).
+     *
+     * @param level the level
+     * @param job   the job
+     */
+    void showLevelUp(ServerLevel level, SettlerJob job) {
         int newLevel = settler.getSkills().get(job.jobType()).level();
-        if (quiet) {
-            return;
-        }
         level.sendParticles(net.minecraft.core.particles.ParticleTypes.HAPPY_VILLAGER, settler.getX(), settler.getY() + 2.0, settler.getZ(),
                 8, 0.4, 0.3, 0.4, 0.0);
         level.playSound(null, settler.getX(), settler.getY(), settler.getZ(), net.minecraft.sounds.SoundEvents.PLAYER_LEVELUP,

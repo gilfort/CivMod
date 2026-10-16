@@ -20,7 +20,8 @@ import net.minecraft.server.level.ServerLevel;
  * <p>
  * The {@link SettlerWork} holds one Workplace per JobBlock; forgetting the job drops the whole Workplace, so nothing of
  * it survives. Buffer, work place of the day and scan are saved with the settler (shape unchanged since before the
- * Workplace: {@link SettlerWork.BuffersSnapshot}); status and blocked time are not.
+ * Workplace: {@link SettlerWork.BuffersSnapshot}); status, blocked time and the fractional production of the
+ * {@link WorkRules} are not.
  */
 final class Workplace {
 
@@ -42,12 +43,30 @@ final class Workplace {
     /** The scan in flight; its result is only stored while it is still the pending one. */
     private @Nullable ScanKey scanning;
     private boolean catchUpEnded;
+    /** Fractional production of the {@link WorkRules} between calls (not saved). */
+    private double production;
 
     /**
      * @param jobBlock the JobBlock position
      */
     Workplace(BlockPos jobBlock) {
         this.jobBlock = jobBlock;
+    }
+
+    // ---------------------------------------------------------------- production
+
+    /**
+     * @return the fractional production carried over by the {@link WorkRules} (0–1)
+     */
+    double production() {
+        return production;
+    }
+
+    /**
+     * @param production the fractional production to carry over
+     */
+    void setProduction(double production) {
+        this.production = production;
     }
 
     // ---------------------------------------------------------------- buffer and status
