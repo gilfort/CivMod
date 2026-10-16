@@ -380,11 +380,6 @@ final class MissionLoop implements CategoryLoop {
         return level.isLoaded(site.pos()) && level.isLoaded(site.dropOff());
     }
 
-    @Override
-    public void startCatchUp() {
-        // Nothing per run: the mission end is a world time.
-    }
-
     /**
      * Missions are not started during catch-up; the time goes to the next job.
      */
