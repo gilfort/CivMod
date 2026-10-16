@@ -7,7 +7,6 @@ import java.util.function.Predicate;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobBlockSite;
-import com.gilfort.civmod.settlement.SettlementBlock;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -21,7 +20,8 @@ import net.minecraft.world.phys.Vec3;
  * Work loop of the Resource Collection Job Category (vault {@code Systems/Resource Collection Jobs.md}); its contract
  * with the Job is the {@link JobProfile}. Per job: fetch the tool, take the work place of the day and the scan from the
  * job's {@link Workplace}, walk there and produce into its buffer, which the shell delivers at ~80 % or at the end of
- * the day. Production and animation are cheap per-tick counters while working.
+ * the day. Production (live every work tick, catch-up per simulated hour) goes through the {@link WorkRules}; this
+ * loop only adds the live effects (swing, hit sound, level-up) and chooses where output goes.
  */
 final class ResourceCollectionLoop implements CategoryLoop {
 
@@ -35,9 +35,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
     private final Fatigue fatigue = new Fatigue();
 
     private Step step = Step.WORK;
-    private double production;
     private int swingTimer;
-    private double cuProduction;
 
     /**
      * @param shell the Settler Shell driving this loop
@@ -128,15 +126,9 @@ final class ResourceCollectionLoop implements CategoryLoop {
         switch (step) {
             case FETCH_TOOL -> {
                 Optional<JobProfile> profile = job.jobType().profile();
-                Optional<SettlementBlock> block = JobBlockSite.at(level, jobBlock).map(JobBlockSite::block);
-                if (profile.isPresent()) {
-                    if (SettlerTools.best(settler, profile.get()::isTool).isEmpty()) {
-                        SettlerTools.take(level, settler, target, profile.get()::isTool);
-                    }
-                    Optional<Predicate<ItemStack>> secondary = block.flatMap(b -> profile.get().secondaryTool(b));
-                    if (secondary.isPresent() && SettlerTools.best(settler, secondary.get()).isEmpty()) {
-                        SettlerTools.take(level, settler, target, secondary.get());
-                    }
+                Optional<JobBlockSite> site = JobBlockSite.at(level, jobBlock);
+                if (profile.isPresent() && site.isPresent()) {
+                    WorkRules.refill(level, settler, profile.get(), site.get());
                 }
                 shell.stepDone(level);
             }
@@ -160,43 +152,30 @@ final class ResourceCollectionLoop implements CategoryLoop {
             BlockState state = level.getBlockState(poi);
             level.playSound(null, poi, state.getSoundType().getHitSound(), net.minecraft.sounds.SoundSource.NEUTRAL, 0.5F, 1.0F);
         }
-        Optional<JobProfile> found = job.jobType().profile();
+        Optional<JobProfile> profile = job.jobType().profile();
         Optional<JobBlockSite> site = JobBlockSite.at(level, jobBlock);
-        if (found.isEmpty() || site.isEmpty()) {
+        if (profile.isEmpty() || site.isEmpty()) {
             return;
         }
-        JobProfile profile = found.get();
-        SettlementBlock block = site.get().block();
-        Workplace workplace = shell.workplace(jobBlock);
-        ScanResult scan = workplace.scan();
-        JobBuffer buffer = workplace.buffer();
-        Optional<ItemStack> tool = SettlerTools.best(settler, profile::isTool);
-        if (tool.isEmpty() || buffer.isFull()) {
-            return;
+        JobBuffer buffer = shell.workplace(jobBlock).buffer();
+        WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site.get(), shell.workplace(jobBlock), poi, 1.0,
+                WorkRules.ToolSupply.BELT, new WorkRules.Output() {
+                    @Override
+                    public boolean hasRoom() {
+                        return !buffer.isFull();
+                    }
+
+                    @Override
+                    public boolean accept(List<ItemStack> stacks) {
+                        stacks.forEach(buffer::add);
+                        return !buffer.isFull();
+                    }
+                });
+        if (result.levelUp()) {
+            shell.showLevelUp(level, job);
         }
-        int skillLevel = settler.getSkills().effectiveLevel(job.jobType(), site.get().skillCap());
-        double perSecond = profile.speed(skillLevel, tool.get()) * profile.productivity(scan);
-        production += perSecond / 20.0;
-        while (production >= 1.0) {
-            production -= 1.0;
-            Optional<ItemStack> current = SettlerTools.best(settler, profile::isTool);
-            if (current.isEmpty()) {
-                return;
-            }
-            Optional<ItemStack> secondary = profile.secondaryTool(block).flatMap(kind -> SettlerTools.best(settler, kind));
-            Optional<JobProfile.Produced> produced = profile.produce(new JobProfile.Context(level, settler, scan, poi, current.get(), secondary,
-                    block, skillLevel));
-            if (produced.isEmpty()) {
-                continue;
-            }
-            produced.get().stacks().forEach(buffer::add);
-            SettlerTools.wear(level, settler, produced.get().worn());
-            if (!produced.get().stacks().isEmpty()) {
-                shell.gainExp(level, job, site.get().level());
-                skillLevel = settler.getSkills().effectiveLevel(job.jobType(), site.get().skillCap());
-            }
-        }
-        SettlerTools.show(settler, profile::isTool);
+        // A job that ended (no tool, buffer full, no resources) is re-planned at the next decision.
+        SettlerTools.show(settler, profile.get()::isTool);
     }
 
     // ---------------------------------------------------------------- catch-up
@@ -224,77 +203,44 @@ final class ResourceCollectionLoop implements CategoryLoop {
 
     @Override
     public void startCatchUp() {
-        cuProduction = 0.0;
+        // The fractional production lives in each job's Workplace and carries over.
     }
 
     /**
-     * Produces the output of some work ticks during catch-up: directly into the drop-off, then the buffer.
+     * Produces the output of some work ticks during catch-up through the {@link WorkRules}: directly into the
+     * drop-off, then the buffer; missing tools are taken from the collect inventory.
      */
     @Override
     public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks) {
         Optional<JobBlockSite> found = JobBlockSite.at(level, job.jobBlock());
         Optional<JobProfile> profile = job.jobType().profile();
         Workplace workplace = shell.workplace(job.jobBlock());
-        ScanResult scan = workplace.scan();
-        if (found.isEmpty() || profile.isEmpty() || scan == null) {
+        BlockPos poi = found.isEmpty() || profile.isEmpty() || workplace.scan() == null ? null
+                : workplace.workPlaceOfDay(level, profile.get(), found.get(), day);
+        if (poi == null) {
             shell.endCatchUpJob(job.jobBlock());
             return new SimulatedWork(0, workTicks);
         }
         JobBlockSite site = found.get();
-        SettlementBlock block = site.block();
-        BlockPos poi = workplace.workPlaceOfDay(level, profile.get(), site, day);
-        if (poi == null || (profile.get().needsResources() && scan.isEmpty())) {
-            shell.endCatchUpJob(job.jobBlock());
-            return new SimulatedWork(0, workTicks);
-        }
-        Optional<ItemStack> tool = toolForCatchUp(level, profile.get(), site);
-        if (tool.isEmpty()) {
-            shell.endCatchUpJob(job.jobBlock());
-            return new SimulatedWork(0, workTicks);
-        }
-        int rolls = 0;
-        double remaining = 0.0;
-        int cap = site.skillCap();
-        int skillLevel = settler.getSkills().effectiveLevel(job.jobType(), cap);
-        cuProduction += profile.get().speed(skillLevel, tool.get()) * profile.get().productivity(scan) * workTicks / 20.0;
-        while (cuProduction >= 1.0) {
-            cuProduction -= 1.0;
-            tool = toolForCatchUp(level, profile.get(), site);
-            if (tool.isEmpty()) {
-                shell.endCatchUpJob(job.jobBlock());
-                break;
-            }
-            Optional<ItemStack> secondary = profile.get().secondaryTool(block).flatMap(kind -> SettlerTools.best(settler, kind));
-            Optional<JobProfile.Produced> produced = profile.get().produce(new JobProfile.Context(level, settler, scan, poi, tool.get(),
-                    secondary, block, skillLevel));
-            rolls++;
-            if (produced.isEmpty()) {
-                continue;
-            }
-            SettlerTools.wear(level, settler, produced.get().worn());
-            if (produced.get().stacks().isEmpty()) {
-                continue;
-            }
-            if (!shell.deliverDirect(level, site, produced.get().stacks())) {
-                shell.endCatchUpJob(job.jobBlock());
-                // The next job takes over the rest of the time (approximated by the rest of this hour's output).
-                remaining = cuProduction * 20.0;
-                cuProduction = 0.0;
-                break;
-            }
-            shell.gainExp(level, job, site.level());
-            skillLevel = settler.getSkills().effectiveLevel(job.jobType(), cap);
-        }
-        return new SimulatedWork(rolls, remaining);
-    }
+        JobBuffer buffer = workplace.buffer();
+        WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site, workplace, poi, workTicks,
+                WorkRules.ToolSupply.BELT_AND_COLLECT, new WorkRules.Output() {
+                    @Override
+                    public boolean hasRoom() {
+                        return !buffer.isFull();
+                    }
 
-    private Optional<ItemStack> toolForCatchUp(ServerLevel level, JobProfile profile, JobBlockSite site) {
-        Optional<ItemStack> tool = SettlerTools.best(settler, profile::isTool);
-        if (tool.isEmpty() && SettlerTools.findInContainer(level, site.collect(), profile::isTool).isPresent()) {
-            SettlerTools.take(level, settler, site.collect(), profile::isTool);
-            tool = SettlerTools.best(settler, profile::isTool);
+                    @Override
+                    public boolean accept(List<ItemStack> stacks) {
+                        return shell.deliverDirect(level, site, stacks);
+                    }
+                });
+        if (result.end() == WorkRules.End.NONE) {
+            return new SimulatedWork(result.rolls(), 0.0);
         }
-        return tool;
+        shell.endCatchUpJob(job.jobBlock());
+        // The next job takes over the rest of the time.
+        return new SimulatedWork(result.rolls(), result.ticksLeft());
     }
 
     @Override
