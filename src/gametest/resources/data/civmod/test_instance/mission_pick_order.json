@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:mission_pick_order",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 4
+}

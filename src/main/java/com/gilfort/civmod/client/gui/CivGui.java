@@ -2,8 +2,10 @@ package com.gilfort.civmod.client.gui;
 
 import com.gilfort.civmod.CivMod;
 
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
 /**
@@ -115,5 +117,20 @@ public final class CivGui {
                 graphics.blitSprite(RenderPipelines.GUI_TEXTURED, SATURATION_HALF, iconX, y, 9, 9);
             }
         }
+    }
+
+    /**
+     * Shortens a text with an ellipsis so it fits into a width.
+     *
+     * @param font  the font
+     * @param text  the text
+     * @param width the available width
+     * @return the text, or its shortened plain version
+     */
+    public static Component fit(Font font, Component text, int width) {
+        if (font.width(text) <= width) {
+            return text;
+        }
+        return Component.literal(font.plainSubstrByWidth(text.getString(), width - font.width("…")) + "…");
     }
 }

@@ -9,7 +9,7 @@
     "minecraft:chests/village/village_butcher"
   ],
   "days": 1,
-  "recommended_level": 5,
+  "recommended_level": 1,
   "rolls": 3,
   "jobs": ["civmod:adventurer"],
   "weight": 3,

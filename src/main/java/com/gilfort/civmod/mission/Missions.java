@@ -2,9 +2,11 @@ package com.gilfort.civmod.mission;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import com.gilfort.civmod.CivMod;
 
+import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.Identifier;
@@ -39,5 +41,14 @@ public final class Missions {
         Map<Identifier, Mission> missions = new LinkedHashMap<>();
         registries.lookupOrThrow(KEY).listElements().forEach(holder -> missions.put(holder.key().identifier(), holder.value()));
         return missions;
+    }
+
+    /**
+     * @param registries the registry access of a level
+     * @param id         a mission id
+     * @return that mission, empty if no datapack defines it
+     */
+    public static Optional<Mission> get(HolderLookup.Provider registries, Identifier id) {
+        return registries.lookupOrThrow(KEY).get(ResourceKey.create(KEY, id)).map(Holder.Reference::value);
     }
 }

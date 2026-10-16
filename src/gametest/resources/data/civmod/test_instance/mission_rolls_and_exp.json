@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:mission_rolls_and_exp",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 4
+}

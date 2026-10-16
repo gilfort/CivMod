@@ -6,6 +6,7 @@ import java.util.List;
 import com.gilfort.civmod.block.UpgradeCosts;
 import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.mission.MissionOffer;
+import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementManager;
@@ -42,10 +43,28 @@ import net.minecraft.server.level.ServerLevel;
  * @param collectLeaves  whether a Lumberjack also collects leaves
  * @param costs          upgrade costs per target level (index 0 = level 2)
  * @param missions       the daily mission offer (Mission Board only)
+ * @param taken          the missions settlers of this board took (reserved or on the way; loaded settlers only)
  */
 public record JobBlockInfo(Job jobType, int level, Component settlementName, boolean inSettlement, boolean connected,
         int distance, int required, List<String> assignees, boolean collectLeaves, List<List<CostEntry>> costs,
-        List<MissionOffer.Entry> missions) {
+        List<MissionOffer.Entry> missions, List<TakenMission> taken) {
+
+    /**
+     * A mission a settler of the board took: it left the offer.
+     *
+     * @param settler  the settler name
+     * @param mission  the mission id
+     * @param departed whether the settler is on its way (otherwise it leaves the next morning)
+     */
+    public record TakenMission(String settler, Identifier mission, boolean departed) {
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, TakenMission> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.STRING_UTF8, TakenMission::settler,
+                Identifier.STREAM_CODEC, TakenMission::mission,
+                ByteBufCodecs.BOOL, TakenMission::departed,
+                TakenMission::new);
+    }
 
     /**
      * An upgrade cost as shown to the client.
@@ -120,7 +139,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withLevel(int newLevel) {
         return new JobBlockInfo(jobType, newLevel, settlementName, inSettlement, connected, distance, required, assignees, collectLeaves, costs,
-                missions);
+                missions, taken);
     }
 
     /**
@@ -148,6 +167,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
             ByteBufCodecs.BOOL, JobBlockInfo::collectLeaves,
             CostEntry.STREAM_CODEC.apply(ByteBufCodecs.list()).apply(ByteBufCodecs.list()), JobBlockInfo::costs,
             MissionOffer.Entry.STREAM_CODEC.apply(ByteBufCodecs.list()), JobBlockInfo::missions,
+            TakenMission.STREAM_CODEC.apply(ByteBufCodecs.list()), JobBlockInfo::taken,
             JobBlockInfo::new);
 
     /**
@@ -160,13 +180,16 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
     public static JobBlockInfo of(ServerLevel level, BlockPos pos, Job jobType, int jobLevel) {
         SettlementManager.Status status = SettlementWorld.status(level, pos);
         Optional<Settlement> settlement = status.settlement();
+        List<SettlementBlock.Assignee> assignees = settlement.flatMap(s -> s.block(pos)).map(SettlementBlock::assignees).orElse(List.of());
+        List<TakenMission> taken = assignees.stream().flatMap(assignee -> level.getEntity(assignee.id()) instanceof Settler settler
+                ? settler.getWork().missionTrip().map(trip -> new TakenMission(assignee.name(), trip.mission(), trip.departed())).stream()
+                : java.util.stream.Stream.empty()).toList();
         return new JobBlockInfo(jobType, jobLevel,
                 settlement.map(Settlement::displayName).orElse(Component.empty()),
                 settlement.isPresent(), status.connected(), status.distance(), status.required(),
-                settlement.flatMap(s -> s.block(pos)).map(block -> block.assignees().stream().map(SettlementBlock.Assignee::name).toList())
-                        .orElse(List.of()),
+                assignees.stream().map(SettlementBlock.Assignee::name).toList(),
                 settlement.flatMap(s -> s.block(pos)).map(SettlementBlock::collectLeaves).orElse(false), costsOf(jobType),
-                SettlementWorld.missionOffer(level, pos));
+                SettlementWorld.missionOffer(level, pos), taken);
     }
 
     /**
@@ -181,7 +204,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withoutAssignees() {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, List.of(), collectLeaves, costs,
-                missions);
+                missions, List.of());
     }
 
     /**
@@ -189,7 +212,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withLeavesToggled() {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, !collectLeaves, costs,
-                missions);
+                missions, taken);
     }
 
     /**
@@ -204,7 +227,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         List<MissionOffer.Entry> changed = new ArrayList<>(missions);
         changed.set(index, missions.get(index).withMarked(marked));
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, collectLeaves, costs,
-                List.copyOf(changed));
+                List.copyOf(changed), taken);
     }
 
     /**
@@ -213,6 +236,6 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      * @return info without settlement data
      */
     public static JobBlockInfo unknown(Job jobType, int jobLevel) {
-        return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, List.of(), false, costsOf(jobType), List.of());
+        return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, List.of(), false, costsOf(jobType), List.of(), List.of());
     }
 }

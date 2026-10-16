@@ -77,6 +77,55 @@ public final class MissionOffers {
         return true;
     }
 
+    /**
+     * Takes an offered mission off the board (a settler reserved it). Like {@link #setMarked}, nothing happens if the
+     * entry at that index is no longer that mission.
+     *
+     * @param data    the dimension's settlement data
+     * @param board   the Mission Board position
+     * @param index   the entry index
+     * @param mission the mission expected at that index
+     * @return whether the entry was taken
+     */
+    public static boolean take(SettlementData data, BlockPos board, int index, Identifier mission) {
+        Optional<SettlementBlock> block = missionBoard(data, board);
+        if (block.isEmpty() || index < 0 || index >= block.get().missionOffer().entries().size()) {
+            return false;
+        }
+        MissionOffer offer = block.get().missionOffer();
+        if (!offer.entries().get(index).mission().equals(mission)) {
+            return false;
+        }
+        List<MissionOffer.Entry> entries = new ArrayList<>(offer.entries());
+        entries.remove(index);
+        block.get().setMissionOffer(new MissionOffer(entries, offer.day()));
+        data.setDirty();
+        return true;
+    }
+
+    /**
+     * Puts a reserved mission back on the board as a marked entry, after the other marked ones.
+     *
+     * @param data    the dimension's settlement data
+     * @param board   the Mission Board position
+     * @param mission the mission
+     */
+    public static void giveBack(SettlementData data, BlockPos board, Identifier mission) {
+        Optional<SettlementBlock> block = missionBoard(data, board);
+        if (block.isEmpty()) {
+            return;
+        }
+        MissionOffer offer = block.get().missionOffer();
+        List<MissionOffer.Entry> entries = new ArrayList<>(offer.entries());
+        int index = 0;
+        while (index < entries.size() && entries.get(index).marked()) {
+            index++;
+        }
+        entries.add(index, new MissionOffer.Entry(mission, true));
+        block.get().setMissionOffer(new MissionOffer(entries, offer.day()));
+        data.setDirty();
+    }
+
     private static Optional<SettlementBlock> missionBoard(SettlementData data, BlockPos board) {
         return data.settlementAt(board).flatMap(s -> s.block(board)).filter(block -> block.jobType().category() == JobCategory.MISSION);
     }

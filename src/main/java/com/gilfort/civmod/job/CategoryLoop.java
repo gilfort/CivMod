@@ -31,6 +31,17 @@ interface CategoryLoop {
     boolean plan(ServerLevel level, SettlerJob job, SettlementBlock block, long day, long dayTime);
 
     /**
+     * Called at a decision for a job of this loop that was not planned because a higher priority job works.
+     *
+     * @param level   the level
+     * @param job     the job
+     * @param day     the day
+     * @param dayTime the time of day
+     */
+    default void outranked(ServerLevel level, SettlerJob job, long day, long dayTime) {
+    }
+
+    /**
      * Called at every decision while the settler is in a step of this loop, before anything else is decided.
      *
      * @param level the level
@@ -104,10 +115,9 @@ interface CategoryLoop {
     /**
      * Restores the saved state of this loop.
      *
-     * @param workPlaces the saved work places of the day
-     * @param scans      the saved scans
+     * @param snapshot the saved work state of the settler
      */
-    default void restore(List<SettlerWork.WorkPlaceEntry> workPlaces, List<SavedScan> scans) {
+    default void restore(SettlerWork.BuffersSnapshot snapshot) {
     }
 
     /**

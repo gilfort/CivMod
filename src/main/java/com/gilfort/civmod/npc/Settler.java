@@ -259,11 +259,12 @@ public class Settler extends PathfinderMob {
     }
 
     /**
-     * Makes the settler homeless: keeps name, inventory and skills, drops all jobs except Laborer.
+     * Makes the settler homeless: keeps name, inventory and skills, drops all jobs except Laborer (their work state is
+     * forgotten, e.g. a mission it was away on ends).
      */
     public void becomeHomeless() {
         settlementId = -1;
-        jobs = List.of();
+        setJobs(List.of());
         setHomeTo(blockPosition(), HOMELESS_RADIUS);
     }
 
@@ -308,9 +309,22 @@ public class Settler extends PathfinderMob {
         return value >= 0 && value < 4 ? Optional.of(net.minecraft.core.Direction.from2DDataValue(value)) : Optional.empty();
     }
 
+    /**
+     * @return whether the settler is away (foraging out of sight or on a mission): invisible and not interactable
+     */
+    public boolean isAway() {
+        return food.isAway() || work.isAway();
+    }
+
+    @Override
+    protected boolean isImmobile() {
+        // On a mission the AI is skipped entirely; the work behaviour still checks the return (see tick()).
+        return super.isImmobile() || work.isAway();
+    }
+
     @Override
     public void travel(Vec3 input) {
-        if (isSleeping() || food.isAway()) {
+        if (isSleeping() || isAway()) {
             // Lying still: leftover movement (move control, pushes) would slide the settler out of its bed.
             setDeltaMovement(Vec3.ZERO);
             return;
@@ -325,14 +339,14 @@ public class Settler extends PathfinderMob {
 
     @Override
     public boolean isPickable() {
-        // Invisible only while away foraging: not interactable.
+        // Invisible only while away (foraging, mission): not interactable.
         return !isInvisible() && super.isPickable();
     }
 
     @Override
     public boolean isNoGravity() {
         // A straw bed is never placed, nothing holds the settler at its lying height.
-        return super.isNoGravity() || isSleepingWithoutBed() || food.isAway();
+        return super.isNoGravity() || isSleepingWithoutBed() || isAway();
     }
 
     @Override
@@ -355,6 +369,10 @@ public class Settler extends PathfinderMob {
     public void tick() {
         long profile = level().isClientSide() ? 0L : com.gilfort.civmod.debug.CivProfiler.start();
         super.tick();
+        if (level() instanceof ServerLevel level && work.isAway()) {
+            // The AI step is skipped while away on a mission; only the work behaviour runs (return, catch-up).
+            work.aiStep(level);
+        }
         com.gilfort.civmod.debug.CivProfiler.stop(com.gilfort.civmod.debug.CivProfiler.Section.SETTLERS, profile);
     }
 
@@ -395,6 +413,9 @@ public class Settler extends PathfinderMob {
         if (isHomeless()) {
             return Component.translatable("civmod.settler.status.homeless");
         }
+        if (work.isAway()) {
+            return work.missionStatus().orElse(Component.translatable("civmod.job.status.on_mission"));
+        }
         if (isSleeping()) {
             return Component.translatable("civmod.settler.status.sleeping");
         }
@@ -410,7 +431,7 @@ public class Settler extends PathfinderMob {
     @Override
     protected InteractionResult mobInteract(Player player, InteractionHand hand) {
         if (player.getItemInHand(hand).getItem() instanceof ScrollOfAssignmentItem || isInvisible()) {
-            // Let the scroll handle the interaction (assign / bind); foraging settlers are away.
+            // Let the scroll handle the interaction (assign / bind); invisible settlers are away.
             return InteractionResult.PASS;
         }
         ItemStack held = player.getItemInHand(hand);
@@ -490,6 +511,6 @@ public class Settler extends PathfinderMob {
         ContainerHelper.loadAllItems(input, inventory.getItems());
         food.load(input);
         input.read("skills", com.gilfort.civmod.job.SettlerSkills.CODEC).ifPresent(skills::restore);
-        setInvisible(food.isAway());
+        setInvisible(isAway());
     }
 }

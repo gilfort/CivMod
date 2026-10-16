@@ -27,7 +27,13 @@ public enum JobStatus {
     /** The drop-off inventory is full. */
     DROP_OFF_FULL("drop_off_full"),
     /** The scan found nothing this job can produce. */
-    NO_RESOURCES("no_resources");
+    NO_RESOURCES("no_resources"),
+    /** No marked mission at or below the settler's skill. */
+    NO_MISSION("no_mission"),
+    /** A mission is reserved; the settler leaves at the start of the next workday. */
+    WAITING_DEPARTURE("waiting_departure"),
+    /** Away on a mission. */
+    ON_MISSION("on_mission");
 
     /** Network codec. */
     public static final StreamCodec<ByteBuf, JobStatus> STREAM_CODEC = ByteBufCodecs.idMapper(i -> values()[i], JobStatus::ordinal);
@@ -42,7 +48,7 @@ public enum JobStatus {
      * @return whether the job can currently not work (the settler switches to its next priority)
      */
     public boolean isBlocked() {
-        return this == NO_TOOL || this == NO_WORK_PLACE || this == DROP_OFF_FULL || this == NO_RESOURCES;
+        return this == NO_TOOL || this == NO_WORK_PLACE || this == DROP_OFF_FULL || this == NO_RESOURCES || this == NO_MISSION;
     }
 
     /**
