@@ -2,11 +2,15 @@ package com.gilfort.civmod.job;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
 
 import com.mojang.serialization.Codec;
 
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -93,6 +97,44 @@ public final class JobBuffer {
         while (!remaining.isEmpty()) {
             stacks.add(remaining.split(remaining.getMaxStackSize()));
         }
+    }
+
+    /**
+     * @return how many of each item are stored
+     */
+    public Map<Item, Integer> counts() {
+        Map<Item, Integer> counts = new HashMap<>();
+        stacks.forEach(stack -> counts.merge(stack.getItem(), stack.getCount(), Integer::sum));
+        return counts;
+    }
+
+    /**
+     * Takes one item out.
+     *
+     * @param kind which items may be taken
+     * @return the item, empty if none matches
+     */
+    public ItemStack takeOne(Predicate<ItemStack> kind) {
+        for (ItemStack stack : stacks) {
+            if (kind.test(stack)) {
+                ItemStack one = stack.split(1);
+                stacks.removeIf(ItemStack::isEmpty);
+                return one;
+            }
+        }
+        return ItemStack.EMPTY;
+    }
+
+    /**
+     * Takes all items of a kind out.
+     *
+     * @param kind which items are taken
+     * @return the taken stacks
+     */
+    public List<ItemStack> takeAll(Predicate<ItemStack> kind) {
+        List<ItemStack> taken = stacks.stream().filter(kind).toList();
+        stacks.removeIf(kind);
+        return taken;
     }
 
     /**

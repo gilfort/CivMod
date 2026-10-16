@@ -1,6 +1,5 @@
 package com.gilfort.civmod.settlement;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -14,7 +13,6 @@ import com.gilfort.civmod.logistics.StockRule;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
@@ -133,13 +131,8 @@ public final class StockRules {
 
     /** Item counts over the Clerk's whole storage, counted once per check. */
     private static Map<Item, Integer> count(ServerLevel level, BlockPos clerk) {
-        Map<Item, Integer> counts = new HashMap<>();
-        for (ItemStack stack : ClerkStorage.stock(level, clerk, true).contents()) {
-            if (!stack.isEmpty()) {
-                counts.merge(stack.getItem(), stack.getCount(), Integer::sum);
-            }
-        }
-        return counts;
+        // Stock.contents() has one item per slot; the counts are the real amounts.
+        return ClerkStorage.stock(level, clerk, true).counts();
     }
 
     /**

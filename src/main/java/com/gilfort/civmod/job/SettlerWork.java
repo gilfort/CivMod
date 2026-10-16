@@ -171,6 +171,34 @@ public final class SettlerWork {
         // The Clerk is the only Logistics Job so far.
         clerks = new ClerkLoop(this);
         loops.put(JobCategory.LOGISTICS, clerks);
+        // The Craftsperson is the only Producing Job so far.
+        loops.put(JobCategory.PRODUCING, new CraftspersonLoop(this));
+    }
+
+    /**
+     * Runs one decision now (for tests; live decisions run every {@value #DECISION_INTERVAL} ticks).
+     *
+     * @param level the level
+     */
+    public void decideNow(ServerLevel level) {
+        decide(level);
+    }
+
+    /**
+     * @return whether the settler is caught up (no effects, messages or sounds)
+     */
+    boolean quiet() {
+        return quiet;
+    }
+
+    /** Tells every loop that the settler's work day is over. */
+    private void endDay(ServerLevel level) {
+        for (SettlerJob job : settler.getJobs()) {
+            CategoryLoop loop = loop(job);
+            if (loop != null) {
+                loop.dayEnded(level, job);
+            }
+        }
     }
 
     /**
@@ -568,6 +596,7 @@ public final class SettlerWork {
         }
         SettlerJob delivery = null;
         if (decision.afterWork()) {
+            endDay(level);
             // Jobs show idle after work, except the first one with something to deliver.
             for (SettlerJob job : settler.getJobs()) {
                 if (!buffer(job.jobBlock()).isEmpty() && status(job.jobBlock()) != JobStatus.DROP_OFF_FULL) {
@@ -1146,6 +1175,7 @@ public final class SettlerWork {
             rolls = simulateWork(level, day, work * share * CivModConfig.CATCH_UP_MULTIPLIER.get());
         }
         if (to >= workEnd) {
+            endDay(level);
             // Work is over: the evening meal.
             decideCatchUp(level, day, Math.max(dayTime, workEnd()));
         }

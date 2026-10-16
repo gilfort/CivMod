@@ -4,10 +4,21 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.job.CatchUp;
+import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.job.JobStatus;
+import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.StockRule;
+import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.settlement.Requests;
+import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.logistics.CraftPlan;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.Request;
@@ -25,10 +36,12 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.registries.RegisterEvent;
@@ -49,6 +62,10 @@ public final class CraftspersonGameTests {
             register(helper, "craftsperson_pattern_matching", CraftspersonGameTests::patternMatching);
             register(helper, "craftsperson_checkmark_limit", CraftspersonGameTests::checkmarkLimit);
             register(helper, "craftsperson_chain_resolution", CraftspersonGameTests::chainResolution);
+            register(helper, "craftsperson_catch_up_crafting", CraftspersonGameTests::catchUpCrafting);
+            register(helper, "craftsperson_fallback", CraftspersonGameTests::fallback);
+            register(helper, "craftsperson_claim_split", CraftspersonGameTests::claimSplit);
+            register(helper, "craftsperson_delivery_fallback", CraftspersonGameTests::deliveryFallback);
         });
     }
 
@@ -186,6 +203,204 @@ public final class CraftspersonGameTests {
         helper.assertTrue(CraftPlan.most(level, checked, Items.STONE_PICKAXE, 5, Map.of(), Map.of(Items.OAK_LOG, 2, Items.COBBLESTONE, 9), 256) == 3,
                 "As many as the materials allow: 3");
         helper.succeed();
+    }
+
+    /**
+     * Catch-up: the Craftsperson takes a stone pickaxe request, fetches a log and cobblestone from the Clerk storage,
+     * crafts planks, sticks and the pickaxe (3 operations, EXP each) and delivers the pickaxe to the Clerk; the request
+     * is done, leftover intermediates stay in its buffer.
+     */
+    private static void catchUpCrafting(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerk = StockRuleGameTests.workingClerk(helper);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
+        chest.setItem(0, new ItemStack(Items.OAK_LOG, 1));
+        chest.setItem(1, new ItemStack(Items.COBBLESTONE, 3));
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 1, 0)), "Rule set");
+        StockRules.check(level, clerk, ClerkGameTests.MORNING);
+        helper.assertTrue(Requests.claimable(settlement).size() == 1, "One request");
+
+        BlockPos craft = craftsperson(helper, new BlockPos(1, 1, 5));
+        placeTable(helper, new BlockPos(3, 1, 5));
+        define(helper, craft, 0, Items.STONE_PICKAXE);
+        define(helper, craft, 1, Items.STICK);
+        define(helper, craft, 2, Items.OAK_PLANKS);
+        Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
+        catchUp(level, settler, 4000L);
+
+        helper.assertTrue(ClerkStorage.stock(level, clerk, true).count(stack -> stack.is(Items.STONE_PICKAXE)) == 1, "Pickaxe delivered");
+        helper.assertTrue(ClerkStorage.stock(level, clerk, true).count(stack -> stack.is(Items.COBBLESTONE) || stack.is(Items.OAK_LOG)) == 0,
+                "Inputs used up");
+        helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "Request done: " + Requests.byPriority(settlement));
+        JobBuffer buffer = settler.getWork().buffer(craft);
+        helper.assertTrue(buffer.count() == 4, "Leftover 2 planks and 2 sticks stay in the buffer: " + buffer.stacks());
+        helper.assertTrue(settler.getSkills().get(ModJobs.CRAFTSPERSON.get()).exp() + settler.getSkills().get(ModJobs.CRAFTSPERSON.get()).level() > 1,
+                "EXP gained");
+        JobAssignments.unassign(data, clerk);
+        settler.discard();
+        helper.succeed();
+    }
+
+    /**
+     * Picking work: the highest-priority request with a checked pattern, even if materials are missing; up to 3 per
+     * decision, a failed one is skipped for 30 s; the next decision reaches the doable request.
+     */
+    private static void fallback(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerk = StockRuleGameTests.workingClerk(helper);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
+        chest.setItem(0, new ItemStack(Items.COBBLESTONE, 2));
+        chest.setItem(1, new ItemStack(Items.STICK, 2));
+        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 1, 30));
+        StockRules.setRule(data, clerk, StockRule.minimum(1, Items.STONE_AXE, 1, 20));
+        StockRules.setRule(data, clerk, StockRule.minimum(2, Items.TORCH, 4, 10));
+        StockRules.setRule(data, clerk, StockRule.minimum(3, Items.STONE_HOE, 1, 5));
+        StockRules.setRule(data, clerk, StockRule.minimum(4, Items.LADDER, 3, 50));
+        StockRules.check(level, clerk, ClerkGameTests.MORNING);
+
+        BlockPos craft = craftsperson(helper, new BlockPos(1, 1, 5));
+        Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
+        define(helper, craft, 0, Items.STONE_PICKAXE);
+        define(helper, craft, 1, Items.STONE_AXE);
+        define(helper, craft, 2, Items.TORCH);
+        define(helper, craft, 3, Items.STONE_HOE);
+        settler.getWork().decideNow(level);
+        helper.assertTrue(settler.getWork().status(craft) == JobStatus.NO_WORK_PLACE, "No crafting table: no work place "
+                + settler.getWork().status(craft));
+        // Leaving and taking the job again ends the wait of the blocked job.
+        settler.removeJob(craft);
+        settler.addJob(new SettlerJob(ModJobs.CRAFTSPERSON.get(), craft));
+
+        placeTable(helper, new BlockPos(3, 1, 5));
+        settler.getWork().decideNow(level);
+        helper.assertTrue(Requests.forRule(settlement, clerk, 0).orElseThrow().missing().equals(Optional.of(new Request.Missing(Items.COBBLESTONE, 1))),
+                "Pickaxe: Missing 1× Cobblestone " + Requests.forRule(settlement, clerk, 0));
+        helper.assertTrue(Requests.forRule(settlement, clerk, 1).orElseThrow().missing().isPresent()
+                && Requests.forRule(settlement, clerk, 2).orElseThrow().missing().isPresent(), "Axe and torches tried");
+        helper.assertTrue(Requests.forRule(settlement, clerk, 4).orElseThrow().missing().isEmpty(), "No ladder pattern: not tried");
+        Request hoe = Requests.forRule(settlement, clerk, 3).orElseThrow();
+        helper.assertTrue(hoe.claims().isEmpty() && hoe.missing().isEmpty(), "Only 3 tries: the hoe waits " + hoe);
+        helper.assertTrue(settler.getWork().status(craft) == JobStatus.MISSING_INPUTS, "Status: missing inputs");
+
+        settler.getWork().decideNow(level);
+        helper.assertTrue(Requests.forRule(settlement, clerk, 3).orElseThrow().claimOf(settler.getUUID()).map(Request.Claim::amount)
+                .equals(Optional.of(1)), "Failed ones skipped: the hoe is claimed");
+        helper.assertTrue(settler.getWork().status(craft) == JobStatus.FETCHING_INPUTS, "Fetching inputs");
+
+        settler.removeJob(craft);
+        helper.assertTrue(Requests.forRule(settlement, clerk, 3).orElseThrow().claims().isEmpty(), "Leaving the JobBlock releases the claim");
+        JobAssignments.unassign(data, clerk);
+        settler.discard();
+        helper.succeed();
+    }
+
+    /** Several Craftspersons split a request: each claims what it can do in one round (buffer limit). */
+    private static void claimSplit(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerk = StockRuleGameTests.workingClerk(helper);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
+        for (int slot = 0; slot < 7; slot++) {
+            chest.setItem(slot, new ItemStack(Items.COBBLESTONE, 64));
+        }
+        for (int slot = 7; slot < 11; slot++) {
+            chest.setItem(slot, new ItemStack(Items.STICK, 64));
+        }
+        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 100, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(1, Items.COBBLESTONE, 500, 0));
+        StockRules.check(level, clerk, ClerkGameTests.MORNING);
+        UUID request = Requests.forRule(settlement, clerk, 0).orElseThrow().id();
+        helper.assertTrue(Requests.forRule(settlement, clerk, 1).orElseThrow().amount() == 500 - 7 * 64,
+                "Rules count items, not slots: " + Requests.forRule(settlement, clerk, 1));
+        StockRules.removeRule(data, clerk, 1);
+
+        BlockPos first = craftsperson(helper, new BlockPos(1, 1, 5));
+        placeTable(helper, new BlockPos(3, 1, 5));
+        define(helper, first, 0, Items.STONE_PICKAXE);
+        BlockPos second = craftsperson(helper, new BlockPos(6, 1, 5));
+        placeTable(helper, new BlockPos(8, 1, 5));
+        define(helper, second, 0, Items.STONE_PICKAXE);
+        Settler cora = craftsperson(helper, first, new BlockPos(2, 1, 7), "Cora");
+        Settler cid = craftsperson(helper, second, new BlockPos(7, 1, 7), "Cid");
+        cora.getWork().decideNow(level);
+        cid.getWork().decideNow(level);
+        Request split = Requests.get(settlement, request).orElseThrow();
+        helper.assertTrue(split.claimOf(cora.getUUID()).map(Request.Claim::amount).equals(Optional.of(51)),
+                "Cora claims what fits its buffer (5 items each): " + split);
+        helper.assertTrue(split.claimOf(cid.getUUID()).map(Request.Claim::amount).equals(Optional.of(49)), "Cid claims the rest: " + split);
+        helper.assertTrue(split.amount() == 0, "Nothing open");
+        JobAssignments.unassign(data, clerk);
+        cora.discard();
+        cid.discard();
+        helper.assertTrue(Requests.get(settlement, request).orElseThrow().claims().isEmpty(), "Removed settlers release their claims");
+        helper.succeed();
+    }
+
+    /**
+     * Delivery: to the posting Clerk; its storage full → the Craftsperson's own drop-off; that full too → "Drop-off
+     * full" (catch-up).
+     */
+    private static void deliveryFallback(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerk = ClerkGameTests.clerkWithStorage(helper);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        Container clerkSlots = (Container) level.getBlockEntity(clerk);
+        for (int slot = 0; slot < clerkSlots.getContainerSize(); slot++) {
+            clerkSlots.setItem(slot, new ItemStack(Items.DIRT, 64));
+        }
+        BlockPos craft = craftsperson(helper, new BlockPos(1, 1, 5));
+        placeTable(helper, new BlockPos(3, 1, 5));
+        helper.setBlock(new BlockPos(5, 1, 5), Blocks.CHEST);
+        BlockPos dropOff = helper.absolutePos(new BlockPos(5, 1, 5));
+        JobAssignments.cyclePoint(data, craft, dropOff, false, true);
+        helper.assertTrue(JobAssignments.cyclePoint(data, craft, dropOff, false, true) == JobAssignments.PointResult.DROP_OFF, "Own drop-off");
+        define(helper, craft, 0, Items.STICK);
+        Container own = (Container) level.getBlockEntity(craft);
+        own.setItem(0, new ItemStack(Items.OAK_PLANKS, 2));
+        Request request = Requests.post(data, settlement, Items.STICK, 4, Optional.of(clerk), Optional.empty());
+        Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
+        catchUp(level, settler, 3000L);
+        Container chest = (Container) level.getBlockEntity(dropOff);
+        helper.assertTrue(chest.countItem(Items.STICK) == 4, "Clerk full (no Clerk settler: block slots only): sticks in the own drop-off");
+        helper.assertTrue(Requests.get(settlement, request.id()).isEmpty(), "Request done");
+
+        for (int slot = 0; slot < chest.getContainerSize(); slot++) {
+            chest.setItem(slot, new ItemStack(Items.DIRT, 64));
+        }
+        own.setItem(0, new ItemStack(Items.OAK_PLANKS, 2));
+        Requests.post(data, settlement, Items.STICK, 4, Optional.of(clerk), Optional.empty());
+        catchUp(level, settler, 3000L);
+        helper.assertTrue(settler.getWork().buffer(craft).stacks().stream().anyMatch(stack -> stack.is(Items.STICK) && stack.getCount() == 4),
+                "Everything full: the sticks stay in the buffer " + settler.getWork().buffer(craft).stacks());
+        helper.assertTrue(settler.getWork().status(craft) == JobStatus.DROP_OFF_FULL, "Drop-off full: " + settler.getWork().status(craft));
+        settler.discard();
+        helper.succeed();
+    }
+
+    private static Settler craftsperson(GameTestHelper helper, BlockPos craft, BlockPos relative, String name) {
+        SettlementData data = SettlementData.get(helper.getLevel());
+        Settlement settlement = data.settlementAt(craft).orElseThrow();
+        Settler settler = ClerkGameTests.settler(helper, relative, data, settlement);
+        settler.setCustomName(net.minecraft.network.chat.Component.literal(name));
+        // Live decisions go straight to work (no morning trip for provisions).
+        settler.getFood().setMorningDay(Math.floorDiv(helper.getLevel().getOverworldClockTime(), 24000L));
+        helper.assertTrue(JobAssignments.assign(data, craft, settler.getUUID(), name, settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
+                "Craftsperson assigned");
+        settler.addJob(new SettlerJob(ModJobs.CRAFTSPERSON.get(), craft));
+        return settler;
+    }
+
+    /** Catches up some hours of the previous workday from 06:00. */
+    private static void catchUp(ServerLevel level, Settler settler, long ticks) {
+        long dayStart = Math.floorDiv(level.getOverworldClockTime(), 24000L) * 24000L;
+        settler.getWork().setCatchUp(dayStart - 24000L, dayStart - 24000L + ticks);
+        CatchUp.runNow(level, List.of(settler));
     }
 
     /** Puts a checked pattern for an item into a library slot. */

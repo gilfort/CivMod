@@ -1,9 +1,12 @@
 package com.gilfort.civmod.logistics;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.ResourceHandlerUtil;
@@ -79,6 +82,52 @@ public final class Stock {
             }
         }
         return total;
+    }
+
+    /**
+     * @return how many of each item are reachable (components ignored)
+     */
+    public Map<Item, Integer> counts() {
+        Map<Item, Integer> counts = new HashMap<>();
+        for (ResourceHandler<ItemResource> handler : handlers) {
+            for (int i = 0; i < handler.size(); i++) {
+                ItemResource resource = handler.getResource(i);
+                if (!resource.isEmpty()) {
+                    int amount = (int) Math.min(Integer.MAX_VALUE, handler.getAmountAsLong(i));
+                    counts.merge(resource.getItem(), amount, (a, b) -> (int) Math.min(Integer.MAX_VALUE, (long) a + b));
+                }
+            }
+        }
+        return counts;
+    }
+
+    /**
+     * Takes up to {@code count} items of a kind, container by container.
+     *
+     * @param item  the item
+     * @param count how many at most
+     * @return the taken stacks
+     */
+    public List<ItemStack> take(Item item, int count) {
+        List<ItemStack> taken = new ArrayList<>();
+        int rest = count;
+        for (ResourceHandler<ItemResource> handler : handlers) {
+            for (int i = 0; i < handler.size() && rest > 0; i++) {
+                ItemResource resource = handler.getResource(i);
+                if (resource.isEmpty() || resource.getItem() != item) {
+                    continue;
+                }
+                try (Transaction transaction = Transaction.openRoot()) {
+                    int extracted = handler.extract(i, resource, rest, transaction);
+                    transaction.commit();
+                    if (extracted > 0) {
+                        taken.add(resource.toStack(extracted));
+                        rest -= extracted;
+                    }
+                }
+            }
+        }
+        return taken;
     }
 
     /**

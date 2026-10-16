@@ -1,10 +1,13 @@
 package com.gilfort.civmod.logistics;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
 import net.minecraft.core.Holder;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
@@ -57,13 +60,16 @@ public final class CraftingRecipes {
     /**
      * @param level the level
      * @param item  an item
-     * @return the crafting recipes making it, in recipe order (the first one is the default)
+     * @return the crafting recipes making it; the first one is the default: the recipe named like the item, then by id
      */
     public static List<Shape> producing(ServerLevel level, Item item) {
         List<Shape> shapes = new ArrayList<>();
         for (RecipeHolder<CraftingRecipe> holder : level.recipeAccess().recipeMap().byType(RecipeType.CRAFTING)) {
             shape(level, holder).filter(shape -> shape.output() == item).ifPresent(shapes::add);
         }
+        Identifier name = BuiltInRegistries.ITEM.getKey(item);
+        shapes.sort(Comparator.<Shape>comparingInt(shape -> shape.id().identifier().equals(name) ? 0 : 1)
+                .thenComparing(shape -> shape.id().identifier().toString()));
         return shapes;
     }
 

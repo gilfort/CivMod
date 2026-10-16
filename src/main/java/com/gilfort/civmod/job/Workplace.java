@@ -3,6 +3,8 @@ package com.gilfort.civmod.job;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import org.jspecify.annotations.Nullable;
 
@@ -126,12 +128,27 @@ final class Workplace {
      * @return the work place, null if there is none
      */
     @Nullable BlockPos workPlaceOfDay(ServerLevel level, JobProfile profile, JobBlockSite site, long day) {
+        return workPlaceOfDay(level, pos -> profile.isWorkPlace(level, pos), () -> profile.autoSearch(level, site.pos()), site, day);
+    }
+
+    /**
+     * The work place of the day for any work place rule (a Producing Job's station).
+     *
+     * @param level       the level
+     * @param isWorkPlace whether a position is a work place of the job
+     * @param autoSearch  the job's own search, used without a valid scroll work point (may return null)
+     * @param site        the JobBlock site
+     * @param day         the day
+     * @return the work place, null if there is none
+     */
+    @Nullable BlockPos workPlaceOfDay(ServerLevel level, Predicate<BlockPos> isWorkPlace, Supplier<@Nullable BlockPos> autoSearch,
+            JobBlockSite site, long day) {
         BlockPos current = workPlaceOfDay;
-        if (current != null && workPlaceDay == day && profile.isWorkPlace(level, current)) {
+        if (current != null && workPlaceDay == day && isWorkPlace.test(current)) {
             return current;
         }
-        List<BlockPos> candidates = new ArrayList<>(site.block().workPoints().stream().filter(pos -> profile.isWorkPlace(level, pos)).toList());
-        BlockPos chosen = candidates.isEmpty() ? profile.autoSearch(level, site.pos())
+        List<BlockPos> candidates = new ArrayList<>(site.block().workPoints().stream().filter(isWorkPlace).toList());
+        BlockPos chosen = candidates.isEmpty() ? autoSearch.get()
                 : candidates.get(level.getRandom().nextInt(candidates.size()));
         if (chosen != null) {
             workPlaceOfDay = chosen;

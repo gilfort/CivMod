@@ -219,6 +219,17 @@ public class Settler extends PathfinderMob {
     }
 
     /**
+     * A settler that dies or is removed for good releases its claims on requests (vault {@code Jobs/Clerk.md}).
+     */
+    @Override
+    public void remove(RemovalReason reason) {
+        if (reason.shouldDestroy() && level() instanceof net.minecraft.server.level.ServerLevel server) {
+            com.gilfort.civmod.settlement.Requests.releaseAll(SettlementData.get(server), getUUID());
+        }
+        super.remove(reason);
+    }
+
+    /**
      * @return the work behaviour (job status, buffers)
      */
     public SettlerWork getWork() {
