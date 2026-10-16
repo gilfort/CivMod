@@ -2,12 +2,15 @@ package com.gilfort.civmod.gametest;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.logistics.CraftPlan;
 import com.gilfort.civmod.logistics.Pattern;
+import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.Producers;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModJobs;
@@ -45,6 +48,7 @@ public final class CraftspersonGameTests {
             register(helper, "craftsperson_registry", CraftspersonGameTests::registry);
             register(helper, "craftsperson_pattern_matching", CraftspersonGameTests::patternMatching);
             register(helper, "craftsperson_checkmark_limit", CraftspersonGameTests::checkmarkLimit);
+            register(helper, "craftsperson_chain_resolution", CraftspersonGameTests::chainResolution);
         });
     }
 
@@ -142,6 +146,52 @@ public final class CraftspersonGameTests {
         helper.assertTrue(block.trim().equals(Optional.of(new SettlementBlock.Trim(2, 4))), "Notice: 2 removed, 4 left");
         helper.assertTrue(Patterns.enforceLimit(data, pos, 4) == 0, "Within the limit: nothing removed");
         helper.succeed();
+    }
+
+    /**
+     * Chain resolution: a stone pickaxe from logs and cobblestone crafts planks and sticks first with its own patterns;
+     * a missing base input without a pattern is reported; held intermediates are used before the stock.
+     */
+    private static void chainResolution(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos pos = craftsperson(helper, new BlockPos(1, 1, 1));
+        define(helper, pos, 0, Items.STONE_PICKAXE);
+        define(helper, pos, 1, Items.OAK_PLANKS);
+        SettlementData data = SettlementData.get(level);
+        List<Pattern> checked = Patterns.checked(SettlementData.get(level).settlementAt(pos).flatMap(s -> s.block(pos)).orElseThrow());
+        Map<Item, Integer> stock = Map.of(Items.OAK_LOG, 1, Items.COBBLESTONE, 3);
+
+        CraftPlan noSticks = CraftPlan.plan(level, checked, Items.STONE_PICKAXE, 1, Map.of(), stock);
+        helper.assertTrue(noSticks.missing().equals(Optional.of(new Request.Missing(Items.STICK, 2))),
+                "No stick pattern: Missing 2× Stick " + noSticks.missing());
+
+        define(helper, pos, 2, Items.STICK);
+        checked = Patterns.checked(data.settlementAt(pos).flatMap(s -> s.block(pos)).orElseThrow());
+        CraftPlan one = CraftPlan.plan(level, checked, Items.STONE_PICKAXE, 1, Map.of(), stock);
+        helper.assertTrue(one.missing().isEmpty(), "Everything there: " + one.missing());
+        helper.assertTrue(one.takes().equals(Map.of(Items.OAK_LOG, 1, Items.COBBLESTONE, 3)), "Takes a log and 3 cobblestone: " + one.takes());
+        helper.assertTrue(one.steps().stream().map(step -> step.pattern().output()).toList()
+                .equals(List.of(Items.OAK_PLANKS, Items.STICK, Items.STONE_PICKAXE)), "Intermediates first: " + one.steps());
+        helper.assertTrue(one.operations() == 3, "Three operations: " + one.operations());
+
+        CraftPlan two = CraftPlan.plan(level, checked, Items.STONE_PICKAXE, 2, Map.of(), stock);
+        helper.assertTrue(two.missing().equals(Optional.of(new Request.Missing(Items.COBBLESTONE, 3))), "2 pickaxes: 3 cobblestone missing "
+                + two.missing());
+        helper.assertTrue(CraftPlan.plan(level, checked, Items.STONE_PICKAXE, 2, Map.of(), Map.of(Items.OAK_LOG, 1, Items.COBBLESTONE, 6))
+                .operations() == 4, "One log makes the sticks of two pickaxes: planks, sticks, 2 pickaxes");
+
+        CraftPlan held = CraftPlan.plan(level, checked, Items.STONE_PICKAXE, 1, Map.of(Items.STICK, 2), Map.of(Items.COBBLESTONE, 3));
+        helper.assertTrue(held.missing().isEmpty() && held.operations() == 1 && held.takes().equals(Map.of(Items.COBBLESTONE, 3)),
+                "Held sticks are used first: " + held);
+        helper.assertTrue(CraftPlan.most(level, checked, Items.STONE_PICKAXE, 5, Map.of(), Map.of(Items.OAK_LOG, 2, Items.COBBLESTONE, 9), 256) == 3,
+                "As many as the materials allow: 3");
+        helper.succeed();
+    }
+
+    /** Puts a checked pattern for an item into a library slot. */
+    static void define(GameTestHelper helper, BlockPos pos, int slot, Item output) {
+        helper.assertTrue(Patterns.setOutput(helper.getLevel(), pos, slot, output).isPresent(), "Pattern for " + output);
+        helper.assertTrue(Patterns.toggleCheck(SettlementData.get(helper.getLevel()), pos, slot), "Checked " + output);
     }
 
     static BlockPos craftsperson(GameTestHelper helper, BlockPos relative) {
