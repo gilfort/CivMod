@@ -21,9 +21,11 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.Identifier;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ItemLike;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 
 /**
  * A kind of work a settler can hold (vault {@code Systems/Jobs.md}), registered in the {@code civmod:job} registry
@@ -46,6 +48,8 @@ public final class Job {
     private final Supplier<? extends ItemLike> icon;
     private final double hungerFactor;
     private final int baseExp;
+    private final double jobFactor;
+    private final @Nullable TagKey<Block> station;
     private final @Nullable Supplier<JobProfile> profile;
 
     private Job(Builder builder) {
@@ -54,6 +58,8 @@ public final class Job {
         this.icon = Objects.requireNonNull(builder.icon, "icon");
         this.hungerFactor = builder.hungerFactor;
         this.baseExp = builder.baseExp;
+        this.jobFactor = builder.jobFactor;
+        this.station = builder.station;
         this.profile = builder.profile == null ? null : Suppliers.memoize(builder.profile::get);
     }
 
@@ -145,7 +151,24 @@ public final class Job {
      * @return whether a player may set the block as the job's work place with the Scroll of Assignment
      */
     public boolean isValidWorkPlace(Level level, BlockPos pos) {
+        if (station != null) {
+            return level.getBlockState(pos).is(station);
+        }
         return profile().map(found -> found.isAssignableWorkPlace(level, pos)).orElse(false);
+    }
+
+    /**
+     * @return the block tag of the job's station ({@code <namespace>:stations/<job>}), if it works at one
+     */
+    public Optional<TagKey<Block>> station() {
+        return Optional.ofNullable(station);
+    }
+
+    /**
+     * @return the factor on the shared speed formula (datapack override or default)
+     */
+    public double jobFactor() {
+        return JobBalancing.of(this).jobFactor().orElse(jobFactor);
     }
 
     /**
@@ -192,6 +215,8 @@ public final class Job {
         private @Nullable Supplier<? extends ItemLike> icon;
         private double hungerFactor = 1.0;
         private int baseExp = 1;
+        private double jobFactor = 1.0;
+        private @Nullable TagKey<Block> station;
         private @Nullable Supplier<? extends JobProfile> profile;
 
         private Builder(JobCategory category) {
@@ -231,6 +256,24 @@ public final class Job {
          */
         public Builder baseExp(int baseExp) {
             this.baseExp = baseExp;
+            return this;
+        }
+
+        /**
+         * @param jobFactor default factor on the shared speed formula (default 1)
+         * @return this builder
+         */
+        public Builder jobFactor(double jobFactor) {
+            this.jobFactor = jobFactor;
+            return this;
+        }
+
+        /**
+         * @param station the block tag of the job's station (its work places)
+         * @return this builder
+         */
+        public Builder station(TagKey<Block> station) {
+            this.station = station;
             return this;
         }
 

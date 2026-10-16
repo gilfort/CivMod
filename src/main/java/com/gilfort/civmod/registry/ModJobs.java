@@ -8,6 +8,8 @@ import com.gilfort.civmod.job.LumberjackProfile;
 import com.gilfort.civmod.job.MinerProfile;
 
 import net.minecraft.core.Registry;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.tags.TagKey;
 import net.minecraft.resources.ResourceKey;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
@@ -43,6 +45,10 @@ public final class ModJobs {
     /** See vault {@code Jobs/Clerk.md}; the store and food point of the settlement, the first Logistics Job. */
     public static final DeferredHolder<Job, Job> CLERK = JOBS.register("clerk", () -> Job.builder(JobCategory.LOGISTICS)
             .icon(ModItems.CLERK_BLOCK).hungerFactor(0.5).baseExp(1).build());
+    /** See vault {@code Jobs/Craftsperson.md}; crafts requested items from its patterns, the first Producing Job. */
+    public static final DeferredHolder<Job, Job> CRAFTSPERSON = JOBS.register("craftsperson", () -> Job.builder(JobCategory.PRODUCING)
+            .icon(ModItems.CRAFTSPERSON_BLOCK).hungerFactor(0.5).baseExp(2).jobFactor(0.3)
+            .station(TagKey.create(Registries.BLOCK, CivMod.id("stations/craftsperson"))).build());
 
     private ModJobs() {
     }

@@ -246,5 +246,8 @@
   "civmod.scroll.point.taken": "Already storage of %s",
   "civmod.scroll.point.clerk_at": "the Clerk at %s",
   "civmod.scroll.point.clerk_invalid": "Needs a container (storage) or a block with two blocks of air above (stand spot)",
-  "civmod.job.status.serving": "Serving"
+  "civmod.job.status.serving": "Serving",
+  "block.civmod.craftsperson_block": "Craftsperson Block",
+  "job.civmod.craftsperson": "Craftsperson",
+  "civmod.scroll.work_place.craftsperson": "a crafting table"
 }

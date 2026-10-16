@@ -33,18 +33,20 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
  *
  * @param hungerFactor work hunger factor
  * @param baseExp      base EXP per produced resource
+ * @param jobFactor    factor on the shared speed formula
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
-public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> baseExp) {
+public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> baseExp, Optional<Double> jobFactor) {
 
     /** Reload listener id. */
     public static final Identifier ID = CivMod.id("job_balancing");
     /** No override. */
-    public static final JobBalancing NONE = new JobBalancing(Optional.empty(), Optional.empty());
+    public static final JobBalancing NONE = new JobBalancing(Optional.empty(), Optional.empty(), Optional.empty());
 
     private static final Codec<JobBalancing> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.doubleRange(0.0, 10.0).optionalFieldOf("hunger_factor").forGetter(JobBalancing::hungerFactor),
-            Codec.intRange(0, 10000).optionalFieldOf("base_exp").forGetter(JobBalancing::baseExp)
+            Codec.intRange(0, 10000).optionalFieldOf("base_exp").forGetter(JobBalancing::baseExp),
+            Codec.doubleRange(0.0, 100.0).optionalFieldOf("job_factor").forGetter(JobBalancing::jobFactor)
     ).apply(instance, JobBalancing::new));
 
     private static final FileToIdConverter FILES = FileToIdConverter.json("civmod_jobs");
@@ -68,7 +70,8 @@ public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> base
         JobBalancing merged = NONE;
         for (JsonElement file : files) {
             JobBalancing part = CODEC.parse(JsonOps.INSTANCE, file).getOrThrow();
-            merged = new JobBalancing(part.hungerFactor().or(merged::hungerFactor), part.baseExp().or(merged::baseExp));
+            merged = new JobBalancing(part.hungerFactor().or(merged::hungerFactor), part.baseExp().or(merged::baseExp),
+                    part.jobFactor().or(merged::jobFactor));
         }
         return merged;
     }
