@@ -202,6 +202,18 @@ public final class Schedule {
     }
 
     /**
+     * Whether the settler eats at the pantry it walked to (until full), or only takes provisions: the morning trip for
+     * provisions is not a meal unless the settler is hungry.
+     *
+     * @param purpose why the settler came to the pantry (null: unknown, it eats)
+     * @param food    the food level
+     * @return whether it eats there
+     */
+    public static boolean eatsAtPantry(@Nullable MealPurpose purpose, int food) {
+        return purpose != MealPurpose.MORNING || food < SettlerFood.HUNGRY;
+    }
+
+    /**
      * @return the food points a forager brings back ({@link Intent#END_FORAGING})
      */
     static int foragingFood() {

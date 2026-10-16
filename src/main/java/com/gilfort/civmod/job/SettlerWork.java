@@ -1318,7 +1318,7 @@ public final class SettlerWork {
                 settler.getInventory().setItem(i, Pantries.insert(handler, stack));
             }
         }
-        if (mealPurpose != MealPurpose.MORNING || food.level() < SettlerFood.HUNGRY) {
+        if (Schedule.eatsAtPantry(mealPurpose, food.level())) {
             while (food.level() < SettlerFood.MAX) {
                 Optional<Integer> slot = SettlerFood.choose(Pantries.contents(handler), food.level());
                 if (slot.isEmpty()) {

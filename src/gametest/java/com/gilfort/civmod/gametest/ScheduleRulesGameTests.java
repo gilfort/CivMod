@@ -153,6 +153,10 @@ public final class ScheduleRulesGameTests {
         helper.assertTrue(Schedule.morningPlan(5, 0, 6, false) == Schedule.MorningPlan.FORAGE, "Plan: hungry, no food anywhere");
         helper.assertTrue(Schedule.morningPlan(5, 3, 6, false) == Schedule.MorningPlan.WORK, "Plan: hungry but has provisions");
         helper.assertTrue(Schedule.morningPlan(20, 0, 6, true) == Schedule.MorningPlan.FETCH_PROVISIONS, "Plan: short of provisions");
+        helper.assertFalse(Schedule.eatsAtPantry(MealPurpose.MORNING, 15), "The morning provisions trip is no meal");
+        helper.assertTrue(Schedule.eatsAtPantry(MealPurpose.MORNING, 9), "Hungry in the morning: eats at the pantry");
+        helper.assertTrue(Schedule.eatsAtPantry(MealPurpose.HUNGRY, 9) && Schedule.eatsAtPantry(MealPurpose.EVENING, 15),
+                "Hungry and evening trips are meals");
         helper.succeed();
     }
 
