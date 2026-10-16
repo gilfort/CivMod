@@ -78,8 +78,9 @@ interface CategoryLoop {
      */
     boolean catchUpReady(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime);
 
-    /** Resets per-run state before a catch-up run. */
-    void startCatchUp();
+    /** Resets per-run state before a catch-up run; nothing by default. */
+    default void startCatchUp() {
+    }
 
     /**
      * Simulates work of a job during catch-up. A job that cannot go on is ended with {@link SettlerWork#endCatchUpJob}.

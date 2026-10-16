@@ -1,12 +1,15 @@
 package com.gilfort.civmod.gametest;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.job.JobStatus;
+import com.gilfort.civmod.job.SavedScan;
 import com.gilfort.civmod.job.SettlerWork;
+import com.gilfort.civmod.job.WoodScan;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.SettlementRules;
@@ -46,7 +49,46 @@ public final class WorkplaceGameTests {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "workplace_forget_leaves_no_trace", WorkplaceGameTests::forgetLeavesNoTrace);
             register(helper, "workplace_old_save_loads", WorkplaceGameTests::oldSaveLoads);
+            register(helper, "workplace_restore_drops_scan_in_flight", WorkplaceGameTests::restoreDropsScanInFlight);
         });
+    }
+
+    /**
+     * A scan still in flight when the settler is restored does not land on top of the restored scan: the job keeps the
+     * restored (here: empty) scan instead of the stale result's logs.
+     */
+    private static void restoreDropsScanInFlight(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        Settler settler = CatchUpGameTests.lumberjack(helper, forced);
+        SettlerJob job = settler.getJobs().get(0);
+        BlockPos jobBlock = job.jobBlock();
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertFalse(settler.getWork().found(job).isEmpty(), "Never scanned"))
+                .thenExecute(() -> {
+                    SettlerWork.BuffersSnapshot saved = settler.getWork().snapshot();
+                    SavedScan scan = saved.scans().stream().filter(entry -> entry.jobBlock().equals(jobBlock)).findFirst().orElseThrow();
+                    // Without a scan the next decision asks for one again (same centre, radius and day).
+                    settler.getWork().restore(new SettlerWork.BuffersSnapshot(saved.entries(), saved.workPlaces(), List.of(),
+                            SettlerWork.CatchUpState.NONE));
+                    settler.tickCount = Math.floorMod(-settler.getId(), SettlerWork.DECISION_INTERVAL);
+                    settler.getWork().aiStep(level);
+                    // Restored while that scan is in flight: the same scan key, but nothing found.
+                    SavedScan empty = SavedScan.of(jobBlock, scan.center(), scan.radius(), scan.day(), WoodScan.Result.EMPTY).orElseThrow();
+                    settler.getWork().restore(new SettlerWork.BuffersSnapshot(saved.entries(), saved.workPlaces(), List.of(empty),
+                            SettlerWork.CatchUpState.NONE));
+                })
+                .thenExecuteAfter(200, () -> {
+                    helper.assertTrue(settler.getWork().found(job).isEmpty(), "The stale scan landed: " + settler.getWork().found(job));
+                    helper.assertTrue(settler.getWork().snapshot().scans().stream()
+                            .anyMatch(entry -> entry.jobBlock().equals(jobBlock) && entry.wood().equals(Optional.of(WoodScan.Result.EMPTY))),
+                            "Restored empty scan lost: " + settler.getWork().snapshot().scans());
+                })
+                .thenExecute(() -> {
+                    settler.discard();
+                    forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+                })
+                .thenSucceed();
     }
 
     private static void register(RegisterEvent.RegisterHelper<Consumer<GameTestHelper>> helper, String name, Consumer<GameTestHelper> test) {
@@ -83,10 +125,13 @@ public final class WorkplaceGameTests {
                     helper.assertTrue(itemsNear(level, settler) - itemsBefore == dropped[0], "Buffer not dropped at the settler");
                     settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_AXE));
                     settler.addJob(job);
+                    // The very next decision works the re-added job: a left-over blocked time (600 ticks) would skip
+                    // it, and it would stay idle.
+                    settler.tickCount = Math.floorMod(-settler.getId(), SettlerWork.DECISION_INTERVAL);
+                    settler.getWork().aiStep(level);
+                    helper.assertTrue(settler.getWork().status(jobBlock) == JobStatus.WORKING,
+                            "Re-added job still blocked: " + settler.getWork().status(jobBlock));
                 })
-                // A blocked job waits 600 ticks; a left-over blocked time would keep the re-added job idle that long.
-                .thenExecuteAfter(250, () -> helper.assertTrue(settler.getWork().status(jobBlock) != JobStatus.IDLE
-                        && settler.getWork().status(jobBlock) != JobStatus.NO_TOOL, "Re-added job still blocked: " + settler.getWork().status(jobBlock)))
                 .thenExecute(() -> {
                     settler.discard();
                     level.getEntitiesOfClass(ItemEntity.class, new AABB(settler.blockPosition()).inflate(8)).forEach(ItemEntity::discard);

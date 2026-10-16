@@ -42,6 +42,8 @@ final class Workplace {
     private @Nullable ScanKey scanKey;
     /** The scan in flight; its result is only stored while it is still the pending one. */
     private @Nullable ScanKey scanning;
+    /** Counts scan requests; a result whose request is no longer the latest (restored in between) is dropped. */
+    private int scanRequest;
     private boolean catchUpEnded;
     /** Fractional production of the {@link WorkRules} between calls (not saved). */
     private double production;
@@ -155,11 +157,13 @@ final class Workplace {
             return;
         }
         scanning = key;
+        int request = ++scanRequest;
         // Spread daily scans over the first real minute of the workday; later starts (e.g. after loading) begin at once.
         long delay = profile.rescanDaily() && dayTime < SettlerWork.SCAN_SPREAD_TICKS ? level.getRandom().nextInt(SettlerWork.SCAN_SPREAD_TICKS) : 0;
         ScanScheduler.submit(level, profile.createScan(key.center(), key.radius()), delay, result -> {
-            // Only the pending scan lands; a scan of a forgotten job lands in its dropped Workplace, which nothing reads.
-            if (!key.equals(scanning)) {
+            // Only the pending scan lands (not one from before a restore); a scan of a forgotten job lands in its
+            // dropped Workplace, which nothing reads.
+            if (request != scanRequest) {
                 return;
             }
             scan = result;
@@ -217,13 +221,18 @@ final class Workplace {
         return result == null || key == null ? Optional.empty() : SavedScan.of(jobBlock, key.center(), key.radius(), key.day(), result);
     }
 
-    /** Drops the saved parts (buffer, work place of the day, scan) before a restore. */
+    /**
+     * Drops the saved parts (buffer, work place of the day, scan) before a restore, and the scan in flight: its result
+     * is ignored when it arrives, and the next plan asks for a scan again if the restored one does not fit.
+     */
     void clearSaved() {
         buffer = new JobBuffer();
         workPlaceOfDay = null;
         workPlaceDay = -1L;
         scan = null;
         scanKey = null;
+        scanning = null;
+        scanRequest++;
     }
 
     /**

@@ -4,6 +4,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.Schedule;
 import com.gilfort.civmod.job.Schedule.Activity;
 import com.gilfort.civmod.job.Schedule.Decision;
@@ -39,7 +40,35 @@ public final class ScheduleRulesGameTests {
             register(helper, "schedule_rules_homeless", ScheduleRulesGameTests::homeless);
             register(helper, "schedule_rules_sleeping", ScheduleRulesGameTests::sleeping);
             register(helper, "schedule_rules_activity_in_progress", ScheduleRulesGameTests::activityInProgress);
+            register(helper, "schedule_rules_foraging", ScheduleRulesGameTests::foraging);
         });
+    }
+
+    /** Foraging lasts until the end of work (17:30); foraging of an earlier day is over as well. */
+    private static void foraging(GameTestHelper helper) {
+        Situation away = new Situation();
+        away.forageDay = 3L;
+        helper.assertTrue(away.wakeUp().equals(Optional.of(Intent.FORAGE)), "Foraging during the workday");
+
+        Situation beforeEnd = new Situation();
+        beforeEnd.forageDay = 3L;
+        beforeEnd.dayTime = 11499L;
+        helper.assertTrue(beforeEnd.wakeUp().equals(Optional.of(Intent.FORAGE)), "Still foraging just before 17:30");
+
+        Situation back = new Situation();
+        back.forageDay = 3L;
+        back.dayTime = 11500L;
+        helper.assertTrue(back.wakeUp().equals(Optional.of(Intent.END_FORAGING)), "Back at 17:30");
+
+        Situation yesterday = new Situation();
+        yesterday.forageDay = 2L;
+        helper.assertTrue(yesterday.wakeUp().equals(Optional.of(Intent.END_FORAGING)), "Foraging of an earlier day is over");
+
+        Situation skipped = new Situation();
+        skipped.forageDay = 2L;
+        skipped.nightSkipped = true;
+        helper.assertTrue(skipped.wakeUp().equals(Optional.of(Intent.END_FORAGING)), "After a skipped night the forager comes back first");
+        helper.succeed();
     }
 
     private static void register(RegisterEvent.RegisterHelper<Consumer<GameTestHelper>> helper, String name, Consumer<GameTestHelper> test) {
@@ -55,7 +84,7 @@ public final class ScheduleRulesGameTests {
         boolean pantryFood = true;
         boolean homeless;
         boolean sleeping;
-        boolean foraging;
+        long forageDay = SettlerFood.NO_DAY;
         boolean nightSkipped;
         Activity activity = Activity.IDLE;
         boolean jobStepHolds;
@@ -68,7 +97,7 @@ public final class ScheduleRulesGameTests {
             return new Schedule.Snapshot(3L, dayTime, food, provisions, 6, pocketMeal, () -> {
                 pantryAsked++;
                 return pantryFood;
-            }, homeless, sleeping, foraging, nightSkipped, activity, () -> jobStepHolds, morningHandled, eveningMealEaten,
+            }, homeless, sleeping, forageDay, nightSkipped, activity, () -> jobStepHolds, morningHandled, eveningMealEaten,
                     deliveryPending);
         }
 
@@ -124,6 +153,10 @@ public final class ScheduleRulesGameTests {
         helper.assertTrue(Schedule.morningPlan(5, 0, 6, false) == Schedule.MorningPlan.FORAGE, "Plan: hungry, no food anywhere");
         helper.assertTrue(Schedule.morningPlan(5, 3, 6, false) == Schedule.MorningPlan.WORK, "Plan: hungry but has provisions");
         helper.assertTrue(Schedule.morningPlan(20, 0, 6, true) == Schedule.MorningPlan.FETCH_PROVISIONS, "Plan: short of provisions");
+        helper.assertFalse(Schedule.eatsAtPantry(MealPurpose.MORNING, 15), "The morning provisions trip is no meal");
+        helper.assertTrue(Schedule.eatsAtPantry(MealPurpose.MORNING, 9), "Hungry in the morning: eats at the pantry");
+        helper.assertTrue(Schedule.eatsAtPantry(MealPurpose.HUNGRY, 9) && Schedule.eatsAtPantry(MealPurpose.EVENING, 15),
+                "Hungry and evening trips are meals");
         helper.succeed();
     }
 
@@ -292,7 +325,7 @@ public final class ScheduleRulesGameTests {
 
         Situation skippedForaging = new Situation();
         skippedForaging.nightSkipped = true;
-        skippedForaging.foraging = true;
+        skippedForaging.forageDay = 3L;
         helper.assertTrue(skippedForaging.wakeUp().equals(Optional.of(Intent.FORAGE)), "A foraging settler stays out");
 
         Situation skippedAtNight = new Situation();

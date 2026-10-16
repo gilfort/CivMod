@@ -45,8 +45,10 @@ public final class SettlerFood {
      * this used {@code -1}, which is read as "no day" as well.
      */
     public static final long NO_DAY = Long.MIN_VALUE;
-    /** "No day" in saves written before {@link #NO_DAY}. */
+    /** "No day" in saves written before {@link #DAY_FORMAT}. */
     private static final long LEGACY_NO_DAY = -1L;
+    /** Save format of the days: from this format on, every saved day is a real day (absent = {@link #NO_DAY}). */
+    private static final int DAY_FORMAT = 2;
     /** Items settlers never eat. */
     public static final TagKey<Item> INEDIBLE = TagKey.create(Registries.ITEM, CivMod.id("settler_inedible"));
 
@@ -373,10 +375,11 @@ public final class SettlerFood {
         data.addAdditionalSaveData(food);
         food.putFloat("exhaustion", exhaustion);
         food.putFloat("appetite", appetite);
-        food.putLong("eaten_day", eatenDay);
-        food.putLong("morning_day", morningDay);
-        food.putLong("complaint_day", complaintDay);
-        food.putLong("forage_day", forageDay);
+        food.putInt("day_format", DAY_FORMAT);
+        putDay(food, "eaten_day", eatenDay);
+        putDay(food, "morning_day", morningDay);
+        putDay(food, "complaint_day", complaintDay);
+        putDay(food, "forage_day", forageDay);
         food.putBoolean("away", away);
         if (forageSpot != null) {
             food.putLong("forage_spot", forageSpot.asLong());
@@ -393,17 +396,28 @@ public final class SettlerFood {
             data.readAdditionalSaveData(food);
             exhaustion = food.getFloatOr("exhaustion", 0.0F);
             appetite = food.getFloatOr("appetite", -1.0F);
-            eatenDay = day(food, "eaten_day");
-            morningDay = day(food, "morning_day");
-            complaintDay = day(food, "complaint_day");
-            forageDay = day(food, "forage_day");
+            boolean legacy = food.getIntOr("day_format", 0) < DAY_FORMAT;
+            eatenDay = day(food, "eaten_day", legacy);
+            morningDay = day(food, "morning_day", legacy);
+            complaintDay = day(food, "complaint_day", legacy);
+            forageDay = day(food, "forage_day", legacy);
             away = food.getBooleanOr("away", false);
             forageSpot = food.getLong("forage_spot").map(BlockPos::of).orElse(null);
         });
     }
 
-    private static long day(ValueInput food, String key) {
+    /** Writes a day; {@link #NO_DAY} is left out. */
+    private static void putDay(ValueOutput food, String key, long day) {
+        if (day != NO_DAY) {
+            food.putLong(key, day);
+        }
+    }
+
+    /**
+     * Reads a day: absent is {@link #NO_DAY}; in saves from before {@link #DAY_FORMAT}, {@code -1} is as well.
+     */
+    private static long day(ValueInput food, String key, boolean legacy) {
         long day = food.getLongOr(key, NO_DAY);
-        return day == LEGACY_NO_DAY ? NO_DAY : day;
+        return legacy && day == LEGACY_NO_DAY ? NO_DAY : day;
     }
 }

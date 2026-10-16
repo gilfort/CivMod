@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:long_run",
   "function": "civmod:work_rules_live_matches_catch_up",
   "max_ticks": 4800,
   "structure": "minecraft:empty",

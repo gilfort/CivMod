@@ -263,7 +263,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
     public static JobBlockInfo of(ServerLevel level, BlockPos pos, Job jobType, int jobLevel) {
         SettlementManager.Status status = SettlementWorld.status(level, pos);
         Optional<Settlement> settlement = status.settlement();
-        Optional<SettlementBlock> block = JobBlockSite.at(level, pos).map(JobBlockSite::block);
+        Optional<SettlementBlock> block = JobBlockSite.blockAt(level, pos);
         List<SettlementBlock.Assignee> assignees = block.map(SettlementBlock::assignees).orElse(List.of());
         List<TakenMission> taken = new ArrayList<>();
         List<MissionSettler> settlers = new ArrayList<>();

@@ -42,7 +42,45 @@ public final class CatchUpScheduleGameTests {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "catch_up_day_flags_shared", CatchUpScheduleGameTests::dayFlagsShared);
             register(helper, "catch_up_old_save_loads", CatchUpScheduleGameTests::oldSaveLoads);
+            register(helper, "food_day_round_trip", CatchUpScheduleGameTests::dayRoundTrip);
         });
+    }
+
+    /**
+     * Every day survives saving, also day -1 (the "no day" marker of old saves); "no day" stays "no day", and an old
+     * save's -1 still reads as "no day".
+     */
+    private static void dayRoundTrip(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
+        SettlerFood food = settler.getFood();
+        food.setMorningDay(-1L);
+        food.setEatenDay(-1L);
+        food.startForaging(-1L);
+        CompoundTag tag = save(level, settler);
+        Settler loaded = reload(level, tag);
+        helper.assertTrue(loaded.getFood().morningDay() == -1L && loaded.getFood().eatenDay() == -1L,
+                "Day -1 lost on save: " + loaded.getFood().morningDay() + " / " + loaded.getFood().eatenDay());
+        helper.assertTrue(loaded.getFood().isForaging() && loaded.getFood().forageDay() == -1L,
+                "Foraging on day -1 lost on save: " + loaded.getFood().forageDay());
+
+        Settler fresh = reload(level, save(level, ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT)));
+        helper.assertTrue(fresh.getFood().morningDay() == SettlerFood.NO_DAY && !fresh.getFood().isForaging(),
+                "No day stays no day: " + fresh.getFood().morningDay() + " / " + fresh.getFood().forageDay());
+
+        // A save from before the day format: -1 meant "no day".
+        CompoundTag old = tag.copy();
+        CompoundTag oldFood = old.getCompoundOrEmpty("food");
+        oldFood.remove("day_format");
+        old.put("food", oldFood);
+        Settler legacy = reload(level, old);
+        helper.assertTrue(legacy.getFood().morningDay() == SettlerFood.NO_DAY && !legacy.getFood().isForaging(),
+                "Old save's -1 is no day: " + legacy.getFood().morningDay() + " / " + legacy.getFood().forageDay());
+        settler.discard();
+        loaded.discard();
+        fresh.discard();
+        legacy.discard();
+        helper.succeed();
     }
 
     private static void register(RegisterEvent.RegisterHelper<Consumer<GameTestHelper>> helper, String name, Consumer<GameTestHelper> test) {
@@ -58,7 +96,7 @@ public final class CatchUpScheduleGameTests {
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         Settler settler = CatchUpGameTests.lumberjack(helper, forced);
         long dayStart = Math.floorDiv(level.getOverworldClockTime(), DAY) * DAY;
-        // Two days back: the test clock lies on day 0, and day -1 is the "never" value of the flags.
+        // Two days back: the test clock lies on day 0, and old saves used day -1 as "no day".
         long missed = Math.floorDiv(dayStart - 2 * DAY, DAY);
         settler.getWork().setCatchUp(missed * DAY, (missed + 1) * DAY);
         CatchUp.runNow(level, List.of(settler));
@@ -93,13 +131,15 @@ public final class CatchUpScheduleGameTests {
             done[0] = true;
             long clock = level.getOverworldClockTime();
             long dayStart = Math.floorDiv(clock, DAY) * DAY;
-            // Two days back: the test clock lies on day 0, and day -1 is the "never" value of the flags.
+            // Two days back: the test clock lies on day 0, and old saves used day -1 as "no day".
             long missed = Math.floorDiv(dayStart - 2 * DAY, DAY);
             CompoundTag tag = save(level, settler);
             CompoundTag food = tag.getCompoundOrEmpty("food");
             food.putLong("morning_day", missed - 1);
             food.putLong("eaten_day", missed - 1);
             food.putLong("forage_day", -1L);
+            // Saved before the day format: -1 is "no day".
+            food.remove("day_format");
             tag.put("food", food);
             CompoundTag buffers = tag.getCompoundOrEmpty("buffers");
             CompoundTag catchUp = new CompoundTag();

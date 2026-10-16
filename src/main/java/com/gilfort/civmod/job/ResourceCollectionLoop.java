@@ -38,6 +38,23 @@ final class ResourceCollectionLoop implements CategoryLoop {
     private int swingTimer;
 
     /**
+     * Output of the {@link WorkRules} while the job's buffer has room; the sink takes the items of a roll (live: into
+     * the buffer; catch-up: the drop-off first) and says whether more fits.
+     */
+    private record BufferOutput(JobBuffer buffer, Predicate<List<ItemStack>> sink) implements WorkRules.Output {
+
+        @Override
+        public boolean hasRoom() {
+            return !buffer.isFull();
+        }
+
+        @Override
+        public boolean accept(List<ItemStack> stacks) {
+            return sink.test(stacks);
+        }
+    }
+
+    /**
      * @param shell the Settler Shell driving this loop
      */
     ResourceCollectionLoop(SettlerWork shell) {
@@ -60,13 +77,9 @@ final class ResourceCollectionLoop implements CategoryLoop {
             return false;
         }
         JobProfile profile = found.get();
-        if (SettlerTools.best(settler, profile::isTool).isEmpty()) {
-            return fetchTool(level, job, site, profile::isTool);
-        }
-        Optional<Predicate<ItemStack>> secondary = profile.secondaryTool(site.block());
-        if (secondary.isPresent() && SettlerTools.best(settler, secondary.get()).isEmpty()
-                && SettlerTools.findInContainer(level, site.collect(), secondary.get()).isPresent()) {
-            return fetchTool(level, job, site, secondary.get());
+        Optional<WorkRules.MissingTool> missing = WorkRules.missingTool(level, settler, profile, site);
+        if (missing.isPresent()) {
+            return fetchTool(level, job, site, missing.get());
         }
         BlockPos poi = workplace.workPlaceOfDay(level, profile, site, day);
         if (poi == null) {
@@ -88,9 +101,9 @@ final class ResourceCollectionLoop implements CategoryLoop {
         return true;
     }
 
-    private boolean fetchTool(ServerLevel level, SettlerJob job, JobBlockSite site, Predicate<ItemStack> kind) {
+    private boolean fetchTool(ServerLevel level, SettlerJob job, JobBlockSite site, WorkRules.MissingTool tool) {
         BlockPos collect = site.collect();
-        if (SettlerTools.findInContainer(level, collect, kind).isEmpty()) {
+        if (!tool.inCollect()) {
             shell.block(level, job.jobBlock(), JobStatus.NO_TOOL);
             return false;
         }
@@ -159,18 +172,10 @@ final class ResourceCollectionLoop implements CategoryLoop {
         }
         JobBuffer buffer = shell.workplace(jobBlock).buffer();
         WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site.get(), shell.workplace(jobBlock), poi, 1.0,
-                WorkRules.ToolSupply.BELT, new WorkRules.Output() {
-                    @Override
-                    public boolean hasRoom() {
-                        return !buffer.isFull();
-                    }
-
-                    @Override
-                    public boolean accept(List<ItemStack> stacks) {
-                        stacks.forEach(buffer::add);
-                        return !buffer.isFull();
-                    }
-                });
+                WorkRules.ToolSupply.BELT, new BufferOutput(buffer, stacks -> {
+                    stacks.forEach(buffer::add);
+                    return !buffer.isFull();
+                }));
         if (result.levelUp()) {
             shell.showLevelUp(level, job);
         }
@@ -201,11 +206,6 @@ final class ResourceCollectionLoop implements CategoryLoop {
         return true;
     }
 
-    @Override
-    public void startCatchUp() {
-        // The fractional production lives in each job's Workplace and carries over.
-    }
-
     /**
      * Produces the output of some work ticks during catch-up through the {@link WorkRules}: directly into the
      * drop-off, then the buffer; missing tools are taken from the collect inventory.
@@ -222,19 +222,8 @@ final class ResourceCollectionLoop implements CategoryLoop {
             return new SimulatedWork(0, workTicks);
         }
         JobBlockSite site = found.get();
-        JobBuffer buffer = workplace.buffer();
         WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site, workplace, poi, workTicks,
-                WorkRules.ToolSupply.BELT_AND_COLLECT, new WorkRules.Output() {
-                    @Override
-                    public boolean hasRoom() {
-                        return !buffer.isFull();
-                    }
-
-                    @Override
-                    public boolean accept(List<ItemStack> stacks) {
-                        return shell.deliverDirect(level, site, stacks);
-                    }
-                });
+                WorkRules.ToolSupply.BELT_AND_COLLECT, new BufferOutput(workplace.buffer(), stacks -> shell.deliverDirect(level, site, stacks)));
         if (result.end() == WorkRules.End.NONE) {
             return new SimulatedWork(result.rolls(), 0.0);
         }

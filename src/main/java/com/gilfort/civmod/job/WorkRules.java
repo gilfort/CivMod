@@ -176,6 +176,35 @@ final class WorkRules {
     }
 
     /**
+     * The tool the settler has to fetch before it can work (live play walks to the collect inventory for it): the
+     * job's tool when none is on the belt, else the secondary tool when the JobBlock settings want one, none is on the
+     * belt and the collect inventory has one.
+     *
+     * @param level   the level
+     * @param settler the settler
+     * @param profile the job's profile
+     * @param site    the job's JobBlock site
+     * @return the missing tool, empty if the belt is ready
+     */
+    static Optional<MissingTool> missingTool(ServerLevel level, Settler settler, JobProfile profile, JobBlockSite site) {
+        if (SettlerTools.best(settler, profile::isTool).isEmpty()) {
+            Predicate<ItemStack> kind = profile::isTool;
+            return Optional.of(new MissingTool(kind, SettlerTools.findInContainer(level, site.collect(), kind).isPresent()));
+        }
+        return profile.secondaryTool(site.block()).filter(kind -> SettlerTools.best(settler, kind).isEmpty()
+                && SettlerTools.findInContainer(level, site.collect(), kind).isPresent()).map(kind -> new MissingTool(kind, true));
+    }
+
+    /**
+     * A tool the settler lacks for its job.
+     *
+     * @param kind      what counts as that tool
+     * @param inCollect whether the collect inventory has one; without it the job cannot work ("No tool")
+     */
+    record MissingTool(Predicate<ItemStack> kind, boolean inCollect) {
+    }
+
+    /**
      * Takes the job's tool and its secondary tool (if the JobBlock settings want one) from the collect inventory onto
      * the belt, each only if none is on the belt yet.
      *

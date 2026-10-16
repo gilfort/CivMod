@@ -172,7 +172,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
             return List.of();
         }
         return settler.getJobs().stream().filter(job -> job.jobType().category() == JobCategory.MISSION).findFirst()
-                .flatMap(job -> JobBlockSite.at(level, job.jobBlock())).map(JobBlockSite::block)
+                .flatMap(job -> JobBlockSite.blockAt(level, job.jobBlock()))
                 .map(board -> board.jobType().offeredAt(board.level()).stream().filter(job -> job.category() == JobCategory.MISSION).toList())
                 .orElse(List.of());
     }
