@@ -13,7 +13,15 @@ The behaviour template a Job is built on (Resource Collection, Producing, Missio
 _Avoid_: Role, meta type, archetype
 
 **Settler Shell**:
-The part of a settler's behaviour shared by every Job Category (schedule, walking, food, sleep, job priorities, EXP, catch-up). Code: `SettlerWork`; it hands control to the `CategoryLoop` of the active Job's category (`ResourceCollectionLoop`, `MissionLoop`). Shared parts the loops use: buffers / delivery and EXP in the shell, tools in `SettlerTools`, `Fatigue`.
+The part of a settler's behaviour shared by every Job Category (schedule, walking, food, sleep, job priorities, EXP, catch-up). Code: `SettlerWork`; it hands control to the `CategoryLoop` of the active Job's category (`ResourceCollectionLoop`, `MissionLoop`). Shared parts the loops use: the job's Workplace, delivery and EXP in the shell, tools in `SettlerTools`, `Fatigue`.
+
+**Workplace**:
+Everything a settler keeps for one job at its JobBlock: the buffer, the status shown in the job tab, the blocked-until time, the work place of the day and the scan (requested, scanning, ready, rescanned per day or per centre / radius change). One per JobBlock the settler works for; forgetting the job drops it whole (the buffer is dropped at the settler). Code: `Workplace`, held by `SettlerWork` (`workplace(jobBlock)`), saved through `SettlerWork.BuffersSnapshot`.
+_Avoid_: Work place (that is the block worked at, below); per-job maps beside it
+
+**Work place of the day**:
+The block a Resource Collection settler works at today (a tree, a stone face, water), chosen each day among the JobBlock's work points or by the job's auto search; part of the Workplace, not the same thing. Code: `Workplace.workPlaceOfDay`, saved as `SettlerWork.WorkPlaceEntry` (`poi`).
+_Avoid_: Workplace (the whole per-job state), POI in prose
 
 **Base Job**:
 A Job a Level 1 JobBlock offers; root of a specialization tree.
