@@ -453,7 +453,12 @@ public final class SettlerWork {
                 return;
             }
             if (intent == Intent.FORAGE) {
-                forage(level, day, dayTime);
+                forage(level);
+                return;
+            }
+            if (intent == Intent.END_FORAGING) {
+                returnFromForaging();
+                stop();
                 return;
             }
             if (intent == Intent.WAKE) {
@@ -489,7 +494,7 @@ public final class SettlerWork {
         return new Schedule.Snapshot(day, dayTime, food.level(),
                 SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE),
                 CivModConfig.PROVISION_NUTRITION.get(), SettlerFood.choose(pocketStacks(), food.level()).isPresent(),
-                () -> pantry.get().isPresent(), settler.isHomeless(), settler.isSleeping() && !woke, food.isForaging(), nightSkipped,
+                () -> pantry.get().isPresent(), settler.isHomeless(), settler.isSleeping() && !woke, food.forageDay(), nightSkipped,
                 activity, () -> jobStepHolds(level), food.morningDay() == day, food.eatenDay() == day, deliveryPending);
     }
 
@@ -1017,11 +1022,7 @@ public final class SettlerWork {
         CivMod.LOGGER.info("Catch-up {}: {} day(s), {} item(s), {} meal(s), skills {}", settler.getName().getString(),
                 String.format(java.util.Locale.ROOT, "%.1f", cuDays), cuItems, cuMeals,
                 settler.getSkills().snapshot());
-        SettlerFood food = settler.getFood();
-        if (food.isForaging() && catchUpTo >= food.forageDay() * 24000L + WORK_END) {
-            // The foraging day's food was already given at the end of its work.
-            food.endForaging();
-        }
+        // Foraging that is over came back during the run (Schedule); one still going on continues live.
         catchUpFrom = -1;
         catchUpTo = -1;
         catchUpRegistered = false;
@@ -1053,20 +1054,23 @@ public final class SettlerWork {
             // On the mission all hour (no hunger, no work), or died on it.
             return 0;
         }
-        long awake = to - from;
         long workEnd = day * 24000L + WORK_END;
-        long work = Math.max(0, Math.min(to, workEnd) - from);
         long dayTime = from - day * 24000L;
         SettlerFood food = settler.getFood();
 
-        // Start of the hour: back from an earlier foraging day, the morning plan, a meal if hungry.
+        // Start of the hour: back from foraging, the morning plan, a meal if hungry.
         if (decideCatchUp(level, day, dayTime) == Intent.FORAGE) {
-            // Foraging takes the whole day (no hunger, no work); the food comes at the end of work.
-            if (from < workEnd && to >= workEnd) {
-                food.addFood(CivModConfig.FORAGING_FOOD.get());
+            // Away while foraging (no hunger, no work).
+            if (to <= workEnd) {
+                return 0;
             }
-            return 0;
+            // Back at the end of work (the Schedule hands out the food): the rest of the hour is an ordinary evening.
+            from = workEnd;
+            dayTime = WORK_END;
+            decideCatchUp(level, day, dayTime);
         }
+        long awake = to - from;
+        long work = Math.max(0, Math.min(to, workEnd) - from);
 
         double share = Fatigue.expectedWorkShare();
         double factor = settler.getJobs().stream().filter(job -> !catchUpEnded(job.jobBlock())).findFirst()
@@ -1105,13 +1109,16 @@ public final class SettlerWork {
             for (int step = 0; step < CATCH_UP_DECISIONS; step++) {
                 PantryLookup pantry = new PantryLookup(level);
                 Schedule.Snapshot snapshot = catchUpSnapshot(day, dayTime, pantry, noFood);
-                if (Schedule.wakeUp(snapshot).isPresent()) {
-                    // Only foraging settles the body in catch-up. Foraging of an earlier day is over: its food came
-                    // at the end of that day's work.
-                    if (day <= food.forageDay()) {
+                Optional<Intent> body = Schedule.wakeUp(snapshot);
+                if (body.isPresent()) {
+                    // Only foraging settles the body in catch-up (awake, no skipped night).
+                    if (body.get() == Intent.FORAGE) {
                         return Intent.FORAGE;
                     }
-                    food.endForaging();
+                    // END_FORAGING: back with the day's food, which is not a meal.
+                    int beforeReturn = food.level();
+                    returnFromForaging();
+                    levelBefore += food.level() - beforeReturn;
                     continue;
                 }
                 Decision decision = Schedule.next(snapshot);
@@ -1167,7 +1174,7 @@ public final class SettlerWork {
         return new Schedule.Snapshot(day, dayTime, food.level(),
                 SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE),
                 CivModConfig.PROVISION_NUTRITION.get(), !noFood && SettlerFood.choose(pocketStacks(), food.level()).isPresent(),
-                () -> !noFood && pantry.get().isPresent(), settler.isHomeless(), false, food.isForaging(), false,
+                () -> !noFood && pantry.get().isPresent(), settler.isHomeless(), false, food.forageDay(), false,
                 Activity.IDLE, () -> false, food.morningDay() == day, food.eatenDay() == day, false);
     }
 
@@ -1496,21 +1503,11 @@ public final class SettlerWork {
     }
 
     /**
-     * Foraging: walk towards the border, vanish after at most {@value #FORAGE_WALK_TICKS} ticks or at the border,
-     * reappear there at 17:30 with some food.
+     * Foraging: walk towards the border, vanish after at most {@value #FORAGE_WALK_TICKS} ticks or at the border.
+     * When it is over the Schedule says {@link Intent#END_FORAGING}: see {@link #returnFromForaging}.
      */
-    private void forage(ServerLevel level, long day, long dayTime) {
+    private void forage(ServerLevel level) {
         SettlerFood food = settler.getFood();
-        boolean over = dayTime >= WORK_END || day > food.forageDay();
-        if (over) {
-            if (food.isAway()) {
-                settler.setInvisible(false);
-            }
-            food.addFood(CivModConfig.FORAGING_FOOD.get());
-            food.endForaging();
-            stop();
-            return;
-        }
         if (food.isAway()) {
             return;
         }
@@ -1525,6 +1522,19 @@ public final class SettlerWork {
             settler.setInvisible(true);
             target = null;
         }
+    }
+
+    /**
+     * Back from foraging ({@link Intent#END_FORAGING}, live and catch-up): reappears where it vanished, with the day's
+     * food.
+     */
+    private void returnFromForaging() {
+        SettlerFood food = settler.getFood();
+        if (food.isAway()) {
+            settler.setInvisible(false);
+        }
+        food.addFood(Schedule.foragingFood());
+        food.endForaging();
     }
 
     /**

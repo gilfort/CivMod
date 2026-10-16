@@ -5,16 +5,18 @@ import java.util.function.BooleanSupplier;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.food.SettlerFood;
 
 /**
  * The daily schedule of a settler (vault {@code Systems/NPC Daily Schedule.md}, {@code Systems/Needs.md}): a
  * {@link Snapshot} of plain values goes in, an {@link Intent} comes out. It does not touch the world, navigation or
- * the inventory; the Settler Shell builds the snapshot and acts on the intent.
+ * the inventory; the Settler Shell builds the snapshot and acts on the intent. Live play and catch-up ask the same
+ * rules.
  * <p>
  * A decision has two steps. {@link #wakeUp} settles the body first (stay asleep, wake, return to the rest place after a
- * skipped night, keep foraging); the shell acts on it and asks again until it is empty. Then {@link #next} decides
- * what the awake settler does.
+ * skipped night, keep foraging, come back from foraging); the shell acts on it and asks again until it is empty. Then
+ * {@link #next} decides what the awake settler does.
  */
 public final class Schedule {
 
@@ -35,8 +37,13 @@ public final class Schedule {
         WAKE,
         /** The night was skipped while not in bed: appear at the rest place as if the settler slept there. */
         RETURN_TO_REST_PLACE,
-        /** Go on foraging (walk out, stay away, come back at the end of the day). */
+        /** Go on foraging (walk out, stay away). */
         FORAGE,
+        /**
+         * Foraging is over (end of work, or a later day): come back with the day's food
+         * ({@code foragingFood()}) and decide as usual.
+         */
+        END_FORAGING,
         /** Keep doing the current activity (a meal in progress, or the job step holds the decision). */
         CONTINUE,
         /** Stand still (homeless, or starving). */
@@ -72,7 +79,7 @@ public final class Schedule {
      *                         when a rule needs it
      * @param homeless         whether the settler has no settlement
      * @param sleeping         whether the settler is asleep
-     * @param foraging         whether the settler is foraging today
+     * @param forageDay        the day the settler forages on, {@link SettlerFood#NO_DAY} if it is not foraging
      * @param nightSkipped     whether the night was skipped since the last decision
      * @param activity         the current activity
      * @param jobStepHolds     whether the current job step holds the decision (fatigue break, walking out for a
@@ -82,9 +89,16 @@ public final class Schedule {
      * @param deliveryPending  whether a job has items to deliver to a drop-off that is not full
      */
     public record Snapshot(long day, long dayTime, int food, int provisions, int provisionsWanted, boolean pocketMeal,
-            BooleanSupplier pantryFood, boolean homeless, boolean sleeping, boolean foraging, boolean nightSkipped,
+            BooleanSupplier pantryFood, boolean homeless, boolean sleeping, long forageDay, boolean nightSkipped,
             Activity activity, BooleanSupplier jobStepHolds, boolean morningHandled, boolean eveningMealEaten,
             boolean deliveryPending) {
+
+        /**
+         * @return whether the settler is foraging (today, or still from an earlier day)
+         */
+        public boolean foraging() {
+            return forageDay != SettlerFood.NO_DAY;
+        }
     }
 
     /**
@@ -105,8 +119,8 @@ public final class Schedule {
      * Settles the body before anything else.
      *
      * @param snapshot the situation
-     * @return {@link Intent#SLEEP}, {@link Intent#WAKE}, {@link Intent#RETURN_TO_REST_PLACE} or {@link Intent#FORAGE};
-     *         empty when the settler is awake and free to decide with {@link #next}
+     * @return {@link Intent#SLEEP}, {@link Intent#WAKE}, {@link Intent#RETURN_TO_REST_PLACE}, {@link Intent#FORAGE} or
+     *         {@link Intent#END_FORAGING}; empty when the settler is awake and free to decide with {@link #next}
      */
     public static Optional<Intent> wakeUp(Snapshot snapshot) {
         boolean night = isNight(snapshot);
@@ -116,7 +130,12 @@ public final class Schedule {
         if (snapshot.nightSkipped() && !night && !snapshot.homeless() && !snapshot.foraging()) {
             return Optional.of(Intent.RETURN_TO_REST_PLACE);
         }
-        return snapshot.foraging() ? Optional.of(Intent.FORAGE) : Optional.empty();
+        if (!snapshot.foraging()) {
+            return Optional.empty();
+        }
+        // The forager comes back at the end of work (17:30); foraging of an earlier day is over as well.
+        boolean over = snapshot.dayTime() >= SettlerWork.WORK_END || snapshot.day() > snapshot.forageDay();
+        return Optional.of(over ? Intent.END_FORAGING : Intent.FORAGE);
     }
 
     /**
@@ -180,6 +199,13 @@ public final class Schedule {
         }
         boolean complain = snapshot.food() < SettlerFood.HUNGRY && snapshot.provisions() == 0 && !snapshot.pantryFood().getAsBoolean();
         return new Decision(night ? Intent.GO_TO_BED : Intent.REST, null, complain, false, meal, true);
+    }
+
+    /**
+     * @return the food points a forager brings back ({@link Intent#END_FORAGING})
+     */
+    static int foragingFood() {
+        return CivModConfig.FORAGING_FOOD.get();
     }
 
     private static boolean isNight(Snapshot snapshot) {
