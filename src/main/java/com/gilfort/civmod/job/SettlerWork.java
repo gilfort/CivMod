@@ -4,11 +4,9 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import org.jspecify.annotations.Nullable;
 
@@ -56,9 +54,9 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 /**
  * The Settler Shell (vault {@code Systems/Job Categories.md}): the behaviour shared by every Job Category – schedule,
- * walking / anti-stuck, food, sleep, job priorities, status, EXP, per-job buffers with delivery and the catch-up
- * driver. It picks the first job of the priority list that can work and hands control to the {@link CategoryLoop} of
- * that job's {@link JobCategory}.
+ * walking / anti-stuck, food, sleep, job priorities, EXP, one {@link Workplace} per job (buffer, status, work place of
+ * the day, scan) with delivery and the catch-up driver. It picks the first job of the priority list that can work and
+ * hands control to the {@link CategoryLoop} of that job's {@link JobCategory}.
  * <p>
  * Decisions run every {@value #DECISION_INTERVAL} ticks (staggered per settler); movement uses vanilla navigation.
  */
@@ -66,8 +64,6 @@ public final class SettlerWork {
 
     /** Ticks between decisions. */
     public static final int DECISION_INTERVAL = 100;
-    /** Ticks a blocked job waits before it is checked again. */
-    private static final int BLOCKED_RETRY = 600;
     /** Work hours in day ticks (06:00–17:30; day time 0 = 06:00). */
     public static final long WORK_END = 11500;
     /** Daily scans that start within this many day ticks are spread randomly over that window. */
@@ -121,9 +117,8 @@ public final class SettlerWork {
     }
 
     private final Settler settler;
-    private final Map<BlockPos, JobBuffer> buffers = new HashMap<>();
-    private final Map<BlockPos, JobStatus> statuses = new HashMap<>();
-    private final Map<BlockPos, Long> blockedUntil = new HashMap<>();
+    /** One Workplace per JobBlock the settler works for. */
+    private final Map<BlockPos, Workplace> jobWorkplaces = new HashMap<>();
     /** The work loop of each implemented Job Category. */
     private final Map<JobCategory, CategoryLoop> loops = new EnumMap<>(JobCategory.class);
     private final MissionLoop missions;
@@ -157,7 +152,6 @@ public final class SettlerWork {
     private long cuStarvingDay = NO_DAY;
     private long cuMorningDay = NO_DAY;
     private long cuEveningDay = NO_DAY;
-    private final Set<BlockPos> cuDone = new HashSet<>();
     private int cuItems;
     private int cuMeals;
     private double cuDays;
@@ -207,15 +201,18 @@ public final class SettlerWork {
      * @return the codec value of the buffers
      */
     public BuffersSnapshot snapshot() {
+        List<BufferEntry> buffers = new ArrayList<>();
         List<WorkPlaceEntry> workPlaces = new ArrayList<>();
         List<SavedScan> saved = new ArrayList<>();
-        loops.values().forEach(loop -> {
-            workPlaces.addAll(loop.workPlaces());
-            saved.addAll(loop.savedScans());
+        jobWorkplaces.forEach((jobBlock, workplace) -> {
+            if (!workplace.buffer().isEmpty()) {
+                buffers.add(new BufferEntry(jobBlock, workplace.buffer()));
+            }
+            workplace.savedWorkPlace().ifPresent(workPlaces::add);
+            workplace.savedScan().ifPresent(saved::add);
         });
         long clock = settler.level() instanceof ServerLevel level ? level.getOverworldClockTime() : -1L;
-        return new BuffersSnapshot(buffers.entrySet().stream().map(e -> new BufferEntry(e.getKey(), e.getValue())).toList(),
-                workPlaces, saved, new CatchUpState(clock, catchUpFrom, catchUpTo), missions.trip());
+        return new BuffersSnapshot(buffers, workPlaces, saved, new CatchUpState(clock, catchUpFrom, catchUpTo), missions.trip());
     }
 
     /**
@@ -297,13 +294,15 @@ public final class SettlerWork {
     }
 
     /**
-     * Restores saved buffers.
+     * Restores the saved work state into the Workplaces (status and blocked time are not saved and stay).
      *
-     * @param snapshot the saved buffers
+     * @param snapshot the saved work state
      */
     public void restore(BuffersSnapshot snapshot) {
-        buffers.clear();
-        snapshot.entries().forEach(entry -> buffers.put(entry.jobBlock(), entry.buffer()));
+        jobWorkplaces.values().forEach(Workplace::clearSaved);
+        snapshot.entries().forEach(entry -> workplace(entry.jobBlock()).restoreBuffer(entry.buffer()));
+        snapshot.workPlaces().forEach(entry -> workplace(entry.jobBlock()).restoreWorkPlace(entry));
+        snapshot.scans().forEach(scan -> workplace(scan.jobBlock()).restoreScan(scan));
         loops.values().forEach(loop -> loop.restore(snapshot));
         savedClock = snapshot.catchUp().activeClock();
         catchUpFrom = snapshot.catchUp().from();
@@ -317,7 +316,7 @@ public final class SettlerWork {
      * @return the status of that job
      */
     public JobStatus status(BlockPos jobBlock) {
-        return statuses.getOrDefault(jobBlock, JobStatus.IDLE);
+        return existingWorkplace(jobBlock).map(Workplace::status).orElse(JobStatus.IDLE);
     }
 
     /**
@@ -325,7 +324,7 @@ public final class SettlerWork {
      * @return the buffer of that job (empty if none)
      */
     public JobBuffer buffer(BlockPos jobBlock) {
-        return buffers.getOrDefault(jobBlock, new JobBuffer());
+        return existingWorkplace(jobBlock).map(Workplace::buffer).orElseGet(JobBuffer::new);
     }
 
     /**
@@ -377,16 +376,15 @@ public final class SettlerWork {
     }
 
     /**
-     * Forgets everything about a removed job (its buffer is dropped at the settler's position).
+     * Forgets everything about a removed job: its whole Workplace goes (the buffer is dropped at the settler's position).
      *
      * @param jobBlock the JobBlock position
      */
     public void forget(BlockPos jobBlock) {
-        JobBuffer buffer = buffers.remove(jobBlock);
-        if (buffer != null && settler.level() instanceof ServerLevel level) {
-            buffer.stacks().forEach(stack -> settler.spawnAtLocation(level, stack.copy()));
+        Workplace workplace = jobWorkplaces.remove(jobBlock);
+        if (workplace != null && settler.level() instanceof ServerLevel level) {
+            workplace.buffer().stacks().forEach(stack -> settler.spawnAtLocation(level, stack.copy()));
         }
-        statuses.remove(jobBlock);
         loops.values().forEach(loop -> loop.forget(jobBlock));
         if (activeJob != null && activeJob.jobBlock().equals(jobBlock)) {
             stop();
@@ -498,7 +496,7 @@ public final class SettlerWork {
                     startDelivery(level, job);
                     return;
                 }
-                statuses.put(job.jobBlock(), JobStatus.IDLE);
+                workplace(job.jobBlock()).setStatus(JobStatus.IDLE);
             }
             if (evening && food.eatenDay() != day) {
                 food.setEatenDay(day);
@@ -571,7 +569,7 @@ public final class SettlerWork {
         List<SettlerJob> jobs = settler.getJobs();
         for (int i = 0; i < jobs.size(); i++) {
             SettlerJob job = jobs.get(i);
-            if (blockedUntil.getOrDefault(job.jobBlock(), 0L) > level.getGameTime()) {
+            if (workplace(job.jobBlock()).isBlocked(level.getGameTime())) {
                 continue;
             }
             if (plan(level, job, day, dayTime)) {
@@ -606,10 +604,18 @@ public final class SettlerWork {
 
     /**
      * @param jobBlock a JobBlock position
-     * @return the buffer of that job (created if missing)
+     * @return the Workplace of that job (created if missing)
      */
-    JobBuffer jobBuffer(BlockPos jobBlock) {
-        return buffers.computeIfAbsent(jobBlock, pos -> new JobBuffer());
+    Workplace workplace(BlockPos jobBlock) {
+        return jobWorkplaces.computeIfAbsent(jobBlock, Workplace::new);
+    }
+
+    /**
+     * @param jobBlock a JobBlock position
+     * @return the Workplace of that job, empty if it has none (for queries that must not create one)
+     */
+    Optional<Workplace> existingWorkplace(BlockPos jobBlock) {
+        return Optional.ofNullable(jobWorkplaces.get(jobBlock));
     }
 
     /**
@@ -624,7 +630,7 @@ public final class SettlerWork {
      * @param status   the new status of that job
      */
     void setStatus(BlockPos jobBlock, JobStatus status) {
-        statuses.put(jobBlock, status);
+        workplace(jobBlock).setStatus(status);
     }
 
     /**
@@ -684,7 +690,7 @@ public final class SettlerWork {
     boolean startDelivery(ServerLevel level, SettlerJob job) {
         BlockPos dropOff = JobBlockSite.at(level, job.jobBlock()).map(JobBlockSite::dropOff).orElse(job.jobBlock());
         activeJob = job;
-        statuses.put(job.jobBlock(), JobStatus.DELIVERING);
+        workplace(job.jobBlock()).setStatus(JobStatus.DELIVERING);
         if (activity != Activity.DELIVER || !dropOff.equals(target)) {
             moveTo(level, Activity.DELIVER, dropOff);
         }
@@ -699,8 +705,7 @@ public final class SettlerWork {
      * @param status   the status explaining why
      */
     void block(ServerLevel level, BlockPos jobBlock, JobStatus status) {
-        statuses.put(jobBlock, status);
-        blockedUntil.put(jobBlock, level.getGameTime() + BLOCKED_RETRY);
+        workplace(jobBlock).block(status, level.getGameTime());
         if (activeJob != null && activeJob.jobBlock().equals(jobBlock)) {
             stop();
         }
@@ -986,7 +991,7 @@ public final class SettlerWork {
         cuDays = Math.max(0, catchUpTo - catchUpFrom()) / (double) 24000L;
         quiet = true;
         loops.values().forEach(CategoryLoop::startCatchUp);
-        cuDone.clear();
+        jobWorkplaces.values().forEach(workplace -> workplace.setCatchUpEnded(false));
         cuItems = 0;
         cuMeals = 0;
         cuForageDay = NO_DAY;
@@ -1008,7 +1013,10 @@ public final class SettlerWork {
         catchUpTo = -1;
         catchUpRegistered = false;
         quiet = false;
-        cuDone.forEach(jobBlock -> statuses.put(jobBlock, JobStatus.DROP_OFF_FULL));
+        jobWorkplaces.values().stream().filter(Workplace::catchUpEnded).forEach(workplace -> {
+            workplace.setStatus(JobStatus.DROP_OFF_FULL);
+            workplace.setCatchUpEnded(false);
+        });
     }
 
     /**
@@ -1059,7 +1067,7 @@ public final class SettlerWork {
         }
 
         double share = Fatigue.expectedWorkShare();
-        double factor = settler.getJobs().stream().filter(job -> !cuDone.contains(job.jobBlock())).findFirst()
+        double factor = settler.getJobs().stream().filter(job -> !catchUpEnded(job.jobBlock())).findFirst()
                 .map(job -> job.jobType().hungerFactor()).orElse(0.0);
         float appetite = food.appetite(level.getRandom(), CivModConfig.APPETITE_MIN.get(), CivModConfig.APPETITE_MAX.get());
         food.exhaust(SettlerFood.exhaustionFor(awake, work * share * factor, CivModConfig.HUNGER_BASE_PER_DAY.get(),
@@ -1123,12 +1131,12 @@ public final class SettlerWork {
         int rolls = 0;
         double remaining = workTicks;
         for (SettlerJob job : settler.getJobs()) {
-            if (cuDone.contains(job.jobBlock()) || remaining <= 0.0) {
+            if (catchUpEnded(job.jobBlock()) || remaining <= 0.0) {
                 continue;
             }
             CategoryLoop loop = loop(job);
             if (loop == null) {
-                cuDone.add(job.jobBlock());
+                endCatchUpJob(job.jobBlock());
                 continue;
             }
             CategoryLoop.SimulatedWork simulated = loop.simulateWork(level, job, day, remaining);
@@ -1144,7 +1152,11 @@ public final class SettlerWork {
      * @param jobBlock the JobBlock position
      */
     void endCatchUpJob(BlockPos jobBlock) {
-        cuDone.add(jobBlock);
+        workplace(jobBlock).setCatchUpEnded(true);
+    }
+
+    private boolean catchUpEnded(BlockPos jobBlock) {
+        return existingWorkplace(jobBlock).map(Workplace::catchUpEnded).orElse(false);
     }
 
     /**
@@ -1157,7 +1169,7 @@ public final class SettlerWork {
      */
     boolean deliverDirect(ServerLevel level, JobBlockSite site, List<ItemStack> stacks) {
         ResourceHandler<ItemResource> handler = level.getCapability(Capabilities.Item.BLOCK, site.dropOff(), null);
-        JobBuffer buffer = buffers.computeIfAbsent(site.pos(), pos -> new JobBuffer());
+        JobBuffer buffer = workplace(site.pos()).buffer();
         for (ItemStack stack : stacks) {
             ItemStack rest = stack.copy();
             if (handler != null) {
