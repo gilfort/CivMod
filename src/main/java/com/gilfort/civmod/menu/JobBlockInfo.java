@@ -9,6 +9,8 @@ import com.gilfort.civmod.block.UpgradeCosts;
 import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.job.JobCategory;
 import com.gilfort.civmod.mission.MissionOffer;
+import com.gilfort.civmod.mission.MissionRules;
+import com.gilfort.civmod.mission.OutcomeRules;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
@@ -58,23 +60,26 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      * @param offer    the daily mission offer
      * @param taken    the missions settlers of this board took (reserved or on the way; loaded settlers only)
      * @param settlers the settlers of this board with their Mission Job (loaded settlers only), for assignments
+     * @param rules    the outcome constants, so the client shows the chances of the outcome roll
      */
-    public record MissionTab(List<MissionOffer.Entry> offer, List<TakenMission> taken, List<MissionSettler> settlers) {
+    public record MissionTab(List<MissionOffer.Entry> offer, List<TakenMission> taken, List<MissionSettler> settlers, OutcomeRules rules) {
 
         /** No missions (any other JobBlock). */
-        public static final MissionTab EMPTY = new MissionTab(List.of(), List.of(), List.of());
+        public static final MissionTab EMPTY = new MissionTab(List.of(), List.of(), List.of(), OutcomeRules.FALLBACK);
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, MissionTab> STREAM_CODEC = StreamCodec.composite(
                 MissionOffer.Entry.STREAM_CODEC.apply(ByteBufCodecs.list()), MissionTab::offer,
                 TakenMission.STREAM_CODEC.apply(ByteBufCodecs.list()), MissionTab::taken,
                 MissionSettler.STREAM_CODEC.apply(ByteBufCodecs.list()), MissionTab::settlers,
+                OutcomeRules.STREAM_CODEC, MissionTab::rules,
                 MissionTab::new);
 
         /**
          * @param offer    the daily mission offer
          * @param taken    the missions settlers of this board took
          * @param settlers the settlers of this board with their Mission Job
+         * @param rules    the outcome constants
          */
         public MissionTab {
             offer = List.copyOf(offer);
@@ -90,6 +95,13 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
             return settlers.stream().filter(settler -> settler.id().equals(id)).findFirst();
         }
 
+        /**
+         * @return the settlers as the pick rule sees them (same order as {@link #settlers()})
+         */
+        public List<MissionRules.Picker> pickers() {
+            return settlers.stream().map(settler -> new MissionRules.Picker(settler.id(), settler.job(), settler.skill())).toList();
+        }
+
         /** A copy with one offer entry changed. */
         MissionTab withEntry(int index, UnaryOperator<MissionOffer.Entry> change) {
             if (index < 0 || index >= offer.size()) {
@@ -97,7 +109,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
             }
             List<MissionOffer.Entry> changed = new ArrayList<>(offer);
             changed.set(index, change.apply(offer.get(index)));
-            return new MissionTab(changed, taken, settlers);
+            return new MissionTab(changed, taken, settlers, rules);
         }
     }
 
@@ -268,7 +280,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
                 settlement.isPresent(), status.connected(), status.distance(), status.required(),
                 assignees.stream().map(SettlementBlock.Assignee::name).toList(),
                 settlement.flatMap(s -> s.block(pos)).map(SettlementBlock::collectLeaves).orElse(false), costsOf(jobType),
-                new MissionTab(SettlementWorld.missionOffer(level, pos), taken, settlers));
+                new MissionTab(SettlementWorld.missionOffer(level, pos), taken, settlers, OutcomeRules.get()));
     }
 
     /**
@@ -283,7 +295,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withoutAssignees() {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, List.of(), collectLeaves, costs,
-                new MissionTab(missionTab.offer(), List.of(), List.of()));
+                new MissionTab(missionTab.offer(), List.of(), List.of(), missionTab.rules()));
     }
 
     /**

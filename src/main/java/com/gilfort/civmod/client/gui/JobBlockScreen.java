@@ -3,12 +3,14 @@ package com.gilfort.civmod.client.gui;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 import com.gilfort.civmod.job.JobProfile;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.mission.Mission;
 import com.gilfort.civmod.mission.MissionOffer;
+import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -22,6 +24,7 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.FormattedCharSequence;
@@ -256,7 +259,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             checkbox(graphics, entry.marked(), index == hovered, left + width - box, y);
         }
         if (hovered >= 0) {
-            graphics.setTooltipForNextFrame(font, hovered < offer.size() ? missionTooltip(offer.get(hovered))
+            graphics.setTooltipForNextFrame(font, hovered < offer.size() ? missionTooltip(hovered)
                     : takenTooltip(taken.get(hovered - offer.size())), mouseX, mouseY);
         }
     }
@@ -299,11 +302,13 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         return lines;
     }
 
-    private List<FormattedCharSequence> missionTooltip(MissionOffer.Entry entry) {
+    private List<FormattedCharSequence> missionTooltip(int index) {
+        MissionOffer.Entry entry = menu.getInfo().missions().get(index);
         List<FormattedCharSequence> lines = missionLines(entry.mission());
         if (entry.locked()) {
             lines.add(lockText(entry).copy().withStyle(ChatFormatting.GOLD).getVisualOrderText());
         }
+        lines.addAll(pickerLines(index));
         lines.add(Component.translatable(entry.marked() ? "civmod.gui.mission.unmark" : "civmod.gui.mission.mark")
                 .withStyle(ChatFormatting.DARK_GRAY).getVisualOrderText());
         if (entry.marked()) {
@@ -319,6 +324,48 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             return Component.translatable("civmod.gui.mission.assigned", name.get());
         }
         return Component.translatable(entry.assignee().isPresent() ? "civmod.gui.mission.assigned.unknown" : "civmod.gui.mission.locked");
+    }
+
+    /**
+     * The settler the automatic pick rule would send on an offer entry, with its chances, or that none would take it.
+     */
+    private List<FormattedCharSequence> pickerLines(int index) {
+        JobBlockInfo.MissionTab board = menu.getInfo().missionTab();
+        Optional<Mission> mission = mission(board.offer().get(index).mission());
+        if (mission.isEmpty()) {
+            return List.of();
+        }
+        OptionalInt picker = MissionRules.picker(board.offer(), Missions.all(minecraft.level.registryAccess()), index, board.pickers());
+        if (picker.isEmpty()) {
+            return List.of(Component.translatable("civmod.gui.mission.chances.nobody").withStyle(ChatFormatting.GRAY).getVisualOrderText());
+        }
+        JobBlockInfo.MissionSettler settler = board.settlers().get(picker.getAsInt());
+        return List.of(Component.translatable("civmod.gui.mission.chances.picker", settler.name(), settler.skill()).getVisualOrderText(),
+                chancesLine(chances(mission.get(), settler)).getVisualOrderText());
+    }
+
+    /** The chances of a settler of the board on a mission, from the outcome constants the server sent. */
+    private MissionRules.Chances chances(Mission mission, JobBlockInfo.MissionSettler settler) {
+        return MissionRules.chances(menu.getInfo().missionTab().rules(), mission.recommendedLevel(), settler.skill());
+    }
+
+    /** "Success 75 % · Failed 22 % · Death 3 %", the death chance in red when it is high. */
+    private static Component chancesLine(MissionRules.Chances chances) {
+        return Component.translatable("civmod.gui.mission.chances", percent(chances.success()), percent(chances.failed()), death(chances));
+    }
+
+    /** "75% / 22% / 3%" (success / failed / death), the death chance in red when it is high. */
+    private static Component chancesShort(MissionRules.Chances chances) {
+        return Component.translatable("civmod.gui.mission.chances.short", percent(chances.success()), percent(chances.failed()), death(chances));
+    }
+
+    private static Component death(MissionRules.Chances chances) {
+        MutableComponent death = percent(chances.death());
+        return chances.highDeath() ? death.withStyle(ChatFormatting.RED) : death;
+    }
+
+    private static MutableComponent percent(double chance) {
+        return Component.translatable("civmod.gui.mission.percent", Math.round(chance * 100));
     }
 
     // ---------------------------------------------------------------- assignment view
@@ -365,8 +412,8 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     }
 
     /**
-     * Draws the assignment view: the settlers of the board whose Mission Job may take the mission (name, Mission Job,
-     * skill), the current assignee checked; a click assigns. More than {@value #ASSIGN_ROWS} rows scroll.
+     * Draws the assignment view: the settlers of the board whose Mission Job may take the mission (name, chances,
+     * Mission Job, skill), the current assignee checked; a click assigns. More than {@value #ASSIGN_ROWS} rows scroll.
      */
     private void extractAssignment(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         JobBlockInfo.MissionTab board = menu.getInfo().missionTab();
@@ -374,7 +421,8 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             return;
         }
         MissionOffer.Entry entry = board.offer().get(assigning);
-        Component title = Component.translatable("civmod.gui.mission.assign.title", title(entry.mission(), mission(entry.mission())));
+        Optional<Mission> mission = mission(entry.mission());
+        Component title = Component.translatable("civmod.gui.mission.assign.title", title(entry.mission(), mission));
         graphics.text(font, CivGui.fit(font, title, imageWidth - 2 * CivGui.PADDING), CivGui.PADDING, 22, CivGui.LABEL_COLOR, false);
         int left = CivGui.PADDING + CivGui.INSET_PADDING;
         int width = imageWidth - 2 * left;
@@ -400,10 +448,22 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             JobBlockInfo.MissionSettler settler = board.settlers().get(eligible.get(index));
             int y = MISSION_LIST_Y + CivGui.INSET_PADDING + row * MISSION_ROW_HEIGHT;
             int textWidth = width - box - 2;
-            graphics.text(font, CivGui.fit(font, Component.literal(settler.name()), textWidth), left, y + 1, CivGui.LABEL_COLOR, false);
+            int nameWidth = textWidth;
+            if (mission.isPresent()) {
+                Component chances = chancesShort(chances(mission.get(), settler));
+                int chancesWidth = font.width(chances);
+                graphics.text(font, chances, left + textWidth - chancesWidth, y + 1, CivGui.LABEL_COLOR, false);
+                nameWidth -= chancesWidth + 4;
+            }
+            graphics.text(font, CivGui.fit(font, Component.literal(settler.name()), nameWidth), left, y + 1, CivGui.LABEL_COLOR, false);
             graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.mission.assign.settler", settler.job().displayName(),
                     settler.skill()), textWidth), left, y + 11, CivGui.HINT_COLOR, false);
             checkbox(graphics, entry.assignee().filter(settler.id()::equals).isPresent(), index == hovered, left + width - box, y);
+        }
+        if (hovered >= 0 && mission.isPresent()) {
+            JobBlockInfo.MissionSettler settler = board.settlers().get(eligible.get(hovered));
+            graphics.setComponentTooltipForNextFrame(font, List.of(Component.literal(settler.name()), chancesLine(chances(mission.get(), settler))),
+                    mouseX, mouseY);
         }
     }
 

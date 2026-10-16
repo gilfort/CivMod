@@ -113,6 +113,16 @@ public final class MissionRules {
      */
     public record Chances(double success, double death) {
 
+        /** Death chances from here on are shown as a warning. */
+        private static final double HIGH_DEATH = 0.20;
+
+        /**
+         * @return whether the death chance is high enough to warn the player
+         */
+        public boolean highDeath() {
+            return death >= HIGH_DEATH;
+        }
+
         /**
          * @return the failure chance
          */
@@ -186,6 +196,56 @@ public final class MissionRules {
             return OptionalInt.of(assigned.get(random.nextInt(assigned.size())));
         }
         return best < 0 ? OptionalInt.empty() : OptionalInt.of(best);
+    }
+
+    /**
+     * A settler of a Mission Board as the pick rule sees it.
+     *
+     * @param id    the settler UUID
+     * @param job   its Mission Job
+     * @param skill its effective Mission Job skill
+     */
+    public record Picker(UUID id, Job job, int skill) {
+    }
+
+    /**
+     * Which settler the automatic rule would send on one offer entry: every settler asks at the same time and again
+     * after each pick ({@link #order} and {@link #pick}), until one takes the entry or nobody takes anything more. An
+     * unmarked entry is predicted as if it were marked. Equal skills pick in board order (the real order is random).
+     *
+     * @param offer    the current offer
+     * @param pool     all missions by id
+     * @param index    the offer index of the entry
+     * @param settlers the settlers of the board
+     * @return the index (in {@code settlers}) of the settler that would take the entry, empty if none would
+     */
+    public static OptionalInt picker(List<MissionOffer.Entry> offer, Map<Identifier, Mission> pool, int index, List<Picker> settlers) {
+        List<MissionOffer.Entry> left = new ArrayList<>(offer);
+        left.set(index, left.get(index).withMarked(true));
+        List<Integer> order = new ArrayList<>();
+        for (int i = 0; i < settlers.size(); i++) {
+            order.add(i);
+        }
+        order.sort(Comparator.comparingInt(i -> settlers.get(i).skill()));
+        // Several assigned missions only change their own order, never who takes another entry.
+        RandomSource random = RandomSource.create(0L);
+        boolean picked = true;
+        while (picked) {
+            picked = false;
+            for (int i : order) {
+                Picker settler = settlers.get(i);
+                OptionalInt pick = pick(left, pool, settler.job(), settler.skill(), settler.id(), random);
+                if (pick.isEmpty()) {
+                    continue;
+                }
+                if (pick.getAsInt() == index) {
+                    return OptionalInt.of(i);
+                }
+                left.set(pick.getAsInt(), left.get(pick.getAsInt()).withMarked(false));
+                picked = true;
+            }
+        }
+        return OptionalInt.empty();
     }
 
     /**

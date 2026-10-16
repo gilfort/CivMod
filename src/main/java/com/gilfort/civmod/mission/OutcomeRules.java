@@ -13,6 +13,9 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
+import io.netty.buffer.ByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.FileToIdConverter;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.Resource;
@@ -47,6 +50,20 @@ public record OutcomeRules(double successBase, double successPerLevel, double su
     public static final Identifier ID = CivMod.id("mission_outcome");
     /** Values used when no file is loaded. */
     public static final OutcomeRules FALLBACK = new OutcomeRules(0.75, 0.02, 0.05, 0.95, 0.03, 0.015, 0.01, 0.60, 2.0, 0.8);
+
+    /** Network codec (the board GUI computes the chances on the client). */
+    public static final StreamCodec<ByteBuf, OutcomeRules> STREAM_CODEC = StreamCodec.composite(
+            ByteBufCodecs.DOUBLE, OutcomeRules::successBase,
+            ByteBufCodecs.DOUBLE, OutcomeRules::successPerLevel,
+            ByteBufCodecs.DOUBLE, OutcomeRules::successMin,
+            ByteBufCodecs.DOUBLE, OutcomeRules::successMax,
+            ByteBufCodecs.DOUBLE, OutcomeRules::deathBase,
+            ByteBufCodecs.DOUBLE, OutcomeRules::deathPerLevel,
+            ByteBufCodecs.DOUBLE, OutcomeRules::deathMin,
+            ByteBufCodecs.DOUBLE, OutcomeRules::deathMax,
+            ByteBufCodecs.DOUBLE, OutcomeRules::successExp,
+            ByteBufCodecs.DOUBLE, OutcomeRules::failedExp,
+            OutcomeRules::new);
 
     private static final FileToIdConverter FILES = FileToIdConverter.json("civmod_mission");
     private static OutcomeRules current = FALLBACK;
