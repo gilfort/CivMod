@@ -12,8 +12,11 @@ import com.gilfort.civmod.mission.MissionOffer;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
+import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.codec.StreamCodec;
 
 /**
  * A JobBlock as recorded by its settlement, including its work points and the assigned settlers
@@ -37,6 +40,45 @@ public final class SettlementBlock {
         ).apply(instance, Assignee::new));
     }
 
+    /**
+     * A Clerk stand spot: the block the Clerk stands on and the direction it faces (vault {@code Jobs/Clerk.md}).
+     *
+     * @param pos    the block the Clerk stands on
+     * @param facing the direction the Clerk faces
+     */
+    public record StandSpot(BlockPos pos, Direction facing) {
+
+        /** Save codec. */
+        public static final Codec<StandSpot> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                BlockPos.CODEC.fieldOf("pos").forGetter(StandSpot::pos),
+                Direction.CODEC.fieldOf("facing").forGetter(StandSpot::facing)
+        ).apply(instance, StandSpot::new));
+
+        /** Network codec. */
+        public static final StreamCodec<ByteBuf, StandSpot> STREAM_CODEC = StreamCodec.composite(
+                BlockPos.STREAM_CODEC, StandSpot::pos,
+                Direction.STREAM_CODEC, StandSpot::facing,
+                StandSpot::new);
+    }
+
+    /**
+     * The stand spot a Clerk uses in one half of a day.
+     *
+     * @param period the half day it was picked for ({@code day * 2}, {@code + 1} from 12:00)
+     * @param index  the index into the stand spots
+     */
+    public record SpotOfDay(long period, int index) {
+
+        /** No spot picked yet. */
+        public static final SpotOfDay NONE = new SpotOfDay(Long.MIN_VALUE, -1);
+
+        /** Save codec. */
+        public static final Codec<SpotOfDay> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                Codec.LONG.fieldOf("period").forGetter(SpotOfDay::period),
+                Codec.INT.fieldOf("index").forGetter(SpotOfDay::index)
+        ).apply(instance, SpotOfDay::new));
+    }
+
     /** Maximum number of work POIs per JobBlock. */
     public static final int MAX_WORK_POINTS = 8;
 
@@ -54,7 +96,10 @@ public final class SettlementBlock {
             UUIDUtil.CODEC.optionalFieldOf("assignee").forGetter(block -> Optional.empty()),
             Codec.STRING.optionalFieldOf("assignee_name").forGetter(block -> Optional.empty()),
             Codec.BOOL.optionalFieldOf("collect_leaves", false).forGetter(SettlementBlock::collectLeaves),
-            MissionOffer.CODEC.optionalFieldOf("mission_offer", MissionOffer.EMPTY).forGetter(SettlementBlock::missionOffer)
+            MissionOffer.CODEC.optionalFieldOf("mission_offer", MissionOffer.EMPTY).forGetter(SettlementBlock::missionOffer),
+            BlockPos.CODEC.listOf().optionalFieldOf("storage", List.of()).forGetter(SettlementBlock::storage),
+            StandSpot.CODEC.listOf().optionalFieldOf("stand_spots", List.of()).forGetter(SettlementBlock::standSpots),
+            SpotOfDay.CODEC.optionalFieldOf("spot_of_day", SpotOfDay.NONE).forGetter(SettlementBlock::spotOfDay)
     ).apply(instance, SettlementBlock::new));
 
     private final BlockPos pos;
@@ -67,6 +112,9 @@ public final class SettlementBlock {
     private final List<Assignee> assignees = new ArrayList<>();
     private boolean collectLeaves;
     private MissionOffer missionOffer;
+    private final List<BlockPos> storage = new ArrayList<>();
+    private final List<StandSpot> standSpots = new ArrayList<>();
+    private SpotOfDay spotOfDay;
 
     /**
      * @param pos       the block position
@@ -76,12 +124,13 @@ public final class SettlementBlock {
      */
     public SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected) {
         this(pos, jobType, level, connected, List.of(), Optional.empty(), Optional.empty(), List.of(), Optional.empty(), Optional.empty(), false,
-                MissionOffer.EMPTY);
+                MissionOffer.EMPTY, List.of(), List.of(), SpotOfDay.NONE);
     }
 
     private SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected, List<BlockPos> workPoints,
             Optional<BlockPos> collect, Optional<BlockPos> dropOff, List<Assignee> assignees, Optional<UUID> legacyAssignee,
-            Optional<String> legacyAssigneeName, boolean collectLeaves, MissionOffer missionOffer) {
+            Optional<String> legacyAssigneeName, boolean collectLeaves, MissionOffer missionOffer, List<BlockPos> storage,
+            List<StandSpot> standSpots, SpotOfDay spotOfDay) {
         this.pos = pos.immutable();
         this.jobType = jobType;
         this.level = SettlementRules.clampLevel(level);
@@ -93,6 +142,42 @@ public final class SettlementBlock {
         legacyAssignee.filter(id -> assignees.isEmpty()).ifPresent(id -> this.assignees.add(new Assignee(id, legacyAssigneeName.orElse("?"))));
         this.collectLeaves = collectLeaves;
         this.missionOffer = missionOffer;
+        this.storage.addAll(storage);
+        this.standSpots.addAll(standSpots);
+        this.spotOfDay = spotOfDay;
+    }
+
+    /**
+     * @return the containers linked as Clerk storage, in linking order (read-only; Clerk only, else always empty)
+     */
+    public List<BlockPos> storage() {
+        return Collections.unmodifiableList(storage);
+    }
+
+    /**
+     * @return the Clerk stand spots, in setting order (read-only; Clerk only, else always empty)
+     */
+    public List<StandSpot> standSpots() {
+        return Collections.unmodifiableList(standSpots);
+    }
+
+    /**
+     * @return the stand spot the Clerk uses in the current half day
+     */
+    public SpotOfDay spotOfDay() {
+        return spotOfDay;
+    }
+
+    List<BlockPos> mutableStorage() {
+        return storage;
+    }
+
+    List<StandSpot> mutableStandSpots() {
+        return standSpots;
+    }
+
+    void setSpotOfDay(SpotOfDay spotOfDay) {
+        this.spotOfDay = spotOfDay;
     }
 
     /**

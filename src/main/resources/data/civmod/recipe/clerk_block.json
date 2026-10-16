@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "C": "minecraft:chest",
+    "P": "#minecraft:planks",
+    "R": "minecraft:paper"
+  },
+  "pattern": [
+    "PRP",
+    "PCP"
+  ],
+  "result": {
+    "id": "civmod:clerk_block"
+  }
+}

@@ -40,6 +40,9 @@ public final class ModJobs {
     /** See vault {@code Jobs/Adventurer.md}; the Base Job of the Mission Board. */
     public static final DeferredHolder<Job, Job> ADVENTURER = JOBS.register("adventurer", () -> Job.builder(JobCategory.MISSION)
             .icon(ModItems.MISSION_BOARD).hungerFactor(1.0).baseExp(10).build());
+    /** See vault {@code Jobs/Clerk.md}; the store and food point of the settlement, the first Logistics Job. */
+    public static final DeferredHolder<Job, Job> CLERK = JOBS.register("clerk", () -> Job.builder(JobCategory.LOGISTICS)
+            .icon(ModItems.CLERK_BLOCK).hungerFactor(0.5).baseExp(1).build());
 
     private ModJobs() {
     }

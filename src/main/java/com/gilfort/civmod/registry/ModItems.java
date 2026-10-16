@@ -29,6 +29,8 @@ public final class ModItems {
     public static final DeferredItem<BlockItem> FISHERMAN_BLOCK = ITEMS.registerSimpleBlockItem(ModBlocks.FISHERMAN_BLOCK);
     /** Item of the {@link ModBlocks#MISSION_BOARD}. */
     public static final DeferredItem<BlockItem> MISSION_BOARD = ITEMS.registerSimpleBlockItem(ModBlocks.MISSION_BOARD);
+    /** Item of the {@link ModBlocks#CLERK_BLOCK}. */
+    public static final DeferredItem<BlockItem> CLERK_BLOCK = ITEMS.registerSimpleBlockItem(ModBlocks.CLERK_BLOCK);
 
     /** The Scroll of Assignment. */
     public static final DeferredItem<ScrollOfAssignmentItem> SCROLL_OF_ASSIGNMENT = ITEMS.registerItem("scroll_of_assignment",
