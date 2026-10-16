@@ -52,11 +52,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.transfer.ResourceHandler;
-import net.neoforged.neoforge.transfer.ResourceHandlerUtil;
-import net.neoforged.neoforge.transfer.item.ItemResource;
-import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 /**
  * The Settler Shell (vault {@code Systems/Job Categories.md}): the behaviour shared by every Job Category – schedule,
@@ -140,6 +135,8 @@ public final class SettlerWork {
     private @Nullable MealPurpose mealPurpose;
     /** The food point the settler walks to or visits. */
     private ClerkStorage.@Nullable FoodPoint foodPoint;
+    /** Where the settler delivers to (a Clerk drop-off takes at its counter). */
+    private ClerkStorage.@Nullable Visit deliveryVisit;
     /** Reach of the current walking target outside job steps. */
     private double targetReach = REACH;
 
@@ -156,6 +153,8 @@ public final class SettlerWork {
     /** Schedule decisions per catch-up step at most (meals in a row; guards against a meal that never ends). */
     private static final int CATCH_UP_DECISIONS = 64;
     private double cuDays;
+    /** The day time of the hour being simulated in catch-up. */
+    private long cuDayTime;
 
     /**
      * @param settler the settler
@@ -713,10 +712,12 @@ public final class SettlerWork {
      */
     boolean startDelivery(ServerLevel level, SettlerJob job) {
         BlockPos dropOff = JobBlockSite.at(level, job.jobBlock()).map(JobBlockSite::dropOff).orElse(job.jobBlock());
+        ClerkStorage.Visit visit = ClerkStorage.visit(level, dropOff, Math.floorMod(level.getOverworldClockTime(), 24000L));
         activeJob = job;
         workplace(job.jobBlock()).setStatus(JobStatus.DELIVERING);
-        if (activity != Activity.DELIVER || !dropOff.equals(target)) {
-            moveTo(level, Activity.DELIVER, dropOff);
+        if (activity != Activity.DELIVER || !visit.target().equals(target)) {
+            deliveryVisit = visit;
+            moveTo(level, Activity.DELIVER, visit.target(), visit.reach());
         }
         return true;
     }
@@ -1071,6 +1072,7 @@ public final class SettlerWork {
         }
         long workEnd = day * 24000L + WORK_END;
         long dayTime = from - day * 24000L;
+        cuDayTime = dayTime;
         SettlerFood food = settler.getFood();
 
         // Start of the hour: back from foraging, the morning plan, a meal if hungry.
@@ -1230,6 +1232,13 @@ public final class SettlerWork {
     }
 
     /**
+     * @return the day time of the hour being simulated in catch-up
+     */
+    long catchUpDayTime() {
+        return cuDayTime;
+    }
+
+    /**
      * Ends a job for the rest of the catch-up run (it shows "Drop-off full" afterwards).
      *
      * @param jobBlock the JobBlock position
@@ -1251,17 +1260,11 @@ public final class SettlerWork {
      * @return false when the buffer is full as well (the job ends)
      */
     boolean deliverDirect(ServerLevel level, JobBlockSite site, List<ItemStack> stacks) {
-        ResourceHandler<ItemResource> handler = level.getCapability(Capabilities.Item.BLOCK, site.dropOff(), null);
+        // No walking in catch-up: the shift alone decides whether a Clerk drop-off takes into its linked storage.
+        Stock dropOff = ClerkStorage.stock(level, site.dropOff(), cuDayTime, true);
         JobBuffer buffer = workplace(site.pos()).buffer();
         for (ItemStack stack : stacks) {
-            ItemStack rest = stack.copy();
-            if (handler != null) {
-                try (Transaction transaction = Transaction.openRoot()) {
-                    int inserted = ResourceHandlerUtil.insertStacking(handler, ItemResource.of(rest), rest.getCount(), transaction);
-                    transaction.commit();
-                    rest.shrink(inserted);
-                }
-            }
+            ItemStack rest = dropOff.insert(stack);
             cuItems += stack.getCount() - rest.getCount();
             if (!rest.isEmpty()) {
                 buffer.add(rest);
@@ -1710,8 +1713,9 @@ public final class SettlerWork {
             return;
         }
         if (activity == Activity.DELIVER) {
-            deliver(level, activeJob.jobBlock(), target);
+            deliver(level, activeJob.jobBlock(), deliveryVisit != null && deliveryVisit.counter());
             activity = Activity.IDLE;
+            deliveryVisit = null;
             decide(level);
         } else if (activity == Activity.JOB) {
             CategoryLoop loop = loop(activeJob);
@@ -1721,16 +1725,16 @@ public final class SettlerWork {
         }
     }
 
-    private void deliver(ServerLevel level, BlockPos jobBlock, BlockPos dropOff) {
+    /**
+     * Delivers the buffer of a job into its drop-off, under the access rule if the drop-off is a Clerk.
+     *
+     * @param atCounter whether the settler stands at the counter of a working Clerk
+     */
+    private void deliver(ServerLevel level, BlockPos jobBlock, boolean atCounter) {
         JobBuffer buffer = buffer(jobBlock);
-        ResourceHandler<ItemResource> handler = level.getCapability(Capabilities.Item.BLOCK, dropOff, null);
-        boolean all = handler != null && buffer.deliver(stack -> {
-            try (Transaction transaction = Transaction.openRoot()) {
-                int inserted = ResourceHandlerUtil.insertStacking(handler, ItemResource.of(stack), stack.getCount(), transaction);
-                transaction.commit();
-                return inserted;
-            }
-        });
+        BlockPos dropOff = JobBlockSite.at(level, jobBlock).map(JobBlockSite::dropOff).orElse(jobBlock);
+        Stock stock = ClerkStorage.stock(level, dropOff, Math.floorMod(level.getOverworldClockTime(), 24000L), atCounter);
+        boolean all = !stock.isEmpty() && buffer.deliver(stack -> stack.getCount() - stock.insert(stack).getCount());
         if (!all) {
             block(level, jobBlock, JobStatus.DROP_OFF_FULL);
         }

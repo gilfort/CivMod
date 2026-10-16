@@ -6,7 +6,9 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.registry.ModBlocks;
@@ -60,6 +62,7 @@ public final class ClerkGameTests {
             register(helper, "clerk_storage_limits", ClerkGameTests::storageLimits);
             register(helper, "clerk_spot_of_day", ClerkGameTests::spotOfDay);
             register(helper, "clerk_food_points", ClerkGameTests::foodPoints);
+            register(helper, "clerk_as_drop_off", ClerkGameTests::asDropOff);
         });
     }
 
@@ -230,6 +233,75 @@ public final class ClerkGameTests {
                 .equals(Optional.of(near)), "The Clerk eats from its own storage after the shift");
         JobAssignments.unassign(data, near);
         helper.succeed();
+    }
+
+    /**
+     * A Clerk JobBlock as drop-off and collect point of a Lumberjack (catch-up): deliveries and tools follow the access
+     * rule – without a Clerk settler only the full block slots (nothing fits, no tool), with one on shift the linked
+     * storage.
+     */
+    private static void asDropOff(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        Settler settler = CatchUpGameTests.lumberjack(helper, forced);
+        BlockPos jobBlock = settler.getJobs().get(0).jobBlock();
+        boolean[] done = new boolean[1];
+        helper.onEachTick(() -> {
+            if (done[0] || settler.getWork().found(settler.getJobs().get(0)).isEmpty()) {
+                return;
+            }
+            done[0] = true;
+            helper.setBlock(new BlockPos(1, 1, 6), ModBlocks.CLERK_BLOCK.get());
+            helper.setBlock(new BlockPos(3, 1, 6), Blocks.CHEST);
+            BlockPos clerk = helper.absolutePos(new BlockPos(1, 1, 6));
+            BlockPos chestPos = helper.absolutePos(new BlockPos(3, 1, 6));
+            SettlementData data = SettlementData.get(level);
+            helper.assertTrue(JobAssignments.cycleClerkPoint(data, clerk, chestPos, true, false, Direction.NORTH) == PointResult.STORAGE,
+                    "Chest linked");
+            Container block = (Container) level.getBlockEntity(clerk);
+            for (int i = 0; i < block.getContainerSize(); i++) {
+                block.setItem(i, new ItemStack(Items.COBBLESTONE, 64));
+            }
+            helper.assertTrue(JobAssignments.cyclePoint(data, jobBlock, clerk, false, true) == PointResult.COLLECT, "A Clerk JobBlock is a container");
+            helper.assertTrue(JobAssignments.cyclePoint(data, jobBlock, clerk, false, true) == PointResult.DROP_OFF, "Clerk as drop-off");
+            Container chest = (Container) level.getBlockEntity(chestPos);
+            long clock = level.getOverworldClockTime();
+            long dayStart = Math.floorDiv(clock, 24000L) * 24000L;
+
+            settler.getWork().setCatchUp(dayStart - 24000L, dayStart);
+            CatchUp.runNow(level, List.of(settler));
+            helper.assertTrue(logs(chest) == 0, "No Clerk settler: nothing reaches the linked storage");
+            helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0, "The output waits in the buffer");
+
+            Settlement settlement = data.settlementAt(clerk).orElseThrow();
+            JobAssignments.assign(data, clerk, CLARA, "Clara", settlement.id(), List.of());
+            settler.getWork().setCatchUp(dayStart - 24000L, dayStart);
+            CatchUp.runNow(level, List.of(settler));
+            helper.assertTrue(logs(chest) > 0, "Working Clerk: deliveries go into the linked storage, got " + logs(chest));
+
+            helper.assertTrue(JobAssignments.cyclePoint(data, jobBlock, clerk, false, true) == PointResult.REMOVED
+                    && JobAssignments.cyclePoint(data, jobBlock, clerk, false, true) == PointResult.COLLECT, "Clerk as collect point");
+            settler.getInventory().setItem(Settler.BELT_START, ItemStack.EMPTY);
+            chest.setItem(26, new ItemStack(Items.STONE_AXE));
+            settler.getWork().setCatchUp(dayStart - 24000L, dayStart);
+            CatchUp.runNow(level, List.of(settler));
+            helper.assertTrue(settler.getInventory().getItem(Settler.BELT_START).is(Items.STONE_AXE) && chest.getItem(26).isEmpty(),
+                    "Tool from the linked storage of a working Clerk: " + settler.getInventory().getItem(Settler.BELT_START));
+            JobAssignments.unassign(data, clerk);
+            settler.discard();
+            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+            helper.succeed();
+        });
+    }
+
+    private static int logs(Container container) {
+        int count = 0;
+        for (int i = 0; i < container.getContainerSize(); i++) {
+            if (container.getItem(i).is(Items.OAK_LOG)) {
+                count += container.getItem(i).getCount();
+            }
+        }
+        return count;
     }
 
     private static Optional<BlockPos> food(ServerLevel level, Settlement settlement, BlockPos from, long dayTime, Optional<BlockPos> own,

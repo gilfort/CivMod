@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:clerk_as_drop_off",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

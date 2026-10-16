@@ -4,6 +4,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 
+import org.jspecify.annotations.Nullable;
+
+import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobBlockSite;
@@ -36,6 +39,8 @@ final class ResourceCollectionLoop implements CategoryLoop {
 
     private Step step = Step.WORK;
     private int swingTimer;
+    /** Where the settler fetches its tool (a Clerk serves at its counter). */
+    private ClerkStorage.@Nullable Visit toolVisit;
 
     /**
      * Output of the {@link WorkRules} while the job's buffer has room; the sink takes the items of a roll (live: into
@@ -77,9 +82,10 @@ final class ResourceCollectionLoop implements CategoryLoop {
             return false;
         }
         JobProfile profile = found.get();
-        Optional<WorkRules.MissingTool> missing = WorkRules.missingTool(level, settler, profile, site);
+        Optional<WorkRules.MissingTool> missing = WorkRules.missingTool(settler, profile, site,
+                ClerkStorage.stock(level, site.collect(), dayTime, true));
         if (missing.isPresent()) {
-            return fetchTool(level, job, site, missing.get());
+            return fetchTool(level, job, site, missing.get(), dayTime);
         }
         BlockPos poi = workplace.workPlaceOfDay(level, profile, site, day);
         if (poi == null) {
@@ -101,17 +107,18 @@ final class ResourceCollectionLoop implements CategoryLoop {
         return true;
     }
 
-    private boolean fetchTool(ServerLevel level, SettlerJob job, JobBlockSite site, WorkRules.MissingTool tool) {
-        BlockPos collect = site.collect();
+    private boolean fetchTool(ServerLevel level, SettlerJob job, JobBlockSite site, WorkRules.MissingTool tool, long dayTime) {
         if (!tool.inCollect()) {
             shell.block(level, job.jobBlock(), JobStatus.NO_TOOL);
             return false;
         }
+        ClerkStorage.Visit visit = ClerkStorage.visit(level, site.collect(), dayTime);
         shell.setActiveJob(job);
         shell.setStatus(job.jobBlock(), JobStatus.FETCHING_TOOL);
-        if (step != Step.FETCH_TOOL || !shell.walkingTo(collect)) {
+        if (step != Step.FETCH_TOOL || !shell.walkingTo(visit.target())) {
             step = Step.FETCH_TOOL;
-            shell.moveToJob(level, collect);
+            toolVisit = visit;
+            shell.moveToJob(level, visit.target());
         }
         return true;
     }
@@ -128,7 +135,10 @@ final class ResourceCollectionLoop implements CategoryLoop {
 
     @Override
     public double reach(SettlerJob job) {
-        return step == Step.WORK ? job.jobType().profile().map(JobProfile::reach).orElse(SettlerWork.REACH) : SettlerWork.REACH;
+        if (step == Step.WORK) {
+            return job.jobType().profile().map(JobProfile::reach).orElse(SettlerWork.REACH);
+        }
+        return toolVisit == null ? SettlerWork.REACH : toolVisit.reach();
     }
 
     // ---------------------------------------------------------------- per-tick work
@@ -141,8 +151,11 @@ final class ResourceCollectionLoop implements CategoryLoop {
                 Optional<JobProfile> profile = job.jobType().profile();
                 Optional<JobBlockSite> site = JobBlockSite.at(level, jobBlock);
                 if (profile.isPresent() && site.isPresent()) {
-                    WorkRules.refill(level, settler, profile.get(), site.get());
+                    long dayTime = Math.floorMod(level.getOverworldClockTime(), 24000L);
+                    boolean counter = toolVisit != null && toolVisit.counter();
+                    WorkRules.refill(settler, profile.get(), site.get(), ClerkStorage.stock(level, site.get().collect(), dayTime, counter));
                 }
+                toolVisit = null;
                 shell.stepDone(level);
             }
             case WORK -> {
@@ -223,7 +236,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
         }
         JobBlockSite site = found.get();
         WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site, workplace, poi, workTicks,
-                WorkRules.ToolSupply.BELT_AND_COLLECT, new BufferOutput(workplace.buffer(), stacks -> shell.deliverDirect(level, site, stacks)));
+                WorkRules.ToolSupply.beltAnd(ClerkStorage.stock(level, site.collect(), shell.catchUpDayTime(), true)), new BufferOutput(workplace.buffer(), stacks -> shell.deliverDirect(level, site, stacks)));
         if (result.end() == WorkRules.End.NONE) {
             return new SimulatedWork(result.rolls(), 0.0);
         }
