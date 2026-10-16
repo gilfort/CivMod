@@ -14,11 +14,10 @@ import com.gilfort.civmod.mission.OutcomeRules;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.MissionOffers;
 import com.gilfort.civmod.settlement.Settlement;
-import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
-import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -111,7 +110,7 @@ final class MissionLoop implements CategoryLoop {
     // ---------------------------------------------------------------- decisions
 
     @Override
-    public boolean plan(ServerLevel level, SettlerJob job, SettlementBlock block, long day, long dayTime) {
+    public boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
         BlockPos board = job.jobBlock();
         if (departed()) {
             return leave(level, job);
@@ -249,13 +248,13 @@ final class MissionLoop implements CategoryLoop {
         settler.setInvisible(false);
         BlockPos board = ended.board();
         Optional<SettlerJob> job = missionJob(settler, board);
-        Optional<SettlementBlock> block = SettlementData.get(level).settlementAt(board).flatMap(s -> s.block(board));
+        Optional<JobBlockSite> site = JobBlockSite.at(level, board);
         Optional<Mission> mission = Missions.get(level.registryAccess(), ended.mission());
-        if (job.isEmpty() || block.isEmpty()) {
+        if (job.isEmpty() || site.isEmpty()) {
             return true;
         }
         shell.setStatus(board, JobStatus.IDLE);
-        if (mission.isPresent() && finish(level, job.get(), block.get(), mission.get(), catchUp) == MissionRules.Outcome.DEATH) {
+        if (mission.isPresent() && finish(level, job.get(), site.get(), mission.get(), catchUp) == MissionRules.Outcome.DEATH) {
             die(level, board, mission.get());
             return true;
         }
@@ -266,9 +265,9 @@ final class MissionLoop implements CategoryLoop {
     }
 
     /** Rolls the outcome; a survivor gets its loot, EXP and a return message. */
-    private MissionRules.Outcome finish(ServerLevel level, SettlerJob job, SettlementBlock block, Mission mission, boolean catchUp) {
+    private MissionRules.Outcome finish(ServerLevel level, SettlerJob job, JobBlockSite site, Mission mission, boolean catchUp) {
         OutcomeRules rules = OutcomeRules.get();
-        int cap = SettlementRules.skillCap(block.level());
+        int cap = site.skillCap();
         int skill = settler.getSkills().effectiveLevel(job.jobType(), cap);
         MissionRules.Outcome outcome = forcedOutcome != null ? forcedOutcome
                 : MissionRules.roll(MissionRules.chances(rules, mission.recommendedLevel(), skill), level.getRandom());
@@ -278,15 +277,15 @@ final class MissionLoop implements CategoryLoop {
         if (outcome == MissionRules.Outcome.SUCCESS) {
             List<ItemStack> loot = loot(level, mission, MissionRules.rolls(mission, skill));
             if (catchUp) {
-                shell.deliverDirect(level, block, loot);
+                shell.deliverDirect(level, site, loot);
             } else {
-                JobBuffer buffer = shell.jobBuffer(block.pos());
+                JobBuffer buffer = shell.jobBuffer(site.pos());
                 loot.forEach(buffer::add);
             }
         }
         shell.announce(level, Component.translatable("civmod.settler.mission.returned." + outcome.name().toLowerCase(Locale.ROOT),
                 settler.getName(), mission.title()), RETURN_RANGE);
-        shell.gainExp(level, job, MissionRules.exp(outcome, rules, job.jobType().baseExp(), block.level(), mission.recommendedLevel()), cap);
+        shell.gainExp(level, job, MissionRules.exp(outcome, rules, job.jobType().baseExp(), site.level(), mission.recommendedLevel()), cap);
         return outcome;
     }
 
@@ -296,7 +295,7 @@ final class MissionLoop implements CategoryLoop {
      */
     private void die(ServerLevel level, BlockPos board, Mission mission) {
         Component message = Component.translatable("civmod.settler.mission.died", settler.getName(), mission.title());
-        Optional<Settlement> settlement = SettlementData.get(level).settlementAt(board);
+        Optional<Settlement> settlement = JobBlockSite.at(level, board).map(JobBlockSite::settlement);
         for (ServerPlayer player : level.players()) {
             if (player.distanceToSqr(settler) <= RETURN_RANGE * RETURN_RANGE
                     || settlement.filter(s -> JobAssignments.insideBorder(s, player.blockPosition())).isPresent()) {
@@ -373,12 +372,12 @@ final class MissionLoop implements CategoryLoop {
     // ---------------------------------------------------------------- catch-up
 
     @Override
-    public boolean catchUpReady(ServerLevel level, SettlerJob job, SettlementBlock block, long day, long dayTime) {
+    public boolean catchUpReady(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
         if (trip == null || !trip.departed() || trip.returnTime() > shell.catchUpTo()) {
             return true;
         }
         // The return is caught up: the loot is delivered to the drop-off.
-        return level.isLoaded(block.pos()) && level.isLoaded(block.dropOff().orElse(block.pos()));
+        return level.isLoaded(site.pos()) && level.isLoaded(site.dropOff());
     }
 
     @Override

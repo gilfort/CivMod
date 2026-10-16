@@ -7,7 +7,7 @@ import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.registry.ModBlockEntityTypes;
 import com.gilfort.civmod.registry.ModDataComponents;
-import com.gilfort.civmod.settlement.SettlementBlock;
+import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
@@ -159,11 +159,11 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
         // The settlement may have changed while this chunk was unloaded (e.g. auto-connect); clients receive the
         // corrected state with the chunk data, so no block update is sent here.
         if (level instanceof ServerLevel serverLevel) {
-            SettlementWorld.settlementAt(serverLevel, worldPosition).ifPresent(settlement -> {
-                settlementId = settlement.id();
-                connected = settlement.block(worldPosition).map(SettlementBlock::connected).orElse(true);
+            JobBlockSite.at(serverLevel, worldPosition).ifPresent(site -> {
+                settlementId = site.settlement().id();
+                connected = site.block().connected();
                 // Placement registers with the default level before the block entity exists; sync the real level.
-                if (settlement.block(worldPosition).map(block -> block.level() != jobLevel).orElse(false)) {
+                if (site.level() != jobLevel) {
                     // Deferred: onLoad may run during chunk loading, where other blocks must not be touched.
                     BlockPos pos = worldPosition;
                     int level = jobLevel;

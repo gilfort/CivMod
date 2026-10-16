@@ -3,7 +3,7 @@ package com.gilfort.civmod.job;
 import java.util.List;
 
 import com.gilfort.civmod.npc.SettlerJob;
-import com.gilfort.civmod.settlement.SettlementBlock;
+import com.gilfort.civmod.settlement.JobBlockSite;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -23,12 +23,12 @@ interface CategoryLoop {
      *
      * @param level   the level
      * @param job     the job
-     * @param block   the job's JobBlock
+     * @param site    the job's JobBlock site
      * @param day     the day
      * @param dayTime the time of day
      * @return whether the job can work (the settler is busy with it)
      */
-    boolean plan(ServerLevel level, SettlerJob job, SettlementBlock block, long day, long dayTime);
+    boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime);
 
     /**
      * Called at a decision for a job of this loop that was not planned because a higher priority job works.
@@ -70,12 +70,12 @@ interface CategoryLoop {
      *
      * @param level   the level
      * @param job     the job
-     * @param block   the job's JobBlock (already loaded together with its drop-off)
+     * @param site    the job's JobBlock site (already loaded together with its drop-off)
      * @param day     the day
      * @param dayTime the time of day
      * @return whether the job is ready
      */
-    boolean catchUpReady(ServerLevel level, SettlerJob job, SettlementBlock block, long day, long dayTime);
+    boolean catchUpReady(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime);
 
     /** Resets per-run state before a catch-up run. */
     void startCatchUp();

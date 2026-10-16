@@ -195,16 +195,17 @@ public final class SettlementManager {
      * @param listener receives side effects
      */
     public static void setLevel(SettlementData data, BlockPos pos, int level, Listener listener) {
-        data.settlementAt(pos).ifPresent(settlement -> settlement.block(pos).ifPresent(block -> {
+        JobBlockSite.at(data, pos).ifPresent(site -> {
+            SettlementBlock block = site.block();
             if (block.level() == SettlementRules.clampLevel(level)) {
                 return;
             }
             block.setLevel(level);
             data.changed();
             if (block.connected()) {
-                connectChain(data, settlement, listener);
+                connectChain(data, site.settlement(), listener);
             }
-        }));
+        });
     }
 
     /**
@@ -217,7 +218,7 @@ public final class SettlementManager {
      * @return the settlement the block belonged to, if any
      */
     public static Optional<Settlement> remove(SettlementData data, BlockPos pos, Listener listener) {
-        List<SettlementBlock.Assignee> assignees = data.settlementAt(pos).flatMap(s -> s.block(pos)).map(SettlementBlock::assignees)
+        List<SettlementBlock.Assignee> assignees = JobBlockSite.at(data, pos).map(site -> site.block().assignees())
                 .map(List::copyOf).orElse(List.of());
         Optional<Settlement> removed = data.removeBlock(pos);
         assignees.forEach(assignee -> listener.jobRemoved(assignee.id(), pos));
@@ -242,15 +243,14 @@ public final class SettlementManager {
      * @return the connection status of that JobBlock
      */
     public static Status status(SettlementData data, BlockPos pos) {
-        Optional<Settlement> settlement = data.settlementAt(pos);
-        Optional<SettlementBlock> block = settlement.flatMap(s -> s.block(pos));
-        if (settlement.isEmpty() || block.isEmpty()) {
+        Optional<JobBlockSite> site = JobBlockSite.at(data, pos);
+        if (site.isEmpty()) {
             return new Status(Optional.empty(), false, 0, 0);
         }
-        if (block.get().connected()) {
+        Optional<Settlement> settlement = site.map(JobBlockSite::settlement);
+        if (site.get().block().connected()) {
             return new Status(settlement, true, 0, 0);
         }
-        SettlementBlock self = block.get();
         return settlement.get().blocks().stream()
                 .filter(SettlementBlock::connected)
                 .min(Comparator.comparingDouble(other -> SettlementRules.horizontalDistance(pos, other.pos())))
