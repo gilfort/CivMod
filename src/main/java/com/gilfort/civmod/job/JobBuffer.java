@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
 
+import com.gilfort.civmod.logistics.ItemCounts;
 import com.mojang.serialization.Codec;
 
 import net.minecraft.world.item.Item;
@@ -104,7 +105,7 @@ public final class JobBuffer {
      */
     public Map<Item, Integer> counts() {
         Map<Item, Integer> counts = new HashMap<>();
-        stacks.forEach(stack -> counts.merge(stack.getItem(), stack.getCount(), Integer::sum));
+        stacks.forEach(stack -> ItemCounts.add(counts, stack.getItem(), stack.getCount()));
         return counts;
     }
 
@@ -131,7 +132,7 @@ public final class JobBuffer {
      * @param kind which items are taken
      * @return the taken stacks
      */
-    public List<ItemStack> takeAll(Predicate<ItemStack> kind) {
+    List<ItemStack> takeAll(Predicate<ItemStack> kind) {
         List<ItemStack> taken = stacks.stream().filter(kind).toList();
         stacks.removeIf(kind);
         return taken;

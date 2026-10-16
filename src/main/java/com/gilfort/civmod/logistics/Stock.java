@@ -93,8 +93,7 @@ public final class Stock {
             for (int i = 0; i < handler.size(); i++) {
                 ItemResource resource = handler.getResource(i);
                 if (!resource.isEmpty()) {
-                    int amount = (int) Math.min(Integer.MAX_VALUE, handler.getAmountAsLong(i));
-                    counts.merge(resource.getItem(), amount, (a, b) -> (int) Math.min(Integer.MAX_VALUE, (long) a + b));
+                    ItemCounts.add(counts, resource.getItem(), handler.getAmountAsLong(i));
                 }
             }
         }

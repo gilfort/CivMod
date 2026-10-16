@@ -19,6 +19,7 @@ import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.MissionOffers;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.DayClock;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -105,7 +106,7 @@ final class MissionPicks {
             return;
         }
         Map<Identifier, Mission> pool = Missions.all(level.registryAccess());
-        MissionOffers.refresh(data, board, Math.floorDiv(level.getOverworldClockTime(), 24000L), pool, level.getRandom());
+        MissionOffers.refresh(data, board, DayClock.day(level), pool, level.getRandom());
         int cap = site.get().skillCap();
         List<Candidate> candidates = settlers.stream()
                 .filter(settler -> !settler.isRemoved() && !settler.getWork().missions().hasTrip())

@@ -9,6 +9,7 @@ import java.util.Map;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.settlement.DayClock;
 
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
@@ -62,8 +63,8 @@ public final class CatchUp {
             lastDay = Long.MIN_VALUE;
             for (Settler settler : settlers) {
                 settler.getWork().startCatchUp();
-                day = Math.min(day, Math.floorDiv(settler.getWork().catchUpFrom(), 24000L));
-                lastDay = Math.max(lastDay, Math.floorDiv(settler.getWork().catchUpTo() - 1, 24000L));
+                day = Math.min(day, DayClock.day(settler.getWork().catchUpFrom()));
+                lastDay = Math.max(lastDay, DayClock.day(settler.getWork().catchUpTo() - 1));
             }
         }
 

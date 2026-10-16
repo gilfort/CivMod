@@ -18,6 +18,7 @@ import com.gilfort.civmod.settlement.MissionOffers;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
+import com.gilfort.civmod.settlement.DayClock;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -222,7 +223,7 @@ public class JobBlockMenu extends CivMenu {
         }
         boolean changed = rule.isPresent() ? StockRules.setRule(data, pos, rule.get()) : StockRules.removeRule(data, pos, slot);
         if (changed) {
-            StockRules.check(level, pos, Math.floorMod(level.getOverworldClockTime(), 24000L));
+            StockRules.check(level, pos, DayClock.dayTime(level));
             tabSyncIn = 0;
         }
     }

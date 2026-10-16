@@ -11,6 +11,7 @@ import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.DayClock;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -158,7 +159,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
                         // Waiting for the Clerk.
                         return;
                     }
-                    Stock stock = ClerkStorage.stock(level, collect, Math.floorMod(level.getOverworldClockTime(), 24000L), counter);
+                    Stock stock = ClerkStorage.stock(level, collect, DayClock.dayTime(level), counter);
                     if (WorkRules.refill(settler, profile.get(), site.get(), stock) && stock.counter()) {
                         ClerkCounter.handOut(level, collect, true);
                     }
