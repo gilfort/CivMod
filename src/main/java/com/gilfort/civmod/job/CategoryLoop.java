@@ -3,7 +3,7 @@ package com.gilfort.civmod.job;
 import java.util.List;
 
 import com.gilfort.civmod.npc.SettlerJob;
-import com.gilfort.civmod.settlement.SettlementBlock;
+import com.gilfort.civmod.settlement.JobBlockSite;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -13,7 +13,8 @@ import net.minecraft.server.level.ServerLevel;
  * {@code Systems/Job Categories.md}). The shell runs schedule, walking, food, sleep, job priorities, status, EXP and
  * the catch-up driver, picks the active Job by priority and hands control to the loop of that Job's category.
  * <p>
- * One instance per settler, shared by all of its jobs of that category; a loop keeps its own state and uses the shell's
+ * One instance per settler, shared by all of its jobs of that category; per-job state (buffer, status, work place of
+ * the day, scan) lives in the job's {@link Workplace}; a loop keeps its own loop state and uses the shell's
  * shared parts (walking, buffers and delivery, statuses, EXP) through the {@link SettlerWork} it was created for.
  */
 interface CategoryLoop {
@@ -23,12 +24,12 @@ interface CategoryLoop {
      *
      * @param level   the level
      * @param job     the job
-     * @param block   the job's JobBlock
+     * @param site    the job's JobBlock site
      * @param day     the day
      * @param dayTime the time of day
      * @return whether the job can work (the settler is busy with it)
      */
-    boolean plan(ServerLevel level, SettlerJob job, SettlementBlock block, long day, long dayTime);
+    boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime);
 
     /**
      * Called at a decision for a job of this loop that was not planned because a higher priority job works.
@@ -70,15 +71,16 @@ interface CategoryLoop {
      *
      * @param level   the level
      * @param job     the job
-     * @param block   the job's JobBlock (already loaded together with its drop-off)
+     * @param site    the job's JobBlock site (already loaded together with its drop-off)
      * @param day     the day
      * @param dayTime the time of day
      * @return whether the job is ready
      */
-    boolean catchUpReady(ServerLevel level, SettlerJob job, SettlementBlock block, long day, long dayTime);
+    boolean catchUpReady(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime);
 
-    /** Resets per-run state before a catch-up run. */
-    void startCatchUp();
+    /** Resets per-run state before a catch-up run; nothing by default. */
+    default void startCatchUp() {
+    }
 
     /**
      * Simulates work of a job during catch-up. A job that cannot go on is ended with {@link SettlerWork#endCatchUpJob}.
@@ -92,24 +94,11 @@ interface CategoryLoop {
     SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks);
 
     /**
-     * Forgets everything about a removed job.
+     * Forgets the loop's own state of a removed job (the shell drops the job's {@link Workplace}).
      *
      * @param jobBlock the JobBlock position
      */
-    void forget(BlockPos jobBlock);
-
-    /**
-     * @return the work places of the day this loop saves with the settler
-     */
-    default List<SettlerWork.WorkPlaceEntry> workPlaces() {
-        return List.of();
-    }
-
-    /**
-     * @return the scans this loop saves with the settler
-     */
-    default List<SavedScan> savedScans() {
-        return List.of();
+    default void forget(BlockPos jobBlock) {
     }
 
     /**

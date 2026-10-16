@@ -1,19 +1,12 @@
 package com.gilfort.civmod.job;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
 
-import org.jspecify.annotations.Nullable;
-
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
-import com.gilfort.civmod.settlement.SettlementBlock;
-import com.gilfort.civmod.settlement.SettlementData;
-import com.gilfort.civmod.settlement.SettlementRules;
+import com.gilfort.civmod.settlement.JobBlockSite;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -25,9 +18,10 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * Work loop of the Resource Collection Job Category (vault {@code Systems/Resource Collection Jobs.md}); its contract
- * with the Job is the {@link JobProfile}. Per job: fetch the tool, choose the work place of the day, scan in the
- * background, walk there and produce into the per-job buffer, which the shell delivers at ~80 % or at the end of the
- * day. Production and animation are cheap per-tick counters while working.
+ * with the Job is the {@link JobProfile}. Per job: fetch the tool, take the work place of the day and the scan from the
+ * job's {@link Workplace}, walk there and produce into its buffer, which the shell delivers at ~80 % or at the end of
+ * the day. Production (live every work tick, catch-up per simulated hour) goes through the {@link WorkRules}; this
+ * loop only adds the live effects (swing, hit sound, level-up) and chooses where output goes.
  */
 final class ResourceCollectionLoop implements CategoryLoop {
 
@@ -36,24 +30,29 @@ final class ResourceCollectionLoop implements CategoryLoop {
     /** The step of the loop the settler is in. */
     private enum Step { FETCH_TOOL, WORK }
 
-    /** What a cached scan was made for; a different key triggers a rescan. */
-    private record ScanKey(BlockPos center, int radius, long day) {
-    }
-
     private final SettlerWork shell;
     private final Settler settler;
-    private final Map<BlockPos, ScanResult> scans = new HashMap<>();
-    private final Map<BlockPos, ScanKey> scanKeys = new HashMap<>();
-    /** Scans in flight per JobBlock; a result is only stored while its key is still the pending one. */
-    private final Map<BlockPos, ScanKey> scanning = new HashMap<>();
-    private final Map<BlockPos, BlockPos> poiOfDay = new HashMap<>();
-    private final Map<BlockPos, Long> poiDay = new HashMap<>();
     private final Fatigue fatigue = new Fatigue();
 
     private Step step = Step.WORK;
-    private double production;
     private int swingTimer;
-    private double cuProduction;
+
+    /**
+     * Output of the {@link WorkRules} while the job's buffer has room; the sink takes the items of a roll (live: into
+     * the buffer; catch-up: the drop-off first) and says whether more fits.
+     */
+    private record BufferOutput(JobBuffer buffer, Predicate<List<ItemStack>> sink) implements WorkRules.Output {
+
+        @Override
+        public boolean hasRoom() {
+            return !buffer.isFull();
+        }
+
+        @Override
+        public boolean accept(List<ItemStack> stacks) {
+            return sink.test(stacks);
+        }
+    }
 
     /**
      * @param shell the Settler Shell driving this loop
@@ -63,62 +62,14 @@ final class ResourceCollectionLoop implements CategoryLoop {
         this.settler = shell.settler();
     }
 
-    // ---------------------------------------------------------------- persistence
-
-    /**
-     * @return the work places of the day for saving
-     */
-    @Override
-    public List<SettlerWork.WorkPlaceEntry> workPlaces() {
-        return poiOfDay.entrySet().stream()
-                .map(e -> new SettlerWork.WorkPlaceEntry(e.getKey(), e.getValue(), poiDay.getOrDefault(e.getKey(), -1L))).toList();
-    }
-
-    /**
-     * @return the cached scans for saving
-     */
-    @Override
-    public List<SavedScan> savedScans() {
-        List<SavedScan> saved = new ArrayList<>();
-        scans.forEach((jobBlock, result) -> {
-            ScanKey key = scanKeys.get(jobBlock);
-            if (key != null) {
-                SavedScan.of(jobBlock, key.center(), key.radius(), key.day(), result).ifPresent(saved::add);
-            }
-        });
-        return saved;
-    }
-
-    /**
-     * Restores saved work places and scans.
-     *
-     * @param snapshot the saved work state
-     */
-    @Override
-    public void restore(SettlerWork.BuffersSnapshot snapshot) {
-        poiOfDay.clear();
-        poiDay.clear();
-        snapshot.workPlaces().forEach(entry -> {
-            poiOfDay.put(entry.jobBlock(), entry.poi());
-            poiDay.put(entry.jobBlock(), entry.day());
-        });
-        snapshot.scans().forEach(scan -> {
-            ScanResult result = scan.result();
-            if (result != null) {
-                scans.put(scan.jobBlock(), result);
-                scanKeys.put(scan.jobBlock(), new ScanKey(scan.center(), scan.radius(), scan.day()));
-            }
-        });
-    }
-
     // ---------------------------------------------------------------- decisions
 
     @Override
-    public boolean plan(ServerLevel level, SettlerJob job, SettlementBlock block, long day, long dayTime) {
+    public boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
         BlockPos jobBlock = job.jobBlock();
-        JobBuffer buffer = shell.jobBuffer(jobBlock);
+        Workplace workplace = shell.workplace(jobBlock);
 
-        if (buffer.shouldDeliver()) {
+        if (workplace.buffer().shouldDeliver()) {
             return shell.startDelivery(level, job);
         }
         Optional<JobProfile> found = job.jobType().profile();
@@ -126,22 +77,17 @@ final class ResourceCollectionLoop implements CategoryLoop {
             return false;
         }
         JobProfile profile = found.get();
-        if (SettlerTools.best(settler, profile::isTool).isEmpty()) {
-            return fetchTool(level, job, block, profile::isTool);
+        Optional<WorkRules.MissingTool> missing = WorkRules.missingTool(level, settler, profile, site);
+        if (missing.isPresent()) {
+            return fetchTool(level, job, site, missing.get());
         }
-        Optional<Predicate<ItemStack>> secondary = profile.secondaryTool(block);
-        if (secondary.isPresent() && SettlerTools.best(settler, secondary.get()).isEmpty()
-                && SettlerTools.findInContainer(level, collectPos(block), secondary.get()).isPresent()) {
-            return fetchTool(level, job, block, secondary.get());
-        }
-        BlockPos poi = poiOfDay(level, profile, block, day);
+        BlockPos poi = workplace.workPlaceOfDay(level, profile, site, day);
         if (poi == null) {
             shell.block(level, jobBlock, JobStatus.NO_WORK_PLACE);
             return false;
         }
-        ensureScan(level, profile, block, poi, day, dayTime);
-        ScanResult scan = scans.get(jobBlock);
-        if (profile.needsResources() && scan != null && scan.isEmpty() && !scanning.containsKey(jobBlock)) {
+        workplace.ensureScan(level, profile, site, poi, day, dayTime);
+        if (profile.needsResources() && workplace.foundNothing()) {
             shell.block(level, jobBlock, JobStatus.NO_RESOURCES);
             return false;
         }
@@ -155,9 +101,9 @@ final class ResourceCollectionLoop implements CategoryLoop {
         return true;
     }
 
-    private boolean fetchTool(ServerLevel level, SettlerJob job, SettlementBlock block, Predicate<ItemStack> kind) {
-        BlockPos collect = collectPos(block);
-        if (SettlerTools.findInContainer(level, collect, kind).isEmpty()) {
+    private boolean fetchTool(ServerLevel level, SettlerJob job, JobBlockSite site, WorkRules.MissingTool tool) {
+        BlockPos collect = site.collect();
+        if (!tool.inCollect()) {
             shell.block(level, job.jobBlock(), JobStatus.NO_TOOL);
             return false;
         }
@@ -168,10 +114,6 @@ final class ResourceCollectionLoop implements CategoryLoop {
             shell.moveToJob(level, collect);
         }
         return true;
-    }
-
-    private static BlockPos collectPos(SettlementBlock block) {
-        return block.collect().orElse(block.pos());
     }
 
     @Override
@@ -197,15 +139,9 @@ final class ResourceCollectionLoop implements CategoryLoop {
         switch (step) {
             case FETCH_TOOL -> {
                 Optional<JobProfile> profile = job.jobType().profile();
-                Optional<SettlementBlock> block = SettlementData.get(level).settlementAt(jobBlock).flatMap(s -> s.block(jobBlock));
-                if (profile.isPresent()) {
-                    if (SettlerTools.best(settler, profile.get()::isTool).isEmpty()) {
-                        SettlerTools.take(level, settler, target, profile.get()::isTool);
-                    }
-                    Optional<Predicate<ItemStack>> secondary = block.flatMap(b -> profile.get().secondaryTool(b));
-                    if (secondary.isPresent() && SettlerTools.best(settler, secondary.get()).isEmpty()) {
-                        SettlerTools.take(level, settler, target, secondary.get());
-                    }
+                Optional<JobBlockSite> site = JobBlockSite.at(level, jobBlock);
+                if (profile.isPresent() && site.isPresent()) {
+                    WorkRules.refill(level, settler, profile.get(), site.get());
                 }
                 shell.stepDone(level);
             }
@@ -229,187 +165,76 @@ final class ResourceCollectionLoop implements CategoryLoop {
             BlockState state = level.getBlockState(poi);
             level.playSound(null, poi, state.getSoundType().getHitSound(), net.minecraft.sounds.SoundSource.NEUTRAL, 0.5F, 1.0F);
         }
-        Optional<JobProfile> found = job.jobType().profile();
-        Optional<SettlementBlock> block = SettlementData.get(level).settlementAt(jobBlock).flatMap(s -> s.block(jobBlock));
-        if (found.isEmpty() || block.isEmpty()) {
+        Optional<JobProfile> profile = job.jobType().profile();
+        Optional<JobBlockSite> site = JobBlockSite.at(level, jobBlock);
+        if (profile.isEmpty() || site.isEmpty()) {
             return;
         }
-        JobProfile profile = found.get();
-        ScanResult scan = scans.get(jobBlock);
-        JobBuffer buffer = shell.jobBuffer(jobBlock);
-        Optional<ItemStack> tool = SettlerTools.best(settler, profile::isTool);
-        if (tool.isEmpty() || buffer.isFull()) {
-            return;
+        JobBuffer buffer = shell.workplace(jobBlock).buffer();
+        WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site.get(), shell.workplace(jobBlock), poi, 1.0,
+                WorkRules.ToolSupply.BELT, new BufferOutput(buffer, stacks -> {
+                    stacks.forEach(buffer::add);
+                    return !buffer.isFull();
+                }));
+        if (result.levelUp()) {
+            shell.showLevelUp(level, job);
         }
-        int skillLevel = settler.getSkills().effectiveLevel(job.jobType(), SettlementRules.skillCap(block.get().level()));
-        double perSecond = profile.speed(skillLevel, tool.get()) * profile.productivity(scan);
-        production += perSecond / 20.0;
-        while (production >= 1.0) {
-            production -= 1.0;
-            Optional<ItemStack> current = SettlerTools.best(settler, profile::isTool);
-            if (current.isEmpty()) {
-                return;
-            }
-            Optional<ItemStack> secondary = profile.secondaryTool(block.get()).flatMap(kind -> SettlerTools.best(settler, kind));
-            Optional<JobProfile.Produced> produced = profile.produce(new JobProfile.Context(level, settler, scan, poi, current.get(), secondary,
-                    block.get(), skillLevel));
-            if (produced.isEmpty()) {
-                continue;
-            }
-            produced.get().stacks().forEach(buffer::add);
-            SettlerTools.wear(level, settler, produced.get().worn());
-            if (!produced.get().stacks().isEmpty()) {
-                shell.gainExp(level, job, block.get().level());
-                skillLevel = settler.getSkills().effectiveLevel(job.jobType(), SettlementRules.skillCap(block.get().level()));
-            }
-        }
-        SettlerTools.show(settler, profile::isTool);
+        // A job that ended (no tool, buffer full, no resources) is re-planned at the next decision.
+        SettlerTools.show(settler, profile.get()::isTool);
     }
 
     // ---------------------------------------------------------------- catch-up
 
     @Override
-    public boolean catchUpReady(ServerLevel level, SettlerJob job, SettlementBlock block, long day, long dayTime) {
+    public boolean catchUpReady(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
         Optional<JobProfile> profile = job.jobType().profile();
         if (profile.isEmpty()) {
             return true;
         }
-        if (!level.isLoaded(block.pos()) || !level.isLoaded(collectPos(block)) || !level.isLoaded(block.dropOff().orElse(block.pos()))) {
+        if (!level.isLoaded(site.pos()) || !level.isLoaded(site.collect()) || !level.isLoaded(site.dropOff())) {
             return false;
         }
-        if (!scans.containsKey(job.jobBlock())) {
-            BlockPos poi = poiOfDay(level, profile.get(), block, day);
+        Workplace workplace = shell.workplace(job.jobBlock());
+        if (workplace.scan() == null) {
+            BlockPos poi = workplace.workPlaceOfDay(level, profile.get(), site, day);
             if (poi == null) {
                 return true;
             }
-            ensureScan(level, profile.get(), block, poi, day, dayTime);
+            workplace.ensureScan(level, profile.get(), site, poi, day, dayTime);
             return false;
         }
         return true;
     }
 
-    @Override
-    public void startCatchUp() {
-        cuProduction = 0.0;
-    }
-
     /**
-     * Produces the output of some work ticks during catch-up: directly into the drop-off, then the buffer.
+     * Produces the output of some work ticks during catch-up through the {@link WorkRules}: directly into the
+     * drop-off, then the buffer; missing tools are taken from the collect inventory.
      */
     @Override
     public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks) {
-        Optional<SettlementBlock> found = SettlementData.get(level).settlementAt(job.jobBlock()).flatMap(s -> s.block(job.jobBlock()));
+        Optional<JobBlockSite> found = JobBlockSite.at(level, job.jobBlock());
         Optional<JobProfile> profile = job.jobType().profile();
-        ScanResult scan = scans.get(job.jobBlock());
-        if (found.isEmpty() || profile.isEmpty() || scan == null) {
+        Workplace workplace = shell.workplace(job.jobBlock());
+        BlockPos poi = found.isEmpty() || profile.isEmpty() || workplace.scan() == null ? null
+                : workplace.workPlaceOfDay(level, profile.get(), found.get(), day);
+        if (poi == null) {
             shell.endCatchUpJob(job.jobBlock());
             return new SimulatedWork(0, workTicks);
         }
-        SettlementBlock block = found.get();
-        BlockPos poi = poiOfDay(level, profile.get(), block, day);
-        if (poi == null || (profile.get().needsResources() && scan.isEmpty())) {
-            shell.endCatchUpJob(job.jobBlock());
-            return new SimulatedWork(0, workTicks);
+        JobBlockSite site = found.get();
+        WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site, workplace, poi, workTicks,
+                WorkRules.ToolSupply.BELT_AND_COLLECT, new BufferOutput(workplace.buffer(), stacks -> shell.deliverDirect(level, site, stacks)));
+        if (result.end() == WorkRules.End.NONE) {
+            return new SimulatedWork(result.rolls(), 0.0);
         }
-        Optional<ItemStack> tool = toolForCatchUp(level, profile.get(), block);
-        if (tool.isEmpty()) {
-            shell.endCatchUpJob(job.jobBlock());
-            return new SimulatedWork(0, workTicks);
-        }
-        int rolls = 0;
-        double remaining = 0.0;
-        int cap = SettlementRules.skillCap(block.level());
-        int skillLevel = settler.getSkills().effectiveLevel(job.jobType(), cap);
-        cuProduction += profile.get().speed(skillLevel, tool.get()) * profile.get().productivity(scan) * workTicks / 20.0;
-        while (cuProduction >= 1.0) {
-            cuProduction -= 1.0;
-            tool = toolForCatchUp(level, profile.get(), block);
-            if (tool.isEmpty()) {
-                shell.endCatchUpJob(job.jobBlock());
-                break;
-            }
-            Optional<ItemStack> secondary = profile.get().secondaryTool(block).flatMap(kind -> SettlerTools.best(settler, kind));
-            Optional<JobProfile.Produced> produced = profile.get().produce(new JobProfile.Context(level, settler, scan, poi, tool.get(),
-                    secondary, block, skillLevel));
-            rolls++;
-            if (produced.isEmpty()) {
-                continue;
-            }
-            SettlerTools.wear(level, settler, produced.get().worn());
-            if (produced.get().stacks().isEmpty()) {
-                continue;
-            }
-            if (!shell.deliverDirect(level, block, produced.get().stacks())) {
-                shell.endCatchUpJob(job.jobBlock());
-                // The next job takes over the rest of the time (approximated by the rest of this hour's output).
-                remaining = cuProduction * 20.0;
-                cuProduction = 0.0;
-                break;
-            }
-            shell.gainExp(level, job, block.level());
-            skillLevel = settler.getSkills().effectiveLevel(job.jobType(), cap);
-        }
-        return new SimulatedWork(rolls, remaining);
-    }
-
-    private Optional<ItemStack> toolForCatchUp(ServerLevel level, JobProfile profile, SettlementBlock block) {
-        Optional<ItemStack> tool = SettlerTools.best(settler, profile::isTool);
-        if (tool.isEmpty() && SettlerTools.findInContainer(level, collectPos(block), profile::isTool).isPresent()) {
-            SettlerTools.take(level, settler, collectPos(block), profile::isTool);
-            tool = SettlerTools.best(settler, profile::isTool);
-        }
-        return tool;
-    }
-
-    // ---------------------------------------------------------------- work places and scans
-
-    private @Nullable BlockPos poiOfDay(ServerLevel level, JobProfile profile, SettlementBlock block, long day) {
-        BlockPos current = poiOfDay.get(block.pos());
-        if (current != null && poiDay.getOrDefault(block.pos(), -1L) == day && profile.isWorkPlace(level, current)) {
-            return current;
-        }
-        List<BlockPos> candidates = new ArrayList<>(block.workPoints().stream().filter(pos -> profile.isWorkPlace(level, pos)).toList());
-        BlockPos chosen = candidates.isEmpty() ? profile.autoSearch(level, block.pos())
-                : candidates.get(level.getRandom().nextInt(candidates.size()));
-        if (chosen != null) {
-            poiOfDay.put(block.pos(), chosen);
-            poiDay.put(block.pos(), day);
-        }
-        return chosen;
-    }
-
-    private void ensureScan(ServerLevel level, JobProfile profile, SettlementBlock block, BlockPos poi, long day, long dayTime) {
-        BlockPos jobBlock = block.pos();
-        ScanKey key = new ScanKey(profile.scanCenter(block, poi), SettlementRules.joinRadius(block.level()), profile.rescanDaily() ? day : -1L);
-        if (key.equals(scanKeys.get(jobBlock)) || scanning.containsKey(jobBlock)) {
-            return;
-        }
-        scanning.put(jobBlock, key);
-        // Spread daily scans over the first real minute of the workday; later starts (e.g. after loading) begin at once.
-        long delay = profile.rescanDaily() && dayTime < SettlerWork.SCAN_SPREAD_TICKS ? level.getRandom().nextInt(SettlerWork.SCAN_SPREAD_TICKS) : 0;
-        ScanScheduler.submit(level, profile.createScan(key.center(), key.radius()), delay, result -> {
-            // Identity check: a scan of a forgotten job (possibly re-added since with an equal key) must not land.
-            if (scanning.get(jobBlock) != key) {
-                return;
-            }
-            scans.put(jobBlock, result);
-            scanKeys.put(jobBlock, key);
-            scanning.remove(jobBlock);
-        });
-    }
-
-    @Override
-    public void forget(BlockPos jobBlock) {
-        scans.remove(jobBlock);
-        scanKeys.remove(jobBlock);
-        scanning.remove(jobBlock);
-        poiOfDay.remove(jobBlock);
-        poiDay.remove(jobBlock);
+        shell.endCatchUpJob(job.jobBlock());
+        // The next job takes over the rest of the time.
+        return new SimulatedWork(result.rolls(), result.ticksLeft());
     }
 
     @Override
     public List<JobProfile.Found> found(SettlerJob job) {
-        ScanResult scan = scans.get(job.jobBlock());
+        ScanResult scan = shell.existingWorkplace(job.jobBlock()).map(Workplace::scan).orElse(null);
         Optional<JobProfile> profile = job.jobType().profile();
         if (scan == null || profile.isEmpty()) {
             return List.of();

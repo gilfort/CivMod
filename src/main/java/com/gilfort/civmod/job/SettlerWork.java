@@ -4,11 +4,10 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 
 import org.jspecify.annotations.Nullable;
 
@@ -16,10 +15,15 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.food.Pantries;
 import com.gilfort.civmod.food.SettlerFood;
+import com.gilfort.civmod.job.Schedule.Activity;
+import com.gilfort.civmod.job.Schedule.Decision;
+import com.gilfort.civmod.job.Schedule.Intent;
+import com.gilfort.civmod.job.Schedule.MealPurpose;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModEntityTypes;
+import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
@@ -55,18 +59,17 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 /**
  * The Settler Shell (vault {@code Systems/Job Categories.md}): the behaviour shared by every Job Category – schedule,
- * walking / anti-stuck, food, sleep, job priorities, status, EXP, per-job buffers with delivery and the catch-up
- * driver. It picks the first job of the priority list that can work and hands control to the {@link CategoryLoop} of
- * that job's {@link JobCategory}.
+ * walking / anti-stuck, food, sleep, job priorities, EXP, one {@link Workplace} per job (buffer, status, work place of
+ * the day, scan) with delivery and the catch-up driver. It picks the first job of the priority list that can work and
+ * hands control to the {@link CategoryLoop} of that job's {@link JobCategory}.
  * <p>
- * Decisions run every {@value #DECISION_INTERVAL} ticks (staggered per settler); movement uses vanilla navigation.
+ * Decisions run every {@value #DECISION_INTERVAL} ticks (staggered per settler): the {@link Schedule} decides from a
+ * snapshot, the shell acts on its intent; movement uses vanilla navigation.
  */
 public final class SettlerWork {
 
     /** Ticks between decisions. */
     public static final int DECISION_INTERVAL = 100;
-    /** Ticks a blocked job waits before it is checked again. */
-    private static final int BLOCKED_RETRY = 600;
     /** Work hours in day ticks (06:00–17:30; day time 0 = 06:00). */
     public static final long WORK_END = 11500;
     /** Daily scans that start within this many day ticks are spread randomly over that window. */
@@ -75,12 +78,6 @@ public final class SettlerWork {
     static final double REACH = 2.5;
     /** Players within this distance get the level-up message. */
     private static final double LEVEL_UP_RANGE = 32.0;
-
-    /** What the settler does; {@code JOB} is a step of the active job's category loop. */
-    private enum Activity { IDLE, JOB, DELIVER, GO_TO_BED, SLEEP, FETCH_FOOD, EATING, FORAGE }
-
-    /** Why a settler walks to a pantry. */
-    private enum MealPurpose { MORNING, HUNGRY, EVENING }
 
     /** Ticks a meal from the pockets takes. */
     private static final int EAT_TICKS = 30;
@@ -120,9 +117,8 @@ public final class SettlerWork {
     }
 
     private final Settler settler;
-    private final Map<BlockPos, JobBuffer> buffers = new HashMap<>();
-    private final Map<BlockPos, JobStatus> statuses = new HashMap<>();
-    private final Map<BlockPos, Long> blockedUntil = new HashMap<>();
+    /** One Workplace per JobBlock the settler works for. */
+    private final Map<BlockPos, Workplace> jobWorkplaces = new HashMap<>();
     /** The work loop of each implemented Job Category. */
     private final Map<JobCategory, CategoryLoop> loops = new EnumMap<>(JobCategory.class);
     private final MissionLoop missions;
@@ -145,20 +141,15 @@ public final class SettlerWork {
     // Catch-up (vault Systems/Settlement.md): missed time while unloaded.
     /** Minimum missed time that is caught up (2 real minutes). */
     public static final long CATCH_UP_MIN_GAP = 2400;
-    /** Marks "no day" (days may be negative in tests with a frozen clock). */
-    private static final long NO_DAY = Long.MIN_VALUE;
     private long savedClock = -1;
     private long catchUpFrom = -1;
     private long catchUpTo = -1;
     private boolean catchUpRegistered;
     private boolean quiet;
-    private long cuForageDay = NO_DAY;
-    private long cuStarvingDay = NO_DAY;
-    private long cuMorningDay = NO_DAY;
-    private long cuEveningDay = NO_DAY;
-    private final Set<BlockPos> cuDone = new HashSet<>();
     private int cuItems;
     private int cuMeals;
+    /** Schedule decisions per catch-up step at most (meals in a row; guards against a meal that never ends). */
+    private static final int CATCH_UP_DECISIONS = 64;
     private double cuDays;
 
     /**
@@ -206,15 +197,18 @@ public final class SettlerWork {
      * @return the codec value of the buffers
      */
     public BuffersSnapshot snapshot() {
+        List<BufferEntry> buffers = new ArrayList<>();
         List<WorkPlaceEntry> workPlaces = new ArrayList<>();
         List<SavedScan> saved = new ArrayList<>();
-        loops.values().forEach(loop -> {
-            workPlaces.addAll(loop.workPlaces());
-            saved.addAll(loop.savedScans());
+        jobWorkplaces.forEach((jobBlock, workplace) -> {
+            if (!workplace.buffer().isEmpty()) {
+                buffers.add(new BufferEntry(jobBlock, workplace.buffer()));
+            }
+            workplace.savedWorkPlace().ifPresent(workPlaces::add);
+            workplace.savedScan().ifPresent(saved::add);
         });
         long clock = settler.level() instanceof ServerLevel level ? level.getOverworldClockTime() : -1L;
-        return new BuffersSnapshot(buffers.entrySet().stream().map(e -> new BufferEntry(e.getKey(), e.getValue())).toList(),
-                workPlaces, saved, new CatchUpState(clock, catchUpFrom, catchUpTo), missions.trip());
+        return new BuffersSnapshot(buffers, workPlaces, saved, new CatchUpState(clock, catchUpFrom, catchUpTo), missions.trip());
     }
 
     /**
@@ -296,13 +290,15 @@ public final class SettlerWork {
     }
 
     /**
-     * Restores saved buffers.
+     * Restores the saved work state into the Workplaces (status and blocked time are not saved and stay).
      *
-     * @param snapshot the saved buffers
+     * @param snapshot the saved work state
      */
     public void restore(BuffersSnapshot snapshot) {
-        buffers.clear();
-        snapshot.entries().forEach(entry -> buffers.put(entry.jobBlock(), entry.buffer()));
+        jobWorkplaces.values().forEach(Workplace::clearSaved);
+        snapshot.entries().forEach(entry -> workplace(entry.jobBlock()).restoreBuffer(entry.buffer()));
+        snapshot.workPlaces().forEach(entry -> workplace(entry.jobBlock()).restoreWorkPlace(entry));
+        snapshot.scans().forEach(scan -> workplace(scan.jobBlock()).restoreScan(scan));
         loops.values().forEach(loop -> loop.restore(snapshot));
         savedClock = snapshot.catchUp().activeClock();
         catchUpFrom = snapshot.catchUp().from();
@@ -316,7 +312,7 @@ public final class SettlerWork {
      * @return the status of that job
      */
     public JobStatus status(BlockPos jobBlock) {
-        return statuses.getOrDefault(jobBlock, JobStatus.IDLE);
+        return existingWorkplace(jobBlock).map(Workplace::status).orElse(JobStatus.IDLE);
     }
 
     /**
@@ -324,7 +320,7 @@ public final class SettlerWork {
      * @return the buffer of that job (empty if none)
      */
     public JobBuffer buffer(BlockPos jobBlock) {
-        return buffers.getOrDefault(jobBlock, new JobBuffer());
+        return existingWorkplace(jobBlock).map(Workplace::buffer).orElseGet(JobBuffer::new);
     }
 
     /**
@@ -376,16 +372,15 @@ public final class SettlerWork {
     }
 
     /**
-     * Forgets everything about a removed job (its buffer is dropped at the settler's position).
+     * Forgets everything about a removed job: its whole Workplace goes (the buffer is dropped at the settler's position).
      *
      * @param jobBlock the JobBlock position
      */
     public void forget(BlockPos jobBlock) {
-        JobBuffer buffer = buffers.remove(jobBlock);
-        if (buffer != null && settler.level() instanceof ServerLevel level) {
-            buffer.stacks().forEach(stack -> settler.spawnAtLocation(level, stack.copy()));
+        Workplace workplace = jobWorkplaces.remove(jobBlock);
+        if (workplace != null && settler.level() instanceof ServerLevel level) {
+            workplace.buffer().stacks().forEach(stack -> settler.spawnAtLocation(level, stack.copy()));
         }
-        statuses.remove(jobBlock);
         loops.values().forEach(loop -> loop.forget(jobBlock));
         if (activeJob != null && activeJob.jobBlock().equals(jobBlock)) {
             stop();
@@ -449,128 +444,129 @@ public final class SettlerWork {
             // Died on the mission.
             return;
         }
-        boolean night = dayTime >= SLEEP_TIME;
-        boolean evening = dayTime >= WORK_END && !night;
-        SettlerFood food = settler.getFood();
-
-        if (settler.isSleeping()) {
-            if (night) {
+        // The body first: stay asleep, wake, return to the rest place after a skipped night, keep foraging.
+        boolean woke = false;
+        Optional<Intent> body = Schedule.wakeUp(snapshot(level, day, dayTime, jumped, false, new PantryLookup(level)));
+        while (body.isPresent()) {
+            Intent intent = body.get();
+            if (intent == Intent.SLEEP) {
                 return;
             }
-            wake();
-        } else if (jumped && !night && !settler.isHomeless() && !food.isForaging()) {
-            // The night was skipped while this settler was not in bed: appear at the bed as if it slept there.
-            teleportToRestPlace(level, day);
+            if (intent == Intent.FORAGE) {
+                forage(level);
+                return;
+            }
+            if (intent == Intent.END_FORAGING) {
+                returnFromForaging();
+                stop();
+                return;
+            }
+            if (intent == Intent.WAKE) {
+                wake();
+                woke = true;
+            } else {
+                // The night was skipped while this settler was not in bed: appear at the bed as if it slept there.
+                teleportToRestPlace(level, day);
+            }
+            body = Schedule.wakeUp(snapshot(level, day, dayTime, false, woke, new PantryLookup(level)));
         }
-        if (food.isForaging()) {
-            forage(level, day, dayTime);
-            return;
-        }
+        SettlerFood food = settler.getFood();
         if (food.level() >= SettlerFood.HUNGRY) {
             hungryNoFood = false;
         }
         checkStuck(level);
-        if (activity == Activity.EATING || activity == Activity.FETCH_FOOD) {
-            // A meal in progress is finished first (also after 20:00).
+
+        PantryLookup pantry = new PantryLookup(level);
+        Decision decision = Schedule.next(snapshot(level, day, dayTime, false, woke, pantry));
+        act(level, decision, pantry, day, dayTime);
+    }
+
+    /**
+     * Builds the Schedule snapshot. Pantries are looked up (once) only if a rule asks; the job step is asked only
+     * during a job step.
+     *
+     * @param woke whether the settler was just woken in this decision (it counts as awake)
+     */
+    private Schedule.Snapshot snapshot(ServerLevel level, long day, long dayTime, boolean nightSkipped, boolean woke, PantryLookup pantry) {
+        SettlerFood food = settler.getFood();
+        boolean deliveryPending = settler.getJobs().stream()
+                .anyMatch(job -> !buffer(job.jobBlock()).isEmpty() && status(job.jobBlock()) != JobStatus.DROP_OFF_FULL);
+        return new Schedule.Snapshot(day, dayTime, food.level(),
+                SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE),
+                CivModConfig.PROVISION_NUTRITION.get(), SettlerFood.choose(pocketStacks(), food.level()).isPresent(),
+                () -> pantry.get().isPresent(), settler.isHomeless(), settler.isSleeping() && !woke, food.forageDay(), nightSkipped,
+                activity, () -> jobStepHolds(level), food.morningDay() == day, food.eatenDay() == day, deliveryPending);
+    }
+
+    private boolean jobStepHolds(ServerLevel level) {
+        SettlerJob job = activeJob;
+        CategoryLoop loop = job == null ? null : loop(job);
+        return activity == Activity.JOB && loop != null && loop.holdsDecision(level, job);
+    }
+
+    /** Acts on a decision of the Schedule. */
+    private void act(ServerLevel level, Decision decision, PantryLookup pantry, long day, long dayTime) {
+        SettlerFood food = settler.getFood();
+        if (decision.intent() == Intent.CONTINUE) {
             return;
         }
-
-        if (activity == Activity.JOB && activeJob != null) {
-            CategoryLoop loop = loop(activeJob);
-            if (loop != null && loop.holdsDecision(level, activeJob)) {
-                return;
-            }
+        if (decision.morningHandled()) {
+            food.setMorningDay(day);
         }
-
-        if (settler.isHomeless()) {
-            restPlace = null;
-            stop();
-            if (food.level() < SettlerFood.HUNGRY && !startPocketMeal(false)) {
-                complain(level, day);
-            }
-            return;
+        if (decision.eveningMealHandled()) {
+            food.setEatenDay(day);
         }
-        if (evening || night) {
-            // After work: deliver what is left, eat, then rest near the bed and sleep from 20:00.
+        if (decision.complain()) {
+            complain(level, day);
+        }
+        SettlerJob delivery = null;
+        if (decision.afterWork()) {
+            // Jobs show idle after work, except the first one with something to deliver.
             for (SettlerJob job : settler.getJobs()) {
                 if (!buffer(job.jobBlock()).isEmpty() && status(job.jobBlock()) != JobStatus.DROP_OFF_FULL) {
-                    startDelivery(level, job);
-                    return;
+                    delivery = job;
+                    break;
                 }
-                statuses.put(job.jobBlock(), JobStatus.IDLE);
+                workplace(job.jobBlock()).setStatus(JobStatus.IDLE);
             }
-            if (evening && food.eatenDay() != day) {
-                food.setEatenDay(day);
-                if (food.level() < SettlerFood.MAX) {
-                    Optional<BlockPos> pantry = pantryWithFood(level);
-                    if (pantry.isPresent()) {
+        } else {
+            restPlace = null;
+        }
+        switch (decision.intent()) {
+            case IDLE -> stop();
+            case EAT_FROM_POCKETS -> startPocketMeal(false);
+            case EAT_UNTIL_FULL -> startPocketMeal(true);
+            case FETCH_FOOD -> {
+                stop();
+                startFetchFood(level, pantry.get().orElseThrow(), Objects.requireNonNull(decision.purpose()));
+            }
+            case START_FORAGING -> startForaging(level, day);
+            case DELIVER -> startDelivery(level, Objects.requireNonNull(delivery));
+            case REST, GO_TO_BED -> {
+                RestPlace rest = ensureRestPlace(level, day);
+                if (rest != null) {
+                    settler.setHomeTo(rest.pos(), REST_RADIUS);
+                }
+                if (decision.intent() == Intent.GO_TO_BED && rest != null) {
+                    if (activity != Activity.GO_TO_BED && activity != Activity.SLEEP) {
                         stop();
-                        startFetchFood(level, pantry.get(), MealPurpose.EVENING);
-                        return;
+                        moveTo(level, Activity.GO_TO_BED, rest.pos());
                     }
-                    // Provisions are only eaten in the evening if no pantry has food.
-                    if (startPocketMeal(true)) {
-                        return;
-                    }
-                }
-            }
-            if (food.level() < SettlerFood.HUNGRY && SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE) == 0
-                    && pantryWithFood(level).isEmpty()) {
-                complain(level, day);
-            }
-            RestPlace rest = ensureRestPlace(level, day);
-            if (rest != null) {
-                settler.setHomeTo(rest.pos(), REST_RADIUS);
-            }
-            if (night && rest != null) {
-                if (activity != Activity.GO_TO_BED && activity != Activity.SLEEP) {
+                } else {
                     stop();
-                    moveTo(level, Activity.GO_TO_BED, rest.pos());
                 }
-            } else {
-                stop();
             }
-            return;
+            case WORK -> work(level, day, dayTime);
+            default -> throw new IllegalStateException("Not a decision of Schedule.next: " + decision);
         }
-        restPlace = null;
+    }
 
-        if (food.morningDay() != day) {
-            food.setMorningDay(day);
-            int provisions = SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE);
-            Optional<BlockPos> pantry = pantryWithFood(level);
-            MorningPlan plan = morningPlan(food.level(), provisions, CivModConfig.PROVISION_NUTRITION.get(), pantry.isPresent());
-            if (plan == MorningPlan.FORAGE) {
-                startForaging(level, day);
-                return;
-            }
-            if (plan == MorningPlan.FETCH_PROVISIONS) {
-                stop();
-                startFetchFood(level, pantry.get(), MealPurpose.MORNING);
-                return;
-            }
-        }
-        if (food.level() < SettlerFood.HUNGRY) {
-            if (startPocketMeal(false)) {
-                return;
-            }
-            Optional<BlockPos> pantry = pantryWithFood(level);
-            if (pantry.isPresent()) {
-                stop();
-                startFetchFood(level, pantry.get(), MealPurpose.HUNGRY);
-                return;
-            }
-            complain(level, day);
-            if (food.level() <= 0) {
-                // Starving: no work until there is food again; forages the next day.
-                stop();
-                return;
-            }
-        }
-
+    /** Works the first job of the priority list that can work; lower jobs are told they were outranked. */
+    private void work(ServerLevel level, long day, long dayTime) {
         List<SettlerJob> jobs = settler.getJobs();
         for (int i = 0; i < jobs.size(); i++) {
             SettlerJob job = jobs.get(i);
-            if (blockedUntil.getOrDefault(job.jobBlock(), 0L) > level.getGameTime()) {
+            if (workplace(job.jobBlock()).isBlocked(level.getGameTime())) {
                 continue;
             }
             if (plan(level, job, day, dayTime)) {
@@ -587,29 +583,56 @@ public final class SettlerWork {
         stop();
     }
 
+    /** The nearest pantry with food, looked up once and only when asked. */
+    private final class PantryLookup {
+
+        private final ServerLevel level;
+        private Optional<BlockPos> pantry = Optional.empty();
+        private boolean looked;
+
+        PantryLookup(ServerLevel level) {
+            this.level = level;
+        }
+
+        Optional<BlockPos> get() {
+            if (!looked) {
+                looked = true;
+                pantry = pantryWithFood(level);
+            }
+            return pantry;
+        }
+    }
+
     /**
      * Plans the next step of a job through its category loop.
      *
      * @return whether the job can work (the settler is busy with it)
      */
     private boolean plan(ServerLevel level, SettlerJob job, long day, long dayTime) {
-        SettlementData data = SettlementData.get(level);
-        Optional<SettlementBlock> block = data.settlementAt(job.jobBlock()).flatMap(s -> s.block(job.jobBlock()));
+        Optional<JobBlockSite> site = JobBlockSite.at(level, job.jobBlock());
         CategoryLoop loop = loop(job);
-        if (block.isEmpty() || loop == null) {
+        if (site.isEmpty() || loop == null) {
             return false;
         }
-        return loop.plan(level, job, block.get(), day, dayTime);
+        return loop.plan(level, job, site.get(), day, dayTime);
     }
 
     // ---------------------------------------------------------------- shared parts used by the category loops
 
     /**
      * @param jobBlock a JobBlock position
-     * @return the buffer of that job (created if missing)
+     * @return the Workplace of that job (created if missing)
      */
-    JobBuffer jobBuffer(BlockPos jobBlock) {
-        return buffers.computeIfAbsent(jobBlock, pos -> new JobBuffer());
+    Workplace workplace(BlockPos jobBlock) {
+        return jobWorkplaces.computeIfAbsent(jobBlock, Workplace::new);
+    }
+
+    /**
+     * @param jobBlock a JobBlock position
+     * @return the Workplace of that job, empty if it has none (for queries that must not create one)
+     */
+    Optional<Workplace> existingWorkplace(BlockPos jobBlock) {
+        return Optional.ofNullable(jobWorkplaces.get(jobBlock));
     }
 
     /**
@@ -624,7 +647,7 @@ public final class SettlerWork {
      * @param status   the new status of that job
      */
     void setStatus(BlockPos jobBlock, JobStatus status) {
-        statuses.put(jobBlock, status);
+        workplace(jobBlock).setStatus(status);
     }
 
     /**
@@ -682,10 +705,9 @@ public final class SettlerWork {
      * @return true (the settler is busy with it)
      */
     boolean startDelivery(ServerLevel level, SettlerJob job) {
-        Optional<SettlementBlock> block = SettlementData.get(level).settlementAt(job.jobBlock()).flatMap(s -> s.block(job.jobBlock()));
-        BlockPos dropOff = block.flatMap(SettlementBlock::dropOff).orElse(job.jobBlock());
+        BlockPos dropOff = JobBlockSite.at(level, job.jobBlock()).map(JobBlockSite::dropOff).orElse(job.jobBlock());
         activeJob = job;
-        statuses.put(job.jobBlock(), JobStatus.DELIVERING);
+        workplace(job.jobBlock()).setStatus(JobStatus.DELIVERING);
         if (activity != Activity.DELIVER || !dropOff.equals(target)) {
             moveTo(level, Activity.DELIVER, dropOff);
         }
@@ -700,8 +722,7 @@ public final class SettlerWork {
      * @param status   the status explaining why
      */
     void block(ServerLevel level, BlockPos jobBlock, JobStatus status) {
-        statuses.put(jobBlock, status);
-        blockedUntil.put(jobBlock, level.getGameTime() + BLOCKED_RETRY);
+        workplace(jobBlock).block(status, level.getGameTime());
         if (activeJob != null && activeJob.jobBlock().equals(jobBlock)) {
             stop();
         }
@@ -968,12 +989,12 @@ public final class SettlerWork {
         }
         long clock = level.getOverworldClockTime();
         for (SettlerJob job : settler.getJobs()) {
-            Optional<SettlementBlock> block = settlement.get().block(job.jobBlock());
+            Optional<JobBlockSite> site = JobBlockSite.at(level, job.jobBlock()).filter(found -> found.settlement() == settlement.get());
             CategoryLoop loop = loop(job);
-            if (block.isEmpty() || loop == null) {
+            if (site.isEmpty() || loop == null) {
                 continue;
             }
-            if (!loop.catchUpReady(level, job, block.get(), Math.floorDiv(clock, 24000L), Math.floorMod(clock, 24000L))) {
+            if (!loop.catchUpReady(level, job, site.get(), Math.floorDiv(clock, 24000L), Math.floorMod(clock, 24000L))) {
                 return false;
             }
         }
@@ -987,13 +1008,9 @@ public final class SettlerWork {
         cuDays = Math.max(0, catchUpTo - catchUpFrom()) / (double) 24000L;
         quiet = true;
         loops.values().forEach(CategoryLoop::startCatchUp);
-        cuDone.clear();
+        jobWorkplaces.values().forEach(workplace -> workplace.setCatchUpEnded(false));
         cuItems = 0;
         cuMeals = 0;
-        cuForageDay = NO_DAY;
-        cuStarvingDay = NO_DAY;
-        cuMorningDay = NO_DAY;
-        cuEveningDay = NO_DAY;
     }
 
     /**
@@ -1005,11 +1022,15 @@ public final class SettlerWork {
         CivMod.LOGGER.info("Catch-up {}: {} day(s), {} item(s), {} meal(s), skills {}", settler.getName().getString(),
                 String.format(java.util.Locale.ROOT, "%.1f", cuDays), cuItems, cuMeals,
                 settler.getSkills().snapshot());
+        // Foraging that is over came back during the run (Schedule); one still going on continues live.
         catchUpFrom = -1;
         catchUpTo = -1;
         catchUpRegistered = false;
         quiet = false;
-        cuDone.forEach(jobBlock -> statuses.put(jobBlock, JobStatus.DROP_OFF_FULL));
+        jobWorkplaces.values().stream().filter(Workplace::catchUpEnded).forEach(workplace -> {
+            workplace.setStatus(JobStatus.DROP_OFF_FULL);
+            workplace.setCatchUpEnded(false);
+        });
     }
 
     /**
@@ -1033,86 +1054,139 @@ public final class SettlerWork {
             // On the mission all hour (no hunger, no work), or died on it.
             return 0;
         }
-        long awake = to - from;
         long workEnd = day * 24000L + WORK_END;
-        long work = Math.max(0, Math.min(to, workEnd) - from);
+        long dayTime = from - day * 24000L;
         SettlerFood food = settler.getFood();
-        int provisionWanted = CivModConfig.PROVISION_NUTRITION.get();
 
-        if (cuMorningDay != day) {
-            cuMorningDay = day;
-            boolean pocketFood = SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE) > 0;
-            Optional<BlockPos> pantry = pantryWithFood(level);
-            if (food.level() < SettlerFood.HUNGRY && !pocketFood && pantry.isEmpty()) {
-                cuForageDay = day;
-            } else if (pantry.isPresent()
-                    && SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE) < provisionWanted) {
-                mealPurpose = MealPurpose.MORNING;
-                visitPantry(level, pantry.get());
-                mealPurpose = null;
+        // Start of the hour: back from foraging, the morning plan, a meal if hungry.
+        if (decideCatchUp(level, day, dayTime) == Intent.FORAGE) {
+            // Away while foraging (no hunger, no work).
+            if (to <= workEnd) {
+                return 0;
             }
+            // Back at the end of work (the Schedule hands out the food): the rest of the hour is an ordinary evening.
+            from = workEnd;
+            dayTime = WORK_END;
+            decideCatchUp(level, day, dayTime);
         }
-        if (cuForageDay == day) {
-            if (hour == 11) {
-                food.addFood(CivModConfig.FORAGING_FOOD.get());
-            }
-            return 0;
-        }
+        long awake = to - from;
+        long work = Math.max(0, Math.min(to, workEnd) - from);
 
         double share = Fatigue.expectedWorkShare();
-        double factor = settler.getJobs().stream().filter(job -> !cuDone.contains(job.jobBlock())).findFirst()
+        double factor = settler.getJobs().stream().filter(job -> !catchUpEnded(job.jobBlock())).findFirst()
                 .map(job -> job.jobType().hungerFactor()).orElse(0.0);
         float appetite = food.appetite(level.getRandom(), CivModConfig.APPETITE_MIN.get(), CivModConfig.APPETITE_MAX.get());
         food.exhaust(SettlerFood.exhaustionFor(awake, work * share * factor, CivModConfig.HUNGER_BASE_PER_DAY.get(),
                 CivModConfig.HUNGER_PER_WORK_MINUTE.get(), appetite));
-        if (food.level() < SettlerFood.HUNGRY) {
-            simulateMeal(level, false);
-        }
-        if (food.level() <= 0) {
-            cuStarvingDay = day;
-        }
+
+        // After the hour's hunger: a meal if hungry; starving stops the work.
         int rolls = 0;
-        if (work > 0 && cuStarvingDay != day) {
+        if (decideCatchUp(level, day, dayTime) == Intent.WORK && work > 0) {
             rolls = simulateWork(level, day, work * share * CivModConfig.CATCH_UP_MULTIPLIER.get());
         }
-        if (hour >= 12 && cuEveningDay != day) {
-            cuEveningDay = day;
-            simulateMeal(level, true);
-            food.setEatenDay(day);
+        if (to >= workEnd) {
+            // Work is over: the evening meal.
+            decideCatchUp(level, day, Math.max(dayTime, WORK_END));
         }
         return rolls;
     }
 
-    /** Eats during catch-up: provisions first (daytime) or the pantry first (evening). */
-    private void simulateMeal(ServerLevel level, boolean evening) {
+    /**
+     * Asks the Schedule what the settler does during catch-up and simulates meals and the start of foraging on the
+     * spot (no walking, no messages), until the Schedule asks for something else.
+     *
+     * @param level   the level
+     * @param day     the day
+     * @param dayTime the day time of the decision
+     * @return {@link Intent#FORAGE} while foraging, otherwise the intent of the last decision ({@link Intent#WORK},
+     *         {@link Intent#IDLE} when starving, an evening intent after work)
+     */
+    private Intent decideCatchUp(ServerLevel level, long day, long dayTime) {
         SettlerFood food = settler.getFood();
-        int before = food.level();
-        if (!evening) {
-            while (food.level() < SettlerFood.HUNGRY) {
-                Optional<Integer> choice = SettlerFood.choose(pocketStacks(), food.level());
-                if (choice.isEmpty()) {
-                    break;
+        int levelBefore = food.level();
+        boolean noFood = false;
+        try {
+            for (int step = 0; step < CATCH_UP_DECISIONS; step++) {
+                PantryLookup pantry = new PantryLookup(level);
+                Schedule.Snapshot snapshot = catchUpSnapshot(day, dayTime, pantry, noFood);
+                Optional<Intent> body = Schedule.wakeUp(snapshot);
+                if (body.isPresent()) {
+                    // Only foraging settles the body in catch-up (awake, no skipped night).
+                    if (body.get() == Intent.FORAGE) {
+                        return Intent.FORAGE;
+                    }
+                    // END_FORAGING: back with the day's food, which is not a meal.
+                    int beforeReturn = food.level();
+                    returnFromForaging();
+                    levelBefore += food.level() - beforeReturn;
+                    continue;
                 }
-                eatItem(level, settler.getInventory().getItem(Settler.POCKETS_START + choice.get()).split(1), null);
-            }
-        }
-        if (evening || food.level() < SettlerFood.HUNGRY) {
-            Optional<BlockPos> pantry = pantryWithFood(level);
-            if (pantry.isPresent()) {
-                mealPurpose = evening ? MealPurpose.EVENING : MealPurpose.HUNGRY;
-                visitPantry(level, pantry.get());
-                mealPurpose = null;
-            } else if (evening) {
-                Optional<Integer> choice;
-                while ((choice = SettlerFood.choose(pocketStacks(), food.level())).isPresent()) {
-                    eatItem(level, settler.getInventory().getItem(Settler.POCKETS_START + choice.get()).split(1), null);
+                Decision decision = Schedule.next(snapshot);
+                if (decision.morningHandled()) {
+                    food.setMorningDay(day);
                 }
+                if (decision.eveningMealHandled()) {
+                    food.setEatenDay(day);
+                }
+                int foodBefore = food.level();
+                int pocketsBefore = SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE);
+                switch (decision.intent()) {
+                    case EAT_FROM_POCKETS -> eatFromPockets(level);
+                    case EAT_UNTIL_FULL -> {
+                        while (eatFromPockets(level)) {
+                            // Until nothing fits any more.
+                        }
+                    }
+                    case FETCH_FOOD -> {
+                        mealPurpose = decision.purpose();
+                        visitPantry(level, pantry.get().orElseThrow());
+                        mealPurpose = null;
+                    }
+                    case START_FORAGING -> {
+                        food.startForaging(day);
+                        return Intent.FORAGE;
+                    }
+                    default -> {
+                        return decision.intent();
+                    }
+                }
+                // A meal that found nothing to take counts as no food, so the Schedule decides again without it.
+                noFood = food.level() == foodBefore
+                        && SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE) == pocketsBefore;
             }
+            return Intent.IDLE;
+        } finally {
+            if (food.level() > levelBefore) {
+                cuMeals++;
+            }
+            settler.getInventory().setChanged();
         }
-        if (food.level() > before) {
-            cuMeals++;
-        }
-        settler.getInventory().setChanged();
+    }
+
+    /**
+     * The Schedule snapshot during catch-up: awake, idle, nothing left to deliver (output goes straight to the
+     * drop-off).
+     *
+     * @param noFood whether a meal just found nothing to take (no pantry or pocket food for this decision)
+     */
+    private Schedule.Snapshot catchUpSnapshot(long day, long dayTime, PantryLookup pantry, boolean noFood) {
+        SettlerFood food = settler.getFood();
+        return new Schedule.Snapshot(day, dayTime, food.level(),
+                SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE),
+                CivModConfig.PROVISION_NUTRITION.get(), !noFood && SettlerFood.choose(pocketStacks(), food.level()).isPresent(),
+                () -> !noFood && pantry.get().isPresent(), settler.isHomeless(), false, food.forageDay(), false,
+                Activity.IDLE, () -> false, food.morningDay() == day, food.eatenDay() == day, false);
+    }
+
+    /**
+     * Eats one item from the pockets on the spot (catch-up).
+     *
+     * @return whether there was something to eat
+     */
+    private boolean eatFromPockets(ServerLevel level) {
+        Optional<Integer> choice = SettlerFood.choose(pocketStacks(), settler.getFood().level());
+        choice.ifPresent(slot -> eatItem(level, settler.getInventory().getItem(Settler.POCKETS_START + slot).split(1), null));
+        return choice.isPresent();
     }
 
     /**
@@ -1124,12 +1198,12 @@ public final class SettlerWork {
         int rolls = 0;
         double remaining = workTicks;
         for (SettlerJob job : settler.getJobs()) {
-            if (cuDone.contains(job.jobBlock()) || remaining <= 0.0) {
+            if (catchUpEnded(job.jobBlock()) || remaining <= 0.0) {
                 continue;
             }
             CategoryLoop loop = loop(job);
             if (loop == null) {
-                cuDone.add(job.jobBlock());
+                endCatchUpJob(job.jobBlock());
                 continue;
             }
             CategoryLoop.SimulatedWork simulated = loop.simulateWork(level, job, day, remaining);
@@ -1145,20 +1219,24 @@ public final class SettlerWork {
      * @param jobBlock the JobBlock position
      */
     void endCatchUpJob(BlockPos jobBlock) {
-        cuDone.add(jobBlock);
+        workplace(jobBlock).setCatchUpEnded(true);
+    }
+
+    private boolean catchUpEnded(BlockPos jobBlock) {
+        return existingWorkplace(jobBlock).map(Workplace::catchUpEnded).orElse(false);
     }
 
     /**
      * Delivers output straight into the drop-off; what does not fit goes into the buffer.
      *
      * @param level  the level
-     * @param block  the JobBlock
+     * @param site   the JobBlock site
      * @param stacks the output
      * @return false when the buffer is full as well (the job ends)
      */
-    boolean deliverDirect(ServerLevel level, SettlementBlock block, List<ItemStack> stacks) {
-        ResourceHandler<ItemResource> handler = level.getCapability(Capabilities.Item.BLOCK, block.dropOff().orElse(block.pos()), null);
-        JobBuffer buffer = buffers.computeIfAbsent(block.pos(), pos -> new JobBuffer());
+    boolean deliverDirect(ServerLevel level, JobBlockSite site, List<ItemStack> stacks) {
+        ResourceHandler<ItemResource> handler = level.getCapability(Capabilities.Item.BLOCK, site.dropOff(), null);
+        JobBuffer buffer = workplace(site.pos()).buffer();
         for (ItemStack stack : stacks) {
             ItemStack rest = stack.copy();
             if (handler != null) {
@@ -1178,32 +1256,6 @@ public final class SettlerWork {
     }
 
     // ---------------------------------------------------------------- food
-
-    /** What a settler does at the start of a workday regarding food. */
-    public enum MorningPlan {
-        /** Nothing to do, go to work. */
-        WORK,
-        /** Fetch provisions from a pantry before work. */
-        FETCH_PROVISIONS,
-        /** Hungry and no food anywhere: forage all day. */
-        FORAGE
-    }
-
-    /**
-     * Morning decision (vault {@code Systems/Needs.md}).
-     *
-     * @param level      the food level
-     * @param provisions nutrition carried in the pockets
-     * @param wanted     nutrition the settler wants to carry
-     * @param pantryFood whether a pantry has food
-     * @return the plan
-     */
-    public static MorningPlan morningPlan(int level, int provisions, int wanted, boolean pantryFood) {
-        if (level < SettlerFood.HUNGRY && provisions == 0 && !pantryFood) {
-            return MorningPlan.FORAGE;
-        }
-        return provisions < wanted && pantryFood ? MorningPlan.FETCH_PROVISIONS : MorningPlan.WORK;
-    }
 
     private void accountHunger(ServerLevel level) {
         SettlerFood food = settler.getFood();
@@ -1266,7 +1318,7 @@ public final class SettlerWork {
                 settler.getInventory().setItem(i, Pantries.insert(handler, stack));
             }
         }
-        if (mealPurpose != MealPurpose.MORNING || food.level() < SettlerFood.HUNGRY) {
+        if (Schedule.eatsAtPantry(mealPurpose, food.level())) {
             while (food.level() < SettlerFood.MAX) {
                 Optional<Integer> slot = SettlerFood.choose(Pantries.contents(handler), food.level());
                 if (slot.isEmpty()) {
@@ -1451,21 +1503,11 @@ public final class SettlerWork {
     }
 
     /**
-     * Foraging: walk towards the border, vanish after at most {@value #FORAGE_WALK_TICKS} ticks or at the border,
-     * reappear there at 17:30 with some food.
+     * Foraging: walk towards the border, vanish after at most {@value #FORAGE_WALK_TICKS} ticks or at the border.
+     * When it is over the Schedule says {@link Intent#END_FORAGING}: see {@link #returnFromForaging}.
      */
-    private void forage(ServerLevel level, long day, long dayTime) {
+    private void forage(ServerLevel level) {
         SettlerFood food = settler.getFood();
-        boolean over = dayTime >= WORK_END || day > food.forageDay();
-        if (over) {
-            if (food.isAway()) {
-                settler.setInvisible(false);
-            }
-            food.addFood(CivModConfig.FORAGING_FOOD.get());
-            food.endForaging();
-            stop();
-            return;
-        }
         if (food.isAway()) {
             return;
         }
@@ -1480,6 +1522,19 @@ public final class SettlerWork {
             settler.setInvisible(true);
             target = null;
         }
+    }
+
+    /**
+     * Back from foraging ({@link Intent#END_FORAGING}, live and catch-up): reappears where it vanished, with the day's
+     * food.
+     */
+    private void returnFromForaging() {
+        SettlerFood food = settler.getFood();
+        if (food.isAway()) {
+            settler.setInvisible(false);
+        }
+        food.addFood(Schedule.foragingFood());
+        food.endForaging();
     }
 
     /**
@@ -1526,8 +1581,7 @@ public final class SettlerWork {
         if (!(settler.level() instanceof ServerLevel level)) {
             return SettlementRules.MIN_LEVEL;
         }
-        return SettlementData.get(level).settlementAt(job.jobBlock()).flatMap(s -> s.block(job.jobBlock()))
-                .map(SettlementBlock::level).orElse(SettlementRules.MIN_LEVEL);
+        return JobBlockSite.levelAt(level, job.jobBlock());
     }
 
     /**
@@ -1536,17 +1590,6 @@ public final class SettlerWork {
      */
     public int effectiveLevel(SettlerJob job) {
         return settler.getSkills().effectiveLevel(job.jobType(), SettlementRules.skillCap(jobBlockLevel(job)));
-    }
-
-    /**
-     * Grants the EXP of one unit of work.
-     *
-     * @param level      the level
-     * @param job        the job
-     * @param blockLevel the level of the job's JobBlock
-     */
-    void gainExp(ServerLevel level, SettlerJob job, int blockLevel) {
-        gainExp(level, job, job.jobType().baseExp() * blockLevel, SettlementRules.skillCap(blockLevel));
     }
 
     /**
@@ -1560,13 +1603,20 @@ public final class SettlerWork {
     void gainExp(ServerLevel level, SettlerJob job, int amount, int cap) {
         SkillRules rules = SkillRules.get();
         int gained = settler.getSkills().addExp(job.jobType(), amount, cap, rules);
-        if (gained <= 0) {
+        if (gained <= 0 || quiet) {
             return;
         }
+        showLevelUp(level, job);
+    }
+
+    /**
+     * Shows a level-up in a job to nearby players (particles, sound, overlay message).
+     *
+     * @param level the level
+     * @param job   the job
+     */
+    void showLevelUp(ServerLevel level, SettlerJob job) {
         int newLevel = settler.getSkills().get(job.jobType()).level();
-        if (quiet) {
-            return;
-        }
         level.sendParticles(net.minecraft.core.particles.ParticleTypes.HAPPY_VILLAGER, settler.getX(), settler.getY() + 2.0, settler.getZ(),
                 8, 0.4, 0.3, 0.4, 0.0);
         level.playSound(null, settler.getX(), settler.getY(), settler.getZ(), net.minecraft.sounds.SoundEvents.PLAYER_LEVELUP,

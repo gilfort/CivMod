@@ -90,7 +90,12 @@ public final class CatchUpGameTests {
         helper.succeed();
     }
 
-    private static Settler lumberjack(GameTestHelper helper, List<long[]> forced) {
+    /**
+     * Sets up a Lumberjack at (1, 1, 1) with a stone axe, plenty of food, a work point on a block of logs.
+     *
+     * @return the settler (its job is the first one)
+     */
+    static Settler lumberjack(GameTestHelper helper, List<long[]> forced) {
         ServerLevel level = helper.getLevel();
         for (int x = 0; x < 9; x++) {
             for (int z = 0; z < 9; z++) {
@@ -208,12 +213,16 @@ public final class CatchUpGameTests {
         settler.joinSettlement(data, settlement);
         settler.getFood().setLevel(4);
         settler.getFood().setSaturation(0.0F);
+        settler.getFood().setAppetite(1.0F);
         long clock = level.getOverworldClockTime();
         long dayStart = Math.floorDiv(clock, DAY) * DAY;
         // Two full missed days before today.
         settler.getWork().setCatchUp(dayStart - 2 * DAY, dayStart);
         CatchUp.runNow(level, List.of(settler));
-        helper.assertTrue(settler.getFood().level() == 14, "Two foraging days: 4 + 5 + 5, got " + settler.getFood().level());
+        // Each day: forages from the morning (no hunger while away), back at 17:30 with 5 food, then hungry like live
+        // play until bed at 20:00: 2500 of 14000 awake ticks at 8 food per day = 1.43 points. Over both days 2.86
+        // points, of which 2 whole points are lost (no saturation): 4 + 5 + 5 - 2 = 12.
+        helper.assertTrue(settler.getFood().level() == 12, "Two foraging days: 4 + 5 + 5 - 2, got " + settler.getFood().level());
         helper.assertFalse(settler.getFood().isForaging(), "Not foraging afterwards");
         settler.discard();
         helper.succeed();

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:schedule_rules_foraging",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

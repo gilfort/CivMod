@@ -103,15 +103,15 @@ public final class JobAssignments {
      * @return the result
      */
     public static PointResult cyclePoint(SettlementData data, BlockPos jobBlock, BlockPos target, boolean validWork, boolean container) {
-        Optional<Settlement> settlement = data.settlementAt(jobBlock);
-        Optional<SettlementBlock> block = settlement.flatMap(s -> s.block(jobBlock));
-        if (block.isEmpty()) {
+        Optional<JobBlockSite> site = JobBlockSite.at(data, jobBlock);
+        if (site.isEmpty()) {
             return PointResult.NO_JOB_BLOCK;
         }
+        SettlementBlock block = site.get().block();
         boolean self = target.equals(jobBlock);
         boolean work = validWork && !self;
-        Role current = roleOf(block.get(), target);
-        if (current == Role.NONE && !insideBorder(settlement.get(), target)) {
+        Role current = roleOf(block, target);
+        if (current == Role.NONE && !insideBorder(site.get().settlement(), target)) {
             return PointResult.OUTSIDE;
         }
         Role next = switch (current) {
@@ -123,10 +123,10 @@ public final class JobAssignments {
         if (next == null) {
             return PointResult.INVALID;
         }
-        if (next == Role.WORK && block.get().workPoints().size() >= SettlementBlock.MAX_WORK_POINTS) {
-            return container ? apply(data, block.get(), target, current, Role.COLLECT) : PointResult.TOO_MANY;
+        if (next == Role.WORK && block.workPoints().size() >= SettlementBlock.MAX_WORK_POINTS) {
+            return container ? apply(data, block, target, current, Role.COLLECT) : PointResult.TOO_MANY;
         }
-        return apply(data, block.get(), target, current, next);
+        return apply(data, block, target, current, next);
     }
 
     private static PointResult apply(SettlementData data, SettlementBlock block, BlockPos target, Role from, Role to) {
@@ -181,31 +181,31 @@ public final class JobAssignments {
      */
     public static AssignResult assign(SettlementData data, BlockPos jobBlock, UUID settler, String settlerName, int settlementId,
             Collection<Job> currentJobs) {
-        Optional<Settlement> settlement = data.settlementAt(jobBlock);
-        Optional<SettlementBlock> block = settlement.flatMap(s -> s.block(jobBlock));
-        if (block.isEmpty()) {
+        Optional<JobBlockSite> site = JobBlockSite.at(data, jobBlock);
+        if (site.isEmpty()) {
             return AssignResult.NO_JOB_BLOCK;
         }
-        if (!block.get().connected()) {
+        SettlementBlock block = site.get().block();
+        if (!block.connected()) {
             return AssignResult.UNCONNECTED;
         }
-        if (settlement.get().id() != settlementId) {
+        if (site.get().settlement().id() != settlementId) {
             return AssignResult.OTHER_SETTLEMENT;
         }
-        if (block.get().isAssignee(settler)) {
+        if (block.isAssignee(settler)) {
             return AssignResult.DUPLICATE;
         }
-        boolean missionBoard = block.get().jobType().category() == JobCategory.MISSION;
+        boolean missionBoard = block.jobType().category() == JobCategory.MISSION;
         if (missionBoard && currentJobs.stream().anyMatch(job -> job.category() == JobCategory.MISSION)) {
             return AssignResult.MISSION_JOB;
         }
-        if (currentJobs.contains(block.get().jobType())) {
+        if (currentJobs.contains(block.jobType())) {
             return AssignResult.DUPLICATE;
         }
-        if (block.get().assignees().size() >= block.get().capacity()) {
+        if (block.assignees().size() >= block.capacity()) {
             return missionBoard ? AssignResult.FULL : AssignResult.OCCUPIED;
         }
-        block.get().mutableAssignees().add(new SettlementBlock.Assignee(settler, settlerName));
+        block.mutableAssignees().add(new SettlementBlock.Assignee(settler, settlerName));
         data.changed();
         return AssignResult.OK;
     }
@@ -218,7 +218,7 @@ public final class JobAssignments {
      * @return the settlers that worked it
      */
     public static List<UUID> unassign(SettlementData data, BlockPos jobBlock) {
-        Optional<SettlementBlock> block = data.settlementAt(jobBlock).flatMap(s -> s.block(jobBlock));
+        Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
         List<UUID> previous = block.map(b -> b.assignees().stream().map(SettlementBlock.Assignee::id).toList()).orElse(List.of());
         if (!previous.isEmpty()) {
             block.get().mutableAssignees().clear();
@@ -238,7 +238,7 @@ public final class JobAssignments {
      * @return whether the settler worked it
      */
     public static boolean unassign(SettlementData data, BlockPos jobBlock, UUID settler) {
-        Optional<SettlementBlock> block = data.settlementAt(jobBlock).flatMap(s -> s.block(jobBlock));
+        Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
         boolean removed = block.map(b -> b.mutableAssignees().removeIf(assignee -> assignee.id().equals(settler))).orElse(false);
         if (removed) {
             MissionOffers.removeAssignee(data, jobBlock, settler);
@@ -255,7 +255,7 @@ public final class JobAssignments {
      * @return the new state
      */
     public static boolean toggleLeaves(SettlementData data, BlockPos jobBlock) {
-        Optional<SettlementBlock> block = data.settlementAt(jobBlock).flatMap(s -> s.block(jobBlock));
+        Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
         block.ifPresent(b -> {
             b.setCollectLeaves(!b.collectLeaves());
             data.changed();
@@ -270,6 +270,6 @@ public final class JobAssignments {
      * @return whether the settler is an assignee of that JobBlock
      */
     public static boolean isAssignee(SettlementData data, BlockPos jobBlock, UUID settler) {
-        return data.settlementAt(jobBlock).flatMap(s -> s.block(jobBlock)).filter(block -> block.isAssignee(settler)).isPresent();
+        return JobBlockSite.blockAt(data, jobBlock).filter(block -> block.isAssignee(settler)).isPresent();
     }
 }

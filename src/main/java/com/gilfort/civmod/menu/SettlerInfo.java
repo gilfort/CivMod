@@ -8,6 +8,7 @@ import com.gilfort.civmod.job.JobCategory;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 
@@ -171,7 +172,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
             return List.of();
         }
         return settler.getJobs().stream().filter(job -> job.jobType().category() == JobCategory.MISSION).findFirst()
-                .flatMap(job -> SettlementData.get(level).settlementAt(job.jobBlock()).flatMap(s -> s.block(job.jobBlock())))
+                .flatMap(job -> JobBlockSite.blockAt(level, job.jobBlock()))
                 .map(board -> board.jobType().offeredAt(board.level()).stream().filter(job -> job.category() == JobCategory.MISSION).toList())
                 .orElse(List.of());
     }

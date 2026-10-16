@@ -16,10 +16,9 @@ import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.MissionOffers;
-import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
-import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -100,21 +99,21 @@ final class MissionPicks {
 
     private static void resolve(ServerLevel level, BlockPos board, List<Settler> settlers) {
         SettlementData data = SettlementData.get(level);
-        Optional<SettlementBlock> block = data.settlementAt(board).flatMap(s -> s.block(board))
-                .filter(entry -> entry.jobType().category() == JobCategory.MISSION);
-        if (block.isEmpty()) {
+        Optional<JobBlockSite> site = JobBlockSite.at(level, board)
+                .filter(found -> found.block().jobType().category() == JobCategory.MISSION);
+        if (site.isEmpty()) {
             return;
         }
         Map<Identifier, Mission> pool = Missions.all(level.registryAccess());
         MissionOffers.refresh(data, board, Math.floorDiv(level.getOverworldClockTime(), 24000L), pool, level.getRandom());
-        int cap = SettlementRules.skillCap(block.get().level());
+        int cap = site.get().skillCap();
         List<Candidate> candidates = settlers.stream()
                 .filter(settler -> !settler.isRemoved() && !settler.getWork().missions().hasTrip())
                 .flatMap(settler -> MissionLoop.missionJob(settler, board)
                         .map(job -> new Candidate(settler, job, settler.getSkills().effectiveLevel(job.jobType(), cap))).stream())
                 .toList();
         for (Candidate candidate : MissionRules.order(candidates, Candidate::skill, level.getRandom())) {
-            List<MissionOffer.Entry> offer = block.get().missionOffer().entries();
+            List<MissionOffer.Entry> offer = site.get().block().missionOffer().entries();
             OptionalInt pick = MissionRules.pick(offer, pool, candidate.job().jobType(), candidate.skill(),
                     candidate.settler().getUUID(), level.getRandom());
             MissionLoop loop = candidate.settler().getWork().missions();
