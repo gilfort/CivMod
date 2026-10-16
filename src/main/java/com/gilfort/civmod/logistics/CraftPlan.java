@@ -28,10 +28,10 @@ import net.minecraft.world.item.crafting.Ingredient;
  * @param amount     how many of it are made
  * @param steps      the crafts in order (intermediates first)
  * @param takes      what is taken from the stock
- * @param missing    the first base input that is missing, empty if the plan can be done
+ * @param missing    every base input that is missing, empty if the plan can be done
  * @param operations crafting operations (one craft each, intermediates count)
  */
-public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integer> takes, Optional<Request.Missing> missing, int operations) {
+public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integer> takes, List<Request.Missing> missing, int operations) {
 
     /** Patterns deeper than this are not followed (guards against long or cyclic chains). */
     private static final int MAX_DEPTH = 8;
@@ -59,8 +59,8 @@ public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integ
             Map<Item, Integer> stock) {
         Planner planner = new Planner(level, checked, held, stock);
         planner.craft(item, amount, 0);
-        Optional<Request.Missing> missing = planner.missing.entrySet().stream().findFirst()
-                .map(entry -> new Request.Missing(entry.getKey(), entry.getValue()));
+        List<Request.Missing> missing = planner.missing.entrySet().stream()
+                .map(entry -> new Request.Missing(entry.getKey(), entry.getValue())).toList();
         int operations = planner.steps.stream().mapToInt(Step::crafts).sum();
         return new CraftPlan(item, amount, List.copyOf(planner.steps), Map.copyOf(planner.takes), missing, operations);
     }

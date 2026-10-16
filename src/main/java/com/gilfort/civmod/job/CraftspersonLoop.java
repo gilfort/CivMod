@@ -2,9 +2,9 @@ package com.gilfort.civmod.job;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -13,6 +13,7 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.CraftPlan;
 import com.gilfort.civmod.logistics.CraftingRecipes;
+import com.gilfort.civmod.logistics.ItemCounts;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.Stock;
@@ -25,6 +26,7 @@ import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
+import com.gilfort.civmod.settlement.DayClock;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -49,7 +51,8 @@ import net.minecraft.world.phys.Vec3;
  * not fit goes to its own drop-off.
  * <p>
  * The claim is released when the settler switches job, the day ends, it leaves the JobBlock or dies; fetched inputs
- * stay in its buffer and go to its own drop-off. Catch-up runs the same round without walking.
+ * go to its own drop-off (leaving the JobBlock: straight into it while it is loaded; death: the death path). The round
+ * lives in the job's {@link Workplace}. Catch-up runs the same round without walking.
  */
 final class CraftspersonLoop implements CategoryLoop {
 
@@ -66,48 +69,6 @@ final class CraftspersonLoop implements CategoryLoop {
     /** How long a crafted item is shown in the hand. */
     private static final int HAND_TICKS = 20;
 
-    /** The step of a round. */
-    private enum Phase { FETCH, CRAFT, DELIVER }
-
-    /** One claimed part of one request, from fetching the inputs to the delivery. */
-    private static final class Round {
-
-        final UUID request;
-        final Item item;
-        final Optional<BlockPos> target;
-        final List<CraftPlan.Step> steps;
-        /** Inputs still to take, by item. */
-        final Map<Item, Integer> toTake;
-        /** Places still to fetch from (collect inventory, then the Clerk). */
-        final List<BlockPos> sources;
-        Phase phase;
-        int step;
-        int crafted;
-
-        Round(UUID request, Item item, Optional<BlockPos> target, CraftPlan plan, List<BlockPos> sources) {
-            this.request = request;
-            this.item = item;
-            this.target = target;
-            this.steps = plan.steps();
-            this.toTake = new LinkedHashMap<>(plan.takes());
-            this.sources = new ArrayList<>(sources);
-            this.phase = sources.isEmpty() ? Phase.CRAFT : Phase.FETCH;
-        }
-
-        boolean crafted() {
-            return step >= steps.size();
-        }
-    }
-
-    /** What a Craftsperson keeps per JobBlock. */
-    private static final class Bench {
-        @Nullable Round round;
-        /** Requests skipped until a time (live: game time, catch-up: the simulated clock). */
-        final Map<UUID, Long> skips = new HashMap<>();
-        /** The last delivery left items in the buffer: they go to the own drop-off next. */
-        boolean dropOffPending;
-    }
-
     /** Result of picking a request. */
     private record Pick(Optional<Round> round, boolean more) {
     }
@@ -115,7 +76,6 @@ final class CraftspersonLoop implements CategoryLoop {
     private final SettlerWork shell;
     private final Settler settler;
     private final Fatigue fatigue = new Fatigue();
-    private final Map<BlockPos, Bench> benches = new HashMap<>();
     /** Where the current fetch or delivery step is made. */
     private ClerkStorage.@Nullable Visit visit;
     private int swingTimer;
@@ -138,11 +98,10 @@ final class CraftspersonLoop implements CategoryLoop {
         BlockPos jobBlock = job.jobBlock();
         releaseIfRestored(level);
         Patterns.enforceLimit(SettlementData.get(level), jobBlock, Patterns.checkLimit(shell.effectiveLevel(job)));
-        Bench bench = bench(jobBlock);
         Workplace workplace = shell.workplace(jobBlock);
-        if (bench.round == null) {
-            if (bench.dropOffPending || workplace.buffer().shouldDeliver()) {
-                bench.dropOffPending = false;
+        if (workplace.round() == null) {
+            if (workplace.dropOffPending() || workplace.buffer().shouldDeliver()) {
+                workplace.setDropOffPending(false);
                 return shell.startDelivery(level, job);
             }
             if (station(level, job, site, day) == null) {
@@ -153,9 +112,9 @@ final class CraftspersonLoop implements CategoryLoop {
             if (pick.round().isEmpty()) {
                 return false;
             }
-            bench.round = pick.round().get();
+            workplace.setRound(pick.round().get());
         }
-        Round round = bench.round;
+        Round round = Objects.requireNonNull(workplace.round());
         shell.setActiveJob(job);
         switch (round.phase) {
             case FETCH -> {
@@ -174,7 +133,7 @@ final class CraftspersonLoop implements CategoryLoop {
                 walk(level, new ClerkStorage.Visit(station, SettlerWork.REACH, false));
             }
             case DELIVER -> {
-                BlockPos target = round.target.orElse(site.dropOff());
+                BlockPos target = target(SettlementData.get(level), round.request).orElse(site.dropOff());
                 shell.setStatus(jobBlock, JobStatus.DELIVERING);
                 walk(level, shell.reachableVisit(level, target, ClerkStorage.visit(level, target, dayTime)));
             }
@@ -200,16 +159,17 @@ final class CraftspersonLoop implements CategoryLoop {
         BlockPos jobBlock = job.jobBlock();
         SettlementData data = SettlementData.get(level);
         Settlement settlement = site.settlement();
-        Bench bench = bench(jobBlock);
-        bench.skips.values().removeIf(until -> until <= now || until - now > SKIP_TICKS);
+        Workplace workplace = shell.workplace(jobBlock);
+        Map<UUID, Long> skips = workplace.skips();
+        skips.values().removeIf(until -> until <= now || until - now > SKIP_TICKS);
         List<Pattern> checked = Patterns.checked(site.block());
-        JobBuffer buffer = shell.workplace(jobBlock).buffer();
+        JobBuffer buffer = workplace.buffer();
         Map<Item, Integer> held = buffer.counts();
         int room = Math.max(0, JobBuffer.CAPACITY - buffer.count());
         int tries = 0;
         boolean more = false;
         for (Request request : Requests.claimable(settlement)) {
-            if (checked.stream().noneMatch(pattern -> pattern.output() == request.item()) || bench.skips.containsKey(request.id())) {
+            if (checked.stream().noneMatch(pattern -> pattern.output() == request.item()) || skips.containsKey(request.id())) {
                 continue;
             }
             if (tries >= MAX_TRIES) {
@@ -220,12 +180,13 @@ final class CraftspersonLoop implements CategoryLoop {
             Map<Item, Integer> collect = stock(level, site.collect(), dayTime, catchUp).counts();
             Optional<BlockPos> clerk = request.target().filter(target -> !target.equals(site.collect()));
             Map<Item, Integer> available = new HashMap<>(collect);
-            clerk.ifPresent(target -> stock(level, target, dayTime, catchUp).counts().forEach((item, count) -> available.merge(item, count, Integer::sum)));
+            clerk.ifPresent(target -> ItemCounts.addAll(available, stock(level, target, dayTime, catchUp).counts()));
             int amount = CraftPlan.most(level, checked, request.item(), request.amount(), held, available, room);
             if (amount <= 0) {
-                CraftPlan failed = CraftPlan.plan(level, checked, request.item(), 1, held, available);
+                // What the whole open request misses ("2× stone pickaxe" → "Missing: 6× Cobblestone").
+                CraftPlan failed = CraftPlan.plan(level, checked, request.item(), request.amount(), held, available);
                 Requests.setMissing(data, settlement, request.id(), failed.missing());
-                bench.skips.put(request.id(), now + SKIP_TICKS);
+                skips.put(request.id(), now + SKIP_TICKS);
                 continue;
             }
             int claimed = Requests.claim(data, settlement, request.id(), settler.getUUID(), settler.getName().getString(), amount);
@@ -241,7 +202,7 @@ final class CraftspersonLoop implements CategoryLoop {
             if (!rest.isEmpty() && clerk.isPresent()) {
                 sources.add(clerk.get());
             }
-            return new Pick(Optional.of(new Round(request.id(), request.item(), request.target(), plan, sources)), true);
+            return new Pick(Optional.of(new Round(request.id(), request.item(), plan, sources)), true);
         }
         shell.setStatus(jobBlock, tries > 0 ? JobStatus.MISSING_INPUTS : JobStatus.NO_REQUEST);
         return new Pick(Optional.empty(), more);
@@ -270,19 +231,26 @@ final class CraftspersonLoop implements CategoryLoop {
 
     @Override
     public void outranked(ServerLevel level, SettlerJob job, long day, long dayTime) {
-        // A job switch releases the claim; fetched inputs stay in the buffer.
-        release(level, job.jobBlock());
+        releaseToDropOff(level, job.jobBlock());
     }
 
     @Override
     public void dayEnded(ServerLevel level, SettlerJob job) {
-        release(level, job.jobBlock());
+        releaseToDropOff(level, job.jobBlock());
+    }
+
+    /** Releases the claim; the fetched inputs go to the own drop-off before the next round. */
+    private void releaseToDropOff(ServerLevel level, BlockPos jobBlock) {
+        Workplace workplace = shell.workplace(jobBlock);
+        if (release(level, jobBlock) && !workplace.buffer().isEmpty()) {
+            workplace.setDropOffPending(true);
+        }
     }
 
     @Override
     public boolean holdsDecision(ServerLevel level, SettlerJob job) {
-        Round round = bench(job.jobBlock()).round;
-        if (round != null && round.phase == Phase.CRAFT && fatigue.advance(SettlerWork.DECISION_INTERVAL, level.getRandom())) {
+        Round round = shell.workplace(job.jobBlock()).round();
+        if (round != null && round.phase == Round.Phase.CRAFT && fatigue.advance(SettlerWork.DECISION_INTERVAL, level.getRandom())) {
             shell.setStatus(job.jobBlock(), JobStatus.PAUSING);
             settler.getNavigation().stop();
             return true;
@@ -299,14 +267,14 @@ final class CraftspersonLoop implements CategoryLoop {
 
     @Override
     public void tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
-        Bench bench = bench(job.jobBlock());
-        Round round = bench.round;
+        Workplace workplace = shell.workplace(job.jobBlock());
+        Round round = workplace.round();
         Optional<JobBlockSite> site = JobBlockSite.at(level, job.jobBlock());
         if (round == null || site.isEmpty()) {
             shell.stepDone(level);
             return;
         }
-        long dayTime = Math.floorMod(level.getOverworldClockTime(), 24000L);
+        long dayTime = DayClock.dayTime(level);
         switch (round.phase) {
             case FETCH -> {
                 boolean counter = visit != null && visit.counter();
@@ -322,7 +290,7 @@ final class CraftspersonLoop implements CategoryLoop {
             case CRAFT -> craft(level, job, site.get(), round, target);
             case DELIVER -> {
                 if (!deliver(level, job, round, visit != null && visit.counter(), dayTime)) {
-                    bench.dropOffPending = true;
+                    workplace.setDropOffPending(true);
                 }
                 visit = null;
                 shell.stepDone(level);
@@ -353,11 +321,12 @@ final class CraftspersonLoop implements CategoryLoop {
             return;
         }
         if (round.toTake.isEmpty()) {
-            round.phase = Phase.CRAFT;
+            round.phase = Round.Phase.CRAFT;
         } else {
             // The stock changed since the round started.
-            Map.Entry<Item, Integer> lacking = round.toTake.entrySet().iterator().next();
-            fail(level, job.jobBlock(), round, new Request.Missing(lacking.getKey(), lacking.getValue()), level.getGameTime());
+            List<Request.Missing> lacking = round.toTake.entrySet().stream()
+                    .map(entry -> new Request.Missing(entry.getKey(), entry.getValue())).toList();
+            fail(level, job.jobBlock(), round, lacking, level.getGameTime());
         }
     }
 
@@ -388,7 +357,7 @@ final class CraftspersonLoop implements CategoryLoop {
             return;
         }
         if (round.crafted()) {
-            round.phase = Phase.DELIVER;
+            round.phase = Round.Phase.DELIVER;
             shell.stepDone(level);
         }
     }
@@ -406,8 +375,8 @@ final class CraftspersonLoop implements CategoryLoop {
             ItemStack one = buffer.takeOne(input);
             if (one.isEmpty()) {
                 consumed.forEach(buffer::add);
-                fail(level, job.jobBlock(), round, new Request.Missing(input.items().findFirst().map(holder -> holder.value())
-                        .orElse(net.minecraft.world.item.Items.AIR), 1), level.getGameTime());
+                fail(level, job.jobBlock(), round, List.of(new Request.Missing(input.items().findFirst().map(holder -> holder.value())
+                        .orElse(net.minecraft.world.item.Items.AIR), 1)), level.getGameTime());
                 return false;
             }
             consumed.add(one);
@@ -434,10 +403,14 @@ final class CraftspersonLoop implements CategoryLoop {
      * @return whether everything fit (otherwise the rest waits in the buffer for the own drop-off)
      */
     private boolean deliver(ServerLevel level, SettlerJob job, Round round, boolean atCounter, long dayTime) {
-        JobBuffer buffer = shell.workplace(job.jobBlock()).buffer();
+        Workplace workplace = shell.workplace(job.jobBlock());
+        JobBuffer buffer = workplace.buffer();
         List<ItemStack> product = buffer.takeAll(stack -> stack.is(round.item));
         List<ItemStack> rest = new ArrayList<>();
-        Stock stock = round.target.map(target -> ClerkStorage.stock(level, target, dayTime, atCounter)).orElse(Stock.EMPTY);
+        SettlementData data = SettlementData.get(level);
+        // Read at delivery: a removed Clerk leaves the request without a target (own drop-off).
+        Optional<BlockPos> target = target(data, round.request);
+        Stock stock = target.map(clerk -> ClerkStorage.stock(level, clerk, dayTime, atCounter)).orElse(Stock.EMPTY);
         for (ItemStack stack : product) {
             ItemStack left = stock.insert(stack);
             if (!left.isEmpty()) {
@@ -445,35 +418,44 @@ final class CraftspersonLoop implements CategoryLoop {
             }
         }
         rest.forEach(buffer::add);
-        bench(job.jobBlock()).round = null;
-        SettlementData data = SettlementData.get(level);
+        workplace.setRound(null);
         settlementOf(data, round.request).ifPresent(settlement -> Requests.finish(data, settlement, round.request, settler.getUUID()));
-        round.target.ifPresent(target -> StockRules.check(level, target, dayTime));
+        target.ifPresent(clerk -> StockRules.check(level, clerk, dayTime));
         return rest.isEmpty();
     }
 
     /** A round that cannot go on: the claim is released, the request shows what is missing and is skipped a while. */
-    private void fail(ServerLevel level, BlockPos jobBlock, Round round, Request.Missing missing, long now) {
+    private void fail(ServerLevel level, BlockPos jobBlock, Round round, List<Request.Missing> missing, long now) {
         SettlementData data = SettlementData.get(level);
         release(level, jobBlock);
-        settlementOf(data, round.request).ifPresent(settlement -> Requests.setMissing(data, settlement, round.request, Optional.of(missing)));
-        bench(jobBlock).skips.put(round.request, now + SKIP_TICKS);
+        settlementOf(data, round.request).ifPresent(settlement -> Requests.setMissing(data, settlement, round.request, missing));
+        shell.workplace(jobBlock).skips().put(round.request, now + SKIP_TICKS);
     }
 
-    /** Releases the claim of the JobBlock's round, if any. */
-    private void release(ServerLevel level, BlockPos jobBlock) {
-        Bench bench = benches.get(jobBlock);
-        Round round = bench == null ? null : bench.round;
+    /**
+     * Releases the claim of the JobBlock's round, if any.
+     *
+     * @return whether a round was released
+     */
+    private boolean release(ServerLevel level, BlockPos jobBlock) {
+        Workplace workplace = shell.workplace(jobBlock);
+        Round round = workplace.round();
         if (round == null) {
-            return;
+            return false;
         }
-        bench.round = null;
+        workplace.setRound(null);
         SettlementData data = SettlementData.get(level);
         settlementOf(data, round.request).ifPresent(settlement -> Requests.release(data, settlement, round.request, settler.getUUID()));
+        return true;
     }
 
     private static Optional<Settlement> settlementOf(SettlementData data, UUID request) {
         return data.settlements().stream().filter(settlement -> Requests.get(settlement, request).isPresent()).findFirst();
+    }
+
+    /** The Clerk a request delivers to now, empty if it has none (or is gone). */
+    private static Optional<BlockPos> target(SettlementData data, UUID request) {
+        return settlementOf(data, request).flatMap(settlement -> Requests.get(settlement, request)).flatMap(Request::target);
     }
 
     private void releaseIfRestored(ServerLevel level) {
@@ -546,22 +528,21 @@ final class CraftspersonLoop implements CategoryLoop {
             shell.setStatus(jobBlock, JobStatus.NO_WORK_PLACE);
             return new SimulatedWork(0, workTicks);
         }
-        long dayTime = shell.catchUpDayTime();
-        double clock = day * 24000.0 + dayTime;
-        Bench bench = bench(jobBlock);
+        // The time of day follows the simulated clock: a round crossing 18:30 no longer reaches the linked storage.
+        double clock = day * (double) DayClock.DAY_TICKS + shell.catchUpDayTime();
         Workplace workplace = shell.workplace(jobBlock);
         double ticks = workTicks;
         int operations = 0;
         while (ticks > 0.0) {
-            if (bench.round == null) {
-                if (bench.dropOffPending || workplace.buffer().shouldDeliver()) {
-                    bench.dropOffPending = false;
+            if (workplace.round() == null) {
+                if (workplace.dropOffPending() || workplace.buffer().shouldDeliver()) {
+                    workplace.setDropOffPending(false);
                     if (!deliverToDropOff(level, site)) {
                         shell.endCatchUpJob(jobBlock);
                         return new SimulatedWork(operations, ticks);
                     }
                 }
-                Pick pick = start(level, job, site, (long) clock, dayTime, true);
+                Pick pick = start(level, job, site, (long) clock, DayClock.dayTime((long) clock), true);
                 if (pick.round().isEmpty()) {
                     if (!pick.more()) {
                         // Nothing doable: the next job takes the rest of the time.
@@ -573,15 +554,15 @@ final class CraftspersonLoop implements CategoryLoop {
                     continue;
                 }
                 Round round = pick.round().get();
-                bench.round = round;
+                workplace.setRound(round);
                 for (BlockPos source : List.copyOf(round.sources)) {
-                    fetch(level, job, round, source, ClerkStorage.stock(level, source, dayTime, true), false);
+                    fetch(level, job, round, source, ClerkStorage.stock(level, source, DayClock.dayTime((long) clock), true), false);
                 }
                 continue;
             }
-            Round round = bench.round;
+            Round round = workplace.round();
             double perTick = speed(job) / 20.0;
-            while (round.phase == Phase.CRAFT && ticks > 0.0 && bench.round == round) {
+            while (round.phase == Round.Phase.CRAFT && ticks > 0.0 && workplace.round() == round) {
                 double need = (1.0 - workplace.production()) / perTick;
                 if (need > ticks) {
                     workplace.setProduction(workplace.production() + ticks * perTick);
@@ -597,10 +578,11 @@ final class CraftspersonLoop implements CategoryLoop {
                 }
                 operations++;
                 if (round.crafted()) {
-                    round.phase = Phase.DELIVER;
+                    round.phase = Round.Phase.DELIVER;
                 }
             }
-            if (bench.round == round && round.phase == Phase.DELIVER && !deliver(level, job, round, true, dayTime)
+            if (workplace.round() == round && round.phase == Round.Phase.DELIVER
+                    && !deliver(level, job, round, true, DayClock.dayTime((long) clock))
                     && !deliverToDropOff(level, site)) {
                 shell.endCatchUpJob(jobBlock);
                 return new SimulatedWork(operations, ticks);
@@ -622,27 +604,29 @@ final class CraftspersonLoop implements CategoryLoop {
 
     // ---------------------------------------------------------------- state
 
-    private Bench bench(BlockPos jobBlock) {
-        return benches.computeIfAbsent(jobBlock, pos -> new Bench());
-    }
-
+    /**
+     * Leaving the JobBlock releases the claim; the fetched inputs go straight into the own drop-off while it is loaded
+     * (the Settler Shell drops what is left at the settler).
+     */
     @Override
     public void forget(BlockPos jobBlock) {
-        if (settler.level() instanceof ServerLevel level) {
-            release(level, jobBlock);
+        if (settler.level() instanceof ServerLevel level && release(level, jobBlock)) {
+            JobBlockSite.at(level, jobBlock).filter(site -> level.isLoaded(site.dropOff())).ifPresent(site -> {
+                Stock dropOff = ClerkStorage.stock(level, site.dropOff(), DayClock.dayTime(level), false);
+                shell.workplace(jobBlock).buffer().deliver(stack -> stack.getCount() - dropOff.insert(stack).getCount());
+            });
         }
-        benches.remove(jobBlock);
         visit = null;
     }
 
     @Override
     public void restore(SettlerWork.BuffersSnapshot snapshot) {
-        benches.clear();
+        // The Workplaces dropped their rounds; the claims are released at the next decision.
         releasePending = true;
     }
 
     @Override
     public void startCatchUp() {
-        benches.values().forEach(bench -> bench.skips.clear());
+        settler.getJobs().forEach(job -> shell.workplace(job.jobBlock()).skips().clear());
     }
 }

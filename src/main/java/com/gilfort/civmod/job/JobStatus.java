@@ -58,8 +58,8 @@ public enum JobStatus {
      * @return whether the job can currently not work (the settler switches to its next priority)
      */
     public boolean isBlocked() {
-        return this == NO_TOOL || this == NO_WORK_PLACE || this == DROP_OFF_FULL || this == NO_RESOURCES || this == NO_MISSION
-                || this == NO_REQUEST || this == MISSING_INPUTS;
+        // NO_REQUEST and MISSING_INPUTS do not block: the next decision tries again (vault Jobs/Craftsperson.md).
+        return this == NO_TOOL || this == NO_WORK_PLACE || this == DROP_OFF_FULL || this == NO_RESOURCES || this == NO_MISSION;
     }
 
     /**

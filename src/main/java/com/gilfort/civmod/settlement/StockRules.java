@@ -118,12 +118,12 @@ public final class StockRules {
                 Requests.update(data, settlement, request.get().id(), open -> open.withAmount(missing).withPriority(rule.priority()));
             } else if (missing > 0) {
                 Requests.add(data, settlement, new Request(UUID.randomUUID(), rule.item(), missing, rule.priority(), Optional.of(clerk),
-                        rule.slot(), Optional.empty(), List.of(), Optional.empty()));
+                        Optional.of(rule.slot()), Optional.empty(), List.of(), List.of()));
             }
         }
         // Requests whose rule is gone (should not happen; deleting a rule withdraws its request).
         for (Request request : Requests.ofClerk(settlement, clerk)) {
-            if (block.stockRule(request.rule()).isEmpty()) {
+            if (request.rule().flatMap(block::stockRule).isEmpty()) {
                 Requests.withdraw(data, settlement, request.id());
             }
         }
@@ -145,7 +145,7 @@ public final class StockRules {
         }
         long pass = level.getGameTime() / PASS_INTERVAL;
         int passes = CHECK_INTERVAL / PASS_INTERVAL;
-        long dayTime = Math.floorMod(level.getOverworldClockTime(), 24000L);
+        long dayTime = DayClock.dayTime(level);
         for (Settlement settlement : List.copyOf(SettlementData.get(level).settlements())) {
             for (SettlementBlock block : List.copyOf(settlement.blocks())) {
                 if (Math.floorMod(pass + block.pos().hashCode(), passes) == 0 && ClerkStorage.isClerk(block)

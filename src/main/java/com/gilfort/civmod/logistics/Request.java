@@ -24,16 +24,14 @@ import net.minecraft.world.item.Item;
  * @param amount   the open amount nobody claimed yet
  * @param priority the priority (higher first)
  * @param target   the Clerk the result is delivered to, empty if the poster has none
- * @param rule     the slot of the stock rule that posted it, {@code -1} for other sources
+ * @param rule     the slot of the stock rule that posted it, empty for other sources
  * @param parent   the request this is a sub-request of
  * @param claims   the producers crafting parts of it
- * @param missing  what a producer misses to work on it ("Missing: 6× Cobblestone"), set by the producer
+ * @param missing  every base input a producer misses to work on it ("Missing: 6× Cobblestone, 4× Stick"), set by the
+ *                 producer
  */
-public record Request(UUID id, Item item, int amount, int priority, Optional<BlockPos> target, int rule, Optional<UUID> parent,
-        List<Claim> claims, Optional<Missing> missing) {
-
-    /** Value of {@link #rule()} for requests that no stock rule posted. */
-    public static final int NO_RULE = -1;
+public record Request(UUID id, Item item, int amount, int priority, Optional<BlockPos> target, Optional<Integer> rule, Optional<UUID> parent,
+        List<Claim> claims, List<Missing> missing) {
 
     /**
      * A part of a request a producer is crafting.
@@ -74,10 +72,13 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
             Codec.INT.fieldOf("amount").forGetter(Request::amount),
             Codec.INT.optionalFieldOf("priority", 0).forGetter(Request::priority),
             BlockPos.CODEC.optionalFieldOf("target").forGetter(Request::target),
-            Codec.INT.optionalFieldOf("rule", NO_RULE).forGetter(Request::rule),
+            // Saves before the review fixes of #54 wrote -1 for "no rule".
+            Codec.INT.optionalFieldOf("rule").xmap(slot -> slot.filter(found -> found >= 0), slot -> slot).forGetter(Request::rule),
             UUIDUtil.CODEC.optionalFieldOf("parent").forGetter(Request::parent),
             Claim.CODEC.listOf().optionalFieldOf("claims", List.of()).forGetter(Request::claims),
-            Missing.CODEC.optionalFieldOf("missing").forGetter(Request::missing)
+            // Saves before the review fixes of #54 hold one missing input instead of a list.
+            Codec.withAlternative(Missing.CODEC.listOf(), Missing.CODEC.xmap(List::of, list -> list.getFirst()))
+                    .optionalFieldOf("missing", List.of()).forGetter(Request::missing)
     ).apply(instance, Request::new));
 
     /**
@@ -86,7 +87,7 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
      * @param amount   the open amount
      * @param priority the priority
      * @param target   the Clerk the result is delivered to
-     * @param rule     the posting rule slot, {@link #NO_RULE} otherwise
+     * @param rule     the posting rule slot, empty otherwise
      * @param parent   the parent request
      * @param claims   the claims
      * @param missing  what a producer misses
@@ -94,6 +95,7 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
     public Request {
         amount = Math.max(0, amount);
         claims = List.copyOf(claims);
+        missing = List.copyOf(missing);
     }
 
     /**
@@ -102,7 +104,7 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
      * @return whether the rule in that slot of that Clerk posted this request
      */
     public boolean postedBy(BlockPos clerk, int slot) {
-        return rule == slot && slot != NO_RULE && target.filter(clerk::equals).isPresent();
+        return rule.filter(posted -> posted == slot).isPresent() && target.filter(clerk::equals).isPresent();
     }
 
     /**
@@ -144,10 +146,17 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
     }
 
     /**
-     * @param newMissing what a producer misses, empty if nothing
-     * @return a copy with another missing input
+     * @return a copy without a target Clerk (the result goes to the producer's own drop-off)
      */
-    public Request withMissing(Optional<Missing> newMissing) {
+    public Request withoutTarget() {
+        return new Request(id, item, amount, priority, Optional.empty(), rule, parent, claims, missing);
+    }
+
+    /**
+     * @param newMissing what a producer misses, empty if nothing
+     * @return a copy with other missing inputs
+     */
+    public Request withMissing(List<Missing> newMissing) {
         return new Request(id, item, amount, priority, target, rule, parent, claims, newMissing);
     }
 
@@ -170,7 +179,7 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
             }
         }
         changed.add(new Claim(settler, name, total));
-        return new Request(id, item, amount - claimed, priority, target, rule, parent, changed, Optional.empty());
+        return new Request(id, item, amount - claimed, priority, target, rule, parent, changed, List.of());
     }
 
     /**

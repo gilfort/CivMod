@@ -20,7 +20,7 @@ The settler's daily rules (sleep and wake, skipped night, morning plan, hunger, 
 _Avoid_: Daily routine, AI tree; putting schedule rules into movement code; separate per-day marks for catch-up
 
 **Workplace**:
-Everything a settler keeps for one job at its JobBlock: the buffer, the status shown in the job tab, the blocked-until time, the work place of the day, the scan (requested, scanning, ready, rescanned per day or per centre / radius change) and the fractional production of the Work rules. One per JobBlock the settler works for; forgetting the job drops it whole (the buffer is dropped at the settler). Code: `Workplace`, held by `SettlerWork` (`workplace(jobBlock)`), saved through `SettlerWork.BuffersSnapshot`.
+Everything a settler keeps for one job at its JobBlock: the buffer, the status shown in the job tab, the blocked-until time, the work place of the day, the scan (requested, scanning, ready, rescanned per day or per centre / radius change), the fractional production of the Work rules and, for a Producing Job, the current Round, the requests skipped for a while and a pending trip to the drop-off. One per JobBlock the settler works for; forgetting the job drops it whole (the buffer is dropped at the settler). Code: `Workplace`, held by `SettlerWork` (`workplace(jobBlock)`), saved through `SettlerWork.BuffersSnapshot`.
 _Avoid_: Work place (that is the block worked at, below); per-job maps beside it
 
 **Work rules**:
@@ -89,7 +89,7 @@ A Clerk's "keep at least X of item Y" with a priority (−100…+100, higher fir
 _Avoid_: Threshold, order
 
 **Request**:
-"Produce N more of item Y" for the settlement, with a priority and the Clerk to deliver to. A stock rule keeps at most one open (amount = X − stock − amount being crafted); other sources post with priority 0, sub-requests inherit their parent's priority. Producers see them by priority and claim the part they can do in one round (`Request.Claim`); `amount()` is what is still open, `crafting()` what is claimed. Code: `Request` (data), `Requests` (`claimable`, `claim`, `release`, `releaseAll`, `finish`, `setMissing`, `post`, `withdraw`), saved in `Settlement.requests()`; status in the Clerk's Requests tab via `ClerkTab`, "No Craftsperson can make this" from `Producers.canMake`.
+"Produce N more of item Y" for the settlement, with a priority and the Clerk to deliver to. A stock rule keeps at most one open (amount = X − stock − amount being crafted); other sources post with priority 0, sub-requests inherit their parent's priority. Producers see them by priority and claim the part they can do in one round (`Request.Claim`); `amount()` is what is still open, `crafting()` what is claimed. Code: `Request` (data), `Requests` (`claimable`, `claim`, `release`, `releaseAll`, `finish`, `setMissing`, `post`, `withdraw`), saved in `Settlement.requests()`; status in the Clerk's Requests tab via `ClerkTab`, "No Craftsperson can make this" from `Producers.canMake`. A removed Clerk takes its rules' requests with it; other requests that deliver to it lose their target (own drop-off). "Missing" lists every missing base input for the whole open amount (`Request.missing`, a list).
 _Avoid_: Order, job, task
 
 **Food point**:
@@ -109,7 +109,7 @@ _Avoid_: Recipe (a pattern follows one), blueprint
 A pattern the Craftsperson crafts; 6 + 1 per 5 levels of the settler's effective skill (`Patterns.checkLimit`). When the limit drops, the last checked patterns in list order lose theirs (`Patterns.enforceLimit`, notice `SettlementBlock.Trim`).
 
 **Round**:
-One claimed part of one request: claim what fits the buffer, fetch inputs (collect inventory, then the posting Clerk), craft intermediates and the item, deliver. Code: `CraftspersonLoop.Round`, planned by `CraftPlan` (chain resolution with own patterns; `CraftPlan.most` sizes the claim).
+One claimed part of one request: claim what fits the buffer, fetch inputs (collect inventory, then the posting Clerk), craft intermediates and the item, deliver. Code: `Round`, kept in the job's Workplace (`Workplace.round`), run by `CraftspersonLoop`, planned by `CraftPlan` (chain resolution with own patterns; `CraftPlan.most` sizes the claim).
 
 **Station**:
 The work place of a Producing Job, named by the block tag `civmod:stations/<job>` (`Job.station`): set with the scroll (up to 8, one per day) or the nearest one within 16 blocks of the JobBlock inside the border.

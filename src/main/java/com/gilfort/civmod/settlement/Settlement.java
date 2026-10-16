@@ -229,8 +229,10 @@ public final class Settlement {
     }
 
     SettlementBlock remove(BlockPos pos) {
-        // The requests of a removed Clerk's rules go with it.
-        requests.removeIf(request -> request.rule() != Request.NO_RULE && request.target().filter(pos::equals).isPresent());
+        // The requests of a removed Clerk's rules go with it; other requests delivering to it go to the producer's own
+        // drop-off, like requests without a Clerk.
+        requests.removeIf(request -> request.rule().isPresent() && request.target().filter(pos::equals).isPresent());
+        requests.replaceAll(request -> request.target().filter(pos::equals).isPresent() ? request.withoutTarget() : request);
         return blocks.remove(pos);
     }
 }

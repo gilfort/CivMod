@@ -29,6 +29,7 @@ import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.StockRules;
+import com.gilfort.civmod.settlement.DayClock;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
@@ -452,11 +453,12 @@ public final class SettlerWork {
      * @param jobBlock the JobBlock position
      */
     public void forget(BlockPos jobBlock) {
+        // The loops first: they still see the Workplace (a Producing Job empties its buffer into the drop-off).
+        loops.values().forEach(loop -> loop.forget(jobBlock));
         Workplace workplace = jobWorkplaces.remove(jobBlock);
         if (workplace != null && settler.level() instanceof ServerLevel level) {
             workplace.buffer().stacks().forEach(stack -> settler.spawnAtLocation(level, stack.copy()));
         }
-        loops.values().forEach(loop -> loop.forget(jobBlock));
         if (activeJob != null && activeJob.jobBlock().equals(jobBlock)) {
             stop();
         }
@@ -500,8 +502,8 @@ public final class SettlerWork {
 
     private void decide(ServerLevel level) {
         long clock = level.getOverworldClockTime();
-        long dayTime = Math.floorMod(clock, 24000L);
-        long day = Math.floorDiv(clock, 24000L);
+        long dayTime = DayClock.dayTime(clock);
+        long day = DayClock.day(clock);
         boolean jumped = SettlerBeds.nightSkipped(lastClock, clock, DECISION_INTERVAL, WORK_END);
         lastClock = clock;
         if (missions.departed() && (catchUpFrom >= 0 || !missions.returnIfDue(level, clock, false))) {
@@ -785,7 +787,7 @@ public final class SettlerWork {
     boolean startDelivery(ServerLevel level, SettlerJob job) {
         BlockPos dropOff = JobBlockSite.at(level, job.jobBlock()).map(JobBlockSite::dropOff).orElse(job.jobBlock());
         ClerkStorage.Visit visit = reachableVisit(level, dropOff, ClerkStorage.visit(level, dropOff,
-                Math.floorMod(level.getOverworldClockTime(), 24000L)));
+                DayClock.dayTime(level)));
         activeJob = job;
         workplace(job.jobBlock()).setStatus(JobStatus.DELIVERING);
         if (activity != Activity.DELIVER || !visit.target().equals(target)) {
@@ -1048,7 +1050,7 @@ public final class SettlerWork {
      * @return start of the missed time (capped to the maximum number of days)
      */
     public long catchUpFrom() {
-        long earliest = catchUpTo - CivModConfig.CATCH_UP_MAX_DAYS.get() * 24000L;
+        long earliest = catchUpTo - CivModConfig.CATCH_UP_MAX_DAYS.get() * DayClock.DAY_TICKS;
         return Math.max(catchUpFrom, earliest);
     }
 
@@ -1083,7 +1085,7 @@ public final class SettlerWork {
             if (site.isEmpty() || loop == null) {
                 continue;
             }
-            if (!loop.catchUpReady(level, job, site.get(), Math.floorDiv(clock, 24000L), Math.floorMod(clock, 24000L))) {
+            if (!loop.catchUpReady(level, job, site.get(), DayClock.day(clock), DayClock.dayTime(clock))) {
                 return false;
             }
         }
@@ -1094,7 +1096,7 @@ public final class SettlerWork {
      * Prepares a catch-up run.
      */
     void startCatchUp() {
-        cuDays = Math.max(0, catchUpTo - catchUpFrom()) / (double) 24000L;
+        cuDays = Math.max(0, catchUpTo - catchUpFrom()) / (double) DayClock.DAY_TICKS;
         quiet = true;
         loops.values().forEach(CategoryLoop::startCatchUp);
         jobWorkplaces.values().forEach(workplace -> workplace.setCatchUpEnded(false));
@@ -1131,7 +1133,7 @@ public final class SettlerWork {
      * @return the number of production rolls
      */
     int simulateHour(ServerLevel level, long day, int hour) {
-        long hourStart = day * 24000L + hour * 1000L;
+        long hourStart = day * DayClock.DAY_TICKS + hour * 1000L;
         long from = Math.max(hourStart, catchUpFrom());
         long to = Math.min(hourStart + 1000L, catchUpTo);
         if (to <= from || settler.isHomeless()) {
@@ -1143,8 +1145,8 @@ public final class SettlerWork {
             // On the mission all hour (no hunger, no work), or died on it.
             return 0;
         }
-        long workEnd = day * 24000L + workEnd();
-        long dayTime = from - day * 24000L;
+        long workEnd = day * DayClock.DAY_TICKS + workEnd();
+        long dayTime = from - day * DayClock.DAY_TICKS;
         cuDayTime = dayTime;
         SettlerFood food = settler.getFood();
 
@@ -1361,7 +1363,7 @@ public final class SettlerWork {
             weightedWorkTicks = 0.0;
             return;
         }
-        long dayTime = Math.floorMod(level.getOverworldClockTime(), 24000L);
+        long dayTime = DayClock.dayTime(level);
         long awake = dayTime < SLEEP_TIME && !settler.isSleeping() ? DECISION_INTERVAL : 0L;
         float appetite = food.appetite(level.getRandom(), CivModConfig.APPETITE_MIN.get(), CivModConfig.APPETITE_MAX.get());
         food.exhaust(SettlerFood.exhaustionFor(awake, weightedWorkTicks, CivModConfig.HUNGER_BASE_PER_DAY.get(),
@@ -1416,7 +1418,7 @@ public final class SettlerWork {
         if (settler.position().distanceTo(Vec3.atCenterOf(visit.target())) <= COUNTER_PATH_CHECK) {
             net.minecraft.world.level.pathfinder.Path path = settler.getNavigation().createPath(visit.target(), (int) visit.reach());
             if (path == null || !path.canReach()) {
-                unreachableCounters.put(pos.immutable(), Math.floorDiv(level.getOverworldClockTime(), 24000L));
+                unreachableCounters.put(pos.immutable(), DayClock.day(level));
                 return ClerkStorage.blockVisit(pos);
             }
         }
@@ -1430,7 +1432,7 @@ public final class SettlerWork {
      */
     boolean counterUnreachable(ServerLevel level, BlockPos clerk) {
         Long day = unreachableCounters.get(clerk);
-        return day != null && day == Math.floorDiv(level.getOverworldClockTime(), 24000L);
+        return day != null && day == DayClock.day(level);
     }
 
     /**
@@ -1840,7 +1842,7 @@ public final class SettlerWork {
                 if (counter && !waitAtCounter(level, point.clerk())) {
                     return;
                 }
-                if (visitFoodPoint(level, point, Math.floorMod(level.getOverworldClockTime(), 24000L), point.visit().counter())
+                if (visitFoodPoint(level, point, DayClock.dayTime(level), point.visit().counter())
                         && counter) {
                     ClerkCounter.handOut(level, point.clerk(), true);
                 }
@@ -1878,13 +1880,13 @@ public final class SettlerWork {
     private void deliver(ServerLevel level, BlockPos jobBlock, boolean atCounter) {
         JobBuffer buffer = buffer(jobBlock);
         BlockPos dropOff = JobBlockSite.at(level, jobBlock).map(JobBlockSite::dropOff).orElse(jobBlock);
-        Stock stock = ClerkStorage.stock(level, dropOff, Math.floorMod(level.getOverworldClockTime(), 24000L), atCounter);
+        Stock stock = ClerkStorage.stock(level, dropOff, DayClock.dayTime(level), atCounter);
         boolean all = !stock.isEmpty() && buffer.deliver(stack -> stack.getCount() - stock.insert(stack).getCount());
         if (!all) {
             block(level, jobBlock, JobStatus.DROP_OFF_FULL);
         }
         // A delivery into a Clerk: its stock rules are checked right away.
-        StockRules.check(level, dropOff, Math.floorMod(level.getOverworldClockTime(), 24000L));
+        StockRules.check(level, dropOff, DayClock.dayTime(level));
     }
 
     /**

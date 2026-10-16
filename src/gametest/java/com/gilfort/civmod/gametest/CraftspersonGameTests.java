@@ -70,6 +70,7 @@ public final class CraftspersonGameTests {
             register(helper, "craftsperson_chain_resolution", CraftspersonGameTests::chainResolution);
             register(helper, "craftsperson_catch_up_crafting", CraftspersonGameTests::catchUpCrafting);
             register(helper, "craftsperson_fallback", CraftspersonGameTests::fallback);
+            register(helper, "craftsperson_missing_request_amount", CraftspersonGameTests::missingRequestAmount);
             register(helper, "craftsperson_claim_split", CraftspersonGameTests::claimSplit);
             register(helper, "craftsperson_delivery_fallback", CraftspersonGameTests::deliveryFallback);
             register(helper, "craftsperson_live_round", CraftspersonGameTests::liveRound);
@@ -187,7 +188,7 @@ public final class CraftspersonGameTests {
         Map<Item, Integer> stock = Map.of(Items.OAK_LOG, 1, Items.COBBLESTONE, 3);
 
         CraftPlan noSticks = CraftPlan.plan(level, checked, Items.STONE_PICKAXE, 1, Map.of(), stock);
-        helper.assertTrue(noSticks.missing().equals(Optional.of(new Request.Missing(Items.STICK, 2))),
+        helper.assertTrue(noSticks.missing().equals(List.of(new Request.Missing(Items.STICK, 2))),
                 "No stick pattern: Missing 2× Stick " + noSticks.missing());
 
         define(helper, pos, 2, Items.STICK);
@@ -200,7 +201,7 @@ public final class CraftspersonGameTests {
         helper.assertTrue(one.operations() == 3, "Three operations: " + one.operations());
 
         CraftPlan two = CraftPlan.plan(level, checked, Items.STONE_PICKAXE, 2, Map.of(), stock);
-        helper.assertTrue(two.missing().equals(Optional.of(new Request.Missing(Items.COBBLESTONE, 3))), "2 pickaxes: 3 cobblestone missing "
+        helper.assertTrue(two.missing().equals(List.of(new Request.Missing(Items.COBBLESTONE, 3))), "2 pickaxes: 3 cobblestone missing "
                 + two.missing());
         helper.assertTrue(CraftPlan.plan(level, checked, Items.STONE_PICKAXE, 2, Map.of(), Map.of(Items.OAK_LOG, 1, Items.COBBLESTONE, 6))
                 .operations() == 4, "One log makes the sticks of two pickaxes: planks, sticks, 2 pickaxes");
@@ -285,22 +286,51 @@ public final class CraftspersonGameTests {
 
         placeTable(helper, new BlockPos(3, 1, 5));
         settler.getWork().decideNow(level);
-        helper.assertTrue(Requests.forRule(settlement, clerk, 0).orElseThrow().missing().equals(Optional.of(new Request.Missing(Items.COBBLESTONE, 1))),
+        helper.assertTrue(Requests.forRule(settlement, clerk, 0).orElseThrow().missing().equals(List.of(new Request.Missing(Items.COBBLESTONE, 1))),
                 "Pickaxe: Missing 1× Cobblestone " + Requests.forRule(settlement, clerk, 0));
-        helper.assertTrue(Requests.forRule(settlement, clerk, 1).orElseThrow().missing().isPresent()
-                && Requests.forRule(settlement, clerk, 2).orElseThrow().missing().isPresent(), "Axe and torches tried");
+        helper.assertTrue(!Requests.forRule(settlement, clerk, 1).orElseThrow().missing().isEmpty()
+                && !Requests.forRule(settlement, clerk, 2).orElseThrow().missing().isEmpty(), "Axe and torches tried");
         helper.assertTrue(Requests.forRule(settlement, clerk, 4).orElseThrow().missing().isEmpty(), "No ladder pattern: not tried");
         Request hoe = Requests.forRule(settlement, clerk, 3).orElseThrow();
         helper.assertTrue(hoe.claims().isEmpty() && hoe.missing().isEmpty(), "Only 3 tries: the hoe waits " + hoe);
         helper.assertTrue(settler.getWork().status(craft) == JobStatus.MISSING_INPUTS, "Status: missing inputs");
+        helper.assertFalse(JobStatus.MISSING_INPUTS.isBlocked() || JobStatus.NO_REQUEST.isBlocked(), "Missing inputs and no request do not block");
 
         settler.getWork().decideNow(level);
         helper.assertTrue(Requests.forRule(settlement, clerk, 3).orElseThrow().claimOf(settler.getUUID()).map(Request.Claim::amount)
                 .equals(Optional.of(1)), "Failed ones skipped: the hoe is claimed");
         helper.assertTrue(settler.getWork().status(craft) == JobStatus.FETCHING_INPUTS, "Fetching inputs");
 
+        // Inputs fetched so far.
+        settler.getWork().buffer(craft).add(new ItemStack(Items.COBBLESTONE, 2));
         settler.removeJob(craft);
         helper.assertTrue(Requests.forRule(settlement, clerk, 3).orElseThrow().claims().isEmpty(), "Leaving the JobBlock releases the claim");
+        helper.assertTrue(((Container) level.getBlockEntity(craft)).countItem(Items.COBBLESTONE) == 2,
+                "Fetched inputs go to the own drop-off (the JobBlock)");
+        JobAssignments.unassign(data, clerk);
+        settler.discard();
+        helper.succeed();
+    }
+
+    /**
+     * "Missing" counts the whole open request, not one item, and names every missing base input: 2 stone pickaxes
+     * from nothing → "Missing: 6× Cobblestone, 4× Stick".
+     */
+    private static void missingRequestAmount(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerk = StockRuleGameTests.workingClerk(helper);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 2, 0));
+        StockRules.check(level, clerk, ClerkGameTests.MORNING);
+        BlockPos craft = craftsperson(helper, new BlockPos(1, 1, 5));
+        placeTable(helper, new BlockPos(3, 1, 5));
+        define(helper, craft, 0, Items.STONE_PICKAXE);
+        Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
+        settler.getWork().decideNow(level);
+        List<Request.Missing> missing = Requests.forRule(settlement, clerk, 0).orElseThrow().missing();
+        helper.assertTrue(missing.size() == 2 && missing.contains(new Request.Missing(Items.COBBLESTONE, 6))
+                && missing.contains(new Request.Missing(Items.STICK, 4)), "Missing: 6× Cobblestone, 4× Stick " + missing);
         JobAssignments.unassign(data, clerk);
         settler.discard();
         helper.succeed();

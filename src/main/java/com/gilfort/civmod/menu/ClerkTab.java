@@ -18,11 +18,13 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * What the Clerk's "Rules" and "Requests" tabs show (vault {@code Jobs/Clerk.md}): its stock rules and the requests
@@ -101,15 +103,22 @@ public record ClerkTab(int level, List<StockRule> rules, List<RequestRow> reques
     }
 
     /**
-     * "Crafting – <name>", "Missing: 6× Cobblestone", "No Craftsperson can make this" or "Waiting".
+     * "Crafting – <name>", "Missing: 6× Cobblestone, 4× Stick", "No Craftsperson can make this" or "Waiting".
      */
     private static Component status(ServerLevel level, Settlement settlement, Request request) {
         if (!request.claims().isEmpty()) {
             return Component.translatable("civmod.gui.clerk.request.crafting", request.claims().get(0).name());
         }
-        if (request.missing().isPresent()) {
-            Request.Missing missing = request.missing().get();
-            return Component.translatable("civmod.gui.clerk.request.missing", missing.count(), new net.minecraft.world.item.ItemStack(missing.item()).getHoverName());
+        if (!request.missing().isEmpty()) {
+            MutableComponent inputs = Component.empty();
+            for (Request.Missing missing : request.missing()) {
+                if (!inputs.getSiblings().isEmpty()) {
+                    inputs.append(", ");
+                }
+                inputs.append(Component.translatable("civmod.gui.clerk.request.missing_input", missing.count(),
+                        new ItemStack(missing.item()).getHoverName()));
+            }
+            return Component.translatable("civmod.gui.clerk.request.missing", inputs);
         }
         if (!Producers.canMake(level, settlement, request.item())) {
             return Component.translatable("civmod.gui.clerk.request.no_producer");

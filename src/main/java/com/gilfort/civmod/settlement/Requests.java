@@ -72,7 +72,7 @@ public final class Requests {
      * @return the requests that Clerk's rules posted, highest priority first
      */
     public static List<Request> ofClerk(Settlement settlement, BlockPos clerk) {
-        return byPriority(settlement).stream().filter(request -> request.rule() != Request.NO_RULE
+        return byPriority(settlement).stream().filter(request -> request.rule().isPresent()
                 && request.target().filter(clerk::equals).isPresent()).toList();
     }
 
@@ -91,7 +91,7 @@ public final class Requests {
     public static Request post(SettlementData data, Settlement settlement, Item item, int amount, Optional<BlockPos> target,
             Optional<UUID> parent) {
         int priority = parent.flatMap(id -> get(settlement, id)).map(Request::priority).orElse(DEFAULT_PRIORITY);
-        Request request = new Request(UUID.randomUUID(), item, amount, priority, target, Request.NO_RULE, parent, List.of(), Optional.empty());
+        Request request = new Request(UUID.randomUUID(), item, amount, priority, target, Optional.empty(), parent, List.of(), List.of());
         settlement.mutableRequests().add(request);
         data.setDirty();
         return request;
@@ -160,14 +160,14 @@ public final class Requests {
     }
 
     /**
-     * Sets what a producer misses to work on a request (shown as "Missing: 6× Cobblestone"); empty clears it.
+     * Sets what a producer misses to work on a request (shown as "Missing: 6× Cobblestone, 4× Stick"); empty clears it.
      *
      * @param data       the dimension's settlement data
      * @param settlement the settlement
      * @param id         the request id
-     * @param missing    the missing input
+     * @param missing    the missing base inputs
      */
-    public static void setMissing(SettlementData data, Settlement settlement, UUID id, Optional<Request.Missing> missing) {
+    public static void setMissing(SettlementData data, Settlement settlement, UUID id, List<Request.Missing> missing) {
         if (get(settlement, id).filter(found -> !found.missing().equals(missing)).isPresent()) {
             update(data, settlement, id, found -> found.withMissing(missing));
         }

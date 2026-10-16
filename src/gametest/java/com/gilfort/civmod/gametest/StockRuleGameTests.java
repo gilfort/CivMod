@@ -59,6 +59,8 @@ public final class StockRuleGameTests {
             register(helper, "stock_rules_priority_order", StockRuleGameTests::priorityOrder);
             register(helper, "stock_rules_rule_deletion", StockRuleGameTests::ruleDeletion);
             register(helper, "stock_rules_menu", StockRuleGameTests::menu);
+            register(helper, "stock_rules_clerk_removed", StockRuleGameTests::clerkRemoved);
+            register(helper, "stock_rules_old_request_save", StockRuleGameTests::oldRequestSave);
         });
     }
 
@@ -84,7 +86,7 @@ public final class StockRuleGameTests {
         Request request = only(helper, settlement);
         helper.assertTrue(request.item() == Items.STONE_PICKAXE && request.amount() == 3,
                 "Request for 5 − 2 in stock = 3: " + request.amount());
-        helper.assertTrue(request.target().equals(Optional.of(clerk)) && request.rule() == 0, "Posted by the rule of that Clerk");
+        helper.assertTrue(request.target().equals(Optional.of(clerk)) && request.rule().equals(Optional.of(0)), "Posted by the rule of that Clerk");
 
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(only(helper, settlement).id().equals(request.id()), "Checking again keeps the one request");
@@ -294,6 +296,41 @@ public final class StockRuleGameTests {
     }
 
     /** {@link ClerkGameTests#clerkWithStorage} with a Clerk settler assigned (on shift at the frozen 08:00). */
+    /**
+     * Removing a Clerk JobBlock withdraws the requests of its rules; other requests delivering to it lose their
+     * target and go to the producer's own drop-off.
+     */
+    private static void clerkRemoved(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerk = workingClerk(helper);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        // A second JobBlock keeps the settlement alive.
+        CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
+        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 1, 0));
+        StockRules.check(level, clerk, ClerkGameTests.MORNING);
+        Request other = Requests.post(data, settlement, Items.STICK, 4, Optional.of(clerk), Optional.empty());
+        SettlementManager.remove(data, clerk, SettlementManager.Listener.NONE);
+        helper.assertTrue(Requests.forRule(settlement, clerk, 0).isEmpty(), "Rule request withdrawn");
+        helper.assertTrue(Requests.get(settlement, other.id()).map(Request::target).equals(Optional.of(Optional.empty())),
+                "Other request kept without a target (own drop-off): " + Requests.get(settlement, other.id()));
+        helper.succeed();
+    }
+
+    /** Requests saved before the review fixes of #54 ("rule": -1, one "missing" input) still load. */
+    private static void oldRequestSave(GameTestHelper helper) {
+        com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString("""
+                {"id": "00000000-0000-0000-0000-000000000001", "item": "minecraft:stick", "amount": 4, "rule": -1,
+                 "missing": {"item": "minecraft:oak_planks", "count": 2}}
+                """).getAsJsonObject();
+        Request request = Request.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+        helper.assertTrue(request.rule().isEmpty(), "-1: no rule " + request.rule());
+        helper.assertTrue(request.missing().equals(List.of(new Request.Missing(Items.OAK_PLANKS, 2))), "One missing input " + request.missing());
+        json.addProperty("rule", 3);
+        helper.assertTrue(Request.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow().rule().equals(Optional.of(3)), "Rule 3");
+        helper.succeed();
+    }
+
     static BlockPos workingClerk(GameTestHelper helper) {
         BlockPos clerk = ClerkGameTests.clerkWithStorage(helper);
         SettlementData data = SettlementData.get(helper.getLevel());
