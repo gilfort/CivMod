@@ -92,18 +92,17 @@ final class ResourceCollectionLoop implements CategoryLoop {
     /**
      * Restores saved work places and scans.
      *
-     * @param workPlaces the work places of the day
-     * @param saved      the scans
+     * @param snapshot the saved work state
      */
     @Override
-    public void restore(List<SettlerWork.WorkPlaceEntry> workPlaces, List<SavedScan> saved) {
+    public void restore(SettlerWork.BuffersSnapshot snapshot) {
         poiOfDay.clear();
         poiDay.clear();
-        workPlaces.forEach(entry -> {
+        snapshot.workPlaces().forEach(entry -> {
             poiOfDay.put(entry.jobBlock(), entry.poi());
             poiDay.put(entry.jobBlock(), entry.day());
         });
-        saved.forEach(scan -> {
+        snapshot.scans().forEach(scan -> {
             ScanResult result = scan.result();
             if (result != null) {
                 scans.put(scan.jobBlock(), result);

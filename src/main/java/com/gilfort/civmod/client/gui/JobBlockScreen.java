@@ -144,7 +144,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             graphics.text(font, settlers, CivGui.PADDING, y, color, false);
             if (!info.assignees().isEmpty() && mouseX >= leftPos + CivGui.PADDING && mouseX < leftPos + CivGui.PADDING + font.width(settlers)
                     && mouseY >= topPos + y && mouseY < topPos + y + font.lineHeight) {
-                graphics.setComponentTooltipForNextFrame(font, info.assignees().stream().<Component>map(Component::literal).toList(), mouseX, mouseY);
+                graphics.setComponentTooltipForNextFrame(font, settlerLines(info), mouseX, mouseY);
             }
         }
         y += LINE_HEIGHT;
@@ -156,6 +156,19 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             graphics.textWithWordWrap(font, Component.translatable("civmod.gui.job_block.unconnected", info.required(), info.distance()),
                     CivGui.PADDING, y, imageWidth - 2 * CivGui.PADDING, ERROR_COLOR, false);
         }
+    }
+
+    /**
+     * @return one tooltip line per settler of the board: its name and, if any, the mission it is away on or waits for
+     */
+    private static List<Component> settlerLines(JobBlockInfo info) {
+        List<Component> lines = new ArrayList<>();
+        for (int i = 0; i < info.assignees().size(); i++) {
+            Component state = i < info.missionStates().size() ? info.missionStates().get(i) : Component.empty();
+            lines.add(state.getString().isEmpty() ? Component.literal(info.assignees().get(i))
+                    : Component.translatable("civmod.gui.job_block.settler_mission", info.assignees().get(i), state));
+        }
+        return lines;
     }
 
     /**

@@ -6,6 +6,7 @@ import java.util.List;
 import com.gilfort.civmod.block.UpgradeCosts;
 import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.mission.MissionOffer;
+import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementManager;
@@ -42,10 +43,12 @@ import net.minecraft.server.level.ServerLevel;
  * @param collectLeaves  whether a Lumberjack also collects leaves
  * @param costs          upgrade costs per target level (index 0 = level 2)
  * @param missions       the daily mission offer (Mission Board only)
+ * @param missionStates  per assignee: the mission it is away on or waits for (empty text if none or unloaded), aligned
+ *                       with {@code assignees}
  */
 public record JobBlockInfo(Job jobType, int level, Component settlementName, boolean inSettlement, boolean connected,
         int distance, int required, List<String> assignees, boolean collectLeaves, List<List<CostEntry>> costs,
-        List<MissionOffer.Entry> missions) {
+        List<MissionOffer.Entry> missions, List<Component> missionStates) {
 
     /**
      * An upgrade cost as shown to the client.
@@ -120,7 +123,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withLevel(int newLevel) {
         return new JobBlockInfo(jobType, newLevel, settlementName, inSettlement, connected, distance, required, assignees, collectLeaves, costs,
-                missions);
+                missions, missionStates);
     }
 
     /**
@@ -148,6 +151,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
             ByteBufCodecs.BOOL, JobBlockInfo::collectLeaves,
             CostEntry.STREAM_CODEC.apply(ByteBufCodecs.list()).apply(ByteBufCodecs.list()), JobBlockInfo::costs,
             MissionOffer.Entry.STREAM_CODEC.apply(ByteBufCodecs.list()), JobBlockInfo::missions,
+            ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), JobBlockInfo::missionStates,
             JobBlockInfo::new);
 
     /**
@@ -160,13 +164,15 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
     public static JobBlockInfo of(ServerLevel level, BlockPos pos, Job jobType, int jobLevel) {
         SettlementManager.Status status = SettlementWorld.status(level, pos);
         Optional<Settlement> settlement = status.settlement();
+        List<SettlementBlock.Assignee> assignees = settlement.flatMap(s -> s.block(pos)).map(SettlementBlock::assignees).orElse(List.of());
+        List<Component> missionStates = assignees.stream().map(assignee -> level.getEntity(assignee.id()) instanceof Settler settler
+                ? settler.getWork().missionStatus().orElse(Component.empty()) : Component.empty()).toList();
         return new JobBlockInfo(jobType, jobLevel,
                 settlement.map(Settlement::displayName).orElse(Component.empty()),
                 settlement.isPresent(), status.connected(), status.distance(), status.required(),
-                settlement.flatMap(s -> s.block(pos)).map(block -> block.assignees().stream().map(SettlementBlock.Assignee::name).toList())
-                        .orElse(List.of()),
+                assignees.stream().map(SettlementBlock.Assignee::name).toList(),
                 settlement.flatMap(s -> s.block(pos)).map(SettlementBlock::collectLeaves).orElse(false), costsOf(jobType),
-                SettlementWorld.missionOffer(level, pos));
+                SettlementWorld.missionOffer(level, pos), missionStates);
     }
 
     /**
@@ -181,7 +187,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withoutAssignees() {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, List.of(), collectLeaves, costs,
-                missions);
+                missions, List.of());
     }
 
     /**
@@ -189,7 +195,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withLeavesToggled() {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, !collectLeaves, costs,
-                missions);
+                missions, missionStates);
     }
 
     /**
@@ -204,7 +210,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         List<MissionOffer.Entry> changed = new ArrayList<>(missions);
         changed.set(index, missions.get(index).withMarked(marked));
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, collectLeaves, costs,
-                List.copyOf(changed));
+                List.copyOf(changed), missionStates);
     }
 
     /**
@@ -213,6 +219,6 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      * @return info without settlement data
      */
     public static JobBlockInfo unknown(Job jobType, int jobLevel) {
-        return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, List.of(), false, costsOf(jobType), List.of());
+        return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, List.of(), false, costsOf(jobType), List.of(), List.of());
     }
 }

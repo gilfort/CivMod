@@ -13,7 +13,7 @@ The behaviour template a Job is built on (Resource Collection, Producing, Missio
 _Avoid_: Role, meta type, archetype
 
 **Settler Shell**:
-The part of a settler's behaviour shared by every Job Category (schedule, walking, food, sleep, job priorities, EXP, catch-up). Code: `SettlerWork`; it hands control to the `CategoryLoop` of the active Job's category (`ResourceCollectionLoop`). Shared parts the loops use: buffers / delivery and EXP in the shell, tools in `SettlerTools`, `Fatigue`.
+The part of a settler's behaviour shared by every Job Category (schedule, walking, food, sleep, job priorities, EXP, catch-up). Code: `SettlerWork`; it hands control to the `CategoryLoop` of the active Job's category (`ResourceCollectionLoop`, `MissionLoop`). Shared parts the loops use: buffers / delivery and EXP in the shell, tools in `SettlerTools`, `Fatigue`.
 
 **Base Job**:
 A Job a Level 1 JobBlock offers; root of a specialization tree.
@@ -32,7 +32,7 @@ The block that offers a Base Job (and its Specializations) to one settler. Code:
 The JobBlock of all Mission Jobs; holds several settlers and the list of selected Missions. Code: `ModBlocks.MISSION_BOARD` (a `JobBlock` offering the Adventurer), capacity in `SettlementRules.capacity`, settlers in `SettlementBlock.assignees()`; a settler's Mission Job is set with `SettlerJobs.withMissionJob`.
 
 **Mission**:
-A datapack-defined task a Mission Job settler leaves the settlement for (duration, difficulty, loot). Code: `Mission` in the `civmod:mission` datapack registry (`Missions`, files in `data/<namespace>/civmod/mission/`); arithmetic in `MissionRules`.
+A datapack-defined task a Mission Job settler leaves the settlement for (duration, difficulty, loot). Code: `Mission` in the `civmod:mission` datapack registry (`Missions`, files in `data/<namespace>/civmod/mission/`); arithmetic in `MissionRules`, outcome constants in `OutcomeRules` (`civmod_mission/outcome.json`). The mission a settler reserved or is away on: `MissionTrip`; who takes which mission: `MissionPicks`.
 _Avoid_: Quest, expedition
 
 **Mission Offer**:

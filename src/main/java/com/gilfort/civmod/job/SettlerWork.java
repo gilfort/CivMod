@@ -125,6 +125,7 @@ public final class SettlerWork {
     private final Map<BlockPos, Long> blockedUntil = new HashMap<>();
     /** The work loop of each implemented Job Category. */
     private final Map<JobCategory, CategoryLoop> loops = new EnumMap<>(JobCategory.class);
+    private final MissionLoop missions;
 
     private Activity activity = Activity.IDLE;
     private @Nullable SettlerJob activeJob;
@@ -166,6 +167,15 @@ public final class SettlerWork {
     public SettlerWork(Settler settler) {
         this.settler = settler;
         loops.put(JobCategory.RESOURCE_COLLECTION, new ResourceCollectionLoop(this));
+        missions = new MissionLoop(this);
+        loops.put(JobCategory.MISSION, missions);
+    }
+
+    /**
+     * @return the Mission loop (reserved or current mission)
+     */
+    MissionLoop missions() {
+        return missions;
     }
 
     /**
@@ -204,7 +214,7 @@ public final class SettlerWork {
         });
         long clock = settler.level() instanceof ServerLevel level ? level.getOverworldClockTime() : -1L;
         return new BuffersSnapshot(buffers.entrySet().stream().map(e -> new BufferEntry(e.getKey(), e.getValue())).toList(),
-                workPlaces, saved, new CatchUpState(clock, catchUpFrom, catchUpTo));
+                workPlaces, saved, new CatchUpState(clock, catchUpFrom, catchUpTo), missions.trip());
     }
 
     /**
@@ -243,12 +253,16 @@ public final class SettlerWork {
     }
 
     /**
-     * Saved work state: buffers and the work places of the day.
+     * Saved work state: buffers, the work places of the day, scans, catch-up and the reserved or current mission.
      *
      * @param entries    the buffers
      * @param workPlaces the work places of the day
+     * @param scans      the scans
+     * @param catchUp    the catch-up bookkeeping
+     * @param trip       the reserved or current mission
      */
-    public record BuffersSnapshot(List<BufferEntry> entries, List<WorkPlaceEntry> workPlaces, List<SavedScan> scans, CatchUpState catchUp) {
+    public record BuffersSnapshot(List<BufferEntry> entries, List<WorkPlaceEntry> workPlaces, List<SavedScan> scans, CatchUpState catchUp,
+            Optional<MissionTrip> trip) {
 
         /**
          * @param entries    the buffers
@@ -258,11 +272,22 @@ public final class SettlerWork {
             this(entries, workPlaces, List.of(), CatchUpState.NONE);
         }
 
+        /**
+         * @param entries    the buffers
+         * @param workPlaces the work places of the day
+         * @param scans      the scans
+         * @param catchUp    the catch-up bookkeeping
+         */
+        public BuffersSnapshot(List<BufferEntry> entries, List<WorkPlaceEntry> workPlaces, List<SavedScan> scans, CatchUpState catchUp) {
+            this(entries, workPlaces, scans, catchUp, Optional.empty());
+        }
+
         private static final Codec<BuffersSnapshot> CURRENT = RecordCodecBuilder.create(instance -> instance.group(
                 BUFFERS_CODEC.optionalFieldOf("buffers", List.of()).forGetter(BuffersSnapshot::entries),
                 WorkPlaceEntry.CODEC.listOf().optionalFieldOf("work_places", List.of()).forGetter(BuffersSnapshot::workPlaces),
                 SavedScan.CODEC.listOf().optionalFieldOf("scans", List.of()).forGetter(BuffersSnapshot::scans),
-                CatchUpState.CODEC.optionalFieldOf("catch_up", CatchUpState.NONE).forGetter(BuffersSnapshot::catchUp)
+                CatchUpState.CODEC.optionalFieldOf("catch_up", CatchUpState.NONE).forGetter(BuffersSnapshot::catchUp),
+                MissionTrip.CODEC.optionalFieldOf("mission").forGetter(BuffersSnapshot::trip)
         ).apply(instance, BuffersSnapshot::new));
 
         /** Save codec; also reads the earlier format (a plain list of buffers). */
@@ -278,7 +303,7 @@ public final class SettlerWork {
     public void restore(BuffersSnapshot snapshot) {
         buffers.clear();
         snapshot.entries().forEach(entry -> buffers.put(entry.jobBlock(), entry.buffer()));
-        loops.values().forEach(loop -> loop.restore(snapshot.workPlaces(), snapshot.scans()));
+        loops.values().forEach(loop -> loop.restore(snapshot));
         savedClock = snapshot.catchUp().activeClock();
         catchUpFrom = snapshot.catchUp().from();
         catchUpTo = snapshot.catchUp().to();
@@ -300,6 +325,38 @@ public final class SettlerWork {
      */
     public JobBuffer buffer(BlockPos jobBlock) {
         return buffers.getOrDefault(jobBlock, new JobBuffer());
+    }
+
+    /**
+     * @return whether the settler is away on a mission (invisible, no AI, no hunger)
+     */
+    public boolean isAway() {
+        return missions.isAway();
+    }
+
+    /**
+     * @return the mission the settler is away on or waits to leave for, for the GUI
+     */
+    public Optional<net.minecraft.network.chat.Component> missionStatus() {
+        return settler.level() instanceof ServerLevel level ? missions.status(level) : Optional.empty();
+    }
+
+    /**
+     * @return the reserved or current mission
+     */
+    public Optional<MissionTrip> missionTrip() {
+        return missions.trip();
+    }
+
+    /**
+     * Ends the mission if its return time has passed (called at every decision; public for tests).
+     *
+     * @param level the level
+     * @param clock the world time
+     * @return whether the settler returned
+     */
+    public boolean returnFromMission(ServerLevel level, long clock) {
+        return missions.returnIfDue(level, clock, false);
     }
 
     /**
@@ -368,6 +425,10 @@ public final class SettlerWork {
         long day = Math.floorDiv(clock, 24000L);
         boolean jumped = SettlerBeds.nightSkipped(lastClock, clock, DECISION_INTERVAL, WORK_END);
         lastClock = clock;
+        if (missions.isAway() && (catchUpFrom >= 0 || !missions.returnIfDue(level, clock, false))) {
+            // Away: nothing to decide until the return (missed time is caught up first).
+            return;
+        }
         boolean night = dayTime >= SLEEP_TIME;
         boolean evening = dayTime >= WORK_END && !night;
         SettlerFood food = settler.getFood();
@@ -486,11 +547,19 @@ public final class SettlerWork {
             }
         }
 
-        for (SettlerJob job : settler.getJobs()) {
+        List<SettlerJob> jobs = settler.getJobs();
+        for (int i = 0; i < jobs.size(); i++) {
+            SettlerJob job = jobs.get(i);
             if (blockedUntil.getOrDefault(job.jobBlock(), 0L) > level.getGameTime()) {
                 continue;
             }
             if (plan(level, job, day, dayTime)) {
+                for (SettlerJob lower : jobs.subList(i + 1, jobs.size())) {
+                    CategoryLoop loop = loop(lower);
+                    if (loop != null) {
+                        loop.outranked(level, lower, day, dayTime);
+                    }
+                }
                 return;
             }
         }
@@ -564,6 +633,16 @@ public final class SettlerWork {
     void stepDone(ServerLevel level) {
         activity = Activity.IDLE;
         decide(level);
+    }
+
+    /**
+     * Stops the current step and stays idle while working on a job (e.g. waiting for a departure).
+     *
+     * @param job the job
+     */
+    void idleWith(SettlerJob job) {
+        stop();
+        activeJob = job;
     }
 
     /**
@@ -930,6 +1009,10 @@ public final class SettlerWork {
         }
         // Progress is saved: a settler unloaded during the run continues later instead of repeating hours.
         catchUpFrom = Math.max(catchUpFrom, to);
+        if (missions.isAway() && !missions.returnIfDue(level, to, true)) {
+            // Away all hour: no hunger, no work.
+            return 0;
+        }
         long awake = to - from;
         long workEnd = day * 24000L + WORK_END;
         long work = Math.max(0, Math.min(to, workEnd) - from);
@@ -1104,7 +1187,7 @@ public final class SettlerWork {
 
     private void accountHunger(ServerLevel level) {
         SettlerFood food = settler.getFood();
-        if (food.isAway()) {
+        if (food.isAway() || missions.isAway()) {
             weightedWorkTicks = 0.0;
             return;
         }
@@ -1439,9 +1522,20 @@ public final class SettlerWork {
      * @param blockLevel the level of the job's JobBlock
      */
     void gainExp(ServerLevel level, SettlerJob job, int blockLevel) {
+        gainExp(level, job, job.jobType().baseExp() * blockLevel, SettlementRules.skillCap(blockLevel));
+    }
+
+    /**
+     * Grants EXP in a job; a level-up is shown to nearby players.
+     *
+     * @param level  the level
+     * @param job    the job
+     * @param amount the EXP
+     * @param cap    the skill cap of the job's JobBlock
+     */
+    void gainExp(ServerLevel level, SettlerJob job, int amount, int cap) {
         SkillRules rules = SkillRules.get();
-        int gained = settler.getSkills().addExp(job.jobType(), job.jobType().baseExp() * blockLevel,
-                SettlementRules.skillCap(blockLevel), rules);
+        int gained = settler.getSkills().addExp(job.jobType(), amount, cap, rules);
         if (gained <= 0) {
             return;
         }
@@ -1458,6 +1552,24 @@ public final class SettlerWork {
         for (net.minecraft.server.level.ServerPlayer player : level.players()) {
             if (player.distanceToSqr(settler) <= LEVEL_UP_RANGE * LEVEL_UP_RANGE) {
                 player.sendOverlayMessage(message);
+            }
+        }
+    }
+
+    /**
+     * Sends a chat message to the players near the settler (not during catch-up).
+     *
+     * @param level   the level
+     * @param message the message
+     * @param range   the distance
+     */
+    void announce(ServerLevel level, net.minecraft.network.chat.Component message, double range) {
+        if (quiet) {
+            return;
+        }
+        for (net.minecraft.server.level.ServerPlayer player : level.players()) {
+            if (player.distanceToSqr(settler) <= range * range) {
+                player.sendSystemMessage(message);
             }
         }
     }
