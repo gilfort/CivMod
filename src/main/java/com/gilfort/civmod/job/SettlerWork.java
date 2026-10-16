@@ -20,6 +20,7 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModEntityTypes;
+import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
@@ -593,13 +594,12 @@ public final class SettlerWork {
      * @return whether the job can work (the settler is busy with it)
      */
     private boolean plan(ServerLevel level, SettlerJob job, long day, long dayTime) {
-        SettlementData data = SettlementData.get(level);
-        Optional<SettlementBlock> block = data.settlementAt(job.jobBlock()).flatMap(s -> s.block(job.jobBlock()));
+        Optional<JobBlockSite> site = JobBlockSite.at(level, job.jobBlock());
         CategoryLoop loop = loop(job);
-        if (block.isEmpty() || loop == null) {
+        if (site.isEmpty() || loop == null) {
             return false;
         }
-        return loop.plan(level, job, block.get(), day, dayTime);
+        return loop.plan(level, job, site.get(), day, dayTime);
     }
 
     // ---------------------------------------------------------------- shared parts used by the category loops
@@ -682,8 +682,7 @@ public final class SettlerWork {
      * @return true (the settler is busy with it)
      */
     boolean startDelivery(ServerLevel level, SettlerJob job) {
-        Optional<SettlementBlock> block = SettlementData.get(level).settlementAt(job.jobBlock()).flatMap(s -> s.block(job.jobBlock()));
-        BlockPos dropOff = block.flatMap(SettlementBlock::dropOff).orElse(job.jobBlock());
+        BlockPos dropOff = JobBlockSite.at(level, job.jobBlock()).map(JobBlockSite::dropOff).orElse(job.jobBlock());
         activeJob = job;
         statuses.put(job.jobBlock(), JobStatus.DELIVERING);
         if (activity != Activity.DELIVER || !dropOff.equals(target)) {
@@ -968,12 +967,12 @@ public final class SettlerWork {
         }
         long clock = level.getOverworldClockTime();
         for (SettlerJob job : settler.getJobs()) {
-            Optional<SettlementBlock> block = settlement.get().block(job.jobBlock());
+            Optional<JobBlockSite> site = JobBlockSite.at(level, job.jobBlock()).filter(found -> found.settlement() == settlement.get());
             CategoryLoop loop = loop(job);
-            if (block.isEmpty() || loop == null) {
+            if (site.isEmpty() || loop == null) {
                 continue;
             }
-            if (!loop.catchUpReady(level, job, block.get(), Math.floorDiv(clock, 24000L), Math.floorMod(clock, 24000L))) {
+            if (!loop.catchUpReady(level, job, site.get(), Math.floorDiv(clock, 24000L), Math.floorMod(clock, 24000L))) {
                 return false;
             }
         }
@@ -1152,13 +1151,13 @@ public final class SettlerWork {
      * Delivers output straight into the drop-off; what does not fit goes into the buffer.
      *
      * @param level  the level
-     * @param block  the JobBlock
+     * @param site   the JobBlock site
      * @param stacks the output
      * @return false when the buffer is full as well (the job ends)
      */
-    boolean deliverDirect(ServerLevel level, SettlementBlock block, List<ItemStack> stacks) {
-        ResourceHandler<ItemResource> handler = level.getCapability(Capabilities.Item.BLOCK, block.dropOff().orElse(block.pos()), null);
-        JobBuffer buffer = buffers.computeIfAbsent(block.pos(), pos -> new JobBuffer());
+    boolean deliverDirect(ServerLevel level, JobBlockSite site, List<ItemStack> stacks) {
+        ResourceHandler<ItemResource> handler = level.getCapability(Capabilities.Item.BLOCK, site.dropOff(), null);
+        JobBuffer buffer = buffers.computeIfAbsent(site.pos(), pos -> new JobBuffer());
         for (ItemStack stack : stacks) {
             ItemStack rest = stack.copy();
             if (handler != null) {
@@ -1526,8 +1525,7 @@ public final class SettlerWork {
         if (!(settler.level() instanceof ServerLevel level)) {
             return SettlementRules.MIN_LEVEL;
         }
-        return SettlementData.get(level).settlementAt(job.jobBlock()).flatMap(s -> s.block(job.jobBlock()))
-                .map(SettlementBlock::level).orElse(SettlementRules.MIN_LEVEL);
+        return JobBlockSite.levelAt(level, job.jobBlock());
     }
 
     /**

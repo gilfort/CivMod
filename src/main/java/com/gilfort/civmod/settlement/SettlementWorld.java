@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 import com.gilfort.civmod.CivMod;
@@ -274,14 +273,5 @@ public final class SettlementWorld {
      */
     public static SettlementManager.Status status(ServerLevel level, BlockPos pos) {
         return SettlementManager.status(SettlementData.get(level), pos);
-    }
-
-    /**
-     * @param level the dimension
-     * @param pos   a position
-     * @return the settlement owning a JobBlock at that position
-     */
-    public static Optional<Settlement> settlementAt(ServerLevel level, BlockPos pos) {
-        return SettlementData.get(level).settlementAt(pos);
     }
 }

@@ -9,6 +9,7 @@ import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 
@@ -186,7 +187,7 @@ public class ScrollOfAssignmentItem extends Item {
     }
 
     private static void bindJobBlock(ItemStack stack, ServerPlayer player, BlockPos pos, Job jobType) {
-        if (SettlementData.get(player.level()).settlementAt(pos).isEmpty()) {
+        if (JobBlockSite.at(player.level(), pos).isEmpty()) {
             player.sendOverlayMessage(Component.translatable("civmod.scroll.job_block_unregistered").withStyle(ChatFormatting.RED));
             return;
         }
@@ -195,7 +196,7 @@ public class ScrollOfAssignmentItem extends Item {
     }
 
     private static Optional<SettlementBlock> boundBlock(ItemStack stack, ServerPlayer player, BlockPos jobBlock) {
-        Optional<SettlementBlock> block = SettlementData.get(player.level()).settlementAt(jobBlock).flatMap(s -> s.block(jobBlock));
+        Optional<SettlementBlock> block = JobBlockSite.at(player.level(), jobBlock).map(JobBlockSite::block);
         if (block.isEmpty()) {
             stack.remove(ModDataComponents.SCROLL_BINDING.get());
             player.sendOverlayMessage(Component.translatable("civmod.scroll.binding_lost").withStyle(ChatFormatting.RED));

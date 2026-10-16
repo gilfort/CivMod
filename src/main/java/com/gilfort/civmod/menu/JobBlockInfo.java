@@ -12,6 +12,7 @@ import com.gilfort.civmod.mission.MissionOffer;
 import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.mission.OutcomeRules;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementManager;
@@ -262,7 +263,8 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
     public static JobBlockInfo of(ServerLevel level, BlockPos pos, Job jobType, int jobLevel) {
         SettlementManager.Status status = SettlementWorld.status(level, pos);
         Optional<Settlement> settlement = status.settlement();
-        List<SettlementBlock.Assignee> assignees = settlement.flatMap(s -> s.block(pos)).map(SettlementBlock::assignees).orElse(List.of());
+        Optional<SettlementBlock> block = JobBlockSite.at(level, pos).map(JobBlockSite::block);
+        List<SettlementBlock.Assignee> assignees = block.map(SettlementBlock::assignees).orElse(List.of());
         List<TakenMission> taken = new ArrayList<>();
         List<MissionSettler> settlers = new ArrayList<>();
         int cap = SettlementRules.skillCap(jobLevel);
@@ -279,7 +281,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
                 settlement.map(Settlement::displayName).orElse(Component.empty()),
                 settlement.isPresent(), status.connected(), status.distance(), status.required(),
                 assignees.stream().map(SettlementBlock.Assignee::name).toList(),
-                settlement.flatMap(s -> s.block(pos)).map(SettlementBlock::collectLeaves).orElse(false), costsOf(jobType),
+                block.map(SettlementBlock::collectLeaves).orElse(false), costsOf(jobType),
                 new MissionTab(SettlementWorld.missionOffer(level, pos), taken, settlers, OutcomeRules.get()));
     }
 

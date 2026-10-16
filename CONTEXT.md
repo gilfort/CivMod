@@ -28,6 +28,10 @@ The implicit lowest-priority fallback Job of every settler; not a Job Category a
 **JobBlock**:
 The block that offers a Base Job (and its Specializations) to one settler. Code: `JobBlock`, `JobBlockEntity`.
 
+**JobBlock site**:
+A JobBlock as a settler sees it: its settlement block, level, skill cap, drop-off, collect inventory and the pantries of its settlement. The one way to resolve a JobBlock position outside the settlement storage. Code: `JobBlockSite` (`JobBlockSite.at(level, pos)`), backed by `SettlementData`.
+_Avoid_: Looking up `SettlementData.settlementAt(pos)` then `Settlement.block(pos)` by hand
+
 **Mission Board**:
 The JobBlock of all Mission Jobs; holds several settlers and the list of selected Missions. Code: `ModBlocks.MISSION_BOARD` (a `JobBlock` offering the Adventurer), capacity in `SettlementRules.capacity`, settlers in `SettlementBlock.assignees()`; a settler's Mission Job is set with `SettlerJobs.withMissionJob`.
 
