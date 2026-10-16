@@ -84,7 +84,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
         }
         JobProfile profile = found.get();
         Optional<WorkRules.MissingTool> missing = WorkRules.missingTool(settler, profile, site,
-                ClerkStorage.stock(level, site.collect(), dayTime, true));
+                ClerkStorage.stock(level, site.collect(), dayTime, !shell.counterUnreachable(level, site.collect())));
         if (missing.isPresent()) {
             return fetchTool(level, job, site, missing.get(), dayTime);
         }
@@ -113,7 +113,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
             shell.block(level, job.jobBlock(), JobStatus.NO_TOOL);
             return false;
         }
-        ClerkStorage.Visit visit = ClerkStorage.visit(level, site.collect(), dayTime);
+        ClerkStorage.Visit visit = shell.reachableVisit(level, site.collect(), ClerkStorage.visit(level, site.collect(), dayTime));
         shell.setActiveJob(job);
         shell.setStatus(job.jobBlock(), JobStatus.FETCHING_TOOL);
         if (step != Step.FETCH_TOOL || !shell.walkingTo(visit.target())) {

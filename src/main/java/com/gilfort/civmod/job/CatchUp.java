@@ -21,7 +21,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 /**
  * Catch-up simulation per settlement (vault {@code Systems/Settlement.md}): settlers that are ready to catch up are
  * collected for {@value #COLLECT_TICKS} ticks, then simulated day by day in hourly segments; the order of the
- * settlers rotates every day so shared drop-offs and pantries are used fairly. A global budget of
+ * settlers rotates every day so shared drop-offs and Clerks (food points) are used fairly. A global budget of
  * {@value #ROLLS_PER_TICK} production rolls per tick spreads large amounts over several ticks.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)

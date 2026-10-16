@@ -72,6 +72,7 @@ public final class ClerkGameTests {
             register(helper, "clerk_as_drop_off", ClerkGameTests::asDropOff);
             register(helper, "clerk_catch_up_food", ClerkGameTests::catchUpFood);
             register(helper, "clerk_shift", ClerkGameTests::shift);
+            register(helper, "clerk_counter_service", ClerkGameTests::counterService);
         });
     }
 
@@ -343,6 +344,38 @@ public final class ClerkGameTests {
         customer.discard();
         clerk.discard();
         helper.succeed();
+    }
+
+    /** In the world: a hungry settler is served at a working Clerk's counter from the linked storage; the Clerk gains EXP. */
+    private static void counterService(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        for (int x = 0; x < 9; x++) {
+            for (int z = 0; z < 9; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
+        BlockPos clerkPos = clerkWithStorage(helper);
+        Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
+        chest.setItem(0, new ItemStack(Items.BREAD, 16));
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerkPos).orElseThrow();
+        Settler clerk = settler(helper, new BlockPos(1, 1, 3), data, settlement);
+        JobAssignments.assign(data, clerkPos, clerk.getUUID(), "Clerk", settlement.id(), List.of());
+        clerk.addJob(new SettlerJob(ModJobs.CLERK.get(), clerkPos));
+        Settler customer = settler(helper, new BlockPos(7, 1, 7), data, settlement);
+        customer.setNoAi(false);
+        customer.getFood().setLevel(5);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(customer.getFood().level() >= 15, "Not served yet: " + customer.getFood().level() + " ("
+                    + customer.statusText().getString() + ")");
+            helper.assertTrue(chest.getItem(0).getCount() < 16, "Served from the linked storage");
+            helper.assertTrue(clerk.getSkills().get(ModJobs.CLERK.get()).exp() > 0, "The Clerk gains EXP per hand-out");
+            JobAssignments.unassign(data, clerkPos);
+            customer.discard();
+            clerk.discard();
+            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+        });
     }
 
     /** The Clerk works until 18:30, others until 17:30; service time 2 s at level 1 down to 1 s at level 100. */

@@ -138,6 +138,8 @@ public final class SettlerWork {
     private ClerkStorage.@Nullable FoodPoint foodPoint;
     /** Where the settler delivers to (a Clerk drop-off takes at its counter). */
     private ClerkStorage.@Nullable Visit deliveryVisit;
+    /** Clerk JobBlocks whose counter this settler found unreachable, with the day (only their block slots that day). */
+    private final Map<BlockPos, Long> unreachableCounters = new HashMap<>();
     /** Reach of the current walking target outside job steps. */
     private double targetReach = REACH;
 
@@ -752,7 +754,8 @@ public final class SettlerWork {
      */
     boolean startDelivery(ServerLevel level, SettlerJob job) {
         BlockPos dropOff = JobBlockSite.at(level, job.jobBlock()).map(JobBlockSite::dropOff).orElse(job.jobBlock());
-        ClerkStorage.Visit visit = ClerkStorage.visit(level, dropOff, Math.floorMod(level.getOverworldClockTime(), 24000L));
+        ClerkStorage.Visit visit = reachableVisit(level, dropOff, ClerkStorage.visit(level, dropOff,
+                Math.floorMod(level.getOverworldClockTime(), 24000L)));
         activeJob = job;
         workplace(job.jobBlock()).setStatus(JobStatus.DELIVERING);
         if (activity != Activity.DELIVER || !visit.target().equals(target)) {
@@ -1355,7 +1358,46 @@ public final class SettlerWork {
         SettlementData data = SettlementData.get(level);
         return data.settlement(settler.getSettlementId())
                 .flatMap(settlement -> ClerkStorage.nearestFood(level, settlement, settler.blockPosition(), dayTime, ownClerk(),
-                        clerk -> true));
+                        clerk -> !counterUnreachable(level, clerk)));
+    }
+
+    /** Counters further away than this are assumed reachable (a path check would be cut off by the follow range). */
+    private static final double COUNTER_PATH_CHECK = 40.0;
+
+    /**
+     * A visit as this settler can make it: a counter it cannot walk to only offers the Clerk's block slots (checked
+     * with one path search when the walk starts, remembered for the day).
+     *
+     * @param level the level
+     * @param pos   the Clerk JobBlock or container visited
+     * @param visit the visit by the access rule
+     * @return the visit the settler makes
+     */
+    ClerkStorage.Visit reachableVisit(ServerLevel level, BlockPos pos, ClerkStorage.Visit visit) {
+        if (!visit.counter() || ownClerk().filter(pos::equals).isPresent()) {
+            return visit;
+        }
+        if (counterUnreachable(level, pos)) {
+            return ClerkStorage.blockVisit(pos);
+        }
+        if (settler.position().distanceTo(Vec3.atCenterOf(visit.target())) <= COUNTER_PATH_CHECK) {
+            net.minecraft.world.level.pathfinder.Path path = settler.getNavigation().createPath(visit.target(), (int) visit.reach());
+            if (path == null || !path.canReach()) {
+                unreachableCounters.put(pos.immutable(), Math.floorDiv(level.getOverworldClockTime(), 24000L));
+                return ClerkStorage.blockVisit(pos);
+            }
+        }
+        return visit;
+    }
+
+    /**
+     * @param level the level
+     * @param clerk a Clerk JobBlock
+     * @return whether this settler found its counter unreachable today
+     */
+    boolean counterUnreachable(ServerLevel level, BlockPos clerk) {
+        Long day = unreachableCounters.get(clerk);
+        return day != null && day == Math.floorDiv(level.getOverworldClockTime(), 24000L);
     }
 
     /**
@@ -1366,7 +1408,8 @@ public final class SettlerWork {
                 .findFirst();
     }
 
-    private void startFetchFood(ServerLevel level, ClerkStorage.FoodPoint point, MealPurpose purpose) {
+    private void startFetchFood(ServerLevel level, ClerkStorage.FoodPoint found, MealPurpose purpose) {
+        ClerkStorage.FoodPoint point = new ClerkStorage.FoodPoint(found.clerk(), reachableVisit(level, found.clerk(), found.visit()));
         mealPurpose = purpose;
         foodPoint = point;
         hungryNoFood = false;

@@ -177,6 +177,14 @@ public final class ClerkStorage {
     }
 
     /**
+     * @param pos a Clerk JobBlock or any container
+     * @return the visit of a visitor that does not reach the counter: at the block itself, its own slots only
+     */
+    public static Visit blockVisit(BlockPos pos) {
+        return new Visit(pos, BLOCK_REACH, false);
+    }
+
+    /**
      * @param clerk a Clerk JobBlock
      * @return the stand spot the Clerk uses now, as last picked (see {@code ClerkSpots})
      */
