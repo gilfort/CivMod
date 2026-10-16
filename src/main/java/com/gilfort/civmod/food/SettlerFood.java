@@ -40,16 +40,23 @@ public final class SettlerFood {
     public static final long AWAKE_TICKS = 14000L;
     /** Ticks per real minute. */
     public static final double TICKS_PER_MINUTE = 1200.0;
+    /**
+     * Marks "no day" in the per-day flags. Days may be negative in tests with a frozen clock; saves written before
+     * this used {@code -1}, which is read as "no day" as well.
+     */
+    public static final long NO_DAY = Long.MIN_VALUE;
+    /** "No day" in saves written before {@link #NO_DAY}. */
+    private static final long LEGACY_NO_DAY = -1L;
     /** Items settlers never eat. */
     public static final TagKey<Item> INEDIBLE = TagKey.create(Registries.ITEM, CivMod.id("settler_inedible"));
 
     private final FoodData data = new FoodData();
     private float exhaustion;
     private float appetite = -1.0F;
-    private long eatenDay = -1L;
-    private long morningDay = -1L;
-    private long complaintDay = -1L;
-    private long forageDay = -1L;
+    private long eatenDay = NO_DAY;
+    private long morningDay = NO_DAY;
+    private long complaintDay = NO_DAY;
+    private long forageDay = NO_DAY;
     private boolean away;
     private @Nullable BlockPos forageSpot;
 
@@ -138,6 +145,7 @@ public final class SettlerFood {
     }
 
     // ---------------------------------------------------------------- day state
+    // The Schedule's "already handled today" flags, one set for live play and catch-up, saved with the settler.
 
     /**
      * @return the day of the last evening meal
@@ -180,7 +188,7 @@ public final class SettlerFood {
     }
 
     /**
-     * @return the day the settler forages on, {@code -1} if not foraging
+     * @return the day the settler forages on, {@link #NO_DAY} if not foraging
      */
     public long forageDay() {
         return forageDay;
@@ -190,7 +198,7 @@ public final class SettlerFood {
      * @return whether the settler forages today
      */
     public boolean isForaging() {
-        return forageDay >= 0;
+        return forageDay != NO_DAY;
     }
 
     /**
@@ -230,7 +238,7 @@ public final class SettlerFood {
      * Ends foraging (the settler is back).
      */
     public void endForaging() {
-        forageDay = -1L;
+        forageDay = NO_DAY;
         away = false;
         forageSpot = null;
     }
@@ -385,12 +393,17 @@ public final class SettlerFood {
             data.readAdditionalSaveData(food);
             exhaustion = food.getFloatOr("exhaustion", 0.0F);
             appetite = food.getFloatOr("appetite", -1.0F);
-            eatenDay = food.getLongOr("eaten_day", -1L);
-            morningDay = food.getLongOr("morning_day", -1L);
-            complaintDay = food.getLongOr("complaint_day", -1L);
-            forageDay = food.getLongOr("forage_day", -1L);
+            eatenDay = day(food, "eaten_day");
+            morningDay = day(food, "morning_day");
+            complaintDay = day(food, "complaint_day");
+            forageDay = day(food, "forage_day");
             away = food.getBooleanOr("away", false);
             forageSpot = food.getLong("forage_spot").map(BlockPos::of).orElse(null);
         });
+    }
+
+    private static long day(ValueInput food, String key) {
+        long day = food.getLongOr(key, NO_DAY);
+        return day == LEGACY_NO_DAY ? NO_DAY : day;
     }
 }
