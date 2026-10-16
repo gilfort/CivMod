@@ -7,7 +7,10 @@ import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.job.JobCategory;
 import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.mission.Missions;
+import com.gilfort.civmod.logistics.StockRule;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.registry.ModMenuTypes;
+import com.gilfort.civmod.settlement.StockRules;
 
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.MissionOffers;
@@ -19,16 +22,20 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Menu of a JobBlock: tab "Storage" (27 slots + player inventory), tab "Info" and, on the Mission Board, tab
- * "Missions".
+ * "Missions"; the Clerk adds the tabs "Rules" (stock rules, with the player inventory to pick items from) and
+ * "Requests" ({@link ClerkTab}).
  */
 public class JobBlockMenu extends CivMenu {
 
@@ -38,6 +45,14 @@ public class JobBlockMenu extends CivMenu {
     public static final int TAB_INFO = 1;
     /** Missions tab (Mission Board only). */
     public static final int TAB_MISSIONS = 2;
+    /** Rules tab (Clerk only): the stock rules. */
+    public static final int TAB_RULES = 2;
+    /** Requests tab (Clerk only): the requests of the stock rules. */
+    public static final int TAB_REQUESTS = 3;
+    /** Panel height of the Clerk's menu (rules grid, rule editor and player inventory). */
+    public static final int CLERK_HEIGHT = 240;
+    /** Ticks between two checks whether the Clerk tab changed. */
+    private static final int CLERK_SYNC_INTERVAL = 20;
 
     /** Button id: free the JobBlock (remove the job from its settler). */
     public static final int BUTTON_UNASSIGN = 50;
@@ -57,7 +72,10 @@ public class JobBlockMenu extends CivMenu {
     private static final int BUTTON_ASSIGN_MISSION_END = BUTTON_ASSIGN_MISSION + ASSIGN_SLOTS * MissionRules.MAX_OFFER_SIZE;
 
     private final Container container;
+    private final Player player;
     private JobBlockInfo info;
+    private ClerkTab clerkTab = ClerkTab.EMPTY;
+    private int clerkSyncIn;
 
     /**
      * Client constructor.
@@ -79,16 +97,85 @@ public class JobBlockMenu extends CivMenu {
      * @param info        the info snapshot
      */
     public JobBlockMenu(int containerId, Inventory inventory, Container container, JobBlockInfo info) {
-        super(ModMenuTypes.JOB_BLOCK.get(), containerId, isMissionBoard(info) ? 3 : 2);
+        super(ModMenuTypes.JOB_BLOCK.get(), containerId, isClerk(info) ? 4 : isMissionBoard(info) ? 3 : 2);
         checkContainerSize(container, JobBlockEntity.SLOTS);
         this.container = container;
+        this.player = inventory.player;
         this.info = info;
         for (int row = 0; row < 3; row++) {
             for (int column = 0; column < 9; column++) {
                 addTabSlot(container, column + row * 9, 8 + column * 18, 18 + row * 18, TAB_STORAGE);
             }
         }
-        addPlayerInventory(inventory, 8, 84, TAB_STORAGE);
+        if (isClerk(info)) {
+            // Rule items are picked from the player inventory, so it is shown on the Rules tab as well.
+            addPlayerInventory(inventory, 8, CLERK_HEIGHT - 82, TAB_STORAGE, TAB_RULES);
+        } else {
+            addPlayerInventory(inventory, 8, 84, TAB_STORAGE);
+        }
+    }
+
+    /**
+     * @param info a JobBlock info
+     * @return whether the JobBlock is a Clerk JobBlock (Rules and Requests tabs)
+     */
+    public static boolean isClerk(JobBlockInfo info) {
+        return info.jobType() == ModJobs.CLERK.get();
+    }
+
+    /**
+     * @return the Clerk's rules and requests as last synced (Clerk only)
+     */
+    public ClerkTab getClerkTab() {
+        return clerkTab;
+    }
+
+    /**
+     * Client: the server sent a new Clerk tab.
+     *
+     * @param tab the tab
+     */
+    public void setClerkTab(ClerkTab tab) {
+        clerkTab = tab;
+    }
+
+    /**
+     * Server: sets or deletes the stock rule in a slot (only active slots take a new rule) and checks the rules at once.
+     *
+     * @param slot the rule slot
+     * @param rule the new rule, empty to delete it
+     */
+    public void editRule(int slot, Optional<StockRule> rule) {
+        if (!isClerk(info) || !(container instanceof JobBlockEntity jobBlock) || !(jobBlock.getLevel() instanceof ServerLevel level)
+                || !stillValid(player)) {
+            return;
+        }
+        SettlementData data = SettlementData.get(level);
+        BlockPos pos = jobBlock.getBlockPos();
+        boolean valid = rule.map(found -> found.slot() == slot && found.item() != Items.AIR && found.activeAt(jobBlock.getJobLevel())).orElse(true);
+        if (!valid) {
+            return;
+        }
+        boolean changed = rule.isPresent() ? StockRules.setRule(data, pos, rule.get()) : StockRules.removeRule(data, pos, slot);
+        if (changed) {
+            StockRules.check(level, pos, Math.floorMod(level.getOverworldClockTime(), 24000L));
+            clerkSyncIn = 0;
+        }
+    }
+
+    @Override
+    public void broadcastChanges() {
+        super.broadcastChanges();
+        if (!isClerk(info) || !(player instanceof ServerPlayer serverPlayer) || !(container instanceof JobBlockEntity jobBlock)
+                || !(jobBlock.getLevel() instanceof ServerLevel level) || --clerkSyncIn > 0) {
+            return;
+        }
+        clerkSyncIn = CLERK_SYNC_INTERVAL;
+        ClerkTab now = ClerkTab.of(level, jobBlock.getBlockPos());
+        if (!now.equals(clerkTab)) {
+            clerkTab = now;
+            PacketDistributor.sendToPlayer(serverPlayer, new ClerkTab.Sync(containerId, now));
+        }
     }
 
     /**

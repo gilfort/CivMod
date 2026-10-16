@@ -88,9 +88,31 @@ configurations {
     runtimeClasspath.extendsFrom localRuntime
 }
 
+repositories {
+    // Soft compat only: recipe viewer APIs are compile-only, CivMod runs without them.
+    maven {
+        name = 'BlameJared (JEI)'
+        url = 'https://maven.blamejared.com/'
+        content { includeGroup 'mezz.jei' }
+    }
+    maven {
+        name = 'shedaniel (REI)'
+        url = 'https://maven.shedaniel.me/'
+        content {
+            includeGroup 'me.shedaniel'
+            includeGroup 'dev.architectury'
+        }
+    }
+}
+
 dependencies {
     // Static analysis on every compile (see tasks.withType(JavaCompile) below).
     errorprone 'com.google.errorprone:error_prone_core:2.50.0'
+
+    // Ghost-ingredient drag for the Clerk's rule slots (soft compat, see compat/ packages).
+    compileOnly 'mezz.jei:jei-26.3-neoforge-api:31.14.0.72'
+    compileOnly('me.shedaniel:RoughlyEnoughItems-api-neoforge:26.3.824') { transitive = false }
+    compileOnly('dev.architectury:architectury-neoforge:22.0.3') { transitive = false }
 }
 
 // Expands the ${} properties in src/main/templates (e.g. neoforge.mods.toml).
