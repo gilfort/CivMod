@@ -35,7 +35,8 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * Who takes which mission (vault {@code Systems/Mission Jobs.md}): settlers of one Mission Board that want a mission
  * within one decision interval ({@value SettlerWork#DECISION_INTERVAL} ticks, decisions are staggered) pick together,
  * the lowest Mission Job skill first, equal skills in random order ({@link MissionRules#order}); each takes the mission
- * of the pick rule ({@link MissionRules#pick}) off the offer. Nothing is kept while no settler asks.
+ * of the pick rule ({@link MissionRules#pick}: missions the player assigned to it first) off the offer. Nothing is kept
+ * while no settler asks.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 final class MissionPicks {
@@ -114,10 +115,13 @@ final class MissionPicks {
                 .toList();
         for (Candidate candidate : MissionRules.order(candidates, Candidate::skill, level.getRandom())) {
             List<MissionOffer.Entry> offer = block.get().missionOffer().entries();
-            OptionalInt pick = MissionRules.pick(offer, pool, candidate.job().jobType(), candidate.skill());
+            OptionalInt pick = MissionRules.pick(offer, pool, candidate.job().jobType(), candidate.skill(),
+                    candidate.settler().getUUID(), level.getRandom());
             MissionLoop loop = candidate.settler().getWork().missions();
-            if (pick.isPresent() && MissionOffers.take(data, board, pick.getAsInt(), offer.get(pick.getAsInt()).mission())) {
-                loop.reserve(board, offer.get(pick.getAsInt()).mission());
+            Optional<MissionOffer.Entry> entry = pick.isPresent() ? Optional.of(offer.get(pick.getAsInt())) : Optional.empty();
+            if (entry.isPresent() && MissionOffers.take(data, board, pick.getAsInt(), entry.get().mission())) {
+                // A locked entry the settler may take is one the player assigned to it.
+                loop.reserve(board, entry.get().mission(), entry.get().locked());
             } else {
                 loop.noMission(level, board);
             }

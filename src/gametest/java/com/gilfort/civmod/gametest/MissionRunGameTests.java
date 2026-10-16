@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
@@ -67,13 +68,16 @@ public final class MissionRunGameTests {
 
     private static final double EPSILON = 1.0E-9;
     private static final long DAY = 24000L;
-    private static final BlockPos BOARD = new BlockPos(1, 1, 1);
+    static final BlockPos BOARD = new BlockPos(1, 1, 1);
     /** Bed head of the settler in the death tests (only the settlement entry, no bed block). */
     private static final BlockPos BED = new BlockPos(7, 1, 7);
     /** Level of the test board (skill cap 40). */
     private static final int BOARD_LEVEL = 2;
     /** Mission Job skill of the test settler: every sample mission fits, below the board cap. */
     private static final int SKILL = 25;
+    /** Settler and random source of the pick rule test. */
+    private static final UUID SETTLER = new UUID(0L, 1L);
+    private static final RandomSource RANDOM = RandomSource.create(0L);
 
     private MissionRunGameTests() {
     }
@@ -158,13 +162,13 @@ public final class MissionRunGameTests {
         List<MissionOffer.Entry> offer = List.of(new MissionOffer.Entry(CivMod.id("lv5"), true), new MissionOffer.Entry(CivMod.id("lv15"), false),
                 new MissionOffer.Entry(CivMod.id("lv12"), true), new MissionOffer.Entry(CivMod.id("lv30"), true),
                 new MissionOffer.Entry(CivMod.id("other_job"), true), new MissionOffer.Entry(CivMod.id("removed"), true));
-        OptionalInt pick = MissionRules.pick(offer, pool, ModJobs.ADVENTURER.get(), 20);
+        OptionalInt pick = MissionRules.pick(offer, pool, ModJobs.ADVENTURER.get(), 20, SETTLER, RANDOM);
         helper.assertTrue(pick.equals(OptionalInt.of(2)), "Skill 20 takes the marked Lv 12 (Lv 15 is unmarked): " + pick);
-        helper.assertTrue(MissionRules.pick(offer, pool, ModJobs.ADVENTURER.get(), 12).equals(OptionalInt.of(2)), "At its level");
-        helper.assertTrue(MissionRules.pick(offer, pool, ModJobs.ADVENTURER.get(), 11).equals(OptionalInt.of(0)), "Skill 11 takes Lv 5");
-        helper.assertTrue(MissionRules.pick(offer, pool, ModJobs.ADVENTURER.get(), 4).isEmpty(), "Nothing at or below skill 4");
-        helper.assertTrue(MissionRules.pick(offer, pool, ModJobs.MINER.get(), 100).isEmpty(), "A job no mission allows takes nothing");
-        helper.assertTrue(MissionRules.pick(List.of(), pool, ModJobs.ADVENTURER.get(), 100).isEmpty(), "Empty offer");
+        helper.assertTrue(MissionRules.pick(offer, pool, ModJobs.ADVENTURER.get(), 12, SETTLER, RANDOM).equals(OptionalInt.of(2)), "At its level");
+        helper.assertTrue(MissionRules.pick(offer, pool, ModJobs.ADVENTURER.get(), 11, SETTLER, RANDOM).equals(OptionalInt.of(0)), "Skill 11 takes Lv 5");
+        helper.assertTrue(MissionRules.pick(offer, pool, ModJobs.ADVENTURER.get(), 4, SETTLER, RANDOM).isEmpty(), "Nothing at or below skill 4");
+        helper.assertTrue(MissionRules.pick(offer, pool, ModJobs.MINER.get(), 100, SETTLER, RANDOM).isEmpty(), "A job no mission allows takes nothing");
+        helper.assertTrue(MissionRules.pick(List.of(), pool, ModJobs.ADVENTURER.get(), 100, SETTLER, RANDOM).isEmpty(), "Empty offer");
         helper.succeed();
     }
 
@@ -215,7 +219,7 @@ public final class MissionRunGameTests {
     // ---------------------------------------------------------------- a settler on a mission
 
     /** A level-2 Mission Board with an Adventurer of skill {@value #SKILL}; the first offered mission is marked. */
-    private static Settler adventurer(GameTestHelper helper) {
+    static Settler adventurer(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         for (int x = 0; x < 9; x++) {
             for (int z = 0; z < 9; z++) {
@@ -244,7 +248,7 @@ public final class MissionRunGameTests {
         return settler;
     }
 
-    private static List<MissionOffer.Entry> offer(GameTestHelper helper) {
+    static List<MissionOffer.Entry> offer(GameTestHelper helper) {
         BlockPos board = helper.absolutePos(BOARD);
         return SettlementData.get(helper.getLevel()).settlementAt(board).flatMap(s -> s.block(board)).orElseThrow().missionOffer().entries();
     }

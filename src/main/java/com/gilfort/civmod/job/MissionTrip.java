@@ -16,26 +16,36 @@ import net.minecraft.resources.Identifier;
  * @param mission    the mission id
  * @param returnTime the world time of the return, {@code -1} while the mission is only reserved
  * @param exit       where the settler vanished, empty while it is still walking out
+ * @param assigned   whether the player assigned the mission to this settler (it goes back to the board locked)
  */
-public record MissionTrip(BlockPos board, Identifier mission, long returnTime, Optional<BlockPos> exit) {
+public record MissionTrip(BlockPos board, Identifier mission, long returnTime, Optional<BlockPos> exit, boolean assigned) {
 
     /** Save codec. */
     public static final Codec<MissionTrip> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             BlockPos.CODEC.fieldOf("board").forGetter(MissionTrip::board),
             Identifier.CODEC.fieldOf("mission").forGetter(MissionTrip::mission),
             Codec.LONG.optionalFieldOf("return_time", -1L).forGetter(MissionTrip::returnTime),
-            BlockPos.CODEC.optionalFieldOf("exit").forGetter(MissionTrip::exit)
+            BlockPos.CODEC.optionalFieldOf("exit").forGetter(MissionTrip::exit),
+            Codec.BOOL.optionalFieldOf("assigned", false).forGetter(MissionTrip::assigned)
     ).apply(instance, MissionTrip::new));
 
     /**
-     * A trip without an exit (reserved, or departed and still walking out).
+     * A trip without an exit (reserved, or departed and still walking out) of a mission nobody assigned.
      *
      * @param board      the Mission Board
      * @param mission    the mission id
      * @param returnTime the world time of the return, {@code -1} while reserved
      */
     public MissionTrip(BlockPos board, Identifier mission, long returnTime) {
-        this(board, mission, returnTime, Optional.empty());
+        this(board, mission, returnTime, Optional.empty(), false);
+    }
+
+    /**
+     * @param returnTime the world time of the return
+     * @return this trip departed, returning at that time
+     */
+    public MissionTrip departing(long returnTime) {
+        return new MissionTrip(board, mission, returnTime, exit, assigned);
     }
 
     /**
@@ -57,6 +67,6 @@ public record MissionTrip(BlockPos board, Identifier mission, long returnTime, O
      * @return this trip with that exit
      */
     public MissionTrip withExit(BlockPos spot) {
-        return new MissionTrip(board, mission, returnTime, Optional.of(spot.immutable()));
+        return new MissionTrip(board, mission, returnTime, Optional.of(spot.immutable()), assigned);
     }
 }

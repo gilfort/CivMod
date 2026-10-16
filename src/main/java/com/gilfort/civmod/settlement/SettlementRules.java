@@ -22,6 +22,8 @@ public final class SettlementRules {
     public static final int SKILL_CAP_PER_LEVEL = 20;
     /** Settlers a Mission Board holds per level (index 0 = level 1). */
     private static final int[] MISSION_BOARD_CAPACITY = {1, 2, 4, 6, 10};
+    /** The most settlers a Mission Board holds (at the maximum level). */
+    public static final int MAX_MISSION_BOARD_CAPACITY = MISSION_BOARD_CAPACITY[MISSION_BOARD_CAPACITY.length - 1];
 
     private SettlementRules() {
     }

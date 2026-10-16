@@ -4,7 +4,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
+import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.job.JobCategory;
 import com.gilfort.civmod.mission.Mission;
 import com.gilfort.civmod.mission.MissionOffer;
@@ -58,23 +62,11 @@ public final class MissionOffers {
      * @param board   the Mission Board position
      * @param index   the entry index
      * @param mission the mission expected at that index
-     * @param marked  the new mark
+     * @param marked  the new mark (unmarking also removes an assignment and its lock)
      * @return whether the entry was set
      */
     public static boolean setMarked(SettlementData data, BlockPos board, int index, Identifier mission, boolean marked) {
-        Optional<SettlementBlock> block = missionBoard(data, board);
-        if (block.isEmpty() || index < 0 || index >= block.get().missionOffer().entries().size()) {
-            return false;
-        }
-        MissionOffer offer = block.get().missionOffer();
-        if (!offer.entries().get(index).mission().equals(mission)) {
-            return false;
-        }
-        List<MissionOffer.Entry> entries = new ArrayList<>(offer.entries());
-        entries.set(index, entries.get(index).withMarked(marked));
-        block.get().setMissionOffer(new MissionOffer(entries, offer.day()));
-        data.setDirty();
-        return true;
+        return update(data, board, index, mission, entry -> Optional.of(entry.withMarked(marked)));
     }
 
     /**
@@ -104,13 +96,91 @@ public final class MissionOffers {
     }
 
     /**
-     * Puts a reserved mission back on the board as a marked entry, after the other marked ones.
+     * Assigns a marked mission to one settler of the board; it is then locked for every other settler. Like
+     * {@link #setMarked}, nothing happens if the entry at that index is no longer that mission.
+     *
+     * @param data       the dimension's settlement data
+     * @param board      the Mission Board position
+     * @param index      the entry index
+     * @param mission    the mission expected at that index
+     * @param settler    the settler
+     * @param missionJob the settler's Mission Job
+     * @param pool       all missions by id
+     * @return whether the mission was assigned: the entry is marked, the settler works this board and the mission
+     *         allows its Mission Job
+     */
+    public static boolean assign(SettlementData data, BlockPos board, int index, Identifier mission, UUID settler, Job missionJob,
+            Map<Identifier, Mission> pool) {
+        Mission found = pool.get(mission);
+        if (found == null || !found.jobs().contains(missionJob)
+                || missionBoard(data, board).filter(block -> block.isAssignee(settler)).isEmpty()) {
+            return false;
+        }
+        return update(data, board, index, mission, entry -> entry.marked() ? Optional.of(entry.withAssignee(Optional.of(settler))) : Optional.empty());
+    }
+
+    /**
+     * Revokes the assignment of a mission (or the lock left by a settler that died or left the board): every settler
+     * may take it again.
      *
      * @param data    the dimension's settlement data
      * @param board   the Mission Board position
-     * @param mission the mission
+     * @param index   the entry index
+     * @param mission the mission expected at that index
+     * @return whether the entry was unlocked
      */
-    public static void giveBack(SettlementData data, BlockPos board, Identifier mission) {
+    public static boolean unlock(SettlementData data, BlockPos board, int index, Identifier mission) {
+        return update(data, board, index, mission, entry -> Optional.of(entry.withAssignee(Optional.empty())));
+    }
+
+    /**
+     * A settler left the board or died: its assignments are removed, the missions stay marked and locked until the
+     * player assigns them again or unlocks them.
+     *
+     * @param data    the dimension's settlement data
+     * @param board   the Mission Board position
+     * @param settler the settler
+     */
+    static void removeAssignee(SettlementData data, BlockPos board, UUID settler) {
+        removeAssignee(data, board, settler, mission -> true);
+    }
+
+    /**
+     * A settler of the board got another Mission Job: its assignments of missions that job may not take are removed
+     * like those of a settler that left (the missions stay locked), the others stay.
+     *
+     * @param data    the dimension's settlement data
+     * @param board   the Mission Board position
+     * @param settler the settler
+     * @param job     its new Mission Job
+     * @param pool    all missions by id
+     */
+    public static void missionJobChanged(SettlementData data, BlockPos board, UUID settler, Job job, Map<Identifier, Mission> pool) {
+        removeAssignee(data, board, settler, mission -> pool.get(mission) == null || !pool.get(mission).jobs().contains(job));
+    }
+
+    private static void removeAssignee(SettlementData data, BlockPos board, UUID settler, Predicate<Identifier> mission) {
+        Optional<SettlementBlock> block = missionBoard(data, board);
+        Predicate<MissionOffer.Entry> affected = entry -> entry.assignee().filter(settler::equals).isPresent() && mission.test(entry.mission());
+        if (block.isEmpty() || block.get().missionOffer().entries().stream().noneMatch(affected)) {
+            return;
+        }
+        MissionOffer offer = block.get().missionOffer();
+        List<MissionOffer.Entry> entries = offer.entries().stream().map(entry -> affected.test(entry) ? entry.withoutAssignee() : entry).toList();
+        block.get().setMissionOffer(new MissionOffer(entries, offer.day()));
+        data.setDirty();
+    }
+
+    /**
+     * Puts a reserved mission back on the board as a marked entry, after the other marked ones.
+     *
+     * @param data     the dimension's settlement data
+     * @param board    the Mission Board position
+     * @param mission  the mission
+     * @param assignee the settler it stays assigned to
+     * @param locked   whether it stays locked (an assigned mission whose settler left the board)
+     */
+    public static void giveBack(SettlementData data, BlockPos board, Identifier mission, Optional<UUID> assignee, boolean locked) {
         Optional<SettlementBlock> block = missionBoard(data, board);
         if (block.isEmpty()) {
             return;
@@ -121,9 +191,34 @@ public final class MissionOffers {
         while (index < entries.size() && entries.get(index).marked()) {
             index++;
         }
-        entries.add(index, new MissionOffer.Entry(mission, true));
+        entries.add(index, new MissionOffer.Entry(mission, true, assignee, locked));
         block.get().setMissionOffer(new MissionOffer(entries, offer.day()));
         data.setDirty();
+    }
+
+    /**
+     * Replaces one entry; nothing happens if the entry at that index is no longer the expected mission or the change
+     * is refused (empty).
+     */
+    private static boolean update(SettlementData data, BlockPos board, int index, Identifier mission,
+            Function<MissionOffer.Entry, Optional<MissionOffer.Entry>> change) {
+        Optional<SettlementBlock> block = missionBoard(data, board);
+        if (block.isEmpty() || index < 0 || index >= block.get().missionOffer().entries().size()) {
+            return false;
+        }
+        MissionOffer offer = block.get().missionOffer();
+        if (!offer.entries().get(index).mission().equals(mission)) {
+            return false;
+        }
+        Optional<MissionOffer.Entry> changed = change.apply(offer.entries().get(index));
+        if (changed.isEmpty()) {
+            return false;
+        }
+        List<MissionOffer.Entry> entries = new ArrayList<>(offer.entries());
+        entries.set(index, changed.get());
+        block.get().setMissionOffer(new MissionOffer(entries, offer.day()));
+        data.setDirty();
+        return true;
     }
 
     private static Optional<SettlementBlock> missionBoard(SettlementData data, BlockPos board) {

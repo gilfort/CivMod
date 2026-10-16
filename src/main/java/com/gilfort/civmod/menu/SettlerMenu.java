@@ -3,12 +3,15 @@ package com.gilfort.civmod.menu;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.npc.Settler;
 import java.util.List;
 
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.SettlerJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.settlement.MissionOffers;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.registry.ModMenuTypes;
 
@@ -139,6 +142,12 @@ public class SettlerMenu extends CivMenu {
                 info = info.withJobs(SettlerJobs.withMissionJob(info.jobs(), info.missionJobs().get(index)));
                 if (settler != null) {
                     settler.setJobs(info.jobs());
+                    if (settler.level() instanceof ServerLevel level) {
+                        // Assigned missions the new Mission Job may not take lose their assignee (they stay locked).
+                        info.jobs().stream().filter(job -> job.jobType().category() == JobCategory.MISSION).findFirst()
+                                .ifPresent(job -> MissionOffers.missionJobChanged(SettlementData.get(level), job.jobBlock(), settler.getUUID(),
+                                        job.jobType(), Missions.all(level.registryAccess())));
+                    }
                 }
             }
             return true;

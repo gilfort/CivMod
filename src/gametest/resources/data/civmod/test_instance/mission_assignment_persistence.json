@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:mission_assignment_persistence",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 4
+}

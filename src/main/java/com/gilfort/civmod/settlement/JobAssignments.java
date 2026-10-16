@@ -211,7 +211,7 @@ public final class JobAssignments {
     }
 
     /**
-     * Frees a JobBlock of all its settlers.
+     * Frees a JobBlock of all its settlers (and removes their mission assignments, see {@link #unassign(SettlementData, BlockPos, UUID)}).
      *
      * @param data     the dimension's settlement data
      * @param jobBlock the JobBlock position
@@ -222,13 +222,15 @@ public final class JobAssignments {
         List<UUID> previous = block.map(b -> b.assignees().stream().map(SettlementBlock.Assignee::id).toList()).orElse(List.of());
         if (!previous.isEmpty()) {
             block.get().mutableAssignees().clear();
+            previous.forEach(settler -> MissionOffers.removeAssignee(data, jobBlock, settler));
             data.changed();
         }
         return previous;
     }
 
     /**
-     * Removes one settler from a JobBlock.
+     * Removes one settler from a JobBlock; on a Mission Board its mission assignments are removed (the missions stay
+     * locked).
      *
      * @param data     the dimension's settlement data
      * @param jobBlock the JobBlock position
@@ -239,6 +241,7 @@ public final class JobAssignments {
         Optional<SettlementBlock> block = data.settlementAt(jobBlock).flatMap(s -> s.block(jobBlock));
         boolean removed = block.map(b -> b.mutableAssignees().removeIf(assignee -> assignee.id().equals(settler))).orElse(false);
         if (removed) {
+            MissionOffers.removeAssignee(data, jobBlock, settler);
             data.changed();
         }
         return removed;

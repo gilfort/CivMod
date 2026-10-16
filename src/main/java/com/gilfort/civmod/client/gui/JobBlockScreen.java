@@ -45,10 +45,15 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     private int costOffset;
     private int costRowY = -1;
     private int missionOffset;
+    /** The offer entry whose assignment view is open, {@code -1} while the offer is shown. */
+    private int assigning = -1;
+    private int settlerOffset;
     private static final int LINE_HEIGHT = 11;
     private static final int MISSION_LIST_Y = 34;
     private static final int MISSION_ROW_HEIGHT = 23;
     private static final int MISSION_ROWS = 5;
+    /** Settler rows of the assignment view (the buttons take the place of the last row). */
+    private static final int ASSIGN_ROWS = 4;
     private static final int TOOLTIP_WIDTH = 200;
     private static final int SCROLL_COLUMN = 8;
     private static final Identifier CHECKBOX = Identifier.withDefaultNamespace("widget/checkbox");
@@ -96,6 +101,16 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             }).bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 72, imageWidth - 2 * CivGui.PADDING, 20).build());
             leaves.setTooltip(Tooltip.create(Component.translatable("civmod.gui.job_block.leaves.tooltip")));
         }
+        if (assigning >= 0) {
+            int buttonWidth = (imageWidth - 2 * CivGui.PADDING - 4) / 2;
+            int y = topPos + imageHeight - 28;
+            Button unlock = addTabWidget(JobBlockMenu.TAB_MISSIONS, Button.builder(Component.translatable("civmod.gui.mission.assign.unlock"),
+                    button -> assign(-1)).bounds(leftPos + CivGui.PADDING, y, buttonWidth, 20).build());
+            unlock.active = assigning < current.missions().size() && current.missions().get(assigning).locked();
+            unlock.setTooltip(Tooltip.create(Component.translatable("civmod.gui.mission.assign.unlock.tooltip")));
+            addTabWidget(JobBlockMenu.TAB_MISSIONS, Button.builder(Component.translatable("gui.back"), button -> showOffer())
+                    .bounds(leftPos + CivGui.PADDING + buttonWidth + 4, y, buttonWidth, 20).build());
+        }
         if (!JobBlockMenu.isMissionBoard(current) && !current.assignees().isEmpty()) {
             addTabWidget(JobBlockMenu.TAB_INFO, Button.builder(Component.translatable("civmod.gui.job_block.unassign"), button -> {
                 menu.clickMenuButton(minecraft.player, JobBlockMenu.BUTTON_UNASSIGN);
@@ -108,15 +123,26 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     @Override
     protected void extractTabBackground(GuiGraphicsExtractor graphics, int tab, int mouseX, int mouseY) {
         if (tab == JobBlockMenu.TAB_MISSIONS) {
-            CivGui.inset(graphics, leftPos + CivGui.PADDING, topPos + MISSION_LIST_Y, imageWidth - 2 * CivGui.PADDING,
-                    imageHeight - MISSION_LIST_Y - CivGui.PADDING);
+            int height = assigning >= 0 ? ASSIGN_ROWS * MISSION_ROW_HEIGHT + 2 * CivGui.INSET_PADDING : imageHeight - MISSION_LIST_Y - CivGui.PADDING;
+            CivGui.inset(graphics, leftPos + CivGui.PADDING, topPos + MISSION_LIST_Y, imageWidth - 2 * CivGui.PADDING, height);
+        }
+    }
+
+    @Override
+    protected void onTabChanged(int tab) {
+        if (assigning >= 0) {
+            showOffer();
         }
     }
 
     @Override
     protected void extractTabLabels(GuiGraphicsExtractor graphics, int tab, int mouseX, int mouseY) {
         if (tab == JobBlockMenu.TAB_MISSIONS) {
-            extractMissions(graphics, mouseX, mouseY);
+            if (assigning >= 0) {
+                extractAssignment(graphics, mouseX, mouseY);
+            } else {
+                extractMissions(graphics, mouseX, mouseY);
+            }
             return;
         }
         if (tab != JobBlockMenu.TAB_INFO) {
@@ -220,17 +246,28 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             graphics.item(mission.map(Mission::iconStack).orElse(ItemStack.EMPTY), left, y + 2);
             int textWidth = width - 20 - box - 2;
             graphics.text(font, CivGui.fit(font, title(entry.mission(), mission), textWidth), left + 20, y + 1, CivGui.LABEL_COLOR, false);
-            mission.ifPresent(found -> graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.mission.details", found.recommendedLevel(),
-                    found.days(), found.rolls()), textWidth), left + 20, y + 11, CivGui.HINT_COLOR, false));
-            Identifier sprite = entry.marked()
-                    ? (index == hovered ? CHECKBOX_SELECTED_HIGHLIGHTED : CHECKBOX_SELECTED)
-                    : (index == hovered ? CHECKBOX_HIGHLIGHTED : CHECKBOX);
-            graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, left + width - box, y + (MISSION_ROW_HEIGHT - box) / 2 - 1, box, box);
+            if (entry.locked()) {
+                // An assigned or locked mission shows who takes it instead of the details (still in the tooltip).
+                graphics.text(font, CivGui.fit(font, lockText(entry), textWidth), left + 20, y + 11, CivGui.HINT_COLOR, false);
+            } else {
+                mission.ifPresent(found -> graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.mission.details",
+                        found.recommendedLevel(), found.days(), found.rolls()), textWidth), left + 20, y + 11, CivGui.HINT_COLOR, false));
+            }
+            checkbox(graphics, entry.marked(), index == hovered, left + width - box, y);
         }
         if (hovered >= 0) {
             graphics.setTooltipForNextFrame(font, hovered < offer.size() ? missionTooltip(offer.get(hovered))
                     : takenTooltip(taken.get(hovered - offer.size())), mouseX, mouseY);
         }
+    }
+
+    /** Draws a vanilla checkbox at the right end of a list row. */
+    private void checkbox(GuiGraphicsExtractor graphics, boolean selected, boolean hovered, int x, int rowY) {
+        Identifier sprite = selected
+                ? (hovered ? CHECKBOX_SELECTED_HIGHLIGHTED : CHECKBOX_SELECTED)
+                : (hovered ? CHECKBOX_HIGHLIGHTED : CHECKBOX);
+        int box = Checkbox.getBoxSize(font);
+        graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, rowY + (MISSION_ROW_HEIGHT - box) / 2 - 1, box, box);
     }
 
     private Optional<Mission> mission(Identifier id) {
@@ -264,9 +301,129 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
 
     private List<FormattedCharSequence> missionTooltip(MissionOffer.Entry entry) {
         List<FormattedCharSequence> lines = missionLines(entry.mission());
+        if (entry.locked()) {
+            lines.add(lockText(entry).copy().withStyle(ChatFormatting.GOLD).getVisualOrderText());
+        }
         lines.add(Component.translatable(entry.marked() ? "civmod.gui.mission.unmark" : "civmod.gui.mission.mark")
                 .withStyle(ChatFormatting.DARK_GRAY).getVisualOrderText());
+        if (entry.marked()) {
+            lines.add(Component.translatable("civmod.gui.mission.assign.hint").withStyle(ChatFormatting.DARK_GRAY).getVisualOrderText());
+        }
         return lines;
+    }
+
+    /** "Assigned to <name>", or "Locked" when the assigned settler died or left the board (or is not loaded). */
+    private Component lockText(MissionOffer.Entry entry) {
+        Optional<String> name = entry.assignee().flatMap(id -> menu.getInfo().missionTab().settler(id)).map(JobBlockInfo.MissionSettler::name);
+        if (name.isPresent()) {
+            return Component.translatable("civmod.gui.mission.assigned", name.get());
+        }
+        return Component.translatable(entry.assignee().isPresent() ? "civmod.gui.mission.assigned.unknown" : "civmod.gui.mission.locked");
+    }
+
+    // ---------------------------------------------------------------- assignment view
+
+    /** Opens the assignment view of an offer entry. */
+    private void showAssignment(int index) {
+        assigning = index;
+        settlerOffset = 0;
+        rebuildWidgets();
+    }
+
+    /** Back to the offer. */
+    private void showOffer() {
+        assigning = -1;
+        rebuildWidgets();
+    }
+
+    /**
+     * @return the indices (in the board's settler list) of the settlers whose Mission Job may take the mission being
+     *         assigned
+     */
+    private List<Integer> eligible() {
+        JobBlockInfo.MissionTab board = menu.getInfo().missionTab();
+        if (assigning < 0 || assigning >= board.offer().size()) {
+            return List.of();
+        }
+        Optional<Mission> mission = mission(board.offer().get(assigning).mission());
+        List<Integer> eligible = new ArrayList<>();
+        for (int i = 0; i < board.settlers().size(); i++) {
+            JobBlockInfo.MissionSettler settler = board.settlers().get(i);
+            if (mission.filter(found -> found.jobs().contains(settler.job())).isPresent()) {
+                eligible.add(i);
+            }
+        }
+        return eligible;
+    }
+
+    /** Assigns the mission being assigned to a settler (index in the board's settler list) or unlocks it ({@code -1}). */
+    private void assign(int settler) {
+        int button = JobBlockMenu.assignButtonId(assigning, settler);
+        menu.clickMenuButton(minecraft.player, button);
+        minecraft.gameMode.handleInventoryButtonClick(menu.containerId, button);
+        showOffer();
+    }
+
+    /**
+     * Draws the assignment view: the settlers of the board whose Mission Job may take the mission (name, Mission Job,
+     * skill), the current assignee checked; a click assigns. More than {@value #ASSIGN_ROWS} rows scroll.
+     */
+    private void extractAssignment(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        JobBlockInfo.MissionTab board = menu.getInfo().missionTab();
+        if (assigning >= board.offer().size()) {
+            return;
+        }
+        MissionOffer.Entry entry = board.offer().get(assigning);
+        Component title = Component.translatable("civmod.gui.mission.assign.title", title(entry.mission(), mission(entry.mission())));
+        graphics.text(font, CivGui.fit(font, title, imageWidth - 2 * CivGui.PADDING), CivGui.PADDING, 22, CivGui.LABEL_COLOR, false);
+        int left = CivGui.PADDING + CivGui.INSET_PADDING;
+        int width = imageWidth - 2 * left;
+        List<Integer> eligible = eligible();
+        if (eligible.isEmpty()) {
+            graphics.textWithWordWrap(font, Component.translatable("civmod.gui.mission.assign.none"), left,
+                    MISSION_LIST_Y + CivGui.INSET_PADDING, width, CivGui.HINT_COLOR, false);
+            return;
+        }
+        settlerOffset = Math.clamp(settlerOffset, 0, Math.max(0, eligible.size() - ASSIGN_ROWS));
+        if (eligible.size() > ASSIGN_ROWS) {
+            width -= SCROLL_COLUMN;
+            int arrowX = left + width + 1;
+            graphics.text(font, Component.literal("▲"), arrowX, MISSION_LIST_Y + CivGui.INSET_PADDING,
+                    settlerOffset > 0 ? CivGui.LABEL_COLOR : CivGui.HINT_COLOR, false);
+            graphics.text(font, Component.literal("▼"), arrowX, MISSION_LIST_Y + CivGui.INSET_PADDING + ASSIGN_ROWS * MISSION_ROW_HEIGHT - font.lineHeight,
+                    settlerOffset + ASSIGN_ROWS < eligible.size() ? CivGui.LABEL_COLOR : CivGui.HINT_COLOR, false);
+        }
+        int box = Checkbox.getBoxSize(font);
+        int hovered = settlerRowAt(mouseX, mouseY);
+        for (int row = 0; row < Math.min(ASSIGN_ROWS, eligible.size() - settlerOffset); row++) {
+            int index = settlerOffset + row;
+            JobBlockInfo.MissionSettler settler = board.settlers().get(eligible.get(index));
+            int y = MISSION_LIST_Y + CivGui.INSET_PADDING + row * MISSION_ROW_HEIGHT;
+            int textWidth = width - box - 2;
+            graphics.text(font, CivGui.fit(font, Component.literal(settler.name()), textWidth), left, y + 1, CivGui.LABEL_COLOR, false);
+            graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.mission.assign.settler", settler.job().displayName(),
+                    settler.skill()), textWidth), left, y + 11, CivGui.HINT_COLOR, false);
+            checkbox(graphics, entry.assignee().filter(settler.id()::equals).isPresent(), index == hovered, left + width - box, y);
+        }
+    }
+
+    /**
+     * @return the index (in the eligible settlers) of the settler row under the mouse, {@code -1} if none
+     */
+    private int settlerRowAt(double mouseX, double mouseY) {
+        if (menu.getActiveTab() != JobBlockMenu.TAB_MISSIONS || assigning < 0) {
+            return -1;
+        }
+        int rows = eligible().size();
+        int left = leftPos + CivGui.PADDING + CivGui.INSET_PADDING;
+        int top = topPos + MISSION_LIST_Y + CivGui.INSET_PADDING;
+        int right = leftPos + imageWidth - CivGui.PADDING - CivGui.INSET_PADDING - (rows > ASSIGN_ROWS ? SCROLL_COLUMN : 0);
+        if (mouseX < left || mouseX >= right || mouseY < top) {
+            return -1;
+        }
+        int row = (int) ((mouseY - top) / MISSION_ROW_HEIGHT);
+        int index = settlerOffset + row;
+        return row < ASSIGN_ROWS && index < rows ? index : -1;
     }
 
     private List<FormattedCharSequence> takenTooltip(JobBlockInfo.TakenMission entry) {
@@ -279,7 +436,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      * @return the index of the mission row under the mouse (offer entries first, then taken missions), {@code -1} if none
      */
     private int rowAt(double mouseX, double mouseY) {
-        if (menu.getActiveTab() != JobBlockMenu.TAB_MISSIONS) {
+        if (menu.getActiveTab() != JobBlockMenu.TAB_MISSIONS || assigning >= 0) {
             return -1;
         }
         int rows = menu.getInfo().missions().size() + menu.getInfo().taken().size();
@@ -296,7 +453,20 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        int index = event.button() == InputConstants.MOUSE_BUTTON_LEFT ? rowAt(event.x(), event.y()) : -1;
+        int settler = event.button() == InputConstants.MOUSE_BUTTON_LEFT ? settlerRowAt(event.x(), event.y()) : -1;
+        if (settler >= 0) {
+            minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+            assign(eligible().get(settler));
+            return true;
+        }
+        int row = rowAt(event.x(), event.y());
+        if (event.button() == InputConstants.MOUSE_BUTTON_RIGHT && row >= 0 && row < menu.getInfo().missions().size()
+                && menu.getInfo().missions().get(row).marked()) {
+            minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+            showAssignment(row);
+            return true;
+        }
+        int index = event.button() == InputConstants.MOUSE_BUTTON_LEFT ? row : -1;
         if (index >= 0 && index < menu.getInfo().missions().size()) {
             int button = JobBlockMenu.markButtonId(index, !menu.getInfo().missions().get(index).marked());
             menu.clickMenuButton(minecraft.player, button);
@@ -349,6 +519,11 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        int eligible = eligible().size();
+        if (menu.getActiveTab() == JobBlockMenu.TAB_MISSIONS && assigning >= 0) {
+            settlerOffset = Math.clamp(settlerOffset - (int) Math.signum(scrollY), 0, Math.max(0, eligible - ASSIGN_ROWS));
+            return true;
+        }
         int offered = menu.getInfo().missions().size() + menu.getInfo().taken().size();
         if (menu.getActiveTab() == JobBlockMenu.TAB_MISSIONS && offered > MISSION_ROWS) {
             missionOffset = Math.clamp(missionOffset - (int) Math.signum(scrollY), 0, offered - MISSION_ROWS);

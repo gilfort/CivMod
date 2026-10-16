@@ -1,16 +1,23 @@
 package com.gilfort.civmod.menu;
 
+import java.util.List;
+import java.util.Optional;
+
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.job.JobCategory;
 import com.gilfort.civmod.mission.MissionRules;
+import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.registry.ModMenuTypes;
 
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.MissionOffers;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
@@ -42,6 +49,12 @@ public class JobBlockMenu extends CivMenu {
     private static final int BUTTON_MARK_MISSION = 100;
     /** Upper bound (exclusive) of the mark button ids. */
     private static final int BUTTON_MARK_MISSION_END = BUTTON_MARK_MISSION + 2 * MissionRules.MAX_OFFER_SIZE;
+    /** Assign buttons per offer entry: unlock, then one per board settler. */
+    private static final int ASSIGN_SLOTS = 1 + SettlementRules.MAX_MISSION_BOARD_CAPACITY;
+    /** Button ids from here: assign or unlock a mission offer entry ({@link #assignButtonId}). */
+    private static final int BUTTON_ASSIGN_MISSION = BUTTON_MARK_MISSION_END;
+    /** Upper bound (exclusive) of the assign button ids. */
+    private static final int BUTTON_ASSIGN_MISSION_END = BUTTON_ASSIGN_MISSION + ASSIGN_SLOTS * MissionRules.MAX_OFFER_SIZE;
 
     private final Container container;
     private JobBlockInfo info;
@@ -99,6 +112,18 @@ public class JobBlockMenu extends CivMenu {
     }
 
     /**
+     * Assign buttons name the settler by its index in the snapshot the player sees
+     * ({@link JobBlockInfo.MissionTab#settlers()}); the server assigns the settler of its own snapshot at that index.
+     *
+     * @param index   a mission offer index
+     * @param settler the settler index in the board's settler list, {@code -1} to unlock the mission
+     * @return the menu button id that assigns or unlocks it
+     */
+    public static int assignButtonId(int index, int settler) {
+        return BUTTON_ASSIGN_MISSION + ASSIGN_SLOTS * index + settler + 1;
+    }
+
+    /**
      * @return the info snapshot
      */
     public JobBlockInfo getInfo() {
@@ -130,6 +155,9 @@ public class JobBlockMenu extends CivMenu {
             info = info.withMarked(index, marked);
             return true;
         }
+        if (buttonId >= BUTTON_ASSIGN_MISSION && buttonId < BUTTON_ASSIGN_MISSION_END) {
+            return assign((buttonId - BUTTON_ASSIGN_MISSION) / ASSIGN_SLOTS, (buttonId - BUTTON_ASSIGN_MISSION) % ASSIGN_SLOTS - 1);
+        }
         if (buttonId == BUTTON_TOGGLE_LEAVES) {
             info = info.withLeavesToggled();
             if (container instanceof JobBlockEntity jobBlock && jobBlock.getLevel() instanceof ServerLevel level) {
@@ -138,6 +166,28 @@ public class JobBlockMenu extends CivMenu {
             return true;
         }
         return super.clickMenuButton(player, buttonId);
+    }
+
+    /** Assigns an offer entry to a settler of the board ({@code settler} = index in the snapshot) or unlocks it ({@code -1}). */
+    private boolean assign(int index, int settler) {
+        List<JobBlockInfo.MissionSettler> settlers = info.missionTab().settlers();
+        if (index >= info.missions().size() || settler >= settlers.size()) {
+            return false;
+        }
+        Identifier mission = info.missions().get(index).mission();
+        Optional<JobBlockInfo.MissionSettler> chosen = settler < 0 ? Optional.empty() : Optional.of(settlers.get(settler));
+        if (container instanceof JobBlockEntity jobBlock && jobBlock.getLevel() instanceof ServerLevel level) {
+            SettlementData data = SettlementData.get(level);
+            BlockPos board = jobBlock.getBlockPos();
+            boolean changed = chosen.isPresent()
+                    ? MissionOffers.assign(data, board, index, mission, chosen.get().id(), chosen.get().job(), Missions.all(level.registryAccess()))
+                    : MissionOffers.unlock(data, board, index, mission);
+            if (!changed) {
+                return false;
+            }
+        }
+        info = info.withAssignee(index, chosen.map(JobBlockInfo.MissionSettler::id));
+        return true;
     }
 
     private boolean upgrade(Player player) {

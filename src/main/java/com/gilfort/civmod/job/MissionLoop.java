@@ -137,11 +137,12 @@ final class MissionLoop implements CategoryLoop {
     /**
      * A mission was picked for this settler: it is off the offer and reserved until the settler leaves.
      *
-     * @param board   the Mission Board
-     * @param mission the mission
+     * @param board    the Mission Board
+     * @param mission  the mission
+     * @param assigned whether the player assigned the mission to this settler
      */
-    void reserve(BlockPos board, Identifier mission) {
-        trip = new MissionTrip(board, mission, -1L);
+    void reserve(BlockPos board, Identifier mission, boolean assigned) {
+        trip = new MissionTrip(board, mission, -1L, Optional.empty(), assigned);
         shell.setStatus(board, JobStatus.WAITING_DEPARTURE);
     }
 
@@ -167,7 +168,7 @@ final class MissionLoop implements CategoryLoop {
             shell.setStatus(job.jobBlock(), JobStatus.IDLE);
             return false;
         }
-        trip = new MissionTrip(reserved.board(), reserved.mission(), MissionRules.returnTime(day, mission.get().days()));
+        trip = reserved.departing(MissionRules.returnTime(day, mission.get().days()));
         leaveTarget = null;
         return leave(level, job);
     }
@@ -218,9 +219,11 @@ final class MissionLoop implements CategoryLoop {
 
     @Override
     public void outranked(ServerLevel level, SettlerJob job, long day, long dayTime) {
-        // A higher priority has work at the start of the day: the reserved mission goes back to the board.
+        // A higher priority has work at the start of the day: the reserved mission goes back to the board (still
+        // assigned to this settler if the player assigned it).
         if (trip != null && !trip.departed() && dayTime < DEPARTURE_END) {
-            MissionOffers.giveBack(SettlementData.get(level), trip.board(), trip.mission());
+            MissionOffers.giveBack(SettlementData.get(level), trip.board(), trip.mission(),
+                    trip.assigned() ? Optional.of(settler.getUUID()) : Optional.empty(), trip.assigned());
             trip = null;
             shell.setStatus(job.jobBlock(), JobStatus.IDLE);
         }
@@ -402,7 +405,8 @@ final class MissionLoop implements CategoryLoop {
         if (current.departed()) {
             settler.setInvisible(false);
         } else if (settler.level() instanceof ServerLevel level) {
-            MissionOffers.giveBack(SettlementData.get(level), jobBlock, current.mission());
+            // The settler left the board: an assigned mission stays locked for the others.
+            MissionOffers.giveBack(SettlementData.get(level), jobBlock, current.mission(), Optional.empty(), current.assigned());
         }
     }
 }
