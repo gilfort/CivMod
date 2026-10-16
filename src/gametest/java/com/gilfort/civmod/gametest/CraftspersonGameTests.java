@@ -66,6 +66,7 @@ public final class CraftspersonGameTests {
             register(helper, "craftsperson_fallback", CraftspersonGameTests::fallback);
             register(helper, "craftsperson_claim_split", CraftspersonGameTests::claimSplit);
             register(helper, "craftsperson_delivery_fallback", CraftspersonGameTests::deliveryFallback);
+            register(helper, "craftsperson_live_round", CraftspersonGameTests::liveRound);
         });
     }
 
@@ -381,6 +382,46 @@ public final class CraftspersonGameTests {
         helper.assertTrue(settler.getWork().status(craft) == JobStatus.DROP_OFF_FULL, "Drop-off full: " + settler.getWork().status(craft));
         settler.discard();
         helper.succeed();
+    }
+
+    /**
+     * Live play: the Craftsperson walks to its inputs, crafts at the crafting table (swing, sound, result in the hand)
+     * and walks the result to the posting Clerk.
+     */
+    private static void liveRound(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        // Own floor: test places are spread over the world and the terrain below them varies.
+        for (int x = 0; x < 9; x++) {
+            for (int z = 0; z < 9; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+                for (int y = 1; y < 4; y++) {
+                    helper.setBlock(new BlockPos(x, y, z), Blocks.AIR);
+                }
+            }
+        }
+        // Entities only tick in forced chunks on the GameTest server.
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        BlockPos clerk = ClerkGameTests.clerkWithStorage(helper);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        BlockPos craft = craftsperson(helper, new BlockPos(1, 1, 5));
+        placeTable(helper, new BlockPos(4, 1, 6));
+        define(helper, craft, 0, Items.STICK);
+        ((Container) level.getBlockEntity(craft)).setItem(0, new ItemStack(Items.OAK_PLANKS, 2));
+        Request request = Requests.post(data, settlement, Items.STICK, 4, Optional.of(clerk), Optional.empty());
+        Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
+        // Skilled up to the cap of a level 1 JobBlock (a bigger JobBlock would reach into the neighbouring tests).
+        settler.getSkills().set(ModJobs.CRAFTSPERSON.get(), new com.gilfort.civmod.job.SettlerSkills.Skill(100, 0));
+        settler.setNoAi(false);
+        Container clerkSlots = (Container) level.getBlockEntity(clerk);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(clerkSlots.countItem(Items.STICK) == 4, "Sticks delivered to the Clerk; status " + settler.getWork().status(craft)
+                    + ", buffer " + settler.getWork().buffer(craft).stacks() + ", request " + Requests.get(settlement, request.id())
+                    + ", at " + helper.relativePos(settler.blockPosition()));
+            helper.assertTrue(Requests.get(settlement, request.id()).isEmpty(), "Request done");
+            settler.discard();
+            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+        });
     }
 
     private static Settler craftsperson(GameTestHelper helper, BlockPos craft, BlockPos relative, String name) {

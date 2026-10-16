@@ -44,6 +44,11 @@ public final class BenchmarkGameTests {
                 "All JobBlocks connected: " + settlement.connectedCount());
         helper.runAtTickTime(2380, () -> {
             CivProfiler.report().forEach(line -> CivMod.LOGGER.info("[benchmark] {}", line));
+            BlockPos clerk = origin.offset(-3, 0, 0);
+            int crafted = com.gilfort.civmod.logistics.ClerkStorage.stock(level, clerk, true)
+                    .count(stack -> stack.is(net.minecraft.world.item.Items.TORCH) || stack.is(net.minecraft.world.item.Items.STONE_PICKAXE));
+            CivMod.LOGGER.info("[benchmark] Craftspersons: {} item(s) delivered, {} request(s) claimed", crafted,
+                    settlement.requests().stream().filter(request -> !request.claims().isEmpty()).count());
             helper.succeed();
         });
     }
