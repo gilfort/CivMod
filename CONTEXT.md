@@ -13,7 +13,11 @@ The behaviour template a Job is built on (Resource Collection, Producing, Missio
 _Avoid_: Role, meta type, archetype
 
 **Settler Shell**:
-The part of a settler's behaviour shared by every Job Category (schedule, walking, food, sleep, job priorities, EXP, catch-up). Code: `SettlerWork`; it hands control to the `CategoryLoop` of the active Job's category (`ResourceCollectionLoop`, `MissionLoop`). Shared parts the loops use: the job's Workplace, delivery and EXP in the shell, the Work rules, tools in `SettlerTools`, `Fatigue`.
+The part of a settler's behaviour shared by every Job Category (acting on the Schedule, walking, food, sleep, job priorities, EXP, catch-up). Code: `SettlerWork`; it hands control to the `CategoryLoop` of the active Job's category (`ResourceCollectionLoop`, `MissionLoop`). Shared parts the loops use: the job's Workplace, delivery and EXP in the shell, the Work rules, tools in `SettlerTools`, `Fatigue`.
+
+**Schedule (intent)**:
+The settler's daily rules (sleep and wake, skipped night, morning plan, hunger, evening delivery and meal, rest, bed at 20:00, homeless, foraging) as one pure decision: a snapshot of plain values (time, day, food level, provisions, pantry food, homeless, sleeping, foraging, night skipped, current activity, per-day marks) goes in, an intent comes out (sleep, wake, eat from pockets, fetch food with a purpose, forage, deliver, go to bed, rest, work a job, idle; complaining is a flag). It never touches the world; the Settler Shell builds the snapshot every decision and acts on the intent. Code: `Schedule` (`wakeUp`, `next`, `Schedule.Snapshot`, `Schedule.Intent`, `Schedule.Decision`, `Schedule.morningPlan`), acted on in `SettlerWork.decide`.
+_Avoid_: Daily routine, AI tree; putting schedule rules into movement code
 
 **Workplace**:
 Everything a settler keeps for one job at its JobBlock: the buffer, the status shown in the job tab, the blocked-until time, the work place of the day, the scan (requested, scanning, ready, rescanned per day or per centre / radius change) and the fractional production of the Work rules. One per JobBlock the settler works for; forgetting the job drops it whole (the buffer is dropped at the settler). Code: `Workplace`, held by `SettlerWork` (`workplace(jobBlock)`), saved through `SettlerWork.BuffersSnapshot`.

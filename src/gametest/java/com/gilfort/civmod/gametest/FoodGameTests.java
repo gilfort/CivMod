@@ -7,7 +7,7 @@ import java.util.function.Consumer;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.food.Pantries;
 import com.gilfort.civmod.food.SettlerFood;
-import com.gilfort.civmod.job.SettlerWork;
+import com.gilfort.civmod.job.Schedule;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModEntityTypes;
@@ -136,11 +136,11 @@ public final class FoodGameTests {
 
     /** Morning: forage when hungry without any food, fetch provisions when short, otherwise work. */
     private static void morningPlan(GameTestHelper helper) {
-        helper.assertTrue(SettlerWork.morningPlan(5, 0, 6, false) == SettlerWork.MorningPlan.FORAGE, "Hungry, no food anywhere");
-        helper.assertTrue(SettlerWork.morningPlan(5, 3, 6, false) == SettlerWork.MorningPlan.WORK, "Hungry but has provisions");
-        helper.assertTrue(SettlerWork.morningPlan(20, 0, 6, true) == SettlerWork.MorningPlan.FETCH_PROVISIONS, "Short of provisions");
-        helper.assertTrue(SettlerWork.morningPlan(20, 10, 6, true) == SettlerWork.MorningPlan.WORK, "Enough provisions");
-        helper.assertTrue(SettlerWork.morningPlan(20, 0, 6, false) == SettlerWork.MorningPlan.WORK, "Not hungry, no pantry: work");
+        helper.assertTrue(Schedule.morningPlan(5, 0, 6, false) == Schedule.MorningPlan.FORAGE, "Hungry, no food anywhere");
+        helper.assertTrue(Schedule.morningPlan(5, 3, 6, false) == Schedule.MorningPlan.WORK, "Hungry but has provisions");
+        helper.assertTrue(Schedule.morningPlan(20, 0, 6, true) == Schedule.MorningPlan.FETCH_PROVISIONS, "Short of provisions");
+        helper.assertTrue(Schedule.morningPlan(20, 10, 6, true) == Schedule.MorningPlan.WORK, "Enough provisions");
+        helper.assertTrue(Schedule.morningPlan(20, 0, 6, false) == Schedule.MorningPlan.WORK, "Not hungry, no pantry: work");
         helper.succeed();
     }
 
