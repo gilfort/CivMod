@@ -12,6 +12,8 @@ import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.mission.MissionOffer;
+import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.npc.Settler;
 
 import net.minecraft.core.BlockPos;
@@ -118,6 +120,19 @@ public final class SettlementWorld {
      */
     public static void setLevel(ServerLevel level, BlockPos pos, int jobLevel) {
         SettlementManager.setLevel(SettlementData.get(level), pos, jobLevel, listener(level));
+    }
+
+    /**
+     * The current mission offer of a Mission Board, refilled on the first access of a settler day (the day starts at
+     * 06:00 overworld time, like the settler schedule).
+     *
+     * @param level the dimension
+     * @param board the Mission Board position
+     * @return the offer, empty if there is no Mission Board at that position
+     */
+    public static List<MissionOffer.Entry> missionOffer(ServerLevel level, BlockPos board) {
+        long day = Math.floorDiv(level.getOverworldClockTime(), 24000L);
+        return MissionOffers.refresh(SettlementData.get(level), board, day, Missions.all(level.registryAccess()), level.getRandom());
     }
 
     @SubscribeEvent

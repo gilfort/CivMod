@@ -1,0 +1,12 @@
+{
+  "title": { "translate": "mission.civmod.abandoned_mineshaft" },
+  "description": { "translate": "mission.civmod.abandoned_mineshaft.description" },
+  "icon": "minecraft:rail",
+  "loot_tables": ["minecraft:chests/abandoned_mineshaft"],
+  "days": 2,
+  "recommended_level": 20,
+  "rolls": 2,
+  "jobs": ["civmod:adventurer"],
+  "weight": 2,
+  "max_per_offer": 6
+}

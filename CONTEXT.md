@@ -32,5 +32,9 @@ The block that offers a Base Job (and its Specializations) to one settler. Code:
 The JobBlock of all Mission Jobs; holds several settlers and the list of selected Missions. Code: `ModBlocks.MISSION_BOARD` (a `JobBlock` offering the Adventurer), capacity in `SettlementRules.capacity`, settlers in `SettlementBlock.assignees()`; a settler's Mission Job is set with `SettlerJobs.withMissionJob`.
 
 **Mission**:
-A datapack-defined task a Mission Job settler leaves the settlement for (duration, difficulty, loot). Code: not yet built.
+A datapack-defined task a Mission Job settler leaves the settlement for (duration, difficulty, loot). Code: `Mission` in the `civmod:mission` datapack registry (`Missions`, files in `data/<namespace>/civmod/mission/`); arithmetic in `MissionRules`.
 _Avoid_: Quest, expedition
+
+**Mission Offer**:
+The missions a Mission Board offers today; the player marks the ones to be done. Code: `MissionOffer` (entries + refill day) in `SettlementBlock.missionOffer()`, refilled and marked through `MissionOffers`.
+_Avoid_: Quest list, mission pool (the pool is all missions)

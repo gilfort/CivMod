@@ -1,0 +1,17 @@
+{
+  "title": { "translate": "mission.civmod.village_heist" },
+  "description": { "translate": "mission.civmod.village_heist.description" },
+  "icon": "minecraft:bell",
+  "loot_tables": [
+    "minecraft:chests/village/village_weaponsmith",
+    "minecraft:chests/village/village_toolsmith",
+    "minecraft:chests/village/village_armorer",
+    "minecraft:chests/village/village_butcher"
+  ],
+  "days": 1,
+  "recommended_level": 5,
+  "rolls": 3,
+  "jobs": ["civmod:adventurer"],
+  "weight": 3,
+  "max_per_offer": 8
+}
