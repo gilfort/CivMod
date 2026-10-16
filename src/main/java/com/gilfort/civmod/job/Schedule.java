@@ -88,11 +88,12 @@ public final class Schedule {
      * @param morningHandled   whether the morning plan was made today
      * @param eveningMealEaten whether the evening meal was handled today
      * @param deliveryPending  whether a job has items to deliver to a drop-off that is not full
+     * @param workEnd          the day time the settler's work ends ({@link SettlerWork#WORK_END}, a Clerk later)
      */
     public record Snapshot(long day, long dayTime, int food, int provisions, int provisionsWanted, boolean pocketMeal,
             BooleanSupplier foodPoint, boolean homeless, boolean sleeping, long forageDay, boolean nightSkipped,
             Activity activity, BooleanSupplier jobStepHolds, boolean morningHandled, boolean eveningMealEaten,
-            boolean deliveryPending) {
+            boolean deliveryPending, long workEnd) {
 
         /**
          * @return whether the settler is foraging (today, or still from an earlier day)
@@ -155,7 +156,7 @@ public final class Schedule {
             boolean hungry = snapshot.food() < SettlerFood.HUNGRY;
             return day(hungry && snapshot.pocketMeal() ? Intent.EAT_FROM_POCKETS : Intent.IDLE, null, hungry && !snapshot.pocketMeal(), false);
         }
-        if (snapshot.dayTime() >= SettlerWork.WORK_END) {
+        if (snapshot.dayTime() >= snapshot.workEnd()) {
             return afterWork(snapshot);
         }
         boolean morning = !snapshot.morningHandled();

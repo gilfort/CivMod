@@ -44,6 +44,8 @@ public final class ClerkStorage {
     public static final double COUNTER_REACH = 3.0;
     /** Reach when walking to a closed Clerk JobBlock (its own slots), as for any container. */
     private static final double BLOCK_REACH = 2.5;
+    /** Service time at skill level 1 (2 s). */
+    private static final double SERVICE_TICKS = 40.0;
 
     private ClerkStorage() {
     }
@@ -81,6 +83,17 @@ public final class ClerkStorage {
      */
     public static boolean inShift(long dayTime) {
         return dayTime >= 0 && dayTime < SHIFT_END;
+    }
+
+    /**
+     * Service time at the counter: 2 s at skill level 1 down to 1 s at level 100, on the exponential curve of the work
+     * speed with half its gain.
+     *
+     * @param skillLevel the Clerk's skill level
+     * @return ticks per customer
+     */
+    public static int serviceTicks(int skillLevel) {
+        return (int) Math.round(SERVICE_TICKS / Math.pow(2.0, (Math.clamp(skillLevel, 1, 100) - 1) / 99.0));
     }
 
     /**

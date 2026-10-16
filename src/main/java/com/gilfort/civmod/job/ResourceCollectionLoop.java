@@ -7,6 +7,7 @@ import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobBlockSite;
@@ -151,9 +152,16 @@ final class ResourceCollectionLoop implements CategoryLoop {
                 Optional<JobProfile> profile = job.jobType().profile();
                 Optional<JobBlockSite> site = JobBlockSite.at(level, jobBlock);
                 if (profile.isPresent() && site.isPresent()) {
-                    long dayTime = Math.floorMod(level.getOverworldClockTime(), 24000L);
+                    BlockPos collect = site.get().collect();
                     boolean counter = toolVisit != null && toolVisit.counter();
-                    WorkRules.refill(settler, profile.get(), site.get(), ClerkStorage.stock(level, site.get().collect(), dayTime, counter));
+                    if (counter && !shell.waitAtCounter(level, collect)) {
+                        // Waiting for the Clerk.
+                        return;
+                    }
+                    Stock stock = ClerkStorage.stock(level, collect, Math.floorMod(level.getOverworldClockTime(), 24000L), counter);
+                    if (WorkRules.refill(settler, profile.get(), site.get(), stock) && stock.counter()) {
+                        ClerkCounter.handOut(level, collect, true);
+                    }
                 }
                 toolVisit = null;
                 shell.stepDone(level);
@@ -236,7 +244,8 @@ final class ResourceCollectionLoop implements CategoryLoop {
         }
         JobBlockSite site = found.get();
         WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site, workplace, poi, workTicks,
-                WorkRules.ToolSupply.beltAnd(ClerkStorage.stock(level, site.collect(), shell.catchUpDayTime(), true)), new BufferOutput(workplace.buffer(), stacks -> shell.deliverDirect(level, site, stacks)));
+                WorkRules.ToolSupply.beltAnd(ClerkStorage.stock(level, site.collect(), shell.catchUpDayTime(), true),
+                        () -> ClerkCounter.handOut(level, site.collect(), false)), new BufferOutput(workplace.buffer(), stacks -> shell.deliverDirect(level, site, stacks)));
         if (result.end() == WorkRules.End.NONE) {
             return new SimulatedWork(result.rolls(), 0.0);
         }

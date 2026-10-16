@@ -14,6 +14,8 @@ public enum JobStatus {
     IDLE("idle"),
     /** Walking to or working at the work place. */
     WORKING("working"),
+    /** A Clerk standing at its counter. */
+    SERVING("serving"),
     /** Fetching a tool. */
     FETCHING_TOOL("fetching_tool"),
     /** Delivering the buffer. */

@@ -32,19 +32,21 @@ final class WorkRules {
     /**
      * Where tools come from during a batch: the belt, and in catch-up also the collect inventory.
      *
-     * @param collect what the settler reaches at its collect inventory, if missing tools are refilled from it
+     * @param collect   what the settler reaches at its collect inventory, if missing tools are refilled from it
+     * @param handedOut called when a working Clerk handed out a tool from its counter
      */
-    record ToolSupply(Optional<Stock> collect) {
+    record ToolSupply(Optional<Stock> collect, Runnable handedOut) {
 
         /** Only the belt: live play, where the settler walks to the collect inventory itself. */
-        static final ToolSupply BELT = new ToolSupply(Optional.empty());
+        static final ToolSupply BELT = new ToolSupply(Optional.empty(), () -> { });
 
         /**
-         * @param collect what the settler reaches at its collect inventory
+         * @param collect   what the settler reaches at its collect inventory
+         * @param handedOut called when a working Clerk handed out a tool from its counter
          * @return the belt, refilled from the collect inventory when a tool is missing: catch-up
          */
-        static ToolSupply beltAnd(Stock collect) {
-            return new ToolSupply(Optional.of(collect));
+        static ToolSupply beltAnd(Stock collect, Runnable handedOut) {
+            return new ToolSupply(Optional.of(collect), handedOut);
         }
     }
 
@@ -181,7 +183,9 @@ final class WorkRules {
     private static Optional<ItemStack> tool(ServerLevel level, Settler settler, JobProfile profile, JobBlockSite site, ToolSupply supply) {
         Optional<ItemStack> tool = SettlerTools.best(settler, profile::isTool);
         if (tool.isEmpty() && supply.collect().isPresent()) {
-            refill(settler, profile, site, supply.collect().get());
+            if (refill(settler, profile, site, supply.collect().get()) && supply.collect().get().counter()) {
+                supply.handedOut().run();
+            }
             tool = SettlerTools.best(settler, profile::isTool);
         }
         return tool;

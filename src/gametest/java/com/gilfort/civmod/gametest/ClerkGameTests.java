@@ -6,9 +6,14 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.job.Schedule;
+import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.registry.ModBlocks;
@@ -30,6 +35,8 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -63,6 +70,8 @@ public final class ClerkGameTests {
             register(helper, "clerk_spot_of_day", ClerkGameTests::spotOfDay);
             register(helper, "clerk_food_points", ClerkGameTests::foodPoints);
             register(helper, "clerk_as_drop_off", ClerkGameTests::asDropOff);
+            register(helper, "clerk_catch_up_food", ClerkGameTests::catchUpFood);
+            register(helper, "clerk_shift", ClerkGameTests::shift);
         });
     }
 
@@ -292,6 +301,86 @@ public final class ClerkGameTests {
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
             helper.succeed();
         });
+    }
+
+    /**
+     * Catch-up: a hungry settler takes food straight from the linked storage while the Clerk is on shift, and every
+     * hand-out gives the Clerk EXP; without a Clerk settler the linked storage stays closed and the settler forages.
+     */
+    private static void catchUpFood(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerkPos = clerkWithStorage(helper);
+        Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
+        chest.setItem(0, new ItemStack(Items.BREAD, 32));
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerkPos).orElseThrow();
+        Settler customer = settler(helper, new BlockPos(2, 1, 3), data, settlement);
+        Settler clerk = settler(helper, new BlockPos(3, 1, 3), data, settlement);
+        JobAssignments.assign(data, clerkPos, clerk.getUUID(), "Clerk", settlement.id(), List.of());
+        clerk.addJob(new SettlerJob(ModJobs.CLERK.get(), clerkPos));
+        customer.getFood().setLevel(4);
+        customer.getFood().setSaturation(0.0F);
+        long dayStart = Math.floorDiv(level.getOverworldClockTime(), 24000L) * 24000L;
+
+        customer.getWork().setCatchUp(dayStart - 24000L, dayStart);
+        CatchUp.runNow(level, List.of(customer));
+        int bread = chest.getItem(0).getCount();
+        helper.assertTrue(bread < 32, "Food taken from the linked storage, bread left " + bread);
+        helper.assertFalse(customer.getFood().isForaging(), "Fed, no foraging");
+        int exp = clerk.getSkills().get(ModJobs.CLERK.get()).exp() + 1000 * clerk.getSkills().get(ModJobs.CLERK.get()).level();
+        helper.assertTrue(exp > 1000, "Hand-outs give the Clerk EXP: " + clerk.getSkills().get(ModJobs.CLERK.get()));
+
+        JobAssignments.unassign(data, clerkPos);
+        clerk.removeJob(clerkPos);
+        customer.getFood().setLevel(4);
+        customer.getFood().setSaturation(0.0F);
+        for (int i = Settler.POCKETS_START; i < Settler.POCKETS_START + Settler.POCKETS_SIZE; i++) {
+            customer.getInventory().setItem(i, ItemStack.EMPTY);
+        }
+        customer.getWork().setCatchUp(dayStart - 24000L, dayStart);
+        CatchUp.runNow(level, List.of(customer));
+        helper.assertTrue(chest.getItem(0).getCount() == bread, "No Clerk settler: the linked storage stays closed");
+        customer.discard();
+        clerk.discard();
+        helper.succeed();
+    }
+
+    /** The Clerk works until 18:30, others until 17:30; service time 2 s at level 1 down to 1 s at level 100. */
+    private static void shift(GameTestHelper helper) {
+        long sixPm = 12000L;
+        helper.assertTrue(Schedule.next(snapshot(sixPm, ClerkStorage.SHIFT_END)).intent() == Schedule.Intent.WORK, "18:00: the Clerk works");
+        helper.assertTrue(Schedule.next(snapshot(sixPm, SettlerWork.WORK_END)).afterWork(), "18:00: others are off");
+        helper.assertTrue(Schedule.next(snapshot(ClerkStorage.SHIFT_END, ClerkStorage.SHIFT_END)).afterWork(), "18:30: the Clerk is off");
+        helper.assertTrue(ClerkStorage.serviceTicks(1) == 40 && ClerkStorage.serviceTicks(100) == 20,
+                "Service 40 → 20 ticks: " + ClerkStorage.serviceTicks(1) + ", " + ClerkStorage.serviceTicks(100));
+        helper.assertTrue(ClerkStorage.serviceTicks(50) > 20 && ClerkStorage.serviceTicks(50) < 40, "Faster with skill");
+
+        Settler clerk = ModEntityTypes.SETTLER.get().create(helper.getLevel(), EntitySpawnReason.EVENT);
+        helper.assertTrue(clerk.getWork().workEnd() == SettlerWork.WORK_END, "Without the Clerk job: 17:30");
+        clerk.addJob(new SettlerJob(ModJobs.CLERK.get(), helper.absolutePos(new BlockPos(1, 1, 1))));
+        helper.assertTrue(clerk.getWork().workEnd() == ClerkStorage.SHIFT_END, "With the Clerk job: 18:30");
+        clerk.discard();
+        helper.succeed();
+    }
+
+    private static Schedule.Snapshot snapshot(long dayTime, long workEnd) {
+        return new Schedule.Snapshot(3L, dayTime, 20, 10, 6, true, () -> true, false, false, SettlerFood.NO_DAY, false,
+                Schedule.Activity.IDLE, () -> false, true, false, false, workEnd);
+    }
+
+    private static Settler settler(GameTestHelper helper, BlockPos relative, SettlementData data, Settlement settlement) {
+        ServerLevel level = helper.getLevel();
+        Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
+        Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(relative));
+        settler.snapTo(spawn.x, spawn.y, spawn.z, 0.0F, 0.0F);
+        settler.setNoAi(true);
+        level.addFreshEntity(settler);
+        settler.joinSettlement(data, settlement);
+        for (int i = Settler.POCKETS_START; i < Settler.POCKETS_START + Settler.POCKETS_SIZE; i++) {
+            settler.getInventory().setItem(i, ItemStack.EMPTY);
+        }
+        settler.getFood().setAppetite(1.0F);
+        return settler;
     }
 
     private static int logs(Container container) {

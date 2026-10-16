@@ -10,6 +10,7 @@ import com.gilfort.civmod.job.Schedule.Activity;
 import com.gilfort.civmod.job.Schedule.Decision;
 import com.gilfort.civmod.job.Schedule.Intent;
 import com.gilfort.civmod.job.Schedule.MealPurpose;
+import com.gilfort.civmod.job.SettlerWork;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -92,13 +93,14 @@ public final class ScheduleRulesGameTests {
         boolean eveningMealEaten;
         boolean deliveryPending;
         int foodPointAsked;
+        long workEnd = SettlerWork.WORK_END;
 
         Schedule.Snapshot snapshot() {
             return new Schedule.Snapshot(3L, dayTime, food, provisions, 6, pocketMeal, () -> {
                 foodPointAsked++;
                 return foodPoint;
             }, homeless, sleeping, forageDay, nightSkipped, activity, () -> jobStepHolds, morningHandled, eveningMealEaten,
-                    deliveryPending);
+                    deliveryPending, workEnd);
         }
 
         Optional<Intent> wakeUp() {
