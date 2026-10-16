@@ -2,7 +2,7 @@
   "type": "minecraft:function",
   "environment": "minecraft:default",
   "function": "civmod:mission_catch_up",
-  "max_ticks": 1200,
+  "max_ticks": 2400,
   "structure": "minecraft:empty",
   "padding": 40
 }

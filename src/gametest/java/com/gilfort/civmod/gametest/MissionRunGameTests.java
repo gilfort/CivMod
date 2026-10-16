@@ -271,8 +271,9 @@ public final class MissionRunGameTests {
     }
 
     /**
-     * The settler takes the marked mission (it leaves the offer), leaves in the morning, is away (invisible, not
-     * pickable, AI skipped) and returns at the return time with loot in the board inventory and EXP.
+     * The settler takes the marked mission (it leaves the offer), leaves in the morning by walking out visibly, then is
+     * away (invisible, not pickable, AI skipped) and reappears where it vanished at the return time, with loot that it
+     * delivers to the board inventory and EXP.
      */
     private static void fullCycle(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -284,7 +285,13 @@ public final class MissionRunGameTests {
         Mission mission = Missions.get(level.registryAccess(), marked).orElseThrow();
         int[] expBefore = new int[1];
         boolean[] returned = new boolean[1];
+        boolean[] walkedOut = new boolean[1];
         helper.onEachTick(() -> {
+            Optional<MissionTrip> leaving = settler.getWork().missionTrip().filter(trip -> trip.departed() && !trip.gone());
+            if (leaving.isPresent()) {
+                helper.assertFalse(settler.isInvisible(), "Visible while walking out");
+                walkedOut[0] = true;
+            }
             if (!returned[0] && settler.getWork().isAway()) {
                 MissionTrip trip = settler.getWork().missionTrip().orElseThrow();
                 helper.assertTrue(trip.mission().equals(marked) && trip.board().equals(board), "Away on the marked mission: " + trip);
@@ -300,11 +307,12 @@ public final class MissionRunGameTests {
                 helper.assertTrue(settler.getWork().returnFromMission(level, trip.returnTime()), "Back at the return time");
                 returned[0] = true;
                 helper.assertFalse(settler.isInvisible() || settler.getWork().isAway(), "Visible again");
-                helper.assertTrue(settler.distanceToSqr(Vec3.atCenterOf(board)) < 16.0, "Back at the board");
+                helper.assertTrue(settler.blockPosition().equals(trip.exit().orElseThrow()), "Reappears where it vanished");
                 assertRewards(helper, mission, expBefore[0], exp(settler), settler.getWork().buffer(board).count());
             }
         });
         helper.succeedWhen(() -> {
+            helper.assertTrue(walkedOut[0], "The settler should walk out before vanishing");
             helper.assertTrue(returned[0], "The settler should leave on the mission");
             Container container = (Container) level.getBlockEntity(board);
             JobBuffer buffer = settler.getWork().buffer(board);
@@ -354,7 +362,8 @@ public final class MissionRunGameTests {
 
     /** A reserved or current mission survives saving; a restored absent settler is away again. */
     private static void persistence(GameTestHelper helper) {
-        MissionTrip trip = new MissionTrip(new BlockPos(1, 2, 3), CivMod.id("dungeon_raid"), 5 * DAY + SettlerWork.WORK_END);
+        MissionTrip trip = new MissionTrip(new BlockPos(1, 2, 3), CivMod.id("dungeon_raid"), 5 * DAY + SettlerWork.WORK_END)
+                .withExit(new BlockPos(30, 2, 3));
         SettlerWork.BuffersSnapshot snapshot = new SettlerWork.BuffersSnapshot(List.of(), List.of(), List.of(), SettlerWork.CatchUpState.NONE,
                 Optional.of(trip));
         var ops = helper.getLevel().registryAccess().createSerializationContext(JsonOps.INSTANCE);

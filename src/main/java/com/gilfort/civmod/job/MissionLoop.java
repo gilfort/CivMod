@@ -28,13 +28,13 @@ import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.LootTable;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
-import net.minecraft.world.phys.Vec3;
 
 /**
  * Work loop of the Mission Job Category (vault {@code Systems/Mission Jobs.md}). A settler whose Mission Job gets its
  * turn asks its board for a mission ({@link MissionPicks}); a reserved mission is taken off the offer and the settler
- * leaves at the start of the workday, is away (invisible, no AI, no hunger) until the mission's return time and comes
- * back in the evening with loot in the job's buffer and EXP – also during catch-up.
+ * leaves at the start of the workday: it walks out of the settlement (like a foraging settler) and vanishes at the
+ * border or after {@value #LEAVE_WALK_TICKS} ticks, is away (invisible, no AI, no hunger) until the mission's return
+ * time and reappears where it vanished in the evening, with loot in the job's buffer and EXP – also during catch-up.
  * <p>
  * Death on a mission is not implemented yet: its chance counts as failure.
  */
@@ -44,10 +44,15 @@ final class MissionLoop implements CategoryLoop {
     static final long DEPARTURE_END = 4000L;
     /** Players within this distance hear about a return. */
     private static final double RETURN_RANGE = 32.0;
+    /** Ticks a departing settler walks out before it vanishes. */
+    static final int LEAVE_WALK_TICKS = 600;
 
     private final SettlerWork shell;
     private final Settler settler;
     private @Nullable MissionTrip trip;
+    /** Where a departing settler walks to (not saved: recomputed after loading). */
+    private @Nullable BlockPos leaveTarget;
+    private long leaveStart;
 
     /**
      * @param shell the Settler Shell driving this loop
@@ -58,10 +63,17 @@ final class MissionLoop implements CategoryLoop {
     }
 
     /**
-     * @return whether the settler is away on a mission
+     * @return whether the settler is away on a mission (vanished outside the settlement)
      */
     boolean isAway() {
-        return trip != null && trip.away();
+        return trip != null && trip.gone();
+    }
+
+    /**
+     * @return whether the settler has left for a mission (walking out or away)
+     */
+    boolean departed() {
+        return trip != null && trip.departed();
     }
 
     /**
@@ -90,6 +102,9 @@ final class MissionLoop implements CategoryLoop {
     @Override
     public boolean plan(ServerLevel level, SettlerJob job, SettlementBlock block, long day, long dayTime) {
         BlockPos board = job.jobBlock();
+        if (departed()) {
+            return leave(level, job);
+        }
         if (!shell.buffer(board).isEmpty()) {
             return shell.startDelivery(level, job);
         }
@@ -142,15 +157,40 @@ final class MissionLoop implements CategoryLoop {
             return false;
         }
         trip = new MissionTrip(reserved.board(), reserved.mission(), MissionRules.returnTime(day, mission.get().days()));
-        settler.setInvisible(true);
+        leaveTarget = null;
+        return leave(level, job);
+    }
+
+    /** Walks out of the settlement (the shell's anti-stuck teleport keeps it going). */
+    private boolean leave(ServerLevel level, SettlerJob job) {
+        if (leaveTarget == null) {
+            leaveTarget = shell.outsideTarget(level);
+            leaveStart = level.getGameTime();
+        }
+        shell.setActiveJob(job);
+        if (!shell.walkingTo(leaveTarget)) {
+            shell.moveToJob(level, leaveTarget);
+        }
         shell.setStatus(job.jobBlock(), JobStatus.ON_MISSION);
         return true;
+    }
+
+    /** Vanishes outside the settlement: from now on the settler is away. */
+    private void vanish(SettlerJob job) {
+        MissionTrip current = trip;
+        if (current == null) {
+            return;
+        }
+        trip = current.withExit(settler.blockPosition());
+        leaveTarget = null;
+        settler.setInvisible(true);
+        shell.idleWith(job);
     }
 
     @Override
     public void outranked(ServerLevel level, SettlerJob job, long day, long dayTime) {
         // A higher priority has work at the start of the day: the reserved mission goes back to the board.
-        if (trip != null && !trip.away() && dayTime < DEPARTURE_END) {
+        if (trip != null && !trip.departed() && dayTime < DEPARTURE_END) {
             MissionOffers.giveBack(SettlementData.get(level), trip.board(), trip.mission());
             trip = null;
             shell.setStatus(job.jobBlock(), JobStatus.IDLE);
@@ -158,9 +198,9 @@ final class MissionLoop implements CategoryLoop {
     }
 
     /**
-     * Ends the mission once its return time has passed: the settler is back at the board, rolls the outcome, puts the
-     * loot into the job's buffer (catch-up: straight into the drop-off) and gains EXP. A settler whose Mission Job is its
-     * top priority right away asks for its next mission.
+     * Ends the mission once its return time has passed: the settler reappears where it vanished, rolls the outcome,
+     * puts the loot into the job's buffer (catch-up: straight into the drop-off) and gains EXP; it then walks back to
+     * deliver. A settler whose Mission Job is its top priority right away asks for its next mission.
      *
      * @param level   the level
      * @param clock   the world time
@@ -169,16 +209,13 @@ final class MissionLoop implements CategoryLoop {
      */
     boolean returnIfDue(ServerLevel level, long clock, boolean catchUp) {
         MissionTrip ended = trip;
-        if (ended == null || !ended.away() || clock < ended.returnTime()) {
+        if (ended == null || !ended.departed() || clock < ended.returnTime()) {
             return false;
         }
         trip = null;
+        leaveTarget = null;
         settler.setInvisible(false);
         BlockPos board = ended.board();
-        if (level.isLoaded(board)) {
-            Vec3 spot = SettlerWork.standingSpot(level, board);
-            settler.teleportTo(spot.x, spot.y, spot.z);
-        }
         Optional<SettlerJob> job = missionJob(settler, board);
         Optional<SettlementBlock> block = SettlementData.get(level).settlementAt(board).flatMap(s -> s.block(board));
         Optional<Mission> mission = Missions.get(level.registryAccess(), ended.mission());
@@ -252,18 +289,29 @@ final class MissionLoop implements CategoryLoop {
         }
         Component title = Missions.get(level.registryAccess(), trip.mission()).map(Mission::title)
                 .orElseGet(() -> Component.literal(trip.mission().toString()));
-        return Optional.of(trip.away() ? Component.translatable("civmod.settler.status.on_mission", title)
+        return Optional.of(trip.departed() ? Component.translatable("civmod.settler.status.on_mission", title)
                 : Component.translatable("civmod.settler.status.mission_reserved", title));
     }
 
+    /**
+     * Walking out holds every decision (also the evening) until the settler vanishes.
+     */
     @Override
     public boolean holdsDecision(ServerLevel level, SettlerJob job) {
-        return false;
+        if (!departed() || isAway()) {
+            return false;
+        }
+        if (leaveTarget == null || level.getGameTime() - leaveStart >= LEAVE_WALK_TICKS) {
+            vanish(job);
+        }
+        return true;
     }
 
     @Override
     public void tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
-        // Missions have no steps in the settlement.
+        if (departed() && !isAway()) {
+            vanish(job);
+        }
     }
 
     @Override
@@ -275,7 +323,7 @@ final class MissionLoop implements CategoryLoop {
 
     @Override
     public boolean catchUpReady(ServerLevel level, SettlerJob job, SettlementBlock block, long day, long dayTime) {
-        if (trip == null || !trip.away() || trip.returnTime() > shell.catchUpTo()) {
+        if (trip == null || !trip.departed() || trip.returnTime() > shell.catchUpTo()) {
             return true;
         }
         // The return is caught up: the loot is delivered to the drop-off.
@@ -302,7 +350,8 @@ final class MissionLoop implements CategoryLoop {
             return;
         }
         trip = null;
-        if (current.away()) {
+        leaveTarget = null;
+        if (current.departed()) {
             settler.setInvisible(false);
         } else if (settler.level() instanceof ServerLevel level) {
             MissionOffers.giveBack(SettlementData.get(level), jobBlock, current.mission());

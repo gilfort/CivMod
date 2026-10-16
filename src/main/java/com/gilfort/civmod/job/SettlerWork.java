@@ -1009,8 +1009,8 @@ public final class SettlerWork {
         }
         // Progress is saved: a settler unloaded during the run continues later instead of repeating hours.
         catchUpFrom = Math.max(catchUpFrom, to);
-        if (missions.isAway() && !missions.returnIfDue(level, to, true)) {
-            // Away all hour: no hunger, no work.
+        if (missions.departed() && !missions.returnIfDue(level, to, true)) {
+            // On the mission all hour: no hunger, no work.
             return 0;
         }
         long awake = to - from;
@@ -1427,7 +1427,7 @@ public final class SettlerWork {
         stop();
         settler.getFood().startForaging(day);
         forageStart = level.getGameTime();
-        moveTo(level, Activity.FORAGE, foragingTarget(level));
+        moveTo(level, Activity.FORAGE, outsideTarget(level));
     }
 
     /**
@@ -1451,7 +1451,7 @@ public final class SettlerWork {
         }
         if (activity != Activity.FORAGE || target == null) {
             forageStart = level.getGameTime();
-            moveTo(level, Activity.FORAGE, foragingTarget(level));
+            moveTo(level, Activity.FORAGE, outsideTarget(level));
         }
         checkStuck(level);
         if (isAtTarget() || level.getGameTime() - forageStart >= FORAGE_WALK_TICKS) {
@@ -1462,7 +1462,11 @@ public final class SettlerWork {
         }
     }
 
-    private BlockPos foragingTarget(ServerLevel level) {
+    /**
+     * @param level the level
+     * @return a spot just outside the settlement, away from its anchor (foraging, leaving for a mission)
+     */
+    BlockPos outsideTarget(ServerLevel level) {
         Optional<SettlementBlock> anchor = SettlementData.get(level).settlement(settler.getSettlementId()).flatMap(s -> s.anchor());
         if (anchor.isEmpty()) {
             return settler.blockPosition();

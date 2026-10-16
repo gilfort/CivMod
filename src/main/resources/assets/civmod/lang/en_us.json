@@ -191,6 +191,8 @@
   "civmod.gui.settler.mission.offered": "Offered by the board:",
   "civmod.gui.settler.mission.no_mission": "No mission taken",
   "civmod.gui.job_block.settler_mission": "%s – %s",
+  "civmod.gui.mission.taken.reserved": "%s took this mission",
+  "civmod.gui.mission.taken.departed": "%s took this mission and is on the way",
   "civmod.job.status.no_mission": "No fitting mission",
   "civmod.job.status.waiting_departure": "Waiting for departure",
   "civmod.job.status.on_mission": "On a mission",
