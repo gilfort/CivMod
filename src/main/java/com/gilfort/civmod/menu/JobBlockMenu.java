@@ -2,9 +2,11 @@ package com.gilfort.civmod.menu;
 
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.registry.ModMenuTypes;
 
 import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.settlement.MissionOffers;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
@@ -36,6 +38,10 @@ public class JobBlockMenu extends CivMenu {
     public static final int BUTTON_TOGGLE_LEAVES = 51;
     /** Button id: upgrade to the next level. */
     public static final int BUTTON_UPGRADE = 52;
+    /** Button ids from here: set the mark of a mission offer entry ({@link #markButtonId}). */
+    private static final int BUTTON_MARK_MISSION = 100;
+    /** Upper bound (exclusive) of the mark button ids. */
+    private static final int BUTTON_MARK_MISSION_END = BUTTON_MARK_MISSION + 2 * MissionRules.MAX_OFFER_SIZE;
 
     private final Container container;
     private JobBlockInfo info;
@@ -81,6 +87,18 @@ public class JobBlockMenu extends CivMenu {
     }
 
     /**
+     * The mark buttons carry the wanted state instead of a toggle, so two players clicking the same entry agree with
+     * what they see.
+     *
+     * @param index  a mission offer index
+     * @param marked the wanted mark
+     * @return the menu button id that sets it
+     */
+    public static int markButtonId(int index, boolean marked) {
+        return BUTTON_MARK_MISSION + 2 * index + (marked ? 1 : 0);
+    }
+
+    /**
      * @return the info snapshot
      */
     public JobBlockInfo getInfo() {
@@ -98,6 +116,19 @@ public class JobBlockMenu extends CivMenu {
         }
         if (buttonId == BUTTON_UPGRADE) {
             return upgrade(player);
+        }
+        if (buttonId >= BUTTON_MARK_MISSION && buttonId < BUTTON_MARK_MISSION_END) {
+            int index = (buttonId - BUTTON_MARK_MISSION) / 2;
+            boolean marked = (buttonId - BUTTON_MARK_MISSION) % 2 == 1;
+            if (index >= info.missions().size()) {
+                return false;
+            }
+            if (container instanceof JobBlockEntity jobBlock && jobBlock.getLevel() instanceof ServerLevel level
+                    && !MissionOffers.setMarked(SettlementData.get(level), jobBlock.getBlockPos(), index, info.missions().get(index).mission(), marked)) {
+                return false;
+            }
+            info = info.withMarked(index, marked);
+            return true;
         }
         if (buttonId == BUTTON_TOGGLE_LEAVES) {
             info = info.withLeavesToggled();

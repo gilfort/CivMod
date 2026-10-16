@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.mission.MissionOffer;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -17,7 +18,7 @@ import net.minecraft.core.UUIDUtil;
 /**
  * A JobBlock as recorded by its settlement, including its work points and the assigned settlers
  * (vault {@code Systems/Scroll of Assignment.md}); every JobBlock holds one settler, the Mission Board several
- * ({@link SettlementRules#capacity}).
+ * ({@link SettlementRules#capacity}) and keeps its daily {@link MissionOffer}.
  */
 public final class SettlementBlock {
 
@@ -52,7 +53,8 @@ public final class SettlementBlock {
             // Saves before the Mission Board stored one assignee; read only.
             UUIDUtil.CODEC.optionalFieldOf("assignee").forGetter(block -> Optional.empty()),
             Codec.STRING.optionalFieldOf("assignee_name").forGetter(block -> Optional.empty()),
-            Codec.BOOL.optionalFieldOf("collect_leaves", false).forGetter(SettlementBlock::collectLeaves)
+            Codec.BOOL.optionalFieldOf("collect_leaves", false).forGetter(SettlementBlock::collectLeaves),
+            MissionOffer.CODEC.optionalFieldOf("mission_offer", MissionOffer.EMPTY).forGetter(SettlementBlock::missionOffer)
     ).apply(instance, SettlementBlock::new));
 
     private final BlockPos pos;
@@ -64,6 +66,7 @@ public final class SettlementBlock {
     private Optional<BlockPos> dropOff;
     private final List<Assignee> assignees = new ArrayList<>();
     private boolean collectLeaves;
+    private MissionOffer missionOffer;
 
     /**
      * @param pos       the block position
@@ -72,12 +75,13 @@ public final class SettlementBlock {
      * @param connected whether the block is connected to the settlement chain
      */
     public SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected) {
-        this(pos, jobType, level, connected, List.of(), Optional.empty(), Optional.empty(), List.of(), Optional.empty(), Optional.empty(), false);
+        this(pos, jobType, level, connected, List.of(), Optional.empty(), Optional.empty(), List.of(), Optional.empty(), Optional.empty(), false,
+                MissionOffer.EMPTY);
     }
 
     private SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected, List<BlockPos> workPoints,
             Optional<BlockPos> collect, Optional<BlockPos> dropOff, List<Assignee> assignees, Optional<UUID> legacyAssignee,
-            Optional<String> legacyAssigneeName, boolean collectLeaves) {
+            Optional<String> legacyAssigneeName, boolean collectLeaves, MissionOffer missionOffer) {
         this.pos = pos.immutable();
         this.jobType = jobType;
         this.level = SettlementRules.clampLevel(level);
@@ -88,6 +92,18 @@ public final class SettlementBlock {
         this.assignees.addAll(assignees);
         legacyAssignee.filter(id -> assignees.isEmpty()).ifPresent(id -> this.assignees.add(new Assignee(id, legacyAssigneeName.orElse("?"))));
         this.collectLeaves = collectLeaves;
+        this.missionOffer = missionOffer;
+    }
+
+    /**
+     * @return the daily mission offer (Mission Board only, else always empty)
+     */
+    public MissionOffer missionOffer() {
+        return missionOffer;
+    }
+
+    void setMissionOffer(MissionOffer missionOffer) {
+        this.missionOffer = missionOffer;
     }
 
     /**

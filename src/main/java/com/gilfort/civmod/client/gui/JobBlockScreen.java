@@ -1,23 +1,37 @@
 package com.gilfort.civmod.client.gui;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import com.gilfort.civmod.job.JobProfile;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
+import com.gilfort.civmod.mission.Mission;
+import com.gilfort.civmod.mission.MissionOffer;
+import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.settlement.SettlementRules;
+import com.mojang.blaze3d.platform.InputConstants;
 
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 /**
  * Screen of a JobBlock: storage tab and info tab (job, level, skill cap, settlement status, upgrade button); the
- * Mission Board adds a missions tab (the mission list, empty until missions exist).
+ * Mission Board adds a missions tab (the daily mission offer; a click on a row marks or unmarks it).
  * <p>
  * Unconnected JobBlocks show the info greyed out with a red hint; storage keeps working.
  */
@@ -30,8 +44,17 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
 
     private int costOffset;
     private int costRowY = -1;
+    private int missionOffset;
     private static final int LINE_HEIGHT = 11;
     private static final int MISSION_LIST_Y = 34;
+    private static final int MISSION_ROW_HEIGHT = 23;
+    private static final int MISSION_ROWS = 5;
+    private static final int TOOLTIP_WIDTH = 200;
+    private static final int SCROLL_COLUMN = 8;
+    private static final Identifier CHECKBOX = Identifier.withDefaultNamespace("widget/checkbox");
+    private static final Identifier CHECKBOX_HIGHLIGHTED = Identifier.withDefaultNamespace("widget/checkbox_highlighted");
+    private static final Identifier CHECKBOX_SELECTED = Identifier.withDefaultNamespace("widget/checkbox_selected");
+    private static final Identifier CHECKBOX_SELECTED_HIGHLIGHTED = Identifier.withDefaultNamespace("widget/checkbox_selected_highlighted");
 
     /**
      * @param menu      the menu
@@ -93,7 +116,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     @Override
     protected void extractTabLabels(GuiGraphicsExtractor graphics, int tab, int mouseX, int mouseY) {
         if (tab == JobBlockMenu.TAB_MISSIONS) {
-            extractMissions(graphics);
+            extractMissions(graphics, mouseX, mouseY);
             return;
         }
         if (tab != JobBlockMenu.TAB_INFO) {
@@ -136,12 +159,117 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     }
 
     /**
-     * Draws the missions tab: the mission list (empty until missions exist).
+     * Draws the missions tab: the daily offer, one row per entry (icon, title, recommended level, duration, rolls and a
+     * mark checkbox), the description in the row tooltip. More than {@value #MISSION_ROWS} entries scroll with the mouse
+     * wheel.
      */
-    private void extractMissions(GuiGraphicsExtractor graphics) {
+    private void extractMissions(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        List<MissionOffer.Entry> offer = menu.getInfo().missions();
+        long marked = offer.stream().filter(MissionOffer.Entry::marked).count();
         graphics.text(font, Component.translatable("civmod.gui.job_block.missions"), CivGui.PADDING, 22, CivGui.LABEL_COLOR, false);
-        graphics.textWithWordWrap(font, Component.translatable("civmod.gui.job_block.missions.none"), CivGui.PADDING + CivGui.INSET_PADDING,
-                MISSION_LIST_Y + CivGui.INSET_PADDING, imageWidth - 2 * (CivGui.PADDING + CivGui.INSET_PADDING), CivGui.HINT_COLOR, false);
+        Component count = Component.translatable("civmod.gui.job_block.missions.marked", marked, offer.size());
+        graphics.text(font, count, imageWidth - CivGui.PADDING - font.width(count), 22, CivGui.LABEL_COLOR, false);
+        int left = CivGui.PADDING + CivGui.INSET_PADDING;
+        int width = imageWidth - 2 * left;
+        if (offer.isEmpty()) {
+            graphics.textWithWordWrap(font, Component.translatable("civmod.gui.job_block.missions.none"), left,
+                    MISSION_LIST_Y + CivGui.INSET_PADDING, width, CivGui.HINT_COLOR, false);
+            return;
+        }
+        missionOffset = Math.clamp(missionOffset, 0, Math.max(0, offer.size() - MISSION_ROWS));
+        if (offer.size() > MISSION_ROWS) {
+            // Scroll arrows in a column on the right.
+            width -= SCROLL_COLUMN;
+            int arrowX = left + width + 1;
+            int color = CivGui.LABEL_COLOR;
+            graphics.text(font, Component.literal("▲"), arrowX, MISSION_LIST_Y + CivGui.INSET_PADDING, missionOffset > 0 ? color : CivGui.HINT_COLOR, false);
+            graphics.text(font, Component.literal("▼"), arrowX, MISSION_LIST_Y + CivGui.INSET_PADDING + MISSION_ROWS * MISSION_ROW_HEIGHT - font.lineHeight,
+                    missionOffset + MISSION_ROWS < offer.size() ? color : CivGui.HINT_COLOR, false);
+        }
+        int box = Checkbox.getBoxSize(font);
+        int hovered = missionAt(mouseX, mouseY);
+        for (int row = 0; row < Math.min(MISSION_ROWS, offer.size() - missionOffset); row++) {
+            int index = missionOffset + row;
+            MissionOffer.Entry entry = offer.get(index);
+            Optional<Mission> mission = mission(entry);
+            int y = MISSION_LIST_Y + CivGui.INSET_PADDING + row * MISSION_ROW_HEIGHT;
+            graphics.item(mission.map(Mission::iconStack).orElse(ItemStack.EMPTY), left, y + 2);
+            int textWidth = width - 20 - box - 2;
+            graphics.text(font, fit(title(entry, mission), textWidth), left + 20, y + 1, CivGui.LABEL_COLOR, false);
+            mission.ifPresent(found -> graphics.text(font, fit(Component.translatable("civmod.gui.mission.details", found.recommendedLevel(),
+                    found.days(), found.rolls()), textWidth), left + 20, y + 11, CivGui.HINT_COLOR, false));
+            Identifier sprite = entry.marked()
+                    ? (index == hovered ? CHECKBOX_SELECTED_HIGHLIGHTED : CHECKBOX_SELECTED)
+                    : (index == hovered ? CHECKBOX_HIGHLIGHTED : CHECKBOX);
+            graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, left + width - box, y + (MISSION_ROW_HEIGHT - box) / 2 - 1, box, box);
+        }
+        if (hovered >= 0) {
+            graphics.setTooltipForNextFrame(font, missionTooltip(offer.get(hovered)), mouseX, mouseY);
+        }
+    }
+
+    private Optional<Mission> mission(MissionOffer.Entry entry) {
+        return minecraft.level.registryAccess().lookup(Missions.KEY).flatMap(registry -> registry.getOptional(entry.mission()));
+    }
+
+    /** The mission title, or its id if the client does not know the mission. */
+    private static Component title(MissionOffer.Entry entry, Optional<Mission> mission) {
+        return mission.map(Mission::title).orElseGet(() -> Component.literal(entry.mission().toString()));
+    }
+
+    private Component fit(Component text, int width) {
+        if (font.width(text) <= width) {
+            return text;
+        }
+        return Component.literal(font.plainSubstrByWidth(text.getString(), width - font.width("…")) + "…");
+    }
+
+    private List<FormattedCharSequence> missionTooltip(MissionOffer.Entry entry) {
+        List<FormattedCharSequence> lines = new ArrayList<>();
+        Optional<Mission> mission = mission(entry);
+        lines.add(title(entry, mission).getVisualOrderText());
+        mission.ifPresent(found -> {
+            if (!found.description().getString().isEmpty()) {
+                lines.addAll(font.split(found.description().copy().withStyle(ChatFormatting.GRAY), TOOLTIP_WIDTH));
+            }
+            lines.add(Component.translatable("civmod.gui.mission.recommended_level", found.recommendedLevel()).getVisualOrderText());
+            lines.add(Component.translatable("civmod.gui.mission.duration", found.days()).getVisualOrderText());
+            lines.add(Component.translatable("civmod.gui.mission.rolls", found.rolls()).getVisualOrderText());
+        });
+        lines.add(Component.translatable(entry.marked() ? "civmod.gui.mission.unmark" : "civmod.gui.mission.mark")
+                .withStyle(ChatFormatting.DARK_GRAY).getVisualOrderText());
+        return lines;
+    }
+
+    /**
+     * @return the offer index of the mission row under the mouse, {@code -1} if none
+     */
+    private int missionAt(double mouseX, double mouseY) {
+        if (menu.getActiveTab() != JobBlockMenu.TAB_MISSIONS) {
+            return -1;
+        }
+        int left = leftPos + CivGui.PADDING + CivGui.INSET_PADDING;
+        int top = topPos + MISSION_LIST_Y + CivGui.INSET_PADDING;
+        int right = leftPos + imageWidth - CivGui.PADDING - CivGui.INSET_PADDING - (menu.getInfo().missions().size() > MISSION_ROWS ? SCROLL_COLUMN : 0);
+        if (mouseX < left || mouseX >= right || mouseY < top) {
+            return -1;
+        }
+        int row = (int) ((mouseY - top) / MISSION_ROW_HEIGHT);
+        int index = missionOffset + row;
+        return row < MISSION_ROWS && index < menu.getInfo().missions().size() ? index : -1;
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        int index = event.button() == InputConstants.MOUSE_BUTTON_LEFT ? missionAt(event.x(), event.y()) : -1;
+        if (index >= 0) {
+            int button = JobBlockMenu.markButtonId(index, !menu.getInfo().missions().get(index).marked());
+            menu.clickMenuButton(minecraft.player, button);
+            minecraft.gameMode.handleInventoryButtonClick(menu.containerId, button);
+            minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+            return true;
+        }
+        return super.mouseClicked(event, doubleClick);
     }
 
     /**
@@ -186,6 +314,11 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        int offered = menu.getInfo().missions().size();
+        if (menu.getActiveTab() == JobBlockMenu.TAB_MISSIONS && offered > MISSION_ROWS) {
+            missionOffset = Math.clamp(missionOffset - (int) Math.signum(scrollY), 0, offered - MISSION_ROWS);
+            return true;
+        }
         int size = menu.getInfo().nextCosts().size();
         if (menu.getActiveTab() == JobBlockMenu.TAB_INFO && size > COST_SLOTS && costRowY >= 0
                 && mouseY >= topPos + costRowY - 2 && mouseY < topPos + costRowY + 18) {

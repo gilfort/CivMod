@@ -1,0 +1,12 @@
+{
+  "title": { "translate": "mission.civmod.dungeon_raid" },
+  "description": { "translate": "mission.civmod.dungeon_raid.description" },
+  "icon": "minecraft:mossy_cobblestone",
+  "loot_tables": ["minecraft:chests/simple_dungeon"],
+  "days": 1,
+  "recommended_level": 10,
+  "rolls": 2,
+  "jobs": ["civmod:adventurer"],
+  "weight": 2,
+  "max_per_offer": 6
+}
