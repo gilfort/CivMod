@@ -115,6 +115,12 @@ public final class SettlementBlock {
                 Codec.INT.fieldOf("removed").forGetter(Trim::removed),
                 Codec.INT.fieldOf("limit").forGetter(Trim::limit)
         ).apply(instance, Trim::new));
+
+        /** Network codec. */
+        public static final StreamCodec<ByteBuf, Trim> STREAM_CODEC = StreamCodec.composite(
+                net.minecraft.network.codec.ByteBufCodecs.VAR_INT, Trim::removed,
+                net.minecraft.network.codec.ByteBufCodecs.VAR_INT, Trim::limit,
+                Trim::new);
     }
 
     /**

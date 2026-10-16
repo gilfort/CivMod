@@ -8,8 +8,10 @@ import java.util.OptionalInt;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.job.JobProfile;
+import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.ClerkTab;
+import com.gilfort.civmod.menu.PatternTab;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.mission.Mission;
@@ -37,6 +39,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
@@ -102,7 +105,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      * @param title     the title
      */
     public JobBlockScreen(JobBlockMenu menu, Inventory inventory, Component title) {
-        super(menu, inventory, title, 176, JobBlockMenu.isClerk(menu.getInfo()) ? JobBlockMenu.CLERK_HEIGHT : 166, tabs(menu));
+        super(menu, inventory, title, 176, menu.isTall() ? JobBlockMenu.CLERK_HEIGHT : 166, tabs(menu));
     }
 
     private static List<TabBar.Tab> tabs(JobBlockMenu menu) {
@@ -116,6 +119,9 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.clerk.tab.rules"), new ItemStack(Items.WRITABLE_BOOK)));
             tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.clerk.tab.requests"), new ItemStack(Items.PAPER)));
         }
+        if (JobBlockMenu.isCraftsperson(menu.getInfo())) {
+            tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.patterns.tab"), new ItemStack(Items.CRAFTING_TABLE)));
+        }
         return tabs;
     }
 
@@ -124,6 +130,9 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         JobBlockInfo current = menu.getInfo();
         if (JobBlockMenu.isClerk(current)) {
             initRuleEditor();
+        }
+        if (JobBlockMenu.isCraftsperson(current)) {
+            initPatternEditor();
         }
         boolean max = current.level() >= SettlementRules.MAX_LEVEL;
         Component upgradeLabel = max ? Component.translatable("civmod.gui.job_block.upgrade.max")
@@ -171,7 +180,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             }
             return;
         }
-        if (tab == JobBlockMenu.TAB_MISSIONS) {
+        if (tab == JobBlockMenu.TAB_MISSIONS && JobBlockMenu.isMissionBoard(menu.getInfo())) {
             int height = assigning >= 0 ? ASSIGN_ROWS * MISSION_ROW_HEIGHT + 2 * CivGui.INSET_PADDING : imageHeight - MISSION_LIST_Y - CivGui.PADDING;
             CivGui.inset(graphics, leftPos + CivGui.PADDING, topPos + MISSION_LIST_Y, imageWidth - 2 * CivGui.PADDING, height);
         }
@@ -192,6 +201,10 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         }
         if (JobBlockMenu.isClerk(menu.getInfo()) && tab == JobBlockMenu.TAB_REQUESTS) {
             extractRequests(graphics, mouseX, mouseY);
+            return;
+        }
+        if (JobBlockMenu.isCraftsperson(menu.getInfo()) && tab == JobBlockMenu.TAB_PATTERNS) {
+            extractPatterns(graphics, mouseX, mouseY);
             return;
         }
         if (tab == JobBlockMenu.TAB_MISSIONS) {
@@ -572,7 +585,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (clickRule(event)) {
+        if (clickRule(event) || clickPattern(event)) {
             return true;
         }
         int settler =event.button() == InputConstants.MOUSE_BUTTON_LEFT ? settlerRowAt(event.x(), event.y()) : -1;
@@ -980,5 +993,350 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
                 graphics.setComponentTooltipForNextFrame(font, List.of(title, request.status(), priority), mouseX, mouseY);
             }
         }
+    }
+
+    // ---------------------------------------------------------------- Craftsperson: patterns
+
+    /** The library: 6 rows of 9 pattern slots. */
+    private static final int LIBRARY_X = CivGui.PADDING;
+    private static final int LIBRARY_Y = 18;
+    private static final int LIBRARY_ROWS = 6;
+    /** The pattern editor: 3×3 grid and output slot. */
+    private static final int GRID_X = 30;
+    private static final int GRID_Y = 30;
+    private static final int OUTPUT_X = 116;
+    private static final int OUTPUT_Y = 48;
+    private static final int PATTERN_BUTTONS_Y = 94;
+    /** Ghost target ids of the editor (library slots are 0–53). */
+    private static final int TARGET_CELL = 100;
+    private static final int TARGET_OUTPUT = 200;
+    private static final Identifier CHECKMARK = Identifier.withDefaultNamespace("container/beacon/confirm");
+
+    /** The pattern open in the editor, {@code -1} while the library is shown. */
+    private int editing = -1;
+    private @Nullable Button checkButton;
+    private @Nullable Button previousButton;
+    private @Nullable Button nextButton;
+
+    /**
+     * Client handler of {@link PatternTab.Sync}: updates the open Craftsperson menu.
+     *
+     * @param payload the payload
+     * @param context the payload context
+     */
+    public static void handlePatternTab(PatternTab.Sync payload, IPayloadContext context) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player != null && minecraft.player.containerMenu instanceof JobBlockMenu open && open.containerId == payload.containerId()) {
+            open.setPatternTab(payload.tab());
+            if (minecraft.gui.screen() instanceof JobBlockScreen screen) {
+                screen.updatePatternEditor();
+            }
+        }
+    }
+
+    private void initPatternEditor() {
+        if (editing < 0) {
+            return;
+        }
+        int y = topPos + PATTERN_BUTTONS_Y;
+        int width = (imageWidth - 2 * CivGui.PADDING - 4) / 3;
+        checkButton = addTabWidget(JobBlockMenu.TAB_PATTERNS, Button.builder(Component.empty(), button -> sendPattern(
+                PatternTab.Edit.toggleCheck(menu.containerId, editing))).bounds(leftPos + CivGui.PADDING, y, width, 20).build());
+        addTabWidget(JobBlockMenu.TAB_PATTERNS, Button.builder(Component.translatable("civmod.gui.patterns.clear"), button -> sendPattern(
+                PatternTab.Edit.clear(menu.containerId, editing))).bounds(leftPos + CivGui.PADDING + width + 2, y, width, 20).build());
+        addTabWidget(JobBlockMenu.TAB_PATTERNS, Button.builder(Component.translatable("gui.back"), button -> showLibrary())
+                .bounds(leftPos + CivGui.PADDING + 2 * (width + 2), y, width, 20).build());
+        previousButton = addTabWidget(JobBlockMenu.TAB_PATTERNS, Button.builder(Component.literal("<"), button -> sendPattern(
+                PatternTab.Edit.cycle(menu.containerId, editing, -1))).bounds(leftPos + OUTPUT_X - 9, topPos + OUTPUT_Y + 20, 16, 16).build());
+        nextButton = addTabWidget(JobBlockMenu.TAB_PATTERNS, Button.builder(Component.literal(">"), button -> sendPattern(
+                PatternTab.Edit.cycle(menu.containerId, editing, 1))).bounds(leftPos + OUTPUT_X + 9, topPos + OUTPUT_Y + 20, 16, 16).build());
+        Tooltip cycle = Tooltip.create(Component.translatable("civmod.gui.patterns.cycle"));
+        previousButton.setTooltip(cycle);
+        nextButton.setTooltip(cycle);
+        updatePatternEditor();
+    }
+
+    /** Shows the edited pattern's state on the editor buttons. */
+    private void updatePatternEditor() {
+        if (checkButton == null || previousButton == null || nextButton == null || editing < 0) {
+            return;
+        }
+        Optional<Pattern> pattern = menu.getPatternTab().pattern(editing);
+        boolean checked = pattern.map(Pattern::checked).orElse(false);
+        checkButton.setMessage(Component.translatable(checked ? "civmod.gui.patterns.uncheck" : "civmod.gui.patterns.check"));
+        checkButton.active = pattern.filter(Pattern::valid).isPresent()
+                && (checked || menu.getPatternTab().checked() < menu.getPatternTab().limit());
+        boolean recipe = pattern.filter(found -> found.valid() && !found.exact()).isPresent();
+        previousButton.active = recipe;
+        nextButton.active = recipe;
+    }
+
+    private void showEditor(int slot) {
+        editing = slot;
+        rebuildWidgets();
+    }
+
+    private void showLibrary() {
+        editing = -1;
+        checkButton = null;
+        previousButton = null;
+        nextButton = null;
+        rebuildWidgets();
+    }
+
+    private void sendPattern(PatternTab.Edit edit) {
+        ClientPacketDistributor.sendToServer(edit);
+        minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+    }
+
+    private static int librarySlotX(int slot) {
+        return LIBRARY_X + (slot % 9) * 18;
+    }
+
+    private static int librarySlotY(int slot) {
+        return LIBRARY_Y + (slot / 9) * 18;
+    }
+
+    private static int cellX(int cell) {
+        return GRID_X + (cell % 3) * 18;
+    }
+
+    private static int cellY(int cell) {
+        return GRID_Y + (cell / 3) * 18;
+    }
+
+    /**
+     * The ghost targets of the Patterns tab, relative to the panel: the library slots (output), or the grid cells and the
+     * output of the open pattern.
+     */
+    private java.util.Map<Integer, Rect2i> patternAreas() {
+        java.util.Map<Integer, Rect2i> areas = new java.util.LinkedHashMap<>();
+        if (!JobBlockMenu.isCraftsperson(menu.getInfo()) || menu.getActiveTab() != JobBlockMenu.TAB_PATTERNS) {
+            return areas;
+        }
+        if (editing < 0) {
+            for (int slot = 0; slot < Pattern.SLOTS; slot++) {
+                areas.put(slot, new Rect2i(librarySlotX(slot), librarySlotY(slot), 16, 16));
+            }
+            return areas;
+        }
+        for (int cell = 0; cell < Pattern.GRID; cell++) {
+            areas.put(TARGET_CELL + cell, new Rect2i(cellX(cell), cellY(cell), 16, 16));
+        }
+        areas.put(TARGET_OUTPUT, new Rect2i(OUTPUT_X, OUTPUT_Y, 16, 16));
+        return areas;
+    }
+
+    private int patternTargetAt(double x, double y) {
+        for (java.util.Map.Entry<Integer, Rect2i> entry : patternAreas().entrySet()) {
+            Rect2i area = entry.getValue();
+            if (area.contains((int) Math.floor(x - leftPos), (int) Math.floor(y - topPos))) {
+                return entry.getKey();
+            }
+        }
+        return -1;
+    }
+
+    /** Puts an item into a pattern target as a ghost (the item is not taken). */
+    private boolean setPatternItem(int target, ItemStack stack) {
+        if (stack.isEmpty() || target < 0) {
+            return false;
+        }
+        if (target < Pattern.SLOTS) {
+            sendPattern(PatternTab.Edit.setOutput(menu.containerId, target, stack.getItem()));
+        } else if (target == TARGET_OUTPUT) {
+            sendPattern(PatternTab.Edit.setOutput(menu.containerId, editing, stack.getItem()));
+        } else {
+            sendPattern(PatternTab.Edit.setInput(menu.containerId, editing, target - TARGET_CELL, stack.getItem()));
+        }
+        return true;
+    }
+
+    /**
+     * A click on the Patterns tab. Library: with an item on the cursor the slot's pattern is made from that output, a
+     * left click opens the editor, a right click checks or unchecks. Editor: with an item a cell (or the output) is set,
+     * a right click empties a cell.
+     */
+    private boolean clickPattern(MouseButtonEvent event) {
+        int target = patternTargetAt(event.x(), event.y());
+        if (target < 0) {
+            return false;
+        }
+        ItemStack carried = menu.getCarried();
+        if (!carried.isEmpty()) {
+            return setPatternItem(target, carried);
+        }
+        boolean right = event.button() == InputConstants.MOUSE_BUTTON_RIGHT;
+        if (target < Pattern.SLOTS) {
+            if (right) {
+                if (menu.getPatternTab().pattern(target).isPresent()) {
+                    sendPattern(PatternTab.Edit.toggleCheck(menu.containerId, target));
+                }
+            } else {
+                minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+                showEditor(target);
+            }
+            return true;
+        }
+        if (right && target != TARGET_OUTPUT) {
+            sendPattern(PatternTab.Edit.setInput(menu.containerId, editing, target - TARGET_CELL, Items.AIR));
+        }
+        return true;
+    }
+
+    /** Draws the Patterns tab: the library with checkmarks, or the editor of one pattern. */
+    private void extractPatterns(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        PatternTab tab = menu.getPatternTab();
+        int hovered = patternTargetAt(mouseX, mouseY);
+        if (editing >= 0) {
+            extractPatternEditor(graphics, tab, hovered, mouseX, mouseY);
+            return;
+        }
+        for (int slot = 0; slot < LIBRARY_ROWS * 9; slot++) {
+            int x = librarySlotX(slot);
+            int y = librarySlotY(slot);
+            CivGui.slot(graphics, x, y);
+            Optional<Pattern> pattern = tab.pattern(slot);
+            pattern.filter(Pattern::valid).ifPresent(found -> {
+                ItemStack icon = new ItemStack(found.output(), found.count());
+                graphics.item(icon, x, y);
+                graphics.itemDecorations(font, icon, x, y);
+            });
+            if (pattern.filter(Pattern::checked).isPresent()) {
+                graphics.blitSprite(RenderPipelines.GUI_TEXTURED, CHECKMARK, x - 1, y - 1, 9, 9);
+            }
+            if (slot == hovered) {
+                graphics.fill(x, y, x + 16, y + 16, HOVER_TINT);
+            }
+        }
+        int y = LIBRARY_Y + LIBRARY_ROWS * 18 + 3;
+        graphics.text(font, Component.translatable("civmod.gui.patterns.checkmarks", tab.checked(), tab.limit()), CivGui.PADDING, y,
+                CivGui.LABEL_COLOR, false);
+        tab.trim().ifPresent(trim -> graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.patterns.trimmed", trim.removed(),
+                trim.limit()), imageWidth - 2 * CivGui.PADDING), CivGui.PADDING, y + 10, ERROR_COLOR, false));
+        if (hovered >= 0) {
+            graphics.setComponentTooltipForNextFrame(font, patternTooltip(tab.pattern(hovered)), mouseX, mouseY);
+        }
+    }
+
+    private List<Component> patternTooltip(Optional<Pattern> pattern) {
+        List<Component> lines = new ArrayList<>();
+        if (pattern.filter(Pattern::valid).isPresent()) {
+            Pattern found = pattern.get();
+            lines.add(Component.translatable("civmod.gui.clerk.request.amount", found.count(), new ItemStack(found.output()).getHoverName()));
+            lines.add(Component.translatable(found.exact() ? "civmod.gui.patterns.exact" : "civmod.gui.patterns.recipe").withStyle(ChatFormatting.GRAY));
+            lines.add(Component.translatable(found.checked() ? "civmod.gui.patterns.checked" : "civmod.gui.patterns.unchecked")
+                    .withStyle(found.checked() ? ChatFormatting.GREEN : ChatFormatting.GRAY));
+            lines.add(Component.translatable("civmod.gui.patterns.slot_hint").withStyle(ChatFormatting.DARK_GRAY));
+        } else {
+            lines.add(Component.translatable(pattern.isPresent() ? "civmod.gui.patterns.no_recipe" : "civmod.gui.patterns.empty_slot"));
+            lines.add(Component.translatable("civmod.gui.patterns.set_hint").withStyle(ChatFormatting.DARK_GRAY));
+        }
+        return lines;
+    }
+
+    private void extractPatternEditor(GuiGraphicsExtractor graphics, PatternTab tab, int hovered, int mouseX, int mouseY) {
+        Optional<Pattern> pattern = tab.pattern(editing);
+        graphics.text(font, Component.translatable("civmod.gui.patterns.editing", editing + 1), CivGui.PADDING, 18, CivGui.LABEL_COLOR, false);
+        for (int cell = 0; cell < Pattern.GRID; cell++) {
+            int x = cellX(cell);
+            int y = cellY(cell);
+            CivGui.slot(graphics, x, y);
+            int index = cell;
+            Item item = pattern.map(found -> found.grid().get(index)).orElse(Items.AIR);
+            if (item != Items.AIR) {
+                graphics.item(new ItemStack(item), x, y);
+            }
+            if (TARGET_CELL + cell == hovered) {
+                graphics.fill(x, y, x + 16, y + 16, HOVER_TINT);
+            }
+        }
+        graphics.text(font, Component.literal("→"), GRID_X + 3 * 18 + 6, OUTPUT_Y + 4, CivGui.LABEL_COLOR, false);
+        CivGui.slot(graphics, OUTPUT_X, OUTPUT_Y);
+        pattern.filter(Pattern::valid).ifPresent(found -> {
+            ItemStack icon = new ItemStack(found.output(), found.count());
+            graphics.item(icon, OUTPUT_X, OUTPUT_Y);
+            graphics.itemDecorations(font, icon, OUTPUT_X, OUTPUT_Y);
+        });
+        if (hovered == TARGET_OUTPUT) {
+            graphics.fill(OUTPUT_X, OUTPUT_Y, OUTPUT_X + 16, OUTPUT_Y + 16, HOVER_TINT);
+        }
+        Component mode = pattern.map(found -> Component.translatable(!found.valid() ? "civmod.gui.patterns.no_recipe"
+                : found.exact() ? "civmod.gui.patterns.exact" : "civmod.gui.patterns.recipe")).orElse(Component.translatable("civmod.gui.patterns.empty_slot"));
+        int y = PATTERN_BUTTONS_Y + 24;
+        graphics.text(font, CivGui.fit(font, mode, imageWidth - 2 * CivGui.PADDING), CivGui.PADDING, y, CivGui.HINT_COLOR, false);
+        graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.patterns.editor_hint"), imageWidth - 2 * CivGui.PADDING),
+                CivGui.PADDING, y + 10, CivGui.HINT_COLOR, false);
+        if (hovered >= TARGET_CELL && hovered < TARGET_CELL + Pattern.GRID) {
+            Item item = pattern.map(found -> found.grid().get(hovered - TARGET_CELL)).orElse(Items.AIR);
+            if (item != Items.AIR) {
+                graphics.setComponentTooltipForNextFrame(font, List.of(new ItemStack(item).getHoverName()), mouseX, mouseY);
+            }
+        }
+    }
+
+    /**
+     * The screen areas that take a dragged item (for JEI / REI ghost drag): the Clerk's active rule slots on the Rules
+     * tab, or the Craftsperson's pattern slots on the Patterns tab.
+     *
+     * @return target id → absolute area
+     */
+    public java.util.Map<Integer, Rect2i> ghostTargets() {
+        if (JobBlockMenu.isClerk(menu.getInfo())) {
+            return ruleTargets();
+        }
+        java.util.Map<Integer, Rect2i> targets = new java.util.LinkedHashMap<>();
+        patternAreas().forEach((id, area) -> targets.put(id, new Rect2i(leftPos + area.getX(), topPos + area.getY(), area.getWidth(), area.getHeight())));
+        return targets;
+    }
+
+    /**
+     * @param x the mouse x position
+     * @param y the mouse y position
+     * @return the ghost target under the mouse, {@code -1} if none
+     */
+    public int ghostTargetAt(double x, double y) {
+        return JobBlockMenu.isClerk(menu.getInfo()) ? ruleSlotAt(x, y) : patternTargetAt(x, y);
+    }
+
+    /**
+     * Puts a dragged item into a ghost target (not consumed).
+     *
+     * @param target the target id from {@link #ghostTargets()}
+     * @param stack  the item
+     * @return whether the target took it
+     */
+    public boolean acceptGhost(int target, ItemStack stack) {
+        return JobBlockMenu.isClerk(menu.getInfo()) ? setRuleItem(target, stack) : setPatternItem(target, stack);
+    }
+
+    /**
+     * Fills a pattern from a recipe viewer's transfer button: the open pattern, else the first empty library slot.
+     *
+     * @param recipe     the recipe the viewer shows
+     * @param grid       the items it shows, row by row
+     * @param doTransfer whether to transfer (false: only check)
+     * @return the reason it cannot, empty if it can
+     */
+    public Optional<Component> transferPattern(Optional<net.minecraft.resources.ResourceKey<net.minecraft.world.item.crafting.Recipe<?>>> recipe,
+            List<Item> grid, boolean doTransfer) {
+        if (!JobBlockMenu.isCraftsperson(menu.getInfo())) {
+            return Optional.of(Component.translatable("civmod.gui.patterns.not_here"));
+        }
+        int slot = editing;
+        for (int candidate = 0; slot < 0 && candidate < Pattern.SLOTS; candidate++) {
+            if (menu.getPatternTab().pattern(candidate).isEmpty()) {
+                slot = candidate;
+            }
+        }
+        if (slot < 0) {
+            return Optional.of(Component.translatable("civmod.gui.patterns.full"));
+        }
+        if (doTransfer) {
+            sendPattern(PatternTab.Edit.transfer(menu.containerId, slot, recipe, grid));
+            selectTab(JobBlockMenu.TAB_PATTERNS);
+            showEditor(slot);
+        }
+        return Optional.empty();
     }
 }

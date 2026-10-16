@@ -94,6 +94,7 @@ public final class CivModClient {
         event.register(SettlementOutline.Sync.TYPE, SettlementOutlineRenderer::handle);
         event.register(JobPointsDisplay.Sync.TYPE, JobPointsRenderer::handle);
         event.register(ClerkTab.Sync.TYPE, JobBlockScreen::handleClerkTab);
+        event.register(com.gilfort.civmod.menu.PatternTab.Sync.TYPE, JobBlockScreen::handlePatternTab);
     }
 
     private static void onItemTooltip(ItemTooltipEvent event) {

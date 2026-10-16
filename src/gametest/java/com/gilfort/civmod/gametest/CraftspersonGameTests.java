@@ -8,7 +8,11 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.job.CatchUp;
+import com.gilfort.civmod.menu.JobBlockInfo;
+import com.gilfort.civmod.menu.JobBlockMenu;
+import com.gilfort.civmod.menu.PatternTab;
 import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.job.JobCategory;
 import com.gilfort.civmod.job.JobStatus;
@@ -37,6 +41,8 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -67,6 +73,7 @@ public final class CraftspersonGameTests {
             register(helper, "craftsperson_claim_split", CraftspersonGameTests::claimSplit);
             register(helper, "craftsperson_delivery_fallback", CraftspersonGameTests::deliveryFallback);
             register(helper, "craftsperson_live_round", CraftspersonGameTests::liveRound);
+            register(helper, "craftsperson_menu", CraftspersonGameTests::menu);
         });
     }
 
@@ -442,6 +449,38 @@ public final class CraftspersonGameTests {
         long dayStart = Math.floorDiv(level.getOverworldClockTime(), 24000L) * 24000L;
         settler.getWork().setCatchUp(dayStart - 24000L, dayStart - 24000L + ticks);
         CatchUp.runNow(level, List.of(settler));
+    }
+
+    /**
+     * The Craftsperson's menu: a Patterns tab with the player inventory; edits through the menu change the library;
+     * the tab shows the checkmark limit and removed checkmarks.
+     */
+    private static void menu(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos pos = craftsperson(helper, new BlockPos(1, 1, 1));
+        SettlementData data = SettlementData.get(level);
+        Player player = helper.makeMockPlayer(GameType.CREATIVE);
+        player.snapTo(pos.getX() + 0.5, pos.getY() + 1, pos.getZ() + 0.5);
+        JobBlockEntity entity = (JobBlockEntity) level.getBlockEntity(pos);
+        JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(level, pos, ModJobs.CRAFTSPERSON.get(), 1));
+        helper.assertTrue(menu.getTabCount() == 3, "Storage, Info, Patterns");
+        menu.setActiveTab(JobBlockMenu.TAB_PATTERNS);
+        helper.assertTrue(menu.slots.get(JobBlockEntity.SLOTS).isActive() && !menu.slots.get(0).isActive(),
+                "Patterns tab: player inventory, no storage slots");
+
+        menu.editPattern(PatternTab.Edit.setOutput(1, 3, Items.TORCH));
+        menu.editPattern(PatternTab.Edit.toggleCheck(1, 3));
+        menu.editPattern(PatternTab.Edit.transfer(1, 5, Optional.empty(), List.of(Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.OAK_PLANKS,
+                Items.AIR, Items.AIR, Items.AIR, Items.AIR)));
+        PatternTab tab = PatternTab.of(level, pos);
+        helper.assertTrue(tab.pattern(3).filter(Pattern::checked).map(Pattern::output).equals(Optional.of(Items.TORCH)), "Torch pattern checked: " + tab);
+        helper.assertTrue(tab.pattern(5).map(Pattern::output).equals(Optional.of(Items.STICK)) && tab.pattern(5).orElseThrow().exact(),
+                "Transfer without a known recipe: exactly the shown items");
+        helper.assertTrue(tab.limit() == Patterns.BASE_CHECKMARKS && tab.trim().isEmpty(), "Limit 6, nothing removed");
+        menu.editPattern(PatternTab.Edit.clear(1, 3));
+        helper.assertTrue(PatternTab.of(level, pos).pattern(3).isEmpty(), "Cleared through the menu");
+        helper.assertTrue(data.settlementAt(pos).isPresent(), "Still registered");
+        helper.succeed();
     }
 
     /** Puts a checked pattern for an item into a library slot. */

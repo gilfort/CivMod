@@ -10,6 +10,7 @@ import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.registry.ModMenuTypes;
+import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.StockRules;
 
 import com.gilfort.civmod.settlement.JobAssignments;
@@ -49,10 +50,12 @@ public class JobBlockMenu extends CivMenu {
     public static final int TAB_RULES = 2;
     /** Requests tab (Clerk only): the requests of the stock rules. */
     public static final int TAB_REQUESTS = 3;
-    /** Panel height of the Clerk's menu (rules grid, rule editor and player inventory). */
+    /** Patterns tab (Craftsperson only): the pattern library, with the player inventory to pick items from. */
+    public static final int TAB_PATTERNS = 2;
+    /** Panel height of the Clerk's and the Craftsperson's menu (a grid of 45 / 54 slots and the player inventory). */
     public static final int CLERK_HEIGHT = 240;
-    /** Ticks between two checks whether the Clerk tab changed. */
-    private static final int CLERK_SYNC_INTERVAL = 20;
+    /** Ticks between two checks whether the Clerk or Patterns tab changed. */
+    private static final int TAB_SYNC_INTERVAL = 20;
 
     /** Button id: free the JobBlock (remove the job from its settler). */
     public static final int BUTTON_UNASSIGN = 50;
@@ -75,7 +78,8 @@ public class JobBlockMenu extends CivMenu {
     private final Player player;
     private JobBlockInfo info;
     private ClerkTab clerkTab = ClerkTab.EMPTY;
-    private int clerkSyncIn;
+    private int tabSyncIn;
+    private PatternTab patternTab = PatternTab.EMPTY;
 
     /**
      * Client constructor.
@@ -97,7 +101,7 @@ public class JobBlockMenu extends CivMenu {
      * @param info        the info snapshot
      */
     public JobBlockMenu(int containerId, Inventory inventory, Container container, JobBlockInfo info) {
-        super(ModMenuTypes.JOB_BLOCK.get(), containerId, isClerk(info) ? 4 : isMissionBoard(info) ? 3 : 2);
+        super(ModMenuTypes.JOB_BLOCK.get(), containerId, isClerk(info) ? 4 : isMissionBoard(info) || isCraftsperson(info) ? 3 : 2);
         checkContainerSize(container, JobBlockEntity.SLOTS);
         this.container = container;
         this.player = inventory.player;
@@ -110,6 +114,9 @@ public class JobBlockMenu extends CivMenu {
         if (isClerk(info)) {
             // Rule items are picked from the player inventory, so it is shown on the Rules tab as well.
             addPlayerInventory(inventory, 8, CLERK_HEIGHT - 82, TAB_STORAGE, TAB_RULES);
+        } else if (isCraftsperson(info)) {
+            // Pattern items are picked from the player inventory, so it is shown on the Patterns tab as well.
+            addPlayerInventory(inventory, 8, CLERK_HEIGHT - 82, TAB_STORAGE, TAB_PATTERNS);
         } else {
             addPlayerInventory(inventory, 8, 84, TAB_STORAGE);
         }
@@ -121,6 +128,63 @@ public class JobBlockMenu extends CivMenu {
      */
     public static boolean isClerk(JobBlockInfo info) {
         return info.jobType() == ModJobs.CLERK.get();
+    }
+
+    /**
+     * @param info a JobBlock info
+     * @return whether the JobBlock is a Craftsperson JobBlock (Patterns tab)
+     */
+    public static boolean isCraftsperson(JobBlockInfo info) {
+        return info.jobType() == ModJobs.CRAFTSPERSON.get();
+    }
+
+    /**
+     * @return whether the menu has a tall panel (Clerk, Craftsperson)
+     */
+    public boolean isTall() {
+        return isClerk(info) || isCraftsperson(info);
+    }
+
+    /**
+     * @return the Craftsperson's pattern library as last synced (Craftsperson only)
+     */
+    public PatternTab getPatternTab() {
+        return patternTab;
+    }
+
+    /**
+     * Client: the server sent a new Patterns tab.
+     *
+     * @param tab the tab
+     */
+    public void setPatternTab(PatternTab tab) {
+        patternTab = tab;
+    }
+
+    /**
+     * Server: changes a pattern of the library and sends the tab at once.
+     *
+     * @param edit the edit
+     */
+    public void editPattern(PatternTab.Edit edit) {
+        if (!isCraftsperson(info) || !(container instanceof JobBlockEntity jobBlock) || !(jobBlock.getLevel() instanceof ServerLevel level)
+                || !stillValid(player)) {
+            return;
+        }
+        BlockPos pos = jobBlock.getBlockPos();
+        SettlementData data = SettlementData.get(level);
+        Optional<?> ignored = switch (edit.op()) {
+            case SET_OUTPUT -> Patterns.setOutput(level, pos, edit.slot(), edit.item());
+            case SET_INPUT -> Patterns.setInput(level, pos, edit.slot(), edit.index(), edit.item());
+            case CYCLE -> Patterns.cycle(level, pos, edit.slot(), edit.index());
+            case TOGGLE_CHECK -> Optional.of(Patterns.toggleCheck(data, pos, edit.slot()));
+            case CLEAR -> {
+                Patterns.clear(data, pos, edit.slot());
+                yield Optional.empty();
+            }
+            case TRANSFER -> Patterns.transfer(level, pos, edit.slot(), edit.recipe(), edit.grid());
+        };
+        tabSyncIn = 0;
     }
 
     /**
@@ -159,18 +223,26 @@ public class JobBlockMenu extends CivMenu {
         boolean changed = rule.isPresent() ? StockRules.setRule(data, pos, rule.get()) : StockRules.removeRule(data, pos, slot);
         if (changed) {
             StockRules.check(level, pos, Math.floorMod(level.getOverworldClockTime(), 24000L));
-            clerkSyncIn = 0;
+            tabSyncIn = 0;
         }
     }
 
     @Override
     public void broadcastChanges() {
         super.broadcastChanges();
-        if (!isClerk(info) || !(player instanceof ServerPlayer serverPlayer) || !(container instanceof JobBlockEntity jobBlock)
-                || !(jobBlock.getLevel() instanceof ServerLevel level) || --clerkSyncIn > 0) {
+        if (!isTall() || !(player instanceof ServerPlayer serverPlayer) || !(container instanceof JobBlockEntity jobBlock)
+                || !(jobBlock.getLevel() instanceof ServerLevel level) || --tabSyncIn > 0) {
             return;
         }
-        clerkSyncIn = CLERK_SYNC_INTERVAL;
+        tabSyncIn = TAB_SYNC_INTERVAL;
+        if (isCraftsperson(info)) {
+            PatternTab patterns = PatternTab.of(level, jobBlock.getBlockPos());
+            if (!patterns.equals(patternTab)) {
+                patternTab = patterns;
+                PacketDistributor.sendToPlayer(serverPlayer, new PatternTab.Sync(containerId, patterns));
+            }
+            return;
+        }
         ClerkTab now = ClerkTab.of(level, jobBlock.getBlockPos());
         if (!now.equals(clerkTab)) {
             clerkTab = now;
