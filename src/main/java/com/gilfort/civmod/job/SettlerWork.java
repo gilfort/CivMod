@@ -360,6 +360,15 @@ public final class SettlerWork {
     }
 
     /**
+     * Fixes the outcome of every following mission instead of rolling it (for tests).
+     *
+     * @param outcome the outcome
+     */
+    public void forceMissionOutcome(com.gilfort.civmod.mission.MissionRules.Outcome outcome) {
+        missions.forceOutcome(outcome);
+    }
+
+    /**
      * @return the job the settler currently works on
      */
     public Optional<SettlerJob> activeJob() {
@@ -435,6 +444,10 @@ public final class SettlerWork {
                 missions.resumeLeaving(level);
                 return;
             }
+        }
+        if (settler.isRemoved()) {
+            // Died on the mission.
+            return;
         }
         boolean night = dayTime >= SLEEP_TIME;
         boolean evening = dayTime >= WORK_END && !night;
@@ -1016,8 +1029,8 @@ public final class SettlerWork {
         }
         // Progress is saved: a settler unloaded during the run continues later instead of repeating hours.
         catchUpFrom = Math.max(catchUpFrom, to);
-        if (missions.departed() && !missions.returnIfDue(level, to, true)) {
-            // On the mission all hour: no hunger, no work.
+        if ((missions.departed() && !missions.returnIfDue(level, to, true)) || settler.isRemoved()) {
+            // On the mission all hour (no hunger, no work), or died on it.
             return 0;
         }
         long awake = to - from;

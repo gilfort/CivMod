@@ -46,8 +46,12 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.storage.loot.BuiltInLootTables;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -64,6 +68,8 @@ public final class MissionRunGameTests {
     private static final double EPSILON = 1.0E-9;
     private static final long DAY = 24000L;
     private static final BlockPos BOARD = new BlockPos(1, 1, 1);
+    /** Bed head of the settler in the death tests (only the settlement entry, no bed block). */
+    private static final BlockPos BED = new BlockPos(7, 1, 7);
     /** Level of the test board (skill cap 40). */
     private static final int BOARD_LEVEL = 2;
     /** Mission Job skill of the test settler: every sample mission fits, below the board cap. */
@@ -84,6 +90,8 @@ public final class MissionRunGameTests {
             register(helper, "mission_catch_up", MissionRunGameTests::catchUp);
             register(helper, "mission_persistence", MissionRunGameTests::persistence);
             register(helper, "mission_resume_leaving", MissionRunGameTests::resumeLeaving);
+            register(helper, "mission_death", MissionRunGameTests::death);
+            register(helper, "mission_death_catch_up", MissionRunGameTests::deathCatchUp);
         });
     }
 
@@ -260,8 +268,8 @@ public final class MissionRunGameTests {
     }
 
     /**
-     * Checks the rewards of a return from a level-2 board: success = loot and 2 × 10 × 2 × mission level EXP, failure
-     * (death counts as failure for now) = no loot and 0.8 × 10 × 2 × mission level EXP.
+     * Checks the rewards of a return from a level-2 board: success = loot and 2 × 10 × 2 × mission level EXP, failure =
+     * no loot and 0.8 × 10 × 2 × mission level EXP.
      */
     private static void assertRewards(GameTestHelper helper, Mission mission, int expBefore, int expAfter, int loot) {
         int success = 40 * mission.recommendedLevel();
@@ -280,6 +288,7 @@ public final class MissionRunGameTests {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         Settler settler = adventurer(helper);
+        settler.getWork().forceMissionOutcome(MissionRules.Outcome.SUCCESS);
         BlockPos board = helper.absolutePos(BOARD);
         Identifier marked = offer(helper).get(0).mission();
         int offered = offer(helper).size();
@@ -332,6 +341,7 @@ public final class MissionRunGameTests {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         Settler settler = adventurer(helper);
+        settler.getWork().forceMissionOutcome(MissionRules.Outcome.SUCCESS);
         BlockPos board = helper.absolutePos(BOARD);
         boolean[] done = new boolean[1];
         helper.onEachTick(() -> {
@@ -375,6 +385,66 @@ public final class MissionRunGameTests {
             helper.assertTrue(settler.getWork().isAway() && settler.isInvisible(), "The settler should go on leaving and vanish");
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+        });
+    }
+
+    /** An Adventurer with a bed and carried items (tool belt, pockets) that will not survive its mission. */
+    private static Settler doomed(GameTestHelper helper) {
+        Settler settler = adventurer(helper);
+        settler.getWork().forceMissionOutcome(MissionRules.Outcome.DEATH);
+        SettlementData data = SettlementData.get(helper.getLevel());
+        data.assignBed(data.settlementAt(helper.absolutePos(BOARD)).orElseThrow(), helper.absolutePos(BED), settler.getUUID());
+        settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.IRON_SWORD));
+        settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COBBLESTONE, 16));
+        return settler;
+    }
+
+    /** The settler is gone for good: removed, bed and Mission Board slot free, no member, its items not dropped. */
+    private static void assertDead(GameTestHelper helper, Settler settler) {
+        ServerLevel level = helper.getLevel();
+        SettlementData data = SettlementData.get(level);
+        BlockPos board = helper.absolutePos(BOARD);
+        Settlement settlement = data.settlementAt(board).orElseThrow();
+        helper.assertTrue(settler.isRemoved(), "The settler does not come back");
+        helper.assertFalse(JobAssignments.isAssignee(data, board, settler.getUUID()), "Mission Board slot freed");
+        helper.assertTrue(settlement.bedOf(settler.getUUID()).isEmpty() && !settlement.beds().containsKey(helper.absolutePos(BED)), "Bed freed");
+        helper.assertFalse(settlement.members().contains(settler.getUUID()), "Gone from the settlement");
+        helper.assertTrue(level.getEntitiesOfClass(ItemEntity.class, new AABB(helper.absolutePos(BOARD)).inflate(32)).isEmpty(),
+                "Carried items are lost, not dropped");
+    }
+
+    /** A forced death outcome at the return time removes the settler and frees its bed and jobs. */
+    private static void death(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        Settler settler = doomed(helper);
+        helper.onEachTick(() -> {
+            if (settler.isRemoved() || !settler.getWork().isAway()) {
+                return;
+            }
+            MissionTrip trip = settler.getWork().missionTrip().orElseThrow();
+            helper.assertTrue(settler.getWork().returnFromMission(level, trip.returnTime()), "The mission ends at the return time");
+            assertDead(helper, settler);
+            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+            helper.succeed();
+        });
+    }
+
+    /** A death resolved during catch-up removes the settler and frees its bed and jobs as well. */
+    private static void deathCatchUp(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        Settler settler = doomed(helper);
+        helper.onEachTick(() -> {
+            if (settler.isRemoved() || !settler.getWork().isAway()) {
+                return;
+            }
+            MissionTrip trip = settler.getWork().missionTrip().orElseThrow();
+            settler.getWork().setCatchUp(level.getOverworldClockTime(), trip.returnTime() + 1000);
+            CatchUp.runNow(level, List.of(settler));
+            assertDead(helper, settler);
+            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+            helper.succeed();
         });
     }
 

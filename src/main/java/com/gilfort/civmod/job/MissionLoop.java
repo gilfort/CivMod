@@ -13,7 +13,9 @@ import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.mission.OutcomeRules;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.MissionOffers;
+import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
@@ -23,6 +25,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.LootTable;
@@ -35,8 +38,7 @@ import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
  * leaves at the start of the workday: it walks out of the settlement (like a foraging settler) and vanishes at the
  * border or after {@value #LEAVE_WALK_TICKS} ticks, is away (invisible, no AI, no hunger) until the mission's return
  * time and reappears where it vanished in the evening, with loot in the job's buffer and EXP – also during catch-up.
- * <p>
- * Death on a mission is not implemented yet: its chance counts as failure.
+ * A settler that dies on the mission does not reappear: it is removed with everything it carried.
  */
 final class MissionLoop implements CategoryLoop {
 
@@ -53,6 +55,8 @@ final class MissionLoop implements CategoryLoop {
     /** Where a departing settler walks to (not saved: recomputed after loading). */
     private @Nullable BlockPos leaveTarget;
     private long leaveStart;
+    /** Outcome used instead of the roll (tests only, not saved). */
+    private MissionRules.@Nullable Outcome forcedOutcome;
 
     /**
      * @param shell the Settler Shell driving this loop
@@ -88,6 +92,13 @@ final class MissionLoop implements CategoryLoop {
      */
     Optional<MissionTrip> trip() {
         return Optional.ofNullable(trip);
+    }
+
+    /**
+     * @param outcome the outcome of every following mission instead of the roll
+     */
+    void forceOutcome(MissionRules.Outcome outcome) {
+        forcedOutcome = outcome;
     }
 
     // ---------------------------------------------------------------- persistence
@@ -241,8 +252,9 @@ final class MissionLoop implements CategoryLoop {
             return true;
         }
         shell.setStatus(board, JobStatus.IDLE);
-        if (mission.isPresent()) {
-            finish(level, job.get(), block.get(), mission.get(), catchUp);
+        if (mission.isPresent() && finish(level, job.get(), block.get(), mission.get(), catchUp) == MissionRules.Outcome.DEATH) {
+            die(level, board, mission.get());
+            return true;
         }
         if (settler.getJobs().get(0).equals(job.get())) {
             MissionPicks.request(level, board, settler);
@@ -250,14 +262,15 @@ final class MissionLoop implements CategoryLoop {
         return true;
     }
 
-    private void finish(ServerLevel level, SettlerJob job, SettlementBlock block, Mission mission, boolean catchUp) {
+    /** Rolls the outcome; a survivor gets its loot, EXP and a return message. */
+    private MissionRules.Outcome finish(ServerLevel level, SettlerJob job, SettlementBlock block, Mission mission, boolean catchUp) {
         OutcomeRules rules = OutcomeRules.get();
         int cap = SettlementRules.skillCap(block.level());
         int skill = settler.getSkills().effectiveLevel(job.jobType(), cap);
-        MissionRules.Outcome outcome = MissionRules.roll(MissionRules.chances(rules, mission.recommendedLevel(), skill), level.getRandom());
+        MissionRules.Outcome outcome = forcedOutcome != null ? forcedOutcome
+                : MissionRules.roll(MissionRules.chances(rules, mission.recommendedLevel(), skill), level.getRandom());
         if (outcome == MissionRules.Outcome.DEATH) {
-            // Death on a mission comes with its own story; until then it counts as failure.
-            outcome = MissionRules.Outcome.FAILED;
+            return outcome;
         }
         if (outcome == MissionRules.Outcome.SUCCESS) {
             List<ItemStack> loot = loot(level, mission, MissionRules.rolls(mission, skill));
@@ -271,6 +284,23 @@ final class MissionLoop implements CategoryLoop {
         shell.announce(level, Component.translatable("civmod.settler.mission.returned." + outcome.name().toLowerCase(Locale.ROOT),
                 settler.getName(), mission.title()), RETURN_RANGE);
         shell.gainExp(level, job, MissionRules.exp(outcome, rules, job.jobType().baseExp(), block.level(), mission.recommendedLevel()), cap);
+        return outcome;
+    }
+
+    /**
+     * The settler did not return: players in its settlement or near it hear about it (also during catch-up, a death is
+     * news), then it is removed for good with everything it carried.
+     */
+    private void die(ServerLevel level, BlockPos board, Mission mission) {
+        Component message = Component.translatable("civmod.settler.mission.died", settler.getName(), mission.title());
+        Optional<Settlement> settlement = SettlementData.get(level).settlementAt(board);
+        for (ServerPlayer player : level.players()) {
+            if (player.distanceToSqr(settler) <= RETURN_RANGE * RETURN_RANGE
+                    || settlement.filter(s -> JobAssignments.insideBorder(s, player.blockPosition())).isPresent()) {
+                player.sendSystemMessage(message);
+            }
+        }
+        settler.perish(level);
     }
 
     /** Rolls the loot: each roll uses one of the mission's loot tables at random. */

@@ -472,6 +472,28 @@ public class Settler extends PathfinderMob {
         }
     }
 
+    /**
+     * Removes the settler for good (died on a mission): frees its job slots, bed and settlement membership; everything
+     * it carries is lost.
+     *
+     * @param level the level
+     */
+    public void perish(ServerLevel level) {
+        SettlementData data = SettlementData.get(level);
+        jobs.forEach(job -> JobAssignments.unassign(data, job.jobBlock(), getUUID()));
+        data.settlement(settlementId).ifPresent(settlement -> {
+            settlement.bedOf(getUUID()).ifPresent(bed -> {
+                data.releaseBed(settlement, bed);
+                SettlerBeds.releasePoi(level, bed);
+            });
+            data.removeMember(settlement, getUUID());
+        });
+        SettlerBeds.releaseStrawSpot(getUUID());
+        setJobs(List.of());
+        settlementId = -1;
+        discard();
+    }
+
     @Override
     public boolean isInvulnerableTo(ServerLevel level, DamageSource source) {
         return !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY);
