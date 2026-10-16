@@ -253,15 +253,21 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
                 mission.ifPresent(found -> graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.mission.details",
                         found.recommendedLevel(), found.days(), found.rolls()), textWidth), left + 20, y + 11, CivGui.HINT_COLOR, false));
             }
-            Identifier sprite = entry.marked()
-                    ? (index == hovered ? CHECKBOX_SELECTED_HIGHLIGHTED : CHECKBOX_SELECTED)
-                    : (index == hovered ? CHECKBOX_HIGHLIGHTED : CHECKBOX);
-            graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, left + width - box, y + (MISSION_ROW_HEIGHT - box) / 2 - 1, box, box);
+            checkbox(graphics, entry.marked(), index == hovered, left + width - box, y);
         }
         if (hovered >= 0) {
             graphics.setTooltipForNextFrame(font, hovered < offer.size() ? missionTooltip(offer.get(hovered))
                     : takenTooltip(taken.get(hovered - offer.size())), mouseX, mouseY);
         }
+    }
+
+    /** Draws a vanilla checkbox at the right end of a list row. */
+    private void checkbox(GuiGraphicsExtractor graphics, boolean selected, boolean hovered, int x, int rowY) {
+        Identifier sprite = selected
+                ? (hovered ? CHECKBOX_SELECTED_HIGHLIGHTED : CHECKBOX_SELECTED)
+                : (hovered ? CHECKBOX_HIGHLIGHTED : CHECKBOX);
+        int box = Checkbox.getBoxSize(font);
+        graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, rowY + (MISSION_ROW_HEIGHT - box) / 2 - 1, box, box);
     }
 
     private Optional<Mission> mission(Identifier id) {
@@ -308,7 +314,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
 
     /** "Assigned to <name>", or "Locked" when the assigned settler died or left the board (or is not loaded). */
     private Component lockText(MissionOffer.Entry entry) {
-        Optional<String> name = entry.assignee().flatMap(id -> menu.getInfo().missionBoard().settler(id)).map(JobBlockInfo.MissionSettler::name);
+        Optional<String> name = entry.assignee().flatMap(id -> menu.getInfo().missionTab().settler(id)).map(JobBlockInfo.MissionSettler::name);
         if (name.isPresent()) {
             return Component.translatable("civmod.gui.mission.assigned", name.get());
         }
@@ -335,7 +341,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      *         assigned
      */
     private List<Integer> eligible() {
-        JobBlockInfo.MissionBoard board = menu.getInfo().missionBoard();
+        JobBlockInfo.MissionTab board = menu.getInfo().missionTab();
         if (assigning < 0 || assigning >= board.offer().size()) {
             return List.of();
         }
@@ -363,7 +369,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      * skill), the current assignee checked; a click assigns. More than {@value #ASSIGN_ROWS} rows scroll.
      */
     private void extractAssignment(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-        JobBlockInfo.MissionBoard board = menu.getInfo().missionBoard();
+        JobBlockInfo.MissionTab board = menu.getInfo().missionTab();
         if (assigning >= board.offer().size()) {
             return;
         }
@@ -397,11 +403,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             graphics.text(font, CivGui.fit(font, Component.literal(settler.name()), textWidth), left, y + 1, CivGui.LABEL_COLOR, false);
             graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.mission.assign.settler", settler.job().displayName(),
                     settler.skill()), textWidth), left, y + 11, CivGui.HINT_COLOR, false);
-            boolean current = entry.assignee().filter(settler.id()::equals).isPresent();
-            Identifier sprite = current
-                    ? (index == hovered ? CHECKBOX_SELECTED_HIGHLIGHTED : CHECKBOX_SELECTED)
-                    : (index == hovered ? CHECKBOX_HIGHLIGHTED : CHECKBOX);
-            graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, left + width - box, y + (MISSION_ROW_HEIGHT - box) / 2 - 1, box, box);
+            checkbox(graphics, entry.assignee().filter(settler.id()::equals).isPresent(), index == hovered, left + width - box, y);
         }
     }
 

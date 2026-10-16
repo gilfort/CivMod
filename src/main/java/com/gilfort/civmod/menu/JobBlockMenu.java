@@ -113,7 +113,7 @@ public class JobBlockMenu extends CivMenu {
 
     /**
      * Assign buttons name the settler by its index in the snapshot the player sees
-     * ({@link JobBlockInfo.MissionBoard#settlers()}); the server assigns the settler of its own snapshot at that index.
+     * ({@link JobBlockInfo.MissionTab#settlers()}); the server assigns the settler of its own snapshot at that index.
      *
      * @param index   a mission offer index
      * @param settler the settler index in the board's settler list, {@code -1} to unlock the mission
@@ -170,7 +170,7 @@ public class JobBlockMenu extends CivMenu {
 
     /** Assigns an offer entry to a settler of the board ({@code settler} = index in the snapshot) or unlocks it ({@code -1}). */
     private boolean assign(int index, int settler) {
-        List<JobBlockInfo.MissionSettler> settlers = info.missionBoard().settlers();
+        List<JobBlockInfo.MissionSettler> settlers = info.missionTab().settlers();
         if (index >= info.missions().size() || settler >= settlers.size()) {
             return false;
         }

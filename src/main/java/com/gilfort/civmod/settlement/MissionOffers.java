@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.job.JobCategory;
@@ -141,13 +142,31 @@ public final class MissionOffers {
      * @param settler the settler
      */
     static void removeAssignee(SettlementData data, BlockPos board, UUID settler) {
+        removeAssignee(data, board, settler, mission -> true);
+    }
+
+    /**
+     * A settler of the board got another Mission Job: its assignments of missions that job may not take are removed
+     * like those of a settler that left (the missions stay locked), the others stay.
+     *
+     * @param data    the dimension's settlement data
+     * @param board   the Mission Board position
+     * @param settler the settler
+     * @param job     its new Mission Job
+     * @param pool    all missions by id
+     */
+    public static void missionJobChanged(SettlementData data, BlockPos board, UUID settler, Job job, Map<Identifier, Mission> pool) {
+        removeAssignee(data, board, settler, mission -> pool.get(mission) == null || !pool.get(mission).jobs().contains(job));
+    }
+
+    private static void removeAssignee(SettlementData data, BlockPos board, UUID settler, Predicate<Identifier> mission) {
         Optional<SettlementBlock> block = missionBoard(data, board);
-        if (block.isEmpty() || block.get().missionOffer().entries().stream().noneMatch(entry -> entry.assignee().filter(settler::equals).isPresent())) {
+        Predicate<MissionOffer.Entry> affected = entry -> entry.assignee().filter(settler::equals).isPresent() && mission.test(entry.mission());
+        if (block.isEmpty() || block.get().missionOffer().entries().stream().noneMatch(affected)) {
             return;
         }
         MissionOffer offer = block.get().missionOffer();
-        List<MissionOffer.Entry> entries = offer.entries().stream()
-                .map(entry -> entry.assignee().filter(settler::equals).isPresent() ? entry.withoutAssignee() : entry).toList();
+        List<MissionOffer.Entry> entries = offer.entries().stream().map(entry -> affected.test(entry) ? entry.withoutAssignee() : entry).toList();
         block.get().setMissionOffer(new MissionOffer(entries, offer.day()));
         data.setDirty();
     }

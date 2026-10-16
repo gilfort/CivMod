@@ -38,3 +38,7 @@ _Avoid_: Quest, expedition
 **Mission Offer**:
 The missions a Mission Board offers today; the player marks the ones to be done. Code: `MissionOffer` (entries + refill day) in `SettlementBlock.missionOffer()`, refilled and marked through `MissionOffers`.
 _Avoid_: Quest list, mission pool (the pool is all missions)
+
+**Mission Assignment**:
+A marked mission the player assigned to one settler of the board; it is **locked** for every other settler, and the lock outlives the assignee (death, leaving the board) until the player reassigns or unlocks it. Code: `MissionOffer.Entry.assignee()` / `locked()`, set through `MissionOffers.assign` / `unlock`; a reserved assigned mission: `MissionTrip.assigned()`.
+_Avoid_: Reservation (a settler reserves the mission it picked)
