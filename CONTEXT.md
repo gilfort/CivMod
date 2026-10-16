@@ -84,6 +84,14 @@ Where a working Clerk serves: within 3 blocks of the stand spot of the day (or n
 **Stand spot**:
 A block a Clerk stands on, with a facing; up to 8 per Clerk JobBlock; one is picked each morning and at 12:00, never the same twice in a row. Code: `SettlementBlock.StandSpot`, `ClerkSpots.today`, saved as `SettlementBlock.spotOfDay()`.
 
+**Stock rule**:
+A Clerk's "keep at least X of item Y" with a priority (−100…+100, higher first); 9 per JobBlock level in rows of 9, extra ones after a downgrade kept but inactive. Only the Minimum mode exists. Active only while a Clerk settler is on shift; checked every 30 s (staggered), right after a delivery into the Clerk and once per simulated hour in catch-up. Code: `StockRule` (data), `StockRules` (edit, `check`), saved in `SettlementBlock.stockRules()`.
+_Avoid_: Threshold, order
+
+**Request**:
+"Produce N more of item Y" for the settlement, with a priority and the Clerk to deliver to. A stock rule keeps at most one open (amount = X − stock − amount being crafted); other sources post with priority 0, sub-requests inherit their parent's priority. Producers see them by priority and claim the part they can do in one round (`Request.Claim`); `amount()` is what is still open, `crafting()` what is claimed. Code: `Request` (data), `Requests` (`claimable`, `claim`, `release`, `releaseAll`, `finish`, `setMissing`, `post`, `withdraw`), saved in `Settlement.requests()`; status in the Clerk's Requests tab via `ClerkTab`, "No Craftsperson can make this" from `Producers.canMake`.
+_Avoid_: Order, job, task
+
 **Food point**:
 Every Clerk JobBlock; settlers take food from the nearest one whose reachable stock has food (a Clerk from its own storage first). Code: `ClerkStorage.nearestFood` → `ClerkStorage.FoodPoint`.
 _Avoid_: Pantry
