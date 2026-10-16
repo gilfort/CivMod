@@ -6,16 +6,22 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 
+import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
+import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 
@@ -29,6 +35,7 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
  * Every Clerk JobBlock is a food point: settlers take food from the nearest Clerk whose reachable storage has food
  * ({@link #nearestFood}).
  */
+@EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class ClerkStorage {
 
     /** End of the Clerk's shift in day ticks (18:30; day time 0 = 06:00). */
@@ -194,5 +201,15 @@ public final class ClerkStorage {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * Removes a broken block as storage or stand spot right away (other missing containers are skipped on access).
+     */
+    @SubscribeEvent
+    static void onBreak(BreakBlockEvent event) {
+        if (event.getLevel() instanceof ServerLevel level) {
+            JobAssignments.removePointsAt(SettlementData.get(level), event.getPos());
+        }
     }
 }

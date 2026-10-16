@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "minecraft:default",
-  "function": "civmod:food_eats_at_pantry",
+  "function": "civmod:food_eats_at_clerk",
   "max_ticks": 1200,
   "structure": "minecraft:empty",
   "padding": 40

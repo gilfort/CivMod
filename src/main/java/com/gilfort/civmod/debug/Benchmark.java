@@ -3,6 +3,7 @@ package com.gilfort.civmod.debug;
 import java.util.List;
 import java.util.function.Supplier;
 
+import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -13,6 +14,7 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.SettlementWorld;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
@@ -31,7 +33,7 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * Builds the PoC benchmark (vault {@code PoC.md}): one settlement with 20 JobBlocks (8 Lumberjack, 7 Miner,
- * 5 Fisherman) in a chain along +X, their work places, a pond, a pantry and 20 equipped settlers.
+ * 5 Fisherman) in a chain along +X, their work places, a pond, a Clerk with 8 linked chests and 20 equipped settlers.
  */
 public final class Benchmark {
 
@@ -41,6 +43,8 @@ public final class Benchmark {
     private static final int LUMBERJACKS = 8;
     private static final int MINERS = 7;
     private static final int FLAGS = Block.UPDATE_CLIENTS;
+    private static final int CLERK_LEVEL = 3;
+    private static final int CLERK_CHESTS = 8;
 
     private static final Scenario LUMBERJACK = new Scenario(ModJobs.LUMBERJACK, ModBlocks.LUMBERJACK_BLOCK, new Vec3i(2, 0, 4),
             Blocks.OAK_LOG, 5, Items.IRON_AXE);
@@ -100,15 +104,20 @@ public final class Benchmark {
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(origin).orElseThrow();
         data.settlersArrived(settlement);
-        // Pantry full of bread.
-        BlockPos pantry = origin.offset(-3, 0, 0);
-        level.setBlock(pantry, Blocks.CHEST.defaultBlockState(), Block.UPDATE_ALL);
-        if (level.getBlockEntity(pantry) instanceof Container chest) {
-            for (int slot = 0; slot < chest.getContainerSize(); slot++) {
-                chest.setItem(slot, new ItemStack(Items.BREAD, 64));
-            }
+        // A Clerk (level 3) full of bread, with 8 linked chests of bread: the settlement's food point.
+        BlockPos clerk = origin.offset(-3, 0, 0);
+        level.setBlock(clerk, ModBlocks.CLERK_BLOCK.get().defaultBlockState(), Block.UPDATE_ALL);
+        if (level.getBlockEntity(clerk) instanceof JobBlockEntity clerkBlock) {
+            clerkBlock.setJobLevel(CLERK_LEVEL);
         }
-        data.togglePantry(settlement, pantry);
+        SettlementWorld.setLevel(level, clerk, CLERK_LEVEL);
+        fillWithBread(level, clerk);
+        for (int i = 0; i < CLERK_CHESTS; i++) {
+            BlockPos chest = origin.offset(-5, 0, -4 + i);
+            level.setBlock(chest, Blocks.CHEST.defaultBlockState(), Block.UPDATE_ALL);
+            fillWithBread(level, chest);
+            JobAssignments.cycleClerkPoint(data, clerk, chest, true, false, net.minecraft.core.Direction.EAST);
+        }
         int spawned = 0;
         for (int i = 0; i < SIZE; i++) {
             BlockPos jobBlock = origin.offset(i * SPACING, 0, 0);
@@ -134,6 +143,14 @@ public final class Benchmark {
         }
         CivProfiler.enable();
         return spawned;
+    }
+
+    private static void fillWithBread(ServerLevel level, BlockPos pos) {
+        if (level.getBlockEntity(pos) instanceof Container container) {
+            for (int slot = 0; slot < container.getContainerSize(); slot++) {
+                container.setItem(slot, new ItemStack(Items.BREAD, 64));
+            }
+        }
     }
 
     private static Scenario scenario(int index) {

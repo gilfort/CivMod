@@ -5,7 +5,6 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
-import com.gilfort.civmod.food.Pantries;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.Schedule;
 import com.gilfort.civmod.npc.Settler;
@@ -39,7 +38,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.registries.RegisterEvent;
 
 /**
- * GameTests for Story 7 (food need and pantries).
+ * GameTests for Story 7 (food need) with Clerk JobBlocks as food points (#55).
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class FoodGameTests {
@@ -52,10 +51,9 @@ public final class FoodGameTests {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "food_exhaustion_and_appetite", FoodGameTests::exhaustionAndAppetite);
             register(helper, "food_choice_and_edibility", FoodGameTests::choiceAndEdibility);
-            register(helper, "food_pantry_toggle_and_persistence", FoodGameTests::pantryToggleAndPersistence);
             register(helper, "food_morning_plan", FoodGameTests::morningPlan);
             register(helper, "food_player_feeding", FoodGameTests::playerFeeding);
-            register(helper, "food_eats_at_pantry", FoodGameTests::eatsAtPantry);
+            register(helper, "food_eats_at_clerk", FoodGameTests::eatsAtClerk);
             register(helper, "food_forages_without_food", FoodGameTests::foragesWithoutFood);
         });
     }
@@ -107,40 +105,13 @@ public final class FoodGameTests {
         helper.succeed();
     }
 
-    /** Pantry toggle, double chest as one pantry, persistence, border lookup. */
-    private static void pantryToggleAndPersistence(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        SettlementData data = new SettlementData();
-        Settlement settlement = SettlementManager.place(data, helper.absolutePos(new BlockPos(1, 1, 1)), ModJobs.LUMBERJACK.get(), 1, 0L,
-                RandomSource.create(0L), SettlementManager.Listener.NONE).settlement();
-        BlockPos left = helper.absolutePos(new BlockPos(3, 1, 3));
-        BlockPos right = left.relative(Direction.EAST);
-        BlockState chest = Blocks.CHEST.defaultBlockState().setValue(ChestBlock.FACING, Direction.NORTH);
-        level.setBlockAndUpdate(left, chest.setValue(ChestBlock.TYPE, ChestType.LEFT));
-        level.setBlockAndUpdate(right, chest.setValue(ChestBlock.TYPE, ChestType.RIGHT));
-
-        helper.assertTrue(data.settlementContaining(left).filter(s -> s.id() == settlement.id()).isPresent(), "Chest lies inside the border");
-        helper.assertTrue(data.togglePantry(settlement, Pantries.canonical(level, settlement, left)), "Becomes a pantry");
-        helper.assertTrue(Pantries.canonical(level, settlement, right).equals(left), "The other half maps to the same pantry");
-        helper.assertTrue(data.settlementContaining(helper.absolutePos(new BlockPos(1, 1, 40))).isEmpty(), "Outside every border");
-
-        var ops = level.registryAccess().createSerializationContext(JsonOps.INSTANCE);
-        Settlement loaded = Settlement.CODEC.parse(ops, Settlement.CODEC.encodeStart(ops, settlement).getOrThrow()).getOrThrow();
-        helper.assertTrue(loaded.pantries().equals(settlement.pantries()) && loaded.pantries().contains(left), "Pantry survives saving");
-
-        helper.assertFalse(data.togglePantry(settlement, Pantries.canonical(level, settlement, right)), "Second toggle removes it");
-        data.togglePantry(settlement, left);
-        helper.assertTrue(data.removePantry(left) && settlement.pantries().isEmpty(), "Destroyed container is removed");
-        helper.succeed();
-    }
-
     /** Morning: forage when hungry without any food, fetch provisions when short, otherwise work. */
     private static void morningPlan(GameTestHelper helper) {
         helper.assertTrue(Schedule.morningPlan(5, 0, 6, false) == Schedule.MorningPlan.FORAGE, "Hungry, no food anywhere");
         helper.assertTrue(Schedule.morningPlan(5, 3, 6, false) == Schedule.MorningPlan.WORK, "Hungry but has provisions");
         helper.assertTrue(Schedule.morningPlan(20, 0, 6, true) == Schedule.MorningPlan.FETCH_PROVISIONS, "Short of provisions");
         helper.assertTrue(Schedule.morningPlan(20, 10, 6, true) == Schedule.MorningPlan.WORK, "Enough provisions");
-        helper.assertTrue(Schedule.morningPlan(20, 0, 6, false) == Schedule.MorningPlan.WORK, "Not hungry, no pantry: work");
+        helper.assertTrue(Schedule.morningPlan(20, 0, 6, false) == Schedule.MorningPlan.WORK, "Not hungry, no food point: work");
         helper.succeed();
     }
 
@@ -171,19 +142,18 @@ public final class FoodGameTests {
         helper.succeed();
     }
 
-    /** In the world: a hungry settler walks to the pantry, eats and takes provisions. */
-    private static void eatsAtPantry(GameTestHelper helper) {
+    /** In the world: a hungry settler walks to a Clerk JobBlock (no Clerk settler: its own slots), eats and takes provisions. */
+    private static void eatsAtClerk(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         floor(helper);
         helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
-        BlockPos pantryPos = helper.absolutePos(new BlockPos(6, 1, 6));
-        helper.setBlock(new BlockPos(6, 1, 6), Blocks.CHEST);
-        Container chest = (ChestBlockEntity) level.getBlockEntity(pantryPos);
-        chest.setItem(0, new ItemStack(Items.BREAD, 16));
+        BlockPos clerkPos = helper.absolutePos(new BlockPos(6, 1, 6));
+        helper.setBlock(new BlockPos(6, 1, 6), ModBlocks.CLERK_BLOCK.get());
+        Container clerk = (Container) level.getBlockEntity(clerkPos);
+        clerk.setItem(0, new ItemStack(Items.BREAD, 16));
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(helper.absolutePos(new BlockPos(1, 1, 1))).orElseThrow();
-        data.togglePantry(settlement, pantryPos);
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
         Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(2, 1, 2)));
         settler.snapTo(spawn.x, spawn.y, spawn.z, 0.0F, 0.0F);
@@ -195,7 +165,6 @@ public final class FoodGameTests {
             helper.assertTrue(SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE) >= 6,
                     "No provisions taken");
             settler.discard();
-            data.removePantry(pantryPos);
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });
     }

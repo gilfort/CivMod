@@ -50,9 +50,12 @@ public final class ModItems {
     /** Render-only icon: bed. */
     public static final DeferredItem<Item> BED_MARKER = ITEMS.registerSimpleItem("bed_marker");
 
+    /** Render-only icon: Clerk stand spot, numbered by the stack count (1–8). */
+    public static final DeferredItem<Item> STAND_SPOT_MARKER = ITEMS.registerSimpleItem("stand_spot_marker");
+
     /** Items that are only used for rendering and never shown in the creative tab. */
     public static final Set<DeferredItem<Item>> RENDER_ONLY = Set.of(UNCONNECTED_MARKER, WORK_MARKER, PRIMARY_WORK_MARKER, COLLECT_MARKER,
-            DROP_OFF_MARKER, BED_MARKER);
+            DROP_OFF_MARKER, BED_MARKER, STAND_SPOT_MARKER);
 
     private ModItems() {
     }

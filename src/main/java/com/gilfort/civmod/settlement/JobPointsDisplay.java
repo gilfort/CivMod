@@ -48,12 +48,15 @@ public final class JobPointsDisplay {
     /**
      * Points of one JobBlock.
      *
-     * @param jobBlock the JobBlock position
-     * @param work     work POIs (first = primary)
-     * @param collect  collect inventory
-     * @param dropOff  drop-off inventory
+     * @param jobBlock   the JobBlock position
+     * @param work       work POIs (first = primary)
+     * @param collect    collect inventory
+     * @param dropOff    drop-off inventory
+     * @param storage    containers linked as Clerk storage
+     * @param standSpots Clerk stand spots (numbered in this order)
      */
-    public record JobPoints(BlockPos jobBlock, List<BlockPos> work, Optional<BlockPos> collect, Optional<BlockPos> dropOff) {
+    public record JobPoints(BlockPos jobBlock, List<BlockPos> work, Optional<BlockPos> collect, Optional<BlockPos> dropOff,
+            List<BlockPos> storage, List<SettlementBlock.StandSpot> standSpots) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, JobPoints> STREAM_CODEC = StreamCodec.composite(
@@ -61,6 +64,8 @@ public final class JobPointsDisplay {
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), JobPoints::work,
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs::optional), JobPoints::collect,
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs::optional), JobPoints::dropOff,
+                BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), JobPoints::storage,
+                SettlementBlock.StandSpot.STREAM_CODEC.apply(ByteBufCodecs.list()), JobPoints::standSpots,
                 JobPoints::new);
     }
 
@@ -71,11 +76,10 @@ public final class JobPointsDisplay {
      * @param bound   the JobBlock the scroll is bound to (its points are highlighted)
      * @param beds    owned beds of the bound settler's settlement (only when bound to a settler)
      * @param ownBed  the bed of the bound settler
-     * @param settler  the bound settler
-     * @param pantries pantries within range
+     * @param settler the bound settler
      */
     public record Sync(List<JobPoints> points, Optional<BlockPos> bound, List<BlockPos> beds, Optional<BlockPos> ownBed,
-            Optional<UUID> settler, List<BlockPos> pantries) implements CustomPacketPayload {
+            Optional<UUID> settler) implements CustomPacketPayload {
 
         /** Payload type. */
         public static final Type<Sync> TYPE = new Type<>(CivMod.id("job_points"));
@@ -87,7 +91,6 @@ public final class JobPointsDisplay {
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), Sync::beds,
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs::optional), Sync::ownBed,
                 net.minecraft.core.UUIDUtil.STREAM_CODEC.apply(ByteBufCodecs::optional), Sync::settler,
-                BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), Sync::pantries,
                 Sync::new);
 
         @Override
@@ -131,9 +134,7 @@ public final class JobPointsDisplay {
         Optional<Settlement> settlement = settler.flatMap(uuid -> data.settlements().stream().filter(s -> s.members().contains(uuid)).findFirst());
         List<BlockPos> beds = settlement.map(s -> List.copyOf(s.beds().keySet())).orElse(List.of());
         Optional<BlockPos> ownBed = settlement.flatMap(s -> s.bedOf(settler.get()));
-        List<BlockPos> pantries = data.settlements().stream().flatMap(s -> s.pantries().stream())
-                .filter(pos -> SettlementRules.horizontalDistance(pos, player.blockPosition()) <= RANGE).toList();
-        PacketDistributor.sendToPlayer(player, new Sync(collect(data, player.blockPosition(), bound), bound, beds, ownBed, settler, pantries));
+        PacketDistributor.sendToPlayer(player, new Sync(collect(data, player.blockPosition(), bound), bound, beds, ownBed, settler));
     }
 
     @SubscribeEvent
@@ -154,7 +155,8 @@ public final class JobPointsDisplay {
                 boolean include = bound.map(block.pos()::equals)
                         .orElseGet(() -> SettlementRules.horizontalDistance(block.pos(), center) <= RANGE);
                 if (include) {
-                    result.add(new JobPoints(block.pos(), block.workPoints(), block.collect(), block.dropOff()));
+                    result.add(new JobPoints(block.pos(), block.workPoints(), block.collect(), block.dropOff(), block.storage(),
+                            block.standSpots()));
                 }
             }
         }

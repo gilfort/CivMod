@@ -39,8 +39,9 @@ public final class BenchmarkGameTests {
         int spawned = Benchmark.build(level, origin);
         helper.assertTrue(spawned == Benchmark.SIZE, "20 settlers expected, got " + spawned);
         Settlement settlement = SettlementData.get(level).settlementAt(origin).orElseThrow();
-        helper.assertTrue(settlement.blocks().size() == Benchmark.SIZE && settlement.connectedCount() == Benchmark.SIZE,
-                "All 20 JobBlocks connected: " + settlement.connectedCount());
+        // The 20 job JobBlocks plus the Clerk (food point).
+        helper.assertTrue(settlement.blocks().size() == Benchmark.SIZE + 1 && settlement.connectedCount() == Benchmark.SIZE + 1,
+                "All 21 JobBlocks connected: " + settlement.connectedCount());
         helper.runAtTickTime(2380, () -> {
             CivProfiler.report().forEach(line -> CivMod.LOGGER.info("[benchmark] {}", line));
             helper.succeed();

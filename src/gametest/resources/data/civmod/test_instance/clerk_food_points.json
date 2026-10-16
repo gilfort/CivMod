@@ -1,8 +1,8 @@
 {
   "type": "minecraft:function",
   "environment": "minecraft:default",
-  "function": "civmod:food_pantry_toggle_and_persistence",
-  "max_ticks": 40,
+  "function": "civmod:clerk_food_points",
+  "max_ticks": 1200,
   "structure": "minecraft:empty",
-  "padding": 24
+  "padding": 40
 }

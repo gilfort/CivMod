@@ -1,6 +1,7 @@
 package com.gilfort.civmod.gametest;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -58,6 +59,7 @@ public final class ClerkGameTests {
             register(helper, "clerk_access_rule", ClerkGameTests::accessRule);
             register(helper, "clerk_storage_limits", ClerkGameTests::storageLimits);
             register(helper, "clerk_spot_of_day", ClerkGameTests::spotOfDay);
+            register(helper, "clerk_food_points", ClerkGameTests::foodPoints);
         });
     }
 
@@ -191,6 +193,48 @@ public final class ClerkGameTests {
         helper.assertTrue(ClerkStorage.spotOfDay(block).map(SettlementBlock.StandSpot::pos).orElseThrow().equals(previous),
                 "Customers see the picked spot");
         helper.succeed();
+    }
+
+    /**
+     * Food points: the nearest Clerk whose reachable storage has food, then the next; a settler's own Clerk first; a
+     * counter it cannot reach only offers the block slots.
+     */
+    private static void foodPoints(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos near = clerkWithStorage(helper);
+        helper.setBlock(new BlockPos(7, 1, 7), ModBlocks.CLERK_BLOCK.get());
+        BlockPos far = helper.absolutePos(new BlockPos(7, 1, 7));
+        BlockPos from = helper.absolutePos(new BlockPos(0, 1, 0));
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(near).orElseThrow();
+        helper.assertTrue(data.settlementAt(far).filter(s -> s == settlement).isPresent(), "Both Clerks in one settlement");
+        helper.assertTrue(food(level, settlement, from, MORNING, Optional.empty(), pos -> true).isEmpty(), "No food anywhere");
+
+        ((Container) level.getBlockEntity(far)).setItem(0, new ItemStack(Items.BREAD, 3));
+        Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
+        chest.setItem(0, new ItemStack(Items.COOKED_BEEF, 3));
+        helper.assertTrue(food(level, settlement, from, MORNING, Optional.empty(), pos -> true).equals(Optional.of(far)),
+                "The near Clerk has food only in its linked storage and no settler: the far one");
+
+        helper.assertTrue(JobAssignments.assign(data, near, CLARA, "Clara", settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
+                "Clerk assigned");
+        Optional<ClerkStorage.FoodPoint> working = ClerkStorage.nearestFood(level, settlement, from, MORNING, Optional.empty(), pos -> true);
+        helper.assertTrue(working.map(ClerkStorage.FoodPoint::clerk).equals(Optional.of(near)), "Working Clerk: the near one");
+        helper.assertTrue(working.orElseThrow().visit().counter() && working.orElseThrow().visit().reach() == ClerkStorage.COUNTER_REACH,
+                "Served at the counter");
+        helper.assertTrue(food(level, settlement, from, MORNING, Optional.empty(), pos -> !pos.equals(near)).equals(Optional.of(far)),
+                "Counter not reachable: only the block slots, which are empty");
+        helper.assertTrue(food(level, settlement, from, EVENING, Optional.empty(), pos -> true).equals(Optional.of(far)),
+                "After the shift the linked storage is closed");
+        helper.assertTrue(food(level, settlement, helper.absolutePos(new BlockPos(8, 1, 8)), EVENING, Optional.of(near), pos -> true)
+                .equals(Optional.of(near)), "The Clerk eats from its own storage after the shift");
+        JobAssignments.unassign(data, near);
+        helper.succeed();
+    }
+
+    private static Optional<BlockPos> food(ServerLevel level, Settlement settlement, BlockPos from, long dayTime, Optional<BlockPos> own,
+            java.util.function.Predicate<BlockPos> reachable) {
+        return ClerkStorage.nearestFood(level, settlement, from, dayTime, own, reachable).map(ClerkStorage.FoodPoint::clerk);
     }
 
     /** Places a Clerk JobBlock at (1, 1, 1) with a chest at (4, 1, 1) linked as storage. */
