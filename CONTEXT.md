@@ -95,3 +95,22 @@ _Avoid_: Order, job, task
 **Food point**:
 Every Clerk JobBlock; settlers take food from the nearest one whose reachable stock has food (a Clerk from its own storage first). Code: `ClerkStorage.nearestFood` → `ClerkStorage.FoodPoint`.
 _Avoid_: Pantry
+
+## Producing
+
+**Craftsperson**:
+The first Producing Job: crafts requested items from its patterns at a crafting table. Code: `ModJobs.CRAFTSPERSON` on `ModBlocks.CRAFTSPERSON_BLOCK`, work loop `CraftspersonLoop` (the Producing category's loop); job factor 0.3 and base EXP 2 in `civmod_jobs/craftsperson.json` (`Job.jobFactor`, `JobBalancing`).
+
+**Pattern**:
+One of the 54 slots of a Craftsperson JobBlock's library: a 3×3 grid and an output. Made from the output alone it follows a crafting recipe (tag ingredients flexible, arrows cycle the recipes making the item); made from inputs it uses exactly those items. Code: `Pattern` (data), `Patterns` (edit, `inputs`), `CraftingRecipes` (recipe lookup), saved in `SettlementBlock.patterns()`; GUI via `PatternTab`.
+_Avoid_: Recipe (a pattern follows one), blueprint
+
+**Checkmark**:
+A pattern the Craftsperson crafts; 6 + 1 per 5 levels of the settler's effective skill (`Patterns.checkLimit`). When the limit drops, the last checked patterns in list order lose theirs (`Patterns.enforceLimit`, notice `SettlementBlock.Trim`).
+
+**Round**:
+One claimed part of one request: claim what fits the buffer, fetch inputs (collect inventory, then the posting Clerk), craft intermediates and the item, deliver. Code: `CraftspersonLoop.Round`, planned by `CraftPlan` (chain resolution with own patterns; `CraftPlan.most` sizes the claim).
+
+**Station**:
+The work place of a Producing Job, named by the block tag `civmod:stations/<job>` (`Job.station`): set with the scroll (up to 8, one per day) or the nearest one within 16 blocks of the JobBlock inside the border.
+_Avoid_: Workbench (the JobBlock is none)
