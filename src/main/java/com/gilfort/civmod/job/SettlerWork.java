@@ -28,6 +28,7 @@ import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
+import com.gilfort.civmod.settlement.StockRules;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
@@ -1317,6 +1318,8 @@ public final class SettlerWork {
                 cuItems += rest.getCount();
             }
         }
+        // A delivery into a Clerk: its stock rules are checked right away.
+        StockRules.check(level, site.dropOff(), cuDayTime);
         return !buffer.isFull();
     }
 
@@ -1850,6 +1853,8 @@ public final class SettlerWork {
         if (!all) {
             block(level, jobBlock, JobStatus.DROP_OFF_FULL);
         }
+        // A delivery into a Clerk: its stock rules are checked right away.
+        StockRules.check(level, dropOff, Math.floorMod(level.getOverworldClockTime(), 24000L));
     }
 
     /**

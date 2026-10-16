@@ -7,9 +7,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.mission.MissionOffer;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import io.netty.buffer.ByteBuf;
@@ -79,6 +81,26 @@ public final class SettlementBlock {
         ).apply(instance, SpotOfDay::new));
     }
 
+    /**
+     * The Clerk's fields, grouped for the save codec (saved flat, next to the other fields).
+     *
+     * @param storage    the linked containers
+     * @param standSpots the stand spots
+     * @param spotOfDay  the stand spot of the current half day
+     * @param stockRules the stock rules
+     */
+    private record ClerkFields(List<BlockPos> storage, List<StandSpot> standSpots, SpotOfDay spotOfDay, List<StockRule> stockRules) {
+
+        static final MapCodec<ClerkFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+                BlockPos.CODEC.listOf().optionalFieldOf("storage", List.of()).forGetter(ClerkFields::storage),
+                StandSpot.CODEC.listOf().optionalFieldOf("stand_spots", List.of()).forGetter(ClerkFields::standSpots),
+                SpotOfDay.CODEC.optionalFieldOf("spot_of_day", SpotOfDay.NONE).forGetter(ClerkFields::spotOfDay),
+                StockRule.CODEC.listOf().optionalFieldOf("stock_rules", List.of()).forGetter(ClerkFields::stockRules)
+        ).apply(instance, ClerkFields::new));
+
+        static final ClerkFields NONE = new ClerkFields(List.of(), List.of(), SpotOfDay.NONE, List.of());
+    }
+
     /** Maximum number of work POIs per JobBlock. */
     public static final int MAX_WORK_POINTS = 8;
 
@@ -97,9 +119,7 @@ public final class SettlementBlock {
             Codec.STRING.optionalFieldOf("assignee_name").forGetter(block -> Optional.empty()),
             Codec.BOOL.optionalFieldOf("collect_leaves", false).forGetter(SettlementBlock::collectLeaves),
             MissionOffer.CODEC.optionalFieldOf("mission_offer", MissionOffer.EMPTY).forGetter(SettlementBlock::missionOffer),
-            BlockPos.CODEC.listOf().optionalFieldOf("storage", List.of()).forGetter(SettlementBlock::storage),
-            StandSpot.CODEC.listOf().optionalFieldOf("stand_spots", List.of()).forGetter(SettlementBlock::standSpots),
-            SpotOfDay.CODEC.optionalFieldOf("spot_of_day", SpotOfDay.NONE).forGetter(SettlementBlock::spotOfDay)
+            ClerkFields.MAP_CODEC.forGetter(SettlementBlock::clerkFields)
     ).apply(instance, SettlementBlock::new));
 
     private final BlockPos pos;
@@ -115,6 +135,7 @@ public final class SettlementBlock {
     private final List<BlockPos> storage = new ArrayList<>();
     private final List<StandSpot> standSpots = new ArrayList<>();
     private SpotOfDay spotOfDay;
+    private final List<StockRule> stockRules = new ArrayList<>();
 
     /**
      * @param pos       the block position
@@ -124,13 +145,12 @@ public final class SettlementBlock {
      */
     public SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected) {
         this(pos, jobType, level, connected, List.of(), Optional.empty(), Optional.empty(), List.of(), Optional.empty(), Optional.empty(), false,
-                MissionOffer.EMPTY, List.of(), List.of(), SpotOfDay.NONE);
+                MissionOffer.EMPTY, ClerkFields.NONE);
     }
 
     private SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected, List<BlockPos> workPoints,
             Optional<BlockPos> collect, Optional<BlockPos> dropOff, List<Assignee> assignees, Optional<UUID> legacyAssignee,
-            Optional<String> legacyAssigneeName, boolean collectLeaves, MissionOffer missionOffer, List<BlockPos> storage,
-            List<StandSpot> standSpots, SpotOfDay spotOfDay) {
+            Optional<String> legacyAssigneeName, boolean collectLeaves, MissionOffer missionOffer, ClerkFields clerk) {
         this.pos = pos.immutable();
         this.jobType = jobType;
         this.level = SettlementRules.clampLevel(level);
@@ -142,9 +162,33 @@ public final class SettlementBlock {
         legacyAssignee.filter(id -> assignees.isEmpty()).ifPresent(id -> this.assignees.add(new Assignee(id, legacyAssigneeName.orElse("?"))));
         this.collectLeaves = collectLeaves;
         this.missionOffer = missionOffer;
-        this.storage.addAll(storage);
-        this.standSpots.addAll(standSpots);
-        this.spotOfDay = spotOfDay;
+        this.storage.addAll(clerk.storage());
+        this.standSpots.addAll(clerk.standSpots());
+        this.spotOfDay = clerk.spotOfDay();
+        this.stockRules.addAll(clerk.stockRules());
+    }
+
+    private ClerkFields clerkFields() {
+        return new ClerkFields(List.copyOf(storage), List.copyOf(standSpots), spotOfDay, List.copyOf(stockRules));
+    }
+
+    /**
+     * @return the Clerk's stock rules (read-only; Clerk only, else always empty)
+     */
+    public List<StockRule> stockRules() {
+        return Collections.unmodifiableList(stockRules);
+    }
+
+    /**
+     * @param slot a rule slot
+     * @return the stock rule in that slot
+     */
+    public Optional<StockRule> stockRule(int slot) {
+        return stockRules.stream().filter(rule -> rule.slot() == slot).findFirst();
+    }
+
+    List<StockRule> mutableStockRules() {
+        return stockRules;
     }
 
     /**

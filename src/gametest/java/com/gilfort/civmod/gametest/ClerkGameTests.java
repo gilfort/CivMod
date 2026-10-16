@@ -401,7 +401,7 @@ public final class ClerkGameTests {
                 Schedule.Activity.IDLE, () -> false, true, false, false, workEnd);
     }
 
-    private static Settler settler(GameTestHelper helper, BlockPos relative, SettlementData data, Settlement settlement) {
+    static Settler settler(GameTestHelper helper, BlockPos relative, SettlementData data, Settlement settlement) {
         ServerLevel level = helper.getLevel();
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
         Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(relative));

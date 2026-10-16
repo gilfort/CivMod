@@ -11,6 +11,7 @@ import com.gilfort.civmod.settlement.ClerkSpots;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.StockRules;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -22,7 +23,8 @@ import net.minecraft.world.phys.Vec3;
  * facing the way the player set it. It does not stroll; fatigue breaks start only while no customer is served.
  * Customers are served at its counter ({@link ClerkCounter}); the Clerk itself only holds its position.
  * <p>
- * Catch-up: the shift alone decides whether the linked storage is reachable; the Clerk's own time produces nothing.
+ * Catch-up: the shift alone decides whether the linked storage is reachable; the Clerk's own time produces nothing,
+ * its stock rules are checked once per simulated hour ({@link StockRules}).
  */
 final class ClerkLoop implements CategoryLoop {
 
@@ -107,7 +109,9 @@ final class ClerkLoop implements CategoryLoop {
 
     @Override
     public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks) {
-        // Standing at the counter uses the work time; hand-outs to customers give the EXP.
+        // Standing at the counter uses the work time; hand-outs to customers give the EXP. Called once per simulated
+        // hour of the shift: the stock rules are checked then.
+        StockRules.check(level, job.jobBlock(), shell.catchUpDayTime());
         return new SimulatedWork(0, 0.0);
     }
 

@@ -1,5 +1,6 @@
 package com.gilfort.civmod.settlement;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -10,6 +11,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import com.gilfort.civmod.logistics.Request;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
@@ -36,7 +38,8 @@ public final class Settlement {
             UUIDUtil.CODEC.listOf().optionalFieldOf("members", List.of()).forGetter(settlement -> List.copyOf(settlement.members)),
             SettlementBlock.CODEC.listOf().fieldOf("blocks").forGetter(settlement -> List.copyOf(settlement.blocks.values())),
             // Saves from before the Clerk may hold "pantries"; they are ignored (vault Systems/Settlement.md, 2026-10-16).
-            Codec.unboundedMap(Codec.STRING, UUIDUtil.CODEC).optionalFieldOf("beds", Map.of()).forGetter(Settlement::bedsForCodec)
+            Codec.unboundedMap(Codec.STRING, UUIDUtil.CODEC).optionalFieldOf("beds", Map.of()).forGetter(Settlement::bedsForCodec),
+            Request.CODEC.listOf().optionalFieldOf("requests", List.of()).forGetter(Settlement::requests)
     ).apply(instance, Settlement::new));
 
     private final int id;
@@ -47,6 +50,7 @@ public final class Settlement {
     private final Set<UUID> members = new LinkedHashSet<>();
     private final Map<BlockPos, SettlementBlock> blocks = new LinkedHashMap<>();
     private final Map<BlockPos, UUID> beds = new LinkedHashMap<>();
+    private final List<Request> requests = new ArrayList<>();
 
     /**
      * @param id          the settlement id (unique per dimension)
@@ -59,11 +63,12 @@ public final class Settlement {
      */
     public Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
             List<SettlementBlock> blocks) {
-        this(id, name, foundedAt, color, settlersDue, members, blocks, Map.of());
+        this(id, name, foundedAt, color, settlersDue, members, blocks, Map.of(), List.of());
     }
 
     private Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
-            List<SettlementBlock> blocks, Map<String, UUID> beds) {
+            List<SettlementBlock> blocks, Map<String, UUID> beds, List<Request> requests) {
+        this.requests.addAll(requests);
         beds.forEach((key, owner) -> this.beds.put(BlockPos.of(Long.parseLong(key)), owner));
         this.id = id;
         this.name = name;
@@ -192,6 +197,17 @@ public final class Settlement {
         return Optional.ofNullable(beds.remove(head));
     }
 
+    /**
+     * @return the settlement's requests, in posting order (read-only; see {@link Requests})
+     */
+    public List<Request> requests() {
+        return Collections.unmodifiableList(requests);
+    }
+
+    List<Request> mutableRequests() {
+        return requests;
+    }
+
     void setName(Optional<String> name) {
         this.name = name;
     }
@@ -213,6 +229,8 @@ public final class Settlement {
     }
 
     SettlementBlock remove(BlockPos pos) {
+        // The requests of a removed Clerk's rules go with it.
+        requests.removeIf(request -> request.rule() != Request.NO_RULE && request.target().filter(pos::equals).isPresent());
         return blocks.remove(pos);
     }
 }
