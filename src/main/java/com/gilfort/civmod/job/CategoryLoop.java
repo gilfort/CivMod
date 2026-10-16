@@ -13,7 +13,8 @@ import net.minecraft.server.level.ServerLevel;
  * {@code Systems/Job Categories.md}). The shell runs schedule, walking, food, sleep, job priorities, status, EXP and
  * the catch-up driver, picks the active Job by priority and hands control to the loop of that Job's category.
  * <p>
- * One instance per settler, shared by all of its jobs of that category; a loop keeps its own state and uses the shell's
+ * One instance per settler, shared by all of its jobs of that category; per-job state (buffer, status, work place of
+ * the day, scan) lives in the job's {@link Workplace}; a loop keeps its own loop state and uses the shell's
  * shared parts (walking, buffers and delivery, statuses, EXP) through the {@link SettlerWork} it was created for.
  */
 interface CategoryLoop {
@@ -92,24 +93,11 @@ interface CategoryLoop {
     SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks);
 
     /**
-     * Forgets everything about a removed job.
+     * Forgets the loop's own state of a removed job (the shell drops the job's {@link Workplace}).
      *
      * @param jobBlock the JobBlock position
      */
-    void forget(BlockPos jobBlock);
-
-    /**
-     * @return the work places of the day this loop saves with the settler
-     */
-    default List<SettlerWork.WorkPlaceEntry> workPlaces() {
-        return List.of();
-    }
-
-    /**
-     * @return the scans this loop saves with the settler
-     */
-    default List<SavedScan> savedScans() {
-        return List.of();
+    default void forget(BlockPos jobBlock) {
     }
 
     /**

@@ -279,7 +279,7 @@ final class MissionLoop implements CategoryLoop {
             if (catchUp) {
                 shell.deliverDirect(level, site, loot);
             } else {
-                JobBuffer buffer = shell.jobBuffer(site.pos());
+                JobBuffer buffer = shell.workplace(site.pos()).buffer();
                 loot.forEach(buffer::add);
             }
         }
