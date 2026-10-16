@@ -199,5 +199,6 @@
   "civmod.settler.status.on_mission": "On a mission: %s",
   "civmod.settler.status.mission_reserved": "Leaves next morning: %s",
   "civmod.settler.mission.returned.success": "%s is back from %s: success",
-  "civmod.settler.mission.returned.failed": "%s is back from %s: failed"
+  "civmod.settler.mission.returned.failed": "%s is back from %s: failed",
+  "civmod.settler.mission.died": "%s did not return from %s"
 }
