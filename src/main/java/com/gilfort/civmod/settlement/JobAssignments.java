@@ -218,7 +218,7 @@ public final class JobAssignments {
      * @return the settlers that worked it
      */
     public static List<UUID> unassign(SettlementData data, BlockPos jobBlock) {
-        Optional<SettlementBlock> block = JobBlockSite.at(data, jobBlock).map(JobBlockSite::block);
+        Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
         List<UUID> previous = block.map(b -> b.assignees().stream().map(SettlementBlock.Assignee::id).toList()).orElse(List.of());
         if (!previous.isEmpty()) {
             block.get().mutableAssignees().clear();
@@ -238,7 +238,7 @@ public final class JobAssignments {
      * @return whether the settler worked it
      */
     public static boolean unassign(SettlementData data, BlockPos jobBlock, UUID settler) {
-        Optional<SettlementBlock> block = JobBlockSite.at(data, jobBlock).map(JobBlockSite::block);
+        Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
         boolean removed = block.map(b -> b.mutableAssignees().removeIf(assignee -> assignee.id().equals(settler))).orElse(false);
         if (removed) {
             MissionOffers.removeAssignee(data, jobBlock, settler);
@@ -255,7 +255,7 @@ public final class JobAssignments {
      * @return the new state
      */
     public static boolean toggleLeaves(SettlementData data, BlockPos jobBlock) {
-        Optional<SettlementBlock> block = JobBlockSite.at(data, jobBlock).map(JobBlockSite::block);
+        Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
         block.ifPresent(b -> {
             b.setCollectLeaves(!b.collectLeaves());
             data.changed();
@@ -270,6 +270,6 @@ public final class JobAssignments {
      * @return whether the settler is an assignee of that JobBlock
      */
     public static boolean isAssignee(SettlementData data, BlockPos jobBlock, UUID settler) {
-        return JobBlockSite.at(data, jobBlock).map(JobBlockSite::block).filter(block -> block.isAssignee(settler)).isPresent();
+        return JobBlockSite.blockAt(data, jobBlock).filter(block -> block.isAssignee(settler)).isPresent();
     }
 }

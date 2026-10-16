@@ -196,7 +196,7 @@ public class ScrollOfAssignmentItem extends Item {
     }
 
     private static Optional<SettlementBlock> boundBlock(ItemStack stack, ServerPlayer player, BlockPos jobBlock) {
-        Optional<SettlementBlock> block = JobBlockSite.at(player.level(), jobBlock).map(JobBlockSite::block);
+        Optional<SettlementBlock> block = JobBlockSite.blockAt(player.level(), jobBlock);
         if (block.isEmpty()) {
             stack.remove(ModDataComponents.SCROLL_BINDING.get());
             player.sendOverlayMessage(Component.translatable("civmod.scroll.binding_lost").withStyle(ChatFormatting.RED));

@@ -1,14 +1,13 @@
 package com.gilfort.civmod.settlement;
 
 import java.util.Optional;
-import java.util.Set;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
 /**
  * A JobBlock as a settler sees it: its settlement block and everything the settler needs from it (level, skill cap,
- * drop-off, collect inventory, the settlement's pantries). The one way to resolve a JobBlock position outside the
+ * drop-off, collect inventory). The one way to resolve a JobBlock position outside the
  * settlement storage; {@link SettlementData} stays the store behind it.
  * <p>
  * A site is a live view of the saved data: read it where it is needed and do not keep it across ticks (the JobBlock
@@ -37,8 +36,21 @@ public record JobBlockSite(Settlement settlement, SettlementBlock block) {
         return at(level, jobBlock).map(JobBlockSite::level).orElse(SettlementRules.MIN_LEVEL);
     }
 
+    /**
+     * @param level    the dimension
+     * @param jobBlock a JobBlock position
+     * @return the JobBlock at that position as recorded by its settlement, empty if no settlement records one there
+     */
+    public static Optional<SettlementBlock> blockAt(ServerLevel level, BlockPos jobBlock) {
+        return blockAt(SettlementData.get(level), jobBlock);
+    }
+
     static Optional<JobBlockSite> at(SettlementData data, BlockPos jobBlock) {
         return data.settlementAt(jobBlock).flatMap(settlement -> settlement.block(jobBlock).map(block -> new JobBlockSite(settlement, block)));
+    }
+
+    static Optional<SettlementBlock> blockAt(SettlementData data, BlockPos jobBlock) {
+        return at(data, jobBlock).map(JobBlockSite::block);
     }
 
     /**
@@ -74,12 +86,5 @@ public record JobBlockSite(Settlement settlement, SettlementBlock block) {
      */
     public BlockPos collect() {
         return block.collect().orElse(block.pos());
-    }
-
-    /**
-     * @return the pantry containers of the JobBlock's settlement (read-only)
-     */
-    public Set<BlockPos> pantries() {
-        return settlement.pantries();
     }
 }

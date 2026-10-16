@@ -222,6 +222,6 @@ public final class MissionOffers {
     }
 
     private static Optional<SettlementBlock> missionBoard(SettlementData data, BlockPos board) {
-        return JobBlockSite.at(data, board).map(JobBlockSite::block).filter(block -> block.jobType().category() == JobCategory.MISSION);
+        return JobBlockSite.blockAt(data, board).filter(block -> block.jobType().category() == JobCategory.MISSION);
     }
 }
