@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.UUID;
 import java.util.function.ToIntFunction;
 
 import com.gilfort.civmod.job.Job;
@@ -150,28 +151,39 @@ public final class MissionRules {
     }
 
     /**
-     * The pick rule: the marked mission with the highest recommended level at or below the skill that the Mission Job
-     * may take; missions above the skill are never picked. Equal levels: the first entry.
+     * The pick rule: missions the player assigned to the settler come first, in random order and regardless of its skill.
+     * Otherwise the marked mission with the highest recommended level at or below the skill that is not locked for the
+     * settler; missions above the skill are never picked. Equal levels: the first entry. Only missions the Mission Job
+     * may take are picked.
      *
-     * @param offer the current offer
-     * @param pool  all missions by id
-     * @param job   the settler's Mission Job
-     * @param skill the settler's (effective) Mission Job skill
+     * @param offer   the current offer
+     * @param pool    all missions by id
+     * @param job     the settler's Mission Job
+     * @param skill   the settler's (effective) Mission Job skill
+     * @param settler the settler
+     * @param random  the random source (order of several assigned missions)
      * @return the offer index of the picked mission, empty if none fits
      */
-    public static OptionalInt pick(List<MissionOffer.Entry> offer, Map<Identifier, Mission> pool, Job job, int skill) {
+    public static OptionalInt pick(List<MissionOffer.Entry> offer, Map<Identifier, Mission> pool, Job job, int skill, UUID settler,
+            RandomSource random) {
+        List<Integer> assigned = new ArrayList<>();
         int best = -1;
         int bestLevel = Integer.MIN_VALUE;
         for (int i = 0; i < offer.size(); i++) {
             MissionOffer.Entry entry = offer.get(i);
             Mission mission = pool.get(entry.mission());
-            if (!entry.marked() || mission == null || !mission.jobs().contains(job) || mission.recommendedLevel() > skill) {
+            if (!entry.takeableBy(settler) || mission == null || !mission.jobs().contains(job)) {
                 continue;
             }
-            if (mission.recommendedLevel() > bestLevel) {
+            if (entry.locked()) {
+                assigned.add(i);
+            } else if (mission.recommendedLevel() <= skill && mission.recommendedLevel() > bestLevel) {
                 best = i;
                 bestLevel = mission.recommendedLevel();
             }
+        }
+        if (!assigned.isEmpty()) {
+            return OptionalInt.of(assigned.get(random.nextInt(assigned.size())));
         }
         return best < 0 ? OptionalInt.empty() : OptionalInt.of(best);
     }
