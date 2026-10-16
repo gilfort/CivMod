@@ -26,6 +26,9 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 
 /**
  * GameTests for the Work rules: live play and catch-up produce alike for the same job, tool, skill and work time.
+ * <p>
+ * The 3000-tick live run uses its own test environment ({@code civmod:long_run}), so it runs in a batch of its own
+ * and does not overlap the benchmark window of {@link BenchmarkGameTests}.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class WorkRulesGameTests {
