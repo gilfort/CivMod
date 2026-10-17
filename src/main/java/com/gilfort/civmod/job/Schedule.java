@@ -26,7 +26,7 @@ public final class Schedule {
     /** Length of every Schedule window in day ticks (30 minutes). */
     public static final long WINDOW_TICKS = 500L;
     /** Start of the waking window (06:00; day time 0 = 06:00). */
-    public static final long WAKE_WINDOW_START = 0L;
+    private static final long WAKE_WINDOW_START = 0L;
 
     private static final long SALT_WAKE = 1L;
     private static final long SALT_WORK_END = 2L;
