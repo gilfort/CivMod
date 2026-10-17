@@ -75,6 +75,6 @@ public class DebugScreen extends CivContainerScreen<DebugMenu> {
 
     @Override
     protected List<Component> helpLines(int tab) {
-        return List.of(Component.translatable("civmod.gui.debug.info"));
+        return List.of(Component.translatable("civmod.gui.debug.help.blocks"), Component.translatable("civmod.gui.debug.help.dev"));
     }
 }
