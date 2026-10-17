@@ -48,6 +48,8 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
     /** How far the lower arm reaches out from the body axis (body 4 px + arm 4 px, slim arm 3 px). */
     private static final float ARM_REACH_WIDE = 8.0F / 16.0F;
     private static final float ARM_REACH_SLIM = 7.0F / 16.0F;
+    /** How deep the lower arm sinks into the mattress on a side: resting on top of it looks stiff. */
+    private static final float ARM_SINK = 5.0F / 16.0F;
     private static final PlayerSkin[] SKINS = new PlayerSkin[SettlerSkins.COUNT];
 
     static {
@@ -85,10 +87,10 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
             return;
         }
         // Roll around the body axis, which runs along the bed. On its side the lower arm rests on the bed instead of
-        // the back: lift the body axis by the difference so the body neither sinks into the (straw) bed nor floats.
+        // the back: lift the body axis by the difference, minus the part of the arm that sinks into the mattress.
         float angle = (float) Math.toRadians(pose == SleepingPose.LEFT_SIDE ? 90.0 : -90.0);
         settlerState.roll = new Quaternionf().rotationAxis(angle, bed.getStepX(), 0.0F, bed.getStepZ());
-        settlerState.lift = (state.skin.model() == PlayerModelType.SLIM ? ARM_REACH_SLIM : ARM_REACH_WIDE) - HALF_DEPTH;
+        settlerState.lift = (state.skin.model() == PlayerModelType.SLIM ? ARM_REACH_SLIM : ARM_REACH_WIDE) - HALF_DEPTH - ARM_SINK;
     }
 
     @Override
