@@ -169,10 +169,14 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (JobBlockMenu.isMissionBoard(info) && tab == JobBlockMenu.TAB_MISSIONS) {
             return missions.helpLines();
         }
-        if (tab == JobBlockMenu.TAB_INFO && info.jobType().profile().map(JobProfile::hasLeavesOption).orElse(false) && info.inSettlement()) {
-            return List.of(Component.translatable("civmod.gui.job_block.leaves.tooltip"));
+        List<Component> lines = new ArrayList<>();
+        if (tab == JobBlockMenu.TAB_INFO && info.inSettlement() && !info.connected()) {
+            lines.add(Component.translatable("civmod.gui.job_block.help.connect"));
         }
-        return List.of();
+        if (tab == JobBlockMenu.TAB_INFO && info.jobType().profile().map(JobProfile::hasLeavesOption).orElse(false) && info.inSettlement()) {
+            lines.add(Component.translatable("civmod.gui.job_block.leaves.tooltip"));
+        }
+        return lines;
     }
 
     // ---------------------------------------------------------------- info tab
@@ -187,8 +191,22 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         graphics.text(font, Component.translatable("civmod.gui.job_block.level_cap", info.level(), SettlementRules.MAX_LEVEL,
                 SettlementRules.skillCap(info.level())), CivGui.PADDING, y, color, false);
         y += LINE_HEIGHT;
-        if (info.inSettlement()) {
-            graphics.text(font, Component.translatable("civmod.gui.job_block.settlement", info.settlementName()), CivGui.PADDING, y, color, false);
+        // The settlement line also carries the connection state (one line: the buttons below leave no room for more).
+        int width = imageWidth - 2 * CivGui.PADDING;
+        if (!info.inSettlement()) {
+            graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.job_block.not_registered"), width), CivGui.PADDING, y,
+                    CivGui.ERROR_COLOR, false);
+        } else if (!info.connected()) {
+            Component settlement = Component.translatable("civmod.gui.job_block.settlement", info.settlementName());
+            Component unconnected = Component.translatable("civmod.gui.job_block.unconnected", info.required(), info.distance());
+            graphics.text(font, CivGui.fit(font, unconnected, width), CivGui.PADDING, y, CivGui.ERROR_COLOR, false);
+            if (mouseX >= leftPos + CivGui.PADDING && mouseX < leftPos + CivGui.PADDING + width && mouseY >= topPos + y
+                    && mouseY < topPos + y + font.lineHeight) {
+                graphics.setComponentTooltipForNextFrame(font, List.of(settlement, unconnected), mouseX, mouseY);
+            }
+        } else {
+            graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.job_block.settlement", info.settlementName()), width),
+                    CivGui.PADDING, y, color, false);
         }
         y += LINE_HEIGHT;
         if (!JobBlockMenu.isMissionBoard(info)) {
@@ -204,14 +222,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             }
         }
         y += LINE_HEIGHT;
-        y = extractCosts(graphics, info, y, mouseX, mouseY);
-        if (!info.inSettlement()) {
-            graphics.textWithWordWrap(font, Component.translatable("civmod.gui.job_block.not_registered"),
-                    CivGui.PADDING, y, imageWidth - 2 * CivGui.PADDING, CivGui.ERROR_COLOR, false);
-        } else if (!info.connected()) {
-            graphics.textWithWordWrap(font, Component.translatable("civmod.gui.job_block.unconnected", info.required(), info.distance()),
-                    CivGui.PADDING, y, imageWidth - 2 * CivGui.PADDING, CivGui.ERROR_COLOR, false);
-        }
+        extractCosts(graphics, info, y, mouseX, mouseY);
     }
 
     /**

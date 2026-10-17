@@ -363,7 +363,8 @@ final class ClerkTabView {
     List<Component> helpLines(int tab) {
         if (tab == JobBlockMenu.TAB_STOCK) {
             return List.of(Component.translatable("civmod.gui.clerk.stock.help.set"), Component.translatable("civmod.gui.clerk.stock.help.click"),
-                    Component.translatable("civmod.gui.clerk.stock.help.shift"), Component.translatable("civmod.gui.clerk.stock.help.levels"));
+                    Component.translatable("civmod.gui.clerk.stock.help.edit"), Component.translatable("civmod.gui.clerk.stock.help.shift"),
+                    Component.translatable("civmod.gui.clerk.stock.help.levels"));
         }
         if (tab == JobBlockMenu.TAB_REQUESTS) {
             return List.of(Component.translatable("civmod.gui.clerk.requests.help"));

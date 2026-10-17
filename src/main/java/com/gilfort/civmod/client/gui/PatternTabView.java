@@ -283,6 +283,7 @@ final class PatternTabView {
         } else {
             lines.add(Component.translatable("civmod.gui.patterns.help.editor"));
         }
+        lines.add(Component.translatable("civmod.gui.patterns.help.modes"));
         lines.add(Component.translatable("civmod.gui.patterns.help.metal"));
         return lines;
     }
@@ -319,11 +320,12 @@ final class PatternTabView {
                 CivGui.slotHover(graphics, x, y);
             }
         }
-        int y = LIBRARY_Y + LIBRARY_ROWS * 18 + 3;
+        // Two lines between the library and the inventory label (which starts 9 px below the second one).
+        int y = LIBRARY_Y + LIBRARY_ROWS * 18 + 2;
         graphics.text(font, Component.translatable("civmod.gui.patterns.checkmarks", tab.checked(), tab.limit()), CivGui.PADDING, y,
                 CivGui.LABEL_COLOR, false);
         tab.trim().ifPresent(trim -> graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.patterns.trimmed", trim.removed(),
-                trim.limit()), screen.panelWidth() - 2 * CivGui.PADDING), CivGui.PADDING, y + 10, CivGui.ERROR_COLOR, false));
+                trim.limit()), screen.panelWidth() - 2 * CivGui.PADDING), CivGui.PADDING, y + 9, CivGui.ERROR_COLOR, false));
         if (hovered >= 0) {
             graphics.setComponentTooltipForNextFrame(font, tooltip(tab, hovered), mouseX, mouseY);
         }
@@ -375,14 +377,17 @@ final class PatternTabView {
         if (hovered == TARGET_OUTPUT) {
             CivGui.slotHover(graphics, OUTPUT_X, OUTPUT_Y);
         }
+        // Two short state lines between the buttons and the inventory label; what they mean is in the help.
+        boolean valid = pattern.filter(Pattern::valid).isPresent();
         Component mode = pattern.map(found -> Component.translatable(!found.valid() ? "civmod.gui.patterns.no_recipe"
                 : found.exact() ? "civmod.gui.patterns.exact" : "civmod.gui.patterns.recipe")).orElse(Component.translatable("civmod.gui.patterns.empty_slot"));
         int y = PATTERN_BUTTONS_Y + 24;
         int width = screen.panelWidth() - 2 * CivGui.PADDING;
-        graphics.text(font, CivGui.fit(font, mode, width), CivGui.PADDING, y, CivGui.HINT_COLOR, false);
+        graphics.text(font, CivGui.fit(font, mode, width), CivGui.PADDING, y, pattern.isPresent() && !valid ? CivGui.ERROR_COLOR : CivGui.HINT_COLOR,
+                false);
         if (tab.metal().contains(editing)) {
-            graphics.textWithWordWrap(font, Component.translatable("civmod.gui.patterns.metal"), CivGui.PADDING, y + 10, width, CivGui.ERROR_COLOR,
-                    false);
+            graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.patterns.metal"), width), CivGui.PADDING, y + 10,
+                    CivGui.ERROR_COLOR, false);
         }
         if (hovered >= TARGET_CELL && hovered < TARGET_CELL + Pattern.GRID) {
             Item item = pattern.map(found -> found.grid().get(hovered - TARGET_CELL)).orElse(Items.AIR);
