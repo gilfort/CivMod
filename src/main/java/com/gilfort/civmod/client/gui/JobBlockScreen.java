@@ -174,7 +174,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             lines.add(Component.translatable("civmod.gui.job_block.help.connect"));
         }
         if (tab == JobBlockMenu.TAB_INFO && info.jobType().profile().map(JobProfile::hasLeavesOption).orElse(false) && info.inSettlement()) {
-            lines.add(Component.translatable("civmod.gui.job_block.leaves.tooltip"));
+            lines.add(Component.translatable("civmod.gui.job_block.help.leaves"));
         }
         return lines;
     }
