@@ -23,6 +23,7 @@
   "job.civmod.miner": "Miner",
   "job.civmod.fisherman": "Fisherman",
   "civmod.tooltip.job_level": "Level %s / %s",
+  "civmod.tooltip.starter_tool": "Starter tool: %s",
   "civmod.settlement.unnamed": "Unnamed settlement",
   "civmod.settlement.founded": "A new settlement has been founded",
   "civmod.settlement.joined": "JobBlock joined %s",

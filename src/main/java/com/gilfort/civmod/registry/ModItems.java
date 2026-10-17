@@ -1,13 +1,17 @@
 package com.gilfort.civmod.registry;
 
+import java.util.Map;
 import java.util.Set;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.event.ModifyDefaultComponentsEvent;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
@@ -59,6 +63,13 @@ public final class ModItems {
     public static final Set<DeferredItem<Item>> RENDER_ONLY = Set.of(UNCONNECTED_MARKER, WORK_MARKER, PRIMARY_WORK_MARKER, COLLECT_MARKER,
             DROP_OFF_MARKER, BED_MARKER, STAND_SPOT_MARKER);
 
+    /**
+     * Starter tool every new JobBlock item of a job that needs a tool carries (vault {@code Systems/JobBlock.md}).
+     * Clerk, Craftsperson and Mission Board have none.
+     */
+    private static final Map<DeferredItem<BlockItem>, Item> STARTER_TOOLS = Map.of(LUMBERJACK_BLOCK, Items.STONE_AXE,
+            MINER_BLOCK, Items.STONE_PICKAXE, FISHERMAN_BLOCK, Items.FISHING_ROD);
+
     private ModItems() {
     }
 
@@ -69,5 +80,12 @@ public final class ModItems {
      */
     public static void register(IEventBus modEventBus) {
         ITEMS.register(modEventBus);
+        modEventBus.addListener(ModItems::addStarterTools);
+    }
+
+    /** Gives every new JobBlock item its starter tool as a default component (crafted, creative, {@code /give}, loot). */
+    private static void addStarterTools(ModifyDefaultComponentsEvent event) {
+        STARTER_TOOLS.forEach((jobBlock, tool) -> event.modify(jobBlock,
+                (components, context, item) -> components.set(ModDataComponents.STARTER_TOOL.get(), BuiltInRegistries.ITEM.wrapAsHolder(tool))));
     }
 }
