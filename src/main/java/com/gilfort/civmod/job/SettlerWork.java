@@ -68,7 +68,10 @@ public final class SettlerWork {
 
     /** Ticks between decisions. */
     public static final int DECISION_INTERVAL = 100;
-    /** Work hours in day ticks (06:00–17:30; day time 0 = 06:00). */
+    /**
+     * Start of the end-of-work window (17:30; day time 0 = 06:00); each settler's work ends at its daily offset inside
+     * the window ({@link #dayTimes}).
+     */
     public static final long WORK_END = 11500;
     /** Daily scans that start within this many day ticks are spread randomly over that window. */
     public static final int SCAN_SPREAD_TICKS = 1200;
@@ -84,7 +87,7 @@ public final class SettlerWork {
     /** Players within this distance get the hunger message. */
     private static final double COMPLAIN_RANGE = 32.0;
 
-    /** Day time at which settlers go to sleep (20:00). */
+    /** Start of the going-to-bed window (20:00); each settler goes to bed at its daily offset inside the window. */
     public static final long SLEEP_TIME = 14000;
     /** Stroll radius around the bed in the evening. */
     private static final int REST_RADIUS = 5;
@@ -203,10 +206,12 @@ public final class SettlerWork {
     }
 
     /**
-     * @return the day time this settler's work ends: 18:30 for a Clerk (its shift), otherwise {@value #WORK_END}
+     * @param day the day
+     * @return this settler's waking, end of work and bed times on that day (daily offsets inside the Schedule windows;
+     *         a Clerk's work ends with its shift at 18:30)
      */
-    public long workEnd() {
-        return ownClerk().isPresent() ? ClerkStorage.SHIFT_END : WORK_END;
+    public Schedule.DayTimes dayTimes(long day) {
+        return Schedule.dayTimes(settler.getUUID(), day, ownClerk().isPresent());
     }
 
     /**
@@ -577,7 +582,7 @@ public final class SettlerWork {
                 SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE),
                 CivModConfig.PROVISION_NUTRITION.get(), SettlerFood.choose(pocketStacks(), food.level()).isPresent(),
                 () -> foodLookup.get().isPresent(), settler.isHomeless(), settler.isSleeping() && !woke, food.forageDay(), nightSkipped,
-                activity, () -> jobStepHolds(level), food.morningDay() == day, food.eatenDay() == day, deliveryPending, workEnd());
+                activity, () -> jobStepHolds(level), food.morningDay() == day, food.eatenDay() == day, deliveryPending, dayTimes(day));
     }
 
     private boolean jobStepHolds(ServerLevel level) {
@@ -1157,7 +1162,9 @@ public final class SettlerWork {
             // On the mission all hour (no hunger, no work), or died on it.
             return 0;
         }
-        long workEnd = day * DayClock.DAY_TICKS + workEnd();
+        // The same daily offset as in live play; the hourly segments only approximate it (accepted).
+        long ownWorkEnd = dayTimes(day).workEnd();
+        long workEnd = day * DayClock.DAY_TICKS + ownWorkEnd;
         long dayTime = from - day * DayClock.DAY_TICKS;
         cuDayTime = dayTime;
         SettlerFood food = settler.getFood();
@@ -1170,7 +1177,7 @@ public final class SettlerWork {
             }
             // Back at the end of work (the Schedule hands out the food): the rest of the hour is an ordinary evening.
             from = workEnd;
-            dayTime = workEnd();
+            dayTime = ownWorkEnd;
             decideCatchUp(level, day, dayTime);
         }
         long awake = to - from;
@@ -1191,7 +1198,7 @@ public final class SettlerWork {
         if (to >= workEnd) {
             endDay(level);
             // Work is over: the evening meal.
-            decideCatchUp(level, day, Math.max(dayTime, workEnd()));
+            decideCatchUp(level, day, Math.max(dayTime, ownWorkEnd));
         }
         return rolls;
     }
@@ -1284,7 +1291,7 @@ public final class SettlerWork {
                 SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE),
                 CivModConfig.PROVISION_NUTRITION.get(), !noFood && SettlerFood.choose(pocketStacks(), food.level()).isPresent(),
                 () -> !noFood && foodLookup.get().isPresent(), settler.isHomeless(), false, food.forageDay(), false,
-                Activity.IDLE, () -> false, food.morningDay() == day, food.eatenDay() == day, false, workEnd());
+                Activity.IDLE, () -> false, food.morningDay() == day, food.eatenDay() == day, false, dayTimes(day));
     }
 
     /**
@@ -1376,7 +1383,7 @@ public final class SettlerWork {
             return;
         }
         long dayTime = DayClock.dayTime(level);
-        long awake = dayTime < SLEEP_TIME && !settler.isSleeping() ? DECISION_INTERVAL : 0L;
+        long awake = dayTime < dayTimes(DayClock.day(level)).bed() && !settler.isSleeping() ? DECISION_INTERVAL : 0L;
         float appetite = food.appetite(level.getRandom(), CivModConfig.APPETITE_MIN.get(), CivModConfig.APPETITE_MAX.get());
         food.exhaust(SettlerFood.exhaustionFor(awake, weightedWorkTicks, CivModConfig.HUNGER_BASE_PER_DAY.get(),
                 CivModConfig.HUNGER_PER_WORK_MINUTE.get(), appetite));
