@@ -37,7 +37,6 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
     private static final int SMALL_BUTTON = 16;
     private static final int FOOD_Y = 72;
     private static final int FOUND_Y = BUFFER_Y + 2 * 18 + 14;
-    private static final int MISSION_OPTIONS_Y = 70;
 
     /**
      * @param menu      the menu
@@ -68,14 +67,6 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
             Button down = jobButton("▼", "civmod.gui.settler.job.down", SettlerJobs.MOVE_DOWN + i, right - 2 * SMALL_BUTTON - 2, y);
             down.active = i < jobs.size() - 1;
             jobButton("✕", "civmod.gui.settler.job.remove", SettlerJobs.REMOVE + i, right - SMALL_BUTTON, y);
-        }
-        java.util.Optional<SettlerJob> missionJob = info.missionJob();
-        for (int i = 0; i < info.missionJobs().size() && missionJob.isPresent(); i++) {
-            com.gilfort.civmod.job.Job option = info.missionJobs().get(i);
-            int buttonId = SettlerJobs.SET_MISSION_JOB + i;
-            Button button = addTabWidget(SettlerMenu.TAB_MISSION, Button.builder(option.displayName(), b -> clickButton(buttonId))
-                    .bounds(leftPos + CivGui.PADDING, topPos + MISSION_OPTIONS_Y + i * ROW_HEIGHT, imageWidth - 2 * CivGui.PADDING, 20).build());
-            button.active = option != missionJob.get().jobType();
         }
     }
 
@@ -160,8 +151,6 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                 34, CivGui.LABEL_COLOR, false);
         Component mission = info.mission().getString().isEmpty() ? Component.translatable("civmod.gui.settler.mission.no_mission") : info.mission();
         graphics.text(font, CivGui.fit(font, mission, imageWidth - 2 * CivGui.PADDING), CivGui.PADDING, 46, CivGui.HINT_COLOR, false);
-        graphics.text(font, Component.translatable("civmod.gui.settler.mission.offered"), CivGui.PADDING, MISSION_OPTIONS_Y - 11,
-                CivGui.LABEL_COLOR, false);
     }
 
     private static java.util.Optional<SettlerInfo.JobState> state(SettlerInfo info, int index) {

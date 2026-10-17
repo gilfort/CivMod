@@ -31,11 +31,10 @@ import net.minecraft.world.item.ItemStack;
  * @param jobStates      status and buffer per job, aligned with {@code jobs}
  * @param bed            where the settler sleeps
  * @param food           food level, saturation and appetite
- * @param missionJobs    the Mission Jobs the settler's Mission Board offers at its level (empty without a board)
  * @param mission        the mission the settler is away on or waits to leave for (empty text if none)
  */
 public record SettlerInfo(Component name, Component status, boolean homeless, Component settlementName, List<SettlerJob> jobs,
-        List<JobState> jobStates, Component bed, FoodInfo food, List<Job> missionJobs, Component mission) {
+        List<JobState> jobStates, Component bed, FoodInfo food, Component mission) {
 
     /**
      * Food state shown in the overview.
@@ -128,7 +127,6 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
             JobState.STREAM_CODEC.apply(ByteBufCodecs.list()), SettlerInfo::jobStates,
             ComponentSerialization.STREAM_CODEC, SettlerInfo::bed,
             FoodInfo.STREAM_CODEC, SettlerInfo::food,
-            Job.STREAM_CODEC.apply(ByteBufCodecs.list()), SettlerInfo::missionJobs,
             ComponentSerialization.STREAM_CODEC, SettlerInfo::mission,
             SettlerInfo::new);
 
@@ -163,18 +161,8 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
         float appetite = food.appetite(settler.getRandom(), com.gilfort.civmod.config.CivModConfig.APPETITE_MIN.get(),
                 com.gilfort.civmod.config.CivModConfig.APPETITE_MAX.get());
         return new SettlerInfo(settler.getName(), settler.statusText(), settler.isHomeless(), settlementName, settler.getJobs(), states, bed,
-                new FoodInfo(food.level(), food.saturation(), appetite), missionJobs(settler),
+                new FoodInfo(food.level(), food.saturation(), appetite),
                 settler.getWork().missionStatus().orElse(Component.empty()));
-    }
-
-    private static List<Job> missionJobs(Settler settler) {
-        if (!(settler.level() instanceof ServerLevel level)) {
-            return List.of();
-        }
-        return settler.getJobs().stream().filter(job -> job.jobType().category() == JobCategory.MISSION).findFirst()
-                .flatMap(job -> JobBlockSite.blockAt(level, job.jobBlock()))
-                .map(board -> board.jobType().offeredAt(board.level()).stream().filter(job -> job.category() == JobCategory.MISSION).toList())
-                .orElse(List.of());
     }
 
     /**
@@ -199,6 +187,6 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
             int index = this.jobs.indexOf(job);
             return index >= 0 && index < jobStates.size() ? jobStates.get(index) : new JobState(JobStatus.IDLE, 0, List.of(), List.of(), List.of(), List.of(), SkillInfo.NONE);
         }).toList();
-        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(jobs), states, bed, food, missionJobs, mission);
+        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(jobs), states, bed, food, mission);
     }
 }

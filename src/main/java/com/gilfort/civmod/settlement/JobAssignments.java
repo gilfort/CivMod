@@ -72,10 +72,14 @@ public final class JobAssignments {
         NO_JOB_BLOCK,
         /** The JobBlock is not connected to its settlement. */
         UNCONNECTED,
-        /** Another settler works this JobBlock (it holds one settler). */
+        /** Another settler holds the Job's only place. */
         OCCUPIED,
-        /** The JobBlock holds as many settlers as its level allows (Mission Board). */
+        /** Every place of the Job is taken (several places, e.g. Deliverymen or the Mission Board). */
         FULL,
+        /** The JobBlock does not offer the Job (at its level). */
+        NOT_OFFERED,
+        /** The settler already holds another Job at this JobBlock (one Job per JobBlock). */
+        SAME_BLOCK,
         /** The settler already has a Mission Job (at most one). */
         MISSION_JOB,
         /** The settler belongs to another settlement or is homeless. */
@@ -263,8 +267,7 @@ public final class JobAssignments {
     }
 
     /**
-     * Assigns the job of a JobBlock to a settler. A settler holds at most one Mission Job; a JobBlock takes settlers up
-     * to its {@link SettlementBlock#capacity() capacity}.
+     * Assigns the Base Job of a JobBlock to a settler ({@link #assign(SettlementData, BlockPos, UUID, String, int, Collection, Job)}).
      *
      * @param data         the dimension's settlement data
      * @param jobBlock     the JobBlock position
@@ -276,6 +279,22 @@ public final class JobAssignments {
      */
     public static AssignResult assign(SettlementData data, BlockPos jobBlock, UUID settler, String settlerName, int settlementId,
             Collection<Job> currentJobs) {
+        return JobBlockSite.blockAt(data, jobBlock)
+                .map(block -> assign(data, jobBlock, settler, settlerName, settlementId, currentJobs, block.jobType()))
+                .orElse(AssignResult.NO_JOB_BLOCK);
+    }
+
+    /**
+     * Checks whether a settler may take any Job of a JobBlock, before the job picker opens: the block is connected, in
+     * the settler's settlement, and the settler holds no Job there yet.
+     *
+     * @param data         the dimension's settlement data
+     * @param jobBlock     the JobBlock position
+     * @param settler      the settler UUID
+     * @param settlementId the settler's settlement id ({@code -1} if homeless)
+     * @return {@link AssignResult#OK} or the reason the settler cannot join
+     */
+    public static AssignResult check(SettlementData data, BlockPos jobBlock, UUID settler, int settlementId) {
         Optional<JobBlockSite> site = JobBlockSite.at(data, jobBlock);
         if (site.isEmpty()) {
             return AssignResult.NO_JOB_BLOCK;
@@ -288,19 +307,46 @@ public final class JobAssignments {
             return AssignResult.OTHER_SETTLEMENT;
         }
         if (block.isAssignee(settler)) {
-            return AssignResult.DUPLICATE;
+            return AssignResult.SAME_BLOCK;
         }
-        boolean missionBoard = block.jobType().category() == JobCategory.MISSION;
-        if (missionBoard && currentJobs.stream().anyMatch(job -> job.category() == JobCategory.MISSION)) {
+        return AssignResult.OK;
+    }
+
+    /**
+     * Assigns one Job of a JobBlock to a settler (the job picker's choice). A settler holds at most one Job per JobBlock,
+     * each Job once and at most one Mission Job; a Job takes settlers up to its places ({@link JobPlaces}).
+     *
+     * @param data         the dimension's settlement data
+     * @param jobBlock     the JobBlock position
+     * @param settler      the settler UUID
+     * @param settlerName  the settler name (for display)
+     * @param settlementId the settler's settlement id ({@code -1} if homeless)
+     * @param currentJobs  the job types the settler already has
+     * @param job          the chosen Job
+     * @return the result
+     */
+    public static AssignResult assign(SettlementData data, BlockPos jobBlock, UUID settler, String settlerName, int settlementId,
+            Collection<Job> currentJobs, Job job) {
+        AssignResult checked = check(data, jobBlock, settler, settlementId);
+        if (checked != AssignResult.OK) {
+            return checked;
+        }
+        SettlementBlock block = JobBlockSite.blockAt(data, jobBlock).orElseThrow();
+        Optional<JobPlaces.Line> line = JobPlaces.line(block, job);
+        if (line.isEmpty()) {
+            return AssignResult.NOT_OFFERED;
+        }
+        if (job.category() == JobCategory.MISSION && currentJobs.stream().anyMatch(current -> current.category() == JobCategory.MISSION)) {
             return AssignResult.MISSION_JOB;
         }
-        if (currentJobs.contains(block.jobType())) {
+        if (currentJobs.contains(job)) {
             return AssignResult.DUPLICATE;
         }
-        if (block.assignees().size() >= block.capacity()) {
-            return missionBoard ? AssignResult.FULL : AssignResult.OCCUPIED;
+        if (line.get().full()) {
+            // "Occupied by <name>" names the holder of a single place; the Mission Board always reports itself full.
+            return line.get().places() == 1 && job.category() != JobCategory.MISSION ? AssignResult.OCCUPIED : AssignResult.FULL;
         }
-        block.mutableAssignees().add(new SettlementBlock.Assignee(settler, settlerName));
+        block.mutableAssignees().add(new SettlementBlock.Assignee(settler, settlerName, job));
         data.changed();
         return AssignResult.OK;
     }

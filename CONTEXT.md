@@ -61,7 +61,7 @@ A JobBlock as a settler sees it: its settlement, settlement block, level, skill 
 _Avoid_: Looking up `SettlementData.settlementAt(pos)` then `Settlement.block(pos)` by hand
 
 **Mission Board**:
-The JobBlock of all Mission Jobs; holds several settlers and the list of selected Missions. Code: `ModBlocks.MISSION_BOARD` (a `JobBlock` offering the Adventurer), capacity in `SettlementRules.capacity`, settlers in `SettlementBlock.assignees()`; a settler's Mission Job is set with `SettlerJobs.withMissionJob`.
+The JobBlock of all Mission Jobs; holds several settlers and the list of selected Missions. Code: `ModBlocks.MISSION_BOARD` (a `JobBlock` offering the Adventurer), capacity in `SettlementRules.capacity` (shared by all Mission Jobs, `JobPlaces`), settlers in `SettlementBlock.assignees()`; a settler's Mission Job is chosen in the Job picker when it joins (changing it: ✕ and assign again).
 
 **Mission**:
 A datapack-defined task a Mission Job settler leaves the settlement for (duration, difficulty, loot). Code: `Mission` in the `civmod:mission` datapack registry (`Missions`, files in `data/<namespace>/civmod/mission/`); arithmetic in `MissionRules`, outcome constants in `OutcomeRules` (`civmod_mission/outcome.json`). The mission a settler reserved or is away on: `MissionTrip`; who takes which mission: `MissionPicks`.
@@ -105,7 +105,7 @@ _Avoid_: Threshold, order
 _Avoid_: Order, job, task
 
 **Deliveryman**:
-A Logistics Job that carries items between containers for its Warehouse; its places are on the Clerk JobBlock (several per block, by level). A Clerk never delivers itself.
+A Logistics Job that carries items between containers for its Warehouse; its places are on the Clerk JobBlock (1 / 2 / 4 / 6 / 8 by level, `SettlementRules.deliverymanPlaces`). A Clerk never delivers itself. Code: `ModJobs.DELIVERYMAN` (no work loop yet: `SettlerWork` skips it like any Job without a loop).
 _Avoid_: Courier, porter, Clerk specialization
 
 **Warehouse**:
@@ -127,7 +127,7 @@ An amount of an item in a Clerk's storage held for one Delivery task until picku
 _Avoid_: Claim (that is a producer's share of a Request)
 
 **Job picker**:
-The window that opens when the scroll assigns a settler to a JobBlock: the block's Jobs with taken / places; a settler holds at most one Job per JobBlock.
+The window that opens when the scroll assigns a settler to a JobBlock: the block's Jobs with taken / places (full ones greyed out); a settler holds at most one Job per JobBlock. Code: `JobPicker` (payloads `Open` / `Choose`), `JobPickerScreen`; Jobs and places per JobBlock in `JobPlaces` (`JobPlaces.Line`; a Base Job and its Specializations share places), checked by `JobAssignments.check` before it opens and assigned with `JobAssignments.assign(…, job)`; each assignee records its Job (`SettlementBlock.Assignee.job()`, the Clerk of a block: `SettlementBlock.assignee(ModJobs.CLERK.get())`).
 
 **Food point**:
 Every Clerk JobBlock; settlers take food from the nearest one whose reachable stock has food (a Clerk from its own storage first). Code: `ClerkStorage.nearestFood` → `ClerkStorage.FoodPoint`.

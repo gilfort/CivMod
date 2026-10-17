@@ -8,6 +8,7 @@ import java.util.UUID;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
 
@@ -113,7 +114,7 @@ final class ClerkCounter {
     }
 
     private static Optional<Settler> clerkSettler(ServerLevel level, BlockPos clerk) {
-        return JobBlockSite.blockAt(level, clerk).flatMap(block -> block.assignees().stream().findFirst())
+        return JobBlockSite.blockAt(level, clerk).flatMap(block -> block.assignee(ModJobs.CLERK.get()))
                 .map(SettlementBlock.Assignee::id).map(level::getEntity).filter(Settler.class::isInstance).map(Settler.class::cast);
     }
 

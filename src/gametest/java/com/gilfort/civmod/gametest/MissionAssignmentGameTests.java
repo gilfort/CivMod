@@ -166,13 +166,6 @@ public final class MissionAssignmentGameTests {
         helper.assertTrue(MissionOffers.assign(data, board, 0, marked, bob.getUUID(), adventurer, pool), "Reassigned to Bob");
         helper.assertTrue(entry(helper, 0).assignee().equals(Optional.of(bob.getUUID())), "Assigned to Bob now: " + entry(helper, 0));
 
-        MissionOffers.missionJobChanged(data, board, bob.getUUID(), adventurer, pool);
-        helper.assertTrue(entry(helper, 0).assignee().equals(Optional.of(bob.getUUID())), "A Mission Job the mission allows keeps it: " + entry(helper, 0));
-        MissionOffers.missionJobChanged(data, board, bob.getUUID(), ModJobs.MINER.get(), pool);
-        helper.assertTrue(entry(helper, 0).assignee().isEmpty() && entry(helper, 0).locked(),
-                "A Mission Job the mission does not allow removes the assignment, the lock stays: " + entry(helper, 0));
-        helper.assertTrue(MissionOffers.assign(data, board, 0, marked, bob.getUUID(), adventurer, pool), "Assigned to Bob again");
-
         helper.assertTrue(JobAssignments.unassign(data, board, bob.getUUID()), "Bob leaves the board");
         helper.assertTrue(entry(helper, 0).assignee().isEmpty() && entry(helper, 0).locked() && entry(helper, 0).marked(),
                 "Assignment removed, the mission stays marked and locked: " + entry(helper, 0));

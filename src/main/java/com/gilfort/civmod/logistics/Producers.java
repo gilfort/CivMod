@@ -1,5 +1,6 @@
 package com.gilfort.civmod.logistics;
 
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.Settlement;
 
@@ -22,7 +23,7 @@ public final class Producers {
      * @return whether a producer of the settlement can make it
      */
     public static boolean canMake(ServerLevel level, Settlement settlement, Item item) {
-        return settlement.blocks().stream().anyMatch(block -> Patterns.isCraftsperson(block) && !block.assignees().isEmpty()
+        return settlement.blocks().stream().anyMatch(block -> Patterns.isCraftsperson(block) && block.assignee(ModJobs.CRAFTSPERSON.get()).isPresent()
                 && Patterns.usable(level, block).stream().anyMatch(pattern -> pattern.output() == item));
     }
 }

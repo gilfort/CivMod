@@ -25,6 +25,9 @@ public final class SettlementRules {
     /** The most settlers a Mission Board holds (at the maximum level). */
     public static final int MAX_MISSION_BOARD_CAPACITY = MISSION_BOARD_CAPACITY[MISSION_BOARD_CAPACITY.length - 1];
 
+    /** Deliveryman places on a Clerk JobBlock per level (index 0 = level 1). */
+    private static final int[] DELIVERYMAN_PLACES = {1, 2, 4, 6, 8};
+
     /** Containers a Clerk JobBlock links as storage per level (index 0 = level 1). */
     private static final int[] CLERK_STORAGE = {2, 4, 8, 12, 16};
     /** Stand spots per Clerk JobBlock. */
@@ -71,10 +74,20 @@ public final class SettlementRules {
     /**
      * @param jobType the job a JobBlock offers
      * @param level   the JobBlock level
-     * @return how many settlers the JobBlock holds: the Mission Board 1 / 2 / 4 / 6 / 10 by level, every other one 1
+     * @return how many settlers the JobBlock holds in its own Job (with its Specializations): the Mission Board
+     *         1 / 2 / 4 / 6 / 10 by level, every other one 1; further Jobs of the block have own places
+     *         ({@link JobPlaces})
      */
     public static int capacity(Job jobType, int level) {
         return jobType.category() == JobCategory.MISSION ? MISSION_BOARD_CAPACITY[clampLevel(level) - MIN_LEVEL] : 1;
+    }
+
+    /**
+     * @param level the Clerk JobBlock level
+     * @return how many Deliverymen a Clerk JobBlock holds at that level: 1 / 2 / 4 / 6 / 8
+     */
+    public static int deliverymanPlaces(int level) {
+        return DELIVERYMAN_PLACES[clampLevel(level) - MIN_LEVEL];
     }
 
     /**
