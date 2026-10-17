@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:sleeping_pose_night",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
