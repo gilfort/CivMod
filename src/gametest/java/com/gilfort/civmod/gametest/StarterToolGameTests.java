@@ -58,6 +58,7 @@ public final class StarterToolGameTests {
         expectToolAfterPlacement(helper, ModItems.LUMBERJACK_BLOCK.get(), new BlockPos(1, 1, 1), Items.STONE_AXE);
         expectToolAfterPlacement(helper, ModItems.MINER_BLOCK.get(), new BlockPos(3, 1, 1), Items.STONE_PICKAXE);
         expectToolAfterPlacement(helper, ModItems.FISHERMAN_BLOCK.get(), new BlockPos(5, 1, 1), Items.FISHING_ROD);
+        remove(helper, new BlockPos(1, 1, 1), new BlockPos(3, 1, 1), new BlockPos(5, 1, 1));
         helper.succeed();
     }
 
@@ -80,6 +81,7 @@ public final class StarterToolGameTests {
             place(helper, helper.makeMockPlayer(GameType.SURVIVAL), new ItemStack(item), pos);
             helper.assertTrue(contents(helper, pos).isEmpty(), item + " should start empty, holds " + contents(helper, pos));
         }
+        remove(helper, new BlockPos(1, 1, 1), new BlockPos(3, 1, 1), new BlockPos(5, 1, 1));
         helper.succeed();
     }
 
@@ -103,6 +105,7 @@ public final class StarterToolGameTests {
         helper.getLevel().destroyBlock(absolute, false);
         place(helper, helper.makeMockPlayer(GameType.SURVIVAL), drop, pos);
         helper.assertTrue(contents(helper, pos).isEmpty(), "Re-placed JobBlock created a tool: " + contents(helper, pos));
+        remove(helper, pos);
         helper.succeed();
     }
 
@@ -131,6 +134,14 @@ public final class StarterToolGameTests {
         // The test area outside the empty structure is barrier; clear the target so the click places into it.
         helper.setBlock(pos, Blocks.AIR);
         helper.placeAt(player, stack, pos.below(), Direction.UP);
+    }
+
+    /** Removes placed JobBlocks so they cannot join the settlements of other tests in the shared test level. */
+    private static void remove(GameTestHelper helper, BlockPos... positions) {
+        for (BlockPos pos : positions) {
+            helper.getBlockEntity(pos, JobBlockEntity.class).clearContent();
+            helper.getLevel().destroyBlock(helper.absolutePos(pos), false);
+        }
     }
 
     private static List<ItemStack> contents(GameTestHelper helper, BlockPos pos) {
