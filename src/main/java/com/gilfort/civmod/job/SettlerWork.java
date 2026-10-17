@@ -521,6 +521,11 @@ public final class SettlerWork {
             // Died on the mission.
             return;
         }
+        if (activity == Activity.SLEEP && !settler.isSleeping()) {
+            // Woken by something else than the Schedule (vanilla wakes sleepers on its own): up as after the night,
+            // so the Schedule can send it to bed again and nothing holds it in place.
+            wake();
+        }
         // The body first: stay asleep, wake, return to the rest place after a skipped night, keep foraging.
         boolean woke = false;
         Optional<Intent> body = Schedule.wakeUp(snapshot(level, day, dayTime, jumped, false, new FoodLookup(level, dayTime)));
@@ -904,10 +909,17 @@ public final class SettlerWork {
     }
 
     private void checkStuck(ServerLevel level) {
-        if (activity == Activity.IDLE || target == null || isAtTarget()) {
+        if (activity == Activity.IDLE || target == null) {
             return;
         }
         double distance = settler.position().distanceTo(Vec3.atCenterOf(target));
+        if (isAtTarget()) {
+            // Being there is progress: a settler that stood at its target for long (a Clerk at its counter, a customer
+            // in the queue) and is pushed away walks back instead of being teleported at once.
+            bestDistance = distance;
+            lastProgressTick = level.getGameTime();
+            return;
+        }
         if (distance < bestDistance - 1.0) {
             bestDistance = distance;
             lastProgressTick = level.getGameTime();

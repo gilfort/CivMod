@@ -306,6 +306,17 @@ public class Settler extends PathfinderMob {
     }
 
     /**
+     * Every way of getting up ends sleeping without a bed as well: vanilla also wakes a sleeper on its own (on the first
+     * tick after loading, when hurt, when its bed is gone). A straw bed flag left behind would keep the settler without
+     * gravity, floating where it lay.
+     */
+    @Override
+    public void stopSleeping() {
+        super.stopSleeping();
+        entityData.set(STRAW, -1);
+    }
+
+    /**
      * @return whether the settler sleeps without a real bed
      */
     public boolean isSleepingWithoutBed() {

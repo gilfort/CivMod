@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:night",
+  "function": "civmod:wake_up_from_bed",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 24
+}
