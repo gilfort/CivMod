@@ -1396,8 +1396,13 @@ public final class SettlerWork {
                         clerk -> !counterUnreachable(level, clerk)));
     }
 
-    /** Counters further away than this are assumed reachable (a path check would be cut off by the follow range). */
-    private static final double COUNTER_PATH_CHECK = 40.0;
+    /**
+     * Counters further away than this are assumed reachable: a path search only ends conclusively well within the
+     * follow range (32). Further away it is cut off (search range, node budget) and would make a reachable counter
+     * unreachable for the whole day, leaving only the Clerk's block slots. Loops that decide again on the way check
+     * once the settler comes this close.
+     */
+    private static final double COUNTER_PATH_CHECK = 16.0;
 
     /**
      * A visit as this settler can make it: a counter it cannot walk to only offers the Clerk's block slots (checked
