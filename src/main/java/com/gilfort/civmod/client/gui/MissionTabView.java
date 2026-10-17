@@ -236,7 +236,7 @@ final class MissionTabView {
             return List.of(Component.translatable("civmod.gui.mission.help.assign"));
         }
         return List.of(Component.translatable("civmod.gui.mission.help.mark"), Component.translatable("civmod.gui.mission.help.lock"),
-                Component.translatable("civmod.gui.mission.help.offer"));
+                Component.translatable("civmod.gui.mission.help.marked"));
     }
 
     /** "Assigned to <name>", or "Locked" when the assigned settler died or left the board (or is not loaded). */
@@ -262,8 +262,10 @@ final class MissionTabView {
             return List.of(Component.translatable("civmod.gui.mission.chances.nobody").withStyle(ChatFormatting.GRAY).getVisualOrderText());
         }
         JobBlockInfo.MissionSettler settler = board.settlers().get(picker.getAsInt());
-        return List.of(Component.translatable("civmod.gui.mission.chances.picker", settler.name(), settler.skill()).getVisualOrderText(),
-                chancesLine(chances(mission.get(), settler)).getVisualOrderText());
+        List<FormattedCharSequence> lines = new ArrayList<>();
+        lines.add(Component.translatable("civmod.gui.mission.chances.picker", settler.name(), settler.skill()).getVisualOrderText());
+        chancesLines(chances(mission.get(), settler)).forEach(line -> lines.add(line.getVisualOrderText()));
+        return lines;
     }
 
     /** The chances of a settler of the board on a mission, from the outcome constants the server sent. */
@@ -271,19 +273,16 @@ final class MissionTabView {
         return MissionRules.chances(menu.getInfo().missionTab().rules(), mission.recommendedLevel(), settler.skill());
     }
 
-    /** "Success 75% · Failed 22% · Death 3%". */
-    private static Component chancesLine(MissionRules.Chances chances) {
-        return chancesText("civmod.gui.mission.chances", chances);
+    /** "Success: 75%", "Failed: 22%", "Death: 3%" on one line each, the death chance in red when it is high. */
+    private static List<Component> chancesLines(MissionRules.Chances chances) {
+        return List.of(Component.translatable("civmod.gui.mission.chance.success", percent(chances.success())),
+                Component.translatable("civmod.gui.mission.chance.failed", percent(chances.failed())),
+                Component.translatable("civmod.gui.mission.chance.death", death(chances)));
     }
 
-    /** "75% / 22% / 3%" (success / failed / death). */
+    /** "75% / 22% / 3%" (success / failed / death), the death chance in red when it is high. */
     private static Component chancesShort(MissionRules.Chances chances) {
-        return chancesText("civmod.gui.mission.chances.short", chances);
-    }
-
-    /** Success, failed and death chance in a lang text, the death chance in red when it is high. */
-    private static Component chancesText(String key, MissionRules.Chances chances) {
-        return Component.translatable(key, percent(chances.success()), percent(chances.failed()), death(chances));
+        return Component.translatable("civmod.gui.mission.chances.short", percent(chances.success()), percent(chances.failed()), death(chances));
     }
 
     private static Component death(MissionRules.Chances chances) {
@@ -389,8 +388,10 @@ final class MissionTabView {
         }
         if (hovered >= 0 && mission.isPresent()) {
             JobBlockInfo.MissionSettler settler = board.settlers().get(eligible.get(hovered));
-            graphics.setComponentTooltipForNextFrame(font, List.of(Component.literal(settler.name()), chancesLine(chances(mission.get(), settler))),
-                    mouseX, mouseY);
+            List<Component> tooltip = new ArrayList<>();
+            tooltip.add(Component.literal(settler.name()));
+            tooltip.addAll(chancesLines(chances(mission.get(), settler)));
+            graphics.setComponentTooltipForNextFrame(font, tooltip, mouseX, mouseY);
         }
     }
 
