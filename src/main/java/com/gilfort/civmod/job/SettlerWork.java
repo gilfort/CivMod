@@ -162,7 +162,7 @@ public final class SettlerWork {
     /** Schedule decisions per catch-up step at most (meals in a row; guards against a meal that never ends). */
     private static final int CATCH_UP_DECISIONS = 64;
     private double cuDays;
-    /** The day time of the hour being simulated in catch-up, as Clerk access sees it ({@link #catchUpAccessTime}). */
+    /** The day time of the hour being simulated in catch-up ({@link #catchUpDayTime}). */
     private long cuDayTime;
 
     /**
@@ -209,11 +209,13 @@ public final class SettlerWork {
     /**
      * @param day the day
      * @return this settler's waking, end of work and bed times on that day (daily offsets inside the Schedule windows);
-     *         a Clerk's work ends with its shift at 18:30, a settler back from a mission ended its work day on its return
+     *         a Clerk wakes early (05:30–06:00, its shift opens then) and its work ends with its shift at 18:30, a
+     *         settler back from a mission ended its work day on its return
      */
     public Schedule.DayTimes dayTimes(long day) {
-        Schedule.DayTimes times = Schedule.dayTimes(settler.getUUID(), day);
-        if (ownClerk().isPresent()) {
+        boolean clerk = ownClerk().isPresent();
+        Schedule.DayTimes times = Schedule.dayTimes(settler.getUUID(), day, clerk);
+        if (clerk) {
             times = times.withWorkEnd(ClerkStorage.SHIFT_END);
         }
         OptionalLong returned = missions.returnedOn(day);
@@ -516,8 +518,9 @@ public final class SettlerWork {
 
     private void decide(ServerLevel level) {
         long clock = level.getOverworldClockTime();
-        long dayTime = DayClock.dayTime(clock);
-        long day = DayClock.day(clock);
+        Schedule.Moment moment = moment(clock);
+        long dayTime = moment.dayTime();
+        long day = moment.day();
         boolean jumped = SettlerBeds.nightSkipped(lastClock, clock, DECISION_INTERVAL, WORK_END);
         lastClock = clock;
         if (missions.departed() && (catchUpFrom >= 0 || !missions.returnIfDue(level, clock, false))) {
@@ -575,6 +578,14 @@ public final class SettlerWork {
         FoodLookup foodLookup = new FoodLookup(level, dayTime);
         Decision decision = Schedule.next(snapshot(level, day, dayTime, false, woke, foodLookup));
         act(level, decision, foodLookup, day, dayTime);
+    }
+
+    /**
+     * @param clock a clock value
+     * @return this settler's day and day time then: a Clerk's day begins at its early waking time before 06:00
+     */
+    private Schedule.Moment moment(long clock) {
+        return Schedule.moment(clock, dayTimes(DayClock.day(clock) + 1));
     }
 
     /**
@@ -1175,13 +1186,14 @@ public final class SettlerWork {
         Schedule.DayTimes times = dayTimes(day);
         long workEndDayTime = times.workEnd();
         long workEndTick = day * DayClock.DAY_TICKS + workEndDayTime;
-        // Not up before its waking time (Schedule): the day starts then.
+        // Not up before its waking time (Schedule): the day starts then. A Clerk's early start before 06:00 is not
+        // simulated (hour 0 begins at 06:00; accepted).
         from = Math.max(from, day * DayClock.DAY_TICKS + times.wake());
         if (to <= from) {
             return 0;
         }
         long dayTime = from - day * DayClock.DAY_TICKS;
-        cuDayTime = catchUpAccessTime(dayTime);
+        cuDayTime = dayTime;
         SettlerFood food = settler.getFood();
 
         // Start of the hour: back from foraging, the morning plan, a meal if hungry.
@@ -1234,7 +1246,7 @@ public final class SettlerWork {
         boolean noFood = false;
         try {
             for (int step = 0; step < CATCH_UP_DECISIONS; step++) {
-                FoodLookup foodLookup = new FoodLookup(level, catchUpAccessTime(dayTime));
+                FoodLookup foodLookup = new FoodLookup(level, dayTime);
                 Schedule.Snapshot snapshot = catchUpSnapshot(day, dayTime, foodLookup, noFood);
                 Optional<Intent> body = Schedule.wakeUp(snapshot);
                 if (body.isPresent()) {
@@ -1268,7 +1280,7 @@ public final class SettlerWork {
                         mealPurpose = decision.purpose();
                         // No walking or queue in catch-up: the shift alone decides what is reachable.
                         ClerkStorage.FoodPoint point = foodLookup.get().orElseThrow();
-                        if (visitFoodPoint(level, point, catchUpAccessTime(dayTime), true)) {
+                        if (visitFoodPoint(level, point, dayTime, true)) {
                             ClerkCounter.handOut(level, point.clerk(), false);
                         }
                         mealPurpose = null;
@@ -1345,24 +1357,14 @@ public final class SettlerWork {
     }
 
     /**
-     * @return the day time of the hour being simulated in catch-up, as Clerk access sees it
-     *         ({@link #catchUpAccessTime})
+     * The day time of the hour being simulated in catch-up, at which Clerk access is checked. Catch-up starts every day
+     * at 06:00 at the earliest, when every Clerk (up 05:30–06:00) is already on shift; this also makes the level's day
+     * enough for {@link ClerkStorage#working}.
+     *
+     * @return the simulated day time
      */
     long catchUpDayTime() {
         return cuDayTime;
-    }
-
-    /**
-     * The day time catch-up checks a Clerk's shift at: not before the end of the waking window. The hourly segments do
-     * not tell whether a settler or the Clerk wakes first, so in catch-up every Clerk is on shift by then (an accepted
-     * deviation of at most one Schedule window, vault {@code Systems/NPC Daily Schedule.md}). It also makes the level's
-     * day enough for {@link ClerkStorage#working}: every waking time lies before it.
-     *
-     * @param dayTime the simulated day time
-     * @return the day time for Clerk access
-     */
-    private static long catchUpAccessTime(long dayTime) {
-        return Math.max(dayTime, Schedule.WAKE_WINDOW_END);
     }
 
     /**
@@ -1411,8 +1413,8 @@ public final class SettlerWork {
             weightedWorkTicks = 0.0;
             return;
         }
-        long dayTime = DayClock.dayTime(level);
-        long awake = dayTime < dayTimes(DayClock.day(level)).bed() && !settler.isSleeping() ? DECISION_INTERVAL : 0L;
+        Schedule.Moment moment = moment(level.getOverworldClockTime());
+        long awake = moment.dayTime() < dayTimes(moment.day()).bed() && !settler.isSleeping() ? DECISION_INTERVAL : 0L;
         float appetite = food.appetite(level.getRandom(), CivModConfig.APPETITE_MIN.get(), CivModConfig.APPETITE_MAX.get());
         food.exhaust(SettlerFood.exhaustionFor(awake, weightedWorkTicks, CivModConfig.HUNGER_BASE_PER_DAY.get(),
                 CivModConfig.HUNGER_PER_WORK_MINUTE.get(), appetite));

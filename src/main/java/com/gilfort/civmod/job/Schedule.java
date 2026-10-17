@@ -9,6 +9,7 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.npc.SettlerDay;
+import com.gilfort.civmod.settlement.DayClock;
 
 /**
  * The daily schedule of a settler (vault {@code Systems/NPC Daily Schedule.md}, {@code Systems/Needs.md}): a
@@ -26,8 +27,11 @@ public final class Schedule {
     public static final long WINDOW_TICKS = 500L;
     /** Start of the waking window (06:00; day time 0 = 06:00). */
     private static final long WAKE_WINDOW_START = 0L;
-    /** End of the waking window (06:30): every settler is up. */
-    static final long WAKE_WINDOW_END = WAKE_WINDOW_START + WINDOW_TICKS;
+    /**
+     * Start of the early waking window (05:30, day time -500): an early riser (the Clerk, its stall opens first) is up
+     * before 06:00, before every other settler wakes.
+     */
+    private static final long EARLY_WAKE_WINDOW_START = WAKE_WINDOW_START - WINDOW_TICKS;
 
     private static final long SALT_WAKE = 1L;
     private static final long SALT_WORK_END = 2L;
@@ -39,7 +43,8 @@ public final class Schedule {
     /**
      * One settler's points of the daily schedule on one day, each at its daily offset inside its Schedule window.
      *
-     * @param wake    the day time the settler wakes and starts work (06:00–06:30)
+     * @param wake    the day time the settler wakes and starts work (06:00–06:30; an early riser 05:30–06:00, a
+     *                negative day time: its day begins before the clock's day does, see {@link #moment})
      * @param workEnd the day time its work ends (17:30–18:00; the Settler Shell may replace it, e.g. for a Clerk)
      * @param bed     the day time it goes to bed (20:00–20:30)
      */
@@ -63,10 +68,47 @@ public final class Schedule {
      * @return the times
      */
     public static DayTimes dayTimes(UUID settler, long day) {
-        long wake = WAKE_WINDOW_START + offset(settler, day, SALT_WAKE);
+        return dayTimes(settler, day, false);
+    }
+
+    /**
+     * {@link #dayTimes(UUID, long)}, for an early riser with its waking time in the early waking window (05:30–06:00)
+     * instead. The Settler Shell decides who rises early (the Clerk).
+     *
+     * @param settler    the settler
+     * @param day        the day
+     * @param earlyRiser whether the settler wakes in the early waking window
+     * @return the times
+     */
+    public static DayTimes dayTimes(UUID settler, long day, boolean earlyRiser) {
+        long wake = (earlyRiser ? EARLY_WAKE_WINDOW_START : WAKE_WINDOW_START) + offset(settler, day, SALT_WAKE);
         long workEnd = SettlerWork.WORK_END + offset(settler, day, SALT_WORK_END);
         long bed = SettlerWork.SLEEP_TIME + offset(settler, day, SALT_BED);
         return new DayTimes(wake, workEnd, bed);
+    }
+
+    /**
+     * A settler's day and day time.
+     *
+     * @param day     the day
+     * @param dayTime the day time (0 = 06:00; negative before 06:00 for an early riser that is already up)
+     */
+    public record Moment(long day, long dayTime) {
+    }
+
+    /**
+     * The settler's day and day time at a clock value. The clock's day begins at 06:00; an early riser's day begins at
+     * its waking time before that, so from then on the clock counts as the next day with a negative day time.
+     *
+     * @param clock   the clock value
+     * @param nextDay the settler's times on the day after the clock's day
+     * @return the moment
+     */
+    public static Moment moment(long clock, DayTimes nextDay) {
+        long day = DayClock.day(clock);
+        long dayTime = DayClock.dayTime(clock);
+        long early = dayTime - DayClock.DAY_TICKS;
+        return nextDay.wake() < 0L && early >= nextDay.wake() ? new Moment(day + 1, early) : new Moment(day, dayTime);
     }
 
     private static long offset(UUID settler, long day, long salt) {

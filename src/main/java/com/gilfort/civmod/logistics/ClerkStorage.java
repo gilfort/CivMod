@@ -83,11 +83,22 @@ public final class ClerkStorage {
     /**
      * @param clerk   the Clerk settler
      * @param day     the day
-     * @param dayTime the day time (0 = 06:00)
-     * @return whether it lies within the Clerk's shift: from its own waking time (06:00–06:30) to 18:30
+     * @param dayTime the day time (0 = 06:00; negative before 06:00 on the Clerk's own day, {@link Schedule#moment})
+     * @return whether it lies within the Clerk's shift: from its own waking time (05:30–06:00, Clerks wake up early) to
+     *         18:30. The shift of the clock's next day may already be open after 05:30.
      */
     public static boolean inShift(UUID clerk, long day, long dayTime) {
-        return dayTime >= Schedule.dayTimes(clerk, day).wake() && dayTime < SHIFT_END;
+        boolean today = dayTime >= shiftStart(clerk, day) && dayTime < SHIFT_END;
+        return today || dayTime - DayClock.DAY_TICKS >= shiftStart(clerk, day + 1);
+    }
+
+    /**
+     * @param clerk the Clerk settler
+     * @param day   the day
+     * @return the day time its shift opens: its waking time in the early waking window (05:30–06:00, negative)
+     */
+    public static long shiftStart(UUID clerk, long day) {
+        return Schedule.dayTimes(clerk, day, true).wake();
     }
 
     /**
@@ -112,8 +123,8 @@ public final class ClerkStorage {
     }
 
     /**
-     * {@link #working(SettlementBlock, long, long)} on the level's day. Catch-up passes a simulated day time after the
-     * waking window, where the day does not matter.
+     * {@link #working(SettlementBlock, long, long)} on the level's day. Catch-up passes a simulated day time from 06:00
+     * on, where the day does not matter: every Clerk's shift is open by then.
      */
     private static boolean working(ServerLevel level, SettlementBlock clerk, long dayTime) {
         return working(clerk, DayClock.day(level), dayTime);
