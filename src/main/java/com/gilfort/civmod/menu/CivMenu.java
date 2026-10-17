@@ -95,11 +95,11 @@ public abstract class CivMenu extends AbstractContainerMenu {
      * @param index     the index within the container
      * @param x         the x position relative to the screen
      * @param y         the y position relative to the screen
-     * @param tab       the tab index or {@link #ALL_TABS}
+     * @param tabs      the tab indices the slot is active on, or {@link #ALL_TABS}
      * @return the added slot
      */
-    protected Slot addTabSlot(Container container, int index, int x, int y, int tab) {
-        return addSlot(new CivSlot(this, container, index, x, y, tab));
+    protected Slot addTabSlot(Container container, int index, int x, int y, int... tabs) {
+        return addSlot(new CivSlot(this, container, index, x, y, tabs));
     }
 
     /**
@@ -108,16 +108,16 @@ public abstract class CivMenu extends AbstractContainerMenu {
      * @param inventory the player inventory
      * @param left      the x position of the first column
      * @param top       the y position of the first row
-     * @param tab       the tab index or {@link #ALL_TABS}
+     * @param tabs      the tab indices the slots are active on, or {@link #ALL_TABS}
      */
-    protected void addPlayerInventory(Inventory inventory, int left, int top, int tab) {
+    protected void addPlayerInventory(Inventory inventory, int left, int top, int... tabs) {
         for (int row = 0; row < 3; row++) {
             for (int column = 0; column < 9; column++) {
-                addTabSlot(inventory, column + row * 9 + 9, left + column * 18, top + row * 18, tab);
+                addTabSlot(inventory, column + row * 9 + 9, left + column * 18, top + row * 18, tabs);
             }
         }
         for (int column = 0; column < 9; column++) {
-            addTabSlot(inventory, column, left + column * 18, top + 58, tab);
+            addTabSlot(inventory, column, left + column * 18, top + 58, tabs);
         }
     }
 }

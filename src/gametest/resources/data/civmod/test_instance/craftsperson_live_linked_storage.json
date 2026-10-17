@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "function": "civmod:craftsperson_live_linked_storage",
+  "max_ticks": 2400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

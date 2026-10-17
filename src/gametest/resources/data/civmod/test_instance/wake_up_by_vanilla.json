@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:night_alone",
+  "function": "civmod:wake_up_by_vanilla",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 24
+}

@@ -43,6 +43,16 @@ interface CategoryLoop {
     }
 
     /**
+     * Called for every job of this loop when the settler's work day is over (live after work, catch-up at the end of
+     * the work hours).
+     *
+     * @param level the level
+     * @param job   the job
+     */
+    default void dayEnded(ServerLevel level, SettlerJob job) {
+    }
+
+    /**
      * Called at every decision while the settler is in a step of this loop, before anything else is decided.
      *
      * @param level the level

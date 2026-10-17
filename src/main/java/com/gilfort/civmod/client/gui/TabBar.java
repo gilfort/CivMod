@@ -1,6 +1,7 @@
 package com.gilfort.civmod.client.gui;
 
 import java.util.List;
+import java.util.function.IntPredicate;
 
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
 
@@ -44,6 +45,7 @@ public final class TabBar {
 
     private final List<Tab> top;
     private final List<Tab> bottom;
+    private final IntPredicate shown;
     private final int panelX;
     private final int panelY;
     private final int panelHeight;
@@ -51,16 +53,26 @@ public final class TabBar {
     /**
      * @param top         the tabs above the panel, left to right
      * @param bottom      the tabs below the panel, left to right (indices continue after the top tabs)
+     * @param shown       which tabs are shown; a hidden tab keeps its index, the tabs after it move up
      * @param panelX      the left edge of the panel
      * @param panelY      the top edge of the panel
      * @param panelHeight the height of the panel
      */
-    public TabBar(List<Tab> top, List<Tab> bottom, int panelX, int panelY, int panelHeight) {
+    public TabBar(List<Tab> top, List<Tab> bottom, IntPredicate shown, int panelX, int panelY, int panelHeight) {
         this.top = List.copyOf(top);
         this.bottom = List.copyOf(bottom);
+        this.shown = shown;
         this.panelX = panelX;
         this.panelY = panelY;
         this.panelHeight = panelHeight;
+    }
+
+    /**
+     * @param index a tab index
+     * @return whether the tab exists and is shown
+     */
+    public boolean isShown(int index) {
+        return index >= 0 && index < size() && shown.test(index);
     }
 
     private static Identifier[] sprites(String state) {
@@ -88,7 +100,7 @@ public final class TabBar {
      */
     public void extractUnselected(GuiGraphicsExtractor graphics, int selected, int mouseX, int mouseY) {
         for (int i = 0; i < size(); i++) {
-            if (i != selected) {
+            if (i != selected && isShown(i)) {
                 extractTab(graphics, i, false);
                 if (isOver(i, mouseX, mouseY)) {
                     graphics.requestCursor(CursorTypes.POINTING_HAND);
@@ -104,7 +116,7 @@ public final class TabBar {
      * @param selected the selected tab index
      */
     public void extractSelected(GuiGraphicsExtractor graphics, int selected) {
-        if (selected >= 0 && selected < size()) {
+        if (isShown(selected)) {
             extractTab(graphics, selected, true);
         }
     }
@@ -131,7 +143,7 @@ public final class TabBar {
      */
     public int tabAt(double mouseX, double mouseY) {
         for (int i = 0; i < size(); i++) {
-            if (isOver(i, mouseX, mouseY)) {
+            if (isShown(i) && isOver(i, mouseX, mouseY)) {
                 return i;
             }
         }
@@ -146,8 +158,15 @@ public final class TabBar {
         return index < top.size();
     }
 
+    /** The tab's place in its row, counting only the shown tabs before it. */
     private int column(int index) {
-        return isTop(index) ? index : index - top.size();
+        int column = 0;
+        for (int i = isTop(index) ? 0 : top.size(); i < index; i++) {
+            if (shown.test(i)) {
+                column++;
+            }
+        }
+        return column;
     }
 
     private boolean isOver(int index, double mouseX, double mouseY) {

@@ -2,6 +2,9 @@ package com.gilfort.civmod.network;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.command.CivModCommand;
+import com.gilfort.civmod.menu.ClerkTab;
+import com.gilfort.civmod.menu.JobBlockMenu;
+import com.gilfort.civmod.menu.PatternTab;
 import com.gilfort.civmod.settlement.JobPointsDisplay;
 import com.gilfort.civmod.settlement.SettlementOutline;
 
@@ -24,7 +27,7 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 public final class CivNetwork {
 
     /** Network protocol version; client and server must match. */
-    public static final String PROTOCOL_VERSION = "1";
+    public static final String PROTOCOL_VERSION = "3";
 
     private CivNetwork() {
     }
@@ -64,8 +67,20 @@ public final class CivNetwork {
                 CivModCommand.openDebugMenu(player);
             }
         });
+        registrar.playToServer(ClerkTab.Edit.TYPE, ClerkTab.Edit.STREAM_CODEC, (payload, context) -> {
+            if (context.player().containerMenu instanceof JobBlockMenu menu && menu.containerId == payload.containerId()) {
+                menu.editStockRule(payload.slot(), payload.rule());
+            }
+        });
+        registrar.playToServer(PatternTab.Edit.TYPE, PatternTab.Edit.STREAM_CODEC, (payload, context) -> {
+            if (context.player().containerMenu instanceof JobBlockMenu menu && menu.containerId == payload.containerId()) {
+                menu.editPattern(payload);
+            }
+        });
         // Client handler is registered in CivModClient (RegisterClientPayloadHandlersEvent).
+        registrar.playToClient(PatternTab.Sync.TYPE, PatternTab.Sync.STREAM_CODEC);
         registrar.playToClient(SettlementOutline.Sync.TYPE, SettlementOutline.Sync.STREAM_CODEC);
         registrar.playToClient(JobPointsDisplay.Sync.TYPE, JobPointsDisplay.Sync.STREAM_CODEC);
+        registrar.playToClient(ClerkTab.Sync.TYPE, ClerkTab.Sync.STREAM_CODEC);
     }
 }

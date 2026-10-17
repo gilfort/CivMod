@@ -26,7 +26,7 @@ public final class Schedule {
     /** What a settler is doing right now. {@code JOB} is a step of the active job's category loop. */
     public enum Activity { IDLE, JOB, DELIVER, GO_TO_BED, SLEEP, FETCH_FOOD, EATING, FORAGE }
 
-    /** Why a settler walks to a pantry. */
+    /** Why a settler walks to a food point. */
     public enum MealPurpose { MORNING, HUNGRY, EVENING }
 
     /** What the settler does next. */
@@ -50,9 +50,9 @@ public final class Schedule {
         IDLE,
         /** Eat one item from the pockets on the spot. */
         EAT_FROM_POCKETS,
-        /** Eat from the pockets on the spot until full (evening meal without pantry food). */
+        /** Eat from the pockets on the spot until full (evening meal without food at a food point). */
         EAT_UNTIL_FULL,
-        /** Walk to the nearest pantry with food, for a {@link MealPurpose}. */
+        /** Walk to the nearest food point (Clerk JobBlock) with food, for a {@link MealPurpose}. */
         FETCH_FOOD,
         /** Start foraging for the whole day. */
         START_FORAGING,
@@ -75,7 +75,8 @@ public final class Schedule {
      * @param provisions       nutrition carried in the pockets
      * @param provisionsWanted nutrition the settler wants to carry
      * @param pocketMeal       whether the pockets hold something the settler may eat now
-     * @param pantryFood       whether a pantry of the settlement has food; a container lookup, so it is asked only
+     * @param foodPoint        whether a food point (Clerk JobBlock) of the settlement has food for the settler; a container
+     *                         lookup, so it is asked only
      *                         when a rule needs it
      * @param homeless         whether the settler has no settlement
      * @param sleeping         whether the settler is asleep
@@ -87,11 +88,12 @@ public final class Schedule {
      * @param morningHandled   whether the morning plan was made today
      * @param eveningMealEaten whether the evening meal was handled today
      * @param deliveryPending  whether a job has items to deliver to a drop-off that is not full
+     * @param workEnd          the day time the settler's work ends ({@link SettlerWork#WORK_END}, a Clerk later)
      */
     public record Snapshot(long day, long dayTime, int food, int provisions, int provisionsWanted, boolean pocketMeal,
-            BooleanSupplier pantryFood, boolean homeless, boolean sleeping, long forageDay, boolean nightSkipped,
+            BooleanSupplier foodPoint, boolean homeless, boolean sleeping, long forageDay, boolean nightSkipped,
             Activity activity, BooleanSupplier jobStepHolds, boolean morningHandled, boolean eveningMealEaten,
-            boolean deliveryPending) {
+            boolean deliveryPending, long workEnd) {
 
         /**
          * @return whether the settler is foraging (today, or still from an earlier day)
@@ -154,13 +156,13 @@ public final class Schedule {
             boolean hungry = snapshot.food() < SettlerFood.HUNGRY;
             return day(hungry && snapshot.pocketMeal() ? Intent.EAT_FROM_POCKETS : Intent.IDLE, null, hungry && !snapshot.pocketMeal(), false);
         }
-        if (snapshot.dayTime() >= SettlerWork.WORK_END) {
+        if (snapshot.dayTime() >= snapshot.workEnd()) {
             return afterWork(snapshot);
         }
         boolean morning = !snapshot.morningHandled();
         if (morning) {
             MorningPlan plan = morningPlan(snapshot.food(), snapshot.provisions(), snapshot.provisionsWanted(),
-                    snapshot.pantryFood().getAsBoolean());
+                    snapshot.foodPoint().getAsBoolean());
             if (plan == MorningPlan.FORAGE) {
                 return day(Intent.START_FORAGING, null, false, true);
             }
@@ -172,7 +174,7 @@ public final class Schedule {
             if (snapshot.pocketMeal()) {
                 return day(Intent.EAT_FROM_POCKETS, null, false, morning);
             }
-            if (snapshot.pantryFood().getAsBoolean()) {
+            if (snapshot.foodPoint().getAsBoolean()) {
                 return day(Intent.FETCH_FOOD, MealPurpose.HUNGRY, false, morning);
             }
             // Starving: no work until there is food again; forages the next day.
@@ -189,27 +191,27 @@ public final class Schedule {
         boolean night = isNight(snapshot);
         boolean meal = !night && !snapshot.eveningMealEaten();
         if (meal && snapshot.food() < SettlerFood.MAX) {
-            if (snapshot.pantryFood().getAsBoolean()) {
+            if (snapshot.foodPoint().getAsBoolean()) {
                 return new Decision(Intent.FETCH_FOOD, MealPurpose.EVENING, false, false, true, true);
             }
-            // Provisions are only eaten in the evening if no pantry has food.
+            // Provisions are only eaten in the evening if no food point has food.
             if (snapshot.pocketMeal()) {
                 return new Decision(Intent.EAT_UNTIL_FULL, null, false, false, true, true);
             }
         }
-        boolean complain = snapshot.food() < SettlerFood.HUNGRY && snapshot.provisions() == 0 && !snapshot.pantryFood().getAsBoolean();
+        boolean complain = snapshot.food() < SettlerFood.HUNGRY && snapshot.provisions() == 0 && !snapshot.foodPoint().getAsBoolean();
         return new Decision(night ? Intent.GO_TO_BED : Intent.REST, null, complain, false, meal, true);
     }
 
     /**
-     * Whether the settler eats at the pantry it walked to (until full), or only takes provisions: the morning trip for
+     * Whether the settler eats at the food point it walked to (until full), or only takes provisions: the morning trip for
      * provisions is not a meal unless the settler is hungry.
      *
-     * @param purpose why the settler came to the pantry (null: unknown, it eats)
+     * @param purpose why the settler came to the food point (null: unknown, it eats)
      * @param food    the food level
      * @return whether it eats there
      */
-    public static boolean eatsAtPantry(@Nullable MealPurpose purpose, int food) {
+    public static boolean eatsAtFoodPoint(@Nullable MealPurpose purpose, int food) {
         return purpose != MealPurpose.MORNING || food < SettlerFood.HUNGRY;
     }
 
@@ -232,7 +234,7 @@ public final class Schedule {
     public enum MorningPlan {
         /** Nothing to do, go to work. */
         WORK,
-        /** Fetch provisions from a pantry before work. */
+        /** Fetch provisions from a food point before work. */
         FETCH_PROVISIONS,
         /** Hungry and no food anywhere: forage all day. */
         FORAGE
@@ -244,13 +246,13 @@ public final class Schedule {
      * @param level      the food level
      * @param provisions nutrition carried in the pockets
      * @param wanted     nutrition the settler wants to carry
-     * @param pantryFood whether a pantry has food
+     * @param foodPoint  whether a food point has food
      * @return the plan
      */
-    public static MorningPlan morningPlan(int level, int provisions, int wanted, boolean pantryFood) {
-        if (level < SettlerFood.HUNGRY && provisions == 0 && !pantryFood) {
+    public static MorningPlan morningPlan(int level, int provisions, int wanted, boolean foodPoint) {
+        if (level < SettlerFood.HUNGRY && provisions == 0 && !foodPoint) {
             return MorningPlan.FORAGE;
         }
-        return provisions < wanted && pantryFood ? MorningPlan.FETCH_PROVISIONS : MorningPlan.WORK;
+        return provisions < wanted && foodPoint ? MorningPlan.FETCH_PROVISIONS : MorningPlan.WORK;
     }
 }

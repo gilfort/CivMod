@@ -12,6 +12,7 @@ import java.util.function.ToIntFunction;
 
 import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.job.SettlerWork;
+import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.resources.Identifier;
@@ -299,6 +300,6 @@ public final class MissionRules {
      *         returns the evening of its departure day
      */
     public static long returnTime(long departureDay, int days) {
-        return (departureDay + days - 1) * 24000L + SettlerWork.WORK_END;
+        return (departureDay + days - 1) * DayClock.DAY_TICKS + SettlerWork.WORK_END;
     }
 }

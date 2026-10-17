@@ -37,8 +37,15 @@ public final class ModBlocks {
     /** The Mission Board: JobBlock of all Mission Jobs, offering the Adventurer and holding several settlers. */
     public static final DeferredBlock<JobBlock> MISSION_BOARD = jobBlock("mission_board", ModJobs.ADVENTURER);
 
+    /** JobBlock offering the Clerk: the settlement's store and food point. */
+    public static final DeferredBlock<JobBlock> CLERK_BLOCK = jobBlock("clerk_block", ModJobs.CLERK);
+
+    /** JobBlock offering the Craftsperson: the pattern library of the first Producing Job. */
+    public static final DeferredBlock<JobBlock> CRAFTSPERSON_BLOCK = jobBlock("craftsperson_block", ModJobs.CRAFTSPERSON);
+
     /** All JobBlocks. */
-    public static final List<DeferredBlock<JobBlock>> JOB_BLOCKS = List.of(LUMBERJACK_BLOCK, MINER_BLOCK, FISHERMAN_BLOCK, MISSION_BOARD);
+    public static final List<DeferredBlock<JobBlock>> JOB_BLOCKS = List.of(LUMBERJACK_BLOCK, MINER_BLOCK, FISHERMAN_BLOCK, MISSION_BOARD,
+            CLERK_BLOCK, CRAFTSPERSON_BLOCK);
 
     private ModBlocks() {
     }

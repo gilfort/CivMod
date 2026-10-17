@@ -169,36 +169,6 @@ public final class SettlementData extends SavedData {
     }
 
     /**
-     * Toggles a container as pantry of a settlement.
-     *
-     * @param settlement the settlement
-     * @param pos        the container position
-     * @return whether it is a pantry now
-     */
-    public boolean togglePantry(Settlement settlement, BlockPos pos) {
-        boolean added = settlement.addPantry(pos) || !settlement.removePantry(pos);
-        changed();
-        return added;
-    }
-
-    /**
-     * Removes a pantry (its container is gone), whichever settlement it belongs to.
-     *
-     * @param pos the container position
-     * @return whether a pantry was removed
-     */
-    public boolean removePantry(BlockPos pos) {
-        boolean removed = false;
-        for (Settlement settlement : settlements.values()) {
-            removed |= settlement.removePantry(pos);
-        }
-        if (removed) {
-            changed();
-        }
-        return removed;
-    }
-
-    /**
      * @param pos a position
      * @return the settlement whose border contains it (nearest JobBlock wins)
      */

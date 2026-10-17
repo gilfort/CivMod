@@ -10,6 +10,7 @@ import com.gilfort.civmod.job.Schedule.Activity;
 import com.gilfort.civmod.job.Schedule.Decision;
 import com.gilfort.civmod.job.Schedule.Intent;
 import com.gilfort.civmod.job.Schedule.MealPurpose;
+import com.gilfort.civmod.job.SettlerWork;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -75,13 +76,13 @@ public final class ScheduleRulesGameTests {
         helper.register(ResourceKey.create(Registries.TEST_FUNCTION, CivMod.id(name)), test);
     }
 
-    /** A snapshot under construction; defaults: day 3, 07:00, fed, enough provisions, pantry food, awake, idle. */
+    /** A snapshot under construction; defaults: day 3, 07:00, fed, enough provisions, food point food, awake, idle. */
     private static final class Situation {
         long dayTime = MORNING;
         int food = 20;
         int provisions = 10;
         boolean pocketMeal = true;
-        boolean pantryFood = true;
+        boolean foodPoint = true;
         boolean homeless;
         boolean sleeping;
         long forageDay = SettlerFood.NO_DAY;
@@ -91,14 +92,15 @@ public final class ScheduleRulesGameTests {
         boolean morningHandled = true;
         boolean eveningMealEaten;
         boolean deliveryPending;
-        int pantryAsked;
+        int foodPointAsked;
+        long workEnd = SettlerWork.WORK_END;
 
         Schedule.Snapshot snapshot() {
             return new Schedule.Snapshot(3L, dayTime, food, provisions, 6, pocketMeal, () -> {
-                pantryAsked++;
-                return pantryFood;
+                foodPointAsked++;
+                return foodPoint;
             }, homeless, sleeping, forageDay, nightSkipped, activity, () -> jobStepHolds, morningHandled, eveningMealEaten,
-                    deliveryPending);
+                    deliveryPending, workEnd);
         }
 
         Optional<Intent> wakeUp() {
@@ -114,7 +116,7 @@ public final class ScheduleRulesGameTests {
         helper.assertTrue(decision.intent() == intent, what + ": expected " + intent + ", got " + decision);
     }
 
-    /** Morning: work, fetch provisions when short and a pantry has food, forage when hungry with no food anywhere. */
+    /** Morning: work, fetch provisions when short and a food point has food, forage when hungry with no food anywhere. */
     private static void morning(GameTestHelper helper) {
         Situation work = new Situation();
         work.morningHandled = false;
@@ -129,18 +131,18 @@ public final class ScheduleRulesGameTests {
         expect(helper, decision, Intent.FETCH_FOOD, "Short of provisions");
         helper.assertTrue(decision.purpose() == MealPurpose.MORNING && decision.morningHandled(), "Fetches for the morning: " + decision);
 
-        Situation noPantry = new Situation();
-        noPantry.morningHandled = false;
-        noPantry.provisions = 2;
-        noPantry.pantryFood = false;
-        expect(helper, noPantry.next(), Intent.WORK, "Short of provisions, no pantry food");
+        Situation noFoodPoint = new Situation();
+        noFoodPoint.morningHandled = false;
+        noFoodPoint.provisions = 2;
+        noFoodPoint.foodPoint = false;
+        expect(helper, noFoodPoint.next(), Intent.WORK, "Short of provisions, no food point food");
 
         Situation forage = new Situation();
         forage.morningHandled = false;
         forage.food = 5;
         forage.provisions = 0;
         forage.pocketMeal = false;
-        forage.pantryFood = false;
+        forage.foodPoint = false;
         decision = forage.next();
         expect(helper, decision, Intent.START_FORAGING, "Hungry, no food anywhere");
         helper.assertTrue(decision.morningHandled(), "Foraging marks the morning");
@@ -148,38 +150,38 @@ public final class ScheduleRulesGameTests {
         Situation handled = new Situation();
         handled.provisions = 2;
         expect(helper, handled.next(), Intent.WORK, "Morning already handled today");
-        helper.assertTrue(handled.pantryAsked == 0, "A working settler does not look into pantries");
+        helper.assertTrue(handled.foodPointAsked == 0, "A working settler does not look into food points");
 
         helper.assertTrue(Schedule.morningPlan(5, 0, 6, false) == Schedule.MorningPlan.FORAGE, "Plan: hungry, no food anywhere");
         helper.assertTrue(Schedule.morningPlan(5, 3, 6, false) == Schedule.MorningPlan.WORK, "Plan: hungry but has provisions");
         helper.assertTrue(Schedule.morningPlan(20, 0, 6, true) == Schedule.MorningPlan.FETCH_PROVISIONS, "Plan: short of provisions");
-        helper.assertFalse(Schedule.eatsAtPantry(MealPurpose.MORNING, 15), "The morning provisions trip is no meal");
-        helper.assertTrue(Schedule.eatsAtPantry(MealPurpose.MORNING, 9), "Hungry in the morning: eats at the pantry");
-        helper.assertTrue(Schedule.eatsAtPantry(MealPurpose.HUNGRY, 9) && Schedule.eatsAtPantry(MealPurpose.EVENING, 15),
+        helper.assertFalse(Schedule.eatsAtFoodPoint(MealPurpose.MORNING, 15), "The morning provisions trip is no meal");
+        helper.assertTrue(Schedule.eatsAtFoodPoint(MealPurpose.MORNING, 9), "Hungry in the morning: eats at the food point");
+        helper.assertTrue(Schedule.eatsAtFoodPoint(MealPurpose.HUNGRY, 9) && Schedule.eatsAtFoodPoint(MealPurpose.EVENING, 15),
                 "Hungry and evening trips are meals");
         helper.succeed();
     }
 
-    /** Hunger during the day: pockets first, then the pantry, else complain; starving stops work. */
+    /** Hunger during the day: pockets first, then the food point, else complain; starving stops work. */
     private static void hunger(GameTestHelper helper) {
         Situation pockets = new Situation();
         pockets.food = 5;
         expect(helper, pockets.next(), Intent.EAT_FROM_POCKETS, "Hungry with food in the pockets");
-        helper.assertTrue(pockets.pantryAsked == 0, "Pockets first: no pantry lookup");
+        helper.assertTrue(pockets.foodPointAsked == 0, "Pockets first: no food point lookup");
 
-        Situation pantry = new Situation();
-        pantry.food = 5;
-        pantry.provisions = 0;
-        pantry.pocketMeal = false;
-        Decision decision = pantry.next();
-        expect(helper, decision, Intent.FETCH_FOOD, "Hungry, empty pockets, pantry food");
+        Situation atFoodPoint = new Situation();
+        atFoodPoint.food = 5;
+        atFoodPoint.provisions = 0;
+        atFoodPoint.pocketMeal = false;
+        Decision decision = atFoodPoint.next();
+        expect(helper, decision, Intent.FETCH_FOOD, "Hungry, empty pockets, food point food");
         helper.assertTrue(decision.purpose() == MealPurpose.HUNGRY && !decision.complain(), "Fetches because hungry: " + decision);
 
         Situation complain = new Situation();
         complain.food = 5;
         complain.provisions = 0;
         complain.pocketMeal = false;
-        complain.pantryFood = false;
+        complain.foodPoint = false;
         decision = complain.next();
         expect(helper, decision, Intent.WORK, "Hungry without food still works");
         helper.assertTrue(decision.complain(), "Hungry without food complains");
@@ -188,7 +190,7 @@ public final class ScheduleRulesGameTests {
         starving.food = 0;
         starving.provisions = 0;
         starving.pocketMeal = false;
-        starving.pantryFood = false;
+        starving.foodPoint = false;
         decision = starving.next();
         expect(helper, decision, Intent.IDLE, "Starving stops work");
         helper.assertTrue(decision.complain(), "Starving complains");
@@ -202,7 +204,7 @@ public final class ScheduleRulesGameTests {
         helper.succeed();
     }
 
-    /** Evening: deliver first, then the meal (pantry before pockets), then rest near the rest place, bed from 20:00. */
+    /** Evening: deliver first, then the meal (food point before pockets), then rest near the rest place, bed from 20:00. */
     private static void evening(GameTestHelper helper) {
         Situation deliver = new Situation();
         deliver.dayTime = EVENING;
@@ -212,20 +214,20 @@ public final class ScheduleRulesGameTests {
         expect(helper, decision, Intent.DELIVER, "Items left in a buffer");
         helper.assertTrue(decision.afterWork() && !decision.eveningMealHandled(), "Delivery comes before the meal: " + decision);
 
-        Situation pantry = new Situation();
-        pantry.dayTime = EVENING;
-        pantry.food = 15;
-        decision = pantry.next();
-        expect(helper, decision, Intent.FETCH_FOOD, "Evening meal at the pantry although the pockets have food");
+        Situation atFoodPoint = new Situation();
+        atFoodPoint.dayTime = EVENING;
+        atFoodPoint.food = 15;
+        decision = atFoodPoint.next();
+        expect(helper, decision, Intent.FETCH_FOOD, "Evening meal at the food point although the pockets have food");
         helper.assertTrue(decision.purpose() == MealPurpose.EVENING && decision.eveningMealHandled() && decision.afterWork(),
                 "Evening meal: " + decision);
 
         Situation pockets = new Situation();
         pockets.dayTime = EVENING;
         pockets.food = 15;
-        pockets.pantryFood = false;
+        pockets.foodPoint = false;
         decision = pockets.next();
-        expect(helper, decision, Intent.EAT_UNTIL_FULL, "No pantry food: eat the provisions until full");
+        expect(helper, decision, Intent.EAT_UNTIL_FULL, "No food point food: eat the provisions until full");
         helper.assertTrue(decision.eveningMealHandled(), "Pocket meal marks the evening meal");
 
         Situation full = new Situation();
@@ -240,14 +242,14 @@ public final class ScheduleRulesGameTests {
         eaten.eveningMealEaten = true;
         decision = eaten.next();
         expect(helper, decision, Intent.REST, "One evening meal per day");
-        helper.assertTrue(!decision.eveningMealHandled() && eaten.pantryAsked == 0, "No second meal, no pantry lookup: " + decision);
+        helper.assertTrue(!decision.eveningMealHandled() && eaten.foodPointAsked == 0, "No second meal, no food point lookup: " + decision);
 
         Situation hungry = new Situation();
         hungry.dayTime = EVENING;
         hungry.food = 5;
         hungry.provisions = 0;
         hungry.pocketMeal = false;
-        hungry.pantryFood = false;
+        hungry.foodPoint = false;
         decision = hungry.next();
         expect(helper, decision, Intent.REST, "Hungry without food rests");
         helper.assertTrue(decision.complain(), "Hungry without food complains in the evening");
@@ -279,7 +281,7 @@ public final class ScheduleRulesGameTests {
         evening.deliveryPending = true;
         Decision decision = evening.next();
         expect(helper, decision, Intent.IDLE, "Homeless in the evening");
-        helper.assertTrue(!decision.afterWork() && !decision.complain() && evening.pantryAsked == 0, "No evening for the homeless: " + decision);
+        helper.assertTrue(!decision.afterWork() && !decision.complain() && evening.foodPointAsked == 0, "No evening for the homeless: " + decision);
 
         Situation morning = new Situation();
         morning.homeless = true;
@@ -298,7 +300,7 @@ public final class ScheduleRulesGameTests {
         complain.pocketMeal = false;
         decision = complain.next();
         expect(helper, decision, Intent.IDLE, "Homeless, hungry, empty pockets");
-        helper.assertTrue(decision.complain() && complain.pantryAsked == 0, "Complains without asking a pantry: " + decision);
+        helper.assertTrue(decision.complain() && complain.foodPointAsked == 0, "Complains without asking a food point: " + decision);
 
         Situation skipped = new Situation();
         skipped.homeless = true;

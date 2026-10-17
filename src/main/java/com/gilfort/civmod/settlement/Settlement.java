@@ -1,5 +1,6 @@
 package com.gilfort.civmod.settlement;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -10,6 +11,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import com.gilfort.civmod.logistics.Request;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
@@ -35,8 +37,9 @@ public final class Settlement {
             Codec.LONG.optionalFieldOf("settlers_due", SETTLERS_ARRIVED).forGetter(Settlement::settlersDue),
             UUIDUtil.CODEC.listOf().optionalFieldOf("members", List.of()).forGetter(settlement -> List.copyOf(settlement.members)),
             SettlementBlock.CODEC.listOf().fieldOf("blocks").forGetter(settlement -> List.copyOf(settlement.blocks.values())),
+            // Saves from before the Clerk may hold "pantries"; they are ignored (vault Systems/Settlement.md, 2026-10-16).
             Codec.unboundedMap(Codec.STRING, UUIDUtil.CODEC).optionalFieldOf("beds", Map.of()).forGetter(Settlement::bedsForCodec),
-            BlockPos.CODEC.listOf().optionalFieldOf("pantries", List.of()).forGetter(settlement -> List.copyOf(settlement.pantries))
+            Request.CODEC.listOf().optionalFieldOf("requests", List.of()).forGetter(Settlement::requests)
     ).apply(instance, Settlement::new));
 
     private final int id;
@@ -47,7 +50,7 @@ public final class Settlement {
     private final Set<UUID> members = new LinkedHashSet<>();
     private final Map<BlockPos, SettlementBlock> blocks = new LinkedHashMap<>();
     private final Map<BlockPos, UUID> beds = new LinkedHashMap<>();
-    private final Set<BlockPos> pantries = new LinkedHashSet<>();
+    private final List<Request> requests = new ArrayList<>();
 
     /**
      * @param id          the settlement id (unique per dimension)
@@ -64,9 +67,9 @@ public final class Settlement {
     }
 
     private Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
-            List<SettlementBlock> blocks, Map<String, UUID> beds, List<BlockPos> pantries) {
+            List<SettlementBlock> blocks, Map<String, UUID> beds, List<Request> requests) {
+        this.requests.addAll(requests);
         beds.forEach((key, owner) -> this.beds.put(BlockPos.of(Long.parseLong(key)), owner));
-        this.pantries.addAll(pantries);
         this.id = id;
         this.name = name;
         this.foundedAt = foundedAt;
@@ -179,21 +182,6 @@ public final class Settlement {
         return beds.entrySet().stream().filter(entry -> entry.getValue().equals(settler)).map(Map.Entry::getKey).findFirst();
     }
 
-    /**
-     * @return the pantry containers (read-only)
-     */
-    public Set<BlockPos> pantries() {
-        return Collections.unmodifiableSet(pantries);
-    }
-
-    boolean addPantry(BlockPos pos) {
-        return pantries.add(pos.immutable());
-    }
-
-    boolean removePantry(BlockPos pos) {
-        return pantries.remove(pos);
-    }
-
     private Map<String, UUID> bedsForCodec() {
         Map<String, UUID> result = new LinkedHashMap<>();
         beds.forEach((pos, owner) -> result.put(Long.toString(pos.asLong()), owner));
@@ -207,6 +195,17 @@ public final class Settlement {
 
     Optional<UUID> removeBed(BlockPos head) {
         return Optional.ofNullable(beds.remove(head));
+    }
+
+    /**
+     * @return the settlement's requests, in posting order (read-only; see {@link Requests})
+     */
+    public List<Request> requests() {
+        return Collections.unmodifiableList(requests);
+    }
+
+    List<Request> mutableRequests() {
+        return requests;
     }
 
     void setName(Optional<String> name) {
@@ -230,6 +229,10 @@ public final class Settlement {
     }
 
     SettlementBlock remove(BlockPos pos) {
+        // The requests of a removed Clerk's rules go with it; other requests delivering to it go to the producer's own
+        // drop-off, like requests without a Clerk.
+        requests.removeIf(request -> request.rule().isPresent() && request.target().filter(pos::equals).isPresent());
+        requests.replaceAll(request -> request.target().filter(pos::equals).isPresent() ? request.withoutTarget() : request);
         return blocks.remove(pos);
     }
 }

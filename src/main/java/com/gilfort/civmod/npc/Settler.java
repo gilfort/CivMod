@@ -219,6 +219,17 @@ public class Settler extends PathfinderMob {
     }
 
     /**
+     * A settler that dies or is removed for good releases its claims on requests (vault {@code Jobs/Clerk.md}).
+     */
+    @Override
+    public void remove(RemovalReason reason) {
+        if (reason.shouldDestroy() && level() instanceof net.minecraft.server.level.ServerLevel server) {
+            com.gilfort.civmod.settlement.Requests.releaseAll(SettlementData.get(server), getUUID());
+        }
+        super.remove(reason);
+    }
+
+    /**
      * @return the work behaviour (job status, buffers)
      */
     public SettlerWork getWork() {
@@ -291,6 +302,17 @@ public class Settler extends PathfinderMob {
         if (isSleeping()) {
             stopSleeping();
         }
+        entityData.set(STRAW, -1);
+    }
+
+    /**
+     * Every way of getting up ends sleeping without a bed as well: vanilla also wakes a sleeper on its own (on the first
+     * tick after loading, when hurt, when its bed is gone). A straw bed flag left behind would keep the settler without
+     * gravity, floating where it lay.
+     */
+    @Override
+    public void stopSleeping() {
+        super.stopSleeping();
         entityData.set(STRAW, -1);
     }
 

@@ -9,6 +9,7 @@ import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.job.JobCategory;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 
 /**
  * Rules for work points and job assignment of JobBlocks (vault {@code Systems/Scroll of Assignment.md}).
@@ -50,7 +51,17 @@ public final class JobAssignments {
         /** Neither a valid work place for the job nor a container. */
         INVALID,
         /** Already {@value SettlementBlock#MAX_WORK_POINTS} work POIs. */
-        TOO_MANY
+        TOO_MANY,
+        /** Linked as Clerk storage. */
+        STORAGE,
+        /** Added as Clerk stand spot. */
+        STAND_SPOT,
+        /** The Clerk links as many containers as its level allows. */
+        STORAGE_FULL,
+        /** Already {@value SettlementRules#MAX_STAND_SPOTS} stand spots. */
+        TOO_MANY_SPOTS,
+        /** The container is storage of another Clerk. */
+        TAKEN
     }
 
     /** Result of assigning a JobBlock to a settler. */
@@ -155,6 +166,90 @@ public final class JobAssignments {
         };
         data.changed();
         return result;
+    }
+
+    /**
+     * Cycles a point of a Clerk JobBlock (vault {@code Systems/Scroll of Assignment.md}): a container cycles
+     * storage → removed, any other block stand spot → removed. Registered JobBlocks never become storage; a container
+     * belongs to one Clerk only.
+     *
+     * @param data      the dimension's settlement data
+     * @param clerk     the bound Clerk JobBlock
+     * @param target    the clicked position
+     * @param container whether the target is an item container
+     * @param standable whether a settler can stand on the target (two blocks of air above)
+     * @param facing    the direction the Clerk faces on a new stand spot
+     * @return the result
+     */
+    public static PointResult cycleClerkPoint(SettlementData data, BlockPos clerk, BlockPos target, boolean container, boolean standable,
+            Direction facing) {
+        Optional<JobBlockSite> site = JobBlockSite.at(data, clerk);
+        if (site.isEmpty()) {
+            return PointResult.NO_JOB_BLOCK;
+        }
+        SettlementBlock block = site.get().block();
+        BlockPos pos = target.immutable();
+        if (block.mutableStorage().remove(pos) || block.mutableStandSpots().removeIf(spot -> spot.pos().equals(pos))) {
+            data.changed();
+            return PointResult.REMOVED;
+        }
+        if (!insideBorder(site.get().settlement(), pos)) {
+            return PointResult.OUTSIDE;
+        }
+        if (container) {
+            if (data.settlementAt(pos).isPresent()) {
+                return PointResult.INVALID;
+            }
+            if (storageOwner(data, pos).isPresent()) {
+                return PointResult.TAKEN;
+            }
+            if (block.storage().size() >= SettlementRules.clerkStorage(block.level())) {
+                return PointResult.STORAGE_FULL;
+            }
+            block.mutableStorage().add(pos);
+            data.changed();
+            return PointResult.STORAGE;
+        }
+        if (!standable) {
+            return PointResult.INVALID;
+        }
+        if (block.standSpots().size() >= SettlementRules.MAX_STAND_SPOTS) {
+            return PointResult.TOO_MANY_SPOTS;
+        }
+        block.mutableStandSpots().add(new SettlementBlock.StandSpot(pos, facing));
+        data.changed();
+        return PointResult.STAND_SPOT;
+    }
+
+    /**
+     * @param data      the dimension's settlement data
+     * @param container a container position
+     * @return the Clerk JobBlock the container is linked to as storage
+     */
+    public static Optional<SettlementBlock> storageOwner(SettlementData data, BlockPos container) {
+        return data.settlements().stream().flatMap(settlement -> settlement.blocks().stream())
+                .filter(block -> block.storage().contains(container)).findFirst();
+    }
+
+    /**
+     * Removes a block that is gone as storage or stand spot of every Clerk.
+     *
+     * @param data      the dimension's settlement data
+     * @param container the container position
+     * @return whether it was linked
+     */
+    public static boolean removePointsAt(SettlementData data, BlockPos container) {
+        boolean removed = false;
+        for (Settlement settlement : data.settlements()) {
+            for (SettlementBlock block : settlement.blocks()) {
+                removed |= block.mutableStorage().remove(container);
+                removed |= block.mutableStandSpots().removeIf(spot -> spot.pos().equals(container));
+            }
+        }
+        if (removed) {
+            data.changed();
+        }
+        return removed;
     }
 
     /**

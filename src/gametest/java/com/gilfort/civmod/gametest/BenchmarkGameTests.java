@@ -37,12 +37,18 @@ public final class BenchmarkGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos origin = helper.absolutePos(new BlockPos(6, 4, 6));
         int spawned = Benchmark.build(level, origin);
-        helper.assertTrue(spawned == Benchmark.SIZE, "20 settlers expected, got " + spawned);
+        helper.assertTrue(spawned == Benchmark.SETTLERS, Benchmark.SETTLERS + " settlers expected, got " + spawned);
         Settlement settlement = SettlementData.get(level).settlementAt(origin).orElseThrow();
-        helper.assertTrue(settlement.blocks().size() == Benchmark.SIZE && settlement.connectedCount() == Benchmark.SIZE,
-                "All 20 JobBlocks connected: " + settlement.connectedCount());
+        // The 20 job JobBlocks plus the Clerk (food point) and the 2 Craftspersons.
+        helper.assertTrue(settlement.blocks().size() == Benchmark.JOB_BLOCKS && settlement.connectedCount() == Benchmark.JOB_BLOCKS,
+                "All JobBlocks connected: " + settlement.connectedCount());
         helper.runAtTickTime(2380, () -> {
             CivProfiler.report().forEach(line -> CivMod.LOGGER.info("[benchmark] {}", line));
+            BlockPos clerk = origin.offset(-3, 0, 0);
+            int crafted = com.gilfort.civmod.logistics.ClerkStorage.stock(level, clerk, true)
+                    .count(stack -> stack.is(net.minecraft.world.item.Items.TORCH) || stack.is(net.minecraft.world.item.Items.STONE_PICKAXE));
+            CivMod.LOGGER.info("[benchmark] Craftspersons: {} item(s) delivered, {} request(s) claimed", crafted,
+                    settlement.requests().stream().filter(request -> !request.claims().isEmpty()).count());
             helper.succeed();
         });
     }

@@ -21,8 +21,8 @@ import net.minecraft.world.item.Items;
 
 /**
  * Screen of a settler: Overview (name, status, settlement, dismiss when homeless), Jobs (priority list), Inventory
- * (tool belt, offhand, pockets), Mission (the one Mission Job, chosen from those the Mission Board offers) and one tab
- * per job below the panel (status and buffer).
+ * (tool belt, offhand, pockets), Mission (the one Mission Job, chosen from those the Mission Board offers; only for
+ * settlers with a Mission Job) and one tab per job below the panel (status and buffer).
  */
 public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
 
@@ -151,8 +151,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
     private void extractMissionTab(GuiGraphicsExtractor graphics, SettlerInfo info) {
         java.util.Optional<SettlerJob> missionJob = info.missionJob();
         if (missionJob.isEmpty()) {
-            graphics.textWithWordWrap(font, Component.translatable("civmod.gui.settler.mission.none"), CivGui.PADDING, 22,
-                    imageWidth - 2 * CivGui.PADDING, CivGui.HINT_COLOR, false);
+            // The tab is hidden without a Mission Job.
             return;
         }
         graphics.text(font, Component.translatable("civmod.gui.settler.mission.job", missionJob.get().jobType().displayName()), CivGui.PADDING, 22,
@@ -167,6 +166,20 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
 
     private static java.util.Optional<SettlerInfo.JobState> state(SettlerInfo info, int index) {
         return index >= 0 && index < info.jobStates().size() ? java.util.Optional.of(info.jobStates().get(index)) : java.util.Optional.empty();
+    }
+
+    @Override
+    protected List<Component> helpLines(int tab) {
+        if (tab >= SettlerMenu.FIRST_JOB_TAB) {
+            return List.of(Component.translatable("civmod.gui.settler.help.cap"));
+        }
+        return List.of();
+    }
+
+    /** The Mission tab only for settlers with a Mission Job (linked to a Mission Board). */
+    @Override
+    protected boolean isTabShown(int tab) {
+        return tab != SettlerMenu.TAB_MISSION || menu.getInfo().missionJob().isPresent();
     }
 
     @Override
@@ -209,16 +222,16 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         SettlerJob job = info.jobs().get(index);
         graphics.text(font, job.jobType().displayName(), CivGui.PADDING, 22, CivGui.LABEL_COLOR, false);
         state(info, index).ifPresent(state -> {
-            graphics.text(font, Component.translatable("civmod.gui.settler.status", state.status().displayName()), CivGui.PADDING, 34,
-                    CivGui.LABEL_COLOR, false);
+            graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.settler.status", state.status().displayName()),
+                    imageWidth - 2 * CivGui.PADDING), CivGui.PADDING, 34, CivGui.LABEL_COLOR, false);
             SettlerInfo.SkillInfo skill = state.skill();
             if (skill.limited()) {
-                graphics.text(font, Component.translatable("civmod.gui.settler.limited", skill.level(), skill.effective(), skill.blockLevel()),
-                        CivGui.PADDING, 45, LIMITED_COLOR, false);
+                graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.settler.limited", skill.level(), skill.effective()),
+                        imageWidth - 2 * CivGui.PADDING), CivGui.PADDING, 45, LIMITED_COLOR, false);
             } else if (skill.atCap()) {
                 graphics.text(font, Component.translatable("civmod.gui.settler.level", skill.level()), CivGui.PADDING, 45, CivGui.LABEL_COLOR, false);
-                graphics.text(font, Component.translatable("civmod.gui.settler.max_level"), CivGui.PADDING, EXP_BAR_Y - 1,
-                        LIMITED_COLOR, false);
+                graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.settler.max_level"), imageWidth - 2 * CivGui.PADDING),
+                        CivGui.PADDING, EXP_BAR_Y - 1, LIMITED_COLOR, false);
             } else {
                 graphics.text(font, Component.translatable("civmod.gui.settler.level", skill.level()), CivGui.PADDING, 45, CivGui.LABEL_COLOR, false);
                 graphics.text(font, Component.translatable("civmod.gui.settler.exp", skill.exp(), skill.needed()), CivGui.PADDING + EXP_BAR_WIDTH + 4,

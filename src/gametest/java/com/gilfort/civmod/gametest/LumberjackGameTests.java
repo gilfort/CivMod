@@ -316,8 +316,13 @@ public final class LumberjackGameTests {
     }
 
     static List<long[]> forceChunks(GameTestHelper helper) {
+        return forceChunks(helper, new BlockPos(8, 0, 8));
+    }
+
+    /** Forces the chunks from the test origin up to a relative corner. */
+    static List<long[]> forceChunks(GameTestHelper helper, BlockPos corner) {
         BlockPos min = helper.absolutePos(BlockPos.ZERO);
-        BlockPos max = helper.absolutePos(new BlockPos(8, 0, 8));
+        BlockPos max = helper.absolutePos(corner);
         List<long[]> chunks = new java.util.ArrayList<>();
         for (int x = SectionPos.blockToSectionCoord(Math.min(min.getX(), max.getX())); x <= SectionPos.blockToSectionCoord(Math.max(min.getX(), max.getX())); x++) {
             for (int z = SectionPos.blockToSectionCoord(Math.min(min.getZ(), max.getZ())); z <= SectionPos.blockToSectionCoord(Math.max(min.getZ(), max.getZ())); z++) {

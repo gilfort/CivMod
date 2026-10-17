@@ -14,6 +14,8 @@ public enum JobStatus {
     IDLE("idle"),
     /** Walking to or working at the work place. */
     WORKING("working"),
+    /** A Clerk standing at its counter. */
+    SERVING("serving"),
     /** Fetching a tool. */
     FETCHING_TOOL("fetching_tool"),
     /** Delivering the buffer. */
@@ -33,7 +35,15 @@ public enum JobStatus {
     /** A mission is reserved; the settler leaves at the start of the next workday. */
     WAITING_DEPARTURE("waiting_departure"),
     /** Away on a mission. */
-    ON_MISSION("on_mission");
+    ON_MISSION("on_mission"),
+    /** A producer walking to or crafting at its station. */
+    CRAFTING("crafting"),
+    /** A producer fetching the inputs of a request. */
+    FETCHING_INPUTS("fetching_inputs"),
+    /** A producer finds no request it has a checked pattern for. */
+    NO_REQUEST("no_request"),
+    /** A producer lacks inputs for every request it tried. */
+    MISSING_INPUTS("missing_inputs");
 
     /** Network codec. */
     public static final StreamCodec<ByteBuf, JobStatus> STREAM_CODEC = ByteBufCodecs.idMapper(i -> values()[i], JobStatus::ordinal);
@@ -48,6 +58,7 @@ public enum JobStatus {
      * @return whether the job can currently not work (the settler switches to its next priority)
      */
     public boolean isBlocked() {
+        // NO_REQUEST and MISSING_INPUTS do not block: the next decision tries again (vault Jobs/Craftsperson.md).
         return this == NO_TOOL || this == NO_WORK_PLACE || this == DROP_OFF_FULL || this == NO_RESOURCES || this == NO_MISSION;
     }
 

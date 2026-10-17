@@ -1,8 +1,13 @@
 package com.gilfort.civmod.job;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import org.jspecify.annotations.Nullable;
 
@@ -16,12 +21,13 @@ import net.minecraft.server.level.ServerLevel;
  * What a settler keeps for one job at its JobBlock (vault {@code Systems/Resource Collection Jobs.md},
  * {@code Systems/JobBlock.md}): the buffer, the status shown in the job tab, the time a blocked job waits, the work
  * place of the day and the scan lifecycle (requested, scanning, ready, rescanned per day or when centre or radius
- * change). The {@link ScanScheduler} is only used from here.
+ * change), and for a Producing Job the current {@link Round}, the requests skipped for a while and a pending trip to
+ * the drop-off. The {@link ScanScheduler} is only used from here.
  * <p>
  * The {@link SettlerWork} holds one Workplace per JobBlock; forgetting the job drops the whole Workplace, so nothing of
  * it survives. Buffer, work place of the day and scan are saved with the settler (shape unchanged since before the
  * Workplace: {@link SettlerWork.BuffersSnapshot}); status, blocked time and the fractional production of the
- * {@link WorkRules} are not.
+ * {@link WorkRules}, the round and the skipped requests are not.
  */
 final class Workplace {
 
@@ -47,6 +53,12 @@ final class Workplace {
     private boolean catchUpEnded;
     /** Fractional production of the {@link WorkRules} between calls (not saved). */
     private double production;
+    /** The round of a Producing Job (not saved). */
+    private @Nullable Round round;
+    /** Requests a Producing Job skips until a time (live: game time, catch-up: the simulated clock; not saved). */
+    private final Map<UUID, Long> skips = new HashMap<>();
+    /** A Producing Job takes its buffer to the drop-off before the next round (not saved). */
+    private boolean dropOffPending;
 
     /**
      * @param jobBlock the JobBlock position
@@ -69,6 +81,43 @@ final class Workplace {
      */
     void setProduction(double production) {
         this.production = production;
+    }
+
+    // ---------------------------------------------------------------- producing round
+
+    /**
+     * @return the round of a Producing Job, null between rounds
+     */
+    @Nullable Round round() {
+        return round;
+    }
+
+    /**
+     * @param round the new round, null to end it
+     */
+    void setRound(@Nullable Round round) {
+        this.round = round;
+    }
+
+    /**
+     * @return the requests a Producing Job skips, with the time until which they are skipped (mutable)
+     */
+    Map<UUID, Long> skips() {
+        return skips;
+    }
+
+    /**
+     * @return whether the buffer goes to the drop-off before the next round
+     */
+    boolean dropOffPending() {
+        return dropOffPending;
+    }
+
+    /**
+     * @param pending whether the buffer goes to the drop-off before the next round
+     */
+    void setDropOffPending(boolean pending) {
+        dropOffPending = pending;
     }
 
     // ---------------------------------------------------------------- buffer and status
@@ -126,12 +175,27 @@ final class Workplace {
      * @return the work place, null if there is none
      */
     @Nullable BlockPos workPlaceOfDay(ServerLevel level, JobProfile profile, JobBlockSite site, long day) {
+        return workPlaceOfDay(level, pos -> profile.isWorkPlace(level, pos), () -> profile.autoSearch(level, site.pos()), site, day);
+    }
+
+    /**
+     * The work place of the day for any work place rule (a Producing Job's station).
+     *
+     * @param level       the level
+     * @param isWorkPlace whether a position is a work place of the job
+     * @param autoSearch  the job's own search, used without a valid scroll work point (may return null)
+     * @param site        the JobBlock site
+     * @param day         the day
+     * @return the work place, null if there is none
+     */
+    @Nullable BlockPos workPlaceOfDay(ServerLevel level, Predicate<BlockPos> isWorkPlace, Supplier<@Nullable BlockPos> autoSearch,
+            JobBlockSite site, long day) {
         BlockPos current = workPlaceOfDay;
-        if (current != null && workPlaceDay == day && profile.isWorkPlace(level, current)) {
+        if (current != null && workPlaceDay == day && isWorkPlace.test(current)) {
             return current;
         }
-        List<BlockPos> candidates = new ArrayList<>(site.block().workPoints().stream().filter(pos -> profile.isWorkPlace(level, pos)).toList());
-        BlockPos chosen = candidates.isEmpty() ? profile.autoSearch(level, site.pos())
+        List<BlockPos> candidates = new ArrayList<>(site.block().workPoints().stream().filter(isWorkPlace).toList());
+        BlockPos chosen = candidates.isEmpty() ? autoSearch.get()
                 : candidates.get(level.getRandom().nextInt(candidates.size()));
         if (chosen != null) {
             workPlaceOfDay = chosen;
@@ -222,10 +286,14 @@ final class Workplace {
     }
 
     /**
-     * Drops the saved parts (buffer, work place of the day, scan) before a restore, and the scan in flight: its result
-     * is ignored when it arrives, and the next plan asks for a scan again if the restored one does not fit.
+     * Drops the saved parts (buffer, work place of the day, scan) before a restore, the scan in flight (its result is
+     * ignored when it arrives, and the next plan asks for a scan again if the restored one does not fit) and the round
+     * (its claim is released by the Producing loop).
      */
     void clearSaved() {
+        round = null;
+        skips.clear();
+        dropOffPending = false;
         buffer = new JobBuffer();
         workPlaceOfDay = null;
         workPlaceDay = -1L;

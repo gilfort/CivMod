@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 
+import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobBlockSite;
@@ -28,12 +29,25 @@ import net.minecraft.world.item.ItemStack;
  */
 final class WorkRules {
 
-    /** Where tools come from during a batch. */
-    enum ToolSupply {
+    /**
+     * Where tools come from during a batch: the belt, and in catch-up also the collect inventory.
+     *
+     * @param collect   what the settler reaches at its collect inventory, if missing tools are refilled from it
+     * @param handedOut called when a working Clerk handed out a tool from its counter
+     */
+    record ToolSupply(Optional<Stock> collect, Runnable handedOut) {
+
         /** Only the belt: live play, where the settler walks to the collect inventory itself. */
-        BELT,
-        /** The belt, refilled from the collect inventory when a tool is missing: catch-up. */
-        BELT_AND_COLLECT
+        static final ToolSupply BELT = new ToolSupply(Optional.empty(), () -> { });
+
+        /**
+         * @param collect   what the settler reaches at its collect inventory
+         * @param handedOut called when a working Clerk handed out a tool from its counter
+         * @return the belt, refilled from the collect inventory when a tool is missing: catch-up
+         */
+        static ToolSupply beltAnd(Stock collect, Runnable handedOut) {
+            return new ToolSupply(Optional.of(collect), handedOut);
+        }
     }
 
     /** Why a batch stopped before its work ticks were used up. */
@@ -163,13 +177,15 @@ final class WorkRules {
     }
 
     /**
-     * The best tool of the job on the belt; with {@link ToolSupply#BELT_AND_COLLECT} missing tools are taken from the
-     * collect inventory first.
+     * The best tool of the job on the belt; with {@link ToolSupply#beltAnd} missing tools are taken from the collect
+     * inventory first.
      */
     private static Optional<ItemStack> tool(ServerLevel level, Settler settler, JobProfile profile, JobBlockSite site, ToolSupply supply) {
         Optional<ItemStack> tool = SettlerTools.best(settler, profile::isTool);
-        if (tool.isEmpty() && supply == ToolSupply.BELT_AND_COLLECT) {
-            refill(level, settler, profile, site);
+        if (tool.isEmpty() && supply.collect().isPresent()) {
+            if (refill(settler, profile, site, supply.collect().get()) && supply.collect().get().counter()) {
+                supply.handedOut().run();
+            }
             tool = SettlerTools.best(settler, profile::isTool);
         }
         return tool;
@@ -180,19 +196,19 @@ final class WorkRules {
      * job's tool when none is on the belt, else the secondary tool when the JobBlock settings want one, none is on the
      * belt and the collect inventory has one.
      *
-     * @param level   the level
      * @param settler the settler
      * @param profile the job's profile
      * @param site    the job's JobBlock site
+     * @param collect what the settler reaches at its collect inventory
      * @return the missing tool, empty if the belt is ready
      */
-    static Optional<MissingTool> missingTool(ServerLevel level, Settler settler, JobProfile profile, JobBlockSite site) {
+    static Optional<MissingTool> missingTool(Settler settler, JobProfile profile, JobBlockSite site, Stock collect) {
         if (SettlerTools.best(settler, profile::isTool).isEmpty()) {
             Predicate<ItemStack> kind = profile::isTool;
-            return Optional.of(new MissingTool(kind, SettlerTools.findInContainer(level, site.collect(), kind).isPresent()));
+            return Optional.of(new MissingTool(kind, SettlerTools.find(collect, kind).isPresent()));
         }
         return profile.secondaryTool(site.block()).filter(kind -> SettlerTools.best(settler, kind).isEmpty()
-                && SettlerTools.findInContainer(level, site.collect(), kind).isPresent()).map(kind -> new MissingTool(kind, true));
+                && SettlerTools.find(collect, kind).isPresent()).map(kind -> new MissingTool(kind, true));
     }
 
     /**
@@ -208,18 +224,21 @@ final class WorkRules {
      * Takes the job's tool and its secondary tool (if the JobBlock settings want one) from the collect inventory onto
      * the belt, each only if none is on the belt yet.
      *
-     * @param level   the level
      * @param settler the settler
      * @param profile the job's profile
      * @param site    the job's JobBlock site
+     * @param collect what the settler reaches at its collect inventory
+     * @return whether a tool was taken
      */
-    static void refill(ServerLevel level, Settler settler, JobProfile profile, JobBlockSite site) {
+    static boolean refill(Settler settler, JobProfile profile, JobBlockSite site, Stock collect) {
+        boolean taken = false;
         if (SettlerTools.best(settler, profile::isTool).isEmpty()) {
-            SettlerTools.take(level, settler, site.collect(), profile::isTool);
+            taken |= SettlerTools.take(settler, collect, profile::isTool);
         }
         Optional<Predicate<ItemStack>> secondary = profile.secondaryTool(site.block());
         if (secondary.isPresent() && SettlerTools.best(settler, secondary.get()).isEmpty()) {
-            SettlerTools.take(level, settler, site.collect(), secondary.get());
+            taken |= SettlerTools.take(settler, collect, secondary.get());
         }
+        return taken;
     }
 }

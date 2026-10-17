@@ -25,6 +25,11 @@ public final class SettlementRules {
     /** The most settlers a Mission Board holds (at the maximum level). */
     public static final int MAX_MISSION_BOARD_CAPACITY = MISSION_BOARD_CAPACITY[MISSION_BOARD_CAPACITY.length - 1];
 
+    /** Containers a Clerk JobBlock links as storage per level (index 0 = level 1). */
+    private static final int[] CLERK_STORAGE = {2, 4, 8, 12, 16};
+    /** Stand spots per Clerk JobBlock. */
+    public static final int MAX_STAND_SPOTS = 8;
+
     private SettlementRules() {
     }
 
@@ -70,6 +75,14 @@ public final class SettlementRules {
      */
     public static int capacity(Job jobType, int level) {
         return jobType.category() == JobCategory.MISSION ? MISSION_BOARD_CAPACITY[clampLevel(level) - MIN_LEVEL] : 1;
+    }
+
+    /**
+     * @param level the Clerk JobBlock level
+     * @return how many linked containers a Clerk JobBlock uses at that level: 2 / 4 / 8 / 12 / 16
+     */
+    public static int clerkStorage(int level) {
+        return CLERK_STORAGE[clampLevel(level) - MIN_LEVEL];
     }
 
     /**

@@ -1,5 +1,7 @@
 package com.gilfort.civmod.client.gui;
 
+import java.util.List;
+
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -58,6 +60,22 @@ public abstract class CivScreen extends Screen {
      * @param mouseY   the mouse y position
      */
     protected void extractPanelContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    }
+
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
+        super.extractRenderState(graphics, mouseX, mouseY, a);
+        CivGui.help(graphics, font, leftPos, topPos, imageWidth, mouseX, mouseY, helpLines());
+    }
+
+    /**
+     * The tips and usage info of the screen, shown on the help icon ({@link CivGui#help}); hints are never drawn as
+     * inline text.
+     *
+     * @return the help lines, empty for no help icon
+     */
+    protected List<Component> helpLines() {
+        return List.of();
     }
 
     @Override

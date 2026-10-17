@@ -12,6 +12,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.DayClock;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -294,8 +295,8 @@ public final class SettlerBeds {
         if (previousTicks < 0 || currentTicks - previousTicks <= interval + 1000) {
             return false;
         }
-        boolean wasEvening = Math.floorMod(previousTicks, 24000L) >= workEnd;
-        boolean laterDay = Math.floorDiv(currentTicks, 24000L) > Math.floorDiv(previousTicks, 24000L);
-        return (wasEvening || laterDay) && Math.floorMod(currentTicks, 24000L) < workEnd;
+        boolean wasEvening = DayClock.dayTime(previousTicks) >= workEnd;
+        boolean laterDay = DayClock.day(currentTicks) > DayClock.day(previousTicks);
+        return (wasEvening || laterDay) && DayClock.dayTime(currentTicks) < workEnd;
     }
 }

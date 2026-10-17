@@ -4,12 +4,13 @@ import net.minecraft.world.Container;
 import net.minecraft.world.inventory.Slot;
 
 /**
- * A slot bound to a tab of a {@link CivMenu}; it is inactive (hidden and not clickable) while another tab is selected.
+ * A slot bound to one or more tabs of a {@link CivMenu}; it is inactive (hidden and not clickable) while another tab
+ * is selected.
  */
 public class CivSlot extends Slot {
 
     private final CivMenu menu;
-    private final int tab;
+    private final int[] tabs;
 
     /**
      * @param menu      the owning menu
@@ -17,23 +18,21 @@ public class CivSlot extends Slot {
      * @param index     the index within the container
      * @param x         the x position relative to the screen
      * @param y         the y position relative to the screen
-     * @param tab       the tab index or {@link CivMenu#ALL_TABS}
+     * @param tabs      the tab indices the slot is active on, or {@link CivMenu#ALL_TABS}
      */
-    public CivSlot(CivMenu menu, Container container, int index, int x, int y, int tab) {
+    public CivSlot(CivMenu menu, Container container, int index, int x, int y, int... tabs) {
         super(container, index, x, y);
         this.menu = menu;
-        this.tab = tab;
-    }
-
-    /**
-     * @return the tab index or {@link CivMenu#ALL_TABS}
-     */
-    public int getTab() {
-        return tab;
+        this.tabs = tabs.clone();
     }
 
     @Override
     public boolean isActive() {
-        return menu.isTabActive(tab);
+        for (int tab : tabs) {
+            if (menu.isTabActive(tab)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

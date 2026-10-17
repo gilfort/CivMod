@@ -7,6 +7,7 @@ import java.util.Optional;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.registry.ModItems;
 import com.gilfort.civmod.settlement.JobPointsDisplay;
+import com.gilfort.civmod.settlement.SettlementBlock;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 
@@ -17,10 +18,12 @@ import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.neoforged.api.distmarker.Dist;
@@ -34,8 +37,9 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  * Draws the work points of JobBlocks while a Scroll of Assignment is held: a coloured outline plus a small floating
  * icon above each point (like the unconnected X), and lines from the bound JobBlock to its points.
  * <p>
- * Colours: work = blue (primary marked "1"), collect = turquoise, drop-off = orange, beds and pantries (bread icon)
- * neutral; points of other JobBlocks are dimmed while the scroll is bound.
+ * Colours: work = blue (primary marked "1"), collect = turquoise, drop-off = orange, Clerk storage = purple (chest icon),
+ * Clerk stand spots = blue, numbered, with a short line in the facing direction; beds neutral. Points of other
+ * JobBlocks are dimmed while the scroll is bound.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID, value = Dist.CLIENT)
 public final class JobPointsRenderer {
@@ -46,19 +50,19 @@ public final class JobPointsRenderer {
     private static final float DEGREES_PER_TICK = 3.0F;
 
     private static final int BED_COLOR = 0xE8E8E8;
-    private static final int PANTRY_COLOR = 0xE8E8E8;
+    private static final int STORAGE_COLOR = 0x9B59D0;
 
     private static List<JobPointsDisplay.JobPoints> points = List.of();
     private static Optional<BlockPos> bound = Optional.empty();
     private static List<BlockPos> beds = List.of();
-    private static List<BlockPos> pantries = List.of();
     private static Optional<BlockPos> ownBed = Optional.empty();
     private static Optional<java.util.UUID> boundSettler = Optional.empty();
     private static Optional<Vec3> settlerPos = Optional.empty();
     private static List<Marker> frame = List.of();
     private static float rotation;
 
-    private record Marker(BlockPos pos, BlockPos jobBlock, int color, boolean dimmed, ItemStackRenderState icon) {
+    private record Marker(BlockPos pos, BlockPos jobBlock, int color, boolean dimmed, ItemStackRenderState icon,
+            Optional<Direction> facing) {
     }
 
     private JobPointsRenderer() {
@@ -76,7 +80,6 @@ public final class JobPointsRenderer {
         beds = payload.beds();
         ownBed = payload.ownBed();
         boundSettler = payload.settler();
-        pantries = payload.pantries();
     }
 
     @SubscribeEvent
@@ -100,13 +103,18 @@ public final class JobPointsRenderer {
                     ModItems.COLLECT_MARKER.get().getDefaultInstance())));
             jobPoints.dropOff().ifPresent(pos -> markers.add(marker(minecraft, pos, jobPoints.jobBlock(), DROP_OFF_COLOR, dimmed,
                     ModItems.DROP_OFF_MARKER.get().getDefaultInstance())));
+            for (BlockPos storage : jobPoints.storage()) {
+                markers.add(marker(minecraft, storage, jobPoints.jobBlock(), STORAGE_COLOR, dimmed, new ItemStack(Items.CHEST)));
+            }
+            for (int i = 0; i < jobPoints.standSpots().size(); i++) {
+                SettlementBlock.StandSpot spot = jobPoints.standSpots().get(i);
+                markers.add(new Marker(spot.pos(), jobPoints.jobBlock(), WORK_COLOR, dimmed,
+                        icon(minecraft, new ItemStack(ModItems.STAND_SPOT_MARKER.get(), i + 1)), Optional.of(spot.facing())));
+            }
         }
         for (BlockPos bed : beds) {
             boolean own = ownBed.filter(bed::equals).isPresent();
             markers.add(marker(minecraft, bed, bed, BED_COLOR, !own, ModItems.BED_MARKER.get().getDefaultInstance()));
-        }
-        for (BlockPos pantry : pantries) {
-            markers.add(marker(minecraft, pantry, pantry, PANTRY_COLOR, false, new ItemStack(net.minecraft.world.item.Items.BREAD)));
         }
         settlerPos = boundSettler.flatMap(uuid -> java.util.stream.StreamSupport.stream(event.getLevel().entitiesForRendering().spliterator(), false)
                 .filter(entity -> entity.getUUID().equals(uuid)).findFirst()
@@ -115,9 +123,13 @@ public final class JobPointsRenderer {
     }
 
     private static Marker marker(Minecraft minecraft, BlockPos pos, BlockPos jobBlock, int color, boolean dimmed, ItemStack icon) {
+        return new Marker(pos, jobBlock, color, dimmed, icon(minecraft, icon), Optional.empty());
+    }
+
+    private static ItemStackRenderState icon(Minecraft minecraft, ItemStack icon) {
         ItemStackRenderState state = new ItemStackRenderState();
         minecraft.getItemModelResolver().updateForTopItem(state, icon, ItemDisplayContext.FIXED, minecraft.level, null, 0);
-        return new Marker(pos, jobBlock, color, dimmed, state);
+        return state;
     }
 
     @SubscribeEvent
@@ -144,6 +156,12 @@ public final class JobPointsRenderer {
                 poseStack.popPose();
             }
             poseStack.popPose();
+            if (marker.facing().isPresent() && !marker.dimmed()) {
+                // Where the Clerk looks when standing on the spot.
+                Vec3 eye = Vec3.atBottomCenterOf(marker.pos().above()).add(0.0, 1.6, 0.0);
+                Vec3 look = eye.add(Vec3.atLowerCornerOf(marker.facing().get().getUnitVec3i()));
+                submitLine(poseStack, collector, camera, eye, look, argb);
+            }
             if (bound.filter(marker.jobBlock()::equals).isPresent()) {
                 submitLine(poseStack, collector, camera, Vec3.atCenterOf(marker.jobBlock()), Vec3.atCenterOf(marker.pos()), argb);
             }

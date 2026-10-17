@@ -78,7 +78,7 @@ public final class CivModConfig {
 
     /** Nutrition a settler wants to carry as provisions. */
     public static final ModConfigSpec.IntValue PROVISION_NUTRITION = BUILDER
-            .comment("Settlers carrying less food than this (nutrition) fetch provisions from a pantry in the morning.")
+            .comment("Settlers carrying less food than this (nutrition) fetch provisions from a Clerk (food point) in the morning.")
             .defineInRange("provisionNutrition", 6, 0, 100);
 
     /** Food points regained by a day of foraging. */

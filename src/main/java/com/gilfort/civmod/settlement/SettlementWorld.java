@@ -130,7 +130,7 @@ public final class SettlementWorld {
      * @return the offer, empty if there is no Mission Board at that position
      */
     public static List<MissionOffer.Entry> missionOffer(ServerLevel level, BlockPos board) {
-        long day = Math.floorDiv(level.getOverworldClockTime(), 24000L);
+        long day = DayClock.day(level);
         return MissionOffers.refresh(SettlementData.get(level), board, day, Missions.all(level.registryAccess()), level.getRandom());
     }
 
@@ -238,7 +238,7 @@ public final class SettlementWorld {
     }
 
     private static long day(ServerLevel level) {
-        return level.getGameTime() / 24000L;
+        return DayClock.day(level.getGameTime());
     }
 
     /**

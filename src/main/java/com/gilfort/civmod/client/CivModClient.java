@@ -3,6 +3,7 @@ package com.gilfort.civmod.client;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.client.gui.DebugScreen;
 import com.gilfort.civmod.client.gui.JobBlockScreen;
+import com.gilfort.civmod.menu.ClerkTab;
 import com.gilfort.civmod.client.gui.SettlerScreen;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 import com.gilfort.civmod.registry.ModBlockEntityTypes;
@@ -92,6 +93,8 @@ public final class CivModClient {
     static void onRegisterClientPayloads(RegisterClientPayloadHandlersEvent event) {
         event.register(SettlementOutline.Sync.TYPE, SettlementOutlineRenderer::handle);
         event.register(JobPointsDisplay.Sync.TYPE, JobPointsRenderer::handle);
+        event.register(ClerkTab.Sync.TYPE, JobBlockScreen::handleClerkTab);
+        event.register(com.gilfort.civmod.menu.PatternTab.Sync.TYPE, JobBlockScreen::handlePatternTab);
     }
 
     private static void onItemTooltip(ItemTooltipEvent event) {

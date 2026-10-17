@@ -16,11 +16,11 @@ _Avoid_: Role, meta type, archetype
 The part of a settler's behaviour shared by every Job Category (acting on the Schedule, walking, food, sleep, job priorities, EXP, catch-up). Code: `SettlerWork`; it hands control to the `CategoryLoop` of the active Job's category (`ResourceCollectionLoop`, `MissionLoop`). Shared parts the loops use: the job's Workplace, delivery and EXP in the shell, the Work rules, tools in `SettlerTools`, `Fatigue`.
 
 **Schedule (intent)**:
-The settler's daily rules (sleep and wake, skipped night, morning plan, hunger, evening delivery and meal, rest, bed at 20:00, homeless, foraging) as one pure decision: a snapshot of plain values (time, day, food level, provisions, pantry food, homeless, sleeping, foraging day, night skipped, current activity, per-day marks) goes in, an intent comes out (sleep, wake, eat from pockets, fetch food with a purpose, forage, end foraging, deliver, go to bed, rest, work a job, idle; complaining is a flag). Foraging ends at the end of work (17:30) or on a later day, with the day's food; whether a pantry visit is a meal (not the morning provisions trip unless hungry) is a Schedule rule too (`Schedule.eatsAtPantry`). It never touches the world; the Settler Shell builds the snapshot every decision and acts on the intent. Code: `Schedule` (`wakeUp`, `next`, `Schedule.Snapshot`, `Schedule.Intent`, `Schedule.Decision`, `Schedule.morningPlan`), acted on in `SettlerWork.decide`. Catch-up asks the same Schedule per simulated hour and simulates the intent on the spot (`SettlerWork.decideCatchUp`). The per-day marks (morning handled, evening meal eaten, foraging day) are one set for live play and catch-up, saved with the settler in `SettlerFood`.
+The settler's daily rules (sleep and wake, skipped night, morning plan, hunger, evening delivery and meal, rest, bed at 20:00, homeless, foraging) as one pure decision: a snapshot of plain values (time, day, food level, provisions, food point food, homeless, sleeping, foraging day, night skipped, current activity, per-day marks, work end) goes in, an intent comes out (sleep, wake, eat from pockets, fetch food with a purpose, forage, end foraging, deliver, go to bed, rest, work a job, idle; complaining is a flag). Work ends at 17:30 (a Clerk at 18:30, `SettlerWork.workEnd`); foraging ends at 17:30 or on a later day, with the day's food; whether a food point visit is a meal (not the morning provisions trip unless hungry) is a Schedule rule too (`Schedule.eatsAtFoodPoint`). It never touches the world; the Settler Shell builds the snapshot every decision and acts on the intent. Code: `Schedule` (`wakeUp`, `next`, `Schedule.Snapshot`, `Schedule.Intent`, `Schedule.Decision`, `Schedule.morningPlan`), acted on in `SettlerWork.decide`. Catch-up asks the same Schedule per simulated hour and simulates the intent on the spot (`SettlerWork.decideCatchUp`). The per-day marks (morning handled, evening meal eaten, foraging day) are one set for live play and catch-up, saved with the settler in `SettlerFood`.
 _Avoid_: Daily routine, AI tree; putting schedule rules into movement code; separate per-day marks for catch-up
 
 **Workplace**:
-Everything a settler keeps for one job at its JobBlock: the buffer, the status shown in the job tab, the blocked-until time, the work place of the day, the scan (requested, scanning, ready, rescanned per day or per centre / radius change) and the fractional production of the Work rules. One per JobBlock the settler works for; forgetting the job drops it whole (the buffer is dropped at the settler). Code: `Workplace`, held by `SettlerWork` (`workplace(jobBlock)`), saved through `SettlerWork.BuffersSnapshot`.
+Everything a settler keeps for one job at its JobBlock: the buffer, the status shown in the job tab, the blocked-until time, the work place of the day, the scan (requested, scanning, ready, rescanned per day or per centre / radius change), the fractional production of the Work rules and, for a Producing Job, the current Round, the requests skipped for a while and a pending trip to the drop-off. One per JobBlock the settler works for; forgetting the job drops it whole (the buffer is dropped at the settler). Code: `Workplace`, held by `SettlerWork` (`workplace(jobBlock)`), saved through `SettlerWork.BuffersSnapshot`.
 _Avoid_: Work place (that is the block worked at, below); per-job maps beside it
 
 **Work rules**:
@@ -62,3 +62,58 @@ _Avoid_: Quest list, mission pool (the pool is all missions)
 **Mission Assignment**:
 A marked mission the player assigned to one settler of the board; it is **locked** for every other settler, and the lock outlives the assignee (death, leaving the board) until the player reassigns or unlocks it. Code: `MissionOffer.Entry.assignee()` / `locked()`, set through `MissionOffers.assign` / `unlock`; a reserved assigned mission: `MissionTrip.assigned()`.
 _Avoid_: Reservation (a settler reserves the mission it picked)
+
+## Logistics
+
+**Clerk**:
+The first Logistics Job: the settlement's store and food point. Code: `ModJobs.CLERK` on `ModBlocks.CLERK_BLOCK`, work loop `ClerkLoop` (stands on the stand spot of the day during its shift 06:00–18:30, `ClerkStorage.SHIFT_END`; `SettlerWork.workEnd`).
+
+**Clerk storage**:
+The Clerk JobBlock's own 27 slots plus the containers linked with the Scroll of Assignment (2 / 4 / 8 / 12 / 16 by level, `SettlementRules.clerkStorage`; extra ones after a downgrade are inactive, `ClerkStorage.activeStorage`). Code: `SettlementBlock.storage()`, linked through `JobAssignments.cycleClerkPoint`.
+_Avoid_: Pantry (removed), warehouse
+
+**Access rule**:
+Without a working Clerk (no settler assigned, or outside the shift) only the 27 block slots are reachable; the linked storage only through a working Clerk at its counter. Hoppers and pipes see the 27 slots (the block's item capability). Code: `ClerkStorage.working`, `ClerkStorage.stock`.
+
+**Stock**:
+What a visitor reaches at one place under the access rule, seen as one list of slots; counted on every access (no snapshot). Code: `Stock` (built by `ClerkStorage.stock`); `Stock.counter()` marks the whole storage of a working Clerk, where every take is a hand-out.
+
+**Counter**:
+Where a working Clerk serves: within 3 blocks of the stand spot of the day (or next to its JobBlock without spots). One customer at a time, service time by skill (`ClerkStorage.serviceTicks`); a hand-out gives the Clerk EXP. Code: `ClerkStorage.visit` (where a visitor walks), `ClerkCounter` (queue and hand-out), `SettlerWork.reachableVisit` (an unreachable counter offers only the block slots that day; the path is only checked within 16 blocks, further away a search is cut off by the follow range).
+
+**Stand spot**:
+A block a Clerk stands on, with a facing; up to 8 per Clerk JobBlock; one is picked each morning and at 12:00, never the same twice in a row. Code: `SettlementBlock.StandSpot`, `ClerkSpots.today`, saved as `SettlementBlock.spotOfDay()`.
+
+**Stock rule**:
+A Clerk's "keep at least X of item Y" with a priority (−100…+100, higher first); 9 per JobBlock level in rows of 9, extra ones after a downgrade kept but inactive. Only the Minimum mode exists. Active only while a Clerk settler is on shift; checked every 30 s (staggered), right after a delivery into the Clerk and once per simulated hour in catch-up. Shown in the Clerk's "Stock" tab (`JobBlockMenu.TAB_STOCK`). Code: `StockRule` (data), `StockRules` (edit, `check`), saved in `SettlementBlock.stockRules()`.
+_Avoid_: Threshold, order
+
+**Request**:
+"Produce N more of item Y" for the settlement, with a priority and the Clerk to deliver to. A stock rule keeps at most one open (amount = X − stock − amount being crafted); other sources post with priority 0, sub-requests inherit their parent's priority. Producers see them by priority and claim the part they can do in one round (`Request.Claim`); `amount()` is what is still open, `crafting()` what is claimed. Code: `Request` (data), `Requests` (`claimable`, `claim`, `release`, `releaseAll`, `finish`, `setMissing`, `post`, `withdraw`), saved in `Settlement.requests()`; status in the Clerk's Requests tab via `ClerkTab`, "No Craftsperson can make this" from `Producers.canMake`. A removed Clerk takes its rules' requests with it; other requests that deliver to it lose their target (own drop-off). "Missing" lists every missing base input for the whole open amount (`Request.missing`, a list).
+_Avoid_: Order, job, task
+
+**Food point**:
+Every Clerk JobBlock; settlers take food from the nearest one whose reachable stock has food (a Clerk from its own storage first). Code: `ClerkStorage.nearestFood` → `ClerkStorage.FoodPoint`.
+_Avoid_: Pantry
+
+## Producing
+
+**Craftsperson**:
+The first Producing Job: crafts requested items from its patterns at a crafting table. Code: `ModJobs.CRAFTSPERSON` on `ModBlocks.CRAFTSPERSON_BLOCK`, work loop `CraftspersonLoop` (the Producing category's loop); job factor 0.3 and base EXP 2 in `civmod_jobs/craftsperson.json` (`Job.jobFactor`, `JobBalancing`).
+
+**Pattern**:
+One of the 54 slots of a Craftsperson JobBlock's library: a 3×3 grid and an output. Made from the output alone it follows a crafting recipe (tag ingredients flexible, arrows cycle the recipes making the item); made from inputs it uses exactly those items. Code: `Pattern` (data), `Patterns` (edit, `inputs`), `CraftingRecipes` (recipe lookup), saved in `SettlementBlock.patterns()`; GUI via `PatternTab`.
+_Avoid_: Recipe (a pattern follows one), blueprint
+
+**Checkmark**:
+A pattern the Craftsperson crafts; 6 + 1 per 5 levels of the settler's effective skill (`Patterns.checkLimit`). When the limit drops, the last checked patterns in list order lose theirs (`Patterns.enforceLimit`, notice `SettlementBlock.Trim`).
+
+**Metal**:
+What the Craftsperson never crafts with: item tag `civmod:metals` (ingots, nuggets, raw materials, metal blocks). A pattern whose output or an input (all its alternatives) is metal cannot be checked and is never used; metal alternatives of a tag input are skipped. Code: `Patterns.METALS`, `Patterns.usesMetal`, `Patterns.usable` (the checked patterns a Craftsperson uses), `PatternTab.metal()`.
+
+**Round**:
+One claimed part of one request: claim what fits the buffer, fetch inputs (collect inventory, then the posting Clerk), craft intermediates and the item, deliver. Code: `Round`, kept in the job's Workplace (`Workplace.round`), run by `CraftspersonLoop`, planned by `CraftPlan` (chain resolution with own patterns; `CraftPlan.most` sizes the claim).
+
+**Station**:
+The work place of a Producing Job, named by the block tag `civmod:stations/<job>` (`Job.station`): set with the scroll (up to 8, one per day) or the nearest one within 16 blocks of the JobBlock inside the border.
+_Avoid_: Workbench (the JobBlock is none)

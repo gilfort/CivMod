@@ -29,6 +29,10 @@ public final class ModItems {
     public static final DeferredItem<BlockItem> FISHERMAN_BLOCK = ITEMS.registerSimpleBlockItem(ModBlocks.FISHERMAN_BLOCK);
     /** Item of the {@link ModBlocks#MISSION_BOARD}. */
     public static final DeferredItem<BlockItem> MISSION_BOARD = ITEMS.registerSimpleBlockItem(ModBlocks.MISSION_BOARD);
+    /** Item of the {@link ModBlocks#CLERK_BLOCK}. */
+    public static final DeferredItem<BlockItem> CLERK_BLOCK = ITEMS.registerSimpleBlockItem(ModBlocks.CLERK_BLOCK);
+    /** Item of the {@link ModBlocks#CRAFTSPERSON_BLOCK}. */
+    public static final DeferredItem<BlockItem> CRAFTSPERSON_BLOCK = ITEMS.registerSimpleBlockItem(ModBlocks.CRAFTSPERSON_BLOCK);
 
     /** The Scroll of Assignment. */
     public static final DeferredItem<ScrollOfAssignmentItem> SCROLL_OF_ASSIGNMENT = ITEMS.registerItem("scroll_of_assignment",
@@ -48,9 +52,12 @@ public final class ModItems {
     /** Render-only icon: bed. */
     public static final DeferredItem<Item> BED_MARKER = ITEMS.registerSimpleItem("bed_marker");
 
+    /** Render-only icon: Clerk stand spot, numbered by the stack count (1–8). */
+    public static final DeferredItem<Item> STAND_SPOT_MARKER = ITEMS.registerSimpleItem("stand_spot_marker");
+
     /** Items that are only used for rendering and never shown in the creative tab. */
     public static final Set<DeferredItem<Item>> RENDER_ONLY = Set.of(UNCONNECTED_MARKER, WORK_MARKER, PRIMARY_WORK_MARKER, COLLECT_MARKER,
-            DROP_OFF_MARKER, BED_MARKER);
+            DROP_OFF_MARKER, BED_MARKER, STAND_SPOT_MARKER);
 
     private ModItems() {
     }

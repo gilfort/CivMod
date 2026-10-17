@@ -9,6 +9,7 @@ import java.util.Map;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.settlement.DayClock;
 
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
@@ -21,7 +22,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 /**
  * Catch-up simulation per settlement (vault {@code Systems/Settlement.md}): settlers that are ready to catch up are
  * collected for {@value #COLLECT_TICKS} ticks, then simulated day by day in hourly segments; the order of the
- * settlers rotates every day so shared drop-offs and pantries are used fairly. A global budget of
+ * settlers rotates every day so shared drop-offs and Clerks (food points) are used fairly. A global budget of
  * {@value #ROLLS_PER_TICK} production rolls per tick spreads large amounts over several ticks.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
@@ -62,8 +63,8 @@ public final class CatchUp {
             lastDay = Long.MIN_VALUE;
             for (Settler settler : settlers) {
                 settler.getWork().startCatchUp();
-                day = Math.min(day, Math.floorDiv(settler.getWork().catchUpFrom(), 24000L));
-                lastDay = Math.max(lastDay, Math.floorDiv(settler.getWork().catchUpTo() - 1, 24000L));
+                day = Math.min(day, DayClock.day(settler.getWork().catchUpFrom()));
+                lastDay = Math.max(lastDay, DayClock.day(settler.getWork().catchUpTo() - 1));
             }
         }
 

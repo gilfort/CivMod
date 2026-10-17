@@ -1,0 +1,42 @@
+{
+  "2": [
+    {
+      "tag": "minecraft:planks",
+      "count": 32
+    },
+    {
+      "item": "minecraft:crafting_table",
+      "count": 4
+    }
+  ],
+  "3": [
+    {
+      "item": "minecraft:iron_ingot",
+      "count": 16
+    },
+    {
+      "item": "minecraft:chest",
+      "count": 4
+    }
+  ],
+  "4": [
+    {
+      "item": "minecraft:gold_ingot",
+      "count": 16
+    },
+    {
+      "item": "minecraft:book",
+      "count": 16
+    }
+  ],
+  "5": [
+    {
+      "item": "minecraft:diamond",
+      "count": 8
+    },
+    {
+      "item": "minecraft:emerald",
+      "count": 4
+    }
+  ]
+}

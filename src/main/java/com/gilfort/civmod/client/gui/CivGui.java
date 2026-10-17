@@ -1,5 +1,8 @@
 package com.gilfort.civmod.client.gui;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.gilfort.civmod.CivMod;
 
 import net.minecraft.client.gui.Font;
@@ -7,6 +10,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.FormattedCharSequence;
 
 /**
  * Shared constants and drawing helpers for the vanilla-style CivMod GUIs.
@@ -45,7 +49,56 @@ public final class CivGui {
     private static final int INSET_LIGHT = 0xFFFFFFFF;
     private static final int INSET_FILL = 0xFF8B8B8B;
 
+    /** Colour for error texts (vanilla dark red). */
+    public static final int ERROR_COLOR = 0xFFAA0000;
+
+    /** Translucent slot fill over a slot that cannot be used. */
+    private static final int INACTIVE_TINT = 0xA0000000 | (INSET_FILL & 0xFFFFFF);
+    /** Vanilla slot highlight under the mouse. */
+    private static final int HOVER_TINT = 0x80FFFFFF;
+    /** Frame of a selected slot. */
+    private static final int SELECTED_COLOR = INSET_LIGHT;
+    /** Size of the help icon ({@link #help}). */
+    private static final int HELP_SIZE = 11;
+    /** Distance of the help icon from the panel's top and right edge. */
+    private static final int HELP_MARGIN = 4;
+    /** Width the help lines are wrapped to. */
+    private static final int HELP_WIDTH = 200;
+
     private CivGui() {
+    }
+
+    /**
+     * Greys out a slot that cannot be used (e.g. above the JobBlock level).
+     *
+     * @param graphics the graphics extractor
+     * @param itemX    the x position of the item (slot position)
+     * @param itemY    the y position of the item (slot position)
+     */
+    public static void slotInactive(GuiGraphicsExtractor graphics, int itemX, int itemY) {
+        graphics.fill(itemX, itemY, itemX + 16, itemY + 16, INACTIVE_TINT);
+    }
+
+    /**
+     * Highlights a slot under the mouse like vanilla.
+     *
+     * @param graphics the graphics extractor
+     * @param itemX    the x position of the item (slot position)
+     * @param itemY    the y position of the item (slot position)
+     */
+    public static void slotHover(GuiGraphicsExtractor graphics, int itemX, int itemY) {
+        graphics.fill(itemX, itemY, itemX + 16, itemY + 16, HOVER_TINT);
+    }
+
+    /**
+     * Frames a selected slot.
+     *
+     * @param graphics the graphics extractor
+     * @param itemX    the x position of the item (slot position)
+     * @param itemY    the y position of the item (slot position)
+     */
+    public static void slotSelected(GuiGraphicsExtractor graphics, int itemX, int itemY) {
+        graphics.outline(itemX - 1, itemY - 1, 18, 18, SELECTED_COLOR);
     }
 
     /**
@@ -116,6 +169,40 @@ public final class CivGui {
             } else if (buffer == 1) {
                 graphics.blitSprite(RenderPipelines.GUI_TEXTURED, SATURATION_HALF, iconX, y, 9, 9);
             }
+        }
+    }
+
+    /**
+     * Draws the help icon ("?") in the top right corner of a panel and, while the mouse is over it, a tooltip with all
+     * tips and usage info of the window. Every hint of a CivMod GUI lives here, never as inline text; state lines (e.g.
+     * "No recipe", errors) stay in the panel. Nothing is drawn without lines.
+     *
+     * @param graphics   the graphics extractor
+     * @param font       the font
+     * @param panelX     the panel's left edge (absolute)
+     * @param panelY     the panel's top edge (absolute)
+     * @param panelWidth the panel width
+     * @param mouseX     the mouse x position
+     * @param mouseY     the mouse y position
+     * @param lines      the help lines (wrapped to the tooltip width)
+     */
+    public static void help(GuiGraphicsExtractor graphics, Font font, int panelX, int panelY, int panelWidth, int mouseX, int mouseY,
+            List<Component> lines) {
+        if (lines.isEmpty()) {
+            return;
+        }
+        int x = panelX + panelWidth - HELP_MARGIN - HELP_SIZE;
+        int y = panelY + HELP_MARGIN;
+        inset(graphics, x, y, HELP_SIZE, HELP_SIZE);
+        Component mark = Component.literal("?");
+        graphics.text(font, mark, x + (HELP_SIZE - font.width(mark)) / 2 + 1, y + 2, INSET_LIGHT, false);
+        if (mouseX >= x && mouseX < x + HELP_SIZE && mouseY >= y && mouseY < y + HELP_SIZE) {
+            graphics.fill(x + 1, y + 1, x + HELP_SIZE - 1, y + HELP_SIZE - 1, HOVER_TINT);
+            List<FormattedCharSequence> wrapped = new ArrayList<>();
+            for (Component line : lines) {
+                wrapped.addAll(font.split(line, HELP_WIDTH));
+            }
+            graphics.setTooltipForNextFrame(font, wrapped, mouseX, mouseY);
         }
     }
 

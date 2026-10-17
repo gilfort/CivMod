@@ -47,8 +47,8 @@ public abstract class CivContainerScreen<T extends CivMenu> extends AbstractCont
         super.init();
         tabWidgets.clear();
         List<TabBar.Tab> bottom = bottomTabs();
-        tabBar = tabs.isEmpty() && bottom.isEmpty() ? null : new TabBar(tabs, bottom, leftPos, topPos, imageHeight);
-        if (tabBar != null && menu.getActiveTab() >= tabBar.size()) {
+        tabBar = tabs.isEmpty() && bottom.isEmpty() ? null : new TabBar(tabs, bottom, this::isTabShown, leftPos, topPos, imageHeight);
+        if (tabBar != null && !tabBar.isShown(menu.getActiveTab())) {
             // The selected tab disappeared (e.g. a job tab after removing the job).
             menu.setActiveTab(0);
             minecraft.gameMode.handleInventoryButtonClick(menu.containerId, CivMenu.tabButtonId(0));
@@ -70,6 +70,17 @@ public abstract class CivContainerScreen<T extends CivMenu> extends AbstractCont
      */
     protected List<TabBar.Tab> bottomTabs() {
         return List.of();
+    }
+
+    /**
+     * Whether a tab is shown; a hidden tab keeps its index and cannot be selected. Re-evaluated on every
+     * {@link #init()}.
+     *
+     * @param tab the tab index
+     * @return whether the tab is shown
+     */
+    protected boolean isTabShown(int tab) {
+        return true;
     }
 
     /**
@@ -191,5 +202,17 @@ public abstract class CivContainerScreen<T extends CivMenu> extends AbstractCont
         if (tabBar != null) {
             tabBar.extractTooltip(graphics, font, mouseX, mouseY);
         }
+        CivGui.help(graphics, font, leftPos, topPos, imageWidth, mouseX, mouseY, helpLines(menu.getActiveTab()));
+    }
+
+    /**
+     * The tips and usage info of the selected tab, shown on the help icon ({@link CivGui#help}); hints are never drawn
+     * as inline text.
+     *
+     * @param tab the selected tab
+     * @return the help lines, empty for no help icon
+     */
+    protected List<Component> helpLines(int tab) {
+        return List.of();
     }
 }
