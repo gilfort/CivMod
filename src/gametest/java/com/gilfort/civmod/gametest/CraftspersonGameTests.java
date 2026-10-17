@@ -78,6 +78,11 @@ public final class CraftspersonGameTests {
             register(helper, "craftsperson_live_linked_storage", CraftspersonGameTests::liveLinkedStorage);
             register(helper, "craftsperson_no_metal", CraftspersonGameTests::noMetal);
             register(helper, "craftsperson_live_linked_storage_far", CraftspersonGameTests::liveLinkedStorageFar);
+            register(helper, "craftsperson_live_two_sources_off_shift", test -> liveTwoSources(test, false));
+            register(helper, "craftsperson_live_two_sources_on_shift", test -> liveTwoSources(test, true));
+            register(helper, "craftsperson_unreachable_inputs", CraftspersonGameTests::unreachableInputs);
+            register(helper, "craftsperson_metal_unchecked", CraftspersonGameTests::metalUnchecked);
+            register(helper, "craftsperson_counter_check_in_air", CraftspersonGameTests::counterCheckInAir);
         });
     }
 
@@ -519,6 +524,127 @@ public final class CraftspersonGameTests {
         });
     }
 
+    /**
+     * Client test #54: 2 stone axes requested, the sticks lie in the Craftsperson's own JobBlock (collect), the
+     * cobblestone at the Clerk. The Craftsperson takes the sticks, then the cobblestone at the Clerk, crafts and
+     * delivers both axes; while the request is open it never shows "No request".
+     *
+     * @param working whether a Clerk works the counter (the cobblestone lies in its linked chest; otherwise in its 27
+     *                block slots)
+     */
+    private static void liveTwoSources(GameTestHelper helper, boolean working) {
+        ServerLevel level = helper.getLevel();
+        for (int x = 0; x < 9; x++) {
+            for (int z = 0; z < 9; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+                for (int y = 1; y < 4; y++) {
+                    helper.setBlock(new BlockPos(x, y, z), Blocks.AIR);
+                }
+            }
+        }
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        BlockPos clerk = working ? StockRuleGameTests.workingClerk(helper) : ClerkGameTests.clerkWithStorage(helper);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        Container cobbleAt = working ? (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)))
+                : (Container) level.getBlockEntity(clerk);
+        cobbleAt.setItem(0, new ItemStack(Items.COBBLESTONE, 6));
+        BlockPos craft = craftsperson(helper, new BlockPos(1, 1, 5));
+        placeTable(helper, new BlockPos(4, 1, 6));
+        define(helper, craft, 0, Items.STONE_AXE);
+        ((Container) level.getBlockEntity(craft)).setItem(0, new ItemStack(Items.STICK, 4));
+        // On shift a stock rule posts the request; off shift it was posted earlier (rules only post on shift).
+        UUID request;
+        if (working) {
+            helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_AXE, 2, 0)), "Rule set");
+            StockRules.check(level, clerk, ClerkGameTests.MORNING);
+            request = Requests.forRule(settlement, clerk, 0).orElseThrow().id();
+        } else {
+            request = Requests.post(data, settlement, Items.STONE_AXE, 2, Optional.of(clerk), Optional.empty()).id();
+        }
+        Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
+        settler.getSkills().set(ModJobs.CRAFTSPERSON.get(), new com.gilfort.civmod.job.SettlerSkills.Skill(100, 0));
+        settler.setNoAi(false);
+        String[] noRequest = {null};
+        helper.onEachTick(() -> {
+            if (noRequest[0] == null && settler.getWork().status(craft) == JobStatus.NO_REQUEST && Requests.get(settlement, request).isPresent()) {
+                noRequest[0] = "\"No request\" with the request open: " + Requests.get(settlement, request) + ", buffer "
+                        + settler.getWork().buffer(craft).stacks();
+            }
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(noRequest[0] == null, String.valueOf(noRequest[0]));
+            helper.assertTrue(ClerkStorage.stock(level, clerk, true).count(stack -> stack.is(Items.STONE_AXE)) == 2,
+                    "Two stone axes delivered; status " + settler.getWork().status(craft) + ", buffer " + settler.getWork().buffer(craft).stacks()
+                            + ", request " + Requests.get(settlement, request) + ", at " + helper.relativePos(settler.blockPosition()));
+            helper.assertTrue(Requests.get(settlement, request).isEmpty(), "Request done");
+            if (working) {
+                JobAssignments.unassign(data, clerk);
+            }
+            settler.discard();
+            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+        });
+    }
+
+    /**
+     * Client test #54: the cobblestone lies in the linked chest of a Clerk nobody works, so the Craftsperson cannot
+     * reach it: it shows "Missing inputs" (the request names the cobblestone), never "No request".
+     */
+    private static void unreachableInputs(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerk = ClerkGameTests.clerkWithStorage(helper);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        ((Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)))).setItem(0, new ItemStack(Items.COBBLESTONE, 6));
+        BlockPos craft = craftsperson(helper, new BlockPos(1, 1, 5));
+        placeTable(helper, new BlockPos(3, 1, 5));
+        define(helper, craft, 0, Items.STONE_AXE);
+        ((Container) level.getBlockEntity(craft)).setItem(0, new ItemStack(Items.STICK, 4));
+        UUID request = Requests.post(data, settlement, Items.STONE_AXE, 2, Optional.of(clerk), Optional.empty()).id();
+        Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
+        settler.getWork().decideNow(level);
+        helper.assertTrue(settler.getWork().status(craft) == JobStatus.MISSING_INPUTS, "Missing inputs: " + settler.getWork().status(craft));
+        helper.assertTrue(Requests.get(settlement, request).orElseThrow().missing().equals(List.of(new Request.Missing(Items.COBBLESTONE, 6))),
+                "Missing: 6× Cobblestone " + Requests.get(settlement, request));
+        // The request is skipped for a while: still "Missing inputs", not "No request".
+        settler.getWork().decideNow(level);
+        helper.assertTrue(settler.getWork().status(craft) == JobStatus.MISSING_INPUTS, "Still missing inputs: " + settler.getWork().status(craft));
+        settler.discard();
+        helper.succeed();
+    }
+
+    /**
+     * Client test #54: the counter path check runs while the Craftsperson is in the air (a jump up a block on its walk):
+     * vanilla gives no path then, which must not make the working Clerk's counter unreachable for the day (only its
+     * block slots, so the inputs in the linked storage would be "missing").
+     */
+    private static void counterCheckInAir(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerk = StockRuleGameTests.workingClerk(helper);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        ((Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)))).setItem(0, new ItemStack(Items.OAK_PLANKS, 2));
+        BlockPos craft = craftsperson(helper, new BlockPos(1, 1, 5));
+        placeTable(helper, new BlockPos(3, 1, 5));
+        define(helper, craft, 0, Items.STICK);
+        UUID request = Requests.post(data, settlement, Items.STICK, 4, Optional.of(clerk), Optional.empty()).id();
+        Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
+        // Mid-jump.
+        settler.snapTo(settler.getX(), settler.getY() + 0.6, settler.getZ());
+        settler.setOnGround(false);
+        settler.getWork().decideNow(level);
+        helper.assertTrue(settler.getWork().status(craft) == JobStatus.FETCHING_INPUTS, "Fetching: " + settler.getWork().status(craft));
+        // The round is given up (e.g. the job was left): the next round still counts the linked storage.
+        settler.removeJob(craft);
+        settler.addJob(new SettlerJob(ModJobs.CRAFTSPERSON.get(), craft));
+        settler.getWork().decideNow(level);
+        helper.assertTrue(settler.getWork().status(craft) == JobStatus.FETCHING_INPUTS, "The counter is still reachable: "
+                + settler.getWork().status(craft) + ", request " + Requests.get(settlement, request));
+        JobAssignments.unassign(data, clerk);
+        settler.discard();
+        helper.succeed();
+    }
+
     private static Settler craftsperson(GameTestHelper helper, BlockPos craft, BlockPos relative, String name) {
         SettlementData data = SettlementData.get(helper.getLevel());
         Settlement settlement = data.settlementAt(craft).orElseThrow();
@@ -618,6 +744,54 @@ public final class CraftspersonGameTests {
         helper.assertFalse(iron.missing().isEmpty(), "No metal crafting, even with the ingots in stock");
         JobAssignments.unassign(data, pos);
         helper.succeed();
+    }
+
+    /**
+     * Client test #54: a metal pattern checked in an older save (before the metal rule or a change of the metals tag)
+     * loses its checkmark; the next decision and the Patterns tab sync do this for the JobBlock.
+     */
+    private static void metalUnchecked(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos pos = craftsperson(helper, new BlockPos(1, 1, 1));
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(pos).orElseThrow();
+        helper.assertTrue(Patterns.setOutput(level, pos, 2, Items.SHEARS).isPresent(), "Shears pattern");
+        define(helper, pos, 3, Items.STICK);
+        // An older save: the iron shears pattern is checked although it uses metal.
+        com.google.gson.JsonElement json = Settlement.CODEC.encodeStart(JsonOps.INSTANCE, settlement).getOrThrow();
+        helper.assertTrue(checkSlot(json, 2), "Shears pattern found in the save");
+        Settlement loaded = Settlement.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+        SettlementBlock block = loaded.block(pos).orElseThrow();
+        helper.assertTrue(Patterns.pattern(block, 2).filter(Pattern::checked).isPresent(), "Checked in the old save");
+        helper.assertTrue(Patterns.uncheckMetal(level, new SettlementData(), block) == 1, "One metal checkmark removed");
+        helper.assertTrue(Patterns.pattern(block, 2).filter(Pattern::checked).isEmpty(), "The iron shears are no longer checked");
+        helper.assertTrue(Patterns.pattern(block, 3).filter(Pattern::checked).isPresent(), "The stick pattern keeps its checkmark");
+        helper.assertTrue(Patterns.uncheckMetal(level, pos) == 0, "Nothing to remove in the live JobBlock");
+        helper.succeed();
+    }
+
+    /** Sets {@code checked} on the saved pattern of a library slot. */
+    private static boolean checkSlot(com.google.gson.JsonElement json, int slot) {
+        if (json.isJsonArray()) {
+            boolean found = false;
+            for (com.google.gson.JsonElement element : json.getAsJsonArray()) {
+                found |= checkSlot(element, slot);
+            }
+            return found;
+        }
+        if (!json.isJsonObject()) {
+            return false;
+        }
+        com.google.gson.JsonObject object = json.getAsJsonObject();
+        if (object.has("slot") && object.has("grid") && object.get("slot").getAsInt() == slot) {
+            object.addProperty("checked", true);
+            return true;
+        }
+        boolean found = false;
+        for (String key : object.keySet()) {
+            found |= checkSlot(object.get(key), slot);
+        }
+        return found;
     }
 
     /** Puts a checked pattern for an item into a library slot. */

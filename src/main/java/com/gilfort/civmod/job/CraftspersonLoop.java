@@ -97,6 +97,7 @@ final class CraftspersonLoop implements CategoryLoop {
     public boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
         BlockPos jobBlock = job.jobBlock();
         releaseIfRestored(level);
+        Patterns.uncheckMetal(level, jobBlock);
         Patterns.enforceLimit(SettlementData.get(level), jobBlock, Patterns.checkLimit(shell.effectiveLevel(job)));
         Workplace workplace = shell.workplace(jobBlock);
         if (workplace.round() == null) {
@@ -168,8 +169,14 @@ final class CraftspersonLoop implements CategoryLoop {
         int room = Math.max(0, JobBuffer.CAPACITY - buffer.count());
         int tries = 0;
         boolean more = false;
+        // A request it can make that waits out its skip still counts: "Missing inputs", not "No request".
+        boolean skipped = false;
         for (Request request : Requests.claimable(settlement)) {
-            if (checked.stream().noneMatch(pattern -> pattern.output() == request.item()) || skips.containsKey(request.id())) {
+            if (checked.stream().noneMatch(pattern -> pattern.output() == request.item())) {
+                continue;
+            }
+            if (skips.containsKey(request.id())) {
+                skipped = true;
                 continue;
             }
             if (tries >= MAX_TRIES) {
@@ -204,7 +211,7 @@ final class CraftspersonLoop implements CategoryLoop {
             }
             return new Pick(Optional.of(new Round(request.id(), request.item(), plan, sources)), true);
         }
-        shell.setStatus(jobBlock, tries > 0 ? JobStatus.MISSING_INPUTS : JobStatus.NO_REQUEST);
+        shell.setStatus(jobBlock, tries > 0 || skipped ? JobStatus.MISSING_INPUTS : JobStatus.NO_REQUEST);
         return new Pick(Optional.empty(), more);
     }
 
@@ -523,6 +530,7 @@ final class CraftspersonLoop implements CategoryLoop {
         }
         JobBlockSite site = found.get();
         releaseIfRestored(level);
+        Patterns.uncheckMetal(level, jobBlock);
         Patterns.enforceLimit(SettlementData.get(level), jobBlock, Patterns.checkLimit(shell.effectiveLevel(job)));
         if (station(level, job, site, day) == null) {
             shell.setStatus(jobBlock, JobStatus.NO_WORK_PLACE);

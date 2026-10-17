@@ -1422,7 +1422,9 @@ public final class SettlerWork {
         }
         if (settler.position().distanceTo(Vec3.atCenterOf(visit.target())) <= COUNTER_PATH_CHECK) {
             net.minecraft.world.level.pathfinder.Path path = settler.getNavigation().createPath(visit.target(), (int) visit.reach());
-            if (path == null || !path.canReach()) {
+            // No path at all says nothing: vanilla searches none while the settler is in the air (a jump on its walk).
+            // Only a searched path that ends short of the counter makes it unreachable for the day.
+            if (path != null && !path.canReach()) {
                 unreachableCounters.put(pos.immutable(), DayClock.day(level));
                 return ClerkStorage.blockVisit(pos);
             }

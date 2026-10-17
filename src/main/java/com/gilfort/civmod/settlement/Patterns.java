@@ -258,6 +258,32 @@ public final class Patterns {
     }
 
     /**
+     * Removes the checkmark of every pattern that uses metal: a metal pattern is never checked, also when it was checked
+     * in an older save, before the metal rule or before the {@code civmod:metals} tag changed.
+     *
+     * @param level the level
+     * @param pos   the Craftsperson JobBlock
+     * @return how many checkmarks were removed
+     */
+    public static int uncheckMetal(ServerLevel level, BlockPos pos) {
+        SettlementData data = SettlementData.get(level);
+        return block(data, pos).map(block -> uncheckMetal(level, data, block)).orElse(0);
+    }
+
+    /**
+     * @param level the level
+     * @param data  the dimension's settlement data (marked dirty on a change)
+     * @param block a Craftsperson JobBlock
+     * @return how many checkmarks of metal patterns were removed
+     * @see #uncheckMetal(ServerLevel, BlockPos)
+     */
+    public static int uncheckMetal(ServerLevel level, SettlementData data, SettlementBlock block) {
+        List<Pattern> metal = block.patterns().stream().filter(pattern -> pattern.checked() && usesMetal(level, pattern)).toList();
+        metal.forEach(pattern -> replace(data, block, pattern.withChecked(false)));
+        return metal.size();
+    }
+
+    /**
      * The inputs of one craft of a pattern: exactly its grid items, or the ingredients of its recipe (tags flexible,
      * without their metal alternatives). A recipe that is gone falls back to the grid items.
      *

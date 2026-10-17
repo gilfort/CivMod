@@ -237,6 +237,8 @@ public class JobBlockMenu extends CivMenu {
         }
         tabSyncIn = TAB_SYNC_INTERVAL;
         if (isCraftsperson(info)) {
+            // A metal pattern checked in an older save loses its checkmark as soon as the tab shows it.
+            com.gilfort.civmod.settlement.Patterns.uncheckMetal(level, jobBlock.getBlockPos());
             PatternTab patterns = PatternTab.of(level, jobBlock.getBlockPos());
             if (!patterns.equals(patternTab)) {
                 patternTab = patterns;
