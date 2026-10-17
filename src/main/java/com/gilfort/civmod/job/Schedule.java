@@ -1,12 +1,15 @@
 package com.gilfort.civmod.job;
 
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.BooleanSupplier;
 
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.food.SettlerFood;
+import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.npc.SettlerDay;
 
 /**
  * The daily schedule of a settler (vault {@code Systems/NPC Daily Schedule.md}, {@code Systems/Needs.md}): a
@@ -20,7 +23,46 @@ import com.gilfort.civmod.food.SettlerFood;
  */
 public final class Schedule {
 
+    /** Length of every Schedule window in day ticks (30 minutes). */
+    public static final long WINDOW_TICKS = 500L;
+    /** Start of the waking window (06:00; day time 0 = 06:00). */
+    public static final long WAKE_WINDOW_START = 0L;
+
+    private static final long SALT_WAKE = 1L;
+    private static final long SALT_WORK_END = 2L;
+    private static final long SALT_BED = 3L;
+
     private Schedule() {
+    }
+
+    /**
+     * One settler's points of the daily schedule on one day, each at its daily offset inside its Schedule window.
+     *
+     * @param wake    the day time the settler wakes and starts work (06:00–06:30)
+     * @param workEnd the day time its work ends (17:30–18:00; a Clerk at the end of its shift, 18:30)
+     * @param bed     the day time it goes to bed (20:00–20:30)
+     */
+    public record DayTimes(long wake, long workEnd, long bed) {
+    }
+
+    /**
+     * The settler's points of the daily schedule on a day: deterministic from the settler and the day, never saved, the
+     * same in live play and catch-up.
+     *
+     * @param settler the settler
+     * @param day     the day
+     * @param clerk   whether the settler is a Clerk (its work ends with its shift at 18:30)
+     * @return the times
+     */
+    public static DayTimes dayTimes(UUID settler, long day, boolean clerk) {
+        long wake = WAKE_WINDOW_START + offset(settler, day, SALT_WAKE);
+        long workEnd = clerk ? ClerkStorage.SHIFT_END : SettlerWork.WORK_END + offset(settler, day, SALT_WORK_END);
+        long bed = SettlerWork.SLEEP_TIME + offset(settler, day, SALT_BED);
+        return new DayTimes(wake, workEnd, bed);
+    }
+
+    private static long offset(UUID settler, long day, long salt) {
+        return SettlerDay.pick(settler, day, salt, (int) WINDOW_TICKS);
     }
 
     /** What a settler is doing right now. {@code JOB} is a step of the active job's category loop. */
@@ -60,7 +102,7 @@ public final class Schedule {
         DELIVER,
         /** Rest near the rest place in the evening. */
         REST,
-        /** Go to the rest place and sleep (from 20:00). */
+        /** Go to the rest place and sleep (from the settler's bedtime, 20:00–20:30). */
         GO_TO_BED,
         /** Work the first job of the priority list that can work (Laborer fallback: idle). */
         WORK
@@ -88,12 +130,12 @@ public final class Schedule {
      * @param morningHandled   whether the morning plan was made today
      * @param eveningMealEaten whether the evening meal was handled today
      * @param deliveryPending  whether a job has items to deliver to a drop-off that is not full
-     * @param workEnd          the day time the settler's work ends ({@link SettlerWork#WORK_END}, a Clerk later)
+     * @param times            the settler's waking, end of work and bed times today ({@link #dayTimes})
      */
     public record Snapshot(long day, long dayTime, int food, int provisions, int provisionsWanted, boolean pocketMeal,
             BooleanSupplier foodPoint, boolean homeless, boolean sleeping, long forageDay, boolean nightSkipped,
             Activity activity, BooleanSupplier jobStepHolds, boolean morningHandled, boolean eveningMealEaten,
-            boolean deliveryPending, long workEnd) {
+            boolean deliveryPending, DayTimes times) {
 
         /**
          * @return whether the settler is foraging (today, or still from an earlier day)
@@ -127,16 +169,19 @@ public final class Schedule {
     public static Optional<Intent> wakeUp(Snapshot snapshot) {
         boolean night = isNight(snapshot);
         if (snapshot.sleeping()) {
-            return Optional.of(night ? Intent.SLEEP : Intent.WAKE);
+            // Asleep from its bedtime until its waking time of the next morning.
+            boolean beforeWaking = snapshot.dayTime() < snapshot.times().wake();
+            return Optional.of(night || beforeWaking ? Intent.SLEEP : Intent.WAKE);
         }
+        // A skipped night lands in the morning, maybe before the waking time: the settler appears at its rest place.
         if (snapshot.nightSkipped() && !night && !snapshot.homeless() && !snapshot.foraging()) {
             return Optional.of(Intent.RETURN_TO_REST_PLACE);
         }
         if (!snapshot.foraging()) {
             return Optional.empty();
         }
-        // The forager comes back at the end of work (17:30); foraging of an earlier day is over as well.
-        boolean over = snapshot.dayTime() >= SettlerWork.WORK_END || snapshot.day() > snapshot.forageDay();
+        // The forager comes back at its end of work; foraging of an earlier day is over as well.
+        boolean over = snapshot.dayTime() >= snapshot.times().workEnd() || snapshot.day() > snapshot.forageDay();
         return Optional.of(over ? Intent.END_FORAGING : Intent.FORAGE);
     }
 
@@ -156,7 +201,7 @@ public final class Schedule {
             boolean hungry = snapshot.food() < SettlerFood.HUNGRY;
             return day(hungry && snapshot.pocketMeal() ? Intent.EAT_FROM_POCKETS : Intent.IDLE, null, hungry && !snapshot.pocketMeal(), false);
         }
-        if (snapshot.dayTime() >= snapshot.workEnd()) {
+        if (snapshot.dayTime() >= snapshot.times().workEnd()) {
             return afterWork(snapshot);
         }
         boolean morning = !snapshot.morningHandled();
@@ -183,7 +228,7 @@ public final class Schedule {
         return day(Intent.WORK, null, false, morning);
     }
 
-    /** After work: deliver what is left, eat, then rest near the rest place and sleep from 20:00. */
+    /** After work: deliver what is left, eat, then rest near the rest place and sleep from its bedtime. */
     private static Decision afterWork(Snapshot snapshot) {
         if (snapshot.deliveryPending()) {
             return new Decision(Intent.DELIVER, null, false, false, false, true);
@@ -222,8 +267,9 @@ public final class Schedule {
         return CivModConfig.FORAGING_FOOD.get();
     }
 
+    /** From the settler's bedtime until the day clock wraps at 06:00; the morning before waking is checked apart. */
     private static boolean isNight(Snapshot snapshot) {
-        return snapshot.dayTime() >= SettlerWork.SLEEP_TIME;
+        return snapshot.dayTime() >= snapshot.times().bed();
     }
 
     private static Decision day(Intent intent, @Nullable MealPurpose purpose, boolean complain, boolean morningHandled) {

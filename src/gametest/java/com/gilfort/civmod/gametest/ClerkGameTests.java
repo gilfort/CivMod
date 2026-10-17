@@ -389,16 +389,19 @@ public final class ClerkGameTests {
         helper.assertTrue(ClerkStorage.serviceTicks(50) > 20 && ClerkStorage.serviceTicks(50) < 40, "Faster with skill");
 
         Settler clerk = ModEntityTypes.SETTLER.get().create(helper.getLevel(), EntitySpawnReason.EVENT);
-        helper.assertTrue(clerk.getWork().workEnd() == SettlerWork.WORK_END, "Without the Clerk job: 17:30");
+        long day = 4L;
+        long ownEnd = clerk.getWork().dayTimes(day).workEnd();
+        helper.assertTrue(ownEnd >= SettlerWork.WORK_END && ownEnd < SettlerWork.WORK_END + Schedule.WINDOW_TICKS,
+                "Without the Clerk job: 17:30–18:00, got " + ownEnd);
         clerk.addJob(new SettlerJob(ModJobs.CLERK.get(), helper.absolutePos(new BlockPos(1, 1, 1))));
-        helper.assertTrue(clerk.getWork().workEnd() == ClerkStorage.SHIFT_END, "With the Clerk job: 18:30");
+        helper.assertTrue(clerk.getWork().dayTimes(day).workEnd() == ClerkStorage.SHIFT_END, "With the Clerk job: 18:30");
         clerk.discard();
         helper.succeed();
     }
 
     private static Schedule.Snapshot snapshot(long dayTime, long workEnd) {
         return new Schedule.Snapshot(3L, dayTime, 20, 10, 6, true, () -> true, false, false, SettlerFood.NO_DAY, false,
-                Schedule.Activity.IDLE, () -> false, true, false, false, workEnd);
+                Schedule.Activity.IDLE, () -> false, true, false, false, new Schedule.DayTimes(0L, workEnd, SettlerWork.SLEEP_TIME));
     }
 
     static Settler settler(GameTestHelper helper, BlockPos relative, SettlementData data, Settlement settlement) {
