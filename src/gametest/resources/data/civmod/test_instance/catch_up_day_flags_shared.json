@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:catch_up_day_flags_shared",
   "max_ticks": 1200,
   "structure": "minecraft:empty",

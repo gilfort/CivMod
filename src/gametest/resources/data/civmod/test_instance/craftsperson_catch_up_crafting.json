@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:craftsperson_catch_up_crafting",
   "max_ticks": 1200,
   "structure": "minecraft:empty",

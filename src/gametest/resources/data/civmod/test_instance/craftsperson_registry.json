@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:craftsperson_registry",
   "max_ticks": 1200,
   "structure": "minecraft:empty",

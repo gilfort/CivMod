@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:debug_command_registered",
   "max_ticks": 20,
   "structure": "minecraft:empty",

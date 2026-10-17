@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:clerk_catch_up_food",
   "max_ticks": 1200,
   "structure": "minecraft:empty",

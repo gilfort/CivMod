@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:stock_rules_priority_order",
   "max_ticks": 1200,
   "structure": "minecraft:empty",

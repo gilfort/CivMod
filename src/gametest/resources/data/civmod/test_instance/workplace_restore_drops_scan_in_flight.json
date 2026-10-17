@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:workplace_restore_drops_scan_in_flight",
   "max_ticks": 2400,
   "structure": "minecraft:empty",

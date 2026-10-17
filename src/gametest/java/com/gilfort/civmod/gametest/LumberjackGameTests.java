@@ -51,6 +51,8 @@ public final class LumberjackGameTests {
     private static final Identifier OAK_LEAVES = Identifier.withDefaultNamespace("oak_leaves");
     private static final Identifier BIRCH_LEAVES = Identifier.withDefaultNamespace("birch_leaves");
     private static final int SAMPLES = 20000;
+    /** Chunks around a forced chunk that must be loaded before it ticks entities. */
+    private static final int TICKING_BORDER = 2;
 
     private LumberjackGameTests() {
     }
@@ -319,16 +321,33 @@ public final class LumberjackGameTests {
         return forceChunks(helper, new BlockPos(8, 0, 8));
     }
 
-    /** Forces the chunks from the test origin up to a relative corner. */
+    /**
+     * Forces the chunks from the test origin up to a relative corner and loads them with their neighbours right away.
+     * <p>
+     * Entities only tick in entity-ticking chunks, which need their neighbours (up to {@value #TICKING_BORDER} chunks)
+     * generated. The GameTest server does not wait between ticks, so asynchronous generation at the random far-away test
+     * position costs a varying number of ticks: settlers stood still without a single decision for over 2000 ticks and
+     * timed tests failed now and then. Loading synchronously makes the start independent of the machine's speed.
+     */
     static List<long[]> forceChunks(GameTestHelper helper, BlockPos corner) {
+        ServerLevel level = helper.getLevel();
         BlockPos min = helper.absolutePos(BlockPos.ZERO);
         BlockPos max = helper.absolutePos(corner);
+        int minX = SectionPos.blockToSectionCoord(Math.min(min.getX(), max.getX()));
+        int maxX = SectionPos.blockToSectionCoord(Math.max(min.getX(), max.getX()));
+        int minZ = SectionPos.blockToSectionCoord(Math.min(min.getZ(), max.getZ()));
+        int maxZ = SectionPos.blockToSectionCoord(Math.max(min.getZ(), max.getZ()));
         List<long[]> chunks = new java.util.ArrayList<>();
-        for (int x = SectionPos.blockToSectionCoord(Math.min(min.getX(), max.getX())); x <= SectionPos.blockToSectionCoord(Math.max(min.getX(), max.getX())); x++) {
-            for (int z = SectionPos.blockToSectionCoord(Math.min(min.getZ(), max.getZ())); z <= SectionPos.blockToSectionCoord(Math.max(min.getZ(), max.getZ())); z++) {
-                if (helper.getLevel().setChunkForced(x, z, true)) {
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                if (level.setChunkForced(x, z, true)) {
                     chunks.add(new long[] {x, z});
                 }
+            }
+        }
+        for (int x = minX - TICKING_BORDER; x <= maxX + TICKING_BORDER; x++) {
+            for (int z = minZ - TICKING_BORDER; z <= maxZ + TICKING_BORDER; z++) {
+                level.getChunk(x, z);
             }
         }
         return chunks;
