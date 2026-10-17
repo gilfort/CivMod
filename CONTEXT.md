@@ -19,6 +19,14 @@ The part of a settler's behaviour shared by every Job Category (acting on the Sc
 The settler's daily rules (sleep and wake, skipped night, morning plan, hunger, evening delivery and meal, rest, bed at 20:00, homeless, foraging) as one pure decision: a snapshot of plain values (time, day, food level, provisions, food point food, homeless, sleeping, foraging day, night skipped, current activity, per-day marks, work end) goes in, an intent comes out (sleep, wake, eat from pockets, fetch food with a purpose, forage, end foraging, deliver, go to bed, rest, work a job, idle; complaining is a flag). Work ends at 17:30 (a Clerk at 18:30, `SettlerWork.workEnd`); foraging ends at 17:30 or on a later day, with the day's food; whether a food point visit is a meal (not the morning provisions trip unless hungry) is a Schedule rule too (`Schedule.eatsAtFoodPoint`). It never touches the world; the Settler Shell builds the snapshot every decision and acts on the intent. Code: `Schedule` (`wakeUp`, `next`, `Schedule.Snapshot`, `Schedule.Intent`, `Schedule.Decision`, `Schedule.morningPlan`), acted on in `SettlerWork.decide`. Catch-up asks the same Schedule per simulated hour and simulates the intent on the spot (`SettlerWork.decideCatchUp`). The per-day marks (morning handled, evening meal eaten, foraging day) are one set for live play and catch-up, saved with the settler in `SettlerFood`.
 _Avoid_: Daily routine, AI tree; putting schedule rules into movement code; separate per-day marks for catch-up
 
+**Schedule window**:
+The span a point of the daily schedule falls into for every settler: waking 06:00–06:30, end of work 17:30–18:00, going to bed 20:00–20:30.
+_Avoid_: Time slot, shift (a shift is the Clerk's working time)
+
+**Daily offset**:
+Where one settler's point lies inside a Schedule window on one day; computed from the settler and the day, the same in live play and catch-up, never saved.
+_Avoid_: Random delay, jitter
+
 **Workplace**:
 Everything a settler keeps for one job at its JobBlock: the buffer, the status shown in the job tab, the blocked-until time, the work place of the day, the scan (requested, scanning, ready, rescanned per day or per centre / radius change), the fractional production of the Work rules and, for a Producing Job, the current Round, the requests skipped for a while and a pending trip to the drop-off. One per JobBlock the settler works for; forgetting the job drops it whole (the buffer is dropped at the settler). Code: `Workplace`, held by `SettlerWork` (`workplace(jobBlock)`), saved through `SettlerWork.BuffersSnapshot`.
 _Avoid_: Work place (that is the block worked at, below); per-job maps beside it
@@ -43,6 +51,10 @@ The implicit lowest-priority fallback Job of every settler; not a Job Category a
 
 **JobBlock**:
 The block that offers a Base Job (and its Specializations) to one settler. Code: `JobBlock`, `JobBlockEntity`.
+
+**Starter tool**:
+The tool a new JobBlock puts into its own inventory when it is placed for the first time (Lumberjack stone axe, Miner stone pickaxe, Fisherman fishing rod). A broken JobBlock no longer carries one.
+_Avoid_: Free tool, bonus item
 
 **JobBlock site**:
 A JobBlock as a settler sees it: its settlement, settlement block, level, skill cap, drop-off and collect inventory. The one way to resolve a JobBlock position outside the settlement storage. Code: `JobBlockSite` (`JobBlockSite.at(level, pos)`, `JobBlockSite.blockAt(level, pos)` for the block alone), backed by `SettlementData`.
@@ -70,7 +82,7 @@ The first Logistics Job: the settlement's store and food point. Code: `ModJobs.C
 
 **Clerk storage**:
 The Clerk JobBlock's own 27 slots plus the containers linked with the Scroll of Assignment (2 / 4 / 8 / 12 / 16 by level, `SettlementRules.clerkStorage`; extra ones after a downgrade are inactive, `ClerkStorage.activeStorage`). Code: `SettlementBlock.storage()`, linked through `JobAssignments.cycleClerkPoint`.
-_Avoid_: Pantry (removed), warehouse
+_Avoid_: Pantry (removed), warehouse (that is a Clerk JobBlock with Deliverymen)
 
 **Access rule**:
 Without a working Clerk (no settler assigned, or outside the shift) only the 27 block slots are reachable; the linked storage only through a working Clerk at its counter. Hoppers and pipes see the 27 slots (the block's item capability). Code: `ClerkStorage.working`, `ClerkStorage.stock`.
@@ -91,6 +103,31 @@ _Avoid_: Threshold, order
 **Request**:
 "Produce N more of item Y" for the settlement, with a priority and the Clerk to deliver to. A stock rule keeps at most one open (amount = X − stock − amount being crafted); other sources post with priority 0, sub-requests inherit their parent's priority. Producers see them by priority and claim the part they can do in one round (`Request.Claim`); `amount()` is what is still open, `crafting()` what is claimed. Code: `Request` (data), `Requests` (`claimable`, `claim`, `release`, `releaseAll`, `finish`, `setMissing`, `post`, `withdraw`), saved in `Settlement.requests()`; status in the Clerk's Requests tab via `ClerkTab`, "No Craftsperson can make this" from `Producers.canMake`. A removed Clerk takes its rules' requests with it; other requests that deliver to it lose their target (own drop-off). "Missing" lists every missing base input for the whole open amount (`Request.missing`, a list).
 _Avoid_: Order, job, task
+
+**Deliveryman**:
+A Logistics Job that carries items between containers for its Warehouse; its places are on the Clerk JobBlock (several per block, by level). A Clerk never delivers itself.
+_Avoid_: Courier, porter, Clerk specialization
+
+**Warehouse**:
+A Clerk JobBlock with Deliveryman places; its Deliverymen work for it and for its Served Clerks and are their staff (direct access, no counter).
+_Avoid_: Depot, storage (that is the Clerk storage)
+
+**Served Clerk**:
+A Clerk JobBlock linked to a Warehouse with the Scroll of Assignment; at most one Warehouse per Served Clerk, never one with own Deliverymen.
+
+**Home Clerk**:
+The Clerk JobBlock a JobBlock belongs to: the nearest one of its settlement, kept until a Clerk JobBlock is placed or removed. The Warehouse serving it handles the JobBlock's transports.
+
+**Delivery task**:
+One transport for a Warehouse's Deliverymen: a pickup (empty a drop-off into the Home Clerk), a result delivery (producer to requesting Clerk) or an input delivery (store to a producer's collect inventory). At most one open pickup per source; taken tasks are locked to one Deliveryman.
+_Avoid_: Request (that is "produce more"), order, job
+
+**Reservation**:
+An amount of an item in a Clerk's storage held for one Delivery task until pickup, cancel or end of day; everybody else sees stock minus reservations.
+_Avoid_: Claim (that is a producer's share of a Request)
+
+**Job picker**:
+The window that opens when the scroll assigns a settler to a JobBlock: the block's Jobs with taken / places; a settler holds at most one Job per JobBlock.
 
 **Food point**:
 Every Clerk JobBlock; settlers take food from the nearest one whose reachable stock has food (a Clerk from its own storage first). Code: `ClerkStorage.nearestFood` → `ClerkStorage.FoodPoint`.
