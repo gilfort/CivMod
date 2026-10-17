@@ -72,6 +72,7 @@ public final class ClerkGameTests {
             register(helper, "clerk_as_drop_off", ClerkGameTests::asDropOff);
             register(helper, "clerk_catch_up_food", ClerkGameTests::catchUpFood);
             register(helper, "clerk_shift", ClerkGameTests::shift);
+            register(helper, "clerk_catch_up_wait_for_food", ClerkGameTests::catchUpWaitForFood);
             register(helper, "clerk_counter_service", ClerkGameTests::counterService);
         });
     }
@@ -346,6 +347,37 @@ public final class ClerkGameTests {
         helper.succeed();
     }
 
+    /**
+     * Catch-up: a hungry settler without food waits at the (empty) Clerk for 2 hours, then it forages; the start of the
+     * wait is the per-day mark live play reads as well.
+     */
+    private static void catchUpWaitForFood(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerkPos = clerkWithStorage(helper);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerkPos).orElseThrow();
+        Settler customer = settler(helper, new BlockPos(2, 1, 3), data, settlement);
+        customer.getFood().setLevel(4);
+        customer.getFood().setSaturation(0.0F);
+        for (int i = Settler.POCKETS_START; i < Settler.POCKETS_START + Settler.POCKETS_SIZE; i++) {
+            customer.getInventory().setItem(i, ItemStack.EMPTY);
+        }
+        long missedStart = Math.floorDiv(level.getOverworldClockTime(), 24000L) * 24000L - 24000L;
+        long missed = Math.floorDiv(missedStart, 24000L);
+
+        customer.getWork().setCatchUp(missedStart, missedStart + 1500L);
+        CatchUp.runNow(level, List.of(customer));
+        helper.assertFalse(customer.getFood().isForaging(), "07:30: still waiting at the Clerk");
+        helper.assertTrue(customer.getFood().waitDay() == missed && customer.getFood().waitTime() < 500L,
+                "The wait began at its waking time: " + customer.getFood().waitDay() + " / " + customer.getFood().waitTime());
+
+        customer.getWork().setCatchUp(missedStart + 1500L, missedStart + 3500L);
+        CatchUp.runNow(level, List.of(customer));
+        helper.assertTrue(customer.getFood().forageDay() == missed, "09:30: foraging after 2 hours without food");
+        customer.discard();
+        helper.succeed();
+    }
+
     /** In the world: a hungry settler is served at a working Clerk's counter from the linked storage; the Clerk gains EXP. */
     private static void counterService(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -428,8 +460,9 @@ public final class ClerkGameTests {
     }
 
     private static Schedule.Snapshot snapshot(long dayTime, long workEnd) {
-        return new Schedule.Snapshot(3L, dayTime, 20, 10, 6, true, () -> true, false, false, SettlerFood.NO_DAY, false,
-                Schedule.Activity.IDLE, () -> false, true, false, false, new Schedule.DayTimes(0L, workEnd, SettlerWork.SLEEP_TIME));
+        return new Schedule.Snapshot(3L, dayTime, 20, 10, 6, true, () -> true, () -> true, false, false, SettlerFood.NO_DAY, false,
+                Schedule.Activity.IDLE, () -> false, true, false, Schedule.NOT_WAITING, false,
+                new Schedule.DayTimes(0L, workEnd, SettlerWork.SLEEP_TIME));
     }
 
     static Settler settler(GameTestHelper helper, BlockPos relative, SettlementData data, Settlement settlement) {

@@ -250,6 +250,18 @@ public final class ClerkStorage {
     }
 
     /**
+     * The Clerk JobBlock a hungry settler without food waits at (with food or not): the nearest one.
+     *
+     * @param settlement the settler's settlement
+     * @param from       the settler position
+     * @return the Clerk JobBlock, empty if the settlement has none
+     */
+    public static Optional<BlockPos> nearestClerk(Settlement settlement, BlockPos from) {
+        return settlement.blocks().stream().filter(ClerkStorage::isClerk).map(SettlementBlock::pos)
+                .min(Comparator.comparingDouble(pos -> pos.distSqr(from)));
+    }
+
+    /**
      * Removes a broken block as storage or stand spot right away (other missing containers are skipped on access).
      */
     @SubscribeEvent

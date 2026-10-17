@@ -160,6 +160,7 @@
   "civmod.settler.status.foraging": "Foraging",
   "civmod.settler.status.eating": "Eating",
   "civmod.settler.status.fetching_food": "Fetching food",
+  "civmod.settler.status.waiting_for_food": "Waiting for food",
   "civmod.settler.status.starving": "Starving",
   "civmod.settler.status.hungry": "Hungry – no food",
   "civmod.settler.hungry_message": "%s is hungry – no Clerk has food!",

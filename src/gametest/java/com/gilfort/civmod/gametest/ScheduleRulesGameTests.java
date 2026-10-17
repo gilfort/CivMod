@@ -49,7 +49,77 @@ public final class ScheduleRulesGameTests {
             register(helper, "schedule_rules_windows", ScheduleRulesGameTests::windows);
             register(helper, "schedule_rules_no_work_before_waking", ScheduleRulesGameTests::noWorkBeforeWaking);
             register(helper, "schedule_rules_early_waking", ScheduleRulesGameTests::earlyWaking);
+            register(helper, "schedule_rules_wait_for_food", ScheduleRulesGameTests::waitForFood);
         });
+    }
+
+    /**
+     * Hungry settlers wait at the Clerk's queue for 2 hours before they go foraging: food may still arrive. Without a
+     * Clerk JobBlock in the settlement they forage right away, as before.
+     */
+    private static void waitForFood(GameTestHelper helper) {
+        Situation start = hungryWithoutFood();
+        start.waitPoint = true;
+        Decision decision = start.next();
+        expect(helper, decision, Intent.WAIT_FOR_FOOD, "Hungry, a Clerk without food: waits at its queue");
+        helper.assertTrue(decision.waitStarted() && !decision.morningHandled(), "The wait starts, the morning stays open: " + decision);
+
+        Situation waiting = hungryWithoutFood();
+        waiting.waitPoint = true;
+        waiting.waitStart = 1000L;
+        waiting.activity = Activity.WAIT_FOR_FOOD;
+        waiting.dayTime = 2999L;
+        decision = waiting.next();
+        expect(helper, decision, Intent.WAIT_FOR_FOOD, "Still waiting 1 h 59 min after it began");
+        helper.assertTrue(!decision.waitStarted() && !decision.morningHandled(), "The wait goes on: " + decision);
+
+        Situation forage = hungryWithoutFood();
+        forage.waitPoint = true;
+        forage.waitStart = 1000L;
+        forage.activity = Activity.WAIT_FOR_FOOD;
+        forage.dayTime = 3000L;
+        decision = forage.next();
+        expect(helper, decision, Intent.START_FORAGING, "After 2 hours without food: foraging");
+        helper.assertTrue(decision.morningHandled(), "Foraging marks the morning: " + decision);
+
+        Situation arrived = hungryWithoutFood();
+        arrived.waitPoint = true;
+        arrived.waitStart = 1000L;
+        arrived.activity = Activity.WAIT_FOR_FOOD;
+        arrived.dayTime = 1500L;
+        arrived.foodPoint = true;
+        decision = arrived.next();
+        expect(helper, decision, Intent.FETCH_FOOD, "Food arrived while waiting: fetches it");
+        helper.assertTrue(decision.purpose() == MealPurpose.MORNING && Schedule.eatsAtFoodPoint(decision.purpose(), arrived.food),
+                "Eats there as usual: " + decision);
+
+        Situation noClerk = hungryWithoutFood();
+        expect(helper, noClerk.next(), Intent.START_FORAGING, "No Clerk JobBlock: forages right away");
+
+        Situation evening = hungryWithoutFood();
+        evening.waitPoint = true;
+        evening.waitStart = 11000L;
+        evening.activity = Activity.WAIT_FOR_FOOD;
+        evening.dayTime = EVENING;
+        helper.assertTrue(evening.next().afterWork(), "The wait ends with the work day");
+
+        Situation fed = new Situation();
+        fed.morningHandled = false;
+        fed.waitPoint = true;
+        expect(helper, fed.next(), Intent.WORK, "Not hungry: no waiting");
+        helper.assertTrue(fed.waitPointAsked == 0, "Only a settler that would forage looks for a Clerk to wait at");
+        helper.succeed();
+    }
+
+    /** Morning not handled, hungry, empty pockets, no food point food. */
+    private static Situation hungryWithoutFood() {
+        Situation situation = new Situation();
+        situation.morningHandled = false;
+        situation.food = 5;
+        situation.provisions = 0;
+        situation.pocketMeal = false;
+        situation.foodPoint = false;
+        return situation;
     }
 
     /**
@@ -257,6 +327,10 @@ public final class ScheduleRulesGameTests {
         int provisions = 10;
         boolean pocketMeal = true;
         boolean foodPoint = true;
+        /** Whether the settlement has a Clerk JobBlock to wait at; off by default (no waiting, as before). */
+        boolean waitPoint;
+        int waitPointAsked;
+        long waitStart = Schedule.NOT_WAITING;
         boolean homeless;
         boolean sleeping;
         long forageDay = SettlerFood.NO_DAY;
@@ -274,8 +348,11 @@ public final class ScheduleRulesGameTests {
             return new Schedule.Snapshot(3L, dayTime, food, provisions, 6, pocketMeal, () -> {
                 foodPointAsked++;
                 return foodPoint;
+            }, () -> {
+                waitPointAsked++;
+                return waitPoint;
             }, homeless, sleeping, forageDay, nightSkipped, activity, () -> jobStepHolds, morningHandled, eveningMealEaten,
-                    deliveryPending, times);
+                    waitStart, deliveryPending, times);
         }
 
         Optional<Intent> wakeUp() {

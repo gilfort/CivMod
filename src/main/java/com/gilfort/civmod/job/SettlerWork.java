@@ -601,8 +601,31 @@ public final class SettlerWork {
         return new Schedule.Snapshot(day, dayTime, food.level(),
                 SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE),
                 CivModConfig.PROVISION_NUTRITION.get(), SettlerFood.choose(pocketStacks(), food.level()).isPresent(),
-                () -> foodLookup.get().isPresent(), settler.isHomeless(), settler.isSleeping() && !woke, food.forageDay(), nightSkipped,
-                activity, () -> jobStepHolds(level), food.morningDay() == day, food.eatenDay() == day, deliveryPending, dayTimes(day));
+                () -> foodLookup.get().isPresent(), () -> clerkToWaitAt(level).isPresent(), settler.isHomeless(),
+                settler.isSleeping() && !woke, food.forageDay(), nightSkipped, activity, () -> jobStepHolds(level),
+                food.morningDay() == day, food.eatenDay() == day, waitStart(day), deliveryPending, dayTimes(day));
+    }
+
+    /**
+     * @param day the day
+     * @return the day time the settler began waiting for food today, {@link Schedule#NOT_WAITING} if it did not
+     */
+    private long waitStart(long day) {
+        SettlerFood food = settler.getFood();
+        return food.waitDay() == day ? food.waitTime() : Schedule.NOT_WAITING;
+    }
+
+    /**
+     * @return the Clerk JobBlock this settler waits at for food (its own as a Clerk, else the nearest), empty if the
+     *         settlement has none
+     */
+    private Optional<BlockPos> clerkToWaitAt(ServerLevel level) {
+        Optional<BlockPos> own = ownClerk();
+        if (own.isPresent()) {
+            return own;
+        }
+        return SettlementData.get(level).settlement(settler.getSettlementId())
+                .flatMap(settlement -> ClerkStorage.nearestClerk(settlement, settler.blockPosition()));
     }
 
     private boolean jobStepHolds(ServerLevel level) {
@@ -622,6 +645,9 @@ public final class SettlerWork {
         }
         if (decision.eveningMealHandled()) {
             food.setEatenDay(day);
+        }
+        if (decision.waitStarted()) {
+            food.startWaiting(day, dayTime);
         }
         if (decision.complain()) {
             complain(level, day);
@@ -648,6 +674,7 @@ public final class SettlerWork {
                 stop();
                 startFetchFood(level, foodLookup.get().orElseThrow(), Objects.requireNonNull(decision.purpose()));
             }
+            case WAIT_FOR_FOOD -> waitForFood(level, day, dayTime);
             case START_FORAGING -> startForaging(level, day);
             case DELIVER -> startDelivery(level, Objects.requireNonNull(delivery));
             case REST, GO_TO_BED -> {
@@ -666,6 +693,27 @@ public final class SettlerWork {
             }
             case WORK -> work(level, day, dayTime);
             default -> throw new IllegalStateException("Not a decision of Schedule.next: " + decision);
+        }
+    }
+
+    /**
+     * Waits for food at the queue of the nearest Clerk JobBlock (where its counter is now). A Clerk waits at its own
+     * counter: it works its shift meanwhile.
+     */
+    private void waitForFood(ServerLevel level, long day, long dayTime) {
+        if (ownClerk().isPresent()) {
+            work(level, day, dayTime);
+            return;
+        }
+        Optional<BlockPos> clerk = clerkToWaitAt(level);
+        if (clerk.isEmpty()) {
+            stop();
+            return;
+        }
+        ClerkStorage.Visit visit = reachableVisit(level, clerk.get(), ClerkStorage.visit(level, clerk.get(), DayClock.dayTime(level)));
+        if (activity != Activity.WAIT_FOR_FOOD || !visit.target().equals(target)) {
+            stop();
+            moveTo(level, Activity.WAIT_FOR_FOOD, visit.target(), visit.reach());
         }
     }
 
@@ -1247,7 +1295,7 @@ public final class SettlerWork {
         try {
             for (int step = 0; step < CATCH_UP_DECISIONS; step++) {
                 FoodLookup foodLookup = new FoodLookup(level, dayTime);
-                Schedule.Snapshot snapshot = catchUpSnapshot(day, dayTime, foodLookup, noFood);
+                Schedule.Snapshot snapshot = catchUpSnapshot(level, day, dayTime, foodLookup, noFood);
                 Optional<Intent> body = Schedule.wakeUp(snapshot);
                 if (body.isPresent()) {
                     // Only foraging settles the body in catch-up (awake, no skipped night).
@@ -1266,6 +1314,9 @@ public final class SettlerWork {
                 }
                 if (decision.eveningMealHandled()) {
                     food.setEatenDay(day);
+                }
+                if (decision.waitStarted()) {
+                    food.startWaiting(day, dayTime);
                 }
                 int foodBefore = food.level();
                 int pocketsBefore = SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE);
@@ -1288,6 +1339,11 @@ public final class SettlerWork {
                     case START_FORAGING -> {
                         food.startForaging(day);
                         return Intent.FORAGE;
+                    }
+                    case WAIT_FOR_FOOD -> {
+                        // Waiting at a Clerk's queue: no work this hour (a Clerk waits at its own counter, at work);
+                        // the Schedule sends it foraging once the 2 hours are over.
+                        return ownClerk().isPresent() ? Intent.WORK : Intent.IDLE;
                     }
                     default -> {
                         return decision.intent();
@@ -1312,13 +1368,14 @@ public final class SettlerWork {
      *
      * @param noFood whether a meal just found nothing to take (no food point or pocket food for this decision)
      */
-    private Schedule.Snapshot catchUpSnapshot(long day, long dayTime, FoodLookup foodLookup, boolean noFood) {
+    private Schedule.Snapshot catchUpSnapshot(ServerLevel level, long day, long dayTime, FoodLookup foodLookup, boolean noFood) {
         SettlerFood food = settler.getFood();
         return new Schedule.Snapshot(day, dayTime, food.level(),
                 SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE),
                 CivModConfig.PROVISION_NUTRITION.get(), !noFood && SettlerFood.choose(pocketStacks(), food.level()).isPresent(),
-                () -> !noFood && foodLookup.get().isPresent(), settler.isHomeless(), false, food.forageDay(), false,
-                Activity.IDLE, () -> false, food.morningDay() == day, food.eatenDay() == day, false, dayTimes(day));
+                () -> !noFood && foodLookup.get().isPresent(), () -> clerkToWaitAt(level).isPresent(), settler.isHomeless(),
+                false, food.forageDay(), false, Activity.IDLE, () -> false, food.morningDay() == day, food.eatenDay() == day,
+                waitStart(day), false, dayTimes(day));
     }
 
     /**
@@ -1433,6 +1490,8 @@ public final class SettlerWork {
             key = "eating";
         } else if (activity == Activity.FETCH_FOOD) {
             key = "fetching_food";
+        } else if (activity == Activity.WAIT_FOR_FOOD) {
+            key = "waiting_for_food";
         } else if (hungryNoFood) {
             key = food.level() <= 0 ? "starving" : "hungry";
         }
@@ -1911,6 +1970,12 @@ public final class SettlerWork {
             return;
         }
         if (activity == Activity.FORAGE) {
+            return;
+        }
+        if (activity == Activity.WAIT_FOR_FOOD) {
+            // In the queue: stand and face the counter until food arrives or the wait is over (Schedule).
+            settler.getNavigation().stop();
+            settler.getLookControl().setLookAt(Vec3.atCenterOf(target));
             return;
         }
         if (activeJob == null) {
