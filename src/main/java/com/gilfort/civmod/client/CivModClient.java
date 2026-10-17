@@ -108,7 +108,8 @@ public final class CivModClient {
                             : Component.translatable("civmod.tooltip.scroll.bound_settler", binding.label()))
                     .orElse(Component.translatable("civmod.tooltip.scroll.unbound"));
             event.getToolTip().add(1, line.copy().withStyle(ChatFormatting.GRAY));
-            event.getToolTip().add(2, Component.translatable("civmod.tooltip.scroll.help").withStyle(ChatFormatting.DARK_GRAY));
+            event.getToolTip().add(2, Component.translatable("civmod.tooltip.scroll.help.bind").withStyle(ChatFormatting.DARK_GRAY));
+            event.getToolTip().add(3, Component.translatable("civmod.tooltip.scroll.help.clear").withStyle(ChatFormatting.DARK_GRAY));
         }
         if (SettlementOutline.isJobBlockItem(event.getItemStack())) {
             int level = event.getItemStack().getOrDefault(ModDataComponents.JOB_LEVEL.get(), SettlementRules.MIN_LEVEL);
