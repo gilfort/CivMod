@@ -66,8 +66,11 @@ public final class ModItems {
     /**
      * Starter tool every new JobBlock item of a job that needs a tool carries (vault {@code Systems/JobBlock.md}).
      * Clerk, Craftsperson and Mission Board have none.
+     * <p>
+     * A new entry also needs its block loot table to drop the JobBlock without the tool (the {@code !civmod:starter_tool}
+     * component removal in {@code data/civmod/loot_table/blocks/}), or every break and re-place adds another tool.
      */
-    private static final Map<DeferredItem<BlockItem>, Item> STARTER_TOOLS = Map.of(LUMBERJACK_BLOCK, Items.STONE_AXE,
+    public static final Map<DeferredItem<BlockItem>, Item> STARTER_TOOLS = Map.of(LUMBERJACK_BLOCK, Items.STONE_AXE,
             MINER_BLOCK, Items.STONE_PICKAXE, FISHERMAN_BLOCK, Items.FISHING_ROD);
 
     private ModItems() {

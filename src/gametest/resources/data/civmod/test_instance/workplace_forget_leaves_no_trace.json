@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:workplace_forget_leaves_no_trace",
   "max_ticks": 2400,
   "structure": "minecraft:empty",

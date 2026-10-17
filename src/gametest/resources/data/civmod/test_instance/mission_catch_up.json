@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:mission_catch_up",
   "max_ticks": 2400,
   "structure": "minecraft:empty",

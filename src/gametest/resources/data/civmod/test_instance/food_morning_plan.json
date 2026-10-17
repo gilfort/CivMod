@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:food_morning_plan",
   "max_ticks": 40,
   "structure": "minecraft:empty",

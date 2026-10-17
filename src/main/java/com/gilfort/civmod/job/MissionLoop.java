@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.OptionalLong;
 
 import org.jspecify.annotations.Nullable;
 
@@ -13,6 +14,7 @@ import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.mission.OutcomeRules;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.MissionOffers;
@@ -54,6 +56,11 @@ final class MissionLoop implements CategoryLoop {
     /** Where a departing settler walks to (not saved: recomputed after loading). */
     private @Nullable BlockPos leaveTarget;
     private long leaveStart;
+    /**
+     * The return time of the last mission, {@code -1} if none (not saved: a world loaded between the return and the
+     * settler's own end of work lets it work for the rest of that window).
+     */
+    private long returnedAt = -1L;
     /** Outcome used instead of the roll (tests only, not saved). */
     private MissionRules.@Nullable Outcome forcedOutcome;
 
@@ -84,6 +91,14 @@ final class MissionLoop implements CategoryLoop {
      */
     boolean hasTrip() {
         return trip != null;
+    }
+
+    /**
+     * @param day the day
+     * @return the day time the settler came back from a mission on that day; empty if it did not
+     */
+    OptionalLong returnedOn(long day) {
+        return returnedAt >= 0 && DayClock.day(returnedAt) == day ? OptionalLong.of(DayClock.dayTime(returnedAt)) : OptionalLong.empty();
     }
 
     /**
@@ -245,6 +260,7 @@ final class MissionLoop implements CategoryLoop {
         }
         trip = null;
         leaveTarget = null;
+        returnedAt = ended.returnTime();
         settler.setInvisible(false);
         BlockPos board = ended.board();
         Optional<SettlerJob> job = missionJob(settler, board);

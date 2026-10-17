@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:mission_assignment_give_back",
   "max_ticks": 400,
   "structure": "minecraft:empty",

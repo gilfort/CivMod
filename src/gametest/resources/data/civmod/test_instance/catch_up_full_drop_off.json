@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:catch_up_full_drop_off",
   "max_ticks": 1200,
   "structure": "minecraft:empty",

@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:settler_names_without_duplicates",
   "max_ticks": 40,
   "structure": "minecraft:empty",

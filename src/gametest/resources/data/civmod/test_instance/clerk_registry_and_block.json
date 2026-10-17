@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:clerk_registry_and_block",
   "max_ticks": 1200,
   "structure": "minecraft:empty",

@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:sleeping_pose_deterministic",
   "max_ticks": 100,
   "structure": "minecraft:empty",

@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:food_player_feeding",
   "max_ticks": 40,
   "structure": "minecraft:empty",

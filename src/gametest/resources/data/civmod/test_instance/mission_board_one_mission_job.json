@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:mission_board_one_mission_job",
   "max_ticks": 40,
   "structure": "minecraft:empty",

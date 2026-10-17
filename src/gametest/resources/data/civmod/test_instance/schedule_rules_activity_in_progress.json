@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:schedule_rules_activity_in_progress",
   "max_ticks": 40,
   "structure": "minecraft:empty",

@@ -8,6 +8,8 @@ import net.minecraft.resources.Identifier;
 
 /**
  * Sprites CivMod windows draw and also show inside texts (help lines, tooltips).
+ * <p>
+ * Lives in common code, not in the client-only {@code CivGui}, so the dedicated GameTest server can check it.
  */
 public final class GuiIcons {
 

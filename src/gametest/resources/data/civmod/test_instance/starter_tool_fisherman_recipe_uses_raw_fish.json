@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:starter_tool_fisherman_recipe_uses_raw_fish",
   "max_ticks": 20,
   "structure": "minecraft:empty",

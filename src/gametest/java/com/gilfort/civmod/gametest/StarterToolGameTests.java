@@ -45,6 +45,7 @@ public final class StarterToolGameTests {
             register(helper, "starter_tool_on_first_placement", StarterToolGameTests::firstPlacement);
             register(helper, "starter_tool_none_for_jobs_without_tool", StarterToolGameTests::jobsWithoutTool);
             register(helper, "starter_tool_not_after_break_and_replace", StarterToolGameTests::breakAndReplace);
+            register(helper, "starter_tool_not_in_any_drop", StarterToolGameTests::noToolInAnyDrop);
             register(helper, "starter_tool_fisherman_recipe_uses_raw_fish", StarterToolGameTests::fishermanRecipe);
         });
     }
@@ -106,6 +107,31 @@ public final class StarterToolGameTests {
         place(helper, helper.makeMockPlayer(GameType.SURVIVAL), drop, pos);
         helper.assertTrue(contents(helper, pos).isEmpty(), "Re-placed JobBlock created a tool: " + contents(helper, pos));
         remove(helper, pos);
+        helper.succeed();
+    }
+
+    /**
+     * Every JobBlock with a starter tool drops without it: guards the loot table's starter tool removal for each entry of
+     * {@link ModItems#STARTER_TOOLS}, also for jobs added later.
+     */
+    private static void noToolInAnyDrop(GameTestHelper helper) {
+        int x = 1;
+        for (var entry : ModItems.STARTER_TOOLS.entrySet()) {
+            Item jobBlockItem = entry.getKey().get();
+            BlockPos pos = new BlockPos(x, 1, 1);
+            BlockPos absolute = helper.absolutePos(pos);
+            x += 2;
+            ItemStack fresh = new ItemStack(jobBlockItem);
+            helper.assertTrue(fresh.has(ModDataComponents.STARTER_TOOL.get()), jobBlockItem + " should carry its starter tool");
+            place(helper, helper.makeMockPlayer(GameType.SURVIVAL), fresh, pos);
+            helper.getBlockEntity(pos, JobBlockEntity.class).clearContent();
+            List<ItemStack> drops = Block.getDrops(helper.getLevel().getBlockState(absolute), helper.getLevel(), absolute,
+                    helper.getLevel().getBlockEntity(absolute));
+            helper.assertTrue(drops.size() == 1 && drops.getFirst().is(jobBlockItem), "Expected " + jobBlockItem + " as drop: " + drops);
+            helper.assertTrue(!drops.getFirst().has(ModDataComponents.STARTER_TOOL.get()),
+                    jobBlockItem + " drops with its starter tool: its loot table must remove civmod:starter_tool");
+            remove(helper, pos);
+        }
         helper.succeed();
     }
 

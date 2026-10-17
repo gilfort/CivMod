@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:menu_tabs_toggle_slots",
   "max_ticks": 20,
   "structure": "minecraft:empty",

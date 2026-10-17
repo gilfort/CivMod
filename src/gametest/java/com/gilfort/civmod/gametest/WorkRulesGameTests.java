@@ -100,7 +100,9 @@ public final class WorkRulesGameTests {
             int live = now - start[0];
             long clock = level.getOverworldClockTime();
             long yesterday = Math.floorDiv(clock, DAY) * DAY - DAY;
-            settler.getWork().setCatchUp(yesterday, yesterday + WINDOW);
+            // From its waking time on, as live play (before it the settler does not work).
+            long from = yesterday + settler.getWork().dayTimes(Math.floorDiv(yesterday, DAY)).wake();
+            settler.getWork().setCatchUp(from, from + WINDOW);
             int before = output(level, settler, jobBlock);
             CatchUp.runNow(level, List.of(settler));
             int caughtUp = output(level, settler, jobBlock) - before;
