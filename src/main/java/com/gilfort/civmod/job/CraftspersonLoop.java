@@ -162,7 +162,7 @@ final class CraftspersonLoop implements CategoryLoop {
         Workplace workplace = shell.workplace(jobBlock);
         Map<UUID, Long> skips = workplace.skips();
         skips.values().removeIf(until -> until <= now || until - now > SKIP_TICKS);
-        List<Pattern> checked = Patterns.checked(site.block());
+        List<Pattern> checked = Patterns.usable(level, site.block());
         JobBuffer buffer = workplace.buffer();
         Map<Item, Integer> held = buffer.counts();
         int room = Math.max(0, JobBuffer.CAPACITY - buffer.count());

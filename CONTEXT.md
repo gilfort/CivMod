@@ -79,13 +79,13 @@ Without a working Clerk (no settler assigned, or outside the shift) only the 27 
 What a visitor reaches at one place under the access rule, seen as one list of slots; counted on every access (no snapshot). Code: `Stock` (built by `ClerkStorage.stock`); `Stock.counter()` marks the whole storage of a working Clerk, where every take is a hand-out.
 
 **Counter**:
-Where a working Clerk serves: within 3 blocks of the stand spot of the day (or next to its JobBlock without spots). One customer at a time, service time by skill (`ClerkStorage.serviceTicks`); a hand-out gives the Clerk EXP. Code: `ClerkStorage.visit` (where a visitor walks), `ClerkCounter` (queue and hand-out), `SettlerWork.reachableVisit` (an unreachable counter offers only the block slots that day).
+Where a working Clerk serves: within 3 blocks of the stand spot of the day (or next to its JobBlock without spots). One customer at a time, service time by skill (`ClerkStorage.serviceTicks`); a hand-out gives the Clerk EXP. Code: `ClerkStorage.visit` (where a visitor walks), `ClerkCounter` (queue and hand-out), `SettlerWork.reachableVisit` (an unreachable counter offers only the block slots that day; the path is only checked within 16 blocks, further away a search is cut off by the follow range).
 
 **Stand spot**:
 A block a Clerk stands on, with a facing; up to 8 per Clerk JobBlock; one is picked each morning and at 12:00, never the same twice in a row. Code: `SettlementBlock.StandSpot`, `ClerkSpots.today`, saved as `SettlementBlock.spotOfDay()`.
 
 **Stock rule**:
-A Clerk's "keep at least X of item Y" with a priority (−100…+100, higher first); 9 per JobBlock level in rows of 9, extra ones after a downgrade kept but inactive. Only the Minimum mode exists. Active only while a Clerk settler is on shift; checked every 30 s (staggered), right after a delivery into the Clerk and once per simulated hour in catch-up. Code: `StockRule` (data), `StockRules` (edit, `check`), saved in `SettlementBlock.stockRules()`.
+A Clerk's "keep at least X of item Y" with a priority (−100…+100, higher first); 9 per JobBlock level in rows of 9, extra ones after a downgrade kept but inactive. Only the Minimum mode exists. Active only while a Clerk settler is on shift; checked every 30 s (staggered), right after a delivery into the Clerk and once per simulated hour in catch-up. Shown in the Clerk's "Stock" tab (`JobBlockMenu.TAB_STOCK`). Code: `StockRule` (data), `StockRules` (edit, `check`), saved in `SettlementBlock.stockRules()`.
 _Avoid_: Threshold, order
 
 **Request**:
@@ -107,6 +107,9 @@ _Avoid_: Recipe (a pattern follows one), blueprint
 
 **Checkmark**:
 A pattern the Craftsperson crafts; 6 + 1 per 5 levels of the settler's effective skill (`Patterns.checkLimit`). When the limit drops, the last checked patterns in list order lose theirs (`Patterns.enforceLimit`, notice `SettlementBlock.Trim`).
+
+**Metal**:
+What the Craftsperson never crafts with: item tag `civmod:metals` (ingots, nuggets, raw materials, metal blocks). A pattern whose output or an input (all its alternatives) is metal cannot be checked and is never used; metal alternatives of a tag input are skipped. Code: `Patterns.METALS`, `Patterns.usesMetal`, `Patterns.usable` (the checked patterns a Craftsperson uses), `PatternTab.metal()`.
 
 **Round**:
 One claimed part of one request: claim what fits the buffer, fetch inputs (collect inventory, then the posting Clerk), craft intermediates and the item, deliver. Code: `Round`, kept in the job's Workplace (`Workplace.round`), run by `CraftspersonLoop`, planned by `CraftPlan` (chain resolution with own patterns; `CraftPlan.most` sizes the claim).

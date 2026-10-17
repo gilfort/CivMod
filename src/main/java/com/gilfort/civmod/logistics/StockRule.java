@@ -16,7 +16,7 @@ import net.minecraft.world.item.Item;
  * A Clerk's stock rule (vault {@code Jobs/Clerk.md}): "keep at least {@code amount} of {@code item}". While its Clerk
  * is on shift a rule below its amount posts one request for the missing amount, with the rule's priority.
  *
- * @param slot     the rule's place in the Rules tab (rows of 9; 9 rules per JobBlock level are active)
+ * @param slot     the rule's place in the Stock tab (rows of 9; 9 rules per JobBlock level are active)
  * @param item     the item (a specific item, no tags)
  * @param amount   the amount to keep ({@value #MIN_AMOUNT}–{@value #MAX_AMOUNT})
  * @param priority the priority ({@value #MIN_PRIORITY}–{@value #MAX_PRIORITY}, higher first)

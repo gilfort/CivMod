@@ -62,7 +62,7 @@ public final class CivModJeiPlugin implements IModPlugin {
         registration.addRecipeTransferHandler(new PatternTransfer(registration.getTransferHelper()), RecipeTypes.CRAFTING);
     }
 
-    /** The rule slots of the Rules tab and the pattern slots of the Patterns tab as ghost targets. */
+    /** The stock slots of the Stock tab and the pattern slots of the Patterns tab as ghost targets. */
     private static final class GhostSlots implements IGhostIngredientHandler<JobBlockScreen> {
 
         @Override

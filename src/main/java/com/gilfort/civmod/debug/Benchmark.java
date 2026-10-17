@@ -145,7 +145,7 @@ public final class Benchmark {
             }
             for (int slot = 0; slot < CRAFTED.size(); slot++) {
                 if (Patterns.setOutput(level, craft, slot, CRAFTED.get(slot)).isPresent()) {
-                    Patterns.toggleCheck(data, craft, slot);
+                    Patterns.toggleCheck(level, craft, slot);
                 }
             }
             craftspersons.add(craft);

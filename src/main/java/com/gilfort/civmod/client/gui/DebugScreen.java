@@ -70,9 +70,11 @@ public class DebugScreen extends CivContainerScreen<DebugMenu> {
         if (tab == DebugMenu.TAB_WIDGETS) {
             graphics.text(font, Component.translatable("civmod.gui.debug.progress", Math.round(progressBar.getProgress() * 100)),
                     CivGui.PADDING, 22, CivGui.LABEL_COLOR, false);
-        } else if (tab == DebugMenu.TAB_INFO) {
-            graphics.textWithWordWrap(font, Component.translatable("civmod.gui.debug.info"),
-                    CivGui.PADDING, 20, imageWidth - 2 * CivGui.PADDING, CivGui.LABEL_COLOR, false);
         }
+    }
+
+    @Override
+    protected List<Component> helpLines(int tab) {
+        return List.of(Component.translatable("civmod.gui.debug.info"));
     }
 }

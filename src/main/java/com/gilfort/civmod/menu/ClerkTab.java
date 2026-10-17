@@ -27,7 +27,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * What the Clerk's "Rules" and "Requests" tabs show (vault {@code Jobs/Clerk.md}): its stock rules and the requests
+ * What the Clerk's "Stock" and "Requests" tabs show (vault {@code Jobs/Clerk.md}): its stock rules and the requests
  * they posted with their status. The server sends it while the menu is open whenever it changed ({@link Sync}); the
  * client edits rules with {@link Edit}.
  *

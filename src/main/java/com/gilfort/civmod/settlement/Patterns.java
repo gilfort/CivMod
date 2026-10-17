@@ -4,13 +4,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.logistics.CraftingRecipes;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.registry.ModJobs;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -21,11 +26,17 @@ import net.minecraft.world.item.crafting.Recipe;
  * pattern slots, of which {@link #checkLimit} can be checked. A pattern is made from its output alone (the first matching
  * crafting recipe fills the grid, arrows cycle the alternatives) or from exact inputs (the output follows the recipe they
  * match), or by a recipe viewer's transfer button.
+ * <p>
+ * The Craftsperson never works metal (item tag {@code civmod:metals}; metal is for later jobs like the Smith): a pattern
+ * that makes metal or has an input only metal fills cannot be checked and is never used; the metal alternatives of a
+ * tag input are skipped.
  */
 public final class Patterns {
 
     /** Checkmarks below skill level 5. */
     public static final int BASE_CHECKMARKS = 6;
+    /** Items the Craftsperson never crafts with: ingots, nuggets, raw materials and metal blocks. */
+    public static final TagKey<Item> METALS = TagKey.create(Registries.ITEM, CivMod.id("metals"));
     /** One more checkmark per this many skill levels. */
     private static final int LEVELS_PER_CHECKMARK = 5;
 
@@ -63,6 +74,33 @@ public final class Patterns {
      */
     public static List<Pattern> checked(SettlementBlock block) {
         return block.patterns().stream().filter(pattern -> pattern.checked() && pattern.valid()).toList();
+    }
+
+    /**
+     * @param level the level
+     * @param block a Craftsperson JobBlock
+     * @return its checked patterns the Craftsperson can use (making something, without metal), in list order
+     */
+    public static List<Pattern> usable(ServerLevel level, SettlementBlock block) {
+        return checked(block).stream().filter(pattern -> !usesMetal(level, pattern)).toList();
+    }
+
+    /**
+     * @param item an item
+     * @return whether it is metal (item tag {@code civmod:metals})
+     */
+    public static boolean isMetal(Item item) {
+        return item.getDefaultInstance().is(METALS);
+    }
+
+    /**
+     * @param level   the level
+     * @param pattern a pattern
+     * @return whether it makes metal or needs an input that only metal fills
+     */
+    public static boolean usesMetal(ServerLevel level, Pattern pattern) {
+        return pattern.valid() && (isMetal(pattern.output())
+                || allInputs(level, pattern).stream().anyMatch(input -> input.items().allMatch(holder -> holder.is(METALS))));
     }
 
     /**
@@ -149,14 +187,15 @@ public final class Patterns {
     }
 
     /**
-     * Checks or unchecks a pattern; checking needs a pattern that makes something and a free checkmark.
+     * Checks or unchecks a pattern; checking needs a pattern that makes something without metal and a free checkmark.
      *
-     * @param data the dimension's settlement data
-     * @param pos  the Craftsperson JobBlock
-     * @param slot the library slot
+     * @param level the level
+     * @param pos   the Craftsperson JobBlock
+     * @param slot  the library slot
      * @return whether the pattern is checked afterwards
      */
-    public static boolean toggleCheck(SettlementData data, BlockPos pos, int slot) {
+    public static boolean toggleCheck(ServerLevel level, BlockPos pos, int slot) {
+        SettlementData data = SettlementData.get(level);
         Optional<SettlementBlock> found = block(data, pos);
         Optional<Pattern> pattern = found.flatMap(block -> pattern(block, slot));
         if (pattern.isEmpty()) {
@@ -164,7 +203,7 @@ public final class Patterns {
         }
         SettlementBlock block = found.get();
         boolean check = !pattern.get().checked();
-        if (check && (!pattern.get().valid() || checked(block).size() >= block.checkLimit())) {
+        if (check && (!pattern.get().valid() || usesMetal(level, pattern.get()) || checked(block).size() >= block.checkLimit())) {
             return false;
         }
         replace(data, block, pattern.get().withChecked(check));
@@ -219,14 +258,25 @@ public final class Patterns {
     }
 
     /**
-     * The inputs of one craft of a pattern: exactly its grid items, or the ingredients of its recipe (tags flexible). A
-     * recipe that is gone falls back to the grid items.
+     * The inputs of one craft of a pattern: exactly its grid items, or the ingredients of its recipe (tags flexible,
+     * without their metal alternatives). A recipe that is gone falls back to the grid items.
      *
      * @param level   the level
      * @param pattern a pattern
      * @return the ingredients, one per used grid cell
      */
     public static List<Ingredient> inputs(ServerLevel level, Pattern pattern) {
+        return allInputs(level, pattern).stream().map(Patterns::withoutMetal).toList();
+    }
+
+    /** An ingredient without its metal alternatives (unchanged if it has none, or only metal ones). */
+    private static Ingredient withoutMetal(Ingredient input) {
+        List<Holder<Item>> items = input.items().toList();
+        List<Holder<Item>> kept = items.stream().filter(holder -> !holder.is(METALS)).toList();
+        return kept.isEmpty() || kept.size() == items.size() ? input : Ingredient.of(HolderSet.direct(kept));
+    }
+
+    private static List<Ingredient> allInputs(ServerLevel level, Pattern pattern) {
         if (!pattern.exact()) {
             Optional<CraftingRecipes.Shape> shape = pattern.recipe().flatMap(id -> CraftingRecipes.byKey(level, id));
             if (shape.isPresent()) {
@@ -246,14 +296,14 @@ public final class Patterns {
                 grid, shape.map(CraftingRecipes.Shape::id), true, false);
     }
 
-    /** Puts a pattern into its slot, keeping the slot's checkmark if the new pattern makes something. */
+    /** Puts a pattern into its slot, keeping the slot's checkmark if the new pattern makes something without metal. */
     private static Optional<Pattern> put(ServerLevel level, BlockPos pos, int slot, Pattern pattern) {
         SettlementData data = SettlementData.get(level);
         Optional<SettlementBlock> found = block(data, pos);
         if (found.isEmpty() || slot < 0 || slot >= Pattern.SLOTS) {
             return Optional.empty();
         }
-        boolean checked = pattern(found.get(), slot).map(Pattern::checked).orElse(false) && pattern.valid();
+        boolean checked = pattern(found.get(), slot).map(Pattern::checked).orElse(false) && pattern.valid() && !usesMetal(level, pattern);
         Pattern placed = pattern.withChecked(checked);
         replace(data, found.get(), placed);
         found.get().setTrim(Optional.empty());

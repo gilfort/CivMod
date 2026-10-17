@@ -223,12 +223,20 @@ final class MissionTabView {
             lines.add(lockText(entry).copy().withStyle(ChatFormatting.GOLD).getVisualOrderText());
         }
         lines.addAll(pickerLines(index));
-        lines.add(Component.translatable(entry.marked() ? "civmod.gui.mission.unmark" : "civmod.gui.mission.mark")
+        lines.add(Component.translatable(entry.marked() ? "civmod.gui.mission.marked" : "civmod.gui.mission.unmarked")
                 .withStyle(ChatFormatting.DARK_GRAY).getVisualOrderText());
-        if (entry.marked()) {
-            lines.add(Component.translatable("civmod.gui.mission.assign.hint").withStyle(ChatFormatting.DARK_GRAY).getVisualOrderText());
-        }
         return lines;
+    }
+
+    /**
+     * @return the help lines of the Missions tab: the offer's or the assignment's usage
+     */
+    List<Component> helpLines() {
+        if (assigning >= 0) {
+            return List.of(Component.translatable("civmod.gui.mission.help.assign"));
+        }
+        return List.of(Component.translatable("civmod.gui.mission.help.mark"), Component.translatable("civmod.gui.mission.help.lock"),
+                Component.translatable("civmod.gui.mission.help.offer"));
     }
 
     /** "Assigned to <name>", or "Locked" when the assigned settler died or left the board (or is not loaded). */

@@ -1,7 +1,10 @@
 package com.gilfort.civmod.menu;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.logistics.Pattern;
@@ -30,26 +33,30 @@ import net.minecraft.world.item.crafting.Recipe;
  * @param limit    the checkmark limit
  * @param patterns the patterns by slot
  * @param trim     the checkmarks last removed by a dropped limit
+ * @param metal    the slots of patterns that make or need metal (the Craftsperson cannot use them)
  */
-public record PatternTab(int limit, List<Pattern> patterns, Optional<SettlementBlock.Trim> trim) {
+public record PatternTab(int limit, List<Pattern> patterns, Optional<SettlementBlock.Trim> trim, Set<Integer> metal) {
 
     /** Nothing (any other JobBlock, or before the first sync). */
-    public static final PatternTab EMPTY = new PatternTab(Patterns.BASE_CHECKMARKS, List.of(), Optional.empty());
+    public static final PatternTab EMPTY = new PatternTab(Patterns.BASE_CHECKMARKS, List.of(), Optional.empty(), Set.of());
 
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, PatternTab> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.VAR_INT, PatternTab::limit,
             Pattern.STREAM_CODEC.apply(ByteBufCodecs.list(Pattern.SLOTS)), PatternTab::patterns,
             ByteBufCodecs.optional(SettlementBlock.Trim.STREAM_CODEC), PatternTab::trim,
+            ByteBufCodecs.VAR_INT.apply(ByteBufCodecs.collection(HashSet::new, Pattern.SLOTS)), tab -> new HashSet<>(tab.metal()),
             PatternTab::new);
 
     /**
      * @param limit    the checkmark limit
      * @param patterns the patterns
      * @param trim     the removed checkmarks
+     * @param metal    the slots of metal patterns
      */
     public PatternTab {
         patterns = List.copyOf(patterns);
+        metal = Set.copyOf(metal);
     }
 
     /**
@@ -59,7 +66,9 @@ public record PatternTab(int limit, List<Pattern> patterns, Optional<SettlementB
      */
     public static PatternTab of(ServerLevel level, BlockPos pos) {
         return SettlementData.get(level).settlementAt(pos).flatMap(settlement -> settlement.block(pos)).filter(Patterns::isCraftsperson)
-                .map(block -> new PatternTab(block.checkLimit(), block.patterns(), block.trim())).orElse(EMPTY);
+                .map(block -> new PatternTab(block.checkLimit(), block.patterns(), block.trim(), block.patterns().stream()
+                        .filter(pattern -> Patterns.usesMetal(level, pattern)).map(Pattern::slot).collect(Collectors.toSet())))
+                .orElse(EMPTY);
     }
 
     /**

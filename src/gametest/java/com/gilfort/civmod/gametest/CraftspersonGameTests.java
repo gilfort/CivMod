@@ -75,6 +75,9 @@ public final class CraftspersonGameTests {
             register(helper, "craftsperson_delivery_fallback", CraftspersonGameTests::deliveryFallback);
             register(helper, "craftsperson_live_round", CraftspersonGameTests::liveRound);
             register(helper, "craftsperson_menu", CraftspersonGameTests::menu);
+            register(helper, "craftsperson_live_linked_storage", CraftspersonGameTests::liveLinkedStorage);
+            register(helper, "craftsperson_no_metal", CraftspersonGameTests::noMetal);
+            register(helper, "craftsperson_live_linked_storage_far", CraftspersonGameTests::liveLinkedStorageFar);
         });
     }
 
@@ -157,7 +160,7 @@ public final class CraftspersonGameTests {
         }
         helper.assertFalse(Producers.canMake(level, settlement, Items.STICK), "Unchecked: nobody makes sticks");
         for (int slot = 0; slot < outputs.length; slot++) {
-            boolean checked = Patterns.toggleCheck(data, pos, slot * 2);
+            boolean checked = Patterns.toggleCheck(level, pos, slot * 2);
             helper.assertTrue(checked == slot < 6, "Checkmark " + slot + " within the limit of 6: " + checked);
         }
         helper.assertFalse(Producers.canMake(level, settlement, Items.STICK), "No settler: nobody makes sticks");
@@ -461,6 +464,61 @@ public final class CraftspersonGameTests {
         });
     }
 
+    /**
+     * Live play with a working Clerk: the inputs lie only in the Clerk's linked storage, the Craftsperson fetches them
+     * at the counter, crafts and delivers the result to the Clerk.
+     */
+    private static void liveLinkedStorage(GameTestHelper helper) {
+        liveLinkedStorage(helper, 5);
+    }
+
+    /**
+     * The same with the Craftsperson 34 blocks away from the Clerk: beyond the settler's follow range (32) a path
+     * search is cut off, which must not make the counter unreachable for the day (only the Clerk's block slots).
+     */
+    private static void liveLinkedStorageFar(GameTestHelper helper) {
+        liveLinkedStorage(helper, 34);
+    }
+
+    private static void liveLinkedStorage(GameTestHelper helper, int distance) {
+        ServerLevel level = helper.getLevel();
+        for (int x = 0; x < 9; x++) {
+            for (int z = 0; z < distance + 4; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+                for (int y = 1; y < 4; y++) {
+                    helper.setBlock(new BlockPos(x, y, z), Blocks.AIR);
+                }
+            }
+        }
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(8, 0, distance + 3));
+        BlockPos clerk = StockRuleGameTests.workingClerk(helper);
+        // Empty JobBlocks every 8 blocks, so the far Craftsperson joins the Clerk's settlement (join radius 10).
+        for (int z = 9; z < distance - 4; z += 8) {
+            craftsperson(helper, new BlockPos(0, 1, z));
+        }
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
+        chest.setItem(0, new ItemStack(Items.OAK_PLANKS, 2));
+        BlockPos craft = craftsperson(helper, new BlockPos(1, 1, distance));
+        placeTable(helper, new BlockPos(4, 1, distance + 1));
+        define(helper, craft, 0, Items.STICK);
+        Request request = Requests.post(data, settlement, Items.STICK, 4, Optional.of(clerk), Optional.empty());
+        Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, distance + 2), "Cora");
+        settler.getSkills().set(ModJobs.CRAFTSPERSON.get(), new com.gilfort.civmod.job.SettlerSkills.Skill(100, 0));
+        settler.setNoAi(false);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(ClerkStorage.stock(level, clerk, true).count(stack -> stack.is(Items.STICK)) == 4,
+                    "Sticks from the linked planks delivered; status " + settler.getWork().status(craft) + ", buffer "
+                            + settler.getWork().buffer(craft).stacks() + ", request " + Requests.get(settlement, request.id())
+                            + ", at " + helper.relativePos(settler.blockPosition()));
+            helper.assertTrue(chest.countItem(Items.OAK_PLANKS) == 0, "Planks taken from the linked chest");
+            JobAssignments.unassign(data, clerk);
+            settler.discard();
+            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+        });
+    }
+
     private static Settler craftsperson(GameTestHelper helper, BlockPos craft, BlockPos relative, String name) {
         SettlementData data = SettlementData.get(helper.getLevel());
         Settlement settlement = data.settlementAt(craft).orElseThrow();
@@ -497,6 +555,16 @@ public final class CraftspersonGameTests {
         menu.setActiveTab(JobBlockMenu.TAB_PATTERNS);
         helper.assertTrue(menu.slots.get(JobBlockEntity.SLOTS).isActive() && !menu.slots.get(0).isActive(),
                 "Patterns tab: player inventory, no storage slots");
+        int inventorySlot = JobBlockEntity.SLOTS;
+        menu.slots.get(inventorySlot).set(new ItemStack(Items.OAK_LOG, 5));
+        helper.assertTrue(menu.quickMoveStack(player, inventorySlot).isEmpty(), "Shift-click on the Patterns tab moves nothing");
+        helper.assertTrue(menu.slots.get(inventorySlot).getItem().getCount() == 5 && entity.isEmpty(),
+                "Patterns tab: the item stays in the player inventory, the JobBlock storage stays empty");
+        menu.setActiveTab(JobBlockMenu.TAB_STORAGE);
+        menu.quickMoveStack(player, inventorySlot);
+        helper.assertTrue(entity.countItem(Items.OAK_LOG) == 5, "Storage tab: shift-click moves into the JobBlock storage");
+        entity.clearContent();
+        menu.setActiveTab(JobBlockMenu.TAB_PATTERNS);
 
         menu.editPattern(PatternTab.Edit.setOutput(1, 3, Items.TORCH));
         menu.editPattern(PatternTab.Edit.toggleCheck(1, 3));
@@ -513,10 +581,49 @@ public final class CraftspersonGameTests {
         helper.succeed();
     }
 
+    /**
+     * The Craftsperson never crafts with metal (item tag {@code civmod:metals}): a pattern whose output or inputs are
+     * metal cannot be checked, loses its checkmark when it becomes one, is marked in the Patterns tab and never counts
+     * for "can make"; the chain resolution does not craft metal intermediates.
+     */
+    private static void noMetal(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos pos = craftsperson(helper, new BlockPos(1, 1, 1));
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(pos).orElseThrow();
+        helper.assertTrue(Patterns.isMetal(Items.IRON_INGOT) && Patterns.isMetal(Items.GOLD_NUGGET) && Patterns.isMetal(Items.RAW_COPPER)
+                && Patterns.isMetal(Items.IRON_BLOCK) && !Patterns.isMetal(Items.COBBLESTONE) && !Patterns.isMetal(Items.OAK_PLANKS),
+                "Ingots, nuggets, raw materials and metal blocks are metal");
+        Pattern pickaxe = Patterns.setOutput(level, pos, 0, Items.IRON_PICKAXE).orElseThrow();
+        helper.assertTrue(Patterns.usesMetal(level, pickaxe), "An iron pickaxe uses metal");
+        helper.assertFalse(Patterns.toggleCheck(level, pos, 0), "A metal pattern cannot be checked");
+        helper.assertTrue(PatternTab.of(level, pos).metal().contains(0), "The Patterns tab marks it");
+        Patterns.setOutput(level, pos, 1, Items.IRON_INGOT);
+        helper.assertTrue(PatternTab.of(level, pos).metal().contains(1), "Metal output: marked");
+
+        define(helper, pos, 2, Items.STICK);
+        helper.assertTrue(Patterns.setOutput(level, pos, 2, Items.IRON_NUGGET).isPresent(), "The checked slot becomes a metal pattern");
+        SettlementBlock block = settlement.block(pos).orElseThrow();
+        helper.assertTrue(Patterns.pattern(block, 2).filter(Pattern::checked).isEmpty(), "It loses its checkmark");
+        JobAssignments.assign(data, pos, UUID.randomUUID(), "Cora", settlement.id(), List.of());
+        helper.assertFalse(Producers.canMake(level, settlement, Items.IRON_NUGGET), "Nobody makes metal");
+
+        define(helper, pos, 3, Items.STONE_PICKAXE);
+        define(helper, pos, 4, Items.STICK);
+        List<Pattern> usable = Patterns.usable(level, block);
+        helper.assertTrue(usable.stream().noneMatch(pattern -> Patterns.usesMetal(level, pattern)), "Only non-metal patterns are usable");
+        CraftPlan plan = CraftPlan.plan(level, usable, Items.STONE_PICKAXE, 1, Map.of(), Map.of(Items.COBBLESTONE, 3, Items.OAK_PLANKS, 2));
+        helper.assertTrue(plan.missing().isEmpty(), "A non-metal chain still works: " + plan.missing());
+        CraftPlan iron = CraftPlan.plan(level, usable, Items.IRON_PICKAXE, 1, Map.of(), Map.of(Items.IRON_INGOT, 3, Items.STICK, 2));
+        helper.assertFalse(iron.missing().isEmpty(), "No metal crafting, even with the ingots in stock");
+        JobAssignments.unassign(data, pos);
+        helper.succeed();
+    }
+
     /** Puts a checked pattern for an item into a library slot. */
     static void define(GameTestHelper helper, BlockPos pos, int slot, Item output) {
         helper.assertTrue(Patterns.setOutput(helper.getLevel(), pos, slot, output).isPresent(), "Pattern for " + output);
-        helper.assertTrue(Patterns.toggleCheck(SettlementData.get(helper.getLevel()), pos, slot), "Checked " + output);
+        helper.assertTrue(Patterns.toggleCheck(helper.getLevel(), pos, slot), "Checked " + output);
     }
 
     static BlockPos craftsperson(GameTestHelper helper, BlockPos relative) {

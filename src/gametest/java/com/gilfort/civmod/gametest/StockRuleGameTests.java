@@ -260,7 +260,7 @@ public final class StockRuleGameTests {
     }
 
     /**
-     * The Clerk's menu: Rules and Requests tabs, the player inventory on the Rules tab, rules only in active slots,
+     * The Clerk's menu: Stock and Requests tabs, the player inventory on the Stock tab, rules only in active slots,
      * deleting through the menu.
      */
     private static void menu(GameTestHelper helper) {
@@ -273,16 +273,20 @@ public final class StockRuleGameTests {
         JobBlockEntity entity = (JobBlockEntity) level.getBlockEntity(clerk);
         JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), entity,
                 JobBlockInfo.of(level, clerk, ModJobs.CLERK.get(), entity.getJobLevel()));
-        helper.assertTrue(menu.getTabCount() == 4, "Storage, Info, Rules, Requests");
-        menu.setActiveTab(JobBlockMenu.TAB_RULES);
+        helper.assertTrue(menu.getTabCount() == 4, "Storage, Info, Stock, Requests");
+        menu.setActiveTab(JobBlockMenu.TAB_STOCK);
         helper.assertTrue(menu.slots.get(JobBlockEntity.SLOTS).isActive() && !menu.slots.get(0).isActive(),
-                "Rules tab: player inventory, no storage slots");
+                "Stock tab: player inventory, no storage slots");
+        menu.slots.get(JobBlockEntity.SLOTS).set(new ItemStack(Items.TORCH, 3));
+        helper.assertTrue(menu.quickMoveStack(player, JobBlockEntity.SLOTS).isEmpty() && entity.isEmpty()
+                && menu.slots.get(JobBlockEntity.SLOTS).getItem().getCount() == 3, "Shift-click on the Stock tab moves nothing");
+        menu.slots.get(JobBlockEntity.SLOTS).set(ItemStack.EMPTY);
 
-        menu.editRule(9, Optional.of(StockRule.minimum(9, Items.TORCH, 8, 0)));
+        menu.editStockRule(9, Optional.of(StockRule.minimum(9, Items.TORCH, 8, 0)));
         helper.assertTrue(settlement.block(clerk).orElseThrow().stockRule(9).isEmpty(), "Level 1: slot 9 is inactive");
-        menu.editRule(0, Optional.of(StockRule.minimum(0, Items.TORCH, 8, 0)));
+        menu.editStockRule(0, Optional.of(StockRule.minimum(0, Items.TORCH, 8, 0)));
         helper.assertTrue(Requests.forRule(settlement, clerk, 0).map(Request::amount).orElse(0) == 8, "Set and checked at once");
-        menu.editRule(0, Optional.empty());
+        menu.editStockRule(0, Optional.empty());
         helper.assertTrue(settlement.block(clerk).orElseThrow().stockRules().isEmpty() && Requests.byPriority(settlement).isEmpty(),
                 "Deleted through the menu");
         JobAssignments.unassign(data, clerk);

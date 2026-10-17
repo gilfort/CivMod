@@ -69,7 +69,7 @@ public final class CivNetwork {
         });
         registrar.playToServer(ClerkTab.Edit.TYPE, ClerkTab.Edit.STREAM_CODEC, (payload, context) -> {
             if (context.player().containerMenu instanceof JobBlockMenu menu && menu.containerId == payload.containerId()) {
-                menu.editRule(payload.slot(), payload.rule());
+                menu.editStockRule(payload.slot(), payload.rule());
             }
         });
         registrar.playToServer(PatternTab.Edit.TYPE, PatternTab.Edit.STREAM_CODEC, (payload, context) -> {

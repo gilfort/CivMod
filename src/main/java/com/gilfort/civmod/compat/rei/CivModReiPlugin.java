@@ -52,7 +52,7 @@ public final class CivModReiPlugin implements REIClientPlugin {
         registry.register(new PatternTransfer());
     }
 
-    /** The rule slots of the Rules tab and the pattern slots of the Patterns tab as drop targets. */
+    /** The stock slots of the Stock tab and the pattern slots of the Patterns tab as drop targets. */
     private static final class GhostSlots implements DraggableStackVisitor<JobBlockScreen> {
 
         @Override

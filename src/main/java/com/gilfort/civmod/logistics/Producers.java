@@ -23,6 +23,6 @@ public final class Producers {
      */
     public static boolean canMake(ServerLevel level, Settlement settlement, Item item) {
         return settlement.blocks().stream().anyMatch(block -> Patterns.isCraftsperson(block) && !block.assignees().isEmpty()
-                && Patterns.checked(block).stream().anyMatch(pattern -> pattern.output() == item));
+                && Patterns.usable(level, block).stream().anyMatch(pattern -> pattern.output() == item));
     }
 }

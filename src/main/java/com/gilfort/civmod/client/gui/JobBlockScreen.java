@@ -18,7 +18,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.Rect2i;
@@ -35,7 +34,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
  * Screen of a JobBlock: storage tab and info tab (job, level, skill cap, settlement status, upgrade button). Job tabs
- * are drawn by their views: the Mission Board's missions tab ({@link MissionTabView}), the Clerk's Rules and Requests
+ * are drawn by their views: the Mission Board's missions tab ({@link MissionTabView}), the Clerk's Stock and Requests
  * tabs ({@link ClerkTabView}) and the Craftsperson's Patterns tab ({@link PatternTabView}).
  * <p>
  * Unconnected JobBlocks show the info greyed out with a red hint; storage keeps working.
@@ -78,7 +77,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.job_block.tab.missions"), new ItemStack(Items.MAP)));
         }
         if (JobBlockMenu.isClerk(menu.getInfo())) {
-            tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.clerk.tab.rules"), new ItemStack(Items.WRITABLE_BOOK)));
+            tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.clerk.tab.stock"), new ItemStack(Items.WRITABLE_BOOK)));
             tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.clerk.tab.requests"), new ItemStack(Items.PAPER)));
         }
         if (JobBlockMenu.isCraftsperson(menu.getInfo())) {
@@ -106,11 +105,10 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         upgrade.active = !max && (minecraft.player.isCreative() || current.canAffordNext(minecraft.player.getInventory()));
         if (menu.getInfo().jobType().profile().map(JobProfile::hasLeavesOption).orElse(false) && menu.getInfo().inSettlement()) {
             Component label = Component.translatable(menu.getInfo().collectLeaves() ? "civmod.gui.job_block.leaves.on" : "civmod.gui.job_block.leaves.off");
-            Button leaves = addTabWidget(JobBlockMenu.TAB_INFO, Button.builder(label, button -> {
+            addTabWidget(JobBlockMenu.TAB_INFO, Button.builder(label, button -> {
                 clickMenuButton(JobBlockMenu.BUTTON_TOGGLE_LEAVES);
                 rebuildWidgets();
             }).bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 72, imageWidth - 2 * CivGui.PADDING, 20).build());
-            leaves.setTooltip(Tooltip.create(Component.translatable("civmod.gui.job_block.leaves.tooltip")));
         }
         if (JobBlockMenu.isMissionBoard(current)) {
             missions.init();
@@ -157,6 +155,24 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (tab == JobBlockMenu.TAB_INFO) {
             extractInfo(graphics, mouseX, mouseY);
         }
+    }
+
+    @Override
+    protected List<Component> helpLines(int tab) {
+        JobBlockInfo info = menu.getInfo();
+        if (JobBlockMenu.isClerk(info) && (tab == JobBlockMenu.TAB_STOCK || tab == JobBlockMenu.TAB_REQUESTS)) {
+            return clerk.helpLines(tab);
+        }
+        if (JobBlockMenu.isCraftsperson(info) && tab == JobBlockMenu.TAB_PATTERNS) {
+            return patterns.helpLines();
+        }
+        if (JobBlockMenu.isMissionBoard(info) && tab == JobBlockMenu.TAB_MISSIONS) {
+            return missions.helpLines();
+        }
+        if (tab == JobBlockMenu.TAB_INFO && info.jobType().profile().map(JobProfile::hasLeavesOption).orElse(false) && info.inSettlement()) {
+            return List.of(Component.translatable("civmod.gui.job_block.leaves.tooltip"));
+        }
+        return List.of();
     }
 
     // ---------------------------------------------------------------- info tab
@@ -397,14 +413,14 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     }
 
     /**
-     * The screen areas that take a dragged item (for JEI / REI ghost drag): the Clerk's active rule slots on the Rules
+     * The screen areas that take a dragged item (for JEI / REI ghost drag): the Clerk's active stock slots on the Stock
      * tab, or the Craftsperson's pattern slots on the Patterns tab.
      *
      * @return target id → absolute area
      */
     public Map<Integer, Rect2i> ghostTargets() {
         if (JobBlockMenu.isClerk(menu.getInfo())) {
-            return clerk.ruleTargets();
+            return clerk.stockTargets();
         }
         return JobBlockMenu.isCraftsperson(menu.getInfo()) ? patterns.targets() : new LinkedHashMap<>();
     }
@@ -416,7 +432,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      */
     public int ghostTargetAt(double x, double y) {
         if (JobBlockMenu.isClerk(menu.getInfo())) {
-            return clerk.ruleSlotAt(x, y);
+            return clerk.stockSlotAt(x, y);
         }
         return JobBlockMenu.isCraftsperson(menu.getInfo()) ? patterns.targetAt(x, y) : -1;
     }
@@ -430,7 +446,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      */
     public boolean acceptGhost(int target, ItemStack stack) {
         if (JobBlockMenu.isClerk(menu.getInfo())) {
-            return clerk.setRuleItem(target, stack);
+            return clerk.setStockItem(target, stack);
         }
         return JobBlockMenu.isCraftsperson(menu.getInfo()) && patterns.setItem(target, stack);
     }

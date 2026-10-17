@@ -36,7 +36,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Menu of a JobBlock: tab "Storage" (27 slots + player inventory), tab "Info" and, on the Mission Board, tab
- * "Missions"; the Clerk adds the tabs "Rules" (stock rules, with the player inventory to pick items from) and
+ * "Missions"; the Clerk adds the tabs "Stock" (stock rules, with the player inventory to pick items from) and
  * "Requests" ({@link ClerkTab}).
  */
 public class JobBlockMenu extends CivMenu {
@@ -47,8 +47,8 @@ public class JobBlockMenu extends CivMenu {
     public static final int TAB_INFO = 1;
     /** Missions tab (Mission Board only). */
     public static final int TAB_MISSIONS = 2;
-    /** Rules tab (Clerk only): the stock rules. */
-    public static final int TAB_RULES = 2;
+    /** Stock tab (Clerk only): the stock rules. */
+    public static final int TAB_STOCK = 2;
     /** Requests tab (Clerk only): the requests of the stock rules. */
     public static final int TAB_REQUESTS = 3;
     /** Patterns tab (Craftsperson only): the pattern library, with the player inventory to pick items from. */
@@ -113,8 +113,8 @@ public class JobBlockMenu extends CivMenu {
             }
         }
         if (isClerk(info)) {
-            // Rule items are picked from the player inventory, so it is shown on the Rules tab as well.
-            addPlayerInventory(inventory, 8, CLERK_HEIGHT - 82, TAB_STORAGE, TAB_RULES);
+            // Stock rule items are picked from the player inventory, so it is shown on the Stock tab as well.
+            addPlayerInventory(inventory, 8, CLERK_HEIGHT - 82, TAB_STORAGE, TAB_STOCK);
         } else if (isCraftsperson(info)) {
             // Pattern items are picked from the player inventory, so it is shown on the Patterns tab as well.
             addPlayerInventory(inventory, 8, CLERK_HEIGHT - 82, TAB_STORAGE, TAB_PATTERNS);
@@ -125,7 +125,7 @@ public class JobBlockMenu extends CivMenu {
 
     /**
      * @param info a JobBlock info
-     * @return whether the JobBlock is a Clerk JobBlock (Rules and Requests tabs)
+     * @return whether the JobBlock is a Clerk JobBlock (Stock and Requests tabs)
      */
     public static boolean isClerk(JobBlockInfo info) {
         return info.jobType() == ModJobs.CLERK.get();
@@ -178,7 +178,7 @@ public class JobBlockMenu extends CivMenu {
             case SET_OUTPUT -> Patterns.setOutput(level, pos, edit.slot(), edit.item());
             case SET_INPUT -> Patterns.setInput(level, pos, edit.slot(), edit.index(), edit.item());
             case CYCLE -> Patterns.cycle(level, pos, edit.slot(), edit.index());
-            case TOGGLE_CHECK -> Optional.of(Patterns.toggleCheck(data, pos, edit.slot()));
+            case TOGGLE_CHECK -> Optional.of(Patterns.toggleCheck(level, pos, edit.slot()));
             case CLEAR -> {
                 Patterns.clear(data, pos, edit.slot());
                 yield Optional.empty();
@@ -210,7 +210,7 @@ public class JobBlockMenu extends CivMenu {
      * @param slot the rule slot
      * @param rule the new rule, empty to delete it
      */
-    public void editRule(int slot, Optional<StockRule> rule) {
+    public void editStockRule(int slot, Optional<StockRule> rule) {
         if (!isClerk(info) || !(container instanceof JobBlockEntity jobBlock) || !(jobBlock.getLevel() instanceof ServerLevel level)
                 || !stillValid(player)) {
             return;
@@ -374,10 +374,14 @@ public class JobBlockMenu extends CivMenu {
         return true;
     }
 
+    /**
+     * Shift-click moves between the player inventory and the JobBlock storage on the Storage tab only; on the other
+     * tabs (Stock, Patterns: the player inventory is there to pick ghost items from) it does nothing.
+     */
     @Override
     public ItemStack quickMoveStack(Player player, int slotIndex) {
         Slot slot = slots.get(slotIndex);
-        if (!slot.hasItem()) {
+        if (getActiveTab() != TAB_STORAGE || !slot.hasItem()) {
             return ItemStack.EMPTY;
         }
         ItemStack stack = slot.getItem();

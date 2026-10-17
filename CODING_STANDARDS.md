@@ -12,7 +12,9 @@ All written output is in English: code, comments, Javadoc, commit messages, GitH
 
 All GUIs share one look across the whole mod, based on Minecraft defaults: vanilla container textures, widget sprites, fonts, spacing, colors. Reuse the shared GUI helpers and base classes instead of styling screens individually. A custom visual style needs an explicit decision recorded in the vault (`CLAUDE.md`, rule 3).
 
-*Review:* hard-coded colors, textures, paddings or fonts in a screen that a shared helper already provides; a new screen that does not extend the shared base.
+Tips, tutorials and usage info ("Click a slot with an item to …", "Right-click: delete", "Shift: ±10") never appear as inline text or in slot tooltips. They go into the help icon: a small "?" in the top right corner of the panel that shows all of them as a tooltip on mouse-over (`CivGui.help`, filled by overriding `helpLines` in `CivContainerScreen` / `CivScreen`, per tab). State stays inline: status and error lines ("No crafting recipe matches these items", "3 checkmarks removed …", "No open requests."). Icon-only buttons keep a short tooltip naming what they do ("Delete stock rule").
+
+*Review:* hard-coded colors, textures, paddings or fonts in a screen that a shared helper already provides; a new screen that does not extend the shared base; a hint or usage text drawn inline or added to a slot tooltip instead of `helpLines`.
 
 ## 3. Keyed state lives together
 

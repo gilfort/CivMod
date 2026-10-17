@@ -29,23 +29,23 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 /**
- * The Clerk's "Rules" and "Requests" tabs of the {@link JobBlockScreen} (vault {@code Jobs/Clerk.md}); the client side
- * of {@link ClerkTab}. Rules: 5 rows of 9 rule slots (9 per JobBlock level active) and the editor of the selected rule
+ * The Clerk's "Stock" and "Requests" tabs of the {@link JobBlockScreen} (vault {@code Jobs/Clerk.md}); the client side
+ * of {@link ClerkTab}. Stock: 5 rows of 9 stock slots (9 per JobBlock level active) and the editor of the selected rule
  * below; Requests: one row per request of this Clerk's rules.
  */
 final class ClerkTabView {
 
-    /** Rules grid of the Clerk: 5 rows of 9 (9 rules per JobBlock level). */
-    private static final int RULES_X = CivGui.PADDING;
-    private static final int RULES_Y = 18;
-    private static final int RULE_ROWS = 5;
+    /** Stock grid of the Clerk: 5 rows of 9 stock rule slots (9 per JobBlock level). */
+    private static final int STOCK_X = CivGui.PADDING;
+    private static final int STOCK_Y = 18;
+    private static final int STOCK_ROWS = 5;
     /** The rule editor (amount, priority, delete) below the grid. */
-    private static final int RULE_EDIT_Y = RULES_Y + RULE_ROWS * 18 + 16;
+    private static final int STOCK_EDIT_Y = STOCK_Y + STOCK_ROWS * 18 + 16;
     private static final int REQUEST_LIST_Y = 34;
 
     private final JobBlockScreen screen;
     private final JobBlockMenu menu;
-    /** The selected rule slot of the Rules tab, {@code -1} if none. */
+    /** The selected rule slot of the Stock tab, {@code -1} if none. */
     private int selectedSlot = -1;
     private int requestOffset;
     private @Nullable Button amountMinus;
@@ -68,35 +68,30 @@ final class ClerkTabView {
         return screen.getFont();
     }
 
-    // ---------------------------------------------------------------- rule editor
+    // ---------------------------------------------------------------- stock rule editor
 
-    /** Adds the rule editor's widgets (called on every widget rebuild). */
+    /** Adds the stock rule editor's widgets (called on every widget rebuild). */
     void init() {
         Font font = font();
-        int y = screen.top() + RULE_EDIT_Y;
+        int y = screen.top() + STOCK_EDIT_Y;
         int x = screen.left() + CivGui.PADDING;
-        amountMinus = screen.addWidget(JobBlockMenu.TAB_RULES, Button.builder(Component.literal("-"), button -> changeAmount(-1))
+        amountMinus = screen.addWidget(JobBlockMenu.TAB_STOCK, Button.builder(Component.literal("-"), button -> changeAmount(-1))
                 .bounds(x, y, 14, 16).build());
-        amountBox = screen.addWidget(JobBlockMenu.TAB_RULES, new EditBox(font, x + 16, y, 34, 16, Component.translatable("civmod.gui.clerk.rule.amount")));
+        amountBox = screen.addWidget(JobBlockMenu.TAB_STOCK, new EditBox(font, x + 16, y, 34, 16, Component.translatable("civmod.gui.clerk.stock.amount")));
         amountBox.setMaxLength(4);
         amountBox.setResponder(text -> parse(text).ifPresent(amount -> editSelected(rule -> withAmount(rule, amount))));
-        amountPlus = screen.addWidget(JobBlockMenu.TAB_RULES, Button.builder(Component.literal("+"), button -> changeAmount(1))
+        amountPlus = screen.addWidget(JobBlockMenu.TAB_STOCK, Button.builder(Component.literal("+"), button -> changeAmount(1))
                 .bounds(x + 52, y, 14, 16).build());
-        priorityMinus = screen.addWidget(JobBlockMenu.TAB_RULES, Button.builder(Component.literal("-"), button -> changePriority(-1))
+        priorityMinus = screen.addWidget(JobBlockMenu.TAB_STOCK, Button.builder(Component.literal("-"), button -> changePriority(-1))
                 .bounds(x + 80, y, 14, 16).build());
-        priorityBox = screen.addWidget(JobBlockMenu.TAB_RULES, new EditBox(font, x + 96, y, 26, 16, Component.translatable("civmod.gui.clerk.rule.priority")));
+        priorityBox = screen.addWidget(JobBlockMenu.TAB_STOCK, new EditBox(font, x + 96, y, 26, 16, Component.translatable("civmod.gui.clerk.stock.priority")));
         priorityBox.setMaxLength(4);
         priorityBox.setResponder(text -> parse(text).ifPresent(priority -> editSelected(rule -> withPriority(rule, priority))));
-        priorityPlus = screen.addWidget(JobBlockMenu.TAB_RULES, Button.builder(Component.literal("+"), button -> changePriority(1))
+        priorityPlus = screen.addWidget(JobBlockMenu.TAB_STOCK, Button.builder(Component.literal("+"), button -> changePriority(1))
                 .bounds(x + 124, y, 14, 16).build());
-        delete = screen.addWidget(JobBlockMenu.TAB_RULES, Button.builder(Component.literal("✕"), button -> deleteSelected())
+        delete = screen.addWidget(JobBlockMenu.TAB_STOCK, Button.builder(Component.literal("✕"), button -> deleteSelected())
                 .bounds(x + 142, y, 18, 16).build());
-        delete.setTooltip(Tooltip.create(Component.translatable("civmod.gui.clerk.rule.delete")));
-        Tooltip shift = Tooltip.create(Component.translatable("civmod.gui.clerk.rule.shift"));
-        amountMinus.setTooltip(shift);
-        amountPlus.setTooltip(shift);
-        priorityMinus.setTooltip(shift);
-        priorityPlus.setTooltip(shift);
+        delete.setTooltip(Tooltip.create(Component.translatable("civmod.gui.clerk.stock.delete")));
         update();
     }
 
@@ -105,7 +100,7 @@ final class ClerkTabView {
         if (amountBox == null || priorityBox == null || delete == null) {
             return;
         }
-        Optional<StockRule> rule = selectedRule();
+        Optional<StockRule> rule = selectedStockRule();
         boolean editable = rule.isPresent() && rule.get().activeAt(menu.getClerkTab().level());
         for (Button button : List.of(amountMinus, amountPlus, priorityMinus, priorityPlus)) {
             button.active = editable;
@@ -121,7 +116,7 @@ final class ClerkTabView {
         }
     }
 
-    private Optional<StockRule> selectedRule() {
+    private Optional<StockRule> selectedStockRule() {
         return selectedSlot < 0 ? Optional.empty() : menu.getClerkTab().rule(selectedSlot);
     }
 
@@ -153,25 +148,25 @@ final class ClerkTabView {
 
     /** Changes the selected rule (active slots only) and sends it to the server. */
     private void editSelected(UnaryOperator<StockRule> change) {
-        selectedRule().filter(rule -> rule.activeAt(menu.getClerkTab().level())).ifPresent(rule -> {
+        selectedStockRule().filter(rule -> rule.activeAt(menu.getClerkTab().level())).ifPresent(rule -> {
             StockRule changed = change.apply(rule);
             if (!changed.equals(rule)) {
-                sendRule(rule.slot(), Optional.of(changed));
+                sendStockRule(rule.slot(), Optional.of(changed));
             }
         });
     }
 
     private void deleteSelected() {
-        if (selectedRule().isPresent()) {
-            sendRule(selectedSlot, Optional.empty());
+        if (selectedStockRule().isPresent()) {
+            sendStockRule(selectedSlot, Optional.empty());
         }
     }
 
-    private void sendRule(int slot, Optional<StockRule> rule) {
+    private void sendStockRule(int slot, Optional<StockRule> rule) {
         ClientPacketDistributor.sendToServer(new ClerkTab.Edit(menu.containerId, slot, rule));
     }
 
-    // ---------------------------------------------------------------- rule slots
+    // ---------------------------------------------------------------- stock slots
 
     /**
      * Sets the item of a rule slot, as a ghost: the item is not taken. A new rule keeps the stack's count (at least 1)
@@ -181,7 +176,7 @@ final class ClerkTabView {
      * @param stack the item
      * @return whether the slot took it (an active slot)
      */
-    boolean setRuleItem(int slot, ItemStack stack) {
+    boolean setStockItem(int slot, ItemStack stack) {
         if (stack.isEmpty() || slot < 0 || slot >= StockRule.slots(menu.getClerkTab().level())) {
             return false;
         }
@@ -189,24 +184,24 @@ final class ClerkTabView {
                 .map(found -> new StockRule(slot, stack.getItem(), found.amount(), found.priority(), found.mode()))
                 .orElseGet(() -> StockRule.minimum(slot, stack.getItem(), Math.max(1, stack.getCount()), 0));
         selectedSlot = slot;
-        sendRule(slot, Optional.of(rule));
+        sendStockRule(slot, Optional.of(rule));
         screen.clickSound();
         return true;
     }
 
     /**
      * The screen areas that take a dragged item as a rule item (for JEI / REI ghost drag): the active rule slots while
-     * the Rules tab is shown.
+     * the Stock tab is shown.
      *
      * @return rule slot → absolute area
      */
-    Map<Integer, Rect2i> ruleTargets() {
+    Map<Integer, Rect2i> stockTargets() {
         Map<Integer, Rect2i> targets = new LinkedHashMap<>();
-        if (menu.getActiveTab() != JobBlockMenu.TAB_RULES) {
+        if (menu.getActiveTab() != JobBlockMenu.TAB_STOCK) {
             return targets;
         }
         for (int slot = 0; slot < StockRule.slots(menu.getClerkTab().level()); slot++) {
-            targets.put(slot, new Rect2i(screen.left() + ruleX(slot), screen.top() + ruleY(slot), 16, 16));
+            targets.put(slot, new Rect2i(screen.left() + stockX(slot), screen.top() + stockY(slot), 16, 16));
         }
         return targets;
     }
@@ -214,23 +209,23 @@ final class ClerkTabView {
     /**
      * @param x the mouse x position
      * @param y the mouse y position
-     * @return the rule slot under the mouse on the Rules tab, {@code -1} if none
+     * @return the rule slot under the mouse on the Stock tab, {@code -1} if none
      */
-    int ruleSlotAt(double x, double y) {
-        if (menu.getActiveTab() != JobBlockMenu.TAB_RULES) {
+    int stockSlotAt(double x, double y) {
+        if (menu.getActiveTab() != JobBlockMenu.TAB_STOCK) {
             return -1;
         }
-        int column = (int) Math.floor((x - screen.left() - RULES_X + 1) / 18.0);
-        int row = (int) Math.floor((y - screen.top() - RULES_Y + 1) / 18.0);
-        return column >= 0 && column < 9 && row >= 0 && row < RULE_ROWS ? row * 9 + column : -1;
+        int column = (int) Math.floor((x - screen.left() - STOCK_X + 1) / 18.0);
+        int row = (int) Math.floor((y - screen.top() - STOCK_Y + 1) / 18.0);
+        return column >= 0 && column < 9 && row >= 0 && row < STOCK_ROWS ? row * 9 + column : -1;
     }
 
-    private static int ruleX(int slot) {
-        return RULES_X + (slot % 9) * 18;
+    private static int stockX(int slot) {
+        return STOCK_X + (slot % 9) * 18;
     }
 
-    private static int ruleY(int slot) {
-        return RULES_Y + (slot / 9) * 18;
+    private static int stockY(int slot) {
+        return STOCK_Y + (slot / 9) * 18;
     }
 
     /**
@@ -240,18 +235,18 @@ final class ClerkTabView {
      * @return whether the click was taken
      */
     boolean mouseClicked(MouseButtonEvent event) {
-        int slot = ruleSlotAt(event.x(), event.y());
+        int slot = stockSlotAt(event.x(), event.y());
         if (slot < 0) {
             return false;
         }
         ItemStack carried = menu.getCarried();
         if (!carried.isEmpty()) {
-            setRuleItem(slot, carried);
+            setStockItem(slot, carried);
             return true;
         }
         if (event.button() == InputConstants.MOUSE_BUTTON_RIGHT) {
             if (menu.getClerkTab().rule(slot).isPresent()) {
-                sendRule(slot, Optional.empty());
+                sendStockRule(slot, Optional.empty());
                 screen.clickSound();
             }
             return true;
@@ -292,13 +287,13 @@ final class ClerkTabView {
     }
 
     /**
-     * Draws the Rules or Requests tab (coordinates relative to the panel).
+     * Draws the Stock or Requests tab (coordinates relative to the panel).
      *
      * @return whether the tab is one of the Clerk's
      */
     boolean extractLabels(GuiGraphicsExtractor graphics, int tab, int mouseX, int mouseY) {
-        if (tab == JobBlockMenu.TAB_RULES) {
-            extractRules(graphics, mouseX, mouseY);
+        if (tab == JobBlockMenu.TAB_STOCK) {
+            extractStock(graphics, mouseX, mouseY);
             return true;
         }
         if (tab == JobBlockMenu.TAB_REQUESTS) {
@@ -309,17 +304,17 @@ final class ClerkTabView {
     }
 
     /**
-     * Draws the Rules tab: rule slots in rows of 9 (9 per JobBlock level active, the rest greyed), the selected rule
+     * Draws the Stock tab: rule slots in rows of 9 (9 per JobBlock level active, the rest greyed), the selected rule
      * framed, and the editor labels.
      */
-    private void extractRules(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    private void extractStock(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         Font font = font();
         ClerkTab tab = menu.getClerkTab();
         int active = StockRule.slots(tab.level());
-        int hovered = ruleSlotAt(mouseX, mouseY);
-        for (int slot = 0; slot < RULE_ROWS * 9; slot++) {
-            int x = ruleX(slot);
-            int y = ruleY(slot);
+        int hovered = stockSlotAt(mouseX, mouseY);
+        for (int slot = 0; slot < STOCK_ROWS * 9; slot++) {
+            int x = stockX(slot);
+            int y = stockY(slot);
             CivGui.slot(graphics, x, y);
             Optional<StockRule> rule = tab.rule(slot);
             if (rule.isPresent()) {
@@ -336,32 +331,44 @@ final class ClerkTabView {
                 CivGui.slotHover(graphics, x, y);
             }
         }
-        Optional<StockRule> selected = selectedRule();
-        Component label = selected.<Component>map(rule -> Component.translatable("civmod.gui.clerk.rule.selected", new ItemStack(rule.item()).getHoverName()))
-                .orElseGet(() -> Component.translatable(selectedSlot >= 0 ? "civmod.gui.clerk.rule.empty" : "civmod.gui.clerk.rule.hint"));
-        graphics.text(font, CivGui.fit(font, label, screen.panelWidth() - 2 * CivGui.PADDING), CivGui.PADDING, RULE_EDIT_Y - 11, CivGui.LABEL_COLOR, false);
+        Optional<StockRule> selected = selectedStockRule();
+        Component label = selected.<Component>map(rule -> Component.translatable("civmod.gui.clerk.stock.selected", new ItemStack(rule.item()).getHoverName()))
+                .orElseGet(() -> Component.translatable(selectedSlot >= 0 ? "civmod.gui.clerk.stock.empty_slot" : "civmod.gui.clerk.stock.none_selected"));
+        graphics.text(font, CivGui.fit(font, label, screen.panelWidth() - 2 * CivGui.PADDING), CivGui.PADDING, STOCK_EDIT_Y - 11, CivGui.LABEL_COLOR, false);
         if (hovered >= 0) {
-            graphics.setComponentTooltipForNextFrame(font, ruleTooltip(hovered, active), mouseX, mouseY);
+            graphics.setComponentTooltipForNextFrame(font, stockTooltip(hovered, active), mouseX, mouseY);
         }
     }
 
-    private List<Component> ruleTooltip(int slot, int active) {
+    private List<Component> stockTooltip(int slot, int active) {
         List<Component> lines = new ArrayList<>();
         Optional<StockRule> rule = menu.getClerkTab().rule(slot);
         if (rule.isPresent()) {
             lines.add(new ItemStack(rule.get().item()).getHoverName());
-            lines.add(Component.translatable("civmod.gui.clerk.rule.keep", rule.get().amount()).withStyle(ChatFormatting.GRAY));
-            lines.add(Component.translatable("civmod.gui.clerk.rule.priority_value", rule.get().priority()).withStyle(ChatFormatting.GRAY));
+            lines.add(Component.translatable("civmod.gui.clerk.stock.keep", rule.get().amount()).withStyle(ChatFormatting.GRAY));
+            lines.add(Component.translatable("civmod.gui.clerk.stock.priority_value", rule.get().priority()).withStyle(ChatFormatting.GRAY));
         } else {
-            lines.add(Component.translatable("civmod.gui.clerk.rule.empty_slot"));
+            lines.add(Component.translatable("civmod.gui.clerk.stock.empty_slot"));
         }
         if (slot >= active) {
-            lines.add(Component.translatable("civmod.gui.clerk.rule.inactive", slot / StockRule.RULES_PER_LEVEL + 1).withStyle(ChatFormatting.RED));
-        } else {
-            lines.add(Component.translatable(rule.isPresent() ? "civmod.gui.clerk.rule.click" : "civmod.gui.clerk.rule.set")
-                    .withStyle(ChatFormatting.DARK_GRAY));
+            lines.add(Component.translatable("civmod.gui.clerk.stock.inactive", slot / StockRule.RULES_PER_LEVEL + 1).withStyle(ChatFormatting.RED));
         }
         return lines;
+    }
+
+    /**
+     * @param tab the selected tab
+     * @return the help lines of the Stock or Requests tab, empty for other tabs
+     */
+    List<Component> helpLines(int tab) {
+        if (tab == JobBlockMenu.TAB_STOCK) {
+            return List.of(Component.translatable("civmod.gui.clerk.stock.help.set"), Component.translatable("civmod.gui.clerk.stock.help.click"),
+                    Component.translatable("civmod.gui.clerk.stock.help.shift"), Component.translatable("civmod.gui.clerk.stock.help.levels"));
+        }
+        if (tab == JobBlockMenu.TAB_REQUESTS) {
+            return List.of(Component.translatable("civmod.gui.clerk.requests.help"));
+        }
+        return List.of();
     }
 
     private int requestRows() {

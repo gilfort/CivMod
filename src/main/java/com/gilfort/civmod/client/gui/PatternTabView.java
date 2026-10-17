@@ -102,8 +102,8 @@ final class PatternTabView {
         Optional<Pattern> pattern = menu.getPatternTab().pattern(editing);
         boolean checked = pattern.map(Pattern::checked).orElse(false);
         checkButton.setMessage(Component.translatable(checked ? "civmod.gui.patterns.uncheck" : "civmod.gui.patterns.check"));
-        checkButton.active = pattern.filter(Pattern::valid).isPresent()
-                && (checked || menu.getPatternTab().checked() < menu.getPatternTab().limit());
+        checkButton.active = checked || (pattern.filter(Pattern::valid).isPresent() && !menu.getPatternTab().metal().contains(editing)
+                && menu.getPatternTab().checked() < menu.getPatternTab().limit());
         boolean recipe = pattern.filter(found -> found.valid() && !found.exact()).isPresent();
         previousButton.active = recipe;
         nextButton.active = recipe;
@@ -271,6 +271,22 @@ final class PatternTabView {
         return Optional.empty();
     }
 
+    /**
+     * @return the help lines of the Patterns tab: the library's or the editor's usage, and the metal rule
+     */
+    List<Component> helpLines() {
+        List<Component> lines = new ArrayList<>();
+        if (editing < 0) {
+            lines.add(Component.translatable("civmod.gui.patterns.help.set"));
+            lines.add(Component.translatable("civmod.gui.patterns.help.slot"));
+            lines.add(Component.translatable("civmod.gui.patterns.help.checkmarks"));
+        } else {
+            lines.add(Component.translatable("civmod.gui.patterns.help.editor"));
+        }
+        lines.add(Component.translatable("civmod.gui.patterns.help.metal"));
+        return lines;
+    }
+
     // ---------------------------------------------------------------- drawing
 
     /** Draws the Patterns tab: the library with checkmarks, or the editor of one pattern. */
@@ -292,6 +308,10 @@ final class PatternTabView {
                 graphics.item(icon, x, y);
                 graphics.itemDecorations(font, icon, x, y);
             });
+            if (tab.metal().contains(slot)) {
+                // Metal: the Craftsperson cannot use the pattern.
+                CivGui.slotInactive(graphics, x, y);
+            }
             if (pattern.filter(Pattern::checked).isPresent()) {
                 graphics.blitSprite(RenderPipelines.GUI_TEXTURED, CHECKMARK, x - 1, y - 1, 9, 9);
             }
@@ -305,22 +325,25 @@ final class PatternTabView {
         tab.trim().ifPresent(trim -> graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.patterns.trimmed", trim.removed(),
                 trim.limit()), screen.panelWidth() - 2 * CivGui.PADDING), CivGui.PADDING, y + 10, CivGui.ERROR_COLOR, false));
         if (hovered >= 0) {
-            graphics.setComponentTooltipForNextFrame(font, tooltip(tab.pattern(hovered)), mouseX, mouseY);
+            graphics.setComponentTooltipForNextFrame(font, tooltip(tab, hovered), mouseX, mouseY);
         }
     }
 
-    private static List<Component> tooltip(Optional<Pattern> pattern) {
+    private static List<Component> tooltip(PatternTab tab, int slot) {
         List<Component> lines = new ArrayList<>();
+        Optional<Pattern> pattern = tab.pattern(slot);
         if (pattern.filter(Pattern::valid).isPresent()) {
             Pattern found = pattern.get();
             lines.add(Component.translatable("civmod.gui.clerk.request.amount", found.count(), new ItemStack(found.output()).getHoverName()));
             lines.add(Component.translatable(found.exact() ? "civmod.gui.patterns.exact" : "civmod.gui.patterns.recipe").withStyle(ChatFormatting.GRAY));
-            lines.add(Component.translatable(found.checked() ? "civmod.gui.patterns.checked" : "civmod.gui.patterns.unchecked")
-                    .withStyle(found.checked() ? ChatFormatting.GREEN : ChatFormatting.GRAY));
-            lines.add(Component.translatable("civmod.gui.patterns.slot_hint").withStyle(ChatFormatting.DARK_GRAY));
+            if (tab.metal().contains(slot)) {
+                lines.add(Component.translatable("civmod.gui.patterns.metal").withStyle(ChatFormatting.RED));
+            } else {
+                lines.add(Component.translatable(found.checked() ? "civmod.gui.patterns.checked" : "civmod.gui.patterns.unchecked")
+                        .withStyle(found.checked() ? ChatFormatting.GREEN : ChatFormatting.GRAY));
+            }
         } else {
             lines.add(Component.translatable(pattern.isPresent() ? "civmod.gui.patterns.no_recipe" : "civmod.gui.patterns.empty_slot"));
-            lines.add(Component.translatable("civmod.gui.patterns.set_hint").withStyle(ChatFormatting.DARK_GRAY));
         }
         return lines;
     }
@@ -357,8 +380,10 @@ final class PatternTabView {
         int y = PATTERN_BUTTONS_Y + 24;
         int width = screen.panelWidth() - 2 * CivGui.PADDING;
         graphics.text(font, CivGui.fit(font, mode, width), CivGui.PADDING, y, CivGui.HINT_COLOR, false);
-        graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.patterns.editor_hint"), width), CivGui.PADDING, y + 10,
-                CivGui.HINT_COLOR, false);
+        if (tab.metal().contains(editing)) {
+            graphics.textWithWordWrap(font, Component.translatable("civmod.gui.patterns.metal"), CivGui.PADDING, y + 10, width, CivGui.ERROR_COLOR,
+                    false);
+        }
         if (hovered >= TARGET_CELL && hovered < TARGET_CELL + Pattern.GRID) {
             Item item = pattern.map(found -> found.grid().get(hovered - TARGET_CELL)).orElse(Items.AIR);
             if (item != Items.AIR) {
