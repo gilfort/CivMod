@@ -271,7 +271,7 @@
   "civmod.gui.patterns.empty_slot": "Empty pattern slot",
   "civmod.gui.patterns.checked": "Checked",
   "civmod.gui.patterns.unchecked": "Not checked",
-  "civmod.gui.patterns.metal": "Uses metal – never crafted",
+  "civmod.gui.patterns.metal": "Can't work with metal",
   "civmod.gui.patterns.help.click": "Click a pattern: edit",
   "civmod.gui.patterns.help.check": "Right-click: check / uncheck",
   "civmod.gui.patterns.help.item": "Click with an item: new output",
