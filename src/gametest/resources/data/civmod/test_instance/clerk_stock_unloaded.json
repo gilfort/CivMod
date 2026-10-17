@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:own_area_unloaded",
+  "function": "civmod:clerk_stock_unloaded",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

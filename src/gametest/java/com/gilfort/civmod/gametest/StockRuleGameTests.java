@@ -10,7 +10,9 @@ import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
+import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Request;
+import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -97,7 +99,7 @@ public final class StockRuleGameTests {
         helper.assertTrue(only(helper, settlement).amount() == 1, "Amount being crafted counts: 5 − 2 − 2 = 1");
         helper.assertTrue(Requests.claim(data, settlement, request.id(), CARL, "Carl", 10) == 1, "Only what is open can be claimed");
 
-        chest.setItem(1, new ItemStack(Items.STONE_PICKAXE, 1));
+        ClerkStorage.stock(level, clerk, true).insert(new ItemStack(Items.STONE_PICKAXE, 1));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         Request crafting = only(helper, settlement);
         helper.assertTrue(crafting.amount() == 0 && crafting.crafting() == 3, "Stock rose: nothing open, claims stay: " + crafting);
@@ -109,8 +111,9 @@ public final class StockRuleGameTests {
                 "Rules are saved");
 
         Requests.finish(data, settlement, request.id(), CARL);
-        chest.setItem(2, new ItemStack(Items.STONE_PICKAXE));
-        chest.setItem(3, new ItemStack(Items.STONE_PICKAXE));
+        Stock delivered = ClerkStorage.stock(level, clerk, true);
+        delivered.insert(new ItemStack(Items.STONE_PICKAXE));
+        delivered.insert(new ItemStack(Items.STONE_PICKAXE));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "Delivered and stocked: no request");
         JobAssignments.unassign(data, clerk);

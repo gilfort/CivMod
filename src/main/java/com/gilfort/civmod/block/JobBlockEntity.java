@@ -3,6 +3,7 @@ package com.gilfort.civmod.block;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.registry.ModBlockEntityTypes;
@@ -47,6 +48,8 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     private int jobLevel = SettlementRules.MIN_LEVEL;
     private int settlementId = -1;
     private boolean connected = true;
+    /** Counts every change of the slots (not saved): the Clerk stock view re-reads them when it moves. */
+    private int changes;
 
     /**
      * @param pos   the block position
@@ -54,6 +57,19 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
      */
     public JobBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntityTypes.JOB_BLOCK.get(), pos, state);
+    }
+
+    /**
+     * @return a counter that moves on every change of the slots (and on other changes of the block entity)
+     */
+    public int changes() {
+        return changes;
+    }
+
+    @Override
+    public void setChanged() {
+        changes++;
+        super.setChanged();
     }
 
     /**
@@ -124,6 +140,7 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
         super.loadAdditional(input);
         items = NonNullList.withSize(getContainerSize(), ItemStack.EMPTY);
         ContainerHelper.loadAllItems(input, items);
+        changes++;
         jobLevel = SettlementRules.clampLevel(input.getIntOr("job_level", SettlementRules.MIN_LEVEL));
         settlementId = input.getIntOr("settlement", -1);
         connected = input.getBooleanOr("connected", true);
@@ -199,6 +216,14 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     }
 
     @Override
+    public void setRemoved() {
+        super.setRemoved();
+        if (level instanceof ServerLevel serverLevel) {
+            ClerkStorage.forgetStock(serverLevel, this);
+        }
+    }
+
+    @Override
     public int getContainerSize() {
         return SLOTS;
     }
@@ -211,6 +236,7 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     @Override
     protected void setItems(NonNullList<ItemStack> items) {
         this.items = items;
+        changes++;
     }
 
     @Override

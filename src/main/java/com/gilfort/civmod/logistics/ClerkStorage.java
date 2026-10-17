@@ -8,6 +8,7 @@ import java.util.UUID;
 import java.util.function.Predicate;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.Schedule;
 import com.gilfort.civmod.registry.ModJobs;
@@ -161,26 +162,26 @@ public final class ClerkStorage {
      * @return the reachable stock
      */
     public static Stock stock(ServerLevel level, BlockPos pos, boolean linked) {
-        List<ResourceHandler<ItemResource>> handlers = new ArrayList<>();
         if (!level.isLoaded(pos)) {
             return Stock.EMPTY;
         }
-        ResourceHandler<ItemResource> own = level.getCapability(Capabilities.Item.BLOCK, pos, null);
-        if (own != null) {
-            handlers.add(own);
+        Optional<SettlementBlock> clerk = JobBlockSite.blockAt(level, pos).filter(ClerkStorage::isClerk);
+        ClerkStock view = clerk.isPresent() ? ClerkStock.of(level, pos) : null;
+        if (view != null) {
+            return view.stock(activeStorage(clerk.get()), linked);
         }
-        Optional<SettlementBlock> clerk = linked ? JobBlockSite.blockAt(level, pos).filter(ClerkStorage::isClerk) : Optional.empty();
-        clerk.ifPresent(block -> {
-            for (BlockPos container : activeStorage(block)) {
-                if (level.isLoaded(container)) {
-                    ResourceHandler<ItemResource> handler = level.getCapability(Capabilities.Item.BLOCK, container, null);
-                    if (handler != null) {
-                        handlers.add(handler);
-                    }
-                }
-            }
-        });
-        return new Stock(handlers, clerk.isPresent());
+        ResourceHandler<ItemResource> own = level.getCapability(Capabilities.Item.BLOCK, pos, null);
+        return own == null ? Stock.EMPTY : Stock.live(List.of(own), false);
+    }
+
+    /**
+     * Drops the stock view of a JobBlock block entity that is removed or unloaded.
+     *
+     * @param level the level
+     * @param block the block entity
+     */
+    public static void forgetStock(ServerLevel level, JobBlockEntity block) {
+        ClerkStock.forget(level, block);
     }
 
     /**
