@@ -8,7 +8,6 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.food.SettlerFood;
-import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.npc.SettlerDay;
 
 /**
@@ -27,6 +26,8 @@ public final class Schedule {
     public static final long WINDOW_TICKS = 500L;
     /** Start of the waking window (06:00; day time 0 = 06:00). */
     private static final long WAKE_WINDOW_START = 0L;
+    /** End of the waking window (06:30): every settler is up. */
+    static final long WAKE_WINDOW_END = WAKE_WINDOW_START + WINDOW_TICKS;
 
     private static final long SALT_WAKE = 1L;
     private static final long SALT_WORK_END = 2L;
@@ -39,10 +40,18 @@ public final class Schedule {
      * One settler's points of the daily schedule on one day, each at its daily offset inside its Schedule window.
      *
      * @param wake    the day time the settler wakes and starts work (06:00–06:30)
-     * @param workEnd the day time its work ends (17:30–18:00; a Clerk at the end of its shift, 18:30)
+     * @param workEnd the day time its work ends (17:30–18:00; the Settler Shell may replace it, e.g. for a Clerk)
      * @param bed     the day time it goes to bed (20:00–20:30)
      */
     public record DayTimes(long wake, long workEnd, long bed) {
+
+        /**
+         * @param end the day time work ends instead
+         * @return these times with another end of work
+         */
+        public DayTimes withWorkEnd(long end) {
+            return new DayTimes(wake, end, bed);
+        }
     }
 
     /**
@@ -51,12 +60,11 @@ public final class Schedule {
      *
      * @param settler the settler
      * @param day     the day
-     * @param clerk   whether the settler is a Clerk (its work ends with its shift at 18:30)
      * @return the times
      */
-    public static DayTimes dayTimes(UUID settler, long day, boolean clerk) {
+    public static DayTimes dayTimes(UUID settler, long day) {
         long wake = WAKE_WINDOW_START + offset(settler, day, SALT_WAKE);
-        long workEnd = clerk ? ClerkStorage.SHIFT_END : SettlerWork.WORK_END + offset(settler, day, SALT_WORK_END);
+        long workEnd = SettlerWork.WORK_END + offset(settler, day, SALT_WORK_END);
         long bed = SettlerWork.SLEEP_TIME + offset(settler, day, SALT_BED);
         return new DayTimes(wake, workEnd, bed);
     }
@@ -88,7 +96,7 @@ public final class Schedule {
         END_FORAGING,
         /** Keep doing the current activity (a meal in progress, or the job step holds the decision). */
         CONTINUE,
-        /** Stand still (homeless, or starving). */
+        /** Stand still (homeless, starving, or awake before the waking time). */
         IDLE,
         /** Eat one item from the pockets on the spot. */
         EAT_FROM_POCKETS,
@@ -203,6 +211,10 @@ public final class Schedule {
         }
         if (snapshot.dayTime() >= snapshot.times().workEnd()) {
             return afterWork(snapshot);
+        }
+        if (snapshot.dayTime() < snapshot.times().wake()) {
+            // Awake before its waking time (skipped night, woken by vanilla): the day has not started yet.
+            return day(Intent.IDLE, null, false, false);
         }
         boolean morning = !snapshot.morningHandled();
         if (morning) {

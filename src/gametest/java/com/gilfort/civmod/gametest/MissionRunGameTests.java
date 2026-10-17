@@ -16,6 +16,7 @@ import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.job.MissionTrip;
+import com.gilfort.civmod.job.Schedule;
 import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.job.SkillRules;
 import com.gilfort.civmod.job.SettlerWork;
@@ -93,6 +94,7 @@ public final class MissionRunGameTests {
             register(helper, "mission_full_cycle", MissionRunGameTests::fullCycle);
             register(helper, "mission_catch_up", MissionRunGameTests::catchUp);
             register(helper, "mission_persistence", MissionRunGameTests::persistence);
+            register(helper, "mission_return_ends_work_day", MissionRunGameTests::returnEndsWorkDay);
             register(helper, "mission_resume_leaving", MissionRunGameTests::resumeLeaving);
             register(helper, "mission_death", MissionRunGameTests::death);
             register(helper, "mission_death_catch_up", MissionRunGameTests::deathCatchUp);
@@ -450,6 +452,34 @@ public final class MissionRunGameTests {
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
             helper.succeed();
         });
+    }
+
+    /**
+     * A settler back from a mission (17:30) has ended its work day, even if its own end of work that day is later; the
+     * next day its own times apply again.
+     */
+    private static void returnEndsWorkDay(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        long day = 5L;
+        Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
+        for (long i = 1; settler.getWork().dayTimes(day).workEnd() == SettlerWork.WORK_END; i++) {
+            // A settler whose own end of work on the return day is after 17:30.
+            settler.setUUID(new UUID(0x3E7L, i));
+        }
+        long ownWorkEnd = settler.getWork().dayTimes(day).workEnd();
+        MissionTrip trip = new MissionTrip(helper.absolutePos(BOARD), CivMod.id("dungeon_raid"), MissionRules.returnTime(day, 1))
+                .withExit(helper.absolutePos(new BlockPos(1, 2, 1)));
+        settler.getWork().restore(new SettlerWork.BuffersSnapshot(List.of(), List.of(), List.of(), SettlerWork.CatchUpState.NONE,
+                Optional.of(trip)));
+        helper.assertTrue(settler.getWork().dayTimes(day).workEnd() == ownWorkEnd, "Away: its own end of work " + ownWorkEnd);
+        helper.assertTrue(settler.getWork().returnFromMission(level, trip.returnTime()), "Back at the return time");
+        long returned = Math.floorMod(trip.returnTime(), DAY);
+        helper.assertTrue(settler.getWork().dayTimes(day).workEnd() == returned,
+                "Back at 17:30: its work day is over, end of work " + settler.getWork().dayTimes(day).workEnd());
+        helper.assertTrue(settler.getWork().dayTimes(day + 1).equals(Schedule.dayTimes(settler.getUUID(), day + 1)),
+                "The next day: its own times again");
+        settler.discard();
+        helper.succeed();
     }
 
     /** A reserved or current mission survives saving; a restored absent settler is away again. */

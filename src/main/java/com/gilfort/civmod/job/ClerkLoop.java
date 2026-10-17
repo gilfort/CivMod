@@ -48,7 +48,7 @@ final class ClerkLoop implements CategoryLoop {
 
     @Override
     public boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
-        if (!ClerkStorage.inShift(dayTime)) {
+        if (!ClerkStorage.inShift(settler.getUUID(), day, dayTime)) {
             return false;
         }
         Optional<SettlementBlock.StandSpot> today = ClerkSpots.today(SettlementData.get(level), site.pos(), day, dayTime, level.getRandom());
