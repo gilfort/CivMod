@@ -88,7 +88,7 @@ _Avoid_: Pantry (removed), warehouse (that is a Clerk JobBlock with Deliverymen)
 Without a working Clerk (no settler assigned, or outside the shift) only the 27 block slots are reachable; the linked storage only through a working Clerk at its counter. Hoppers and pipes see the 27 slots (the block's item capability). Code: `ClerkStorage.working`, `ClerkStorage.stock`.
 
 **Stock**:
-What a visitor reaches at one place under the access rule, seen as one list of slots; counted on every access (no snapshot). Code: `Stock` (built by `ClerkStorage.stock`); `Stock.counter()` marks the whole storage of a working Clerk, where every take is a hand-out.
+What a visitor reaches at one place under the access rule, seen as one list of slots; at a Clerk JobBlock counted by its **stock view** (own slots re-read on change, linked containers at most every 10 s, CivMod's own transactions written through, extraction checks the real container), elsewhere counted on every access. Code: `Stock` (built by `ClerkStorage.stock`), `ClerkStock` (stock view), `StockSummary`; `Stock.counter()` marks the whole storage of a working Clerk, where every take is a hand-out.
 
 **Counter**:
 Where a working Clerk serves: within 3 blocks of the stand spot of the day (or next to its JobBlock without spots). One customer at a time, service time by skill (`ClerkStorage.serviceTicks`); a hand-out gives the Clerk EXP. Code: `ClerkStorage.visit` (where a visitor walks), `ClerkCounter` (queue and hand-out), `SettlerWork.reachableVisit` (an unreachable counter offers only the block slots that day; the path is only checked within 16 blocks, further away a search is cut off by the follow range).
