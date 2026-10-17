@@ -57,8 +57,11 @@ public final class CatchUpScheduleGameTests {
         food.setMorningDay(-1L);
         food.setEatenDay(-1L);
         food.startForaging(-1L);
+        food.startWaiting(-1L, 700L);
         CompoundTag tag = save(level, settler);
         Settler loaded = reload(level, tag);
+        helper.assertTrue(loaded.getFood().waitDay() == -1L && loaded.getFood().waitTime() == 700L,
+                "Start of waiting for food lost on save: " + loaded.getFood().waitDay() + " / " + loaded.getFood().waitTime());
         helper.assertTrue(loaded.getFood().morningDay() == -1L && loaded.getFood().eatenDay() == -1L,
                 "Day -1 lost on save: " + loaded.getFood().morningDay() + " / " + loaded.getFood().eatenDay());
         helper.assertTrue(loaded.getFood().isForaging() && loaded.getFood().forageDay() == -1L,

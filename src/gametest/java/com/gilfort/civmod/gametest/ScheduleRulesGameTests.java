@@ -48,7 +48,129 @@ public final class ScheduleRulesGameTests {
             register(helper, "schedule_rules_daily_offset", ScheduleRulesGameTests::dailyOffset);
             register(helper, "schedule_rules_windows", ScheduleRulesGameTests::windows);
             register(helper, "schedule_rules_no_work_before_waking", ScheduleRulesGameTests::noWorkBeforeWaking);
+            register(helper, "schedule_rules_early_waking", ScheduleRulesGameTests::earlyWaking);
+            register(helper, "schedule_rules_wait_for_food", ScheduleRulesGameTests::waitForFood);
         });
+    }
+
+    /**
+     * Hungry settlers wait at the Clerk's queue for 2 hours before they go foraging: food may still arrive. Without a
+     * Clerk JobBlock in the settlement they forage right away, as before.
+     */
+    private static void waitForFood(GameTestHelper helper) {
+        Situation start = hungryWithoutFood();
+        start.waitPoint = true;
+        Decision decision = start.next();
+        expect(helper, decision, Intent.WAIT_FOR_FOOD, "Hungry, a Clerk without food: waits at its queue");
+        helper.assertTrue(decision.waitStarted() && !decision.morningHandled(), "The wait starts, the morning stays open: " + decision);
+
+        Situation waiting = hungryWithoutFood();
+        waiting.waitPoint = true;
+        waiting.waitStart = 1000L;
+        waiting.activity = Activity.WAIT_FOR_FOOD;
+        waiting.dayTime = 2999L;
+        decision = waiting.next();
+        expect(helper, decision, Intent.WAIT_FOR_FOOD, "Still waiting 1 h 59 min after it began");
+        helper.assertTrue(!decision.waitStarted() && !decision.morningHandled(), "The wait goes on: " + decision);
+
+        Situation forage = hungryWithoutFood();
+        forage.waitPoint = true;
+        forage.waitStart = 1000L;
+        forage.activity = Activity.WAIT_FOR_FOOD;
+        forage.dayTime = 3000L;
+        decision = forage.next();
+        expect(helper, decision, Intent.START_FORAGING, "After 2 hours without food: foraging");
+        helper.assertTrue(decision.morningHandled(), "Foraging marks the morning: " + decision);
+
+        Situation arrived = hungryWithoutFood();
+        arrived.waitPoint = true;
+        arrived.waitStart = 1000L;
+        arrived.activity = Activity.WAIT_FOR_FOOD;
+        arrived.dayTime = 1500L;
+        arrived.foodPoint = true;
+        decision = arrived.next();
+        expect(helper, decision, Intent.FETCH_FOOD, "Food arrived while waiting: fetches it");
+        helper.assertTrue(decision.purpose() == MealPurpose.MORNING && Schedule.eatsAtFoodPoint(decision.purpose(), arrived.food),
+                "Eats there as usual: " + decision);
+
+        Situation noClerk = hungryWithoutFood();
+        expect(helper, noClerk.next(), Intent.START_FORAGING, "No Clerk JobBlock: forages right away");
+
+        Situation evening = hungryWithoutFood();
+        evening.waitPoint = true;
+        evening.waitStart = 11000L;
+        evening.activity = Activity.WAIT_FOR_FOOD;
+        evening.dayTime = EVENING;
+        helper.assertTrue(evening.next().afterWork(), "The wait ends with the work day");
+
+        Situation fed = new Situation();
+        fed.morningHandled = false;
+        fed.waitPoint = true;
+        expect(helper, fed.next(), Intent.WORK, "Not hungry: no waiting");
+        helper.assertTrue(fed.waitPointAsked == 0, "Only a settler that would forage looks for a Clerk to wait at");
+        helper.succeed();
+    }
+
+    /** Morning not handled, hungry, empty pockets, no food point food. */
+    private static Situation hungryWithoutFood() {
+        Situation situation = new Situation();
+        situation.morningHandled = false;
+        situation.food = 5;
+        situation.provisions = 0;
+        situation.pocketMeal = false;
+        situation.foodPoint = false;
+        return situation;
+    }
+
+    /**
+     * The early waking window (05:30–06:00, for the Clerk): the waking time lies before 06:00, so it falls on the clock's
+     * previous day. From its waking time on, the settler's day has begun: the clock maps to the new day with a negative
+     * day time, and it wakes and works as usual; every other time stays as it is.
+     */
+    private static void earlyWaking(GameTestHelper helper) {
+        Set<Long> wakes = new HashSet<>();
+        for (int i = 0; i < 50; i++) {
+            UUID settler = new UUID(0xEA21L * i, 0xBEEFL + i);
+            for (long day = 0; day < 10; day++) {
+                Schedule.DayTimes early = Schedule.dayTimes(settler, day, true);
+                Schedule.DayTimes usual = Schedule.dayTimes(settler, day);
+                helper.assertTrue(early.wake() >= -500L && early.wake() < 0L, "Early waking 05:30–06:00: " + early);
+                helper.assertTrue(early.workEnd() == usual.workEnd() && early.bed() == usual.bed(), "Only the waking time moves: " + early);
+                helper.assertTrue(early.equals(Schedule.dayTimes(settler, day, true)), "Deterministic: " + early);
+                wakes.add(early.wake());
+            }
+        }
+        helper.assertTrue(wakes.size() > 100, "Early offsets differ between settlers and days: " + wakes.size());
+
+        // Day 4, waking at 05:40 (-333); the clock of day 3 at 05:40 is 3 * 24000 + 23667.
+        Schedule.DayTimes dayFour = new Schedule.DayTimes(-333L, 12500L, 14200L);
+        long day3 = 3L * 24000L;
+        helper.assertTrue(Schedule.moment(day3 + 23666L, dayFour).equals(new Schedule.Moment(3L, 23666L)),
+                "05:39: still the night of day 3");
+        helper.assertTrue(Schedule.moment(day3 + 23667L, dayFour).equals(new Schedule.Moment(4L, -333L)),
+                "05:40: day 4 has begun: " + Schedule.moment(day3 + 23667L, dayFour));
+        helper.assertTrue(Schedule.moment(day3 + 23999L, dayFour).equals(new Schedule.Moment(4L, -1L)), "05:59: day 4");
+        helper.assertTrue(Schedule.moment(day3 + 1000L, dayFour).equals(new Schedule.Moment(3L, 1000L)), "07:00 of day 3 stays");
+        Schedule.DayTimes usual = new Schedule.DayTimes(300L, 11800L, 14300L);
+        helper.assertTrue(Schedule.moment(day3 + 23999L, usual).equals(new Schedule.Moment(3L, 23999L)),
+                "A usual waking time never moves the day");
+
+        Situation asleep = new Situation();
+        asleep.times = dayFour;
+        asleep.sleeping = true;
+        asleep.dayTime = -334L;
+        helper.assertTrue(asleep.wakeUp().equals(Optional.of(Intent.SLEEP)), "Asleep before 05:40");
+        asleep.dayTime = -333L;
+        helper.assertTrue(asleep.wakeUp().equals(Optional.of(Intent.WAKE)), "Wakes at 05:40");
+
+        Situation awake = new Situation();
+        awake.times = dayFour;
+        awake.morningHandled = false;
+        awake.dayTime = -300L;
+        Decision decision = awake.next();
+        expect(helper, decision, Intent.WORK, "Works from 05:40, before 06:00");
+        helper.assertTrue(decision.morningHandled() && !decision.afterWork(), "Its morning plan is made then: " + decision);
+        helper.succeed();
     }
 
     /**
@@ -205,6 +327,10 @@ public final class ScheduleRulesGameTests {
         int provisions = 10;
         boolean pocketMeal = true;
         boolean foodPoint = true;
+        /** Whether the settlement has a Clerk JobBlock to wait at; off by default (no waiting, as before). */
+        boolean waitPoint;
+        int waitPointAsked;
+        long waitStart = Schedule.NOT_WAITING;
         boolean homeless;
         boolean sleeping;
         long forageDay = SettlerFood.NO_DAY;
@@ -222,8 +348,11 @@ public final class ScheduleRulesGameTests {
             return new Schedule.Snapshot(3L, dayTime, food, provisions, 6, pocketMeal, () -> {
                 foodPointAsked++;
                 return foodPoint;
+            }, () -> {
+                waitPointAsked++;
+                return waitPoint;
             }, homeless, sleeping, forageDay, nightSkipped, activity, () -> jobStepHolds, morningHandled, eveningMealEaten,
-                    deliveryPending, times);
+                    waitStart, deliveryPending, times);
         }
 
         Optional<Intent> wakeUp() {

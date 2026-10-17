@@ -59,6 +59,8 @@ public final class SettlerFood {
     private long morningDay = NO_DAY;
     private long complaintDay = NO_DAY;
     private long forageDay = NO_DAY;
+    private long waitDay = NO_DAY;
+    private long waitTime;
     private boolean away;
     private @Nullable BlockPos forageSpot;
 
@@ -187,6 +189,31 @@ public final class SettlerFood {
         }
         complaintDay = day;
         return true;
+    }
+
+    /**
+     * @return the day the settler last began waiting at a Clerk's queue for food, {@link #NO_DAY} if never
+     */
+    public long waitDay() {
+        return waitDay;
+    }
+
+    /**
+     * @return the day time it began waiting on {@link #waitDay}
+     */
+    public long waitTime() {
+        return waitTime;
+    }
+
+    /**
+     * Marks the start of waiting for food (it forages once the wait is over, see {@code Schedule.FOOD_WAIT_TICKS}).
+     *
+     * @param day     the day
+     * @param dayTime the day time
+     */
+    public void startWaiting(long day, long dayTime) {
+        waitDay = day;
+        waitTime = dayTime;
     }
 
     /**
@@ -380,6 +407,10 @@ public final class SettlerFood {
         putDay(food, "morning_day", morningDay);
         putDay(food, "complaint_day", complaintDay);
         putDay(food, "forage_day", forageDay);
+        if (waitDay != NO_DAY) {
+            food.putLong("wait_day", waitDay);
+            food.putLong("wait_time", waitTime);
+        }
         food.putBoolean("away", away);
         if (forageSpot != null) {
             food.putLong("forage_spot", forageSpot.asLong());
@@ -401,6 +432,8 @@ public final class SettlerFood {
             morningDay = day(food, "morning_day", legacy);
             complaintDay = day(food, "complaint_day", legacy);
             forageDay = day(food, "forage_day", legacy);
+            waitDay = food.getLongOr("wait_day", NO_DAY);
+            waitTime = food.getLongOr("wait_time", 0L);
             away = food.getBooleanOr("away", false);
             forageSpot = food.getLong("forage_spot").map(BlockPos::of).orElse(null);
         });

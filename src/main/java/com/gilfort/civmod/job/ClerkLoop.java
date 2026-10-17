@@ -18,8 +18,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Work loop of the Clerk, the first Logistics Job (vault {@code Jobs/Clerk.md}): during its shift (06:00–18:30) the
- * Clerk stands on the stand spot of the day (picked each morning and at 12:00), or next to its JobBlock without spots,
+ * Work loop of the Clerk, the first Logistics Job (vault {@code Jobs/Clerk.md}): during its shift (from its early
+ * waking time, 05:30–06:00, to 18:30) the Clerk stands on the stand spot of the day (picked each morning and at 12:00), or next to its JobBlock without spots,
  * facing the way the player set it. It does not stroll; fatigue breaks start only while no customer is served.
  * Customers are served at its counter ({@link ClerkCounter}); the Clerk itself only holds its position.
  * <p>
