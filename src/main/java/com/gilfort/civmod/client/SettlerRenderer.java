@@ -1,33 +1,45 @@
 package com.gilfort.civmod.client;
 
+import org.joml.Quaternionf;
+import org.jspecify.annotations.Nullable;
+
+import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerSkins;
 import com.gilfort.civmod.npc.SleepingPose;
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.math.Axis;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.model.player.PlayerModel;
-import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.HumanoidMobRenderer;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
-import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.core.ClientAsset;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.PlayerModelType;
 import net.minecraft.world.entity.player.PlayerSkin;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.EventPriority;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.RenderLivingEvent;
+import net.neoforged.neoforge.client.event.RenderNameTagEvent;
 
 /**
  * Renders settlers with the player model and their vanilla default skin (wide or slim arms).
  * <p>
  * The name tag is shown within {@value #NAME_DISTANCE} blocks and only with line of sight. Sleeping settlers lie on their
  * left side, right side or back ({@link SleepingPose}).
+ * <p>
+ * The render state is an {@link AvatarRenderState}, so vanilla submits it with its own player renderer (picked by the
+ * skin's arm width): only extracting the state runs here. The side pose is therefore applied around that renderer, in
+ * {@link #onRenderPre} / {@link #onRenderPost}, and taken back out for the name tag.
  */
+@EventBusSubscriber(modid = CivMod.MOD_ID, value = Dist.CLIENT)
 public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderState, PlayerModel> {
 
     private static final double NAME_DISTANCE = 16.0;
@@ -45,21 +57,11 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
         }
     }
 
-    private final PlayerModel wideModel;
-    private final PlayerModel slimModel;
-
     /**
      * @param context the renderer context
      */
     public SettlerRenderer(EntityRendererProvider.Context context) {
-        this(context, new PlayerModel(context.bakeLayer(ModelLayers.PLAYER), false),
-                new PlayerModel(context.bakeLayer(ModelLayers.PLAYER_SLIM), true));
-    }
-
-    private SettlerRenderer(EntityRendererProvider.Context context, PlayerModel wideModel, PlayerModel slimModel) {
-        super(context, wideModel, 0.5F);
-        this.wideModel = wideModel;
-        this.slimModel = slimModel;
+        super(context, new PlayerModel(context.bakeLayer(ModelLayers.PLAYER), false), 0.5F);
     }
 
     @Override
@@ -72,32 +74,21 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
         super.extractRenderState(settler, state, partialTicks);
         state.skin = SKINS[Math.floorMod(settler.getSkin(), SKINS.length)];
         state.showCape = false;
-        ((SettlerRenderState) state).sleepingPose = settler.hasPose(Pose.SLEEPING)
-                ? SleepingPose.of(settler.getUUID(), settler.level().getOverworldClockTime())
-                : SleepingPose.BACK;
-    }
-
-    @Override
-    protected void setupRotations(AvatarRenderState state, PoseStack poseStack, float bodyRot, float entityScale) {
-        SleepingPose pose = ((SettlerRenderState) state).sleepingPose;
-        if (!state.hasPose(Pose.SLEEPING) || pose == SleepingPose.BACK) {
-            super.setupRotations(state, poseStack, bodyRot, entityScale);
+        SettlerRenderState settlerState = (SettlerRenderState) state;
+        settlerState.roll = null;
+        Direction bed = state.bedOrientation;
+        if (!settler.hasPose(Pose.SLEEPING) || bed == null) {
             return;
         }
-        // On its side the lower arm rests on the bed instead of the back: lift the body axis by the difference so the
-        // body neither sinks into the (straw) bed nor floats above it.
-        float armReach = state.skin.model() == PlayerModelType.SLIM ? ARM_REACH_SLIM : ARM_REACH_WIDE;
-        poseStack.translate(0.0F, armReach - HALF_DEPTH, 0.0F);
-        super.setupRotations(state, poseStack, bodyRot, entityScale);
-        // After the vanilla lying rotation the model's Y axis runs along the body (feet to head): roll around it.
-        poseStack.rotateDegrees(Axis.YP, pose == SleepingPose.LEFT_SIDE ? 90.0F : -90.0F);
-    }
-
-    @Override
-    public void submit(AvatarRenderState state, PoseStack poseStack, SubmitNodeCollector collector, CameraRenderState camera) {
-        // One renderer serves both arm widths; pick the model matching the skin.
-        model = state.skin.model() == PlayerModelType.SLIM ? slimModel : wideModel;
-        super.submit(state, poseStack, collector, camera);
+        SleepingPose pose = SleepingPose.of(settler.getUUID(), settler.level().getOverworldClockTime());
+        if (pose == SleepingPose.BACK) {
+            return;
+        }
+        // Roll around the body axis, which runs along the bed. On its side the lower arm rests on the bed instead of
+        // the back: lift the body axis by the difference so the body neither sinks into the (straw) bed nor floats.
+        float angle = (float) Math.toRadians(pose == SleepingPose.LEFT_SIDE ? 90.0 : -90.0);
+        settlerState.roll = new Quaternionf().rotationAxis(angle, bed.getStepX(), 0.0F, bed.getStepZ());
+        settlerState.lift = (state.skin.model() == PlayerModelType.SLIM ? ARM_REACH_SLIM : ARM_REACH_WIDE) - HALF_DEPTH;
     }
 
     @Override
@@ -117,8 +108,35 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
                 && minecraft.player != null && minecraft.player.hasLineOfSight(settler);
     }
 
-    /** The player render state plus the sleeping pose of tonight. */
+    /** Last listener, so the pose is only pushed when the render goes ahead (and {@link #onRenderPost} pops it). */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    static void onRenderPre(RenderLivingEvent.Pre<?, ?, ?> event) {
+        if (event.getRenderState() instanceof SettlerRenderState state && state.roll != null) {
+            event.getPoseStack().pushPose();
+            event.getPoseStack().translate(0.0F, state.lift, 0.0F);
+            event.getPoseStack().rotate(state.roll);
+        }
+    }
+
+    @SubscribeEvent
+    static void onRenderPost(RenderLivingEvent.Post<?, ?, ?> event) {
+        if (event.getRenderState() instanceof SettlerRenderState state && state.roll != null) {
+            event.getPoseStack().popPose();
+        }
+    }
+
+    /** The name tag is drawn inside the rolled pose: take the roll back out so it stays upright above the settler. */
+    @SubscribeEvent
+    static void onNameTag(RenderNameTagEvent.DoRender event) {
+        if (event.getEntityRenderState() instanceof SettlerRenderState state && state.roll != null) {
+            event.getPoseStack().rotate(new Quaternionf(state.roll).conjugate());
+            event.getPoseStack().translate(0.0F, -state.lift, 0.0F);
+        }
+    }
+
+    /** The player render state plus tonight's side pose (none when awake or lying on the back). */
     private static final class SettlerRenderState extends AvatarRenderState {
-        private SleepingPose sleepingPose = SleepingPose.BACK;
+        private @Nullable Quaternionf roll;
+        private float lift;
     }
 }
