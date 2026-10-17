@@ -15,7 +15,10 @@ import com.gilfort.civmod.settlement.SettlementOutline;
 import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -112,6 +115,11 @@ public final class CivModClient {
             int level = event.getItemStack().getOrDefault(ModDataComponents.JOB_LEVEL.get(), SettlementRules.MIN_LEVEL);
             event.getToolTip().add(1, Component.translatable("civmod.tooltip.job_level", level, SettlementRules.MAX_LEVEL)
                     .withStyle(ChatFormatting.GRAY));
+            Holder<Item> starterTool =event.getItemStack().get(ModDataComponents.STARTER_TOOL.get());
+            if (starterTool != null) {
+                event.getToolTip().add(2, Component.translatable("civmod.tooltip.starter_tool", new ItemStack(starterTool).getHoverName())
+                        .withStyle(ChatFormatting.GRAY));
+            }
         }
     }
 }

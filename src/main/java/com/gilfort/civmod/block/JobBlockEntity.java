@@ -12,6 +12,7 @@ import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.component.DataComponentGetter;
@@ -25,6 +26,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BaseContainerBlockEntity;
@@ -145,6 +147,21 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     protected void applyImplicitComponents(DataComponentGetter components) {
         super.applyImplicitComponents(components);
         jobLevel = SettlementRules.clampLevel(components.getOrDefault(ModDataComponents.JOB_LEVEL.get(), SettlementRules.MIN_LEVEL));
+        // A new JobBlock item puts its starter tool into the inventory; it is never collected back, so it is used up.
+        Holder<Item> starterTool = components.get(ModDataComponents.STARTER_TOOL.get());
+        if (starterTool != null) {
+            addStarterTool(new ItemStack(starterTool));
+        }
+    }
+
+    private void addStarterTool(ItemStack tool) {
+        for (int slot = 0; slot < items.size(); slot++) {
+            if (items.get(slot).isEmpty()) {
+                items.set(slot, tool);
+                setChanged();
+                return;
+            }
+        }
     }
 
     @Override
