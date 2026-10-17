@@ -101,7 +101,7 @@ public final class StockRules {
         }
         Settlement settlement = found.get();
         SettlementBlock block = foundBlock.get();
-        boolean working = ClerkStorage.working(block, dayTime);
+        boolean working = ClerkStorage.working(block, DayClock.day(level), dayTime);
         Map<Item, Integer> stock = null;
         for (StockRule rule : block.stockRules()) {
             Optional<Request> request = Requests.forRule(settlement, clerk, rule.slot());

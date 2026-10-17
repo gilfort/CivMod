@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:craftsperson_live_linked_storage",
   "max_ticks": 2400,
   "structure": "minecraft:empty",

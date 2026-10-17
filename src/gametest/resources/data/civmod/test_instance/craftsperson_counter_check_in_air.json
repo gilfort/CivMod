@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:craftsperson_counter_check_in_air",
   "max_ticks": 1200,
   "structure": "minecraft:empty",

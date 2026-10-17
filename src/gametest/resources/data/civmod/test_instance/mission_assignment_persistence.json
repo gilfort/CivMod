@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:mission_assignment_persistence",
   "max_ticks": 100,
   "structure": "minecraft:empty",

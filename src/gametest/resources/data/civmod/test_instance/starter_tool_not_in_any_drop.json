@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:starter_tool_not_in_any_drop",
+  "max_ticks": 20,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

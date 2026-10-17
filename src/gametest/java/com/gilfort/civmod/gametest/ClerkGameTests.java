@@ -389,16 +389,38 @@ public final class ClerkGameTests {
         helper.assertTrue(ClerkStorage.serviceTicks(50) > 20 && ClerkStorage.serviceTicks(50) < 40, "Faster with skill");
 
         Settler clerk = ModEntityTypes.SETTLER.get().create(helper.getLevel(), EntitySpawnReason.EVENT);
-        helper.assertTrue(clerk.getWork().workEnd() == SettlerWork.WORK_END, "Without the Clerk job: 17:30");
+        long day = 4L;
+        long ownEnd = clerk.getWork().dayTimes(day).workEnd();
+        helper.assertTrue(ownEnd >= SettlerWork.WORK_END && ownEnd < SettlerWork.WORK_END + Schedule.WINDOW_TICKS,
+                "Without the Clerk job: 17:30–18:00, got " + ownEnd);
         clerk.addJob(new SettlerJob(ModJobs.CLERK.get(), helper.absolutePos(new BlockPos(1, 1, 1))));
-        helper.assertTrue(clerk.getWork().workEnd() == ClerkStorage.SHIFT_END, "With the Clerk job: 18:30");
+        helper.assertTrue(clerk.getWork().dayTimes(day).workEnd() == ClerkStorage.SHIFT_END, "With the Clerk job: 18:30");
         clerk.discard();
+
+        // The shift opens at the Clerk's own waking time (its daily offset in 06:00–06:30), not at 06:00.
+        UUID late = lateRiser(day);
+        long wake = Schedule.dayTimes(late, day).wake();
+        helper.assertFalse(ClerkStorage.inShift(late, day, 0L), "06:00: the late Clerk's shift is not open yet");
+        helper.assertFalse(ClerkStorage.inShift(late, day, wake - 1), "Closed just before its waking time");
+        helper.assertTrue(ClerkStorage.inShift(late, day, wake), "Open from its waking time");
+        helper.assertTrue(ClerkStorage.inShift(late, day, ClerkStorage.SHIFT_END - 1), "Open until 18:30");
+        helper.assertFalse(ClerkStorage.inShift(late, day, ClerkStorage.SHIFT_END), "Closed at 18:30");
         helper.succeed();
+    }
+
+    /** A settler that wakes after 06:00 on the day. */
+    private static UUID lateRiser(long day) {
+        for (long i = 1; ; i++) {
+            UUID candidate = new UUID(0xC1E2L, i);
+            if (Schedule.dayTimes(candidate, day).wake() > 0L) {
+                return candidate;
+            }
+        }
     }
 
     private static Schedule.Snapshot snapshot(long dayTime, long workEnd) {
         return new Schedule.Snapshot(3L, dayTime, 20, 10, 6, true, () -> true, false, false, SettlerFood.NO_DAY, false,
-                Schedule.Activity.IDLE, () -> false, true, false, false, workEnd);
+                Schedule.Activity.IDLE, () -> false, true, false, false, new Schedule.DayTimes(0L, workEnd, SettlerWork.SLEEP_TIME));
     }
 
     static Settler settler(GameTestHelper helper, BlockPos relative, SettlementData data, Settlement settlement) {

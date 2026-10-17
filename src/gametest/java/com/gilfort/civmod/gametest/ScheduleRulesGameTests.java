@@ -1,6 +1,9 @@
 package com.gilfort.civmod.gametest;
 
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
@@ -42,7 +45,126 @@ public final class ScheduleRulesGameTests {
             register(helper, "schedule_rules_sleeping", ScheduleRulesGameTests::sleeping);
             register(helper, "schedule_rules_activity_in_progress", ScheduleRulesGameTests::activityInProgress);
             register(helper, "schedule_rules_foraging", ScheduleRulesGameTests::foraging);
+            register(helper, "schedule_rules_daily_offset", ScheduleRulesGameTests::dailyOffset);
+            register(helper, "schedule_rules_windows", ScheduleRulesGameTests::windows);
+            register(helper, "schedule_rules_no_work_before_waking", ScheduleRulesGameTests::noWorkBeforeWaking);
         });
+    }
+
+    /**
+     * A settler already awake at 06:00 (after a skipped night, woken by vanilla) waits for its own waking time: no work,
+     * no morning plan before it; from its waking time on it works as usual.
+     */
+    private static void noWorkBeforeWaking(GameTestHelper helper) {
+        Schedule.DayTimes times = new Schedule.DayTimes(300L, 11800L, 14300L);
+
+        Situation early = new Situation();
+        early.times = times;
+        early.morningHandled = false;
+        early.dayTime = 0L;
+        Decision decision = early.next();
+        expect(helper, decision, Intent.IDLE, "Awake at 06:00, waking time 06:18");
+        helper.assertTrue(!decision.morningHandled() && !decision.afterWork(), "No morning plan before waking: " + decision);
+        early.dayTime = 299L;
+        expect(helper, early.next(), Intent.IDLE, "Awake just before its waking time");
+        early.dayTime = 300L;
+        decision = early.next();
+        expect(helper, decision, Intent.WORK, "Works from its waking time");
+        helper.assertTrue(decision.morningHandled(), "The morning plan is made at its waking time: " + decision);
+
+        Situation hungry = new Situation();
+        hungry.times = times;
+        hungry.food = 5;
+        hungry.dayTime = 100L;
+        expect(helper, hungry.next(), Intent.IDLE, "Hungry before its waking time: the day has not started");
+
+        Situation meal = new Situation();
+        meal.times = times;
+        meal.activity = Activity.EATING;
+        meal.dayTime = 100L;
+        expect(helper, meal.next(), Intent.CONTINUE, "A meal in progress is finished");
+        helper.succeed();
+    }
+
+    /** The settler's own times decide: it wakes, ends work, stops foraging and goes to bed at its daily offset. */
+    private static void windows(GameTestHelper helper) {
+        Schedule.DayTimes times = new Schedule.DayTimes(300L, 11800L, 14300L);
+
+        Situation asleep = new Situation();
+        asleep.times = times;
+        asleep.sleeping = true;
+        asleep.dayTime = 299L;
+        helper.assertTrue(asleep.wakeUp().equals(Optional.of(Intent.SLEEP)), "Still asleep before its waking time");
+        asleep.dayTime = 300L;
+        helper.assertTrue(asleep.wakeUp().equals(Optional.of(Intent.WAKE)), "Wakes at its waking time");
+
+        Situation skipped = new Situation();
+        skipped.times = times;
+        skipped.nightSkipped = true;
+        skipped.dayTime = 100L;
+        helper.assertTrue(skipped.wakeUp().equals(Optional.of(Intent.RETURN_TO_REST_PLACE)),
+                "Night skipped to 06:05 while not in bed: back at the rest place, even before its waking time");
+
+        Situation working = new Situation();
+        working.times = times;
+        working.dayTime = 11799L;
+        expect(helper, working.next(), Intent.WORK, "Works until its end of work");
+        working.dayTime = 11800L;
+        helper.assertTrue(working.next().afterWork(), "Off at its end of work");
+
+        Situation forager = new Situation();
+        forager.times = times;
+        forager.forageDay = 3L;
+        forager.dayTime = 11799L;
+        helper.assertTrue(forager.wakeUp().equals(Optional.of(Intent.FORAGE)), "Forages until its end of work");
+        forager.dayTime = 11800L;
+        helper.assertTrue(forager.wakeUp().equals(Optional.of(Intent.END_FORAGING)), "Back at its end of work");
+
+        Situation evening = new Situation();
+        evening.times = times;
+        evening.eveningMealEaten = true;
+        evening.dayTime = 14299L;
+        expect(helper, evening.next(), Intent.REST, "Rests until its bedtime");
+        evening.dayTime = 14300L;
+        expect(helper, evening.next(), Intent.GO_TO_BED, "Goes to bed at its bedtime");
+
+        Situation sleeper = new Situation();
+        sleeper.times = times;
+        sleeper.sleeping = true;
+        sleeper.dayTime = 14300L;
+        helper.assertTrue(sleeper.wakeUp().equals(Optional.of(Intent.SLEEP)), "Asleep after its bedtime");
+        helper.succeed();
+    }
+
+    /**
+     * Each settler gets a daily offset inside each Schedule window (waking 06:00–06:30, end of work 17:30–18:00, going to
+     * bed 20:00–20:30): stable for the same settler and day, different between settlers and days.
+     */
+    private static void dailyOffset(GameTestHelper helper) {
+        Set<Long> wakes = new HashSet<>();
+        Set<Long> workEnds = new HashSet<>();
+        Set<Long> beds = new HashSet<>();
+        for (int i = 0; i < 50; i++) {
+            UUID settler = new UUID(0x5EEDL * i, 0xC0FFEEL + i);
+            for (long day = 0; day < 10; day++) {
+                Schedule.DayTimes times = Schedule.dayTimes(settler, day);
+                helper.assertTrue(times.wake() >= 0L && times.wake() < 500L, "Waking 06:00–06:30: " + times);
+                helper.assertTrue(times.workEnd() >= 11500L && times.workEnd() < 12000L, "End of work 17:30–18:00: " + times);
+                helper.assertTrue(times.bed() >= 14000L && times.bed() < 14500L, "Going to bed 20:00–20:30: " + times);
+                helper.assertTrue(times.equals(Schedule.dayTimes(settler, day)), "Same settler and day, same times: " + times);
+                wakes.add(times.wake());
+                workEnds.add(times.workEnd());
+                beds.add(times.bed());
+            }
+        }
+        // 500 settler days over 500 possible ticks: a working spread hits far more than a few distinct values.
+        helper.assertTrue(wakes.size() > 100 && workEnds.size() > 100 && beds.size() > 100,
+                "Offsets differ between settlers and days: " + wakes.size() + " / " + workEnds.size() + " / " + beds.size());
+        UUID alice = new UUID(1L, 2L);
+        UUID bob = new UUID(3L, 4L);
+        helper.assertFalse(Schedule.dayTimes(alice, 5L).equals(Schedule.dayTimes(bob, 5L)), "Alice and Bob differ on day 5");
+        helper.assertFalse(Schedule.dayTimes(alice, 5L).equals(Schedule.dayTimes(alice, 6L)), "Alice differs on day 5 and 6");
+        helper.succeed();
     }
 
     /** Foraging lasts until the end of work (17:30); foraging of an earlier day is over as well. */
@@ -93,14 +215,15 @@ public final class ScheduleRulesGameTests {
         boolean eveningMealEaten;
         boolean deliveryPending;
         int foodPointAsked;
-        long workEnd = SettlerWork.WORK_END;
+        /** The window starts (06:00, 17:30, 20:00) unless a test moves them. */
+        Schedule.DayTimes times = new Schedule.DayTimes(0L, SettlerWork.WORK_END, SettlerWork.SLEEP_TIME);
 
         Schedule.Snapshot snapshot() {
             return new Schedule.Snapshot(3L, dayTime, food, provisions, 6, pocketMeal, () -> {
                 foodPointAsked++;
                 return foodPoint;
             }, homeless, sleeping, forageDay, nightSkipped, activity, () -> jobStepHolds, morningHandled, eveningMealEaten,
-                    deliveryPending, workEnd);
+                    deliveryPending, times);
         }
 
         Optional<Intent> wakeUp() {
