@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:miner_palette_scan",
   "max_ticks": 40,
   "structure": "minecraft:empty",

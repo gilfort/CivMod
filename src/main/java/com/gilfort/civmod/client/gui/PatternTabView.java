@@ -9,6 +9,7 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.logistics.Pattern;
+import com.gilfort.civmod.menu.GuiIcons;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.PatternTab;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -22,7 +23,6 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -50,7 +50,6 @@ final class PatternTabView {
     /** Ghost target ids of the editor (library slots are 0–53). */
     private static final int TARGET_CELL = 100;
     private static final int TARGET_OUTPUT = 200;
-    private static final Identifier CHECKMARK = Identifier.withDefaultNamespace("container/beacon/confirm");
 
     private final JobBlockScreen screen;
     private final JobBlockMenu menu;
@@ -272,20 +271,15 @@ final class PatternTabView {
     }
 
     /**
-     * @return the help lines of the Patterns tab: the library's or the editor's usage, and the metal rule
+     * @return the help lines of the Patterns tab: the library's or the editor's usage
      */
     List<Component> helpLines() {
-        List<Component> lines = new ArrayList<>();
-        if (editing < 0) {
-            lines.add(Component.translatable("civmod.gui.patterns.help.set"));
-            lines.add(Component.translatable("civmod.gui.patterns.help.slot"));
-            lines.add(Component.translatable("civmod.gui.patterns.help.checkmarks"));
-        } else {
-            lines.add(Component.translatable("civmod.gui.patterns.help.editor"));
+        if (editing >= 0) {
+            return List.of(Component.translatable("civmod.gui.patterns.help.cell"), Component.translatable("civmod.gui.patterns.help.empty_cell"));
         }
-        lines.add(Component.translatable("civmod.gui.patterns.help.modes"));
-        lines.add(Component.translatable("civmod.gui.patterns.help.metal"));
-        return lines;
+        return List.of(Component.translatable("civmod.gui.patterns.help.click"), Component.translatable("civmod.gui.patterns.help.check"),
+                Component.translatable("civmod.gui.patterns.help.item"), Component.translatable("civmod.gui.patterns.help.viewer"),
+                Component.translatable("civmod.gui.patterns.help.crafted", GuiIcons.inlineCheckmark()));
     }
 
     // ---------------------------------------------------------------- drawing
@@ -314,7 +308,7 @@ final class PatternTabView {
                 CivGui.slotInactive(graphics, x, y);
             }
             if (pattern.filter(Pattern::checked).isPresent()) {
-                graphics.blitSprite(RenderPipelines.GUI_TEXTURED, CHECKMARK, x - 1, y - 1, 9, 9);
+                graphics.blitSprite(RenderPipelines.GUI_TEXTURED, GuiIcons.CHECKMARK, x - 1, y - 1, 9, 9);
             }
             if (slot == hovered) {
                 CivGui.slotHover(graphics, x, y);

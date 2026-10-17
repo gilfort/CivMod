@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:craftsperson_metal_unchecked",
   "max_ticks": 100,
   "structure": "minecraft:empty",

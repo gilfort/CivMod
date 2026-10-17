@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "civmod:night",
+  "environment": "civmod:night_straw",
   "function": "civmod:wake_up_from_straw",
   "max_ticks": 1200,
   "structure": "minecraft:empty",

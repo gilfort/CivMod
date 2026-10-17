@@ -4,11 +4,14 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Predicate;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.food.SettlerFood;
+import com.gilfort.civmod.job.Schedule;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Settlement;
@@ -28,7 +31,7 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
 /**
  * The Clerk's store (vault {@code Jobs/Clerk.md}): the Clerk JobBlock's own 27 slots plus the containers linked with the
  * Scroll of Assignment, and the access rule between them. Without a working Clerk (no settler assigned, or outside
- * the shift 06:00–18:30) only the 27 block slots are reachable – for customers and for deliveries; the linked storage
+ * its shift from its waking time to 18:30) only the 27 block slots are reachable – for customers and for deliveries; the linked storage
  * is reachable only through a working Clerk at its counter. Hoppers and pipes use the block's item capability and see
  * the 27 slots only.
  * <p>
@@ -78,11 +81,24 @@ public final class ClerkStorage {
     }
 
     /**
-     * @param dayTime the day time (0 = 06:00)
-     * @return whether it lies within the Clerk's shift (06:00–18:30)
+     * @param clerk   the Clerk settler
+     * @param day     the day
+     * @param dayTime the day time (0 = 06:00; negative before 06:00 on the Clerk's own day, {@link Schedule#moment})
+     * @return whether it lies within the Clerk's shift: from its own waking time (05:30–06:00, Clerks wake up early) to
+     *         18:30. The shift of the clock's next day may already be open after 05:30.
      */
-    public static boolean inShift(long dayTime) {
-        return dayTime >= 0 && dayTime < SHIFT_END;
+    public static boolean inShift(UUID clerk, long day, long dayTime) {
+        boolean today = dayTime >= shiftStart(clerk, day) && dayTime < SHIFT_END;
+        return today || dayTime - DayClock.DAY_TICKS >= shiftStart(clerk, day + 1);
+    }
+
+    /**
+     * @param clerk the Clerk settler
+     * @param day   the day
+     * @return the day time its shift opens: its waking time in the early waking window (05:30–06:00, negative)
+     */
+    public static long shiftStart(UUID clerk, long day) {
+        return Schedule.dayTimes(clerk, day, true).wake();
     }
 
     /**
@@ -98,11 +114,20 @@ public final class ClerkStorage {
 
     /**
      * @param clerk   a Clerk JobBlock
+     * @param day     the day
      * @param dayTime the day time
      * @return whether a Clerk settler works it now (assigned and on shift); only then is the linked storage reachable
      */
-    public static boolean working(SettlementBlock clerk, long dayTime) {
-        return isClerk(clerk) && !clerk.assignees().isEmpty() && inShift(dayTime);
+    public static boolean working(SettlementBlock clerk, long day, long dayTime) {
+        return isClerk(clerk) && clerk.assignees().stream().anyMatch(assignee -> inShift(assignee.id(), day, dayTime));
+    }
+
+    /**
+     * {@link #working(SettlementBlock, long, long)} on the level's day. Catch-up passes a simulated day time from 06:00
+     * on, where the day does not matter: every Clerk's shift is open by then.
+     */
+    private static boolean working(ServerLevel level, SettlementBlock clerk, long dayTime) {
+        return working(clerk, DayClock.day(level), dayTime);
     }
 
     /**
@@ -126,7 +151,7 @@ public final class ClerkStorage {
      */
     public static Stock stock(ServerLevel level, BlockPos pos, long dayTime, boolean atCounter) {
         Optional<SettlementBlock> clerk = JobBlockSite.blockAt(level, pos).filter(ClerkStorage::isClerk);
-        return stock(level, pos, clerk.isPresent() && atCounter && working(clerk.get(), dayTime));
+        return stock(level, pos, clerk.isPresent() && atCounter && working(level, clerk.get(), dayTime));
     }
 
     /**
@@ -169,7 +194,7 @@ public final class ClerkStorage {
      */
     public static Visit visit(ServerLevel level, BlockPos pos, long dayTime) {
         Optional<SettlementBlock> clerk = JobBlockSite.blockAt(level, pos).filter(ClerkStorage::isClerk);
-        if (clerk.isEmpty() || !working(clerk.get(), dayTime)) {
+        if (clerk.isEmpty() || !working(level, clerk.get(), dayTime)) {
             return new Visit(pos, BLOCK_REACH, false);
         }
         BlockPos counter = spotOfDay(clerk.get()).map(spot -> spot.pos().above()).orElse(pos);
@@ -222,6 +247,18 @@ public final class ClerkStorage {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * The Clerk JobBlock a hungry settler without food waits at (with food or not): the nearest one.
+     *
+     * @param settlement the settler's settlement
+     * @param from       the settler position
+     * @return the Clerk JobBlock, empty if the settlement has none
+     */
+    public static Optional<BlockPos> nearestClerk(Settlement settlement, BlockPos from) {
+        return settlement.blocks().stream().filter(ClerkStorage::isClerk).map(SettlementBlock::pos)
+                .min(Comparator.comparingDouble(pos -> pos.distSqr(from)));
     }
 
     /**

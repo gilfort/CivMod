@@ -2,7 +2,7 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "T": "minecraft:fishing_rod",
+    "T": "#c:foods/raw_fish",
     "B": "minecraft:barrel",
     "P": "#minecraft:planks"
   },

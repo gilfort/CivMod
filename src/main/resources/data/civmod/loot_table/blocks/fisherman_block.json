@@ -8,13 +8,21 @@
       "entries": [
         {
           "type": "minecraft:item",
-          "modifier": {
-            "type": "minecraft:copy_components",
-            "include": [
-              "civmod:job_level"
-            ],
-            "source": "block_entity"
-          },
+          "modifier": [
+            {
+              "type": "minecraft:copy_components",
+              "include": [
+                "civmod:job_level"
+              ],
+              "source": "block_entity"
+            },
+            {
+              "type": "minecraft:set_components",
+              "components": {
+                "!civmod:starter_tool": {}
+              }
+            }
+          ],
           "name": "civmod:fisherman_block"
         }
       ],

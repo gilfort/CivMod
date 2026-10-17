@@ -1,4 +1,5 @@
 {
-  "type": "minecraft:all_of",
-  "definitions": []
+  "type": "minecraft:clock_time",
+  "clock": "minecraft:overworld",
+  "time": 26000
 }

@@ -72,6 +72,7 @@ public final class ClerkGameTests {
             register(helper, "clerk_as_drop_off", ClerkGameTests::asDropOff);
             register(helper, "clerk_catch_up_food", ClerkGameTests::catchUpFood);
             register(helper, "clerk_shift", ClerkGameTests::shift);
+            register(helper, "clerk_catch_up_wait_for_food", ClerkGameTests::catchUpWaitForFood);
             register(helper, "clerk_counter_service", ClerkGameTests::counterService);
         });
     }
@@ -346,6 +347,37 @@ public final class ClerkGameTests {
         helper.succeed();
     }
 
+    /**
+     * Catch-up: a hungry settler without food waits at the (empty) Clerk for 2 hours, then it forages; the start of the
+     * wait is the per-day mark live play reads as well.
+     */
+    private static void catchUpWaitForFood(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerkPos = clerkWithStorage(helper);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerkPos).orElseThrow();
+        Settler customer = settler(helper, new BlockPos(2, 1, 3), data, settlement);
+        customer.getFood().setLevel(4);
+        customer.getFood().setSaturation(0.0F);
+        for (int i = Settler.POCKETS_START; i < Settler.POCKETS_START + Settler.POCKETS_SIZE; i++) {
+            customer.getInventory().setItem(i, ItemStack.EMPTY);
+        }
+        long missedStart = Math.floorDiv(level.getOverworldClockTime(), 24000L) * 24000L - 24000L;
+        long missed = Math.floorDiv(missedStart, 24000L);
+
+        customer.getWork().setCatchUp(missedStart, missedStart + 1500L);
+        CatchUp.runNow(level, List.of(customer));
+        helper.assertFalse(customer.getFood().isForaging(), "07:30: still waiting at the Clerk");
+        helper.assertTrue(customer.getFood().waitDay() == missed && customer.getFood().waitTime() < 500L,
+                "The wait began at its waking time: " + customer.getFood().waitDay() + " / " + customer.getFood().waitTime());
+
+        customer.getWork().setCatchUp(missedStart + 1500L, missedStart + 3500L);
+        CatchUp.runNow(level, List.of(customer));
+        helper.assertTrue(customer.getFood().forageDay() == missed, "09:30: foraging after 2 hours without food");
+        customer.discard();
+        helper.succeed();
+    }
+
     /** In the world: a hungry settler is served at a working Clerk's counter from the linked storage; the Clerk gains EXP. */
     private static void counterService(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -389,16 +421,48 @@ public final class ClerkGameTests {
         helper.assertTrue(ClerkStorage.serviceTicks(50) > 20 && ClerkStorage.serviceTicks(50) < 40, "Faster with skill");
 
         Settler clerk = ModEntityTypes.SETTLER.get().create(helper.getLevel(), EntitySpawnReason.EVENT);
-        helper.assertTrue(clerk.getWork().workEnd() == SettlerWork.WORK_END, "Without the Clerk job: 17:30");
+        long day = 4L;
+        long ownEnd = clerk.getWork().dayTimes(day).workEnd();
+        helper.assertTrue(ownEnd >= SettlerWork.WORK_END && ownEnd < SettlerWork.WORK_END + Schedule.WINDOW_TICKS,
+                "Without the Clerk job: 17:30–18:00, got " + ownEnd);
         clerk.addJob(new SettlerJob(ModJobs.CLERK.get(), helper.absolutePos(new BlockPos(1, 1, 1))));
-        helper.assertTrue(clerk.getWork().workEnd() == ClerkStorage.SHIFT_END, "With the Clerk job: 18:30");
+        helper.assertTrue(clerk.getWork().dayTimes(day).workEnd() == ClerkStorage.SHIFT_END, "With the Clerk job: 18:30");
+        // Clerks wake up early (05:30–06:00): they have a stall to take care of.
+        long clerkWake = clerk.getWork().dayTimes(day).wake();
+        helper.assertTrue(clerkWake >= -Schedule.WINDOW_TICKS && clerkWake < 0L, "With the Clerk job: up 05:30–06:00, got " + clerkWake);
+        helper.assertTrue(clerkWake == Schedule.dayTimes(clerk.getUUID(), day, true).wake(), "Its offset in the early waking window");
         clerk.discard();
+
+        // The shift opens at the Clerk's own waking time (its daily offset in 05:30–06:00), before any other settler wakes.
+        UUID late = lateRiser(day);
+        long wake = Schedule.dayTimes(late, day, true).wake();
+        long dayBefore = day - 1;
+        long clockDay = 24000L;
+        helper.assertTrue(ClerkStorage.inShift(late, day, 0L), "06:00: every Clerk's shift is open");
+        helper.assertFalse(ClerkStorage.inShift(late, day, wake - 1), "Closed just before its waking time");
+        helper.assertTrue(ClerkStorage.inShift(late, day, wake), "Open from its waking time");
+        helper.assertFalse(ClerkStorage.inShift(late, dayBefore, clockDay + wake - 1), "On the clock's day before: closed just before");
+        helper.assertTrue(ClerkStorage.inShift(late, dayBefore, clockDay + wake), "On the clock's day before: open from its waking time");
+        helper.assertFalse(ClerkStorage.inShift(late, dayBefore, 14000L), "Closed in the evening");
+        helper.assertTrue(ClerkStorage.inShift(late, day, ClerkStorage.SHIFT_END - 1), "Open until 18:30");
+        helper.assertFalse(ClerkStorage.inShift(late, day, ClerkStorage.SHIFT_END), "Closed at 18:30");
         helper.succeed();
     }
 
+    /** A Clerk that wakes after 05:30 on the day. */
+    private static UUID lateRiser(long day) {
+        for (long i = 1; ; i++) {
+            UUID candidate = new UUID(0xC1E2L, i);
+            if (Schedule.dayTimes(candidate, day, true).wake() > -Schedule.WINDOW_TICKS) {
+                return candidate;
+            }
+        }
+    }
+
     private static Schedule.Snapshot snapshot(long dayTime, long workEnd) {
-        return new Schedule.Snapshot(3L, dayTime, 20, 10, 6, true, () -> true, false, false, SettlerFood.NO_DAY, false,
-                Schedule.Activity.IDLE, () -> false, true, false, false, workEnd);
+        return new Schedule.Snapshot(3L, dayTime, 20, 10, 6, true, () -> true, () -> true, false, false, SettlerFood.NO_DAY, false,
+                Schedule.Activity.IDLE, () -> false, true, false, Schedule.NOT_WAITING, false,
+                new Schedule.DayTimes(0L, workEnd, SettlerWork.SLEEP_TIME));
     }
 
     static Settler settler(GameTestHelper helper, BlockPos relative, SettlementData data, Settlement settlement) {

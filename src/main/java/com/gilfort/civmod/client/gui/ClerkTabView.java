@@ -358,16 +358,13 @@ final class ClerkTabView {
 
     /**
      * @param tab the selected tab
-     * @return the help lines of the Stock or Requests tab, empty for other tabs
+     * @return the help lines of the Stock tab, empty for other tabs
      */
     List<Component> helpLines(int tab) {
         if (tab == JobBlockMenu.TAB_STOCK) {
-            return List.of(Component.translatable("civmod.gui.clerk.stock.help.set"), Component.translatable("civmod.gui.clerk.stock.help.click"),
-                    Component.translatable("civmod.gui.clerk.stock.help.edit"), Component.translatable("civmod.gui.clerk.stock.help.shift"),
-                    Component.translatable("civmod.gui.clerk.stock.help.levels"));
-        }
-        if (tab == JobBlockMenu.TAB_REQUESTS) {
-            return List.of(Component.translatable("civmod.gui.clerk.requests.help"));
+            return List.of(Component.translatable("civmod.gui.clerk.stock.help.click"), Component.translatable("civmod.gui.clerk.stock.help.delete"),
+                    Component.translatable("civmod.gui.clerk.stock.help.item"), Component.translatable("civmod.gui.clerk.stock.help.viewer"),
+                    Component.translatable("civmod.gui.clerk.stock.help.shift"));
         }
         return List.of();
     }

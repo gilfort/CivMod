@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "minecraft:default",
+  "environment": "civmod:day",
   "function": "civmod:food_day_round_trip",
   "max_ticks": 100,
   "structure": "minecraft:empty",
