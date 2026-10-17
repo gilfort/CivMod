@@ -227,9 +227,9 @@ public final class WakeUpGameTests {
                 .thenWaitUntil(() -> helper.assertTrue(settler.isSleeping(), "Goes to bed: at " + helper.relativePos(settler.blockPosition())
                         + ", status " + settler.statusText().getString()))
                 .thenExecuteAfter(20, () -> {
-                    // The player sleeps: the clock jumps to 06:05 of the next day.
+                    // The player sleeps: the clock jumps to 06:35 of the next day, after every waking time (06:00–06:30).
                     level.getServer().clockManager().setTotalTicks(level.registryAccess().getOrThrow(WorldClocks.OVERWORLD),
-                            (day + 1) * DayClock.DAY_TICKS + 100L);
+                            (day + 1) * DayClock.DAY_TICKS + 600L);
                     watching[0] = true;
                 })
                 .thenWaitUntil(() -> helper.assertFalse(settler.isSleeping() || settler.isSleepingWithoutBed(), "Wakes up"))
