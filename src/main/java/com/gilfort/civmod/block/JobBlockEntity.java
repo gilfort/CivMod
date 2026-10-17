@@ -72,6 +72,12 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
         super.setChanged();
     }
 
+    @Override
+    public ItemStack removeItemNoUpdate(int slot) {
+        changes++;
+        return super.removeItemNoUpdate(slot);
+    }
+
     /**
      * @return the JobBlock level
      */

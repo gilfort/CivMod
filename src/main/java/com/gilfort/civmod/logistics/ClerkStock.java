@@ -13,6 +13,7 @@ import com.gilfort.civmod.block.JobBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.Item;
 import net.neoforged.neoforge.capabilities.BlockCapabilityCache;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.transfer.ResourceHandler;
@@ -64,7 +65,7 @@ final class ClerkStock {
     /**
      * @param level the level
      * @param pos   a loaded Clerk JobBlock
-     * @return its stock view, empty if there is no JobBlock block entity
+     * @return its stock view, null if there is no JobBlock block entity
      */
     static @Nullable ClerkStock of(ServerLevel level, BlockPos pos) {
         if (!(level.getBlockEntity(pos) instanceof JobBlockEntity block)) {
@@ -94,6 +95,18 @@ final class ClerkStock {
         if (view != null && view.block == block) {
             view.valid = false;
             views.remove(block.getBlockPos());
+        }
+    }
+
+    /**
+     * Drops the views of an unloaded level.
+     *
+     * @param level the level
+     */
+    static void forget(ServerLevel level) {
+        Map<BlockPos, ClerkStock> views = VIEWS.remove(level);
+        if (views != null) {
+            views.values().forEach(view -> view.valid = false);
         }
     }
 
@@ -131,7 +144,7 @@ final class ClerkStock {
 
     /** Follows the linked containers in use, keeping the views of those still linked. */
     private void link(List<BlockPos> storage) {
-        if (linked.stream().map(container -> container.pos).toList().equals(storage)) {
+        if (linkedAt(storage)) {
             return;
         }
         Map<BlockPos, Linked> kept = new HashMap<>();
@@ -142,10 +155,22 @@ final class ClerkStock {
             next.add(container != null ? container : new Linked(pos.immutable()));
         }
         kept.values().forEach(container -> {
-            container.valid = false;
+            container.inUse = false;
             container.summary.clear(linkedTotal);
         });
         linked = List.copyOf(next);
+    }
+
+    private boolean linkedAt(List<BlockPos> storage) {
+        if (linked.size() != storage.size()) {
+            return false;
+        }
+        for (int i = 0; i < storage.size(); i++) {
+            if (!linked.get(i).pos.equals(storage.get(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** Write-through for the own slots: valid only if no foreign change came in since they were last read. */
@@ -161,7 +186,7 @@ final class ClerkStock {
             if (mark != ownChanges) {
                 return;
             }
-            if (delta < 0 && own.amount(resource) < -delta) {
+            if (!own.covers(resource, delta)) {
                 reread();
                 return;
             }
@@ -170,9 +195,15 @@ final class ClerkStock {
         }
 
         @Override
+        public void drained(Item item) {
+            if (own.contains(item)) {
+                reread();
+            }
+        }
+
+        @Override
         public void reread() {
             ResourceHandler<ItemResource> handler = ownCache.getCapability();
-            own.clear(null);
             if (handler != null) {
                 own.read(handler, null);
             }
@@ -190,12 +221,11 @@ final class ClerkStock {
         private long readTick;
         private int interval = MAX_REREAD;
         private boolean stale = true;
-        private boolean valid = true;
+        private boolean inUse = true;
 
         private Linked(BlockPos pos) {
             this.pos = pos;
-            this.cache = BlockCapabilityCache.create(Capabilities.Item.BLOCK, level, pos, null, () -> valid && ClerkStock.this.valid,
-                    () -> stale = true);
+            this.cache = BlockCapabilityCache.create(Capabilities.Item.BLOCK, level, pos, null, () -> inUse && valid, () -> stale = true);
         }
 
         /** Skips the container while it is unloaded or gone, re-reads it when its interval is over. */
@@ -207,11 +237,15 @@ final class ClerkStock {
                 return;
             }
             if (stale || tick - readTick >= interval) {
-                boolean changed = summary.read(handler, linkedTotal);
-                interval = changed ? MIN_REREAD : Math.min(MAX_REREAD, interval * 2);
-                readTick = tick;
-                stale = false;
+                read(handler, tick);
             }
+        }
+
+        private void read(ResourceHandler<ItemResource> handler, long tick) {
+            boolean changed = summary.read(handler, linkedTotal);
+            interval = changed ? MIN_REREAD : Math.min(MAX_REREAD, interval * 2);
+            readTick = tick;
+            stale = false;
         }
 
         @Override
@@ -221,7 +255,7 @@ final class ClerkStock {
 
         @Override
         public void changed(long mark, ItemResource resource, long delta) {
-            if (delta < 0 && summary.amount(resource) < -delta) {
+            if (!summary.covers(resource, delta)) {
                 reread();
                 return;
             }
@@ -230,10 +264,16 @@ final class ClerkStock {
         }
 
         @Override
+        public void drained(Item item) {
+            if (summary.contains(item)) {
+                reread();
+            }
+        }
+
+        @Override
         public void reread() {
             if (handler != null) {
-                summary.read(handler, linkedTotal);
-                readTick = level.getGameTime();
+                read(handler, level.getGameTime());
             }
         }
     }

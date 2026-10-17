@@ -51,6 +51,10 @@ public final class Stock {
             }
 
             @Override
+            public void drained(Item item) {
+            }
+
+            @Override
             public void reread() {
             }
         };
@@ -68,6 +72,13 @@ public final class Stock {
          * @param delta    how much came in (negative: went out)
          */
         void changed(long mark, ItemResource resource, long delta);
+
+        /**
+         * Re-reads the container at once if its view still counts an item that taking found none of.
+         *
+         * @param item the item the real container has no more of
+         */
+        void drained(Item item);
 
         /**
          * Re-reads the container at once: an extraction found less than the view expected.
@@ -169,8 +180,8 @@ public final class Stock {
     }
 
     /**
-     * Takes up to {@code count} items of a kind, container by container. Taking less than asked re-reads the
-     * containers into the stock view.
+     * Takes up to {@code count} items of a kind, container by container. A container left behind with items still to
+     * take has none of them left; if its stock view still counts some, it is re-read.
      *
      * @param item  the item
      * @param count how many at most
@@ -180,6 +191,9 @@ public final class Stock {
         List<ItemStack> taken = new ArrayList<>();
         int rest = count;
         for (Part part : parts) {
+            if (rest <= 0) {
+                break;
+            }
             ResourceHandler<ItemResource> handler = part.handler();
             for (int i = 0; i < handler.size() && rest > 0; i++) {
                 ItemResource resource = handler.getResource(i);
@@ -197,9 +211,9 @@ public final class Stock {
                     }
                 }
             }
-        }
-        if (rest > 0) {
-            parts.forEach(part -> part.tracker().reread());
+            if (rest > 0) {
+                part.tracker().drained(item);
+            }
         }
         return taken;
     }

@@ -161,6 +161,8 @@ public final class ClerkStockGameTests {
         own.setItem(0, new ItemStack(Items.BREAD, 2));
         helper.assertTrue(bread(level, clerk) == 2, "Own slots: the change shows at once");
         helper.runAfterDelay(1, () -> helper.assertTrue(bread(level, clerk) == 2, "Linked container: not re-read yet"));
+        helper.runAfterDelay(REREAD - 50, () -> helper.assertTrue(bread(level, clerk) == 2,
+                "Nothing changed at the first read: the interval is the longest one"));
         helper.runAfterDelay(REREAD, () -> {
             helper.assertTrue(bread(level, clerk) == 7, "Linked container re-read after at most 10 s, got " + bread(level, clerk));
             chest.setItem(1, new ItemStack(Items.BREAD, 3));

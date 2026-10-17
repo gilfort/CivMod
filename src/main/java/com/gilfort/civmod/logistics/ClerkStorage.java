@@ -25,6 +25,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.level.block.BreakBlockEvent;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.item.ItemResource;
@@ -260,6 +261,16 @@ public final class ClerkStorage {
     public static Optional<BlockPos> nearestClerk(Settlement settlement, BlockPos from) {
         return settlement.blocks().stream().filter(ClerkStorage::isClerk).map(SettlementBlock::pos)
                 .min(Comparator.comparingDouble(pos -> pos.distSqr(from)));
+    }
+
+    /**
+     * Drops the stock views of an unloaded level.
+     */
+    @SubscribeEvent
+    static void onLevelUnload(LevelEvent.Unload event) {
+        if (event.getLevel() instanceof ServerLevel level) {
+            ClerkStock.forget(level);
+        }
     }
 
     /**

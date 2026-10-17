@@ -55,6 +55,29 @@ final class StockSummary {
 
     /**
      * @param resource an item resource
+     * @param delta    a change of its amount
+     * @return whether the summary holds enough of it for the change (always for an increase): if not, an extraction
+     *         found more than the summary knew of
+     */
+    boolean covers(ItemResource resource, long delta) {
+        return delta >= 0 || amount(resource) >= -delta;
+    }
+
+    /**
+     * @param item an item
+     * @return whether any of it is held (components ignored)
+     */
+    boolean contains(Item item) {
+        for (ItemResource resource : entries.keySet()) {
+            if (resource.getItem() == item) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @param resource an item resource
      * @param delta    how much more of it is held (negative: less); an amount that drops to zero or below is removed
      */
     void add(ItemResource resource, long delta) {
