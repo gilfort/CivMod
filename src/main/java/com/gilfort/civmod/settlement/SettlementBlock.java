@@ -2,8 +2,10 @@ package com.gilfort.civmod.settlement;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import com.gilfort.civmod.job.Job;
@@ -189,7 +191,8 @@ public final class SettlementBlock {
             MissionOffer.CODEC.optionalFieldOf("mission_offer", MissionOffer.EMPTY).forGetter(SettlementBlock::missionOffer),
             ClerkFields.MAP_CODEC.forGetter(SettlementBlock::clerkFields),
             CraftspersonFields.MAP_CODEC.forGetter(SettlementBlock::craftspersonFields),
-            BlockPos.CODEC.optionalFieldOf("home_clerk").forGetter(SettlementBlock::homeClerk)
+            BlockPos.CODEC.optionalFieldOf("home_clerk").forGetter(SettlementBlock::homeClerk),
+            Job.CODEC.listOf().optionalFieldOf("auto_assign", List.of()).forGetter(block -> List.copyOf(block.autoAssign))
     ).apply(instance, SettlementBlock::new));
 
     private final BlockPos pos;
@@ -212,6 +215,7 @@ public final class SettlementBlock {
     private int checkLimit;
     private Optional<Trim> trim;
     private boolean byDeliveryman;
+    private final Set<Job> autoAssign = new LinkedHashSet<>();
 
     /**
      * @param pos       the block position
@@ -221,13 +225,13 @@ public final class SettlementBlock {
      */
     public SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected) {
         this(pos, jobType, level, connected, List.of(), Optional.empty(), Optional.empty(), List.of(), Optional.empty(), Optional.empty(), false,
-                MissionOffer.EMPTY, ClerkFields.NONE, CraftspersonFields.NONE, Optional.empty());
+                MissionOffer.EMPTY, ClerkFields.NONE, CraftspersonFields.NONE, Optional.empty(), List.of());
     }
 
     private SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected, List<BlockPos> workPoints,
             Optional<BlockPos> collect, Optional<BlockPos> dropOff, List<SavedAssignee> assignees, Optional<UUID> legacyAssignee,
             Optional<String> legacyAssigneeName, boolean collectLeaves, MissionOffer missionOffer, ClerkFields clerk,
-            CraftspersonFields craftsperson, Optional<BlockPos> homeClerk) {
+            CraftspersonFields craftsperson, Optional<BlockPos> homeClerk, List<Job> autoAssign) {
         this.pos = pos.immutable();
         this.jobType = jobType;
         this.level = SettlementRules.clampLevel(level);
@@ -250,6 +254,24 @@ public final class SettlementBlock {
         this.checkLimit = craftsperson.checkLimit();
         this.trim = craftsperson.trim();
         this.byDeliveryman = craftsperson.byDeliveryman();
+        this.autoAssign.addAll(autoAssign);
+    }
+
+    /**
+     * @return the Jobs whose free places jobless settlers take by themselves (vault {@code Systems/Scroll of
+     *         Assignment.md}); default none (read-only; Jobs no longer offered at the block's level may stay in it)
+     */
+    public Set<Job> autoAssign() {
+        return Collections.unmodifiableSet(autoAssign);
+    }
+
+    /**
+     * @param job a Job
+     * @param on  whether jobless settlers take its free places by themselves
+     * @return whether the state changed
+     */
+    boolean setAutoAssign(Job job, boolean on) {
+        return on ? autoAssign.add(job) : autoAssign.remove(job);
     }
 
     private ClerkFields clerkFields() {

@@ -7,7 +7,6 @@ import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
-import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
@@ -16,6 +15,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
+import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.Warehouses;
 
 import net.minecraft.ChatFormatting;
@@ -317,11 +317,7 @@ public class ScrollOfAssignmentItem extends Item {
             player.sendOverlayMessage(Component.translatable("civmod.scroll.binding_lost").withStyle(ChatFormatting.RED));
             return;
         }
-        JobAssignments.AssignResult result = JobAssignments.assign(SettlementData.get(player.level()), jobBlock, settler.getUUID(),
-                settler.getName().getString(), settler.getSettlementId(), settler.getJobs().stream().map(SettlerJob::jobType).toList(), job);
-        if (result == JobAssignments.AssignResult.OK) {
-            settler.addJob(new SettlerJob(job, jobBlock));
-        }
+        JobAssignments.AssignResult result = SettlementWorld.assign(player.level(), jobBlock, settler, job);
         player.sendOverlayMessage(message(result, block.get(), settler, job));
     }
 

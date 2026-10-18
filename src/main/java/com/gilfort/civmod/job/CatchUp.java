@@ -9,6 +9,7 @@ import java.util.Map;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.settlement.AutoAssignment;
 import com.gilfort.civmod.settlement.DayClock;
 
 import net.minecraft.resources.ResourceKey;
@@ -52,6 +53,8 @@ public final class CatchUp {
         private long lastDay;
         private int hour;
         private int index;
+        /** The day whose 06:00 automatic assignment ran already. */
+        private long morning = Long.MIN_VALUE;
 
         Batch(ServerLevel level) {
             this.level = level;
@@ -74,6 +77,11 @@ public final class CatchUp {
         int step(int budget) {
             int used = 0;
             while (day <= lastDay) {
+                if (morning != day) {
+                    // 06:00 of the simulated day: automatic assignment, before anyone works.
+                    morning = day;
+                    AutoAssignment.catchUpMorning(level, settlers.stream().filter(settler -> !settler.isRemoved()).toList(), day);
+                }
                 List<Settler> order = order(settlers, day);
                 while (hour < HOURS) {
                     while (index < order.size()) {

@@ -21,7 +21,6 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.Identifier;
@@ -39,10 +38,6 @@ final class MissionTabView {
     /** Settler rows of the assignment view (the buttons take the place of the last row). */
     private static final int ASSIGN_ROWS = 4;
     private static final int TOOLTIP_WIDTH = 200;
-    private static final Identifier CHECKBOX = Identifier.withDefaultNamespace("widget/checkbox");
-    private static final Identifier CHECKBOX_HIGHLIGHTED = Identifier.withDefaultNamespace("widget/checkbox_highlighted");
-    private static final Identifier CHECKBOX_SELECTED = Identifier.withDefaultNamespace("widget/checkbox_selected");
-    private static final Identifier CHECKBOX_SELECTED_HIGHLIGHTED = Identifier.withDefaultNamespace("widget/checkbox_selected_highlighted");
 
     private final JobBlockScreen screen;
     private final JobBlockMenu menu;
@@ -172,11 +167,8 @@ final class MissionTabView {
 
     /** Draws a vanilla checkbox at the right end of a list row. */
     private void checkbox(GuiGraphicsExtractor graphics, boolean selected, boolean hovered, int x, int rowY) {
-        Identifier sprite = selected
-                ? (hovered ? CHECKBOX_SELECTED_HIGHLIGHTED : CHECKBOX_SELECTED)
-                : (hovered ? CHECKBOX_HIGHLIGHTED : CHECKBOX);
         int box = Checkbox.getBoxSize(font());
-        graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, rowY + (JobBlockScreen.ROW_HEIGHT - box) / 2 - 1, box, box);
+        CivGui.checkbox(graphics, selected, hovered, x, rowY + (JobBlockScreen.ROW_HEIGHT - box) / 2 - 1, box);
     }
 
     /**
