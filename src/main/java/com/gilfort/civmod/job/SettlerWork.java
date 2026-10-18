@@ -2029,14 +2029,32 @@ public final class SettlerWork {
     // ---------------------------------------------------------------- jobs and EXP
 
     /**
-     * Found resources of a job for the GUI.
-     *
-     * @param job the job
-     * @return the found block types with whether the current tool can obtain them
+     * @param jobBlock a JobBlock of one of the settler's jobs
+     * @return the latest scan of that job, empty before the first scan is ready (or without that job)
      */
-    public List<JobProfile.Found> found(SettlerJob job) {
-        CategoryLoop loop = loop(job);
-        return loop == null ? List.of() : loop.found(job);
+    public Optional<ScanResult> scan(BlockPos jobBlock) {
+        return existingWorkplace(jobBlock).map(Workplace::scan);
+    }
+
+    /**
+     * @param jobBlock a JobBlock of one of the settler's Resource Collection jobs
+     * @return the settler as the Found tab of that JobBlock sees it (best tool, effective skill level), empty without
+     *         that job
+     */
+    public Optional<JobProfile.Worker> worker(BlockPos jobBlock) {
+        return settler.getJobs().stream().filter(job -> job.jobBlock().equals(jobBlock)).findFirst()
+                .flatMap(job -> job.jobType().profile().map(profile -> new JobProfile.Worker(
+                        SettlerTools.best(settler, profile::isTool).map(ItemStack::copy).orElse(ItemStack.EMPTY), effectiveLevel(job))));
+    }
+
+    /**
+     * A found resource of a JobBlock was included again: a job paused with "All resources excluded" checks again at
+     * the next decision instead of after its 30 s.
+     *
+     * @param jobBlock the JobBlock
+     */
+    public void recheckExcluded(BlockPos jobBlock) {
+        existingWorkplace(jobBlock).filter(workplace -> workplace.status() == JobStatus.ALL_EXCLUDED).ifPresent(Workplace::unblock);
     }
 
     /**

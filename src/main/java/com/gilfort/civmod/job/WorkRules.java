@@ -4,12 +4,16 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 
+import org.jspecify.annotations.Nullable;
+
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.SettlementBlock;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
@@ -21,8 +25,9 @@ import net.minecraft.world.item.ItemStack;
  * <p>
  * Production runs one unit at a time: the job's fractional accumulator (kept in its {@link Workplace} between calls)
  * fills at speed × productivity per second; each full unit is one {@link JobProfile#produce} roll with the best tool
- * on the belt. EXP is gained per roll that yields items, and a level-up speeds up the rest of the batch. The job ends
- * when no tool is left, the output is full or an empty scan means no resources.
+ * on the belt. EXP is gained per roll that yields items or is an empty roll (the rolled group is fully excluded at the
+ * JobBlock: the activity still counts), and a level-up speeds up the rest of the batch. The job ends when no tool is
+ * left, the output is full, an empty scan means no resources or every main resource is excluded.
  * <p>
  * Where the output goes is the caller's {@link Output}; effects (swing, sounds, level-up message) stay with the
  * caller, which learns of a level-up from the {@link Result}.
@@ -59,7 +64,9 @@ final class WorkRules {
         /** The output (buffer, or drop-off and buffer) is full. */
         OUTPUT_FULL,
         /** The scan found nothing for a job that needs resources. */
-        NO_RESOURCES
+        NO_RESOURCES,
+        /** Every main resource the scan found is excluded at the JobBlock. */
+        ALL_EXCLUDED
     }
 
     /** Where produced items go; the caller's choice. */
@@ -117,6 +124,9 @@ final class WorkRules {
         if (profile.needsResources() && scan != null && scan.isEmpty()) {
             return new Result(0, 0, 0, 0, false, End.NO_RESOURCES, workTicks);
         }
+        if (allExcluded(profile, scan, site.block())) {
+            return new Result(0, 0, 0, 0, false, End.ALL_EXCLUDED, workTicks);
+        }
         Optional<ItemStack> tool = tool(level, settler, profile, site, supply);
         if (tool.isEmpty()) {
             return new Result(0, 0, 0, 0, false, End.NO_TOOL, workTicks);
@@ -151,19 +161,21 @@ final class WorkRules {
                 SettlerTools.wear(level, settler, produced.get().worn());
                 wear++;
                 List<ItemStack> stacks = produced.get().stacks();
+                // An empty roll (fully excluded group) yields nothing but earns the EXP of the activity.
+                boolean room = true;
                 if (!stacks.isEmpty()) {
                     items += stacks.stream().mapToInt(ItemStack::getCount).sum();
-                    boolean room = output.accept(stacks);
-                    int amount = job.jobType().baseExp() * site.level();
-                    if (settler.getSkills().addExp(job.jobType(), amount, cap, SkillRules.get()) > 0) {
-                        levelUp = true;
-                    }
-                    exp += amount;
-                    skillLevel = settler.getSkills().effectiveLevel(job.jobType(), cap);
-                    if (!room) {
-                        end = End.OUTPUT_FULL;
-                        break;
-                    }
+                    room = output.accept(stacks);
+                }
+                int amount = job.jobType().baseExp() * site.level();
+                if (settler.getSkills().addExp(job.jobType(), amount, cap, SkillRules.get()) > 0) {
+                    levelUp = true;
+                }
+                exp += amount;
+                skillLevel = settler.getSkills().effectiveLevel(job.jobType(), cap);
+                if (!room) {
+                    end = End.OUTPUT_FULL;
+                    break;
                 }
             }
             tool = tool(level, settler, profile, site, supply);
@@ -174,6 +186,20 @@ final class WorkRules {
         }
         workplace.setProduction(accumulated);
         return new Result(rolls, items, wear, exp, levelUp, end, ticks);
+    }
+
+    /**
+     * @param profile the job's profile
+     * @param scan    the job's scan (null while the first scan runs)
+     * @param block   the JobBlock
+     * @return whether the scan found main resources and every one of them is excluded at the JobBlock (the job pauses)
+     */
+    static boolean allExcluded(JobProfile profile, @Nullable ScanResult scan, SettlementBlock block) {
+        if (scan == null || block.excluded().isEmpty()) {
+            return false;
+        }
+        List<Identifier> main = profile.mainResources(scan);
+        return !main.isEmpty() && block.excluded().containsAll(main);
     }
 
     /**

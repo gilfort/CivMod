@@ -100,6 +100,10 @@ final class ResourceCollectionLoop implements CategoryLoop {
             shell.block(level, jobBlock, JobStatus.NO_RESOURCES);
             return false;
         }
+        if (WorkRules.allExcluded(profile, workplace.scan(), site.block())) {
+            shell.block(level, jobBlock, JobStatus.ALL_EXCLUDED);
+            return false;
+        }
         shell.setActiveJob(job);
         if (step != Step.WORK || !shell.walkingTo(poi)) {
             step = Step.WORK;
@@ -260,16 +264,5 @@ final class ResourceCollectionLoop implements CategoryLoop {
         shell.endCatchUpJob(job.jobBlock());
         // The next job takes over the rest of the time.
         return new SimulatedWork(result.rolls(), result.ticksLeft());
-    }
-
-    @Override
-    public List<JobProfile.Found> found(SettlerJob job) {
-        ScanResult scan = shell.existingWorkplace(job.jobBlock()).map(Workplace::scan).orElse(null);
-        Optional<JobProfile> profile = job.jobType().profile();
-        if (scan == null || profile.isEmpty()) {
-            return List.of();
-        }
-        ItemStack tool = SettlerTools.best(settler, profile.get()::isTool).orElse(ItemStack.EMPTY);
-        return profile.get().found(scan, tool, shell.effectiveLevel(job));
     }
 }

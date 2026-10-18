@@ -12,6 +12,7 @@ import com.gilfort.civmod.job.MineScan;
 import com.gilfort.civmod.job.MinerOutput;
 import com.gilfort.civmod.job.MinerProfile;
 import com.gilfort.civmod.job.MinerWeights;
+import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
@@ -48,6 +49,7 @@ public final class MinerGameTests {
     private static final Identifier GRANITE = Identifier.withDefaultNamespace("granite");
     private static final Identifier IRON_ORE = Identifier.withDefaultNamespace("iron_ore");
     private static final Identifier DIAMOND_ORE = Identifier.withDefaultNamespace("diamond_ore");
+    private static final Identifier EMPTY_ROLL = CivMod.id("empty_roll");
     private static final int SAMPLES = 20000;
 
     private MinerGameTests() {
@@ -57,6 +59,7 @@ public final class MinerGameTests {
     static void onRegister(RegisterEvent event) {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "miner_roll", MinerGameTests::roll);
+            register(helper, "miner_excluded_roll", MinerGameTests::excludedRoll);
             register(helper, "miner_weights_merge", MinerGameTests::weightsMerge);
             register(helper, "miner_palette_scan", MinerGameTests::paletteScan);
             register(helper, "miner_exposed_work_place", MinerGameTests::exposedWorkPlace);
@@ -70,13 +73,47 @@ public final class MinerGameTests {
 
     private static Map<Identifier, Integer> sample(MineScan.Result scan, Identifier poi, java.util.function.Predicate<Identifier> harvestable,
             int level, MinerWeights weights) {
+        return sample(scan, poi, harvestable, Set.of(), level, weights);
+    }
+
+    /** Counts rolled types; a missing group counts as air, an empty roll of a fully excluded group as {@link #EMPTY_ROLL}. */
+    private static Map<Identifier, Integer> sample(MineScan.Result scan, Identifier poi, java.util.function.Predicate<Identifier> harvestable,
+            Set<Identifier> excluded, int level, MinerWeights weights) {
         RandomSource random = RandomSource.create(11L);
         Map<Identifier, Integer> counts = new HashMap<>();
         for (int i = 0; i < SAMPLES; i++) {
-            Identifier type = MinerOutput.roll(scan, poi, harvestable, level, weights, random).orElse(Identifier.withDefaultNamespace("air"));
+            MinerOutput.Roll roll = MinerOutput.roll(scan, poi, harvestable, excluded, level, weights, random);
+            Identifier type = roll.type().orElse(roll.emptyRoll() ? EMPTY_ROLL : Identifier.withDefaultNamespace("air"));
             counts.merge(type, 1, Integer::sum);
         }
         return counts;
+    }
+
+    /**
+     * Excluded types are never rolled and their weight spreads over the rest of the group; a fully excluded stone group
+     * gives empty rolls at the stone share instead of more ores.
+     */
+    private static void excludedRoll(GameTestHelper helper) {
+        MinerWeights weights = new MinerWeights(99.7, -0.34, Map.of(STONE, 100.0, GRANITE, 100.0), Map.of(IRON_ORE, 70.0, DIAMOND_ORE, 30.0), 10, 10);
+        MineScan.Result scan = new MineScan.Result(Set.of(STONE, GRANITE), Set.of(IRON_ORE, DIAMOND_ORE));
+
+        Map<Identifier, Integer> noGranite = sample(scan, STONE, type -> true, Set.of(GRANITE), 100, weights);
+        helper.assertTrue(noGranite.getOrDefault(GRANITE, 0) == 0, "Excluded granite is never rolled");
+        double stone = noGranite.getOrDefault(STONE, 0) / (double) SAMPLES;
+        helper.assertTrue(Math.abs(stone - 0.6604) < 0.015, "Stone takes the whole stone share (~66 %): " + stone);
+
+        Map<Identifier, Integer> noIron = sample(scan, STONE, type -> true, Set.of(IRON_ORE), 100, weights);
+        helper.assertTrue(noIron.getOrDefault(IRON_ORE, 0) == 0, "Excluded iron is never rolled");
+        double diamond = noIron.getOrDefault(DIAMOND_ORE, 0) / (double) SAMPLES;
+        helper.assertTrue(Math.abs(diamond - 0.3396) < 0.015, "Diamond takes the whole ore share (~34 %): " + diamond);
+
+        Map<Identifier, Integer> noStones = sample(scan, STONE, type -> true, Set.of(STONE, GRANITE), 1, weights);
+        double empty = noStones.getOrDefault(EMPTY_ROLL, 0) / (double) SAMPLES;
+        double ores = (noStones.getOrDefault(IRON_ORE, 0) + noStones.getOrDefault(DIAMOND_ORE, 0)) / (double) SAMPLES;
+        helper.assertTrue(Math.abs(empty - 0.997) < 0.005 && ores < 0.01,
+                "All stones excluded at level 1: empty rolls at the stone share, ores at the old rate (empty " + empty + ", ores " + ores + ")");
+        helper.assertTrue(noStones.getOrDefault(Identifier.withDefaultNamespace("air"), 0) == 0, "An excluded group is an empty roll, not a missing one");
+        helper.succeed();
     }
 
     /** Stone share by level, POI boost, missing group, harvest level exclusion. */
@@ -175,8 +212,7 @@ public final class MinerGameTests {
             helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0,
                     "Nothing mined yet (status " + settler.getWork().status(jobBlock) + ")");
             helper.assertTrue(level.getBlockState(poi).is(Blocks.GRANITE), "The work place is never destroyed");
-            helper.assertTrue(settler.getWork().found(settler.getJobs().get(0)).stream()
-                    .anyMatch(found -> found.icon().is(Items.GRANITE)), "Found list contains granite");
+            helper.assertTrue(FoundTab.of(level, jobBlock).entry(GRANITE).isPresent(), "Found tab lists granite");
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });

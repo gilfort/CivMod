@@ -3,6 +3,7 @@ package com.gilfort.civmod.job;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -12,7 +13,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 /**
- * Output rules of the Lumberjack (vault {@code Jobs/Lumberjack.md}): 90 % logs by wood type, 10 % rare drops.
+ * Output rules of the Lumberjack (vault {@code Jobs/Lumberjack.md}): 90 % logs by wood type, 10 % rare drops. Excluded
+ * wood types leave the log weights; with every type excluded a log roll is empty (vault
+ * {@code Systems/Resource Collection Jobs.md}).
  */
 public final class LumberjackOutput {
 
@@ -69,15 +72,21 @@ public final class LumberjackOutput {
      * @param poiLog     block id of the work place of the day (×2 weight), may be {@code null}
      * @param leaves     whether leaves are enabled and shears are available
      * @param silkTouch  whether the axe has Silk Touch
+     * @param excluded   the wood types excluded at the JobBlock
      * @param random     the random source
-     * @return the produced item, or empty if nothing can be produced
+     * @return the produced item ({@link ItemStack#EMPTY} for an empty log roll), or empty if nothing can be produced
      */
-    public static Optional<Produced> produce(WoodScan.Result scan, Identifier poiLog, boolean leaves, boolean silkTouch, RandomSource random) {
+    public static Optional<Produced> produce(WoodScan.Result scan, Identifier poiLog, boolean leaves, boolean silkTouch, Set<Identifier> excluded,
+            RandomSource random) {
         if (scan.logs().isEmpty()) {
             return Optional.empty();
         }
         if (random.nextDouble() < COMMON_SHARE) {
             Map<Identifier, Integer> weights = new LinkedHashMap<>(scan.logs());
+            weights.keySet().removeAll(excluded);
+            if (weights.isEmpty()) {
+                return Optional.of(new Produced(Kind.LOG, ItemStack.EMPTY));
+            }
             if (poiLog != null) {
                 weights.computeIfPresent(poiLog, (id, weight) -> weight * 2);
             }

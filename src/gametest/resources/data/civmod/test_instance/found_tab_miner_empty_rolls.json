@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:found_tab_miner_empty_rolls",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

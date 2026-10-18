@@ -4,6 +4,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.command.CivModCommand;
 import com.gilfort.civmod.item.JobPicker;
 import com.gilfort.civmod.menu.ClerkTab;
+import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.PatternTab;
 import com.gilfort.civmod.settlement.JobPointsDisplay;
@@ -78,6 +79,11 @@ public final class CivNetwork {
                 menu.editPattern(payload);
             }
         });
+        registrar.playToServer(FoundTab.Toggle.TYPE, FoundTab.Toggle.STREAM_CODEC, (payload, context) -> {
+            if (context.player().containerMenu instanceof JobBlockMenu menu && menu.containerId == payload.containerId()) {
+                menu.toggleExcluded(payload.resource());
+            }
+        });
         registrar.playToServer(JobPicker.Choose.TYPE, JobPicker.Choose.STREAM_CODEC, (payload, context) -> {
             if (context.player() instanceof ServerPlayer player) {
                 JobPicker.choose(player, payload);
@@ -89,6 +95,7 @@ public final class CivNetwork {
         registrar.playToClient(SettlementOutline.Sync.TYPE, SettlementOutline.Sync.STREAM_CODEC);
         registrar.playToClient(JobPointsDisplay.Sync.TYPE, JobPointsDisplay.Sync.STREAM_CODEC);
         registrar.playToClient(ClerkTab.Sync.TYPE, ClerkTab.Sync.STREAM_CODEC);
+        registrar.playToClient(FoundTab.Sync.TYPE, FoundTab.Sync.STREAM_CODEC);
         registrar.playToClient(com.gilfort.civmod.menu.JobBlockInfo.Sync.TYPE, com.gilfort.civmod.menu.JobBlockInfo.Sync.STREAM_CODEC);
         registrar.playToClient(com.gilfort.civmod.npc.ThoughtBubble.Show.TYPE, com.gilfort.civmod.npc.ThoughtBubble.Show.STREAM_CODEC);
     }

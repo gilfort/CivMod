@@ -120,14 +120,6 @@ interface CategoryLoop {
     }
 
     /**
-     * @param job a job
-     * @return the found resources of that job for the GUI
-     */
-    default List<JobProfile.Found> found(SettlerJob job) {
-        return List.of();
-    }
-
-    /**
      * Result of simulated work.
      *
      * @param rolls     production rolls made (counted against the catch-up budget)

@@ -64,7 +64,7 @@ public final class WorkplaceGameTests {
         SettlerJob job = settler.getJobs().get(0);
         BlockPos jobBlock = job.jobBlock();
         helper.startSequence()
-                .thenWaitUntil(() -> helper.assertFalse(settler.getWork().found(job).isEmpty(), "Never scanned"))
+                .thenWaitUntil(() -> helper.assertFalse(LumberjackGameTests.foundNothing(settler, job), "Never scanned"))
                 .thenExecute(() -> {
                     SettlerWork.BuffersSnapshot saved = settler.getWork().snapshot();
                     SavedScan scan = saved.scans().stream().filter(entry -> entry.jobBlock().equals(jobBlock)).findFirst().orElseThrow();
@@ -79,7 +79,7 @@ public final class WorkplaceGameTests {
                             SettlerWork.CatchUpState.NONE));
                 })
                 .thenExecuteAfter(200, () -> {
-                    helper.assertTrue(settler.getWork().found(job).isEmpty(), "The stale scan landed: " + settler.getWork().found(job));
+                    helper.assertTrue(LumberjackGameTests.foundNothing(settler, job), "The stale scan landed: " + settler.getWork().scan(jobBlock));
                     helper.assertTrue(settler.getWork().snapshot().scans().stream()
                             .anyMatch(entry -> entry.jobBlock().equals(jobBlock) && entry.wood().equals(Optional.of(WoodScan.Result.EMPTY))),
                             "Restored empty scan lost: " + settler.getWork().snapshot().scans());
@@ -108,7 +108,7 @@ public final class WorkplaceGameTests {
         int[] dropped = new int[1];
         helper.startSequence()
                 .thenWaitUntil(() -> {
-                    helper.assertFalse(settler.getWork().found(job).isEmpty(), "Never scanned");
+                    helper.assertFalse(LumberjackGameTests.foundNothing(settler, job), "Never scanned");
                     helper.assertTrue(hasTrace(settler.getWork().snapshot(), jobBlock), "No work place of the day yet");
                 })
                 .thenExecute(() -> settler.getInventory().setItem(Settler.BELT_START, ItemStack.EMPTY))
@@ -120,7 +120,7 @@ public final class WorkplaceGameTests {
                     settler.removeJob(jobBlock);
                     helper.assertTrue(settler.getWork().status(jobBlock) == JobStatus.IDLE, "Status left: " + settler.getWork().status(jobBlock));
                     helper.assertTrue(settler.getWork().buffer(jobBlock).isEmpty(), "Buffer left");
-                    helper.assertTrue(settler.getWork().found(job).isEmpty(), "Scan left");
+                    helper.assertTrue(LumberjackGameTests.foundNothing(settler, job), "Scan left");
                     helper.assertFalse(hasTrace(settler.getWork().snapshot(), jobBlock), "Saved state left");
                     helper.assertTrue(itemsNear(level, settler) - itemsBefore == dropped[0], "Buffer not dropped at the settler");
                     settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_AXE));
@@ -192,7 +192,7 @@ public final class WorkplaceGameTests {
         helper.assertTrue(settler.getWork().buffer(jobBlock).count() == 12, "Buffer lost: " + settler.getWork().buffer(jobBlock).count());
         helper.assertTrue(loaded.workPlaces().equals(List.of(new SettlerWork.WorkPlaceEntry(jobBlock, workPoint, today))),
                 "Work place of the day lost: " + loaded.workPlaces());
-        helper.assertFalse(settler.getWork().found(settler.getJobs().get(0)).isEmpty(), "Scan lost");
+        helper.assertFalse(LumberjackGameTests.foundNothing(settler, settler.getJobs().get(0)), "Scan lost");
         // The test clock may be below one day, so the missed time is checked as saved rather than through hasPendingCatchUp.
         helper.assertTrue(loaded.catchUp().from() == clock - DAY && loaded.catchUp().to() == clock, "Pending catch-up lost: " + loaded.catchUp());
 

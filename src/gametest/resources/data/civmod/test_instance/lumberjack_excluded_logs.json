@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:lumberjack_excluded_logs",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 4
+}
