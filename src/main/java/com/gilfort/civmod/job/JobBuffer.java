@@ -101,6 +101,21 @@ public final class JobBuffer {
     }
 
     /**
+     * @param kind      an item
+     * @param maxStacks the most stacks the buffer may hold (a Deliveryman's carry capacity)
+     * @return how many of that item still fit: the room in its stacks plus the free stacks
+     */
+    int room(ItemStack kind, int maxStacks) {
+        int room = Math.max(0, maxStacks - stacks.size()) * kind.getMaxStackSize();
+        for (ItemStack existing : stacks) {
+            if (ItemStack.isSameItemSameComponents(existing, kind)) {
+                room += Math.max(0, existing.getMaxStackSize() - existing.getCount());
+            }
+        }
+        return room;
+    }
+
+    /**
      * @return how many of each item are stored
      */
     public Map<Item, Integer> counts() {

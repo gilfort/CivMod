@@ -121,7 +121,8 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                     state(info, i).ifPresent(state -> {
                         graphics.text(font, Component.translatable("civmod.gui.settler.level_short", state.skill().level()), levelX, rowY,
                                 state.skill().limited() ? LIMITED_COLOR : CivGui.HINT_COLOR, false);
-                        graphics.text(font, state.status().displayName(), CivGui.PADDING, rowY + 10, CivGui.HINT_COLOR, false);
+                        graphics.text(font, CivGui.fit(font, state.text(), imageWidth - 2 * CivGui.PADDING - 3 * SMALL_BUTTON - 6), CivGui.PADDING,
+                                rowY + 10, CivGui.HINT_COLOR, false);
                     });
                     y += ROW_HEIGHT;
                 }
@@ -198,7 +199,8 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                     }
                 }
             });
-            for (int i = 0; i < 18; i++) {
+            int slots = state(menu.getInfo(), tab - SettlerMenu.FIRST_JOB_TAB).map(state -> state.carry() > 0 ? state.carry() : 18).orElse(18);
+            for (int i = 0; i < slots; i++) {
                 CivGui.slot(graphics, leftPos + CivGui.PADDING + (i % BUFFER_COLUMNS) * 18, topPos + BUFFER_Y + (i / BUFFER_COLUMNS) * 18);
             }
         }
@@ -211,7 +213,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         SettlerJob job = info.jobs().get(index);
         graphics.text(font, job.jobType().displayName(), CivGui.PADDING, 22, CivGui.LABEL_COLOR, false);
         state(info, index).ifPresent(state -> {
-            graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.settler.status", state.status().displayName()),
+            graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.settler.status", state.text()),
                     imageWidth - 2 * CivGui.PADDING), CivGui.PADDING, 34, CivGui.LABEL_COLOR, false);
             SettlerInfo.SkillInfo skill = state.skill();
             if (skill.limited()) {
@@ -226,8 +228,10 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                 graphics.text(font, Component.translatable("civmod.gui.settler.exp", skill.exp(), skill.needed()), CivGui.PADDING + EXP_BAR_WIDTH + 4,
                         EXP_BAR_Y - 1, CivGui.HINT_COLOR, false);
             }
-            graphics.text(font, Component.translatable("civmod.gui.settler.buffer", state.buffered(), JobBuffer.CAPACITY), CivGui.PADDING,
-                    BUFFER_Y - 10, CivGui.LABEL_COLOR, false);
+            // A Deliveryman's carry inventory counts stacks, like a player's.
+            Component load = state.carry() > 0 ? Component.translatable("civmod.gui.settler.carrying", state.preview().size(), state.carry())
+                    : Component.translatable("civmod.gui.settler.buffer", state.buffered(), JobBuffer.CAPACITY);
+            graphics.text(font, load, CivGui.PADDING, BUFFER_Y - 10, CivGui.LABEL_COLOR, false);
             for (int i = 0; i < state.preview().size(); i++) {
                 ItemStack stack = state.preview().get(i);
                 int x = CivGui.PADDING + (i % BUFFER_COLUMNS) * 18;

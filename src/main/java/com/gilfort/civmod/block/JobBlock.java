@@ -5,7 +5,6 @@ import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.job.Job;
-import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
@@ -56,9 +55,9 @@ public class JobBlock extends BaseEntityBlock {
 
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
-        if (level instanceof ServerLevel serverLevel && level.getBlockEntity(pos) instanceof JobBlockEntity jobBlock) {
-            JobBlockInfo info = JobBlockInfo.of(serverLevel, pos, getJobType(), jobBlock.getJobLevel());
-            player.openMenu(jobBlock, buffer -> JobBlockInfo.STREAM_CODEC.encode(buffer, info));
+        if (!level.isClientSide() && level.getBlockEntity(pos) instanceof JobBlockEntity jobBlock) {
+            // The block entity writes the info for the client itself (JobBlockEntity#writeClientSideData).
+            player.openMenu(jobBlock);
         }
         return InteractionResult.SUCCESS;
     }

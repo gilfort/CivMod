@@ -41,6 +41,8 @@ final class Workplace {
     private final BlockPos jobBlock;
     private JobBuffer buffer = new JobBuffer();
     private JobStatus status = JobStatus.IDLE;
+    /** What the status is about (e.g. "Collecting – <block>"; not saved). */
+    private Optional<net.minecraft.network.chat.Component> statusSubject = Optional.empty();
     private long blockedUntil;
     private @Nullable BlockPos workPlaceOfDay;
     private long workPlaceDay = -1L;
@@ -141,6 +143,23 @@ final class Workplace {
      */
     void setStatus(JobStatus status) {
         this.status = status;
+        this.statusSubject = Optional.empty();
+    }
+
+    /**
+     * @param status  the new status
+     * @param subject what it is about
+     */
+    void setStatus(JobStatus status, net.minecraft.network.chat.Component subject) {
+        this.status = status;
+        this.statusSubject = Optional.of(subject);
+    }
+
+    /**
+     * @return what the status is about, if it names something
+     */
+    Optional<net.minecraft.network.chat.Component> statusSubject() {
+        return statusSubject;
     }
 
     /**
@@ -150,7 +169,7 @@ final class Workplace {
      * @param gameTime the game time now
      */
     void block(JobStatus status, long gameTime) {
-        this.status = status;
+        setStatus(status);
         blockedUntil = gameTime + BLOCKED_RETRY;
     }
 

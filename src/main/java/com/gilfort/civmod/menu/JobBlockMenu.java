@@ -36,8 +36,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Menu of a JobBlock: tab "Storage" (27 slots + player inventory), tab "Info" and, on the Mission Board, tab
- * "Missions"; the Clerk adds the tabs "Stock" (stock rules, with the player inventory to pick items from) and
- * "Requests" ({@link ClerkTab}).
+ * "Missions"; the Clerk adds the tabs "Stock" (stock rules, with the player inventory to pick items from), "Requests"
+ * and "Deliveries" ({@link ClerkTab}).
  */
 public class JobBlockMenu extends CivMenu {
 
@@ -51,6 +51,8 @@ public class JobBlockMenu extends CivMenu {
     public static final int TAB_STOCK = 2;
     /** Requests tab (Clerk only): the requests of the stock rules. */
     public static final int TAB_REQUESTS = 3;
+    /** Deliveries tab (Clerk only): the open Delivery tasks. */
+    public static final int TAB_DELIVERIES = 4;
     /** Patterns tab (Craftsperson only): the pattern library, with the player inventory to pick items from. */
     public static final int TAB_PATTERNS = 2;
     /** Panel height of the Clerk's and the Craftsperson's menu (a grid of 45 / 54 slots and the player inventory). */
@@ -102,7 +104,7 @@ public class JobBlockMenu extends CivMenu {
      * @param info        the info snapshot
      */
     public JobBlockMenu(int containerId, Inventory inventory, Container container, JobBlockInfo info) {
-        super(ModMenuTypes.JOB_BLOCK.get(), containerId, isClerk(info) ? 4 : isMissionBoard(info) || isCraftsperson(info) ? 3 : 2);
+        super(ModMenuTypes.JOB_BLOCK.get(), containerId, isClerk(info) ? 5 : isMissionBoard(info) || isCraftsperson(info) ? 3 : 2);
         checkContainerSize(container, JobBlockEntity.SLOTS);
         this.container = container;
         this.player = inventory.player;

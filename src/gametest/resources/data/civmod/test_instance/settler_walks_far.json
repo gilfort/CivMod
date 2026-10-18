@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:walk_far",
+  "function": "civmod:settler_walks_far",
+  "max_ticks": 1100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

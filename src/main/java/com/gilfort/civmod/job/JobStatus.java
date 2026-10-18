@@ -1,5 +1,7 @@
 package com.gilfort.civmod.job;
 
+import java.util.Optional;
+
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -43,7 +45,15 @@ public enum JobStatus {
     /** A producer finds no request it has a checked pattern for. */
     NO_REQUEST("no_request"),
     /** A producer lacks inputs for every request it tried. */
-    MISSING_INPUTS("missing_inputs");
+    MISSING_INPUTS("missing_inputs"),
+    /** A Deliveryman walking to or emptying a drop-off ("Collecting – <block>"). */
+    COLLECTING("collecting"),
+    /** A Deliveryman carrying its load into a store ("Delivering to <Clerk>"). */
+    UNLOADING("unloading"),
+    /** The store a Deliveryman delivers to is full; it keeps the rest and retries after 30 s. */
+    STORAGE_FULL("storage_full"),
+    /** A Deliveryman finds no free pickup of its Warehouse. */
+    NO_PICKUPS("no_pickups");
 
     /** Network codec. */
     public static final StreamCodec<ByteBuf, JobStatus> STREAM_CODEC = ByteBufCodecs.idMapper(i -> values()[i], JobStatus::ordinal);
@@ -59,7 +69,15 @@ public enum JobStatus {
      */
     public boolean isBlocked() {
         // NO_REQUEST and MISSING_INPUTS do not block: the next decision tries again (vault Jobs/Craftsperson.md).
-        return this == NO_TOOL || this == NO_WORK_PLACE || this == DROP_OFF_FULL || this == NO_RESOURCES || this == NO_MISSION;
+        return this == NO_TOOL || this == NO_WORK_PLACE || this == DROP_OFF_FULL || this == NO_RESOURCES || this == NO_MISSION
+                || this == STORAGE_FULL;
+    }
+
+    /**
+     * @return whether the job's buffer waits for room where it goes (not delivered after work)
+     */
+    public boolean waitsForRoom() {
+        return this == DROP_OFF_FULL || this == STORAGE_FULL;
     }
 
     /**
@@ -67,5 +85,13 @@ public enum JobStatus {
      */
     public Component displayName() {
         return Component.translatable("civmod.job.status." + id);
+    }
+
+    /**
+     * @param subject what the status is about (e.g. the block a Deliveryman collects at), if any
+     * @return the translated status, naming the subject
+     */
+    public Component displayName(Optional<Component> subject) {
+        return subject.<Component>map(found -> Component.translatable("civmod.job.status." + id + ".of", found)).orElseGet(this::displayName);
     }
 }

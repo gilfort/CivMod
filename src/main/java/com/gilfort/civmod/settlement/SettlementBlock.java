@@ -111,17 +111,20 @@ public final class SettlementBlock {
      * @param standSpots the stand spots
      * @param spotOfDay  the stand spot of the current half day
      * @param stockRules the stock rules
+     * @param served     the Served Clerks of a Warehouse, in linking order
      */
-    private record ClerkFields(List<BlockPos> storage, List<StandSpot> standSpots, SpotOfDay spotOfDay, List<StockRule> stockRules) {
+    private record ClerkFields(List<BlockPos> storage, List<StandSpot> standSpots, SpotOfDay spotOfDay, List<StockRule> stockRules,
+            List<BlockPos> served) {
 
         static final MapCodec<ClerkFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 BlockPos.CODEC.listOf().optionalFieldOf("storage", List.of()).forGetter(ClerkFields::storage),
                 StandSpot.CODEC.listOf().optionalFieldOf("stand_spots", List.of()).forGetter(ClerkFields::standSpots),
                 SpotOfDay.CODEC.optionalFieldOf("spot_of_day", SpotOfDay.NONE).forGetter(ClerkFields::spotOfDay),
-                StockRule.CODEC.listOf().optionalFieldOf("stock_rules", List.of()).forGetter(ClerkFields::stockRules)
+                StockRule.CODEC.listOf().optionalFieldOf("stock_rules", List.of()).forGetter(ClerkFields::stockRules),
+                BlockPos.CODEC.listOf().optionalFieldOf("served_clerks", List.of()).forGetter(ClerkFields::served)
         ).apply(instance, ClerkFields::new));
 
-        static final ClerkFields NONE = new ClerkFields(List.of(), List.of(), SpotOfDay.NONE, List.of());
+        static final ClerkFields NONE = new ClerkFields(List.of(), List.of(), SpotOfDay.NONE, List.of(), List.of());
     }
 
     /**
@@ -183,7 +186,8 @@ public final class SettlementBlock {
             Codec.BOOL.optionalFieldOf("collect_leaves", false).forGetter(SettlementBlock::collectLeaves),
             MissionOffer.CODEC.optionalFieldOf("mission_offer", MissionOffer.EMPTY).forGetter(SettlementBlock::missionOffer),
             ClerkFields.MAP_CODEC.forGetter(SettlementBlock::clerkFields),
-            CraftspersonFields.MAP_CODEC.forGetter(SettlementBlock::craftspersonFields)
+            CraftspersonFields.MAP_CODEC.forGetter(SettlementBlock::craftspersonFields),
+            BlockPos.CODEC.optionalFieldOf("home_clerk").forGetter(SettlementBlock::homeClerk)
     ).apply(instance, SettlementBlock::new));
 
     private final BlockPos pos;
@@ -200,6 +204,8 @@ public final class SettlementBlock {
     private final List<StandSpot> standSpots = new ArrayList<>();
     private SpotOfDay spotOfDay;
     private final List<StockRule> stockRules = new ArrayList<>();
+    private final List<BlockPos> served = new ArrayList<>();
+    private Optional<BlockPos> homeClerk;
     private final List<Pattern> patterns = new ArrayList<>();
     private int checkLimit;
     private Optional<Trim> trim;
@@ -212,13 +218,13 @@ public final class SettlementBlock {
      */
     public SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected) {
         this(pos, jobType, level, connected, List.of(), Optional.empty(), Optional.empty(), List.of(), Optional.empty(), Optional.empty(), false,
-                MissionOffer.EMPTY, ClerkFields.NONE, CraftspersonFields.NONE);
+                MissionOffer.EMPTY, ClerkFields.NONE, CraftspersonFields.NONE, Optional.empty());
     }
 
     private SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected, List<BlockPos> workPoints,
             Optional<BlockPos> collect, Optional<BlockPos> dropOff, List<SavedAssignee> assignees, Optional<UUID> legacyAssignee,
             Optional<String> legacyAssigneeName, boolean collectLeaves, MissionOffer missionOffer, ClerkFields clerk,
-            CraftspersonFields craftsperson) {
+            CraftspersonFields craftsperson, Optional<BlockPos> homeClerk) {
         this.pos = pos.immutable();
         this.jobType = jobType;
         this.level = SettlementRules.clampLevel(level);
@@ -235,13 +241,15 @@ public final class SettlementBlock {
         this.standSpots.addAll(clerk.standSpots());
         this.spotOfDay = clerk.spotOfDay();
         this.stockRules.addAll(clerk.stockRules());
+        this.served.addAll(clerk.served());
+        this.homeClerk = homeClerk;
         this.patterns.addAll(craftsperson.patterns());
         this.checkLimit = craftsperson.checkLimit();
         this.trim = craftsperson.trim();
     }
 
     private ClerkFields clerkFields() {
-        return new ClerkFields(List.copyOf(storage), List.copyOf(standSpots), spotOfDay, List.copyOf(stockRules));
+        return new ClerkFields(List.copyOf(storage), List.copyOf(standSpots), spotOfDay, List.copyOf(stockRules), List.copyOf(served));
     }
 
     private CraftspersonFields craftspersonFields() {
@@ -319,6 +327,30 @@ public final class SettlementBlock {
      */
     public SpotOfDay spotOfDay() {
         return spotOfDay;
+    }
+
+    /**
+     * @return the Served Clerks of this Warehouse, in linking order (read-only; Clerk only, else always empty; the
+     *         active ones: {@link Warehouses#activeServed})
+     */
+    public List<BlockPos> served() {
+        return Collections.unmodifiableList(served);
+    }
+
+    List<BlockPos> mutableServed() {
+        return served;
+    }
+
+    /**
+     * @return the Home Clerk: the nearest Clerk JobBlock of the settlement (a Clerk JobBlock is its own), empty while
+     *         the settlement has none ({@link Warehouses#nearestClerk})
+     */
+    public Optional<BlockPos> homeClerk() {
+        return homeClerk;
+    }
+
+    void setHomeClerk(Optional<BlockPos> homeClerk) {
+        this.homeClerk = homeClerk;
     }
 
     List<BlockPos> mutableStorage() {

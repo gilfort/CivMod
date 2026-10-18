@@ -28,6 +28,9 @@ public final class SettlementRules {
     /** Deliveryman places on a Clerk JobBlock per level (index 0 = level 1). */
     private static final int[] DELIVERYMAN_PLACES = {1, 2, 4, 6, 8};
 
+    /** Served Clerks a Warehouse links per level (index 0 = level 1). */
+    private static final int[] SERVED_CLERKS = {2, 4, 6, 8, 12};
+
     /** Containers a Clerk JobBlock links as storage per level (index 0 = level 1). */
     private static final int[] CLERK_STORAGE = {2, 4, 8, 12, 16};
     /** Stand spots per Clerk JobBlock. */
@@ -88,6 +91,14 @@ public final class SettlementRules {
      */
     public static int deliverymanPlaces(int level) {
         return DELIVERYMAN_PLACES[clampLevel(level) - MIN_LEVEL];
+    }
+
+    /**
+     * @param level the Warehouse level
+     * @return how many Served Clerks a Warehouse uses at that level: 2 / 4 / 6 / 8 / 12
+     */
+    public static int servedClerks(int level) {
+        return SERVED_CLERKS[clampLevel(level) - MIN_LEVEL];
     }
 
     /**
