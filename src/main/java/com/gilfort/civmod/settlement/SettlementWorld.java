@@ -14,6 +14,7 @@ import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.mission.MissionOffer;
 import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerJob;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
@@ -130,6 +131,26 @@ public final class SettlementWorld {
             }));
         }
         return excluded;
+    }
+
+    /**
+     * Assigns one Job of a JobBlock to a settler: the one server path of the job picker and of automatic assignment
+     * ({@link JobAssignments#assign(SettlementData, BlockPos, UUID, String, int, java.util.Collection, Job)}: place
+     * limits, one Job per JobBlock; the Job is added directly above the Laborer and works the block's points).
+     *
+     * @param level    the dimension
+     * @param jobBlock the JobBlock position
+     * @param settler  the settler
+     * @param job      the Job
+     * @return the result
+     */
+    public static JobAssignments.AssignResult assign(ServerLevel level, BlockPos jobBlock, Settler settler, Job job) {
+        JobAssignments.AssignResult result = JobAssignments.assign(SettlementData.get(level), jobBlock, settler.getUUID(),
+                settler.getName().getString(), settler.getSettlementId(), settler.getJobs().stream().map(SettlerJob::jobType).toList(), job);
+        if (result == JobAssignments.AssignResult.OK) {
+            settler.addJob(new SettlerJob(job, jobBlock));
+        }
+        return result;
     }
 
     /**

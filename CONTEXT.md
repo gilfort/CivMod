@@ -143,7 +143,11 @@ An amount of an item in a Clerk's storage held for one Delivery task (so far an 
 _Avoid_: Claim (that is a producer's share of a Request)
 
 **Job picker**:
-The window that opens when the scroll assigns a settler to a JobBlock: the block's Jobs with taken / places (full ones greyed out); a settler holds at most one Job per JobBlock. Code: `JobPicker` (payloads `Open` / `Choose`), `JobPickerScreen`; Jobs and places per JobBlock in `JobPlaces` (`JobPlaces.Line`; a Base Job and its Specializations share places), checked by `JobAssignments.check` before it opens and assigned with `JobAssignments.assign(…, job)`; each assignee records its Job (`SettlementBlock.Assignee.job()`, the Clerk of a block: `SettlementBlock.assignee(ModJobs.CLERK.get())`).
+The window that opens when the scroll assigns a settler to a JobBlock: the block's Jobs with taken / places (full ones greyed out); a settler holds at most one Job per JobBlock. Code: `JobPicker` (payloads `Open` / `Choose`), `JobPickerScreen`; Jobs and places per JobBlock in `JobPlaces` (`JobPlaces.Line`; a Base Job and its Specializations share places), checked by `JobAssignments.check` before it opens and assigned through `SettlementWorld.assign` (`JobAssignments.assign(…, job)` plus the settler's job list; shared with automatic assignment); each assignee records its Job (`SettlementBlock.Assignee.job()`, the Clerk of a block: `SettlementBlock.assignee(ModJobs.CLERK.get())`).
+
+**Automatic assignment**:
+A toggle per Job a JobBlock offers (checkbox at the end of its line in the info tab, default off, old saves and the Mission Board included): when it is switched on and every morning at 06:00 (catch-up too, for settlers whose missed time contains that morning) jobless settlers of the settlement (Laborer only; loaded settlers) take that Job's free places, highest skill in the Job first, ties nearest to the JobBlock, until no place or candidate is left; never on other events, so a freed place stays free until the next morning. Players within 32 blocks see "<Name> is now a <Job>". Code: `AutoAssignment` (`setAuto`, `morning`, `catchUpMorning`, the 06:00 check in its server tick), `SettlementBlock.autoAssign()` (saved as `auto_assign`), `JobPlaces.Line.auto()`, menu button `JobBlockMenu.autoButtonId`, refreshed info `JobBlockInfo.Sync`.
+_Avoid_: auto-hire, auto-job
 
 **Food point**:
 Every Clerk JobBlock; settlers take food from the nearest one whose reachable stock has food (a Clerk from its own storage first). Code: `ClerkStorage.nearestFood` → `ClerkStorage.FoodPoint`.

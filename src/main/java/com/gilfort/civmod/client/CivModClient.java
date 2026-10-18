@@ -102,6 +102,7 @@ public final class CivModClient {
         event.register(JobPicker.Open.TYPE, JobPickerScreen::handle);
         event.register(com.gilfort.civmod.menu.PatternTab.Sync.TYPE, JobBlockScreen::handlePatternTab);
         event.register(com.gilfort.civmod.menu.FoundTab.Sync.TYPE, JobBlockScreen::handleFoundTab);
+        event.register(com.gilfort.civmod.menu.JobBlockInfo.Sync.TYPE, JobBlockScreen::handleInfo);
     }
 
     private static void onItemTooltip(ItemTooltipEvent event) {

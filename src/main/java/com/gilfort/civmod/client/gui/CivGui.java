@@ -23,6 +23,11 @@ public final class CivGui {
     /** Colour for hint texts on disabled / unavailable content. */
     public static final int HINT_COLOR = 0xFF707070;
 
+    private static final Identifier CHECKBOX = Identifier.withDefaultNamespace("widget/checkbox");
+    private static final Identifier CHECKBOX_HIGHLIGHTED = Identifier.withDefaultNamespace("widget/checkbox_highlighted");
+    private static final Identifier CHECKBOX_SELECTED = Identifier.withDefaultNamespace("widget/checkbox_selected");
+    private static final Identifier CHECKBOX_SELECTED_HIGHLIGHTED = Identifier.withDefaultNamespace("widget/checkbox_selected_highlighted");
+
     /** Nine-slice panel sprite in the vanilla container style; scales to any size. */
     public static final Identifier PANEL = CivMod.id("container/background");
 
@@ -112,6 +117,23 @@ public final class CivGui {
      */
     public static void panel(GuiGraphicsExtractor graphics, int x, int y, int width, int height) {
         graphics.blitSprite(RenderPipelines.GUI_TEXTURED, PANEL, x, y, width, height);
+    }
+
+    /**
+     * Draws a vanilla checkbox (no label).
+     *
+     * @param graphics the graphics extractor
+     * @param selected whether it is checked
+     * @param hovered  whether the mouse is over it
+     * @param x        the left edge
+     * @param y        the top edge
+     * @param size     the width and height
+     */
+    public static void checkbox(GuiGraphicsExtractor graphics, boolean selected, boolean hovered, int x, int y, int size) {
+        Identifier sprite = selected
+                ? (hovered ? CHECKBOX_SELECTED_HIGHLIGHTED : CHECKBOX_SELECTED)
+                : (hovered ? CHECKBOX_HIGHLIGHTED : CHECKBOX);
+        graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, y, size, size);
     }
 
     /**

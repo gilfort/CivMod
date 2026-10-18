@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:auto_assign_toggle_on",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
