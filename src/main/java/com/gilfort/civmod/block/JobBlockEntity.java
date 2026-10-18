@@ -250,6 +250,17 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
         return getBlockState().getBlock().getName();
     }
 
+    /**
+     * Sends the menu's info snapshot to the client on every way the menu opens: a click on the block, and also vanilla
+     * opening it without CivMod's code (a player in spectator mode), which sends no other data.
+     */
+    @Override
+    public void writeClientSideData(AbstractContainerMenu menu, net.minecraft.network.RegistryFriendlyByteBuf buffer) {
+        if (menu instanceof com.gilfort.civmod.menu.JobBlockMenu jobBlockMenu) {
+            JobBlockInfo.STREAM_CODEC.encode(buffer, jobBlockMenu.getInfo());
+        }
+    }
+
     @Override
     protected @Nullable AbstractContainerMenu createMenu(int containerId, Inventory inventory) {
         if (!(getBlockState().getBlock() instanceof JobBlock jobBlock)) {

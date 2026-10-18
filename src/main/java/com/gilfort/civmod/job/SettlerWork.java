@@ -2083,6 +2083,18 @@ public final class SettlerWork {
             return activity != Activity.IDLE || settler.isSleeping();
         }
 
+        /**
+         * Starting this goal stops the idle stroll, and the stroll's stop clears the navigation: the path the decision
+         * just requested is gone. It is requested again here.
+         */
+        @Override
+        public void start() {
+            BlockPos current = target;
+            if (current != null && activity != Activity.SLEEP && settler.getNavigation().isDone() && !isAtTarget()) {
+                settler.getNavigation().moveTo(current.getX() + 0.5, current.getY(), current.getZ() + 0.5, 0.6);
+            }
+        }
+
         @Override
         public boolean requiresUpdateEveryTick() {
             return true;

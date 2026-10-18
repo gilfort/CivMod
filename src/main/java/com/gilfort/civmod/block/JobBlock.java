@@ -57,8 +57,8 @@ public class JobBlock extends BaseEntityBlock {
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
         if (level instanceof ServerLevel serverLevel && level.getBlockEntity(pos) instanceof JobBlockEntity jobBlock) {
-            JobBlockInfo info = JobBlockInfo.of(serverLevel, pos, getJobType(), jobBlock.getJobLevel());
-            player.openMenu(jobBlock, buffer -> JobBlockInfo.STREAM_CODEC.encode(buffer, info));
+            // The block entity writes the info for the client itself (JobBlockEntity#writeClientSideData).
+            player.openMenu(jobBlock);
         }
         return InteractionResult.SUCCESS;
     }
