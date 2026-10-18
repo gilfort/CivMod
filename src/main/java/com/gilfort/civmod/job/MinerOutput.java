@@ -2,6 +2,7 @@ package com.gilfort.civmod.job;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import net.minecraft.resources.Identifier;
@@ -9,11 +10,27 @@ import net.minecraft.util.RandomSource;
 
 /**
  * Miner roll (vault {@code Jobs/Miner.md}): stone group or ore pool by the level-based stone share, then a type by
- * weight among the types found by the scan; the work place type has double weight in its group.
+ * weight among the types found by the scan; the work place type has double weight in its group. Excluded types leave
+ * their group and the weights spread over the rest; a fully excluded group gives an empty roll, never one of the other
+ * group (vault {@code Systems/Resource Collection Jobs.md}).
  */
 public final class MinerOutput {
 
     private MinerOutput() {
+    }
+
+    /**
+     * The outcome of one roll.
+     *
+     * @param type      the rolled block type, empty if nothing was rolled
+     * @param emptyRoll whether the rolled group has types in the area, but all of them are excluded: the roll yields
+     *                  nothing, yet counts as work (EXP, tool wear); otherwise an empty type means the group has no
+     *                  (harvestable) type in the area
+     */
+    public record Roll(Optional<Identifier> type, boolean emptyRoll) {
+
+        private static final Roll NOTHING = new Roll(Optional.empty(), false);
+        private static final Roll EMPTY = new Roll(Optional.empty(), true);
     }
 
     /**
@@ -22,17 +39,22 @@ public final class MinerOutput {
      * @param scan        the scan result
      * @param poi         the work place block type
      * @param harvestable whether the current pickaxe can harvest a type
+     * @param excluded    the types excluded at the JobBlock
      * @param skillLevel  the skill level
      * @param weights     the weights
      * @param random      random source
-     * @return the block type, empty if the rolled group has no (harvestable) type in the area
+     * @return the roll
      */
-    public static Optional<Identifier> roll(MineScan.Result scan, Identifier poi, Predicate<Identifier> harvestable, int skillLevel,
+    public static Roll roll(MineScan.Result scan, Identifier poi, Predicate<Identifier> harvestable, Set<Identifier> excluded, int skillLevel,
             MinerWeights weights, RandomSource random) {
         boolean stone = random.nextDouble() < weights.stoneShare(skillLevel);
-        List<Identifier> group = (stone ? scan.stones() : scan.ores()).stream().filter(harvestable).sorted().toList();
+        List<Identifier> found = (stone ? scan.stones() : scan.ores()).stream().filter(harvestable).sorted().toList();
+        if (found.isEmpty()) {
+            return Roll.NOTHING;
+        }
+        List<Identifier> group = found.stream().filter(type -> !excluded.contains(type)).toList();
         if (group.isEmpty()) {
-            return Optional.empty();
+            return Roll.EMPTY;
         }
         double total = 0.0;
         for (Identifier type : group) {
@@ -42,10 +64,10 @@ public final class MinerOutput {
         for (Identifier type : group) {
             pick -= weight(type, stone, poi, weights);
             if (pick < 0.0) {
-                return Optional.of(type);
+                return new Roll(Optional.of(type), false);
             }
         }
-        return Optional.of(group.getLast());
+        return new Roll(Optional.of(group.getLast()), false);
     }
 
     private static double weight(Identifier type, boolean stone, Identifier poi, MinerWeights weights) {

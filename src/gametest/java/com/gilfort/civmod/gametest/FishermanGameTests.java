@@ -1,11 +1,17 @@
 package com.gilfort.civmod.gametest;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.job.FishTable;
 import com.gilfort.civmod.job.FishermanProfile;
 import com.gilfort.civmod.job.WaterScan;
+import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
@@ -14,13 +20,17 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.google.gson.JsonParser;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -46,6 +56,8 @@ public final class FishermanGameTests {
     static void onRegister(RegisterEvent event) {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "fisherman_formulas", FishermanGameTests::formulas);
+            register(helper, "fisherman_fish_table", FishermanGameTests::fishTable);
+            register(helper, "fisherman_enabled_fish", FishermanGameTests::enabledFish);
             register(helper, "fisherman_water_scan", FishermanGameTests::waterScan);
             register(helper, "fisherman_open_water_and_shore", FishermanGameTests::openWaterAndShore);
             register(helper, "fisherman_works_in_world", FishermanGameTests::worksInWorld);
@@ -81,6 +93,43 @@ public final class FishermanGameTests {
         helper.assertTrue(Math.abs(FishermanProfile.treasureChance(1, 3) - 0.06) < 1.0E-9, "Luck of the Sea III: +6 points");
         helper.assertTrue(Math.abs(FishermanProfile.waterProductivity(35) - 0.85) < 1.0E-9 && FishermanProfile.waterProductivity(80) == 1.0,
                 "−1 % per missing water block below 50");
+        helper.succeed();
+    }
+
+    /** The fish list comes from the fishing fish loot table: vanilla weights, nested and modded entries included. */
+    private static void fishTable(GameTestHelper helper) {
+        Map<Item, Integer> loaded = FishTable.get().fish().stream().collect(Collectors.toMap(FishTable.Fish::item, FishTable.Fish::weight));
+        helper.assertTrue(loaded.equals(Map.of(Items.COD, 60, Items.SALMON, 25, Items.TROPICAL_FISH, 2, Items.PUFFERFISH, 13)),
+                "Vanilla fish table with its weights: " + loaded);
+        FishTable parsed = FishTable.parse(JsonParser.parseString("{\"pools\":[{\"entries\":["
+                + "{\"type\":\"minecraft:item\",\"name\":\"minecraft:cod\",\"weight\":5},"
+                + "{\"type\":\"minecraft:alternatives\",\"children\":[{\"type\":\"minecraft:item\",\"name\":\"minecraft:salmon\"}]},"
+                + "{\"type\":\"minecraft:item\",\"name\":\"othermod:unknown_fish\",\"weight\":3}]}]}"));
+        helper.assertTrue(parsed.fish().equals(List.of(new FishTable.Fish(Items.COD, 5), new FishTable.Fish(Items.SALMON, 1))),
+                "Nested entries count with weight 1; unknown items are skipped: " + parsed.fish());
+        helper.succeed();
+    }
+
+    /** Fish are picked by weight among the enabled ones: only salmon enabled → only salmon; none → no catch. */
+    private static void enabledFish(GameTestHelper helper) {
+        FishTable table = FishTable.get();
+        RandomSource random = RandomSource.create(3L);
+        Set<Identifier> allButSalmon = Set.of(Identifier.withDefaultNamespace("cod"), Identifier.withDefaultNamespace("tropical_fish"),
+                Identifier.withDefaultNamespace("pufferfish"));
+        for (int i = 0; i < 2000; i++) {
+            helper.assertTrue(table.pick(allButSalmon, random).equals(Optional.of(Items.SALMON)), "Only salmon is enabled");
+        }
+        int cod = 0;
+        int samples = 20000;
+        for (int i = 0; i < samples; i++) {
+            if (table.pick(Set.of(Identifier.withDefaultNamespace("salmon")), random).orElseThrow() == Items.COD) {
+                cod++;
+            }
+        }
+        helper.assertTrue(Math.abs(cod / (double) samples - 60.0 / 75.0) < 0.015, "Weights renormalised without salmon: cod " + cod);
+        Set<Identifier> all = Set.of(Identifier.withDefaultNamespace("salmon"), Identifier.withDefaultNamespace("cod"),
+                Identifier.withDefaultNamespace("tropical_fish"), Identifier.withDefaultNamespace("pufferfish"));
+        helper.assertTrue(table.pick(all, random).isEmpty(), "All fish excluded: no catch");
         helper.succeed();
     }
 
@@ -129,6 +178,10 @@ public final class FishermanGameTests {
             helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0,
                     "Nothing caught yet (status " + settler.getWork().status(jobBlock) + ")");
             helper.assertFalse(settler.isInWater(), "The Fisherman stands on the shore");
+            FoundTab tab = FoundTab.of(level, jobBlock);
+            helper.assertTrue(tab.entries().stream().map(FoundTab.Entry::type).toList().equals(FishTable.get().ids()),
+                    "The Found tab lists the fish of the loot table: " + tab);
+            helper.assertTrue(tab.lines().size() >= 2, "Water and treasure lines: " + tab.lines());
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });

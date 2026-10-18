@@ -8,6 +8,7 @@ import java.util.Optional;
 
 import com.gilfort.civmod.job.JobProfile;
 import com.gilfort.civmod.menu.ClerkTab;
+import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.PatternTab;
@@ -37,7 +38,8 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 /**
  * Screen of a JobBlock: storage tab and info tab (job, level, skill cap, settlement status, upgrade button). Job tabs
  * are drawn by their views: the Mission Board's missions tab ({@link MissionTabView}), the Clerk's Stock and Requests
- * tabs ({@link ClerkTabView}) and the Craftsperson's Patterns tab ({@link PatternTabView}).
+ * tabs ({@link ClerkTabView}), the Craftsperson's Patterns tab ({@link PatternTabView}) and the Found tab of Resource
+ * Collection JobBlocks ({@link FoundTabView}).
  * <p>
  * Unconnected JobBlocks show the info greyed out with a red hint; storage keeps working.
  */
@@ -56,6 +58,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     private final MissionTabView missions;
     private final ClerkTabView clerk;
     private final PatternTabView patterns;
+    private final FoundTabView found;
     private int costOffset;
     private int costRowY = -1;
 
@@ -69,6 +72,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         missions = new MissionTabView(this);
         clerk = new ClerkTabView(this);
         patterns = new PatternTabView(this);
+        found = new FoundTabView(this);
     }
 
     private static List<TabBar.Tab> tabs(JobBlockMenu menu) {
@@ -85,6 +89,9 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         }
         if (JobBlockMenu.isCraftsperson(menu.getInfo())) {
             tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.patterns.tab"), new ItemStack(Items.CRAFTING_TABLE)));
+        }
+        if (JobBlockMenu.hasFoundTab(menu.getInfo())) {
+            tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.job_block.tab.found"), new ItemStack(Items.SPYGLASS)));
         }
         return tabs;
     }
@@ -165,6 +172,10 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             missions.extractLabels(graphics, mouseX, mouseY);
             return;
         }
+        if (tab == JobBlockMenu.TAB_FOUND && JobBlockMenu.hasFoundTab(menu.getInfo())) {
+            found.extractLabels(graphics, mouseX, mouseY);
+            return;
+        }
         if (tab == JobBlockMenu.TAB_INFO) {
             extractInfo(graphics, mouseX, mouseY);
         }
@@ -181,6 +192,9 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         }
         if (JobBlockMenu.isMissionBoard(info) && tab == JobBlockMenu.TAB_MISSIONS) {
             return missions.helpLines();
+        }
+        if (JobBlockMenu.hasFoundTab(info) && tab == JobBlockMenu.TAB_FOUND) {
+            return found.helpLines();
         }
         List<Component> lines = new ArrayList<>();
         if (tab == JobBlockMenu.TAB_INFO && info.inSettlement() && !info.connected()) {
@@ -312,6 +326,9 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (JobBlockMenu.isMissionBoard(menu.getInfo()) && missions.mouseClicked(event)) {
             return true;
         }
+        if (JobBlockMenu.hasFoundTab(menu.getInfo()) && found.mouseClicked(event)) {
+            return true;
+        }
         return super.mouseClicked(event, doubleClick);
     }
 
@@ -424,6 +441,19 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             if (minecraft.gui.screen() instanceof JobBlockScreen screen) {
                 screen.clerk.update();
             }
+        }
+    }
+
+    /**
+     * Client handler of {@link FoundTab.Sync}: updates the open Resource Collection JobBlock menu.
+     *
+     * @param payload the payload
+     * @param context the payload context
+     */
+    public static void handleFoundTab(FoundTab.Sync payload, IPayloadContext context) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player != null && minecraft.player.containerMenu instanceof JobBlockMenu open && open.containerId == payload.containerId()) {
+            open.setFoundTab(payload.tab());
         }
     }
 

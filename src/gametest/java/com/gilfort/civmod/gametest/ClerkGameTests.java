@@ -258,7 +258,7 @@ public final class ClerkGameTests {
         BlockPos jobBlock = settler.getJobs().get(0).jobBlock();
         boolean[] done = new boolean[1];
         helper.onEachTick(() -> {
-            if (done[0] || settler.getWork().found(settler.getJobs().get(0)).isEmpty()) {
+            if (done[0] || LumberjackGameTests.foundNothing(settler, settler.getJobs().get(0))) {
                 return;
             }
             done[0] = true;

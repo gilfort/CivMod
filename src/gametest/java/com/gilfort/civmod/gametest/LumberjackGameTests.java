@@ -4,12 +4,14 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.job.Fatigue;
 import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.job.LumberjackOutput;
+import com.gilfort.civmod.job.ScanResult;
 import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.job.ToolTiers;
 import com.gilfort.civmod.job.WoodScan;
@@ -67,6 +69,8 @@ public final class LumberjackGameTests {
             register(helper, "lumberjack_buffer_delivery", LumberjackGameTests::bufferDelivery);
             register(helper, "lumberjack_fatigue", LumberjackGameTests::fatigue);
             register(helper, "lumberjack_sampled_scan", LumberjackGameTests::sampledScan);
+            register(helper, "lumberjack_excluded_logs", LumberjackGameTests::excludedLogs);
+            register(helper, "lumberjack_scan_ignores_stripped", LumberjackGameTests::scanIgnoresStripped);
             register(helper, "lumberjack_works_in_world", LumberjackGameTests::worksInWorld);
             register(helper, "lumberjack_works_from_bed", LumberjackGameTests::worksFromBed);
             register(helper, "lumberjack_work_state_persistence", LumberjackGameTests::workStatePersistence);
@@ -79,10 +83,16 @@ public final class LumberjackGameTests {
     }
 
     private static Map<Item, Integer> sample(WoodScan.Result scan, Identifier poi, boolean leaves, boolean silk, Map<LumberjackOutput.Kind, Integer> kinds) {
+        return sample(scan, poi, leaves, silk, Set.of(), kinds);
+    }
+
+    /** Counts produced items by item (an empty roll counts as air) and by kind. */
+    private static Map<Item, Integer> sample(WoodScan.Result scan, Identifier poi, boolean leaves, boolean silk, Set<Identifier> excluded,
+            Map<LumberjackOutput.Kind, Integer> kinds) {
         RandomSource random = RandomSource.create(7L);
         Map<Item, Integer> items = new HashMap<>();
         for (int i = 0; i < SAMPLES; i++) {
-            LumberjackOutput.Produced produced = LumberjackOutput.produce(scan, poi, leaves, silk, random).orElseThrow();
+            LumberjackOutput.Produced produced = LumberjackOutput.produce(scan, poi, leaves, silk, excluded, random).orElseThrow();
             items.merge(produced.stack().getItem(), 1, Integer::sum);
             kinds.merge(produced.kind(), 1, Integer::sum);
         }
@@ -297,15 +307,15 @@ public final class LumberjackGameTests {
         SettlerJob job = new SettlerJob(ModJobs.LUMBERJACK.get(), jobBlock);
         settler.addJob(job);
         helper.startSequence()
-                .thenWaitUntil(() -> helper.assertFalse(settler.getWork().found(job).isEmpty(),
+                .thenWaitUntil(() -> helper.assertFalse(foundNothing(settler, job),
                         "First job never scanned (status " + settler.getWork().status(jobBlock) + ")"))
                 .thenExecute(() -> {
                     settler.removeJob(jobBlock);
-                    helper.assertTrue(settler.getWork().found(job).isEmpty(), "Removed job still has a scan");
+                    helper.assertTrue(foundNothing(settler, job), "Removed job still has a scan");
                     settler.addJob(job);
                 })
                 .thenWaitUntil(() -> {
-                    helper.assertFalse(settler.getWork().found(job).isEmpty(),
+                    helper.assertFalse(foundNothing(settler, job),
                             "Re-added job never scanned (status " + settler.getWork().status(jobBlock) + ")");
                     helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0,
                             "Re-added job produced no wood (status " + settler.getWork().status(jobBlock) + ")");
@@ -315,6 +325,15 @@ public final class LumberjackGameTests {
                     forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
                 })
                 .thenSucceed();
+    }
+
+    /**
+     * @param settler a settler
+     * @param job     one of its jobs
+     * @return whether that job has no scan yet or its scan found nothing
+     */
+    static boolean foundNothing(Settler settler, SettlerJob job) {
+        return settler.getWork().scan(job.jobBlock()).map(ScanResult::isEmpty).orElse(true);
     }
 
     static List<long[]> forceChunks(GameTestHelper helper) {
@@ -369,6 +388,43 @@ public final class LumberjackGameTests {
         var legacy = SettlerWork.BuffersSnapshot.CODEC.encodeStart(ops, snapshot).getOrThrow().getAsJsonObject().get("buffers");
         SettlerWork.BuffersSnapshot fromLegacy = SettlerWork.BuffersSnapshot.CODEC.parse(ops, legacy).getOrThrow();
         helper.assertTrue(fromLegacy.entries().get(0).buffer().count() == 12, "Earlier save format (plain buffer list) not readable");
+        helper.succeed();
+    }
+
+    /**
+     * An excluded wood type is never produced and the log share goes to the other types; with every log type excluded
+     * the log rolls are empty and the rare drops keep their share.
+     */
+    private static void excludedLogs(GameTestHelper helper) {
+        WoodScan.Result scan = new WoodScan.Result(Map.of(OAK_LOG, 60, BIRCH_LOG, 40), Map.of(OAK_LEAVES, 30, BIRCH_LEAVES, 30));
+        Map<LumberjackOutput.Kind, Integer> kinds = new EnumMap<>(LumberjackOutput.Kind.class);
+        Map<Item, Integer> items = sample(scan, BIRCH_LOG, false, false, Set.of(OAK_LOG), kinds);
+        helper.assertTrue(items.getOrDefault(Items.OAK_LOG, 0) == 0, "Excluded oak is never produced");
+        double birch = items.getOrDefault(Items.BIRCH_LOG, 0) / (double) SAMPLES;
+        helper.assertTrue(near(birch, 0.9, 0.015), "Birch takes the whole log share (~90 %): " + birch);
+
+        kinds.clear();
+        items = sample(scan, BIRCH_LOG, false, false, Set.of(OAK_LOG, BIRCH_LOG), kinds);
+        double empty = items.getOrDefault(Items.AIR, 0) / (double) SAMPLES;
+        helper.assertTrue(near(empty, 0.9, 0.015), "All logs excluded: the log rolls are empty (~90 %): " + empty);
+        helper.assertTrue(items.getOrDefault(Items.OAK_LOG, 0) + items.getOrDefault(Items.BIRCH_LOG, 0) == 0, "No logs at all");
+        double rare = (SAMPLES - kinds.getOrDefault(LumberjackOutput.Kind.LOG, 0)) / (double) SAMPLES;
+        helper.assertTrue(near(rare, 0.1, 0.015), "Rare drops keep their 10 %: " + rare);
+        helper.succeed();
+    }
+
+    /** Stripped logs and stripped wood (buildings) are not counted; wood blocks still are. */
+    private static void scanIgnoresStripped(GameTestHelper helper) {
+        for (int x = 0; x < 4; x++) {
+            for (int z = 0; z < 4; z++) {
+                helper.setBlock(new BlockPos(x, 1, z), Blocks.STRIPPED_OAK_LOG);
+                helper.setBlock(new BlockPos(x, 2, z), Blocks.STRIPPED_SPRUCE_WOOD);
+                helper.setBlock(new BlockPos(x, 3, z), Blocks.OAK_WOOD);
+            }
+        }
+        WoodScan.Result result = new WoodScan(helper.absolutePos(new BlockPos(1, 2, 1)), 10).runAll(helper.getLevel());
+        helper.assertTrue(result.logs().keySet().equals(Set.of(Identifier.withDefaultNamespace("oak_wood"))),
+                "Only the oak wood counts: " + result.logs());
         helper.succeed();
     }
 

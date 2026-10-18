@@ -111,6 +111,28 @@ public final class SettlementWorld {
     }
 
     /**
+     * Excludes or includes a found resource of a JobBlock; including one lets a settler paused with "All resources
+     * excluded" check again at once.
+     *
+     * @param level    the dimension
+     * @param jobBlock the JobBlock position
+     * @param type     the found resource type
+     * @return whether the type is excluded now
+     */
+    public static boolean toggleExcluded(ServerLevel level, BlockPos jobBlock, net.minecraft.resources.Identifier type) {
+        SettlementData data = SettlementData.get(level);
+        boolean excluded = JobAssignments.toggleExcluded(data, jobBlock, type);
+        if (!excluded) {
+            JobBlockSite.blockAt(data, jobBlock).ifPresent(block -> block.assignees().forEach(assignee -> {
+                if (level.getEntity(assignee.id()) instanceof Settler entity) {
+                    entity.getWork().recheckExcluded(jobBlock);
+                }
+            }));
+        }
+        return excluded;
+    }
+
+    /**
      * Applies a JobBlock level to its settlement entry.
      *
      * @param level    the dimension

@@ -10,6 +10,8 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.SettlementBlock;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -141,29 +143,59 @@ public interface JobProfile {
     }
 
     /**
-     * What the job tab shows as found: by default the found block types.
+     * The main resources of the job in an area (logs, stones and ores, fish): when every one of them is excluded at
+     * the JobBlock the job pauses ("All resources excluded"); rare drops and treasure never keep it running.
      *
-     * @param scan       the scan result
-     * @param tool       the current tool (may be empty)
-     * @param skillLevel the skill level
+     * @param scan the scan result
+     * @return the main resource types, by default the found block types
+     */
+    default List<Identifier> mainResources(ScanResult scan) {
+        return scan.foundBlocks();
+    }
+
+    /**
+     * What the JobBlock's Found tab lists (by default the found block types); each entry can be excluded.
+     *
+     * @param scan   the scan result
+     * @param worker the settler working the JobBlock, if any (without one no tool marks)
      * @return the entries
      */
-    default List<Found> found(ScanResult scan, ItemStack tool, int skillLevel) {
+    default List<Found> found(ScanResult scan, Optional<Worker> worker) {
         return scan.foundBlocks().stream()
-                .map(block -> new Found(new ItemStack(net.minecraft.core.registries.BuiltInRegistries.BLOCK.getValue(block)), canObtain(tool, block),
-                        List.<net.minecraft.network.chat.Component>of()))
+                .map(block -> new Found(block, new ItemStack(BuiltInRegistries.BLOCK.getValue(block)),
+                        worker.map(found -> canObtain(found.tool(), block)).orElse(true)))
                 .filter(found -> !found.icon().isEmpty())
                 .toList();
     }
 
     /**
-     * A found resource shown in the job tab.
+     * Scan info the Found tab shows above the entries (e.g. the Fisherman's water and treasure chance).
      *
-     * @param icon      the icon
-     * @param available whether the current tool can obtain it
-     * @param tooltip   tooltip lines (empty: the item name)
+     * @param scan   the scan result
+     * @param worker the settler working the JobBlock, if any
+     * @return the lines, one per value
      */
-    record Found(ItemStack icon, boolean available, List<net.minecraft.network.chat.Component> tooltip) {
+    default List<Component> foundLines(ScanResult scan, Optional<Worker> worker) {
+        return List.of();
+    }
+
+    /**
+     * A found resource listed in the Found tab.
+     *
+     * @param type      the type (block id, for the Fisherman the fish item id); the key of an exclusion
+     * @param icon      the icon
+     * @param available whether the working settler's tool can obtain it (always without a settler)
+     */
+    record Found(Identifier type, ItemStack icon, boolean available) {
+    }
+
+    /**
+     * The settler working a JobBlock, as far as the Found tab needs it.
+     *
+     * @param tool       its best tool of the job (empty without one)
+     * @param skillLevel its effective skill level in the job
+     */
+    record Worker(ItemStack tool, int skillLevel) {
     }
 
     /**
