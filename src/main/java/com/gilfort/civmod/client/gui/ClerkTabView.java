@@ -374,6 +374,7 @@ final class ClerkTabView {
         }
         if (tab == JobBlockMenu.TAB_DELIVERIES) {
             return List.of(Component.translatable("civmod.gui.clerk.deliveries.help.what"),
+                    Component.translatable("civmod.gui.clerk.deliveries.help.results"),
                     Component.translatable("civmod.gui.clerk.deliveries.help.warehouse"));
         }
         return List.of();

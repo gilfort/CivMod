@@ -50,11 +50,13 @@ import net.minecraft.server.level.ServerLevel;
  * @param assignees      the settlers working this JobBlock with their Job
  * @param places         the offered Jobs with taken / places
  * @param collectLeaves  whether a Lumberjack also collects leaves
+ * @param byDeliveryman  whether Deliverymen carry a Craftsperson's results ("Delivery: Deliveryman")
  * @param costs          upgrade costs per target level (index 0 = level 2)
  * @param missionTab   the missions and Mission Job settlers (Mission Board only, else empty)
  */
 public record JobBlockInfo(Job jobType, int level, Component settlementName, boolean inSettlement, boolean connected,
-        int distance, int required, List<SettlementBlock.Assignee> assignees, List<JobPlaces.Line> places, boolean collectLeaves, List<List<CostEntry>> costs,
+        int distance, int required, List<SettlementBlock.Assignee> assignees, List<JobPlaces.Line> places, boolean collectLeaves, boolean byDeliveryman,
+        List<List<CostEntry>> costs,
         MissionTab missionTab) {
 
     /**
@@ -225,7 +227,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withLevel(int newLevel) {
         return new JobBlockInfo(jobType, newLevel, settlementName, inSettlement, connected, distance, required, assignees,
-                JobPlaces.lines(jobType, newLevel, assignees), collectLeaves, costs, missionTab);
+                JobPlaces.lines(jobType, newLevel, assignees), collectLeaves, byDeliveryman, costs, missionTab);
     }
 
     /**
@@ -252,6 +254,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
             SettlementBlock.Assignee.STREAM_CODEC.apply(ByteBufCodecs.list()), JobBlockInfo::assignees,
             JobPlaces.Line.STREAM_CODEC.apply(ByteBufCodecs.list()), JobBlockInfo::places,
             ByteBufCodecs.BOOL, JobBlockInfo::collectLeaves,
+            ByteBufCodecs.BOOL, JobBlockInfo::byDeliveryman,
             CostEntry.STREAM_CODEC.apply(ByteBufCodecs.list()).apply(ByteBufCodecs.list()), JobBlockInfo::costs,
             MissionTab.STREAM_CODEC, JobBlockInfo::missionTab,
             JobBlockInfo::new);
@@ -284,7 +287,8 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
                 settlement.map(Settlement::displayName).orElse(Component.empty()),
                 settlement.isPresent(), status.connected(), status.distance(), status.required(),
                 List.copyOf(assignees), JobPlaces.lines(jobType, jobLevel, assignees),
-                block.map(SettlementBlock::collectLeaves).orElse(false), costsOf(jobType),
+                block.map(SettlementBlock::collectLeaves).orElse(false), block.map(SettlementBlock::byDeliveryman).orElse(false),
+                costsOf(jobType),
                 new MissionTab(SettlementWorld.missionOffer(level, pos), taken, settlers, OutcomeRules.get()));
     }
 
@@ -293,7 +297,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withoutAssignees() {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, List.of(),
-                JobPlaces.lines(jobType, level, List.of()), collectLeaves, costs,
+                JobPlaces.lines(jobType, level, List.of()), collectLeaves, byDeliveryman, costs,
                 new MissionTab(missionTab.offer(), List.of(), List.of(), missionTab.rules()));
     }
 
@@ -301,8 +305,16 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      * @return a copy with leaf collection toggled
      */
     public JobBlockInfo withLeavesToggled() {
-        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, places, !collectLeaves, costs,
-                missionTab);
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, places, !collectLeaves,
+                byDeliveryman, costs, missionTab);
+    }
+
+    /**
+     * @return a copy with the Craftsperson's delivery toggled (Self / Deliveryman)
+     */
+    public JobBlockInfo withDeliveryToggled() {
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, places, collectLeaves,
+                !byDeliveryman, costs, missionTab);
     }
 
     /**
@@ -324,7 +336,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
     }
 
     private JobBlockInfo withMissionTab(MissionTab changed) {
-        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, places, collectLeaves, costs,
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, places, collectLeaves, byDeliveryman, costs,
                 changed);
     }
 
@@ -348,7 +360,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      * @return info without settlement data
      */
     public static JobBlockInfo unknown(Job jobType, int jobLevel) {
-        return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, List.of(), JobPlaces.lines(jobType, jobLevel, List.of()), false,
+        return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, List.of(), JobPlaces.lines(jobType, jobLevel, List.of()), false, false,
                 costsOf(jobType), MissionTab.EMPTY);
     }
 }

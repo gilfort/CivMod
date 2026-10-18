@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:result_delivery_toggle_default",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

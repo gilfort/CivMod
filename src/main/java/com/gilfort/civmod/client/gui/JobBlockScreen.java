@@ -113,6 +113,14 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
                 rebuildWidgets();
             }).bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 72, imageWidth - 2 * CivGui.PADDING, 20).build());
         }
+        if (JobBlockMenu.isCraftsperson(current) && current.inSettlement()) {
+            Component label = Component.translatable(current.byDeliveryman() ? "civmod.gui.job_block.delivery.deliveryman"
+                    : "civmod.gui.job_block.delivery.self");
+            addTabWidget(JobBlockMenu.TAB_INFO, Button.builder(label, button -> {
+                clickMenuButton(JobBlockMenu.BUTTON_TOGGLE_DELIVERY);
+                rebuildWidgets();
+            }).bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 72, imageWidth - 2 * CivGui.PADDING, 20).build());
+        }
         if (JobBlockMenu.isMissionBoard(current)) {
             missions.init();
         }
@@ -180,6 +188,9 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         }
         if (tab == JobBlockMenu.TAB_INFO && info.jobType().profile().map(JobProfile::hasLeavesOption).orElse(false) && info.inSettlement()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.leaves"));
+        }
+        if (tab == JobBlockMenu.TAB_INFO && JobBlockMenu.isCraftsperson(info) && info.inSettlement()) {
+            lines.add(Component.translatable("civmod.gui.job_block.help.delivery"));
         }
         return lines;
     }

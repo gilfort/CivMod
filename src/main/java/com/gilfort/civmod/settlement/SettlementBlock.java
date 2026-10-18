@@ -154,16 +154,18 @@ public final class SettlementBlock {
      * @param patterns   the pattern library
      * @param checkLimit the checkmark limit of the settler last seen working it
      * @param trim       the last checkmarks removed by a dropped limit
+     * @param byDeliveryman whether Deliverymen carry the results ("Delivery: Deliveryman"), else the Craftsperson itself
      */
-    private record CraftspersonFields(List<Pattern> patterns, int checkLimit, Optional<Trim> trim) {
+    private record CraftspersonFields(List<Pattern> patterns, int checkLimit, Optional<Trim> trim, boolean byDeliveryman) {
 
         static final MapCodec<CraftspersonFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Pattern.CODEC.listOf().optionalFieldOf("patterns", List.of()).forGetter(CraftspersonFields::patterns),
                 Codec.INT.optionalFieldOf("check_limit", Patterns.BASE_CHECKMARKS).forGetter(CraftspersonFields::checkLimit),
-                Trim.CODEC.optionalFieldOf("check_trim").forGetter(CraftspersonFields::trim)
+                Trim.CODEC.optionalFieldOf("check_trim").forGetter(CraftspersonFields::trim),
+                Codec.BOOL.optionalFieldOf("by_deliveryman", false).forGetter(CraftspersonFields::byDeliveryman)
         ).apply(instance, CraftspersonFields::new));
 
-        static final CraftspersonFields NONE = new CraftspersonFields(List.of(), Patterns.BASE_CHECKMARKS, Optional.empty());
+        static final CraftspersonFields NONE = new CraftspersonFields(List.of(), Patterns.BASE_CHECKMARKS, Optional.empty(), false);
     }
 
     /** Maximum number of work POIs per JobBlock. */
@@ -209,6 +211,7 @@ public final class SettlementBlock {
     private final List<Pattern> patterns = new ArrayList<>();
     private int checkLimit;
     private Optional<Trim> trim;
+    private boolean byDeliveryman;
 
     /**
      * @param pos       the block position
@@ -246,6 +249,7 @@ public final class SettlementBlock {
         this.patterns.addAll(craftsperson.patterns());
         this.checkLimit = craftsperson.checkLimit();
         this.trim = craftsperson.trim();
+        this.byDeliveryman = craftsperson.byDeliveryman();
     }
 
     private ClerkFields clerkFields() {
@@ -253,7 +257,19 @@ public final class SettlementBlock {
     }
 
     private CraftspersonFields craftspersonFields() {
-        return new CraftspersonFields(List.copyOf(patterns), checkLimit, trim);
+        return new CraftspersonFields(List.copyOf(patterns), checkLimit, trim, byDeliveryman);
+    }
+
+    /**
+     * @return whether Deliverymen carry the Craftsperson's results ("Delivery: Deliveryman"); default the Craftsperson
+     *         delivers itself
+     */
+    public boolean byDeliveryman() {
+        return byDeliveryman;
+    }
+
+    void setByDeliveryman(boolean byDeliveryman) {
+        this.byDeliveryman = byDeliveryman;
     }
 
     /**

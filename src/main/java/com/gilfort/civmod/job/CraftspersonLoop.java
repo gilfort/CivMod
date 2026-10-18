@@ -19,6 +19,7 @@ import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.settlement.Deliveries;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Patterns;
@@ -48,7 +49,8 @@ import net.minecraft.world.phys.Vec3;
  * for (up to {@value #MAX_TRIES} tries; a request it lacks inputs for is skipped for 30 s), claim what it can make in one
  * round, fetch the inputs (collect inventory first, then the posting Clerk's storage under the access rule) into its
  * buffer, craft intermediates and the item at its station (a crafting table) and deliver to the posting Clerk; what does
- * not fit goes to its own drop-off.
+ * not fit goes to its own drop-off. On "Delivery: Deliveryman" the item goes into its own drop-off with a result
+ * delivery for the posting Clerk ({@link Deliveries#postResult}), and it keeps working.
  * <p>
  * The claim is released when the settler switches job, the day ends, it leaves the JobBlock or dies; fetched inputs
  * go to its own drop-off (leaving the JobBlock: straight into it while it is loaded; death: the death path). The round
@@ -134,7 +136,7 @@ final class CraftspersonLoop implements CategoryLoop {
                 walk(level, new ClerkStorage.Visit(station, SettlerWork.REACH, false));
             }
             case DELIVER -> {
-                BlockPos target = target(SettlementData.get(level), round.request).orElse(site.dropOff());
+                BlockPos target = site.block().byDeliveryman() ? site.dropOff() : target(SettlementData.get(level), round.request).orElse(site.dropOff());
                 shell.setStatus(jobBlock, JobStatus.DELIVERING);
                 walk(level, shell.reachableVisit(level, target, ClerkStorage.visit(level, target, dayTime)));
             }
@@ -184,7 +186,10 @@ final class CraftspersonLoop implements CategoryLoop {
                 break;
             }
             tries++;
-            Map<Item, Integer> collect = stock(level, site.collect(), dayTime, catchUp).counts();
+            Map<Item, Integer> collect = new HashMap<>(stock(level, site.collect(), dayTime, catchUp).counts());
+            // Results waiting there for a Deliveryman (drop-off = collect inventory) are no inputs.
+            Deliveries.waitingAt(settlement, site.collect()).forEach((item, count) -> collect.computeIfPresent(item,
+                    (key, there) -> there > count ? there - count : null));
             Optional<BlockPos> clerk = request.target().filter(target -> !target.equals(site.collect()));
             Map<Item, Integer> available = new HashMap<>(collect);
             clerk.ifPresent(target -> ItemCounts.addAll(available, stock(level, target, dayTime, catchUp).counts()));
@@ -405,7 +410,8 @@ final class CraftspersonLoop implements CategoryLoop {
 
     /**
      * Delivers the round's item to the posting Clerk (under its access rule), ends the claim and lets the Clerk check
-     * its rules.
+     * its rules. On "Deliveryman" the item goes into the own drop-off instead, with a result delivery for the Clerk
+     * (in delivery for its rules until a Deliveryman brought it).
      *
      * @return whether everything fit (otherwise the rest waits in the buffer for the own drop-off)
      */
@@ -417,7 +423,11 @@ final class CraftspersonLoop implements CategoryLoop {
         SettlementData data = SettlementData.get(level);
         // Read at delivery: a removed Clerk leaves the request without a target (own drop-off).
         Optional<BlockPos> target = target(data, round.request);
-        Stock stock = target.map(clerk -> ClerkStorage.stock(level, clerk, dayTime, atCounter)).orElse(Stock.EMPTY);
+        Optional<JobBlockSite> site = JobBlockSite.at(level, job.jobBlock());
+        Optional<BlockPos> dropOff = target.isPresent() ? site.filter(found -> found.block().byDeliveryman()).map(JobBlockSite::dropOff)
+                : Optional.empty();
+        Stock stock = dropOff.map(pos -> ClerkStorage.stock(level, pos, dayTime, false))
+                .orElseGet(() -> target.map(clerk -> ClerkStorage.stock(level, clerk, dayTime, atCounter)).orElse(Stock.EMPTY));
         for (ItemStack stack : product) {
             ItemStack left = stock.insert(stack);
             if (!left.isEmpty()) {
@@ -426,8 +436,16 @@ final class CraftspersonLoop implements CategoryLoop {
         }
         rest.forEach(buffer::add);
         workplace.setRound(null);
-        settlementOf(data, round.request).ifPresent(settlement -> Requests.finish(data, settlement, round.request, settler.getUUID()));
-        target.ifPresent(clerk -> StockRules.check(level, clerk, dayTime));
+        Optional<Settlement> settlement = settlementOf(data, round.request);
+        settlement.ifPresent(found -> Requests.finish(data, found, round.request, settler.getUUID()));
+        if (dropOff.isPresent()) {
+            // The whole result: what did not fit follows into the same drop-off with the buffer (in delivery as well).
+            int count = product.stream().mapToInt(ItemStack::getCount).sum();
+            site.ifPresent(found -> Deliveries.postResult(data, found.settlement(), dropOff.get(), found.pos(), round.item, count, target.get(),
+                    level.getGameTime()));
+        } else {
+            target.ifPresent(clerk -> StockRules.check(level, clerk, dayTime));
+        }
         return rest.isEmpty();
     }
 
