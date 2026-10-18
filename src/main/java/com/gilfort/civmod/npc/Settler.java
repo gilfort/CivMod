@@ -225,6 +225,7 @@ public class Settler extends PathfinderMob {
     public void remove(RemovalReason reason) {
         if (reason.shouldDestroy() && level() instanceof net.minecraft.server.level.ServerLevel server) {
             com.gilfort.civmod.settlement.Requests.releaseAll(SettlementData.get(server), getUUID());
+            com.gilfort.civmod.settlement.Deliveries.releaseAll(SettlementData.get(server), getUUID());
         }
         super.remove(reason);
     }

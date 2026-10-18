@@ -29,9 +29,10 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 /**
- * The Clerk's "Stock" and "Requests" tabs of the {@link JobBlockScreen} (vault {@code Jobs/Clerk.md}); the client side
- * of {@link ClerkTab}. Stock: 5 rows of 9 stock slots (9 per JobBlock level active) and the editor of the selected rule
- * below; Requests: one row per request of this Clerk's rules.
+ * The Clerk's "Stock", "Requests" and "Deliveries" tabs of the {@link JobBlockScreen} (vault {@code Jobs/Clerk.md},
+ * {@code Jobs/Deliveryman.md}); the client side of {@link ClerkTab}. Stock: 5 rows of 9 stock slots (9 per JobBlock
+ * level active) and the editor of the selected rule below; Requests: one row per request of this Clerk's rules;
+ * Deliveries: one row per open Delivery task. The info tab gets the Warehouse lines ({@link #extractWarehouse}).
  */
 final class ClerkTabView {
 
@@ -48,6 +49,7 @@ final class ClerkTabView {
     /** The selected rule slot of the Stock tab, {@code -1} if none. */
     private int selectedSlot = -1;
     private int requestOffset;
+    private int deliveryOffset;
     private @Nullable Button amountMinus;
     private @Nullable Button amountPlus;
     private @Nullable Button priorityMinus;
@@ -280,7 +282,7 @@ final class ClerkTabView {
 
     /** Draws the background of the Requests tab (absolute coordinates). */
     void extractBackground(GuiGraphicsExtractor graphics, int tab) {
-        if (tab == JobBlockMenu.TAB_REQUESTS) {
+        if (tab == JobBlockMenu.TAB_REQUESTS || tab == JobBlockMenu.TAB_DELIVERIES) {
             CivGui.inset(graphics, screen.left() + CivGui.PADDING, screen.top() + REQUEST_LIST_Y, screen.panelWidth() - 2 * CivGui.PADDING,
                     screen.panelHeight() - REQUEST_LIST_Y - CivGui.PADDING);
         }
@@ -298,6 +300,10 @@ final class ClerkTabView {
         }
         if (tab == JobBlockMenu.TAB_REQUESTS) {
             extractRequests(graphics, mouseX, mouseY);
+            return true;
+        }
+        if (tab == JobBlockMenu.TAB_DELIVERIES) {
+            extractDeliveries(graphics, mouseX, mouseY);
             return true;
         }
         return false;
@@ -358,13 +364,17 @@ final class ClerkTabView {
 
     /**
      * @param tab the selected tab
-     * @return the help lines of the Stock tab, empty for other tabs
+     * @return the help lines of the Stock and Deliveries tabs, empty for other tabs
      */
     List<Component> helpLines(int tab) {
         if (tab == JobBlockMenu.TAB_STOCK) {
             return List.of(Component.translatable("civmod.gui.clerk.stock.help.click"), Component.translatable("civmod.gui.clerk.stock.help.delete"),
                     Component.translatable("civmod.gui.clerk.stock.help.item"), Component.translatable("civmod.gui.clerk.stock.help.viewer"),
                     Component.translatable("civmod.gui.clerk.stock.help.shift"));
+        }
+        if (tab == JobBlockMenu.TAB_DELIVERIES) {
+            return List.of(Component.translatable("civmod.gui.clerk.deliveries.help.what"),
+                    Component.translatable("civmod.gui.clerk.deliveries.help.warehouse"));
         }
         return List.of();
     }
@@ -382,6 +392,11 @@ final class ClerkTabView {
         int requests = menu.getClerkTab().requests().size();
         if (menu.getActiveTab() == JobBlockMenu.TAB_REQUESTS && requests > requestRows()) {
             requestOffset = Math.clamp(requestOffset - (int) Math.signum(scrollY), 0, requests - requestRows());
+            return true;
+        }
+        int deliveries = menu.getClerkTab().deliveries().size();
+        if (menu.getActiveTab() == JobBlockMenu.TAB_DELIVERIES && deliveries > requestRows()) {
+            deliveryOffset = Math.clamp(deliveryOffset - (int) Math.signum(scrollY), 0, deliveries - requestRows());
             return true;
         }
         return false;
@@ -427,5 +442,78 @@ final class ClerkTabView {
                 graphics.setComponentTooltipForNextFrame(font, List.of(title, request.status(), priority), mouseX, mouseY);
             }
         }
+    }
+
+    /**
+     * Draws the Deliveries tab: one row per open Delivery task (source icon and name, items waiting, the Deliveryman
+     * on it or "Waiting" / "No Deliveryman"); scrolls with the mouse wheel.
+     */
+    private void extractDeliveries(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        Font font = font();
+        List<ClerkTab.DeliveryRow> deliveries = menu.getClerkTab().deliveries();
+        graphics.text(font, Component.translatable("civmod.gui.clerk.deliveries", deliveries.size()), CivGui.PADDING, 22, CivGui.LABEL_COLOR, false);
+        int left = CivGui.PADDING + CivGui.INSET_PADDING;
+        int width = screen.panelWidth() - 2 * left;
+        if (deliveries.isEmpty()) {
+            graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.clerk.deliveries.none"), width), left,
+                    REQUEST_LIST_Y + CivGui.INSET_PADDING, CivGui.HINT_COLOR, false);
+            return;
+        }
+        int rows = requestRows();
+        deliveryOffset = Math.clamp(deliveryOffset, 0, Math.max(0, deliveries.size() - rows));
+        if (deliveries.size() > rows) {
+            width -= JobBlockScreen.SCROLL_COLUMN;
+            int arrowX = left + width + 1;
+            graphics.text(font, Component.literal("▲"), arrowX, REQUEST_LIST_Y + CivGui.INSET_PADDING,
+                    deliveryOffset > 0 ? CivGui.LABEL_COLOR : CivGui.HINT_COLOR, false);
+            graphics.text(font, Component.literal("▼"), arrowX, REQUEST_LIST_Y + CivGui.INSET_PADDING + rows * JobBlockScreen.ROW_HEIGHT - font.lineHeight,
+                    deliveryOffset + rows < deliveries.size() ? CivGui.LABEL_COLOR : CivGui.HINT_COLOR, false);
+        }
+        for (int row = 0; row < Math.min(rows, deliveries.size() - deliveryOffset); row++) {
+            ClerkTab.DeliveryRow delivery = deliveries.get(deliveryOffset + row);
+            int y = REQUEST_LIST_Y + CivGui.INSET_PADDING + row * JobBlockScreen.ROW_HEIGHT;
+            graphics.item(delivery.icon(), left, y + 2);
+            Component items = Component.translatable("civmod.gui.clerk.delivery.items", delivery.items());
+            int itemsWidth = font.width(items);
+            graphics.text(font, items, left + width - itemsWidth, y + 1, CivGui.HINT_COLOR, false);
+            graphics.text(font, CivGui.fit(font, delivery.source(), width - 24 - itemsWidth), left + 20, y + 1, CivGui.LABEL_COLOR, false);
+            graphics.text(font, CivGui.fit(font, delivery.status(), width - 20), left + 20, y + 11, CivGui.HINT_COLOR, false);
+            if (mouseX >= screen.left() + left && mouseX < screen.left() + left + width && mouseY >= screen.top() + y
+                    && mouseY < screen.top() + y + JobBlockScreen.ROW_HEIGHT) {
+                graphics.setComponentTooltipForNextFrame(font, List.of(delivery.source(), items, delivery.status()), mouseX, mouseY);
+            }
+        }
+    }
+
+    /**
+     * Draws the Warehouse line of the info tab: a Warehouse counts its Served Clerks (names on hover), a Served Clerk
+     * names its Warehouse.
+     *
+     * @param graphics the graphics
+     * @param y        the line's y (relative to the panel)
+     * @param width    the line width
+     * @param color    the text colour
+     * @param mouseX   the mouse x position
+     * @param mouseY   the mouse y position
+     * @return the y below the line
+     */
+    int extractWarehouse(GuiGraphicsExtractor graphics, int y, int width, int color, int mouseX, int mouseY) {
+        Font font = font();
+        ClerkTab tab = menu.getClerkTab();
+        if (tab.servedBy().isPresent()) {
+            graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.clerk.served_by", tab.servedBy().get()), width), CivGui.PADDING, y,
+                    color, false);
+            return y + 11;
+        }
+        if (tab.served().isEmpty()) {
+            return y;
+        }
+        Component line = Component.translatable("civmod.gui.clerk.served", tab.served().size());
+        graphics.text(font, CivGui.fit(font, line, width), CivGui.PADDING, y, color, false);
+        if (mouseX >= screen.left() + CivGui.PADDING && mouseX < screen.left() + CivGui.PADDING + Math.min(width, font.width(line))
+                && mouseY >= screen.top() + y && mouseY < screen.top() + y + font.lineHeight) {
+            graphics.setComponentTooltipForNextFrame(font, tab.served(), mouseX, mouseY);
+        }
+        return y + 11;
     }
 }

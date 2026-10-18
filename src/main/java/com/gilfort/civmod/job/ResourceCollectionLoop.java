@@ -7,6 +7,7 @@ import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.Pickups;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -123,6 +124,12 @@ final class ResourceCollectionLoop implements CategoryLoop {
             shell.moveToJob(level, visit.target());
         }
         return true;
+    }
+
+    /** End-of-work sweep: a drop-off with anything left gets a pickup for the Deliverymen. */
+    @Override
+    public void dayEnded(ServerLevel level, SettlerJob job) {
+        JobBlockSite.at(level, job.jobBlock()).ifPresent(site -> Pickups.sweep(level, site));
     }
 
     @Override

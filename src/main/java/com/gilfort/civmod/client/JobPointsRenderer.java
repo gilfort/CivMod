@@ -38,7 +38,8 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  * icon above each point (like the unconnected X), and lines from the bound JobBlock to its points.
  * <p>
  * Colours: work = blue (primary marked "1"), collect = turquoise, drop-off = orange, Clerk storage = purple (chest icon),
- * Clerk stand spots = blue, numbered, with a short line in the facing direction; beds neutral. Points of other
+ * Clerk stand spots = blue, numbered, with a short line in the facing direction; Served Clerks of a Warehouse = gold
+ * (Clerk block icon); beds neutral. Points of other
  * JobBlocks are dimmed while the scroll is bound.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID, value = Dist.CLIENT)
@@ -51,6 +52,7 @@ public final class JobPointsRenderer {
 
     private static final int BED_COLOR = 0xE8E8E8;
     private static final int STORAGE_COLOR = 0x9B59D0;
+    private static final int SERVED_COLOR = 0xE0B020;
 
     private static List<JobPointsDisplay.JobPoints> points = List.of();
     private static Optional<BlockPos> bound = Optional.empty();
@@ -105,6 +107,9 @@ public final class JobPointsRenderer {
                     ModItems.DROP_OFF_MARKER.get().getDefaultInstance())));
             for (BlockPos storage : jobPoints.storage()) {
                 markers.add(marker(minecraft, storage, jobPoints.jobBlock(), STORAGE_COLOR, dimmed, new ItemStack(Items.CHEST)));
+            }
+            for (BlockPos served : jobPoints.served()) {
+                markers.add(marker(minecraft, served, jobPoints.jobBlock(), SERVED_COLOR, dimmed, new ItemStack(ModItems.CLERK_BLOCK.get())));
             }
             for (int i = 0; i < jobPoints.standSpots().size(); i++) {
                 SettlementBlock.StandSpot spot = jobPoints.standSpots().get(i);

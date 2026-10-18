@@ -20,6 +20,7 @@ import com.gilfort.civmod.job.Schedule.Decision;
 import com.gilfort.civmod.job.Schedule.Intent;
 import com.gilfort.civmod.job.Schedule.MealPurpose;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.Pickups;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
@@ -126,6 +127,8 @@ public final class SettlerWork {
     private final Map<JobCategory, CategoryLoop> loops = new EnumMap<>(JobCategory.class);
     private final MissionLoop missions;
     private final ClerkLoop clerks;
+    /** The Deliveryman's loop: a second Logistics loop beside the Clerk's. */
+    private final DeliverymanLoop deliverymen;
 
     private Activity activity = Activity.IDLE;
     private @Nullable SettlerJob activeJob;
@@ -178,6 +181,16 @@ public final class SettlerWork {
         loops.put(JobCategory.LOGISTICS, clerks);
         // The Craftsperson is the only Producing Job so far.
         loops.put(JobCategory.PRODUCING, new CraftspersonLoop(this));
+        deliverymen = new DeliverymanLoop(this);
+    }
+
+    /**
+     * @return every work loop of this settler (the category loops and the Deliveryman's)
+     */
+    private List<CategoryLoop> allLoops() {
+        List<CategoryLoop> all = new ArrayList<>(loops.values());
+        all.add(deliverymen);
+        return all;
     }
 
     /**
@@ -273,8 +286,11 @@ public final class SettlerWork {
      * @return the work loop of the job's category (null if the category is not implemented)
      */
     private @Nullable CategoryLoop loop(SettlerJob job) {
+        if (job.jobType() == ModJobs.DELIVERYMAN.get()) {
+            return deliverymen;
+        }
         CategoryLoop loop = loops.get(job.jobType().category());
-        // The Clerk is the only Logistics Job with a loop so far; the Deliveryman has none yet.
+        // The Logistics category has two loops: the Clerk's (here) and the Deliveryman's (above).
         return loop == clerks && job.jobType() != ModJobs.CLERK.get() ? null : loop;
     }
 
@@ -393,7 +409,7 @@ public final class SettlerWork {
         snapshot.entries().forEach(entry -> workplace(entry.jobBlock()).restoreBuffer(entry.buffer()));
         snapshot.workPlaces().forEach(entry -> workplace(entry.jobBlock()).restoreWorkPlace(entry));
         snapshot.scans().forEach(scan -> workplace(scan.jobBlock()).restoreScan(scan));
-        loops.values().forEach(loop -> loop.restore(snapshot));
+        allLoops().forEach(loop -> loop.restore(snapshot));
         savedClock = snapshot.catchUp().activeClock();
         catchUpFrom = snapshot.catchUp().from();
         catchUpTo = snapshot.catchUp().to();
@@ -407,6 +423,23 @@ public final class SettlerWork {
      */
     public JobStatus status(BlockPos jobBlock) {
         return existingWorkplace(jobBlock).map(Workplace::status).orElse(JobStatus.IDLE);
+    }
+
+    /**
+     * @param jobBlock a JobBlock position
+     * @return the status of that job as text, naming what it is about (e.g. "Collecting – Lumberjack")
+     */
+    public net.minecraft.network.chat.Component statusText(BlockPos jobBlock) {
+        return existingWorkplace(jobBlock).map(workplace -> workplace.status().displayName(workplace.statusSubject()))
+                .orElseGet(JobStatus.IDLE::displayName);
+    }
+
+    /**
+     * @param job a job
+     * @return a Deliveryman's carry capacity in stacks (9 at skill level 1 to 27 at 100), 0 for other jobs
+     */
+    public int carryStacks(SettlerJob job) {
+        return loop(job) == deliverymen ? DeliverymanLoop.carryStacks(effectiveLevel(job)) : 0;
     }
 
     /**
@@ -472,7 +505,7 @@ public final class SettlerWork {
      */
     public void forget(BlockPos jobBlock) {
         // The loops first: they still see the Workplace (a Producing Job empties its buffer into the drop-off).
-        loops.values().forEach(loop -> loop.forget(jobBlock));
+        allLoops().forEach(loop -> loop.forget(jobBlock));
         Workplace workplace = jobWorkplaces.remove(jobBlock);
         if (workplace != null && settler.level() instanceof ServerLevel level) {
             workplace.buffer().stacks().forEach(stack -> settler.spawnAtLocation(level, stack.copy()));
@@ -599,7 +632,7 @@ public final class SettlerWork {
     private Schedule.Snapshot snapshot(ServerLevel level, long day, long dayTime, boolean nightSkipped, boolean woke, FoodLookup foodLookup) {
         SettlerFood food = settler.getFood();
         boolean deliveryPending = settler.getJobs().stream()
-                .anyMatch(job -> !buffer(job.jobBlock()).isEmpty() && status(job.jobBlock()) != JobStatus.DROP_OFF_FULL);
+                .anyMatch(job -> !buffer(job.jobBlock()).isEmpty() && !status(job.jobBlock()).waitsForRoom());
         return new Schedule.Snapshot(day, dayTime, food.level(),
                 SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE),
                 CivModConfig.PROVISION_NUTRITION.get(), SettlerFood.choose(pocketStacks(), food.level()).isPresent(),
@@ -659,7 +692,7 @@ public final class SettlerWork {
             endDay(level);
             // Jobs show idle after work, except the first one with something to deliver.
             for (SettlerJob job : settler.getJobs()) {
-                if (!buffer(job.jobBlock()).isEmpty() && status(job.jobBlock()) != JobStatus.DROP_OFF_FULL) {
+                if (!buffer(job.jobBlock()).isEmpty() && !status(job.jobBlock()).waitsForRoom()) {
                     delivery = job;
                     break;
                 }
@@ -811,6 +844,15 @@ public final class SettlerWork {
     }
 
     /**
+     * @param jobBlock a JobBlock position
+     * @param status   the new status of that job
+     * @param subject  what the status is about
+     */
+    void setStatus(BlockPos jobBlock, JobStatus status, net.minecraft.network.chat.Component subject) {
+        workplace(jobBlock).setStatus(status, subject);
+    }
+
+    /**
      * @param pos a position
      * @return whether the settler is already walking to (or at) that position for a step of a category loop
      */
@@ -865,11 +907,17 @@ public final class SettlerWork {
      * @return true (the settler is busy with it)
      */
     boolean startDelivery(ServerLevel level, SettlerJob job) {
-        BlockPos dropOff = JobBlockSite.at(level, job.jobBlock()).map(JobBlockSite::dropOff).orElse(job.jobBlock());
-        ClerkStorage.Visit visit = reachableVisit(level, dropOff, ClerkStorage.visit(level, dropOff,
-                DayClock.dayTime(level)));
+        ClerkStorage.Visit visit;
         activeJob = job;
-        workplace(job.jobBlock()).setStatus(JobStatus.DELIVERING);
+        if (loop(job) == deliverymen) {
+            // A Deliveryman unloads into its store as staff: at the block, no counter.
+            visit = ClerkStorage.blockVisit(deliverymen.unloadTarget(level, job));
+            workplace(job.jobBlock()).setStatus(JobStatus.UNLOADING, deliverymen.unloadName(level, job));
+        } else {
+            BlockPos dropOff = JobBlockSite.at(level, job.jobBlock()).map(JobBlockSite::dropOff).orElse(job.jobBlock());
+            visit = reachableVisit(level, dropOff, ClerkStorage.visit(level, dropOff, DayClock.dayTime(level)));
+            workplace(job.jobBlock()).setStatus(JobStatus.DELIVERING);
+        }
         if (activity != Activity.DELIVER || !visit.target().equals(target)) {
             deliveryVisit = visit;
             moveTo(level, Activity.DELIVER, visit.target(), visit.reach());
@@ -1185,7 +1233,7 @@ public final class SettlerWork {
     void startCatchUp() {
         cuDays = Math.max(0, catchUpTo - catchUpFrom()) / (double) DayClock.DAY_TICKS;
         quiet = true;
-        loops.values().forEach(CategoryLoop::startCatchUp);
+        allLoops().forEach(CategoryLoop::startCatchUp);
         jobWorkplaces.values().forEach(workplace -> workplace.setCatchUpEnded(false));
         cuItems = 0;
         cuMeals = 0;
@@ -1459,8 +1507,9 @@ public final class SettlerWork {
                 cuItems += rest.getCount();
             }
         }
-        // A delivery into a Clerk: its stock rules are checked right away.
+        // A delivery into a Clerk: its stock rules are checked right away; a harvest in a drop-off may be a pickup.
         StockRules.check(level, site.dropOff(), cuDayTime);
+        Pickups.delivered(level, site, !buffer.isEmpty());
         return !buffer.isFull();
     }
 
@@ -1984,7 +2033,11 @@ public final class SettlerWork {
             return;
         }
         if (activity == Activity.DELIVER) {
-            deliver(level, activeJob.jobBlock(), deliveryVisit != null && deliveryVisit.counter());
+            if (loop(activeJob) == deliverymen) {
+                deliverymen.unload(level, activeJob);
+            } else {
+                deliver(level, activeJob.jobBlock(), deliveryVisit != null && deliveryVisit.counter());
+            }
             activity = Activity.IDLE;
             deliveryVisit = null;
             decide(level);
@@ -2003,12 +2056,15 @@ public final class SettlerWork {
      */
     private void deliver(ServerLevel level, BlockPos jobBlock, boolean atCounter) {
         JobBuffer buffer = buffer(jobBlock);
-        BlockPos dropOff = JobBlockSite.at(level, jobBlock).map(JobBlockSite::dropOff).orElse(jobBlock);
+        Optional<JobBlockSite> site = JobBlockSite.at(level, jobBlock);
+        BlockPos dropOff = site.map(JobBlockSite::dropOff).orElse(jobBlock);
         Stock stock = ClerkStorage.stock(level, dropOff, DayClock.dayTime(level), atCounter);
         boolean all = !stock.isEmpty() && buffer.deliver(stack -> stack.getCount() - stock.insert(stack).getCount());
         if (!all) {
             block(level, jobBlock, JobStatus.DROP_OFF_FULL);
         }
+        // A harvest in a drop-off: a pickup for the Deliverymen if it is full enough.
+        site.ifPresent(found -> Pickups.delivered(level, found, !all && !stock.isEmpty()));
         // A delivery into a Clerk: its stock rules are checked right away.
         StockRules.check(level, dropOff, DayClock.dayTime(level));
     }

@@ -54,9 +54,10 @@ public final class JobPointsDisplay {
      * @param dropOff    drop-off inventory
      * @param storage    containers linked as Clerk storage
      * @param standSpots Clerk stand spots (numbered in this order)
+     * @param served     the Served Clerks of a Warehouse
      */
     public record JobPoints(BlockPos jobBlock, List<BlockPos> work, Optional<BlockPos> collect, Optional<BlockPos> dropOff,
-            List<BlockPos> storage, List<SettlementBlock.StandSpot> standSpots) {
+            List<BlockPos> storage, List<SettlementBlock.StandSpot> standSpots, List<BlockPos> served) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, JobPoints> STREAM_CODEC = StreamCodec.composite(
@@ -66,6 +67,7 @@ public final class JobPointsDisplay {
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs::optional), JobPoints::dropOff,
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), JobPoints::storage,
                 SettlementBlock.StandSpot.STREAM_CODEC.apply(ByteBufCodecs.list()), JobPoints::standSpots,
+                BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), JobPoints::served,
                 JobPoints::new);
     }
 
@@ -156,7 +158,7 @@ public final class JobPointsDisplay {
                         .orElseGet(() -> SettlementRules.horizontalDistance(block.pos(), center) <= RANGE);
                 if (include) {
                     result.add(new JobPoints(block.pos(), block.workPoints(), block.collect(), block.dropOff(), block.storage(),
-                            block.standSpots()));
+                            block.standSpots(), block.served()));
                 }
             }
         }

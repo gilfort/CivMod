@@ -9,13 +9,14 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModDataComponents;
-import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.JobPlaces;
+import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
+import com.gilfort.civmod.settlement.Warehouses;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -43,6 +44,7 @@ import net.neoforged.neoforge.capabilities.Capabilities;
  * <li>Shift + right-click a JobBlock: bind to it.</li>
  * <li>Bound to a JobBlock, right-click a block (or water): cycle work POI → collect → drop-off → removed; bound to a
  * Clerk JobBlock: a container cycles storage → removed, any other block stand spot → removed.</li>
+ * <li>Bound to a Clerk JobBlock (a Warehouse), right-click another Clerk JobBlock: link / unlink it as Served Clerk.</li>
  * <li>Bound to a JobBlock, right-click a settler: open the {@link JobPicker job picker} and assign the chosen Job.</li>
  * <li>Shift + right-click a settler: bind to the settler (NPC settings, e.g. bed later).</li>
  * <li>Shift + right-click air: clear the binding.</li>
@@ -199,7 +201,11 @@ public class ScrollOfAssignmentItem extends Item {
         ServerLevel level = player.level();
         Job jobType = block.get().jobType();
         if (ClerkStorage.isClerk(block.get())) {
-            cycleClerkPoint(player, jobBlock, target);
+            if (!target.equals(jobBlock) && JobBlockSite.blockAt(level, target).filter(ClerkStorage::isClerk).isPresent()) {
+                linkServedClerk(player, jobBlock, target);
+            } else {
+                cycleClerkPoint(player, jobBlock, target);
+            }
             return;
         }
         boolean validWork = isValidWorkPlace(level, target, jobType);
@@ -216,6 +222,29 @@ public class ScrollOfAssignmentItem extends Item {
             case INVALID -> Component.translatable("civmod.scroll.point.invalid", jobType.displayName(),
                     jobType.workPlaceName()).withStyle(ChatFormatting.RED);
             case STORAGE, STAND_SPOT, STORAGE_FULL, TOO_MANY_SPOTS, TAKEN -> throw new IllegalStateException("Clerk result for " + jobType);
+        };
+        player.sendOverlayMessage(message);
+    }
+
+    /** Bound to a Clerk JobBlock (a Warehouse), right-click another Clerk JobBlock: links or unlinks it as Served Clerk. */
+    private static void linkServedClerk(ServerPlayer player, BlockPos warehouse, BlockPos target) {
+        ServerLevel level = player.level();
+        SettlementData data = SettlementData.get(level);
+        Warehouses.LinkResult result = Warehouses.link(data, warehouse, target);
+        Optional<Settlement> settlement = data.settlementAt(warehouse);
+        Component targetName = JobBlockSite.blockAt(level, target).map(ClerkStorage::name).orElse(Component.literal("?"));
+        Component message = switch (result) {
+            case LINKED -> Component.translatable("civmod.scroll.served.linked", targetName, JobBlockSite.blockAt(level, warehouse)
+                    .map(block -> block.served().size()).orElse(0), JobBlockSite.blockAt(level, warehouse)
+                    .map(block -> SettlementRules.servedClerks(block.level())).orElse(0));
+            case UNLINKED -> Component.translatable("civmod.scroll.served.unlinked", targetName);
+            case NOT_A_CLERK, SELF -> Component.translatable("civmod.scroll.served.not_a_clerk").withStyle(ChatFormatting.RED);
+            case OWN_DELIVERYMEN -> Component.translatable("civmod.scroll.served.own_deliverymen", targetName).withStyle(ChatFormatting.RED);
+            case TAKEN -> Component.translatable("civmod.scroll.served.taken", settlement.flatMap(found -> Warehouses.servedBy(found, target))
+                    .map(ClerkStorage::name).orElse(Component.literal("?"))).withStyle(ChatFormatting.RED);
+            case CHAIN -> Component.translatable("civmod.scroll.served.chain").withStyle(ChatFormatting.RED);
+            case FULL -> Component.translatable("civmod.scroll.served.full", JobBlockSite.blockAt(level, warehouse)
+                    .map(block -> SettlementRules.servedClerks(block.level())).orElse(0)).withStyle(ChatFormatting.RED);
         };
         player.sendOverlayMessage(message);
     }
@@ -241,16 +270,11 @@ public class ScrollOfAssignmentItem extends Item {
             case TOO_MANY_SPOTS -> Component.translatable("civmod.scroll.point.too_many_spots", SettlementRules.MAX_STAND_SPOTS)
                     .withStyle(ChatFormatting.RED);
             case TAKEN -> Component.translatable("civmod.scroll.point.taken", JobAssignments.storageOwner(data, target)
-                    .map(ScrollOfAssignmentItem::clerkName).orElse(Component.literal("?"))).withStyle(ChatFormatting.RED);
+                    .map(ClerkStorage::name).orElse(Component.literal("?"))).withStyle(ChatFormatting.RED);
             case INVALID, WORK, COLLECT, DROP_OFF, TOO_MANY -> Component.translatable("civmod.scroll.point.clerk_invalid")
                     .withStyle(ChatFormatting.RED);
         };
         player.sendOverlayMessage(message);
-    }
-
-    private static Component clerkName(SettlementBlock clerk) {
-        return clerk.assignee(ModJobs.CLERK.get()).<Component>map(assignee -> Component.literal(assignee.name()))
-                .orElseGet(() -> Component.translatable("civmod.scroll.point.clerk_at", clerk.pos().toShortString()));
     }
 
     /**

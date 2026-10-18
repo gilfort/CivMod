@@ -105,21 +105,21 @@ _Avoid_: Threshold, order
 _Avoid_: Order, job, task
 
 **Deliveryman**:
-A Logistics Job that carries items between containers for its Warehouse; its places are on the Clerk JobBlock (1 / 2 / 4 / 6 / 8 by level, `SettlementRules.deliverymanPlaces`). A Clerk never delivers itself. Code: `ModJobs.DELIVERYMAN` (no work loop yet: `SettlerWork` skips it like any Job without a loop).
+A Logistics Job that carries items between containers for its Warehouse; its places are on the Clerk JobBlock (1 / 2 / 4 / 6 / 8 by level, `SettlementRules.deliverymanPlaces`). A Clerk never delivers itself. Automatic mode so far: it empties the drop-offs of Resource Collection Jobs into their Home Clerk's store. Code: `ModJobs.DELIVERYMAN`, work loop `DeliverymanLoop` (the Logistics category's second loop beside `ClerkLoop`; picks and batches pickups at its decision, walks from source to source, unloads as staff through the shell's delivery into `ClerkStorage.stock(…, true)`, status `JobStatus.COLLECTING` / `UNLOADING` / `STORAGE_FULL` / `NO_PICKUPS`, EXP per delivered stack). Its carry inventory is the job's buffer (`JobBuffer.room`; 9 stacks at skill level 1 to 27 at 100, `DeliverymanLoop.carryStacks`, `SettlerWork.carryStacks`). Catch-up moves at most the carry capacity per trip, trips by distance (`DeliverymanLoop.tripTicks`).
 _Avoid_: Courier, porter, Clerk specialization
 
 **Warehouse**:
-A Clerk JobBlock with Deliveryman places; its Deliverymen work for it and for its Served Clerks and are their staff (direct access, no counter).
+A Clerk JobBlock with Deliverymen (or one that links Served Clerks); its Deliverymen work for it and for its Served Clerks and are their staff (direct access to the whole store, no counter, no working Clerk needed). A Warehouse without Deliverymen leaves its tasks at "No Deliveryman". Code: `Warehouses` (`hasDeliverymen`, `warehouseOf`, `handled`).
 _Avoid_: Depot, storage (that is the Clerk storage)
 
 **Served Clerk**:
-A Clerk JobBlock linked to a Warehouse with the Scroll of Assignment; at most one Warehouse per Served Clerk, never one with own Deliverymen.
+A Clerk JobBlock linked to a Warehouse with the Scroll of Assignment (2 / 4 / 6 / 8 / 12 by level, `SettlementRules.servedClerks`; extra ones after a downgrade inactive, `Warehouses.activeServed`); at most one Warehouse per Served Clerk, never one with own Deliverymen, no chains. Code: `SettlementBlock.served()` on the Warehouse, linked through `Warehouses.link` (`Warehouses.LinkResult`), `Warehouses.servedBy`; shown with the scroll (`JobPointsDisplay.JobPoints.served`) and on the Clerk's info tab (`ClerkTab.served` / `servedBy`).
 
 **Home Clerk**:
-The Clerk JobBlock a JobBlock belongs to: the nearest one of its settlement, kept until a Clerk JobBlock is placed or removed. The Warehouse serving it handles the JobBlock's transports.
+The Clerk JobBlock a JobBlock belongs to: the nearest one of its settlement (a Clerk JobBlock is its own), stored and recomputed only when a Clerk JobBlock is placed or removed or a JobBlock is added. The Warehouse serving it handles the JobBlock's transports. Code: `SettlementBlock.homeClerk()`, set in `SettlementData.addBlock` / `removeBlock` through `Warehouses.assignHomeClerks`.
 
 **Delivery task**:
-One transport for a Warehouse's Deliverymen: a pickup (empty a drop-off into the Home Clerk), a result delivery (producer to requesting Clerk) or an input delivery (store to a producer's collect inventory). At most one open pickup per source; taken tasks are locked to one Deliveryman.
+One transport for a Warehouse's Deliverymen: a pickup (empty a drop-off into the Home Clerk), later a result delivery (producer to requesting Clerk) or an input delivery (store to a producer's collect inventory). At most one open pickup per source; taken tasks are locked to one Deliveryman until done, released or the day ends. A pickup is created when a settler delivers into a drop-off that then holds a stack or is half full, by the end-of-work sweep, urgently on "Drop-off full"; none for a Clerk JobBlock drop-off; the job's tools stay in a drop-off that is its collect inventory too. Code: `DeliveryTask` (`DeliveryTask.Taker`, not saved), `Deliveries` (`request`, `pick`, `batch`, `score`, `take`, `release`, `releaseAll`, `done`), saved in `Settlement.deliveries()`; created by `Pickups` (`delivered`, `sweep`, `due`); shown in the Clerk's "Deliveries" tab (`JobBlockMenu.TAB_DELIVERIES`, `ClerkTab.DeliveryRow`).
 _Avoid_: Request (that is "produce more"), order, job
 
 **Reservation**:

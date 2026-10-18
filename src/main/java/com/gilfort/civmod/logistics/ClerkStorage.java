@@ -21,6 +21,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -80,6 +81,15 @@ public final class ClerkStorage {
      */
     public static boolean isClerk(SettlementBlock block) {
         return block.jobType() == ModJobs.CLERK.get();
+    }
+
+    /**
+     * @param clerk a Clerk JobBlock
+     * @return its name for players: its Clerk settler, else "Clerk at x, y, z"
+     */
+    public static Component name(SettlementBlock clerk) {
+        return clerk.assignee(ModJobs.CLERK.get()).<Component>map(assignee -> Component.literal(assignee.name()))
+                .orElseGet(() -> Component.translatable("civmod.scroll.point.clerk_at", clerk.pos().toShortString()));
     }
 
     /**

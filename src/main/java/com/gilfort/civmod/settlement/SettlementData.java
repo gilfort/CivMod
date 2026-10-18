@@ -63,6 +63,9 @@ public final class SettlementData extends SavedData {
         for (Settlement settlement : settlements) {
             this.settlements.put(settlement.id(), settlement);
             settlement.blocks().forEach(block -> index(settlement, block.pos()));
+            // Saves from before the Home Clerk: JobBlocks without one get it now.
+            settlement.blocks().stream().filter(block -> block.homeClerk().isEmpty())
+                    .forEach(block -> Warehouses.assignHomeClerk(settlement, block));
         }
     }
 
@@ -228,6 +231,12 @@ public final class SettlementData extends SavedData {
     void addBlock(Settlement settlement, SettlementBlock block) {
         settlement.put(block);
         index(settlement, block.pos());
+        // Home Clerks change only when a Clerk JobBlock comes or goes; any other new JobBlock gets its own.
+        if (Warehouses.isClerk(block)) {
+            Warehouses.assignHomeClerks(settlement);
+        } else {
+            Warehouses.assignHomeClerk(settlement, block);
+        }
         changed();
     }
 
@@ -236,7 +245,10 @@ public final class SettlementData extends SavedData {
         if (settlement == null) {
             return Optional.empty();
         }
-        settlement.remove(pos);
+        SettlementBlock removed = settlement.remove(pos);
+        if (removed != null && Warehouses.isClerk(removed)) {
+            Warehouses.assignHomeClerks(settlement);
+        }
         long chunk = ChunkPos.containing(pos).pack();
         Set<BlockPos> positions = byChunk.get(chunk);
         if (positions != null) {

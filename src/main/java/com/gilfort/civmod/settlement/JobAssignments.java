@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.registry.ModJobs;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -168,6 +169,11 @@ public final class JobAssignments {
             }
             case NONE -> PointResult.REMOVED;
         };
+        if (from == Role.DROP_OFF || to == Role.DROP_OFF) {
+            // A new drop-off: the pickups of the old one go (it no longer holds this job's harvest).
+            data.settlementAt(block.pos()).ifPresent(settlement -> settlement.mutableDeliveries()
+                    .removeIf(task -> task.jobBlock().equals(block.pos())));
+        }
         data.changed();
         return result;
     }
@@ -347,6 +353,11 @@ public final class JobAssignments {
             return line.get().places() == 1 && job.category() != JobCategory.MISSION ? AssignResult.OCCUPIED : AssignResult.FULL;
         }
         block.mutableAssignees().add(new SettlementBlock.Assignee(settler, settlerName, job));
+        if (job == ModJobs.DELIVERYMAN.get()) {
+            // A Clerk with own Deliverymen serves itself: it is no Served Clerk any more.
+            JobBlockSite.at(data, jobBlock).ifPresent(site -> site.settlement().blocks()
+                    .forEach(other -> other.mutableServed().remove(jobBlock)));
+        }
         data.changed();
         return AssignResult.OK;
     }

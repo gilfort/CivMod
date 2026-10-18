@@ -81,6 +81,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (JobBlockMenu.isClerk(menu.getInfo())) {
             tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.clerk.tab.stock"), new ItemStack(Items.WRITABLE_BOOK)));
             tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.clerk.tab.requests"), new ItemStack(Items.PAPER)));
+            tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.clerk.tab.deliveries"), new ItemStack(Items.BUNDLE)));
         }
         if (JobBlockMenu.isCraftsperson(menu.getInfo())) {
             tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.patterns.tab"), new ItemStack(Items.CRAFTING_TABLE)));
@@ -164,7 +165,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     @Override
     protected List<Component> helpLines(int tab) {
         JobBlockInfo info = menu.getInfo();
-        if (JobBlockMenu.isClerk(info) && (tab == JobBlockMenu.TAB_STOCK || tab == JobBlockMenu.TAB_REQUESTS)) {
+        if (JobBlockMenu.isClerk(info) && (tab == JobBlockMenu.TAB_STOCK || tab == JobBlockMenu.TAB_REQUESTS || tab == JobBlockMenu.TAB_DELIVERIES)) {
             return clerk.helpLines(tab);
         }
         if (JobBlockMenu.isCraftsperson(info) && tab == JobBlockMenu.TAB_PATTERNS) {
@@ -225,6 +226,9 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
                 graphics.setComponentTooltipForNextFrame(font, settlerLines(info, holders), mouseX, mouseY);
             }
             y += LINE_HEIGHT;
+        }
+        if (JobBlockMenu.isClerk(info)) {
+            y = clerk.extractWarehouse(graphics, y, width, color, mouseX, mouseY);
         }
         extractCosts(graphics, info, y, mouseX, mouseY);
     }

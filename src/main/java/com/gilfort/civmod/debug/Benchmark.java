@@ -38,8 +38,9 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * Builds the PoC benchmark (vault {@code PoC.md}): one settlement with 20 JobBlocks (8 Lumberjack, 7 Miner,
- * 5 Fisherman) in a chain along +X, their work places, a pond, a working Clerk with 8 linked chests and stock rules,
- * 2 Craftspersons with crafting tables and materials, and 23 equipped settlers.
+ * 5 Fisherman) in a chain along +X, their work places, a pond, a working Clerk with 8 half-full linked chests and stock
+ * rules, 4 Deliverymen at the Clerk with a pickup at 12 of the collecting jobs, 2 Craftspersons with crafting tables
+ * and materials, and 27 equipped settlers.
  */
 public final class Benchmark {
 
@@ -52,10 +53,16 @@ public final class Benchmark {
     private static final int CLERK_LEVEL = 3;
     private static final int CLERK_CHESTS = 8;
     private static final int CRAFTSPERSONS = 2;
+    /** Deliverymen at the Clerk (its places at level 3). */
+    private static final int DELIVERYMEN = 4;
+    /** Collecting jobs whose JobBlock starts with a harvest to pick up. */
+    private static final int PICKUPS = 12;
+    /** Slots of the Clerk's storage filled with bread (the rest takes the deliveries). */
+    private static final int BREAD_SLOTS = 14;
     /** The Craftspersons' patterns: the stock rules' items and their intermediates. */
     private static final List<Item> CRAFTED = List.of(Items.STONE_PICKAXE, Items.TORCH, Items.STICK, Items.OAK_PLANKS);
-    /** Settlers spawned: one per Resource Collection JobBlock, the Clerk and the Craftspersons. */
-    public static final int SETTLERS = SIZE + 1 + CRAFTSPERSONS;
+    /** Settlers spawned: one per Resource Collection JobBlock, the Clerk, the Deliverymen and the Craftspersons. */
+    public static final int SETTLERS = SIZE + 1 + DELIVERYMEN + CRAFTSPERSONS;
     /** JobBlocks built: the Resource Collection ones, the Clerk and the Craftspersons. */
     public static final int JOB_BLOCKS = SIZE + 1 + CRAFTSPERSONS;
 
@@ -117,7 +124,7 @@ public final class Benchmark {
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(origin).orElseThrow();
         data.settlersArrived(settlement);
-        // A Clerk (level 3) full of bread, with 8 linked chests of bread: the settlement's food point.
+        // A Clerk (level 3) with bread, with 8 linked chests half full of bread: the settlement's food point.
         BlockPos clerk = origin.offset(-3, 0, 0);
         level.setBlock(clerk, ModBlocks.CLERK_BLOCK.get().defaultBlockState(), Block.UPDATE_ALL);
         if (level.getBlockEntity(clerk) instanceof JobBlockEntity clerkBlock) {
@@ -166,6 +173,18 @@ public final class Benchmark {
             spawned++;
         }
         spawned += spawn(level, data, settlement, clerk, "Bench Clerk", ModJobs.CLERK.get()) != null ? 1 : 0;
+        for (int i = 0; i < DELIVERYMEN; i++) {
+            spawned += spawn(level, data, settlement, clerk, "Bench Deliveryman " + (i + 1), ModJobs.DELIVERYMAN.get()) != null ? 1 : 0;
+        }
+        // A harvest to pick up at 12 collecting jobs (their JobBlock inventory is the drop-off).
+        for (int i = 0; i < PICKUPS; i++) {
+            BlockPos jobBlock = origin.offset(i * SPACING, 0, 0);
+            if (level.getBlockEntity(jobBlock) instanceof Container harvest) {
+                harvest.setItem(harvest.getContainerSize() - 1, new ItemStack(scenario(i).workBlock().asItem(), 64));
+                harvest.setItem(harvest.getContainerSize() - 2, new ItemStack(scenario(i).workBlock().asItem(), 64));
+            }
+            com.gilfort.civmod.settlement.JobBlockSite.at(level, jobBlock).ifPresent(site -> com.gilfort.civmod.logistics.Pickups.sweep(level, site));
+        }
         for (int i = 0; i < craftspersons.size(); i++) {
             spawned += spawn(level, data, settlement, craftspersons.get(i), "Bench Crafter " + (i + 1), ModJobs.CRAFTSPERSON.get()) != null ? 1 : 0;
         }
@@ -186,14 +205,14 @@ public final class Benchmark {
         level.addFreshEntity(settler);
         settler.joinSettlement(data, settlement);
         settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.BREAD, 8));
-        JobAssignments.assign(data, jobBlock, settler.getUUID(), name, settlement.id(), List.of());
+        JobAssignments.assign(data, jobBlock, settler.getUUID(), name, settlement.id(), List.of(), job);
         settler.addJob(new SettlerJob(job, jobBlock));
         return settler;
     }
 
     private static void fillWithBread(ServerLevel level, BlockPos pos) {
         if (level.getBlockEntity(pos) instanceof Container container) {
-            for (int slot = 0; slot < container.getContainerSize(); slot++) {
+            for (int slot = 0; slot < Math.min(BREAD_SLOTS, container.getContainerSize()); slot++) {
                 container.setItem(slot, new ItemStack(Items.BREAD, 64));
             }
         }

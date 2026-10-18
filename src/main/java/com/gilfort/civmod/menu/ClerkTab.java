@@ -8,11 +8,17 @@ import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Producers;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
+import com.gilfort.civmod.logistics.Pickups;
+import com.gilfort.civmod.settlement.DayClock;
+import com.gilfort.civmod.settlement.Deliveries;
+import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Requests;
+import com.gilfort.civmod.settlement.Warehouses;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -27,34 +33,79 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * What the Clerk's "Stock" and "Requests" tabs show (vault {@code Jobs/Clerk.md}): its stock rules and the requests
- * they posted with their status. The server sends it while the menu is open whenever it changed ({@link Sync}); the
- * client edits rules with {@link Edit}.
+ * What the Clerk's "Stock", "Requests" and "Deliveries" tabs show (vault {@code Jobs/Clerk.md},
+ * {@code Jobs/Deliveryman.md}): its stock rules and the requests they posted with their status, the open Delivery
+ * tasks to it (a Warehouse: to every Clerk it serves) and, for the info tab, its Served Clerks or the Warehouse serving
+ * it. The server sends it while the menu is open whenever it changed ({@link Sync}); the client edits rules with
+ * {@link Edit}.
  *
- * @param level    the Clerk JobBlock level (9 rules per level are active)
- * @param rules    the stock rules
- * @param requests the requests of the rules, highest priority first
+ * @param level      the Clerk JobBlock level (9 rules per level are active)
+ * @param rules      the stock rules
+ * @param requests   the requests of the rules, highest priority first
+ * @param deliveries the open Delivery tasks, in creation order
+ * @param served     a Warehouse's Served Clerks (inactive ones marked), empty for any other Clerk
+ * @param servedBy   the Warehouse serving this Clerk, if any
  */
-public record ClerkTab(int level, List<StockRule> rules, List<RequestRow> requests) {
+public record ClerkTab(int level, List<StockRule> rules, List<RequestRow> requests, List<DeliveryRow> deliveries, List<Component> served,
+        Optional<Component> servedBy) {
 
     /** Nothing (any other JobBlock, or before the first sync). */
-    public static final ClerkTab EMPTY = new ClerkTab(1, List.of(), List.of());
+    public static final ClerkTab EMPTY = new ClerkTab(1, List.of(), List.of(), List.of(), List.of(), Optional.empty());
 
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, ClerkTab> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.VAR_INT, ClerkTab::level,
             StockRule.STREAM_CODEC.apply(ByteBufCodecs.list()), ClerkTab::rules,
             RequestRow.STREAM_CODEC.apply(ByteBufCodecs.list()), ClerkTab::requests,
+            DeliveryRow.STREAM_CODEC.apply(ByteBufCodecs.list()), ClerkTab::deliveries,
+            ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), ClerkTab::served,
+            ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs::optional), ClerkTab::servedBy,
             ClerkTab::new);
 
     /**
-     * @param level    the Clerk JobBlock level
-     * @param rules    the stock rules
-     * @param requests the requests
+     * @param level      the Clerk JobBlock level
+     * @param rules      the stock rules
+     * @param requests   the requests
+     * @param deliveries the Delivery tasks
+     * @param served     the Served Clerks
+     * @param servedBy   the serving Warehouse
      */
     public ClerkTab {
         rules = List.copyOf(rules);
         requests = List.copyOf(requests);
+        deliveries = List.copyOf(deliveries);
+        served = List.copyOf(served);
+    }
+
+    /**
+     * One row of the Deliveries tab.
+     *
+     * @param icon   the source block
+     * @param source the source's name (the job of its JobBlock)
+     * @param items  how many items wait there
+     * @param status the Deliveryman on it, "Waiting" or "No Deliveryman"
+     */
+    public record DeliveryRow(ItemStack icon, Component source, int items, Component status) {
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, DeliveryRow> STREAM_CODEC = StreamCodec.composite(
+                ItemStack.OPTIONAL_STREAM_CODEC, DeliveryRow::icon,
+                ComponentSerialization.STREAM_CODEC, DeliveryRow::source,
+                ByteBufCodecs.VAR_INT, DeliveryRow::items,
+                ComponentSerialization.STREAM_CODEC, DeliveryRow::status,
+                DeliveryRow::new);
+
+        // Item stacks have no value equality; the tab is only resent when a row really changed.
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof DeliveryRow row && ItemStack.matches(icon, row.icon) && source.equals(row.source) && items == row.items
+                    && status.equals(row.status);
+        }
+
+        @Override
+        public int hashCode() {
+            return java.util.Objects.hash(icon.getItem(), source, items, status);
+        }
     }
 
     /**
@@ -99,7 +150,35 @@ public record ClerkTab(int level, List<StockRule> rules, List<RequestRow> reques
                 .map(request -> new RequestRow(request.item(), request.amount() + request.crafting(), request.priority(),
                         status(level, settlement.get(), request)))
                 .toList();
-        return new ClerkTab(block.get().level(), block.get().stockRules(), rows);
+        return new ClerkTab(block.get().level(), block.get().stockRules(), rows, deliveries(level, settlement.get(), block.get()),
+                served(settlement.get(), block.get()), Warehouses.servedBy(settlement.get(), clerk).map(ClerkStorage::name));
+    }
+
+    /** The tasks to this Clerk; a Warehouse shows those of every Clerk it serves. */
+    private static List<DeliveryRow> deliveries(ServerLevel level, Settlement settlement, SettlementBlock clerk) {
+        boolean warehouse = Warehouses.warehouseOf(settlement, clerk.pos()).filter(clerk::equals).isPresent();
+        List<BlockPos> clerks = warehouse ? Warehouses.handled(settlement, clerk) : List.of(clerk.pos());
+        long day = DayClock.day(level);
+        return Deliveries.toClerks(settlement, clerks).stream().map(task -> {
+            Optional<JobBlockSite> site = JobBlockSite.at(level, task.jobBlock());
+            Component source = site.map(found -> found.block().jobType().displayName()).orElse(Component.literal(task.source().toShortString()));
+            int items = site.filter(found -> level.isLoaded(task.source()))
+                    .map(found -> Pickups.contents(level, found, task.source()).items()).orElse(0);
+            ItemStack icon = level.isLoaded(task.source()) ? new ItemStack(level.getBlockState(task.source()).getBlock().asItem()) : ItemStack.EMPTY;
+            Component status = task.takerOn(day).<Component>map(taker -> Component.literal(taker.name()))
+                    .orElseGet(() -> Component.translatable(Deliveries.warehouseOf(settlement, task).filter(Warehouses::hasDeliverymen).isPresent()
+                            ? "civmod.gui.clerk.delivery.waiting" : "civmod.gui.clerk.delivery.no_deliveryman"));
+            return new DeliveryRow(icon, source, items, status);
+        }).toList();
+    }
+
+    /** A Warehouse's Served Clerks; those beyond its level are marked inactive. */
+    private static List<Component> served(Settlement settlement, SettlementBlock warehouse) {
+        List<BlockPos> active = Warehouses.activeServed(warehouse);
+        return warehouse.served().stream().<Component>map(pos -> {
+            Component name = settlement.block(pos).map(ClerkStorage::name).orElse(Component.literal(pos.toShortString()));
+            return active.contains(pos) ? name : Component.translatable("civmod.gui.clerk.served.inactive", name).withStyle(ChatFormatting.GRAY);
+        }).toList();
     }
 
     /**
