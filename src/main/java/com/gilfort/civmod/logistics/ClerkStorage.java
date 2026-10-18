@@ -7,6 +7,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Predicate;
 
+import org.jspecify.annotations.Nullable;
+
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.food.SettlerFood;
@@ -15,6 +17,7 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.Reservations;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
@@ -173,13 +176,25 @@ public final class ClerkStorage {
      * @return the reachable stock
      */
     public static Stock stock(ServerLevel level, BlockPos pos, boolean linked) {
+        return stock(level, pos, linked, null);
+    }
+
+    /**
+     * @param level  the level
+     * @param pos    a Clerk JobBlock or any container
+     * @param linked whether the linked storage of a Clerk is reachable (its working Clerk serves the visitor)
+     * @param task   the Delivery task asking, which sees what is reserved for it; null for everybody else
+     * @return the reachable stock, without what the Clerk reserved for other tasks
+     */
+    public static Stock stock(ServerLevel level, BlockPos pos, boolean linked, @Nullable UUID task) {
         if (!level.isLoaded(pos)) {
             return Stock.EMPTY;
         }
-        Optional<SettlementBlock> clerk = JobBlockSite.blockAt(level, pos).filter(ClerkStorage::isClerk);
+        Optional<JobBlockSite> clerk = JobBlockSite.at(level, pos).filter(site -> isClerk(site.block()));
         ClerkStock view = clerk.isPresent() ? ClerkStock.of(level, pos) : null;
         if (view != null) {
-            return view.stock(activeStorage(clerk.get()), linked);
+            return view.stock(activeStorage(clerk.get().block()), linked)
+                    .without(Reservations.reserved(clerk.get().settlement(), pos, DayClock.day(level), task));
         }
         ResourceHandler<ItemResource> own = level.getCapability(Capabilities.Item.BLOCK, pos, null);
         return own == null ? Stock.EMPTY : Stock.live(List.of(own), false);

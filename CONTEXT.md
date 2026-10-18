@@ -127,7 +127,7 @@ A Delivery task for a producer's result: a Craftsperson on "Delivery: Deliveryma
 _Avoid_: Delivery (that is the Craftsperson delivering itself), shipment
 
 **Reservation**:
-An amount of an item in a Clerk's storage held for one Delivery task until pickup, cancel or end of day; everybody else sees stock minus reservations.
+An amount of an item in a Clerk's storage held for one Delivery task until pickup, cancel or end of day; everybody else sees stock minus reservations. A reservation holds while its task is locked to a Deliveryman on the day it was made, so releasing or finishing the task (`Deliveries.release`, `releaseAll`, `done`) or the end of the day releases it; not saved (like the lock). Customers, producers and other Deliverymen get a Stock without it (counts, slots and takes leave it out, from what the Stock reaches, so the block slots alone may show nothing of a reserved item); the task asking sees all. Picked up, it is consumed; a shortfall at extraction (or no valid reservation) puts back what was taken, releases it and frees the task for another try. Code: `Reservations` (`reserve`, `reserved`, `pickUp` → `Reservations.Pickup`, `release`), `Reservations.Reservation` (item, count, task, day), kept per Clerk JobBlock in the `Settlement`; applied by `ClerkStorage.stock(…, task)` through `Stock.without`.
 _Avoid_: Claim (that is a producer's share of a Request)
 
 **Job picker**:
