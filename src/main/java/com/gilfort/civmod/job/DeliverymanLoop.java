@@ -410,8 +410,9 @@ final class DeliverymanLoop implements CategoryLoop {
     // ---------------------------------------------------------------- end of day, removal
 
     /**
-     * End of work: its tasks are free again (results it carries stay carried until unloaded), and every drop-off of the
-     * Warehouse's JobBlocks with something left gets a pickup (also JobBlocks without a settler: items a player put in).
+     * End of work: its tasks are free again (results it carries stay carried until unloaded), every drop-off of the
+     * Warehouse's JobBlocks with something left gets a pickup (also JobBlocks without a settler: items a player put in)
+     * and the surplus of the Clerks it handles is checked.
      */
     @Override
     public void dayEnded(ServerLevel level, SettlerJob job) {
@@ -427,6 +428,8 @@ final class DeliverymanLoop implements CategoryLoop {
                     JobBlockSite.at(level, block.pos()).ifPresent(source -> Pickups.sweep(level, source));
                 }
             }
+            // Surplus above Max, also of items a player put in.
+            clerks.forEach(clerk -> StockRules.checkSurplus(level, clerk));
         });
     }
 

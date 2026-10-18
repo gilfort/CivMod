@@ -17,7 +17,8 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 /**
  * The "Found" tab of a Resource Collection JobBlock in the {@link JobBlockScreen} (vault
  * {@code Systems/Resource Collection Jobs.md}); the client side of {@link FoundTab}: scan info lines, then the found
- * resources as a slot grid. Excluded entries are grey and struck through; a right click excludes or includes one.
+ * resources as a slot grid. Excluded entries are grey and struck through, entries at their Max at the Home Clerk grey
+ * ("Maximum reached at &lt;Clerk&gt;"); a right click excludes or includes one.
  */
 final class FoundTabView {
 
@@ -94,7 +95,7 @@ final class FoundTabView {
             int y = gridY + (i / COLUMNS) * 18;
             CivGui.slot(graphics, x, y);
             graphics.item(entry.icon(), x, y);
-            if (entry.excluded() || entry.needsTool()) {
+            if (entry.excluded() || entry.needsTool() || entry.maxAt().isPresent()) {
                 CivGui.slotInactive(graphics, x, y);
             }
             if (entry.excluded()) {
@@ -110,6 +111,7 @@ final class FoundTabView {
                 if (entry.excluded()) {
                     lines.add(Component.translatable("civmod.gui.found.excluded").withStyle(ChatFormatting.GRAY));
                 }
+                entry.maxAt().ifPresent(clerk -> lines.add(Component.translatable("civmod.gui.found.max_reached", clerk).withStyle(ChatFormatting.GOLD)));
                 graphics.setComponentTooltipForNextFrame(font, lines, mouseX, mouseY);
             }
         }

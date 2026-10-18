@@ -92,7 +92,7 @@ public final class LumberjackProfile implements JobProfile {
         Identifier poiLog = BuiltInRegistries.BLOCK.getKey(context.level().getBlockState(context.poi()).getBlock());
         boolean silkTouch = hasSilkTouch(context.level(), context.tool());
         boolean leaves = context.block().collectLeaves() && context.secondary().isPresent();
-        return LumberjackOutput.produce(scan, poiLog, leaves, silkTouch, context.block().excluded(), context.level().getRandom())
+        return LumberjackOutput.produce(scan, poiLog, leaves, silkTouch, leftOut(context, scan.logs().keySet()), context.level().getRandom())
                 .map(produced -> new Produced(produced.stack().isEmpty() ? List.of() : List.of(produced.stack()),
                 produced.kind() == LumberjackOutput.Kind.LEAVES && !silkTouch ? context.secondary().orElse(context.tool()) : context.tool()));
     }

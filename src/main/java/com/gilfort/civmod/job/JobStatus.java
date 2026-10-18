@@ -34,6 +34,10 @@ public enum JobStatus {
     NO_RESOURCES("no_resources"),
     /** Every main resource the scan found is excluded at the JobBlock; checked again every 30 s or when one is included. */
     ALL_EXCLUDED("all_excluded"),
+    /** Every main resource the scan found is at its Max at the Home Clerk; checked again every 30 s. */
+    MAX_REACHED("max_reached"),
+    /** Every main resource the scan found is excluded or at its Max (some of each); checked again every 30 s. */
+    NOTHING_TO_PRODUCE("nothing_to_produce"),
     /** No marked mission at or below the settler's skill. */
     NO_MISSION("no_mission"),
     /** A mission is reserved; the settler leaves at the start of the next workday. */
@@ -73,8 +77,8 @@ public enum JobStatus {
      */
     public boolean isBlocked() {
         // NO_REQUEST and MISSING_INPUTS do not block: the next decision tries again (vault Jobs/Craftsperson.md).
-        return this == NO_TOOL || this == NO_WORK_PLACE || this == DROP_OFF_FULL || this == NO_RESOURCES || this == ALL_EXCLUDED || this == NO_MISSION
-                || this == STORAGE_FULL;
+        return this == NO_TOOL || this == NO_WORK_PLACE || this == DROP_OFF_FULL || this == NO_RESOURCES || this == ALL_EXCLUDED || this == MAX_REACHED
+                || this == NOTHING_TO_PRODUCE || this == NO_MISSION || this == STORAGE_FULL;
     }
 
     /**

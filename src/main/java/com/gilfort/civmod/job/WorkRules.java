@@ -2,6 +2,7 @@ package com.gilfort.civmod.job;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
@@ -11,10 +12,12 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
+import com.gilfort.civmod.settlement.StockRules;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -66,7 +69,23 @@ final class WorkRules {
         /** The scan found nothing for a job that needs resources. */
         NO_RESOURCES,
         /** Every main resource the scan found is excluded at the JobBlock. */
-        ALL_EXCLUDED
+        ALL_EXCLUDED,
+        /** Every main resource the scan found is at its Max at the Home Clerk. */
+        MAX_REACHED,
+        /** Every main resource the scan found is excluded or at its Max, some of each. */
+        NOTHING_TO_PRODUCE;
+
+        /**
+         * @return the status a job paused for this reason shows, empty for the other ends
+         */
+        Optional<JobStatus> pauseStatus() {
+            return switch (this) {
+                case ALL_EXCLUDED -> Optional.of(JobStatus.ALL_EXCLUDED);
+                case MAX_REACHED -> Optional.of(JobStatus.MAX_REACHED);
+                case NOTHING_TO_PRODUCE -> Optional.of(JobStatus.NOTHING_TO_PRODUCE);
+                default -> Optional.empty();
+            };
+        }
     }
 
     /** Where produced items go; the caller's choice. */
@@ -151,11 +170,18 @@ final class WorkRules {
                 ticks = 0.0;
                 break;
             }
+            // The Max check per roll: the Home Clerk's stock may have changed (catch-up delivers straight into it).
+            Set<Item> atMax = StockRules.atMax(level, site);
+            End pause = pause(level, profile, scan, site, tool.get(), atMax);
+            if (pause != End.NONE) {
+                end = pause;
+                break;
+            }
             ticks -= (1.0 - accumulated) / perTick;
             accumulated = 0.0;
             Optional<ItemStack> secondary = profile.secondaryTool(site.block()).flatMap(kind -> SettlerTools.best(settler, kind));
             Optional<JobProfile.Produced> produced = profile.produce(new JobProfile.Context(level, settler, scan, poi, tool.get(), secondary,
-                    site.block(), skillLevel));
+                    site.block(), skillLevel, atMax));
             rolls++;
             if (produced.isPresent()) {
                 SettlerTools.wear(level, settler, produced.get().worn());
@@ -200,6 +226,38 @@ final class WorkRules {
         }
         List<Identifier> main = profile.mainResources(scan);
         return !main.isEmpty() && block.excluded().containsAll(main);
+    }
+
+    /**
+     * Whether a job pauses because nothing is left to produce (vault {@code Systems/Resource Collection Jobs.md}):
+     * every main resource is excluded at the JobBlock or its dropped item is at Max at the Home Clerk.
+     *
+     * @param level   the level
+     * @param profile the job's profile
+     * @param scan    the job's scan (null while the first scan runs)
+     * @param site    the JobBlock
+     * @param tool    the tool the drops are checked with (may be empty)
+     * @param atMax   the items at Max at the Home Clerk ({@link com.gilfort.civmod.settlement.StockRules#atMax})
+     * @return {@link End#ALL_EXCLUDED}, {@link End#MAX_REACHED} or {@link End#NOTHING_TO_PRODUCE} for a pause, else
+     *         {@link End#NONE}
+     */
+    static End pause(ServerLevel level, JobProfile profile, @Nullable ScanResult scan, JobBlockSite site, ItemStack tool, Set<Item> atMax) {
+        if (scan == null || (atMax.isEmpty() && site.block().excluded().isEmpty())) {
+            return End.NONE;
+        }
+        List<Identifier> main = profile.mainResources(scan);
+        if (main.isEmpty()) {
+            return End.NONE;
+        }
+        int excluded = 0;
+        for (Identifier type : main) {
+            if (site.block().excluded().contains(type)) {
+                excluded++;
+            } else if (!atMax.contains(profile.dropped(level, site.pos(), type, tool))) {
+                return End.NONE;
+            }
+        }
+        return excluded == main.size() ? End.ALL_EXCLUDED : excluded == 0 ? End.MAX_REACHED : End.NOTHING_TO_PRODUCE;
     }
 
     /**

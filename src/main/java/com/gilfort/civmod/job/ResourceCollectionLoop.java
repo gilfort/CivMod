@@ -13,6 +13,7 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.DayClock;
+import com.gilfort.civmod.settlement.StockRules;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -100,8 +101,10 @@ final class ResourceCollectionLoop implements CategoryLoop {
             shell.block(level, jobBlock, JobStatus.NO_RESOURCES);
             return false;
         }
-        if (WorkRules.allExcluded(profile, workplace.scan(), site.block())) {
-            shell.block(level, jobBlock, JobStatus.ALL_EXCLUDED);
+        ItemStack tool = SettlerTools.best(settler, profile::isTool).orElse(ItemStack.EMPTY);
+        Optional<JobStatus> paused = WorkRules.pause(level, profile, workplace.scan(), site, tool, StockRules.atMax(level, site)).pauseStatus();
+        if (paused.isPresent()) {
+            shell.block(level, jobBlock, paused.get());
             return false;
         }
         shell.setActiveJob(job);
