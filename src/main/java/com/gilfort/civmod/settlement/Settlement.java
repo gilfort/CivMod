@@ -3,6 +3,7 @@ package com.gilfort.civmod.settlement;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -54,6 +55,8 @@ public final class Settlement {
     private final Map<BlockPos, UUID> beds = new LinkedHashMap<>();
     private final List<Request> requests = new ArrayList<>();
     private final List<DeliveryTask> deliveries = new ArrayList<>();
+    /** Clerk JobBlock → its reservations (not saved, see {@link Reservations}). */
+    private final Map<BlockPos, List<Reservations.Reservation>> reservations = new HashMap<>();
 
     /**
      * @param id          the settlement id (unique per dimension)
@@ -223,6 +226,10 @@ public final class Settlement {
         return deliveries;
     }
 
+    Map<BlockPos, List<Reservations.Reservation>> mutableReservations() {
+        return reservations;
+    }
+
     void setName(Optional<String> name) {
         this.name = name;
     }
@@ -253,6 +260,8 @@ public final class Settlement {
         deliveries.removeIf(task -> task.jobBlock().equals(pos) || task.source().equals(pos)
                 || task.result().filter(result -> result.clerk().equals(pos)).isPresent());
         blocks.values().forEach(block -> block.mutableServed().remove(pos));
+        // A removed Clerk's reservations go with it; those of removed tasks elsewhere expire on the next read.
+        reservations.remove(pos);
         return blocks.remove(pos);
     }
 }

@@ -2,8 +2,10 @@ package com.gilfort.civmod.logistics;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
@@ -24,6 +26,10 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
  * right by every transaction made through this Stock. Taking always works on the real containers and corrects the
  * view when it finds less than expected. Anywhere else the container is counted on every access. A Stock is not kept
  * across ticks.
+ * <p>
+ * Items a Clerk reserved for a Delivery task ({@code Reservations}) are not reachable for anybody else: counts, slots
+ * and takes leave them out, from what this Stock reaches (they are taken first, own slots first). A visitor reaching only
+ * the block slots therefore sees them reduced by the whole reservation.
  */
 public final class Stock {
 
@@ -33,6 +39,7 @@ public final class Stock {
     private final List<Part> parts;
     private final @Nullable List<StockSummary> summaries;
     private final boolean counter;
+    private final Map<Item, Integer> reserved;
 
     /**
      * Keeps the stock view of one container right when CivMod changes the container.
@@ -109,9 +116,22 @@ public final class Stock {
      * @param counter   whether this is the whole storage of a working Clerk, served at its counter
      */
     Stock(List<Part> parts, @Nullable List<StockSummary> summaries, boolean counter) {
+        this(parts, summaries, counter, Map.of());
+    }
+
+    private Stock(List<Part> parts, @Nullable List<StockSummary> summaries, boolean counter, Map<Item, Integer> reserved) {
         this.parts = List.copyOf(parts);
         this.summaries = summaries == null ? null : List.copyOf(summaries);
         this.counter = counter;
+        this.reserved = Map.copyOf(reserved);
+    }
+
+    /**
+     * @param reserved the amounts reserved for others, by item
+     * @return this Stock without them
+     */
+    Stock without(Map<Item, Integer> reserved) {
+        return reserved.isEmpty() ? this : new Stock(parts, summaries, counter, reserved);
     }
 
     /**
@@ -131,16 +151,18 @@ public final class Stock {
     /**
      * Reads the real containers (for picking a slot to take from).
      *
-     * @return one stack (count 1) per slot of all containers, empty stacks for empty slots; indices are valid for
-     *         {@link #takeOne}
+     * @return one stack (count 1) per slot of all containers, empty stacks for empty slots and for items that are all
+     *         reserved; indices are valid for {@link #takeOne}
      */
     public List<ItemStack> contents() {
         List<ItemStack> stacks = new ArrayList<>();
+        Set<Item> hidden = new HashSet<>();
+        reserved.keySet().stream().filter(item -> available(item) <= 0).forEach(hidden::add);
         for (Part part : parts) {
             ResourceHandler<ItemResource> handler = part.handler();
             for (int i = 0; i < handler.size(); i++) {
                 ItemResource resource = handler.getResource(i);
-                stacks.add(resource.isEmpty() ? ItemStack.EMPTY : resource.toStack());
+                stacks.add(resource.isEmpty() || hidden.contains(resource.getItem()) ? ItemStack.EMPTY : resource.toStack());
             }
         }
         return stacks;
@@ -159,7 +181,26 @@ public final class Stock {
         for (StockSummary summary : summaries()) {
             total += summary.count(kind);
         }
+        for (Map.Entry<Item, Integer> entry : reserved.entrySet()) {
+            if (kind.test(new ItemStack(entry.getKey()))) {
+                total -= Math.min(entry.getValue(), held(entry.getKey()));
+            }
+        }
         return (int) Math.min(Integer.MAX_VALUE, total);
+    }
+
+    /** How many of an item the containers hold, reserved ones included. */
+    private int held(Item item) {
+        long total = 0;
+        for (StockSummary summary : summaries()) {
+            total += summary.count(stack -> stack.is(item));
+        }
+        return (int) Math.min(Integer.MAX_VALUE, total);
+    }
+
+    /** How many of an item are reachable: held minus reserved. */
+    private int available(Item item) {
+        return Math.max(0, held(item) - reserved.getOrDefault(item, 0));
     }
 
     /**
@@ -168,6 +209,7 @@ public final class Stock {
     public Map<Item, Integer> counts() {
         Map<Item, Integer> counts = new HashMap<>();
         summaries().forEach(summary -> summary.addCounts(counts));
+        reserved.forEach((item, count) -> counts.computeIfPresent(item, (key, held) -> held > count ? held - count : null));
         return counts;
     }
 
@@ -176,12 +218,16 @@ public final class Stock {
      * @return whether any of them is reachable
      */
     public boolean contains(Predicate<ItemStack> kind) {
+        if (!reserved.isEmpty()) {
+            return count(kind) > 0;
+        }
         return summaries().stream().anyMatch(summary -> summary.contains(kind));
     }
 
     /**
-     * Takes up to {@code count} items of a kind, container by container. A container left behind with items still to
-     * take has none of them left; if its stock view still counts some, it is re-read.
+     * Takes up to {@code count} items of a kind, container by container, leaving what is reserved for others. A
+     * container left behind with items still to take has none of them left; if its stock view still counts some, it is
+     * re-read.
      *
      * @param item  the item
      * @param count how many at most
@@ -189,7 +235,7 @@ public final class Stock {
      */
     public List<ItemStack> take(Item item, int count) {
         List<ItemStack> taken = new ArrayList<>();
-        int rest = count;
+        int rest = reserved.containsKey(item) ? Math.min(count, available(item)) : count;
         for (Part part : parts) {
             if (rest <= 0) {
                 break;
@@ -222,7 +268,8 @@ public final class Stock {
      * Takes one item out of a slot.
      *
      * @param index the slot index in {@link #contents()}
-     * @return the item, empty if nothing could be taken (the container is then re-read into the stock view)
+     * @return the item, empty if nothing could be taken (the container is then re-read into the stock view) or all of
+     *         that item is reserved
      */
     public ItemStack takeOne(int index) {
         int rest = index;
@@ -233,6 +280,9 @@ public final class Stock {
                 continue;
             }
             ItemResource resource = handler.getResource(rest);
+            if (!resource.isEmpty() && reserved.containsKey(resource.getItem()) && available(resource.getItem()) <= 0) {
+                return ItemStack.EMPTY;
+            }
             if (!resource.isEmpty()) {
                 long mark = part.tracker().mark();
                 try (Transaction transaction = Transaction.openRoot()) {

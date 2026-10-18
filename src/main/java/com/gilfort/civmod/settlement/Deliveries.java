@@ -304,24 +304,28 @@ public final class Deliveries {
     }
 
     /**
-     * Frees a task again (it stays open).
+     * Frees a task again (it stays open); its reservations are released.
      *
      * @param data       the dimension's settlement data
      * @param settlement the settlement
      * @param id         the task id
      */
     public static void release(SettlementData data, Settlement settlement, UUID id) {
+        Reservations.release(settlement, id);
         update(data, settlement, id, task -> task.withTaker(Optional.empty()));
     }
 
     /**
-     * Frees every task a Deliveryman holds, in every settlement of the dimension (results it carries stay carried).
+     * Frees every task a Deliveryman holds, in every settlement of the dimension (results it carries stay carried); their
+     * reservations are released.
      *
      * @param data    the dimension's settlement data
      * @param settler the Deliveryman
      */
     public static void releaseAll(SettlementData data, UUID settler) {
         for (Settlement settlement : data.settlements()) {
+            settlement.deliveries().stream().filter(task -> task.taker().filter(taker -> taker.settler().equals(settler)).isPresent())
+                    .forEach(task -> Reservations.release(settlement, task.id()));
             settlement.mutableDeliveries().replaceAll(task -> task.taker().filter(taker -> taker.settler().equals(settler)).isPresent()
                     ? task.withTaker(Optional.empty()) : task);
         }
@@ -435,6 +439,7 @@ public final class Deliveries {
     }
 
     private static void removeIf(SettlementData data, Settlement settlement, Predicate<DeliveryTask> filter) {
+        settlement.deliveries().stream().filter(filter).forEach(task -> Reservations.release(settlement, task.id()));
         if (settlement.mutableDeliveries().removeIf(filter)) {
             data.setDirty();
         }
