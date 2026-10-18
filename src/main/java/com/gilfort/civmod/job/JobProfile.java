@@ -34,6 +34,11 @@ public interface JobProfile {
     boolean isTool(ItemStack stack);
 
     /**
+     * @return the tool shown in the "no tool" thought bubble (the job's tool in its simplest usable form)
+     */
+    net.minecraft.world.item.Item toolIcon();
+
+    /**
      * @param block the JobBlock
      * @return a second tool the job wants with these settings (e.g. shears for leaves), if any
      */

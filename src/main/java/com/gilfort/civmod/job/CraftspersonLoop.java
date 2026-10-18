@@ -445,7 +445,8 @@ final class CraftspersonLoop implements CategoryLoop {
 
     private void craft(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, BlockPos station) {
         if (handTimer > 0 && --handTimer == 0) {
-            settler.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+            // Back to the hammer after showing the result just made.
+            settler.setItemSlot(EquipmentSlot.MAINHAND, job.jobType().displayItem().map(ItemStack::new).orElse(ItemStack.EMPTY));
         }
         if (fatigue.onBreak()) {
             return;
