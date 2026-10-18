@@ -20,6 +20,7 @@ import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementWorld;
+import com.gilfort.civmod.settlement.Warehouses;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
@@ -40,7 +41,8 @@ import net.minecraft.world.phys.Vec3;
  * Builds the PoC benchmark (vault {@code PoC.md}): one settlement with 20 JobBlocks (8 Lumberjack, 7 Miner,
  * 5 Fisherman) in a chain along +X, their work places, a pond, a working Clerk with 8 half-full linked chests and stock
  * rules, 4 Deliverymen at the Clerk with a pickup at 12 of the collecting jobs, 2 Craftspersons with crafting tables
- * and materials, and 27 equipped settlers.
+ * and materials, a second working Clerk served by the first one as Warehouse with 2 more Craftspersons on "Delivery:
+ * Deliveryman" crafting for it, and 30 equipped settlers.
  */
 public final class Benchmark {
 
@@ -53,6 +55,8 @@ public final class Benchmark {
     private static final int CLERK_LEVEL = 3;
     private static final int CLERK_CHESTS = 8;
     private static final int CRAFTSPERSONS = 2;
+    /** Craftspersons on "Delivery: Deliveryman", crafting for the second Clerk. */
+    private static final int DELIVERY_CRAFTSPERSONS = 2;
     /** Deliverymen at the Clerk (its places at level 3). */
     private static final int DELIVERYMEN = 4;
     /** Collecting jobs whose JobBlock starts with a harvest to pick up. */
@@ -61,10 +65,12 @@ public final class Benchmark {
     private static final int BREAD_SLOTS = 14;
     /** The Craftspersons' patterns: the stock rules' items and their intermediates. */
     private static final List<Item> CRAFTED = List.of(Items.STONE_PICKAXE, Items.TORCH, Items.STICK, Items.OAK_PLANKS);
-    /** Settlers spawned: one per Resource Collection JobBlock, the Clerk, the Deliverymen and the Craftspersons. */
-    public static final int SETTLERS = SIZE + 1 + DELIVERYMEN + CRAFTSPERSONS;
-    /** JobBlocks built: the Resource Collection ones, the Clerk and the Craftspersons. */
-    public static final int JOB_BLOCKS = SIZE + 1 + CRAFTSPERSONS;
+    /** Settlers spawned: one per Resource Collection JobBlock, the two Clerks, the Deliverymen and the Craftspersons. */
+    public static final int SETTLERS = SIZE + 2 + DELIVERYMEN + CRAFTSPERSONS + DELIVERY_CRAFTSPERSONS;
+    /** JobBlocks built: the Resource Collection ones, the two Clerks and the Craftspersons. */
+    public static final int JOB_BLOCKS = SIZE + 2 + CRAFTSPERSONS + DELIVERY_CRAFTSPERSONS;
+    /** The second Clerk, relative to the origin: behind the Craftspersons, so it is no collecting job's Home Clerk. */
+    public static final Vec3i SECOND_CLERK = new Vec3i(-3, 0, 22);
 
     private static final Scenario LUMBERJACK = new Scenario(ModJobs.LUMBERJACK, ModBlocks.LUMBERJACK_BLOCK, new Vec3i(2, 0, 4),
             Blocks.OAK_LOG, 5, Items.IRON_AXE);
@@ -97,7 +103,7 @@ public final class Benchmark {
         int length = (SIZE - 1) * SPACING;
         // Ground: three layers of stone, air above.
         for (int x = -6; x <= length + 6; x++) {
-            for (int z = -6; z <= 14; z++) {
+            for (int z = -6; z <= 26; z++) {
                 for (int y = -3; y <= 8; y++) {
                     BlockState state = y < 0 ? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState();
                     level.setBlock(origin.offset(x, y, z), state, FLAGS);
@@ -138,9 +144,14 @@ public final class Benchmark {
             fillWithBread(level, chest);
             JobAssignments.cycleClerkPoint(data, clerk, chest, true, false, net.minecraft.core.Direction.EAST);
         }
-        // Two Craftspersons with their crafting tables and materials, crafting for the Clerk's stock rules.
+        // A second working Clerk, served by the first one as Warehouse, with its own stock rules.
+        BlockPos second = origin.offset(SECOND_CLERK);
+        level.setBlock(second, ModBlocks.CLERK_BLOCK.get().defaultBlockState(), Block.UPDATE_ALL);
+        Warehouses.link(data, clerk, second);
+        // Craftspersons with their crafting tables and materials, crafting for the stock rules; the last ones leave their
+        // results to the Deliverymen.
         List<BlockPos> craftspersons = new java.util.ArrayList<>();
-        for (int i = 0; i < CRAFTSPERSONS; i++) {
+        for (int i = 0; i < CRAFTSPERSONS + DELIVERY_CRAFTSPERSONS; i++) {
             BlockPos craft = origin.offset(-3, 0, 6 + 4 * i);
             level.setBlock(craft, ModBlocks.CRAFTSPERSON_BLOCK.get().defaultBlockState(), Block.UPDATE_ALL);
             level.setBlock(craft.offset(-2, 0, 0), Blocks.CRAFTING_TABLE.defaultBlockState(), FLAGS);
@@ -155,10 +166,15 @@ public final class Benchmark {
                     Patterns.toggleCheck(level, craft, slot);
                 }
             }
+            if (i >= CRAFTSPERSONS) {
+                JobAssignments.toggleDelivery(data, craft);
+            }
             craftspersons.add(craft);
         }
         StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 8, 10));
         StockRules.setRule(data, clerk, StockRule.minimum(1, Items.TORCH, 64, 5));
+        StockRules.setRule(data, second, StockRule.minimum(0, Items.STONE_PICKAXE, 4, 10));
+        StockRules.setRule(data, second, StockRule.minimum(1, Items.TORCH, 32, 5));
         int spawned = 0;
         for (int i = 0; i < SIZE; i++) {
             BlockPos jobBlock = origin.offset(i * SPACING, 0, 0);
@@ -173,6 +189,7 @@ public final class Benchmark {
             spawned++;
         }
         spawned += spawn(level, data, settlement, clerk, "Bench Clerk", ModJobs.CLERK.get()) != null ? 1 : 0;
+        spawned += spawn(level, data, settlement, second, "Bench Clerk 2", ModJobs.CLERK.get()) != null ? 1 : 0;
         for (int i = 0; i < DELIVERYMEN; i++) {
             spawned += spawn(level, data, settlement, clerk, "Bench Deliveryman " + (i + 1), ModJobs.DELIVERYMAN.get()) != null ? 1 : 0;
         }

@@ -645,7 +645,7 @@ public final class CraftspersonGameTests {
         helper.succeed();
     }
 
-    private static Settler craftsperson(GameTestHelper helper, BlockPos craft, BlockPos relative, String name) {
+    static Settler craftsperson(GameTestHelper helper, BlockPos craft, BlockPos relative, String name) {
         SettlementData data = SettlementData.get(helper.getLevel());
         Settlement settlement = data.settlementAt(craft).orElseThrow();
         Settler settler = ClerkGameTests.settler(helper, relative, data, settlement);
@@ -659,7 +659,7 @@ public final class CraftspersonGameTests {
     }
 
     /** Catches up some hours of the previous workday from 06:00. */
-    private static void catchUp(ServerLevel level, Settler settler, long ticks) {
+    static void catchUp(ServerLevel level, Settler settler, long ticks) {
         long dayStart = Math.floorDiv(level.getOverworldClockTime(), 24000L) * 24000L;
         settler.getWork().setCatchUp(dayStart - 24000L, dayStart - 24000L + ticks);
         CatchUp.runNow(level, List.of(settler));

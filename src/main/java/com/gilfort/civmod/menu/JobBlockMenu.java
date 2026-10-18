@@ -66,6 +66,8 @@ public class JobBlockMenu extends CivMenu {
     public static final int BUTTON_TOGGLE_LEAVES = 51;
     /** Button id: upgrade to the next level. */
     public static final int BUTTON_UPGRADE = 52;
+    /** Button id: toggle who carries the results, Self / Deliveryman (Craftsperson). */
+    public static final int BUTTON_TOGGLE_DELIVERY = 53;
     /** Button ids from here: set the mark of a mission offer entry ({@link #markButtonId}). */
     private static final int BUTTON_MARK_MISSION = 100;
     /** Upper bound (exclusive) of the mark button ids. */
@@ -326,6 +328,13 @@ public class JobBlockMenu extends CivMenu {
             info = info.withLeavesToggled();
             if (container instanceof JobBlockEntity jobBlock && jobBlock.getLevel() instanceof ServerLevel level) {
                 JobAssignments.toggleLeaves(SettlementData.get(level), jobBlock.getBlockPos());
+            }
+            return true;
+        }
+        if (buttonId == BUTTON_TOGGLE_DELIVERY && isCraftsperson(info)) {
+            info = info.withDeliveryToggled();
+            if (container instanceof JobBlockEntity jobBlock && jobBlock.getLevel() instanceof ServerLevel level) {
+                JobAssignments.toggleDelivery(SettlementData.get(level), jobBlock.getBlockPos());
             }
             return true;
         }

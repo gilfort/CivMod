@@ -2,24 +2,34 @@ package com.gilfort.civmod.settlement;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
 import java.util.function.UnaryOperator;
 
 import com.gilfort.civmod.logistics.DeliveryTask;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.Item;
 
 /**
  * The Delivery tasks of a settlement (vault {@code Jobs/Deliveryman.md}), kept in its {@link Settlement}. A pickup is
  * created when a settler delivers into a drop-off of a Resource Collection Job that is then full enough, by the
- * end-of-work sweep, or urgently when the drop-off is full (at most one task per source). A Deliveryman picks the best
- * free task of its Warehouse ({@link #pick}), adds further sources of the same Home Clerk ({@link #batch}) and locks
- * them ({@link #take}); a locked task is freed when the Deliveryman changes job, the day ends or the source is
- * unreachable ({@link #release}, {@link #releaseAll}), and removed once the source is empty ({@link #done}).
+ * end-of-work sweep, or urgently when the drop-off is full (at most one task per source). A result delivery is posted
+ * by a producer on "Deliveryman" that put a result into its drop-off ({@link #postResult}); it counts as in delivery for
+ * the requesting Clerk ({@link #inDelivery}) until it arrives there. A Deliveryman picks the best free task of its
+ * Warehouse ({@link #pick}), adds further tasks to the same destination ({@link #batch}) and locks them ({@link #take});
+ * a locked task is freed when the Deliveryman changes job, the day ends or the source is unreachable ({@link #release},
+ * {@link #releaseAll}), and removed once the source is empty ({@link #done}). A picked-up result stays carried
+ * ({@link #carry}) until it is unloaded ({@link #arrived}).
+ * <p>
+ * Routing of a result ({@link #destination}): straight to the requesting Clerk when the producer's Warehouse serves it,
+ * otherwise into the producer's Home Clerk, where it waits (relayed) for the requesting Clerk's Warehouse.
  * <p>
  * Pure logic on {@link SettlementData}; facts about the world (how much a source holds) are passed in.
  */
@@ -50,7 +60,7 @@ public final class Deliveries {
         Optional<DeliveryTask> existing = get(settlement, source);
         if (existing.isPresent()) {
             if (urgent && !existing.get().urgent()) {
-                update(data, settlement, source, DeliveryTask::asUrgent);
+                update(data, settlement, existing.get().id(), DeliveryTask::asUrgent);
             }
             return false;
         }
@@ -60,18 +70,60 @@ public final class Deliveries {
     }
 
     /**
+     * Posts a result delivery: a producer put {@code count} of {@code item} into its drop-off for a Clerk's request. A
+     * result of the same kind still waiting at that drop-off for that Clerk grows instead.
+     *
+     * @param data       the dimension's settlement data
+     * @param settlement the settlement
+     * @param source     the producer's drop-off
+     * @param jobBlock   the producer's JobBlock
+     * @param item       the result
+     * @param count      how many were put in
+     * @param clerk      the requesting Clerk JobBlock
+     * @param gameTime   the game time now
+     */
+    public static void postResult(SettlementData data, Settlement settlement, BlockPos source, BlockPos jobBlock, Item item, int count,
+            BlockPos clerk, long gameTime) {
+        if (count <= 0) {
+            return;
+        }
+        Optional<DeliveryTask> waiting = settlement.deliveries().stream()
+                .filter(task -> task.source().equals(source) && !task.carried() && task.result()
+                        .filter(result -> !result.relayed() && result.item() == item && result.clerk().equals(clerk)).isPresent())
+                .findFirst();
+        if (waiting.isPresent()) {
+            DeliveryTask.Result result = waiting.get().result().orElseThrow();
+            update(data, settlement, waiting.get().id(), task -> task.withResult(
+                    new DeliveryTask.Result(item, result.count() + count, clerk, false, Optional.empty())));
+            return;
+        }
+        settlement.mutableDeliveries().add(new DeliveryTask(UUID.randomUUID(), source.immutable(), jobBlock.immutable(), gameTime, false,
+                Optional.of(new DeliveryTask.Result(item, count, clerk.immutable(), false, Optional.empty())), Optional.empty()));
+        data.setDirty();
+    }
+
+    /**
      * @param settlement a settlement
      * @param source     a drop-off
-     * @return the open task of that source
+     * @return the open pickup of that source
      */
     public static Optional<DeliveryTask> get(Settlement settlement, BlockPos source) {
-        return settlement.deliveries().stream().filter(task -> task.source().equals(source)).findFirst();
+        return settlement.deliveries().stream().filter(task -> task.result().isEmpty() && task.source().equals(source)).findFirst();
+    }
+
+    /**
+     * @param settlement a settlement
+     * @param id         a task id
+     * @return that task, if it is still open
+     */
+    public static Optional<DeliveryTask> get(Settlement settlement, UUID id) {
+        return settlement.deliveries().stream().filter(task -> task.id().equals(id)).findFirst();
     }
 
     /**
      * @param settlement a settlement
      * @param task       a task
-     * @return the Clerk JobBlock its items go to: the Home Clerk of its JobBlock
+     * @return the Home Clerk of its JobBlock (a pickup's target)
      */
     public static Optional<BlockPos> homeClerk(Settlement settlement, DeliveryTask task) {
         return settlement.block(task.jobBlock()).flatMap(SettlementBlock::homeClerk);
@@ -80,19 +132,76 @@ public final class Deliveries {
     /**
      * @param settlement a settlement
      * @param task       a task
+     * @return the Clerk whose Warehouse handles it: the requesting Clerk for a relayed result, else the Home Clerk of
+     *         its JobBlock
+     */
+    static Optional<BlockPos> handler(Settlement settlement, DeliveryTask task) {
+        Optional<DeliveryTask.Result> relayed = task.result().filter(DeliveryTask.Result::relayed);
+        return relayed.isPresent() ? relayed.map(DeliveryTask.Result::clerk) : homeClerk(settlement, task);
+    }
+
+    /**
+     * @param settlement a settlement
+     * @param task       a task
      * @return the Warehouse whose Deliverymen handle it, empty if none ("No Deliveryman")
      */
     public static Optional<SettlementBlock> warehouseOf(Settlement settlement, DeliveryTask task) {
-        return homeClerk(settlement, task).flatMap(clerk -> Warehouses.warehouseOf(settlement, clerk));
+        return handler(settlement, task).flatMap(clerk -> Warehouses.warehouseOf(settlement, clerk));
+    }
+
+    /**
+     * Where a task's items are unloaded: a pickup into the Home Clerk; a result into the requesting Clerk if it waits
+     * relayed or the producer's Warehouse serves that Clerk, else into the producer's Home Clerk.
+     *
+     * @param settlement a settlement
+     * @param task       a task
+     * @return the Clerk JobBlock, empty while the producer has no Home Clerk
+     */
+    public static Optional<BlockPos> destination(Settlement settlement, DeliveryTask task) {
+        Optional<BlockPos> home = homeClerk(settlement, task);
+        if (task.result().isEmpty()) {
+            return home;
+        }
+        DeliveryTask.Result result = task.result().get();
+        if (result.relayed() || home.filter(result.clerk()::equals).isPresent()) {
+            return Optional.of(result.clerk());
+        }
+        Optional<SettlementBlock> producer = home.flatMap(clerk -> Warehouses.warehouseOf(settlement, clerk));
+        boolean served = producer.isPresent() && Warehouses.warehouseOf(settlement, result.clerk()).equals(producer);
+        return served ? Optional.of(result.clerk()) : home;
     }
 
     /**
      * @param settlement a settlement
      * @param clerks     Clerk JobBlocks
-     * @return the tasks whose items go to one of them, in creation order
+     * @return the tasks handled for them or bringing results to them, in creation order (the Deliveries tab)
      */
     public static List<DeliveryTask> toClerks(Settlement settlement, List<BlockPos> clerks) {
-        return settlement.deliveries().stream().filter(task -> homeClerk(settlement, task).filter(clerks::contains).isPresent()).toList();
+        return settlement.deliveries().stream().filter(task -> handler(settlement, task).filter(clerks::contains).isPresent()
+                || task.result().filter(result -> clerks.contains(result.clerk())).isPresent()).toList();
+    }
+
+    /**
+     * @param settlement a settlement
+     * @param clerk      a Clerk JobBlock
+     * @param item       an item
+     * @return how many of it are on their way to that Clerk as results (stock rules count them as there)
+     */
+    public static int inDelivery(Settlement settlement, BlockPos clerk, Item item) {
+        return settlement.deliveries().stream().flatMap(task -> task.result().stream())
+                .filter(result -> result.item() == item && result.clerk().equals(clerk)).mapToInt(DeliveryTask.Result::count).sum();
+    }
+
+    /**
+     * @param settlement a settlement
+     * @param source     a drop-off
+     * @return the results waiting there for a Deliveryman, by item (a producer must not use them as inputs)
+     */
+    public static Map<Item, Integer> waitingAt(Settlement settlement, BlockPos source) {
+        Map<Item, Integer> waiting = new HashMap<>();
+        settlement.deliveries().stream().filter(task -> task.source().equals(source) && !task.carried()).flatMap(task -> task.result().stream())
+                .forEach(result -> waiting.merge(result.item(), result.count(), Integer::sum));
+        return waiting;
     }
 
     /**
@@ -126,29 +235,29 @@ public final class Deliveries {
     }
 
     /**
-     * Further sources for a trip: starting at the first task, the nearest free task of the same Home Clerk next, as
-     * long as its estimated stacks still fit the carry capacity.
+     * Further tasks for a trip: starting at the first task, the nearest free task to the same destination next, as long
+     * as its estimated stacks still fit the carry capacity.
      *
      * @param settlement the settlement
      * @param warehouse  the Deliveryman's Warehouse
      * @param first      the picked task
      * @param capacity   the carry capacity in stacks
-     * @param stacksAt   how many stacks a source holds (estimate)
+     * @param stacksOf   how many stacks a task would carry (estimate)
      * @param day        the day now
      * @param skipped    sources the Deliveryman leaves out
      * @return the trip's tasks, the first one first
      */
     public static List<DeliveryTask> batch(Settlement settlement, SettlementBlock warehouse, DeliveryTask first, int capacity,
-            ToIntFunction<BlockPos> stacksAt, long day, Set<BlockPos> skipped) {
+            ToIntFunction<DeliveryTask> stacksOf, long day, Set<BlockPos> skipped) {
         List<DeliveryTask> trip = new ArrayList<>(List.of(first));
-        Optional<BlockPos> clerk = homeClerk(settlement, first);
+        Optional<BlockPos> target = destination(settlement, first);
         List<DeliveryTask> candidates = new ArrayList<>(free(settlement, warehouse, day, skipped).stream()
-                .filter(task -> !task.source().equals(first.source()) && homeClerk(settlement, task).equals(clerk)).toList());
-        int stacks = stacksAt.applyAsInt(first.source());
+                .filter(task -> !task.id().equals(first.id()) && destination(settlement, task).equals(target)).toList());
+        int stacks = stacksOf.applyAsInt(first);
         while (!candidates.isEmpty()) {
             BlockPos last = trip.get(trip.size() - 1).source();
             DeliveryTask next = candidates.stream().min(Comparator.comparingDouble(task -> task.source().distSqr(last))).orElseThrow();
-            int more = stacksAt.applyAsInt(next.source());
+            int more = stacksOf.applyAsInt(next);
             if (stacks + more > capacity) {
                 break;
             }
@@ -161,12 +270,13 @@ public final class Deliveries {
 
     private static List<DeliveryTask> free(Settlement settlement, SettlementBlock warehouse, long day, Set<BlockPos> skipped) {
         List<BlockPos> clerks = Warehouses.handled(settlement, warehouse);
-        return toClerks(settlement, clerks).stream()
-                .filter(task -> task.takerOn(day).isEmpty() && !skipped.contains(task.source())).toList();
+        return settlement.deliveries().stream()
+                .filter(task -> handler(settlement, task).filter(clerks::contains).isPresent())
+                .filter(task -> task.takerOn(day).isEmpty() && !task.carried() && !skipped.contains(task.source())).toList();
     }
 
     /**
-     * Locks a task to a Deliveryman.
+     * Locks the pickup of a source to a Deliveryman.
      *
      * @param data       the dimension's settlement data
      * @param settlement the settlement
@@ -176,7 +286,21 @@ public final class Deliveries {
      * @param day        the day now
      */
     public static void take(SettlementData data, Settlement settlement, BlockPos source, UUID settler, String name, long day) {
-        update(data, settlement, source, task -> task.withTaker(Optional.of(new DeliveryTask.Taker(settler, name, day))));
+        get(settlement, source).ifPresent(task -> take(data, settlement, task.id(), settler, name, day));
+    }
+
+    /**
+     * Locks a task to a Deliveryman.
+     *
+     * @param data       the dimension's settlement data
+     * @param settlement the settlement
+     * @param id         the task id
+     * @param settler    the Deliveryman
+     * @param name       its name
+     * @param day        the day now
+     */
+    public static void take(SettlementData data, Settlement settlement, UUID id, UUID settler, String name, long day) {
+        update(data, settlement, id, task -> task.withTaker(Optional.of(new DeliveryTask.Taker(settler, name, day))));
     }
 
     /**
@@ -184,14 +308,14 @@ public final class Deliveries {
      *
      * @param data       the dimension's settlement data
      * @param settlement the settlement
-     * @param source     the task's source
+     * @param id         the task id
      */
-    public static void release(SettlementData data, Settlement settlement, BlockPos source) {
-        update(data, settlement, source, task -> task.withTaker(Optional.empty()));
+    public static void release(SettlementData data, Settlement settlement, UUID id) {
+        update(data, settlement, id, task -> task.withTaker(Optional.empty()));
     }
 
     /**
-     * Frees every task a Deliveryman holds, in every settlement of the dimension.
+     * Frees every task a Deliveryman holds, in every settlement of the dimension (results it carries stay carried).
      *
      * @param data    the dimension's settlement data
      * @param settler the Deliveryman
@@ -204,20 +328,120 @@ public final class Deliveries {
     }
 
     /**
-     * Removes a task: its source is empty.
+     * A Deliveryman picked up a result: it is carried until unloaded; nothing picked up ends the task (the Clerk's
+     * stock rule asks again).
+     *
+     * @param data       the dimension's settlement data
+     * @param settlement the settlement
+     * @param id         the task id
+     * @param settler    the Deliveryman
+     * @param count      how many it took (a shortfall at the source shrinks the task)
+     */
+    public static void carry(SettlementData data, Settlement settlement, UUID id, UUID settler, int count) {
+        carry(data, settlement, id, settler, count, 0);
+    }
+
+    /**
+     * A Deliveryman picked up part of a result: what it took is carried, the rest that did not fit its carry inventory
+     * waits at the source as a task of its own.
+     *
+     * @param data       the dimension's settlement data
+     * @param settlement the settlement
+     * @param id         the task id
+     * @param settler    the Deliveryman
+     * @param count      how many it took
+     * @param left       how many still wait at the source
+     */
+    public static void carry(SettlementData data, Settlement settlement, UUID id, UUID settler, int count, int left) {
+        Optional<DeliveryTask> found = get(settlement, id).filter(task -> task.result().isPresent());
+        if (found.isEmpty()) {
+            return;
+        }
+        DeliveryTask task = found.get();
+        DeliveryTask.Result result = task.result().get();
+        if (left > 0) {
+            settlement.mutableDeliveries().add(new DeliveryTask(UUID.randomUUID(), task.source(), task.jobBlock(), task.created(), task.urgent(),
+                    Optional.of(new DeliveryTask.Result(result.item(), left, result.clerk(), result.relayed(), Optional.empty())), Optional.empty()));
+        }
+        if (count <= 0) {
+            done(data, settlement, id);
+            return;
+        }
+        update(data, settlement, id, changed -> changed.withResult(
+                new DeliveryTask.Result(result.item(), count, result.clerk(), result.relayed(), Optional.of(settler))));
+    }
+
+    /**
+     * @param settlement a settlement
+     * @param settler    a Deliveryman
+     * @return the results it carries
+     */
+    public static List<DeliveryTask> carriedBy(Settlement settlement, UUID settler) {
+        return settlement.deliveries().stream()
+                .filter(task -> task.result().flatMap(DeliveryTask.Result::carrier).filter(settler::equals).isPresent()).toList();
+    }
+
+    /**
+     * A Deliveryman unloaded its load into a store: the results it carried for that Clerk are done, the others wait
+     * there (relayed) for the requesting Clerk's Warehouse.
+     *
+     * @param data       the dimension's settlement data
+     * @param settlement the settlement
+     * @param settler    the Deliveryman
+     * @param store      the Clerk JobBlock it unloaded into
+     */
+    public static void arrived(SettlementData data, Settlement settlement, UUID settler, BlockPos store) {
+        for (DeliveryTask task : carriedBy(settlement, settler)) {
+            if (task.result().orElseThrow().clerk().equals(store)) {
+                done(data, settlement, task.id());
+            } else {
+                update(data, settlement, task.id(), found -> found.relayedAt(store));
+            }
+        }
+    }
+
+    /**
+     * The results a Deliveryman carries are lost (its load was dropped), in every settlement of the dimension.
+     *
+     * @param data    the dimension's settlement data
+     * @param settler the Deliveryman
+     */
+    public static void dropCarried(SettlementData data, UUID settler) {
+        for (Settlement settlement : data.settlements()) {
+            removeIf(data, settlement, task -> task.result().flatMap(DeliveryTask.Result::carrier).filter(settler::equals).isPresent());
+        }
+    }
+
+    /**
+     * Removes the pickup of a source: it is empty.
      *
      * @param data       the dimension's settlement data
      * @param settlement the settlement
      * @param source     the task's source
      */
     public static void done(SettlementData data, Settlement settlement, BlockPos source) {
-        if (settlement.mutableDeliveries().removeIf(task -> task.source().equals(source))) {
+        removeIf(data, settlement, task -> task.result().isEmpty() && task.source().equals(source));
+    }
+
+    /**
+     * Removes a task.
+     *
+     * @param data       the dimension's settlement data
+     * @param settlement the settlement
+     * @param id         the task id
+     */
+    public static void done(SettlementData data, Settlement settlement, UUID id) {
+        removeIf(data, settlement, task -> task.id().equals(id));
+    }
+
+    private static void removeIf(SettlementData data, Settlement settlement, Predicate<DeliveryTask> filter) {
+        if (settlement.mutableDeliveries().removeIf(filter)) {
             data.setDirty();
         }
     }
 
-    private static void update(SettlementData data, Settlement settlement, BlockPos source, UnaryOperator<DeliveryTask> change) {
-        settlement.mutableDeliveries().replaceAll(task -> task.source().equals(source) ? change.apply(task) : task);
+    private static void update(SettlementData data, Settlement settlement, UUID id, UnaryOperator<DeliveryTask> change) {
+        settlement.mutableDeliveries().replaceAll(task -> task.id().equals(id) ? change.apply(task) : task);
         data.setDirty();
     }
 }

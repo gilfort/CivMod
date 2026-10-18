@@ -32,16 +32,16 @@ public final class BenchmarkGameTests {
                 ResourceKey.create(Registries.TEST_FUNCTION, CivMod.id("benchmark_smoke")), (Consumer<GameTestHelper>) BenchmarkGameTests::smoke));
     }
 
-    /** One connected settlement with 27 working settlers (4 of them Deliverymen); the report is written to the log. */
+    /** One connected settlement with 30 working settlers (4 of them Deliverymen, 2 Craftspersons on "Deliveryman"); the report is written to the log. */
     private static void smoke(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos origin = helper.absolutePos(new BlockPos(6, 4, 6));
         // The settlers only work in entity-ticking chunks: force the whole benchmark area.
-        java.util.List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(6 + (Benchmark.SIZE - 1) * 6 + 6, 0, 6 + 14));
+        java.util.List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(6 + (Benchmark.SIZE - 1) * 6 + 6, 0, 6 + 26));
         int spawned = Benchmark.build(level, origin);
         helper.assertTrue(spawned == Benchmark.SETTLERS, Benchmark.SETTLERS + " settlers expected, got " + spawned);
         Settlement settlement = SettlementData.get(level).settlementAt(origin).orElseThrow();
-        // The 20 job JobBlocks plus the Clerk (food point) and the 2 Craftspersons.
+        // The 20 job JobBlocks plus the two Clerks and the 4 Craftspersons.
         helper.assertTrue(settlement.blocks().size() == Benchmark.JOB_BLOCKS && settlement.connectedCount() == Benchmark.JOB_BLOCKS,
                 "All JobBlocks connected: " + settlement.connectedCount());
         helper.runAtTickTime(2380, () -> {
@@ -54,7 +54,12 @@ public final class BenchmarkGameTests {
             int collected = com.gilfort.civmod.logistics.ClerkStorage.stock(level, clerk, true)
                     .count(stack -> stack.is(net.minecraft.world.item.Items.OAK_LOG) || stack.is(net.minecraft.world.item.Items.GRANITE));
             CivMod.LOGGER.info("[benchmark] Deliverymen: {} item(s) collected into the Clerk, {} pickup(s) open", collected,
-                    settlement.deliveries().size());
+                    settlement.deliveries().stream().filter(task -> task.result().isEmpty()).count());
+            BlockPos second = origin.offset(Benchmark.SECOND_CLERK);
+            int forSecond = com.gilfort.civmod.logistics.ClerkStorage.stock(level, second, true)
+                    .count(stack -> stack.is(net.minecraft.world.item.Items.TORCH) || stack.is(net.minecraft.world.item.Items.STONE_PICKAXE));
+            CivMod.LOGGER.info("[benchmark] Result deliveries: {} item(s) at the second Clerk, {} result delivery(s) open", forSecond,
+                    settlement.deliveries().stream().filter(task -> task.result().isPresent()).count());
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
             helper.succeed();
         });

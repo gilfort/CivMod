@@ -248,8 +248,10 @@ public final class Settlement {
         // drop-off, like requests without a Clerk.
         requests.removeIf(request -> request.rule().isPresent() && request.target().filter(pos::equals).isPresent());
         requests.replaceAll(request -> request.target().filter(pos::equals).isPresent() ? request.withoutTarget() : request);
-        // Its pickups go with it; a removed Clerk is no Served Clerk any more.
-        deliveries.removeIf(task -> task.jobBlock().equals(pos) || task.source().equals(pos));
+        // Its pickups and result deliveries go with it (also those to a removed requesting Clerk); a removed Clerk is no
+        // Served Clerk any more.
+        deliveries.removeIf(task -> task.jobBlock().equals(pos) || task.source().equals(pos)
+                || task.result().filter(result -> result.clerk().equals(pos)).isPresent());
         blocks.values().forEach(block -> block.mutableServed().remove(pos));
         return blocks.remove(pos);
     }

@@ -7,19 +7,27 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.item.Item;
 
 /**
  * A Delivery task of the settlement (vault {@code Jobs/Deliveryman.md}): a pickup – empty the drop-off {@code source}
- * of a Resource Collection Job into the Home Clerk of its JobBlock. At most one open task per source; a Deliveryman
- * that takes it locks it for the others ({@link Taker}) until it is done, released or the day is over.
+ * of a Resource Collection Job into the Home Clerk of its JobBlock – or a result delivery ({@link Result}) – carry a
+ * producer's result from its drop-off to the requesting Clerk. At most one open pickup per source; a Deliveryman that
+ * takes a task locks it for the others ({@link Taker}) until it is done, released or the day is over.
  *
- * @param source   the drop-off (a container or the JobBlock itself)
- * @param jobBlock the JobBlock whose drop-off it is (its Home Clerk is the target)
+ * @param id       the task id
+ * @param source   where the items are picked up (a drop-off, the JobBlock itself, or the store a result waits in)
+ * @param jobBlock the JobBlock whose drop-off it is (its Home Clerk is the target of a pickup); the store itself for a
+ *                 relayed result
  * @param created  the game time the task was created (waiting time)
  * @param urgent   whether the drop-off was full ("Drop-off full")
+ * @param result   what a result delivery carries, empty for a pickup
  * @param taker    the Deliveryman working on it (not saved: a reload frees it)
  */
-public record DeliveryTask(BlockPos source, BlockPos jobBlock, long created, boolean urgent, Optional<Taker> taker) {
+public record DeliveryTask(UUID id, BlockPos source, BlockPos jobBlock, long created, boolean urgent, Optional<Result> result,
+        Optional<Taker> taker) {
 
     /**
      * The Deliveryman a task is locked to.
@@ -31,13 +39,51 @@ public record DeliveryTask(BlockPos source, BlockPos jobBlock, long created, boo
     public record Taker(UUID settler, String name, long day) {
     }
 
-    /** Save codec (without the taker). */
+    /**
+     * What a result delivery carries: {@code count} of {@code item} for the Clerk that requested it. It counts as in
+     * delivery for that Clerk's stock rules until it arrives there.
+     *
+     * @param item    the result
+     * @param count   how many
+     * @param clerk   the requesting Clerk JobBlock
+     * @param relayed whether it waits in another store (the producer's Home Clerk) for the requesting Clerk's Warehouse
+     * @param carrier the Deliveryman carrying it, empty while it waits at its source (saved: the load is saved too)
+     */
+    public record Result(Item item, int count, BlockPos clerk, boolean relayed, Optional<UUID> carrier) {
+
+        /** Save codec. */
+        public static final Codec<Result> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                BuiltInRegistries.ITEM.byNameCodec().fieldOf("item").forGetter(Result::item),
+                Codec.INT.fieldOf("count").forGetter(Result::count),
+                BlockPos.CODEC.fieldOf("clerk").forGetter(Result::clerk),
+                Codec.BOOL.optionalFieldOf("relayed", false).forGetter(Result::relayed),
+                UUIDUtil.CODEC.optionalFieldOf("carrier").forGetter(Result::carrier)
+        ).apply(instance, Result::new));
+    }
+
+    /** Save codec (without the taker; saves before result deliveries have no id). */
     public static final Codec<DeliveryTask> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+            UUIDUtil.CODEC.optionalFieldOf("id").forGetter(task -> Optional.of(task.id())),
             BlockPos.CODEC.fieldOf("source").forGetter(DeliveryTask::source),
             BlockPos.CODEC.fieldOf("job_block").forGetter(DeliveryTask::jobBlock),
             Codec.LONG.fieldOf("created").forGetter(DeliveryTask::created),
-            Codec.BOOL.optionalFieldOf("urgent", false).forGetter(DeliveryTask::urgent)
-    ).apply(instance, (source, jobBlock, created, urgent) -> new DeliveryTask(source, jobBlock, created, urgent, Optional.empty())));
+            Codec.BOOL.optionalFieldOf("urgent", false).forGetter(DeliveryTask::urgent),
+            Result.CODEC.optionalFieldOf("result").forGetter(DeliveryTask::result)
+    ).apply(instance, (id, source, jobBlock, created, urgent, result) -> new DeliveryTask(id.orElseGet(UUID::randomUUID), source, jobBlock,
+            created, urgent, result, Optional.empty())));
+
+    /**
+     * A pickup.
+     *
+     * @param source   the drop-off
+     * @param jobBlock the JobBlock whose drop-off it is
+     * @param created  the game time the task was created
+     * @param urgent   whether the drop-off was full
+     * @param taker    the Deliveryman working on it
+     */
+    public DeliveryTask(BlockPos source, BlockPos jobBlock, long created, boolean urgent, Optional<Taker> taker) {
+        this(UUID.randomUUID(), source, jobBlock, created, urgent, Optional.empty(), taker);
+    }
 
     /**
      * @param day the day now
@@ -48,17 +94,42 @@ public record DeliveryTask(BlockPos source, BlockPos jobBlock, long created, boo
     }
 
     /**
+     * @return whether a Deliveryman carries it (a result delivery picked up and not yet unloaded)
+     */
+    public boolean carried() {
+        return result.flatMap(Result::carrier).isPresent();
+    }
+
+    /**
      * @param taker the new Deliveryman, empty to free the task
      * @return a copy with that taker
      */
     public DeliveryTask withTaker(Optional<Taker> taker) {
-        return new DeliveryTask(source, jobBlock, created, urgent, taker);
+        return new DeliveryTask(id, source, jobBlock, created, urgent, result, taker);
     }
 
     /**
      * @return an urgent copy
      */
     public DeliveryTask asUrgent() {
-        return new DeliveryTask(source, jobBlock, created, true, taker);
+        return new DeliveryTask(id, source, jobBlock, created, true, result, taker);
+    }
+
+    /**
+     * @param changed the new result
+     * @return a copy carrying that result
+     */
+    public DeliveryTask withResult(Result changed) {
+        return new DeliveryTask(id, source, jobBlock, created, urgent, Optional.of(changed), taker);
+    }
+
+    /**
+     * @param store the store a result now waits in
+     * @return a copy of a result delivery waiting there, free and carried by nobody
+     */
+    public DeliveryTask relayedAt(BlockPos store) {
+        Result carriedResult = result.orElseThrow();
+        return new DeliveryTask(id, store.immutable(), store.immutable(), created, urgent,
+                Optional.of(new Result(carriedResult.item(), carriedResult.count(), carriedResult.clerk(), true, Optional.empty())), Optional.empty());
     }
 }

@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.DeliveryTask;
 import com.gilfort.civmod.logistics.Producers;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
@@ -161,13 +162,26 @@ public record ClerkTab(int level, List<StockRule> rules, List<RequestRow> reques
         long day = DayClock.day(level);
         return Deliveries.toClerks(settlement, clerks).stream().map(task -> {
             Optional<JobBlockSite> site = JobBlockSite.at(level, task.jobBlock());
-            Component source = site.map(found -> found.block().jobType().displayName()).orElse(Component.literal(task.source().toShortString()));
-            int items = site.filter(found -> level.isLoaded(task.source()))
-                    .map(found -> Pickups.contents(level, found, task.source()).items()).orElse(0);
-            ItemStack icon = level.isLoaded(task.source()) ? new ItemStack(level.getBlockState(task.source()).getBlock().asItem()) : ItemStack.EMPTY;
+            Component source = site.map(found -> ClerkStorage.isClerk(found.block()) ? ClerkStorage.name(found.block())
+                    : found.block().jobType().displayName()).orElse(Component.literal(task.source().toShortString()));
+            int items;
+            ItemStack icon;
+            if (task.result().isPresent()) {
+                // A result delivery: the result and its count, "<producer> → <requesting Clerk>".
+                DeliveryTask.Result result = task.result().get();
+                items = result.count();
+                icon = new ItemStack(result.item());
+                Component clerkName = settlement.block(result.clerk()).map(ClerkStorage::name).orElse(Component.literal(result.clerk().toShortString()));
+                source = Component.translatable("civmod.gui.clerk.delivery.result", source, clerkName);
+            } else {
+                items = site.filter(found -> level.isLoaded(task.source()))
+                        .map(found -> Pickups.contents(level, found, task.source()).items()).orElse(0);
+                icon = level.isLoaded(task.source()) ? new ItemStack(level.getBlockState(task.source()).getBlock().asItem()) : ItemStack.EMPTY;
+            }
             Component status = task.takerOn(day).<Component>map(taker -> Component.literal(taker.name()))
-                    .orElseGet(() -> Component.translatable(Deliveries.warehouseOf(settlement, task).filter(Warehouses::hasDeliverymen).isPresent()
-                            ? "civmod.gui.clerk.delivery.waiting" : "civmod.gui.clerk.delivery.no_deliveryman"));
+                    .orElseGet(() -> Component.translatable(task.carried() ? "civmod.gui.clerk.delivery.carried"
+                            : Deliveries.warehouseOf(settlement, task).filter(Warehouses::hasDeliverymen).isPresent()
+                                    ? "civmod.gui.clerk.delivery.waiting" : "civmod.gui.clerk.delivery.no_deliveryman"));
             return new DeliveryRow(icon, source, items, status);
         }).toList();
     }

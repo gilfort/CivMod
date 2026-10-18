@@ -19,9 +19,9 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
 
 /**
  * The Clerk's stock rules (vault {@code Jobs/Clerk.md}), kept in its {@link SettlementBlock}. While a Clerk settler is
- * on shift, a rule below its amount keeps one request open for {@code amount − stock − amount being crafted}
- * ({@link Requests}). Rules are checked every 30 s (staggered per Clerk, loaded Clerks only), right after a delivery
- * into the Clerk and once per simulated hour in catch-up. A check while the Clerk is not working, or of a rule
+ * on shift, a rule below its amount keeps one request open for {@code amount − stock − amount being crafted − amount in
+ * delivery} ({@link Requests}). Rules are checked every 30 s (staggered per Clerk, loaded Clerks only), right after a
+ * delivery into the Clerk and once per simulated hour in catch-up. A check while the Clerk is not working, or of a rule
  * inactive after a downgrade, withdraws the rule's request (running claims are finished).
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
@@ -113,7 +113,8 @@ public final class StockRules {
                 stock = count(level, clerk);
             }
             int crafting = request.map(Request::crafting).orElse(0);
-            int missing = rule.amount() - stock.getOrDefault(rule.item(), 0) - crafting;
+            // Results waiting for a Deliveryman count as there (no double production).
+            int missing = rule.amount() - stock.getOrDefault(rule.item(), 0) - crafting - Deliveries.inDelivery(settlement, clerk, rule.item());
             if (request.isPresent()) {
                 Requests.update(data, settlement, request.get().id(), open -> open.withAmount(missing).withPriority(rule.priority()));
             } else if (missing > 0) {
