@@ -13,6 +13,7 @@ import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.mission.OutcomeRules;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementManager;
@@ -46,13 +47,14 @@ import net.minecraft.server.level.ServerLevel;
  * @param connected      whether the block is connected to the settlement chain
  * @param distance       distance to the nearest connected JobBlock (unconnected only)
  * @param required       distance needed to connect (unconnected only)
- * @param assignees      names of the settlers working this JobBlock
+ * @param assignees      the settlers working this JobBlock with their Job
+ * @param places         the offered Jobs with taken / places
  * @param collectLeaves  whether a Lumberjack also collects leaves
  * @param costs          upgrade costs per target level (index 0 = level 2)
  * @param missionTab   the missions and Mission Job settlers (Mission Board only, else empty)
  */
 public record JobBlockInfo(Job jobType, int level, Component settlementName, boolean inSettlement, boolean connected,
-        int distance, int required, List<String> assignees, boolean collectLeaves, List<List<CostEntry>> costs,
+        int distance, int required, List<SettlementBlock.Assignee> assignees, List<JobPlaces.Line> places, boolean collectLeaves, List<List<CostEntry>> costs,
         MissionTab missionTab) {
 
     /**
@@ -222,8 +224,8 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      * @return a copy with another level
      */
     public JobBlockInfo withLevel(int newLevel) {
-        return new JobBlockInfo(jobType, newLevel, settlementName, inSettlement, connected, distance, required, assignees, collectLeaves, costs,
-                missionTab);
+        return new JobBlockInfo(jobType, newLevel, settlementName, inSettlement, connected, distance, required, assignees,
+                JobPlaces.lines(jobType, newLevel, assignees), collectLeaves, costs, missionTab);
     }
 
     /**
@@ -247,7 +249,8 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
             ByteBufCodecs.BOOL, JobBlockInfo::connected,
             ByteBufCodecs.VAR_INT, JobBlockInfo::distance,
             ByteBufCodecs.VAR_INT, JobBlockInfo::required,
-            ByteBufCodecs.STRING_UTF8.apply(ByteBufCodecs.list()), JobBlockInfo::assignees,
+            SettlementBlock.Assignee.STREAM_CODEC.apply(ByteBufCodecs.list()), JobBlockInfo::assignees,
+            JobPlaces.Line.STREAM_CODEC.apply(ByteBufCodecs.list()), JobBlockInfo::places,
             ByteBufCodecs.BOOL, JobBlockInfo::collectLeaves,
             CostEntry.STREAM_CODEC.apply(ByteBufCodecs.list()).apply(ByteBufCodecs.list()), JobBlockInfo::costs,
             MissionTab.STREAM_CODEC, JobBlockInfo::missionTab,
@@ -280,23 +283,17 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         return new JobBlockInfo(jobType, jobLevel,
                 settlement.map(Settlement::displayName).orElse(Component.empty()),
                 settlement.isPresent(), status.connected(), status.distance(), status.required(),
-                assignees.stream().map(SettlementBlock.Assignee::name).toList(),
+                List.copyOf(assignees), JobPlaces.lines(jobType, jobLevel, assignees),
                 block.map(SettlementBlock::collectLeaves).orElse(false), costsOf(jobType),
                 new MissionTab(SettlementWorld.missionOffer(level, pos), taken, settlers, OutcomeRules.get()));
-    }
-
-    /**
-     * @return how many settlers the JobBlock holds at its level
-     */
-    public int capacity() {
-        return SettlementRules.capacity(jobType, level);
     }
 
     /**
      * @return a copy without assignees
      */
     public JobBlockInfo withoutAssignees() {
-        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, List.of(), collectLeaves, costs,
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, List.of(),
+                JobPlaces.lines(jobType, level, List.of()), collectLeaves, costs,
                 new MissionTab(missionTab.offer(), List.of(), List.of(), missionTab.rules()));
     }
 
@@ -304,7 +301,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      * @return a copy with leaf collection toggled
      */
     public JobBlockInfo withLeavesToggled() {
-        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, !collectLeaves, costs,
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, places, !collectLeaves, costs,
                 missionTab);
     }
 
@@ -327,7 +324,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
     }
 
     private JobBlockInfo withMissionTab(MissionTab changed) {
-        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, collectLeaves, costs,
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, places, collectLeaves, costs,
                 changed);
     }
 
@@ -351,6 +348,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      * @return info without settlement data
      */
     public static JobBlockInfo unknown(Job jobType, int jobLevel) {
-        return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, List.of(), false, costsOf(jobType), MissionTab.EMPTY);
+        return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, List.of(), JobPlaces.lines(jobType, jobLevel, List.of()), false,
+                costsOf(jobType), MissionTab.EMPTY);
     }
 }

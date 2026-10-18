@@ -9,8 +9,10 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModDataComponents;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
@@ -41,7 +43,7 @@ import net.neoforged.neoforge.capabilities.Capabilities;
  * <li>Shift + right-click a JobBlock: bind to it.</li>
  * <li>Bound to a JobBlock, right-click a block (or water): cycle work POI → collect → drop-off → removed; bound to a
  * Clerk JobBlock: a container cycles storage → removed, any other block stand spot → removed.</li>
- * <li>Bound to a JobBlock, right-click a settler: assign the job.</li>
+ * <li>Bound to a JobBlock, right-click a settler: open the {@link JobPicker job picker} and assign the chosen Job.</li>
  * <li>Shift + right-click a settler: bind to the settler (NPC settings, e.g. bed later).</li>
  * <li>Shift + right-click air: clear the binding.</li>
  * </ul>
@@ -247,7 +249,7 @@ public class ScrollOfAssignmentItem extends Item {
     }
 
     private static Component clerkName(SettlementBlock clerk) {
-        return clerk.assignees().stream().findFirst().<Component>map(assignee -> Component.literal(assignee.name()))
+        return clerk.assignee(ModJobs.CLERK.get()).<Component>map(assignee -> Component.literal(assignee.name()))
                 .orElseGet(() -> Component.translatable("civmod.scroll.point.clerk_at", clerk.pos().toShortString()));
     }
 
@@ -262,31 +264,60 @@ public class ScrollOfAssignmentItem extends Item {
                 && level.getBlockState(pos.above(2)).getCollisionShape(level, pos.above(2)).isEmpty();
     }
 
+    /** Bound to a JobBlock, right-click a settler: opens the job picker if the settler may join the block. */
     private static void assign(ItemStack stack, ServerPlayer player, BlockPos jobBlock, Settler settler) {
         Optional<SettlementBlock> block = boundBlock(stack, player, jobBlock);
         if (block.isEmpty()) {
             return;
         }
-        SettlementData data = SettlementData.get(player.level());
-        JobAssignments.AssignResult result = JobAssignments.assign(data, jobBlock, settler.getUUID(), settler.getName().getString(),
-                settler.getSettlementId(), settler.getJobs().stream().map(SettlerJob::jobType).toList());
-        Job jobType = block.get().jobType();
-        Component message = switch (result) {
-            case OK -> {
-                settler.addJob(new SettlerJob(jobType, jobBlock));
-                yield Component.translatable("civmod.scroll.assigned", jobType.displayName(), settler.getName());
-            }
+        JobAssignments.AssignResult result = JobAssignments.check(SettlementData.get(player.level()), jobBlock, settler.getUUID(),
+                settler.getSettlementId());
+        if (result != JobAssignments.AssignResult.OK) {
+            player.sendOverlayMessage(message(result, block.get(), settler, block.get().jobType()));
+            return;
+        }
+        JobPicker.open(player, block.get(), settler);
+    }
+
+    /**
+     * Assigns the Job chosen in the job picker and tells the player the result.
+     *
+     * @param player   the player
+     * @param jobBlock the JobBlock the scroll is bound to
+     * @param settler  the settler
+     * @param job      the chosen Job
+     */
+    static void assign(ServerPlayer player, BlockPos jobBlock, Settler settler, Job job) {
+        Optional<SettlementBlock> block = JobBlockSite.blockAt(player.level(), jobBlock);
+        if (block.isEmpty()) {
+            player.sendOverlayMessage(Component.translatable("civmod.scroll.binding_lost").withStyle(ChatFormatting.RED));
+            return;
+        }
+        JobAssignments.AssignResult result = JobAssignments.assign(SettlementData.get(player.level()), jobBlock, settler.getUUID(),
+                settler.getName().getString(), settler.getSettlementId(), settler.getJobs().stream().map(SettlerJob::jobType).toList(), job);
+        if (result == JobAssignments.AssignResult.OK) {
+            settler.addJob(new SettlerJob(job, jobBlock));
+        }
+        player.sendOverlayMessage(message(result, block.get(), settler, job));
+    }
+
+    private static Component message(JobAssignments.AssignResult result, SettlementBlock block, Settler settler, Job job) {
+        return switch (result) {
+            case OK -> Component.translatable("civmod.scroll.assigned", job.displayName(), settler.getName());
             case NO_JOB_BLOCK -> Component.translatable("civmod.scroll.binding_lost").withStyle(ChatFormatting.RED);
             case UNCONNECTED -> Component.translatable("civmod.scroll.assign.unconnected").withStyle(ChatFormatting.RED);
             case OCCUPIED -> Component.translatable("civmod.scroll.assign.occupied",
-                    block.get().assignees().stream().findFirst().map(SettlementBlock.Assignee::name).orElse("?")).withStyle(ChatFormatting.RED);
-            case FULL -> Component.translatable("civmod.scroll.assign.full", block.get().capacity()).withStyle(ChatFormatting.RED);
+                    JobPlaces.holders(block, job).stream().findFirst().map(SettlementBlock.Assignee::name).orElse("?")).withStyle(ChatFormatting.RED);
+            case FULL -> Component.translatable("civmod.scroll.assign.full", job.displayName(), JobPlaces.taken(block, job),
+                    JobPlaces.places(block.jobType(), job, block.level())).withStyle(ChatFormatting.RED);
+            case NOT_OFFERED -> Component.translatable("civmod.scroll.assign.not_offered", job.displayName()).withStyle(ChatFormatting.RED);
+            case SAME_BLOCK -> Component.translatable("civmod.scroll.assign.same_block", settler.getName(),
+                    block.assignee(settler.getUUID()).map(assignee -> assignee.job().displayName()).orElse(Component.literal("?"))).withStyle(ChatFormatting.RED);
             case MISSION_JOB -> Component.translatable("civmod.scroll.assign.mission_job", settler.getName()).withStyle(ChatFormatting.RED);
             case OTHER_SETTLEMENT -> Component.translatable("civmod.scroll.assign.other_settlement", settler.getName()).withStyle(ChatFormatting.RED);
-            case DUPLICATE -> Component.translatable("civmod.scroll.assign.duplicate", settler.getName(), jobType.displayName())
+            case DUPLICATE -> Component.translatable("civmod.scroll.assign.duplicate", settler.getName(), job.displayName())
                     .withStyle(ChatFormatting.RED);
         };
-        player.sendOverlayMessage(message);
     }
 
     /**

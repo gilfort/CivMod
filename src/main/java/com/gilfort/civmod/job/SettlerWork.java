@@ -25,6 +25,7 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModEntityTypes;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
@@ -173,7 +174,6 @@ public final class SettlerWork {
         loops.put(JobCategory.RESOURCE_COLLECTION, new ResourceCollectionLoop(this));
         missions = new MissionLoop(this);
         loops.put(JobCategory.MISSION, missions);
-        // The Clerk is the only Logistics Job so far.
         clerks = new ClerkLoop(this);
         loops.put(JobCategory.LOGISTICS, clerks);
         // The Craftsperson is the only Producing Job so far.
@@ -273,7 +273,9 @@ public final class SettlerWork {
      * @return the work loop of the job's category (null if the category is not implemented)
      */
     private @Nullable CategoryLoop loop(SettlerJob job) {
-        return loops.get(job.jobType().category());
+        CategoryLoop loop = loops.get(job.jobType().category());
+        // The Clerk is the only Logistics Job with a loop so far; the Deliveryman has none yet.
+        return loop == clerks && job.jobType() != ModJobs.CLERK.get() ? null : loop;
     }
 
     /**
@@ -1555,7 +1557,7 @@ public final class SettlerWork {
      * @return the Clerk JobBlock this settler works as Clerk, if any (a Clerk eats from its own storage)
      */
     Optional<BlockPos> ownClerk() {
-        return settler.getJobs().stream().filter(job -> job.jobType().category() == JobCategory.LOGISTICS).map(SettlerJob::jobBlock)
+        return settler.getJobs().stream().filter(job -> job.jobType() == ModJobs.CLERK.get()).map(SettlerJob::jobBlock)
                 .findFirst();
     }
 

@@ -11,6 +11,8 @@ import com.gilfort.civmod.menu.ClerkTab;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.PatternTab;
+import com.gilfort.civmod.settlement.JobPlaces;
+import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.ChatFormatting;
@@ -113,7 +115,9 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (JobBlockMenu.isMissionBoard(current)) {
             missions.init();
         }
-        if (!JobBlockMenu.isMissionBoard(current) && !current.assignees().isEmpty()) {
+        // Frees the block's only place; blocks with several places are left with ✕ in the settler window.
+        if (!JobBlockMenu.isMissionBoard(current) && current.places().stream().mapToInt(JobPlaces.Line::places).sum() == 1
+                && !current.assignees().isEmpty()) {
             addTabWidget(JobBlockMenu.TAB_INFO, Button.builder(Component.translatable("civmod.gui.job_block.unassign"), button -> {
                 clickMenuButton(JobBlockMenu.BUTTON_UNASSIGN);
                 rebuildWidgets();
@@ -209,28 +213,29 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
                     CivGui.PADDING, y, color, false);
         }
         y += LINE_HEIGHT;
-        if (!JobBlockMenu.isMissionBoard(info)) {
-            Component worker = info.assignees().isEmpty() ? Component.translatable("civmod.gui.job_block.no_worker")
-                    : Component.literal(info.assignees().get(0));
-            graphics.text(font, Component.translatable("civmod.gui.job_block.worker", worker), CivGui.PADDING, y, color, false);
-        } else {
-            Component settlers = Component.translatable("civmod.gui.job_block.settlers", info.assignees().size(), info.capacity());
-            graphics.text(font, settlers, CivGui.PADDING, y, color, false);
-            if (!info.assignees().isEmpty() && mouseX >= leftPos + CivGui.PADDING && mouseX < leftPos + CivGui.PADDING + font.width(settlers)
+        // One line per offered Job with taken / places; a single place names its holder, several list them on hover.
+        for (JobPlaces.Line line : info.places()) {
+            List<SettlementBlock.Assignee> holders = info.assignees().stream().filter(assignee -> assignee.job() == line.job()).toList();
+            Component places = JobPickerScreen.label(line);
+            Component text = line.places() == 1 && !holders.isEmpty()
+                    ? Component.translatable("civmod.gui.job_block.job_holder", places, holders.get(0).name()) : places;
+            graphics.text(font, CivGui.fit(font, text, width), CivGui.PADDING, y, color, false);
+            if (!holders.isEmpty() && mouseX >= leftPos + CivGui.PADDING && mouseX < leftPos + CivGui.PADDING + Math.min(width, font.width(text))
                     && mouseY >= topPos + y && mouseY < topPos + y + font.lineHeight) {
-                graphics.setComponentTooltipForNextFrame(font, settlerLines(info), mouseX, mouseY);
+                graphics.setComponentTooltipForNextFrame(font, settlerLines(info, holders), mouseX, mouseY);
             }
+            y += LINE_HEIGHT;
         }
-        y += LINE_HEIGHT;
         extractCosts(graphics, info, y, mouseX, mouseY);
     }
 
     /**
-     * @return one tooltip line per settler of the board: its name and, if any, the mission it took
+     * @return one tooltip line per settler: its name and, if any, the mission it took
      */
-    private static List<Component> settlerLines(JobBlockInfo info) {
+    private static List<Component> settlerLines(JobBlockInfo info, List<SettlementBlock.Assignee> holders) {
         List<Component> lines = new ArrayList<>();
-        for (String name : info.assignees()) {
+        for (SettlementBlock.Assignee holder : holders) {
+            String name = holder.name();
             Optional<JobBlockInfo.TakenMission> taken = info.taken().stream().filter(entry -> entry.settler().equals(name)).findFirst();
             lines.add(taken.<Component>map(entry -> Component.translatable("civmod.gui.job_block.settler_mission", name,
                     Component.translatable(entry.departed() ? "civmod.settler.status.on_mission" : "civmod.settler.status.mission_reserved",

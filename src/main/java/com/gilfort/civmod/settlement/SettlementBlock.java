@@ -22,9 +22,9 @@ import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.codec.StreamCodec;
 
 /**
- * A JobBlock as recorded by its settlement, including its work points and the assigned settlers
- * (vault {@code Systems/Scroll of Assignment.md}); every JobBlock holds one settler, the Mission Board several
- * ({@link SettlementRules#capacity}) and keeps its daily {@link MissionOffer}.
+ * A JobBlock as recorded by its settlement, including its work points and the assigned settlers with their Job
+ * (vault {@code Systems/Scroll of Assignment.md}); places per Job in {@link JobPlaces}. The Mission Board keeps its
+ * daily {@link MissionOffer}.
  */
 public final class SettlementBlock {
 
@@ -33,14 +33,36 @@ public final class SettlementBlock {
      *
      * @param id   the settler UUID
      * @param name the settler name (for display while it is unloaded)
+     * @param job  the Job it holds at this block ({@link JobPlaces})
      */
-    public record Assignee(UUID id, String name) {
+    public record Assignee(UUID id, String name, Job job) {
 
-        /** Save codec. */
-        public static final Codec<Assignee> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                UUIDUtil.CODEC.fieldOf("id").forGetter(Assignee::id),
-                Codec.STRING.fieldOf("name").forGetter(Assignee::name)
-        ).apply(instance, Assignee::new));
+        /** Network codec. */
+        public static final StreamCodec<ByteBuf, Assignee> STREAM_CODEC = StreamCodec.composite(
+                UUIDUtil.STREAM_CODEC, Assignee::id,
+                net.minecraft.network.codec.ByteBufCodecs.STRING_UTF8, Assignee::name,
+                Job.STREAM_CODEC, Assignee::job,
+                Assignee::new);
+    }
+
+    /**
+     * An assignee as saved; saves before JobBlocks offered several Jobs have no Job (read as the block's Job).
+     *
+     * @param id   the settler UUID
+     * @param name the settler name
+     * @param job  the Job it holds at this block
+     */
+    private record SavedAssignee(UUID id, String name, Optional<Job> job) {
+
+        static final Codec<SavedAssignee> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                UUIDUtil.CODEC.fieldOf("id").forGetter(SavedAssignee::id),
+                Codec.STRING.fieldOf("name").forGetter(SavedAssignee::name),
+                Job.CODEC.optionalFieldOf("job").forGetter(SavedAssignee::job)
+        ).apply(instance, SavedAssignee::new));
+
+        static SavedAssignee of(Assignee assignee) {
+            return new SavedAssignee(assignee.id(), assignee.name(), Optional.of(assignee.job()));
+        }
     }
 
     /**
@@ -153,7 +175,8 @@ public final class SettlementBlock {
             BlockPos.CODEC.listOf().optionalFieldOf("work", List.of()).forGetter(SettlementBlock::workPoints),
             BlockPos.CODEC.optionalFieldOf("collect").forGetter(SettlementBlock::collect),
             BlockPos.CODEC.optionalFieldOf("drop_off").forGetter(SettlementBlock::dropOff),
-            Assignee.CODEC.listOf().optionalFieldOf("assignees", List.of()).forGetter(SettlementBlock::assignees),
+            SavedAssignee.CODEC.listOf().optionalFieldOf("assignees", List.of())
+                    .forGetter(block -> block.assignees.stream().map(SavedAssignee::of).toList()),
             // Saves before the Mission Board stored one assignee; read only.
             UUIDUtil.CODEC.optionalFieldOf("assignee").forGetter(block -> Optional.empty()),
             Codec.STRING.optionalFieldOf("assignee_name").forGetter(block -> Optional.empty()),
@@ -193,7 +216,7 @@ public final class SettlementBlock {
     }
 
     private SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected, List<BlockPos> workPoints,
-            Optional<BlockPos> collect, Optional<BlockPos> dropOff, List<Assignee> assignees, Optional<UUID> legacyAssignee,
+            Optional<BlockPos> collect, Optional<BlockPos> dropOff, List<SavedAssignee> assignees, Optional<UUID> legacyAssignee,
             Optional<String> legacyAssigneeName, boolean collectLeaves, MissionOffer missionOffer, ClerkFields clerk,
             CraftspersonFields craftsperson) {
         this.pos = pos.immutable();
@@ -203,8 +226,9 @@ public final class SettlementBlock {
         this.workPoints.addAll(workPoints);
         this.collect = collect;
         this.dropOff = dropOff;
-        this.assignees.addAll(assignees);
-        legacyAssignee.filter(id -> assignees.isEmpty()).ifPresent(id -> this.assignees.add(new Assignee(id, legacyAssigneeName.orElse("?"))));
+        assignees.forEach(saved -> this.assignees.add(new Assignee(saved.id(), saved.name(), saved.job().orElse(jobType))));
+        legacyAssignee.filter(id -> assignees.isEmpty())
+                .ifPresent(id -> this.assignees.add(new Assignee(id, legacyAssigneeName.orElse("?"), jobType)));
         this.collectLeaves = collectLeaves;
         this.missionOffer = missionOffer;
         this.storage.addAll(clerk.storage());
@@ -388,7 +412,23 @@ public final class SettlementBlock {
     }
 
     /**
-     * @return how many settlers this JobBlock holds at its level
+     * @param settler a settler UUID
+     * @return that settler's entry, if it works this JobBlock
+     */
+    public Optional<Assignee> assignee(UUID settler) {
+        return assignees.stream().filter(assignee -> assignee.id().equals(settler)).findFirst();
+    }
+
+    /**
+     * @param job a Job
+     * @return the first settler holding that Job at this JobBlock (e.g. the Clerk of a Clerk JobBlock)
+     */
+    public Optional<Assignee> assignee(Job job) {
+        return assignees.stream().filter(assignee -> assignee.job() == job).findFirst();
+    }
+
+    /**
+     * @return how many settlers this JobBlock holds in its own Job at its level (other Jobs: {@link JobPlaces})
      */
     public int capacity() {
         return SettlementRules.capacity(jobType, level);
@@ -399,7 +439,7 @@ public final class SettlementBlock {
      * @return whether that settler works this JobBlock
      */
     public boolean isAssignee(UUID settler) {
-        return assignees.stream().anyMatch(assignee -> assignee.id().equals(settler));
+        return assignee(settler).isPresent();
     }
 
     void setLevel(int level) {

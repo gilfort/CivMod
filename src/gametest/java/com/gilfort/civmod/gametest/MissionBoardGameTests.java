@@ -9,7 +9,6 @@ import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.job.JobCategory;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
-import com.gilfort.civmod.npc.SettlerJobs;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModItems;
@@ -136,7 +135,7 @@ public final class MissionBoardGameTests {
         BlockPos second = new BlockPos(5, 64, 0);
         SettlementManager.place(data, second, ModJobs.ADVENTURER.get(), 5, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
         helper.assertTrue(assign(data, settlement, 0, List.of(ModJobs.LUMBERJACK.get())) == AssignResult.OK, "A Lumberjack may join");
-        helper.assertTrue(assign(data, settlement, 0, List.of(ModJobs.LUMBERJACK.get(), ModJobs.ADVENTURER.get())) == AssignResult.DUPLICATE,
+        helper.assertTrue(assign(data, settlement, 0, List.of(ModJobs.LUMBERJACK.get(), ModJobs.ADVENTURER.get())) == AssignResult.SAME_BLOCK,
                 "Already on this board");
         helper.assertTrue(JobAssignments.assign(data, second, SETTLERS[0], "Settler 0", settlement.id(),
                 List.of(ModJobs.LUMBERJACK.get(), ModJobs.ADVENTURER.get())) == AssignResult.MISSION_JOB, "An Adventurer cannot join a second board");
@@ -195,11 +194,11 @@ public final class MissionBoardGameTests {
         legacy.add("assignee", UUIDUtil.CODEC.encodeStart(ops, SETTLERS[2]).getOrThrow());
         legacy.addProperty("assignee_name", "Settler 2");
         SettlementBlock old = SettlementBlock.CODEC.parse(ops, legacy).getOrThrow();
-        helper.assertTrue(old.assignees().equals(List.of(new SettlementBlock.Assignee(SETTLERS[2], "Settler 2"))), "Legacy assignee: " + old.assignees());
+        helper.assertTrue(old.assignees().equals(List.of(new SettlementBlock.Assignee(SETTLERS[2], "Settler 2", ModJobs.LUMBERJACK.get()))), "Legacy assignee: " + old.assignees());
         helper.succeed();
     }
 
-    /** Level 1 offers only the Adventurer; Specializations from level 2. Setting the Mission Job keeps the board. */
+    /** Level 1 offers only the Adventurer; Specializations from level 2. */
     private static void unlockedJobs(GameTestHelper helper) {
         Job adventurer = ModJobs.ADVENTURER.get();
         Job specialization = ModJobs.REGISTRY.getValue(CivMod.id("gametest_mission_specialization"));
@@ -207,11 +206,6 @@ public final class MissionBoardGameTests {
         helper.assertTrue(adventurer.offeredAt(2).equals(List.of(adventurer, specialization)), "Level 2: " + adventurer.offeredAt(2));
         helper.assertTrue(ModJobs.LUMBERJACK.get().offeredAt(5).equals(List.of(ModJobs.LUMBERJACK.get())), "No Lumberjack Specializations");
 
-        SettlerJob lumberjack = new SettlerJob(ModJobs.LUMBERJACK.get(), new BlockPos(5, 64, 0));
-        List<SettlerJob> jobs = List.of(lumberjack, new SettlerJob(adventurer, BOARD));
-        helper.assertTrue(SettlerJobs.withMissionJob(jobs, specialization).equals(List.of(lumberjack, new SettlerJob(specialization, BOARD))),
-                "The Mission Job is replaced in place");
-        helper.assertTrue(SettlerJobs.withMissionJob(List.of(lumberjack), specialization).equals(List.of(lumberjack)), "No Mission Job, no change");
         helper.assertTrue(SettlementRules.skillCap(1) == 20 && SettlementRules.skillCap(5) == 100, "Skill cap 20 / 100");
         helper.succeed();
     }

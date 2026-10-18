@@ -136,22 +136,6 @@ public class SettlerMenu extends CivMenu {
             }
             return true;
         }
-        if (buttonId >= SettlerJobs.SET_MISSION_JOB && buttonId < SettlerJobs.SET_MISSION_JOB_END) {
-            int index = buttonId - SettlerJobs.SET_MISSION_JOB;
-            if (index < info.missionJobs().size()) {
-                info = info.withJobs(SettlerJobs.withMissionJob(info.jobs(), info.missionJobs().get(index)));
-                if (settler != null) {
-                    settler.setJobs(info.jobs());
-                    if (settler.level() instanceof ServerLevel level) {
-                        // Assigned missions the new Mission Job may not take lose their assignee (they stay locked).
-                        info.jobs().stream().filter(job -> job.jobType().category() == JobCategory.MISSION).findFirst()
-                                .ifPresent(job -> MissionOffers.missionJobChanged(SettlementData.get(level), job.jobBlock(), settler.getUUID(),
-                                        job.jobType(), Missions.all(level.registryAccess())));
-                    }
-                }
-            }
-            return true;
-        }
         if (buttonId == BUTTON_DISMISS) {
             if (settler != null && settler.isHomeless() && player instanceof ServerPlayer serverPlayer) {
                 settler.dismiss();

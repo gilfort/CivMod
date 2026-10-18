@@ -121,7 +121,7 @@ public final class ClerkStorage {
      * @return whether a Clerk settler works it now (assigned and on shift); only then is the linked storage reachable
      */
     public static boolean working(SettlementBlock clerk, long day, long dayTime) {
-        return isClerk(clerk) && clerk.assignees().stream().anyMatch(assignee -> inShift(assignee.id(), day, dayTime));
+        return isClerk(clerk) && clerk.assignee(ModJobs.CLERK.get()).filter(assignee -> inShift(assignee.id(), day, dayTime)).isPresent();
     }
 
     /**

@@ -2,6 +2,7 @@ package com.gilfort.civmod.network;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.command.CivModCommand;
+import com.gilfort.civmod.item.JobPicker;
 import com.gilfort.civmod.menu.ClerkTab;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.PatternTab;
@@ -27,7 +28,7 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 public final class CivNetwork {
 
     /** Network protocol version; client and server must match. */
-    public static final String PROTOCOL_VERSION = "3";
+    public static final String PROTOCOL_VERSION = "4";
 
     private CivNetwork() {
     }
@@ -77,7 +78,13 @@ public final class CivNetwork {
                 menu.editPattern(payload);
             }
         });
+        registrar.playToServer(JobPicker.Choose.TYPE, JobPicker.Choose.STREAM_CODEC, (payload, context) -> {
+            if (context.player() instanceof ServerPlayer player) {
+                JobPicker.choose(player, payload);
+            }
+        });
         // Client handler is registered in CivModClient (RegisterClientPayloadHandlersEvent).
+        registrar.playToClient(JobPicker.Open.TYPE, JobPicker.Open.STREAM_CODEC);
         registrar.playToClient(PatternTab.Sync.TYPE, PatternTab.Sync.STREAM_CODEC);
         registrar.playToClient(SettlementOutline.Sync.TYPE, SettlementOutline.Sync.STREAM_CODEC);
         registrar.playToClient(JobPointsDisplay.Sync.TYPE, JobPointsDisplay.Sync.STREAM_CODEC);
