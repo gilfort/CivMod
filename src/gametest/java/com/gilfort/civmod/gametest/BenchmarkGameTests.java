@@ -11,6 +11,7 @@ import com.gilfort.civmod.debug.Benchmark;
 import com.gilfort.civmod.debug.CivProfiler;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.DeliveryTask;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.Deliveries;
@@ -65,12 +66,16 @@ public final class BenchmarkGameTests {
             int collected = ClerkStorage.stock(level, clerk, true)
                     .count(stack -> stack.is(Items.OAK_LOG) || stack.is(Items.GRANITE));
             CivMod.LOGGER.info("[benchmark] Deliverymen: {} item(s) collected into the Clerk, {} pickup(s) open", collected,
-                    settlement.deliveries().stream().filter(task -> task.result().isEmpty()).count());
+                    settlement.deliveries().stream().filter(DeliveryTask::pickup).count());
             BlockPos second = origin.offset(Benchmark.SECOND_CLERK);
             int forSecond = ClerkStorage.stock(level, second, true)
                     .count(stack -> stack.is(Items.TORCH) || stack.is(Items.STONE_PICKAXE));
             CivMod.LOGGER.info("[benchmark] Result deliveries: {} item(s) at the second Clerk, {} result delivery(s) open", forSecond,
                     settlement.deliveries().stream().filter(task -> task.result().isPresent()).count());
+            CivMod.LOGGER.info("[benchmark] Input deliveries: {} item(s) of inputs left in the second Clerk, {} input delivery(s) open",
+                    ClerkStorage.stock(level, second, true).count(stack -> stack.is(Items.OAK_LOG) || stack.is(Items.COBBLESTONE)
+                            || stack.is(Items.COAL)),
+                    settlement.deliveries().stream().filter(task -> task.input().isPresent()).count());
             stockReads(level, settlement, clerk);
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
             helper.succeed();

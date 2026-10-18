@@ -166,7 +166,14 @@ public record ClerkTab(int level, List<StockRule> rules, List<RequestRow> reques
                     : found.block().jobType().displayName()).orElse(Component.literal(task.source().toShortString()));
             int items;
             ItemStack icon;
-            if (task.result().isPresent()) {
+            if (task.input().isPresent()) {
+                // An input delivery: its first input and the item count, "<store> → <producer>".
+                DeliveryTask.Input input = task.input().get();
+                items = input.count();
+                icon = input.items().keySet().stream().findFirst().map(ItemStack::new).orElse(ItemStack.EMPTY);
+                Component storeName = settlement.block(task.source()).map(ClerkStorage::name).orElse(Component.literal(task.source().toShortString()));
+                source = Component.translatable("civmod.gui.clerk.delivery.input", storeName, source);
+            } else if (task.result().isPresent()) {
                 // A result delivery: the result and its count, "<producer> → <requesting Clerk>".
                 DeliveryTask.Result result = task.result().get();
                 items = result.count();

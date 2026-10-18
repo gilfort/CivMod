@@ -1,7 +1,9 @@
 package com.gilfort.civmod.job;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -13,6 +15,7 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.CraftPlan;
 import com.gilfort.civmod.logistics.CraftingRecipes;
+import com.gilfort.civmod.logistics.DeliveryTask;
 import com.gilfort.civmod.logistics.ItemCounts;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.Request;
@@ -25,9 +28,11 @@ import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.Settlement;
+import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.settlement.DayClock;
+import com.gilfort.civmod.settlement.Warehouses;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -50,7 +55,10 @@ import net.minecraft.world.phys.Vec3;
  * round, fetch the inputs (collect inventory first, then the posting Clerk's storage under the access rule) into its
  * buffer, craft intermediates and the item at its station (a crafting table) and deliver to the posting Clerk; what does
  * not fit goes to its own drop-off. On "Delivery: Deliveryman" the item goes into its own drop-off with a result
- * delivery for the posting Clerk ({@link Deliveries#postResult}), and it keeps working.
+ * delivery for the posting Clerk ({@link Deliveries#postResult}), and it keeps working. There it also does not fetch
+ * from stores itself: the inputs its collect inventory lacks are asked for as input deliveries ({@link Deliveries#postInput})
+ * from its Home Clerk first, then from the other Clerks of the settlement; while Deliverymen bring them into its collect
+ * inventory it works its next priority ("Waiting for inputs").
  * <p>
  * The claim is released when the settler switches job, the day ends, it leaves the JobBlock or dies; fetched inputs
  * go to its own drop-off (leaving the JobBlock: straight into it while it is loaded; death: the death path). The round
@@ -118,8 +126,15 @@ final class CraftspersonLoop implements CategoryLoop {
             workplace.setRound(pick.round().get());
         }
         Round round = Objects.requireNonNull(workplace.round());
+        if (round.phase == Round.Phase.WAIT && !inputsArrived(level, site, round, dayTime, level.getGameTime())) {
+            // Waiting for input deliveries: the next priority works meanwhile.
+            return false;
+        }
         shell.setActiveJob(job);
         switch (round.phase) {
+            case WAIT -> {
+                // Left above: the inputs arrived and the round fetches them.
+            }
             case FETCH -> {
                 BlockPos source = round.sources.getFirst();
                 shell.setStatus(jobBlock, JobStatus.FETCHING_INPUTS);
@@ -173,6 +188,9 @@ final class CraftspersonLoop implements CategoryLoop {
         boolean more = false;
         // A request it can make that waits out its skip still counts: "Missing inputs", not "No request".
         boolean skipped = false;
+        boolean byDeliveryman = site.block().byDeliveryman();
+        // On "Deliveryman": every store, read once at the first try.
+        Map<BlockPos, Map<Item, Integer>> stores = null;
         for (Request request : Requests.claimable(settlement)) {
             if (checked.stream().noneMatch(pattern -> pattern.output() == request.item())) {
                 continue;
@@ -190,9 +208,15 @@ final class CraftspersonLoop implements CategoryLoop {
             // Results waiting there for a Deliveryman (drop-off = collect inventory) are no inputs.
             Deliveries.waitingAt(settlement, site.collect()).forEach((item, count) -> collect.computeIfPresent(item,
                     (key, there) -> there > count ? there - count : null));
-            Optional<BlockPos> clerk = request.target().filter(target -> !target.equals(site.collect()));
+            Optional<BlockPos> clerk = byDeliveryman ? Optional.empty() : request.target().filter(target -> !target.equals(site.collect()));
             Map<Item, Integer> available = new HashMap<>(collect);
             clerk.ifPresent(target -> ItemCounts.addAll(available, stock(level, target, dayTime, catchUp).counts()));
+            if (byDeliveryman) {
+                if (stores == null) {
+                    stores = stores(level, site, dayTime);
+                }
+                stores.values().forEach(counts -> ItemCounts.addAll(available, counts));
+            }
             int amount = CraftPlan.most(level, checked, request.item(), request.amount(), held, available, room);
             if (amount <= 0) {
                 // What the whole open request misses ("2× stone pickaxe" → "Missing: 6× Cobblestone").
@@ -208,25 +232,38 @@ final class CraftspersonLoop implements CategoryLoop {
             CraftPlan plan = CraftPlan.plan(level, checked, request.item(), claimed, held, available);
             List<BlockPos> sources = new ArrayList<>();
             Map<Item, Integer> rest = new HashMap<>(plan.takes());
-            if (take(rest, collect)) {
+            if (!allot(rest, collect).isEmpty()) {
                 sources.add(site.collect());
             }
             if (!rest.isEmpty() && clerk.isPresent()) {
                 sources.add(clerk.get());
             }
-            return new Pick(Optional.of(new Round(request.id(), request.item(), plan, sources)), true);
+            List<UUID> inputs = new ArrayList<>();
+            if (stores != null) {
+                for (Map.Entry<BlockPos, Map<Item, Integer>> store : stores.entrySet()) {
+                    Map<Item, Integer> items = allot(rest, store.getValue());
+                    if (!items.isEmpty()) {
+                        inputs.add(Deliveries.postInput(data, settlement, store.getKey(), jobBlock, site.collect(), items, level.getGameTime()));
+                    }
+                }
+                if (!inputs.isEmpty()) {
+                    // Everything is taken at the collect inventory once the input deliveries arrived.
+                    sources = List.of(site.collect());
+                }
+            }
+            return new Pick(Optional.of(new Round(request.id(), request.item(), plan, sources, inputs)), true);
         }
         shell.setStatus(jobBlock, tries > 0 || skipped ? JobStatus.MISSING_INPUTS : JobStatus.NO_REQUEST);
         return new Pick(Optional.empty(), more);
     }
 
-    /** Takes what a source has off the needed items; whether it had any of them. */
-    private static boolean take(Map<Item, Integer> needed, Map<Item, Integer> source) {
-        boolean any = false;
+    /** Takes what a source has off the needed items; what it gives, by item. */
+    private static Map<Item, Integer> allot(Map<Item, Integer> needed, Map<Item, Integer> source) {
+        Map<Item, Integer> given = new LinkedHashMap<>();
         for (Map.Entry<Item, Integer> entry : List.copyOf(needed.entrySet())) {
             int used = Math.min(entry.getValue(), source.getOrDefault(entry.getKey(), 0));
             if (used > 0) {
-                any = true;
+                given.put(entry.getKey(), used);
                 if (used == entry.getValue()) {
                     needed.remove(entry.getKey());
                 } else {
@@ -234,7 +271,70 @@ final class CraftspersonLoop implements CategoryLoop {
                 }
             }
         }
-        return any;
+        return given;
+    }
+
+    /**
+     * On "Deliveryman": what every Clerk of the settlement holds for the Deliverymen of the Craftsperson's Home Clerk –
+     * the whole storage of the Clerks their Warehouse handles (staff), the counter under the access rule elsewhere –
+     * the Home Clerk first, then by distance. A Clerk that is the collect inventory is counted there already.
+     */
+    private static Map<BlockPos, Map<Item, Integer>> stores(ServerLevel level, JobBlockSite site, long dayTime) {
+        Settlement settlement = site.settlement();
+        Optional<BlockPos> home = site.block().homeClerk();
+        List<BlockPos> staff = home.flatMap(clerk -> Warehouses.warehouseOf(settlement, clerk))
+                .map(warehouse -> Warehouses.handled(settlement, warehouse)).orElse(List.of());
+        List<BlockPos> clerks = settlement.blocks().stream().filter(ClerkStorage::isClerk).map(SettlementBlock::pos)
+                .filter(pos -> !pos.equals(site.collect()))
+                .sorted(Comparator.<BlockPos>comparingInt(pos -> home.filter(pos::equals).isPresent() ? 0 : 1)
+                        .thenComparingDouble(pos -> pos.distSqr(site.pos())))
+                .toList();
+        Map<BlockPos, Map<Item, Integer>> stores = new LinkedHashMap<>();
+        for (BlockPos clerk : clerks) {
+            Stock stock = staff.contains(clerk) ? ClerkStorage.stock(level, clerk, true) : ClerkStorage.stock(level, clerk, dayTime, true);
+            stores.put(clerk, stock.counts());
+        }
+        return stores;
+    }
+
+    /**
+     * A round waiting for its input deliveries: once none is left (they arrived) it fetches everything at the collect
+     * inventory. An input delivery no Deliveryman has taken yet whose store no longer holds its inputs gives the round
+     * up ("Missing", skipped a while, like any missing input); a taken one holds its reservation, a shortfall at its
+     * pickup frees it again and the next check sees it.
+     *
+     * @param now the time for skipping (live: game time, catch-up: the simulated clock)
+     * @return whether the inputs arrived (the round fetches now)
+     */
+    private boolean inputsArrived(ServerLevel level, JobBlockSite site, Round round, long dayTime, long now) {
+        Settlement settlement = site.settlement();
+        List<DeliveryTask> open = round.inputs.stream().map(id -> Deliveries.get(settlement, id)).flatMap(Optional::stream).toList();
+        if (open.isEmpty()) {
+            round.phase = Round.Phase.FETCH;
+            return true;
+        }
+        long day = DayClock.day(level);
+        List<Request.Missing> lacking = new ArrayList<>();
+        for (DeliveryTask task : open) {
+            if (task.carried() || task.takerOn(day).isPresent()) {
+                continue;
+            }
+            Map<Item, Integer> there = (Deliveries.staff(settlement, task) ? ClerkStorage.stock(level, task.source(), true)
+                    : ClerkStorage.stock(level, task.source(), dayTime, true)).counts();
+            task.input().orElseThrow().items().forEach((item, count) -> {
+                int missing = count - there.getOrDefault(item, 0);
+                if (missing > 0) {
+                    lacking.add(new Request.Missing(item, missing));
+                }
+            });
+        }
+        if (!lacking.isEmpty()) {
+            fail(level, site.pos(), round, lacking, now);
+            shell.setStatus(site.pos(), JobStatus.MISSING_INPUTS);
+            return false;
+        }
+        shell.setStatus(site.pos(), JobStatus.WAITING_FOR_INPUTS);
+        return false;
     }
 
     private Stock stock(ServerLevel level, BlockPos pos, long dayTime, boolean catchUp) {
@@ -288,6 +388,7 @@ final class CraftspersonLoop implements CategoryLoop {
         }
         long dayTime = DayClock.dayTime(level);
         switch (round.phase) {
+            case WAIT -> shell.stepDone(level);
             case FETCH -> {
                 boolean counter = visit != null && visit.counter();
                 BlockPos source = round.sources.getFirst();
@@ -471,6 +572,10 @@ final class CraftspersonLoop implements CategoryLoop {
         workplace.setRound(null);
         SettlementData data = SettlementData.get(level);
         settlementOf(data, round.request).ifPresent(settlement -> Requests.release(data, settlement, round.request, settler.getUUID()));
+        if (!round.inputs.isEmpty()) {
+            // Input deliveries not carried yet go; carried ones still arrive (inputs for a later round).
+            JobBlockSite.at(level, jobBlock).ifPresent(site -> Deliveries.dropInputs(data, site.settlement(), jobBlock));
+        }
         return true;
     }
 
@@ -486,7 +591,11 @@ final class CraftspersonLoop implements CategoryLoop {
     private void releaseIfRestored(ServerLevel level) {
         if (releasePending) {
             releasePending = false;
-            Requests.releaseAll(SettlementData.get(level), settler.getUUID());
+            SettlementData data = SettlementData.get(level);
+            Requests.releaseAll(data, settler.getUUID());
+            // The input deliveries of the lost rounds go too (carried ones still arrive).
+            settler.getJobs().forEach(job -> JobBlockSite.at(level, job.jobBlock())
+                    .ifPresent(site -> Deliveries.dropInputs(data, site.settlement(), job.jobBlock())));
         }
     }
 
@@ -581,12 +690,24 @@ final class CraftspersonLoop implements CategoryLoop {
                 }
                 Round round = pick.round().get();
                 workplace.setRound(round);
-                for (BlockPos source : List.copyOf(round.sources)) {
-                    fetch(level, job, round, source, ClerkStorage.stock(level, source, DayClock.dayTime((long) clock), true), false);
+                if (round.phase != Round.Phase.WAIT) {
+                    for (BlockPos source : List.copyOf(round.sources)) {
+                        fetch(level, job, round, source, ClerkStorage.stock(level, source, DayClock.dayTime((long) clock), true), false);
+                    }
                 }
                 continue;
             }
             Round round = workplace.round();
+            if (round.phase == Round.Phase.WAIT) {
+                long now = (long) clock;
+                if (inputsArrived(level, site, round, DayClock.dayTime(now), now)) {
+                    fetch(level, job, round, site.collect(), ClerkStorage.stock(level, site.collect(), DayClock.dayTime(now), true), false);
+                } else if (workplace.round() != null) {
+                    // The Deliverymen bring the inputs later: the next job takes the rest of the time.
+                    return new SimulatedWork(operations, ticks);
+                }
+                continue;
+            }
             double perTick = speed(job) / 20.0;
             while (round.phase == Round.Phase.CRAFT && ticks > 0.0 && workplace.round() == round) {
                 double need = (1.0 - workplace.production()) / perTick;
