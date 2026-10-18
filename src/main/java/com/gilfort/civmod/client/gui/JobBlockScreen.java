@@ -15,6 +15,8 @@ import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementRules;
 
+import com.mojang.blaze3d.platform.InputConstants;
+
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -52,6 +54,10 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     private static final int COST_X = CivGui.PADDING + 9;
     private static final int MISSING_TINT = 0x80FF2020;
     private static final int LINE_HEIGHT = 11;
+    /** Top of the first Job line in the info tab (below job, level and settlement). */
+    private static final int JOB_LINES_Y = 22 + 3 * LINE_HEIGHT;
+    /** Size of the automatic assignment checkbox at the end of a Job line. */
+    private static final int AUTO_BOX = 9;
 
     private final MissionTabView missions;
     private final ClerkTabView clerk;
@@ -192,6 +198,9 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (tab == JobBlockMenu.TAB_INFO && JobBlockMenu.isCraftsperson(info) && info.inSettlement()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.delivery"));
         }
+        if (tab == JobBlockMenu.TAB_INFO && info.inSettlement()) {
+            lines.add(Component.translatable("civmod.gui.job_block.help.auto_assign"));
+        }
         return lines;
     }
 
@@ -226,13 +235,26 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         }
         y += LINE_HEIGHT;
         // One line per offered Job with taken / places; a single place names its holder, several list them on hover.
+        // In a settlement each line ends with its automatic assignment checkbox.
+        int textWidth = info.inSettlement() ? width - AUTO_BOX - 2 : width;
+        int lineIndex = 0;
         for (JobPlaces.Line line : info.places()) {
             List<SettlementBlock.Assignee> holders = info.assignees().stream().filter(assignee -> assignee.job() == line.job()).toList();
             Component places = JobPickerScreen.label(line);
             Component text = line.places() == 1 && !holders.isEmpty()
                     ? Component.translatable("civmod.gui.job_block.job_holder", places, holders.get(0).name()) : places;
-            graphics.text(font, CivGui.fit(font, text, width), CivGui.PADDING, y, color, false);
-            if (!holders.isEmpty() && mouseX >= leftPos + CivGui.PADDING && mouseX < leftPos + CivGui.PADDING + Math.min(width, font.width(text))
+            graphics.text(font, CivGui.fit(font, text, textWidth), CivGui.PADDING, y, color, false);
+            if (info.inSettlement()) {
+                boolean hovered = overAutoBox(lineIndex, mouseX, mouseY);
+                CivGui.checkbox(graphics, line.auto(), hovered, autoBoxX(), y - 1, AUTO_BOX);
+                if (hovered) {
+                    graphics.setComponentTooltipForNextFrame(font, List.of(Component.translatable(line.auto()
+                            ? "civmod.gui.job_block.auto_assign.on" : "civmod.gui.job_block.auto_assign.off")),
+                            mouseX, mouseY);
+                }
+            }
+            lineIndex++;
+            if (!holders.isEmpty() && mouseX >= leftPos + CivGui.PADDING && mouseX < leftPos + CivGui.PADDING + Math.min(textWidth, font.width(text))
                     && mouseY >= topPos + y && mouseY < topPos + y + font.lineHeight) {
                 graphics.setComponentTooltipForNextFrame(font, settlerLines(info, holders), mouseX, mouseY);
             }
@@ -242,6 +264,34 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             y = clerk.extractWarehouse(graphics, y, width, color, mouseX, mouseY);
         }
         extractCosts(graphics, info, y, mouseX, mouseY);
+    }
+
+    /** Left edge of the automatic assignment checkboxes (panel coordinates). */
+    private int autoBoxX() {
+        return imageWidth - CivGui.PADDING - AUTO_BOX;
+    }
+
+    /** Whether the mouse is over the automatic assignment checkbox of a Job line. */
+    private boolean overAutoBox(int line, double mouseX, double mouseY) {
+        int x = leftPos + autoBoxX();
+        int y = topPos + JOB_LINES_Y + line * LINE_HEIGHT - 1;
+        return mouseX >= x && mouseX < x + AUTO_BOX && mouseY >= y && mouseY < y + AUTO_BOX;
+    }
+
+    /** A left click on an automatic assignment checkbox of the info tab sets the wanted state on client and server. */
+    private boolean infoClicked(MouseButtonEvent event) {
+        JobBlockInfo info = menu.getInfo();
+        if (menu.getActiveTab() != JobBlockMenu.TAB_INFO || !info.inSettlement() || event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
+            return false;
+        }
+        for (int line = 0; line < info.places().size(); line++) {
+            if (overAutoBox(line, event.x(), event.y())) {
+                clickMenuButton(JobBlockMenu.autoButtonId(line, !info.places().get(line).auto()));
+                clickSound();
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -310,6 +360,9 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             return true;
         }
         if (JobBlockMenu.isMissionBoard(menu.getInfo()) && missions.mouseClicked(event)) {
+            return true;
+        }
+        if (infoClicked(event)) {
             return true;
         }
         return super.mouseClicked(event, doubleClick);
@@ -423,6 +476,22 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             open.setClerkTab(payload.tab());
             if (minecraft.gui.screen() instanceof JobBlockScreen screen) {
                 screen.clerk.update();
+            }
+        }
+    }
+
+    /**
+     * Client handler of {@link JobBlockInfo.Sync}: updates the info of the open JobBlock menu.
+     *
+     * @param payload the payload
+     * @param context the payload context
+     */
+    public static void handleInfo(JobBlockInfo.Sync payload, IPayloadContext context) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player != null && minecraft.player.containerMenu instanceof JobBlockMenu open && open.containerId == payload.containerId()) {
+            open.setInfo(payload.info());
+            if (minecraft.gui.screen() instanceof JobBlockScreen screen) {
+                screen.rebuildWidgets();
             }
         }
     }

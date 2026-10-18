@@ -1,8 +1,10 @@
 package com.gilfort.civmod.settlement;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.registry.ModJobs;
@@ -28,15 +30,28 @@ public final class JobPlaces {
      * @param job    the Job
      * @param taken  how many settlers hold one of the places it uses
      * @param places how many places it has at the block's level
+     * @param auto   whether jobless settlers take its free places by themselves ({@link AutoAssignment})
      */
-    public record Line(Job job, int taken, int places) {
+    public record Line(Job job, int taken, int places, boolean auto) {
 
         /** Network codec. */
         public static final StreamCodec<ByteBuf, Line> STREAM_CODEC = StreamCodec.composite(
                 Job.STREAM_CODEC, Line::job,
                 ByteBufCodecs.VAR_INT, Line::taken,
                 ByteBufCodecs.VAR_INT, Line::places,
+                ByteBufCodecs.BOOL, Line::auto,
                 Line::new);
+
+        /**
+         * A line with automatic assignment off.
+         *
+         * @param job    the Job
+         * @param taken  how many settlers hold one of the places it uses
+         * @param places how many places it has at the block's level
+         */
+        public Line(Job job, int taken, int places) {
+            this(job, taken, places, false);
+        }
 
         /**
          * @return whether no place is free
@@ -102,19 +117,30 @@ public final class JobPlaces {
      * @return every Job the block offers at its level with taken / places
      */
     public static List<Line> lines(SettlementBlock block) {
-        return lines(block.jobType(), block.level(), block.assignees());
+        return lines(block.jobType(), block.level(), block.assignees(), block.autoAssign());
     }
 
     /**
      * @param blockJob  the Job the JobBlock was made for
      * @param level     the JobBlock level
      * @param assignees the block's assignees
-     * @return every Job such a block offers at that level with taken / places
+     * @return every Job such a block offers at that level with taken / places, automatic assignment off
      */
     public static List<Line> lines(Job blockJob, int level, List<SettlementBlock.Assignee> assignees) {
+        return lines(blockJob, level, assignees, Set.of());
+    }
+
+    /**
+     * @param blockJob  the Job the JobBlock was made for
+     * @param level     the JobBlock level
+     * @param assignees the block's assignees
+     * @param auto      the Jobs with automatic assignment switched on
+     * @return every Job such a block offers at that level with taken / places
+     */
+    public static List<Line> lines(Job blockJob, int level, List<SettlementBlock.Assignee> assignees, Collection<Job> auto) {
         List<Line> lines = new ArrayList<>();
         for (Job job : offered(blockJob, level)) {
-            lines.add(new Line(job, holders(assignees, job).size(), places(blockJob, job, level)));
+            lines.add(new Line(job, holders(assignees, job).size(), places(blockJob, job, level), auto.contains(job)));
         }
         return List.copyOf(lines);
     }

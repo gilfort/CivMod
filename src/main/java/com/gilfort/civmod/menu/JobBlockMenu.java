@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.gilfort.civmod.block.JobBlockEntity;
+import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.job.JobCategory;
 import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.mission.Missions;
@@ -13,6 +14,7 @@ import com.gilfort.civmod.registry.ModMenuTypes;
 import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.StockRules;
 
+import com.gilfort.civmod.settlement.AutoAssignment;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.MissionOffers;
 import com.gilfort.civmod.settlement.SettlementData;
@@ -78,6 +80,12 @@ public class JobBlockMenu extends CivMenu {
     private static final int BUTTON_ASSIGN_MISSION = BUTTON_MARK_MISSION_END;
     /** Upper bound (exclusive) of the assign button ids. */
     private static final int BUTTON_ASSIGN_MISSION_END = BUTTON_ASSIGN_MISSION + ASSIGN_SLOTS * MissionRules.MAX_OFFER_SIZE;
+    /** Most Job lines of a JobBlock with an automatic assignment toggle. */
+    private static final int MAX_JOB_LINES = 16;
+    /** Button ids from here: set the automatic assignment toggle of a Job line ({@link #autoButtonId}). */
+    private static final int BUTTON_AUTO_ASSIGN = BUTTON_ASSIGN_MISSION_END;
+    /** Upper bound (exclusive) of the automatic assignment button ids. */
+    private static final int BUTTON_AUTO_ASSIGN_END = BUTTON_AUTO_ASSIGN + 2 * MAX_JOB_LINES;
 
     private final Container container;
     private final Player player;
@@ -200,6 +208,15 @@ public class JobBlockMenu extends CivMenu {
     }
 
     /**
+     * Client: the server sent a new info snapshot.
+     *
+     * @param info the info
+     */
+    public void setInfo(JobBlockInfo info) {
+        this.info = info;
+    }
+
+    /**
      * Client: the server sent a new Clerk tab.
      *
      * @param tab the tab
@@ -290,6 +307,17 @@ public class JobBlockMenu extends CivMenu {
     }
 
     /**
+     * The toggle buttons carry the wanted state, like the mark buttons.
+     *
+     * @param line the index of the Job line ({@link JobBlockInfo#places()})
+     * @param on   the wanted state of its automatic assignment
+     * @return the menu button id that sets it
+     */
+    public static int autoButtonId(int line, boolean on) {
+        return BUTTON_AUTO_ASSIGN + 2 * line + (on ? 1 : 0);
+    }
+
+    /**
      * @return the info snapshot
      */
     public JobBlockInfo getInfo() {
@@ -324,6 +352,9 @@ public class JobBlockMenu extends CivMenu {
         if (buttonId >= BUTTON_ASSIGN_MISSION && buttonId < BUTTON_ASSIGN_MISSION_END) {
             return assign((buttonId - BUTTON_ASSIGN_MISSION) / ASSIGN_SLOTS, (buttonId - BUTTON_ASSIGN_MISSION) % ASSIGN_SLOTS - 1);
         }
+        if (buttonId >= BUTTON_AUTO_ASSIGN && buttonId < BUTTON_AUTO_ASSIGN_END) {
+            return setAuto((buttonId - BUTTON_AUTO_ASSIGN) / 2, (buttonId - BUTTON_AUTO_ASSIGN) % 2 == 1);
+        }
         if (buttonId == BUTTON_TOGGLE_LEAVES) {
             info = info.withLeavesToggled();
             if (container instanceof JobBlockEntity jobBlock && jobBlock.getLevel() instanceof ServerLevel level) {
@@ -339,6 +370,26 @@ public class JobBlockMenu extends CivMenu {
             return true;
         }
         return super.clickMenuButton(player, buttonId);
+    }
+
+    /** Sets the automatic assignment toggle of a Job line; switching it on may assign settlers at once (fresh snapshot). */
+    private boolean setAuto(int line, boolean on) {
+        if (line >= info.places().size() || !info.inSettlement()) {
+            return false;
+        }
+        Job job = info.places().get(line).job();
+        if (container instanceof JobBlockEntity jobBlock && jobBlock.getLevel() instanceof ServerLevel level) {
+            if (!AutoAssignment.setAuto(level, jobBlock.getBlockPos(), job, on)) {
+                return false;
+            }
+            info = JobBlockInfo.of(level, jobBlock.getBlockPos(), info.jobType(), info.level());
+            if (player instanceof ServerPlayer serverPlayer) {
+                PacketDistributor.sendToPlayer(serverPlayer, new JobBlockInfo.Sync(containerId, info));
+            }
+        } else {
+            info = info.withAuto(job, on);
+        }
+        return true;
     }
 
     /** Assigns an offer entry to a settler of the board ({@code settler} = index in the snapshot) or unlocks it ({@code -1}). */
