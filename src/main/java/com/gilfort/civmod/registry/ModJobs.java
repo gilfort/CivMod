@@ -10,6 +10,7 @@ import com.gilfort.civmod.job.MinerProfile;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.Items;
 import net.minecraft.resources.ResourceKey;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
@@ -32,25 +33,25 @@ public final class ModJobs {
 
     /** See vault {@code Jobs/Lumberjack.md}. */
     public static final DeferredHolder<Job, Job> LUMBERJACK = JOBS.register("lumberjack", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
-            .icon(ModItems.LUMBERJACK_BLOCK).hungerFactor(1.0).baseExp(1).profile(LumberjackProfile::new).build());
+            .icon(ModItems.LUMBERJACK_BLOCK).bubbleIcon(() -> Items.IRON_AXE).hungerFactor(1.0).baseExp(1).profile(LumberjackProfile::new).build());
     /** See vault {@code Jobs/Miner.md}. */
     public static final DeferredHolder<Job, Job> MINER = JOBS.register("miner", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
-            .icon(ModItems.MINER_BLOCK).hungerFactor(1.0).baseExp(1).profile(MinerProfile::new).build());
+            .icon(ModItems.MINER_BLOCK).bubbleIcon(() -> Items.IRON_PICKAXE).hungerFactor(1.0).baseExp(1).profile(MinerProfile::new).build());
     /** See vault {@code Jobs/Fisherman.md}. */
     public static final DeferredHolder<Job, Job> FISHERMAN = JOBS.register("fisherman", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
-            .icon(ModItems.FISHERMAN_BLOCK).hungerFactor(0.5).baseExp(5).profile(FishermanProfile::new).build());
+            .icon(ModItems.FISHERMAN_BLOCK).bubbleIcon(() -> Items.COD).hungerFactor(0.5).baseExp(5).profile(FishermanProfile::new).build());
     /** See vault {@code Jobs/Adventurer.md}; the Base Job of the Mission Board. */
     public static final DeferredHolder<Job, Job> ADVENTURER = JOBS.register("adventurer", () -> Job.builder(JobCategory.MISSION)
-            .icon(ModItems.MISSION_BOARD).hungerFactor(1.0).baseExp(10).build());
+            .icon(ModItems.MISSION_BOARD).bubbleIcon(() -> Items.MAP).hungerFactor(1.0).baseExp(10).build());
     /** See vault {@code Jobs/Clerk.md}; the store and food point of the settlement, the first Logistics Job. */
     public static final DeferredHolder<Job, Job> CLERK = JOBS.register("clerk", () -> Job.builder(JobCategory.LOGISTICS)
-            .icon(ModItems.CLERK_BLOCK).hungerFactor(0.5).baseExp(1).build());
+            .icon(ModItems.CLERK_BLOCK).bubbleIcon(() -> Items.EMERALD).hungerFactor(0.5).baseExp(1).build());
     /** See vault {@code Jobs/Deliveryman.md}; its places are on the Clerk JobBlock ({@link com.gilfort.civmod.settlement.JobPlaces}). */
     public static final DeferredHolder<Job, Job> DELIVERYMAN = JOBS.register("deliveryman", () -> Job.builder(JobCategory.LOGISTICS)
-            .icon(() -> net.minecraft.world.item.Items.BUNDLE).hungerFactor(1.0).baseExp(1).build());
+            .icon(() -> Items.BUNDLE).bubbleIcon(() -> Items.BUNDLE).displayItem(() -> Items.BUNDLE).hungerFactor(1.0).baseExp(1).build());
     /** See vault {@code Jobs/Craftsperson.md}; crafts requested items from its patterns, the first Producing Job. */
     public static final DeferredHolder<Job, Job> CRAFTSPERSON = JOBS.register("craftsperson", () -> Job.builder(JobCategory.PRODUCING)
-            .icon(ModItems.CRAFTSPERSON_BLOCK).hungerFactor(0.5).baseExp(2).jobFactor(0.3)
+            .icon(ModItems.CRAFTSPERSON_BLOCK).bubbleIcon(() -> Items.STICK).displayItem(ModItems.HAMMER).hungerFactor(0.5).baseExp(2).jobFactor(0.3)
             .station(TagKey.create(Registries.BLOCK, CivMod.id("stations/craftsperson"))).build());
 
     private ModJobs() {

@@ -25,6 +25,7 @@ import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobBlockSite;
@@ -47,6 +48,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
@@ -152,6 +154,10 @@ public final class SettlerWork {
     private final Map<BlockPos, Long> unreachableCounters = new HashMap<>();
     /** Reach of the current walking target outside job steps. */
     private double targetReach = REACH;
+    /** Thought bubbles: sent when what the settler does changes. */
+    private final SettlerThoughts thoughts;
+    /** What the held item was last chosen for: it changes with the activity (vault Systems/Thought Bubbles.md). */
+    private @Nullable HandKey handKey;
 
     // Catch-up (vault Systems/Settlement.md): missed time while unloaded.
     /** Minimum missed time that is caught up (2 real minutes). */
@@ -182,6 +188,7 @@ public final class SettlerWork {
         // The Craftsperson is the only Producing Job so far.
         loops.put(JobCategory.PRODUCING, new CraftspersonLoop(this));
         deliverymen = new DeliverymanLoop(this);
+        thoughts = new SettlerThoughts(settler);
     }
 
     /**
@@ -551,7 +558,13 @@ public final class SettlerWork {
         return Optional.ofNullable(restPlace);
     }
 
+    /** Decides the next step, then shows what changed (thought bubble, held item). */
     private void decide(ServerLevel level) {
+        decideStep(level);
+        observe();
+    }
+
+    private void decideStep(ServerLevel level) {
         long clock = level.getOverworldClockTime();
         Schedule.Moment moment = moment(clock);
         long dayTime = moment.dayTime();
@@ -667,6 +680,122 @@ public final class SettlerWork {
         SettlerJob job = activeJob;
         CategoryLoop loop = job == null ? null : loop(job);
         return activity == Activity.JOB && loop != null && loop.holdsDecision(level, job);
+    }
+
+    // ---------------------------------------------------------------- thought bubbles and held item
+
+    /** What the held item depends on. */
+    private record HandKey(Activity activity, @Nullable SettlerJob job, JobStatus status) {
+    }
+
+    /**
+     * @return the last thought bubbles this settler sent (bubbles and problem on / off), oldest first
+     */
+    public List<ThoughtBubble.Show> recentThoughts() {
+        return thoughts.recent();
+    }
+
+    /**
+     * Shows the Job's thought bubble after an automatic assignment.
+     *
+     * @param job the job the settler was automatically assigned to
+     */
+    public void assigned(SettlerJob job) {
+        thoughts.assigned(job);
+    }
+
+    /**
+     * Sends the problems that are on to a player that starts seeing the settler.
+     *
+     * @param player the player
+     */
+    public void showProblemsTo(net.minecraft.server.level.ServerPlayer player) {
+        thoughts.showProblemsTo(player);
+    }
+
+    /** Sends the thought bubbles of what changed and lets the held item follow the activity. */
+    private void observe() {
+        JobStatus status = activeJob == null ? JobStatus.IDLE : status(activeJob.jobBlock());
+        thoughts.update(new SettlerThoughts.Now(activeJob, activityBubble(status), problems()), !quiet);
+        HandKey key = new HandKey(activity, activeJob, status);
+        if (!key.equals(handKey)) {
+            handKey = key;
+            ItemStack held = heldItem(status);
+            if (!ItemStack.matches(held, settler.getItemBySlot(EquipmentSlot.MAINHAND))) {
+                settler.setItemSlot(EquipmentSlot.MAINHAND, held);
+            }
+        }
+    }
+
+    private @Nullable ThoughtBubble activityBubble(JobStatus status) {
+        return switch (activity) {
+            case DELIVER -> ThoughtBubble.DROP_OFF;
+            case GO_TO_BED -> ThoughtBubble.BED;
+            case FETCH_FOOD, WAIT_FOR_FOOD, EATING -> ThoughtBubble.EATING;
+            case JOB -> switch (status) {
+                case FETCHING_TOOL, FETCHING_INPUTS, COLLECTING -> ThoughtBubble.COLLECT;
+                case CRAFTING -> ThoughtBubble.CRAFTING;
+                case DELIVERING, UNLOADING -> ThoughtBubble.DROP_OFF;
+                case ON_MISSION -> ThoughtBubble.MISSION;
+                default -> null;
+            };
+            default -> null;
+        };
+    }
+
+    /** The problems that are on now (one per kind; the first job with it gives the icon). */
+    private Map<ThoughtBubble, Item> problems() {
+        Map<ThoughtBubble, Item> on = new EnumMap<>(ThoughtBubble.class);
+        for (SettlerJob job : settler.getJobs()) {
+            Job type = job.jobType();
+            switch (status(job.jobBlock())) {
+                case NO_TOOL -> on.putIfAbsent(ThoughtBubble.NO_TOOL,
+                        type.profile().map(JobProfile::toolIcon).orElseGet(() -> type.bubbleIcon().getItem()));
+                case DROP_OFF_FULL, STORAGE_FULL -> on.putIfAbsent(ThoughtBubble.DROP_OFF_FULL,
+                        SettlerThoughts.problemIcon(ThoughtBubble.DROP_OFF_FULL));
+                case NO_WORK_PLACE -> on.putIfAbsent(ThoughtBubble.NO_WORK_PLACE, type.icon().getItem());
+                case MISSING_INPUTS -> on.putIfAbsent(ThoughtBubble.MISSING_INPUTS,
+                        SettlerThoughts.problemIcon(ThoughtBubble.MISSING_INPUTS));
+                default -> {
+                }
+            }
+        }
+        if (hungryNoFood) {
+            on.put(ThoughtBubble.HUNGRY_NO_FOOD,
+                    SettlerThoughts.problemIcon(ThoughtBubble.HUNGRY_NO_FOOD));
+        }
+        return on;
+    }
+
+    /**
+     * The item in the hand for what the settler does: working, the job's real tool or its display item (a Craftsperson
+     * carrying its result shows the result, a Deliveryman its bundle on the whole tour); anything else (eating, bed,
+     * drop-off, fetching) an empty hand. Always a display copy, never an inventory item.
+     */
+    private ItemStack heldItem(JobStatus status) {
+        SettlerJob job = activeJob;
+        if (job == null) {
+            return ItemStack.EMPTY;
+        }
+        Job type = job.jobType();
+        boolean carriesResult = type.category() == JobCategory.PRODUCING
+                && (activity == Activity.DELIVER || (activity == Activity.JOB && status == JobStatus.DELIVERING));
+        if (carriesResult) {
+            return buffer(job.jobBlock()).stacks().stream().filter(stack -> !stack.isEmpty()).findFirst()
+                    .map(stack -> stack.copyWithCount(1)).orElse(ItemStack.EMPTY);
+        }
+        if (loop(job) == deliverymen && (activity == Activity.DELIVER || activity == Activity.JOB)) {
+            return type.displayItem().map(ItemStack::new).orElse(ItemStack.EMPTY);
+        }
+        if (activity != Activity.JOB || status == JobStatus.FETCHING_TOOL || status == JobStatus.FETCHING_INPUTS
+                || status == JobStatus.DELIVERING) {
+            return ItemStack.EMPTY;
+        }
+        Optional<JobProfile> profile = type.profile();
+        if (profile.isPresent()) {
+            return SettlerTools.best(settler, profile.get()::isTool).map(ItemStack::copy).orElse(ItemStack.EMPTY);
+        }
+        return type.displayItem().map(ItemStack::new).orElse(ItemStack.EMPTY);
     }
 
     /** Acts on a decision of the Schedule. */

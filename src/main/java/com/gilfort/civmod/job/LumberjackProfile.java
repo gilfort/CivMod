@@ -37,6 +37,11 @@ public final class LumberjackProfile implements JobProfile {
     private static final Predicate<ItemStack> SHEARS = stack -> stack.is(Items.SHEARS) || stack.is(Tags.Items.TOOLS_SHEAR);
 
     @Override
+    public net.minecraft.world.item.Item toolIcon() {
+        return net.minecraft.world.item.Items.STONE_AXE;
+    }
+
+    @Override
     public boolean isTool(ItemStack stack) {
         return stack.is(ItemTags.AXES);
     }

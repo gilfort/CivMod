@@ -524,6 +524,13 @@ public class Settler extends PathfinderMob {
         discard();
     }
 
+    /** A player that starts seeing the settler gets its open problem bubbles (it missed their "problem on"). */
+    @Override
+    public void startSeenByPlayer(ServerPlayer player) {
+        super.startSeenByPlayer(player);
+        work.showProblemsTo(player);
+    }
+
     @Override
     public boolean isInvulnerableTo(ServerLevel level, DamageSource source) {
         return !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY);

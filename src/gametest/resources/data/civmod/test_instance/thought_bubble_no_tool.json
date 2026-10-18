@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:thought_bubble_no_tool",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -59,9 +59,17 @@ public final class ModItems {
     /** Render-only icon: Clerk stand spot, numbered by the stack count (1–8). */
     public static final DeferredItem<Item> STAND_SPOT_MARKER = ITEMS.registerSimpleItem("stand_spot_marker");
 
+    /** Display item: the hammer a Craftsperson holds while crafting; only shown in its hand, not obtainable. */
+    public static final DeferredItem<Item> HAMMER = ITEMS.registerItem("hammer", Item::new, properties -> properties.stacksTo(1));
+
+    /** Render-only sprite: the thought bubble drawn above a settler. */
+    public static final DeferredItem<Item> THOUGHT_BUBBLE = ITEMS.registerSimpleItem("thought_bubble");
+    /** Render-only sprite: the red "!" of a problem thought bubble. */
+    public static final DeferredItem<Item> PROBLEM_MARKER = ITEMS.registerSimpleItem("problem_marker");
+
     /** Items that are only used for rendering and never shown in the creative tab. */
     public static final Set<DeferredItem<Item>> RENDER_ONLY = Set.of(UNCONNECTED_MARKER, WORK_MARKER, PRIMARY_WORK_MARKER, COLLECT_MARKER,
-            DROP_OFF_MARKER, BED_MARKER, STAND_SPOT_MARKER);
+            DROP_OFF_MARKER, BED_MARKER, STAND_SPOT_MARKER, HAMMER, THOUGHT_BUBBLE, PROBLEM_MARKER);
 
     /**
      * Starter tool every new JobBlock item of a job that needs a tool carries (vault {@code Systems/JobBlock.md}).

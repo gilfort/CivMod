@@ -335,5 +335,9 @@
   "civmod.scroll.served.own_deliverymen": "%s has own Deliverymen",
   "civmod.scroll.served.taken": "Already served by %s",
   "civmod.scroll.served.chain": "Warehouses cannot serve each other",
-  "civmod.scroll.served.full": "This Warehouse serves at most %s Clerks"
+  "civmod.scroll.served.full": "This Warehouse serves at most %s Clerks",
+  "item.civmod.hammer": "Hammer",
+  "item.civmod.thought_bubble": "Thought Bubble",
+  "item.civmod.problem_marker": "Problem Marker",
+  "civmod.configuration.showThoughtBubbles": "Show Thought Bubbles"
 }
