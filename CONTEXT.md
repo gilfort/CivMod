@@ -56,6 +56,15 @@ The block that offers a Base Job (and its Specializations) to one settler. Code:
 The tool a new JobBlock puts into its own inventory when it is placed for the first time (Lumberjack stone axe, Miner stone pickaxe, Fisherman fishing rod). A broken JobBlock no longer carries one.
 _Avoid_: Free tool, bonus item
 
+**Thought bubble**:
+A small icon bubble above a settler's name tag, sent when it starts something new (Job switch, drop-off, fetching, crafting, eating, bed, Mission); a red "!" marks a problem, which the client repeats while it is on. Code: `ThoughtBubble` (types and payload), `SettlerThoughts` (server), `ThoughtBubbleRenderer` (client).
+
+**Bubble icon**:
+The typical item of a Job shown in its thought bubble (Lumberjack axe, Fisherman raw cod, …); separate from the Job's GUI icon, which stays the JobBlock.
+
+**Display item**:
+An item a settler holds while working a Job without a real tool (Craftsperson hammer, Deliveryman bundle); only a copy in the hand, never in an inventory and not obtainable.
+
 **JobBlock site**:
 A JobBlock as a settler sees it: its settlement, settlement block, level, skill cap, drop-off and collect inventory. The one way to resolve a JobBlock position outside the settlement storage. Code: `JobBlockSite` (`JobBlockSite.at(level, pos)`, `JobBlockSite.blockAt(level, pos)` for the block alone), backed by `SettlementData`.
 _Avoid_: Looking up `SettlementData.settlementAt(pos)` then `Settlement.block(pos)` by hand

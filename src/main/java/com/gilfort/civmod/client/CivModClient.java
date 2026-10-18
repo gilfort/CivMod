@@ -52,6 +52,7 @@ public final class CivModClient {
      * @param modContainer the container describing this mod, injected by FML
      */
     public CivModClient(IEventBus modEventBus, ModContainer modContainer) {
+        modContainer.registerConfig(net.neoforged.fml.config.ModConfig.Type.CLIENT, com.gilfort.civmod.config.CivModClientConfig.SPEC);
         modContainer.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
         NeoForge.EVENT_BUS.addListener(CivModClient::onItemTooltip);
     }
@@ -102,6 +103,7 @@ public final class CivModClient {
         event.register(JobPicker.Open.TYPE, JobPickerScreen::handle);
         event.register(com.gilfort.civmod.menu.PatternTab.Sync.TYPE, JobBlockScreen::handlePatternTab);
         event.register(com.gilfort.civmod.menu.JobBlockInfo.Sync.TYPE, JobBlockScreen::handleInfo);
+        event.register(com.gilfort.civmod.npc.ThoughtBubble.Show.TYPE, ThoughtBubbleRenderer::handle);
     }
 
     private static void onItemTooltip(ItemTooltipEvent event) {

@@ -28,7 +28,7 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 public final class CivNetwork {
 
     /** Network protocol version; client and server must match. */
-    public static final String PROTOCOL_VERSION = "4";
+    public static final String PROTOCOL_VERSION = "5";
 
     private CivNetwork() {
     }
@@ -90,5 +90,6 @@ public final class CivNetwork {
         registrar.playToClient(JobPointsDisplay.Sync.TYPE, JobPointsDisplay.Sync.STREAM_CODEC);
         registrar.playToClient(ClerkTab.Sync.TYPE, ClerkTab.Sync.STREAM_CODEC);
         registrar.playToClient(com.gilfort.civmod.menu.JobBlockInfo.Sync.TYPE, com.gilfort.civmod.menu.JobBlockInfo.Sync.STREAM_CODEC);
+        registrar.playToClient(com.gilfort.civmod.npc.ThoughtBubble.Show.TYPE, com.gilfort.civmod.npc.ThoughtBubble.Show.STREAM_CODEC);
     }
 }

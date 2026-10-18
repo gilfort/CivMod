@@ -52,6 +52,11 @@ public final class FishermanProfile implements JobProfile {
             new ItemStack(Items.TROPICAL_FISH), new ItemStack(Items.PUFFERFISH));
 
     @Override
+    public net.minecraft.world.item.Item toolIcon() {
+        return net.minecraft.world.item.Items.FISHING_ROD;
+    }
+
+    @Override
     public boolean isTool(ItemStack stack) {
         return stack.is(Tags.Items.TOOLS_FISHING_ROD);
     }
