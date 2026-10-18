@@ -366,10 +366,14 @@ public class Settler extends PathfinderMob {
         return !isInvisible() && super.isPickable();
     }
 
+    /**
+     * No gravity while lying on a straw bed (it is never placed, nothing holds the settler at its lying height) or while
+     * away. Through the gravity, not the NoGravity flag: vanilla saves the flag through {@code isNoGravity()}, so a
+     * settler saved while lying would load with gravity off for good, float on the block edge and never walk again.
+     */
     @Override
-    public boolean isNoGravity() {
-        // A straw bed is never placed, nothing holds the settler at its lying height.
-        return super.isNoGravity() || isSleepingWithoutBed() || isAway();
+    protected double getDefaultGravity() {
+        return isSleepingWithoutBed() || isAway() ? 0.0 : super.getDefaultGravity();
     }
 
     @Override
@@ -547,6 +551,8 @@ public class Settler extends PathfinderMob {
     @Override
     protected void readAdditionalSaveData(ValueInput input) {
         super.readAdditionalSaveData(input);
+        // Settlers never use the NoGravity flag; older saves wrote it for a settler lying on straw or away.
+        setNoGravity(false);
         race = Optional.ofNullable(Identifier.tryParse(input.getStringOr("race", Races.HUMAN.toString()))).orElse(Races.HUMAN);
         setSkin(input.getIntOr("skin", 0));
         settlementId = input.getIntOr("settlement", -1);

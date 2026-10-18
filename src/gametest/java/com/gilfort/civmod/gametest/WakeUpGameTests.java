@@ -56,6 +56,7 @@ public final class WakeUpGameTests {
             register(helper, "wake_up_from_bed", test -> wakeUp(test, true));
             register(helper, "wake_up_from_straw", test -> wakeUp(test, false));
             register(helper, "wake_up_by_vanilla", WakeUpGameTests::wokenByVanilla);
+            register(helper, "wake_up_saved_on_straw", WakeUpGameTests::savedOnStraw);
             register(helper, "anti_stuck_after_long_stay", WakeUpGameTests::antiStuckAfterLongStay);
         });
     }
@@ -71,7 +72,7 @@ public final class WakeUpGameTests {
                 .thenWaitUntil(() -> helper.assertTrue(settler.isSleeping() && settler.isSleepingWithoutBed(), "Sleeps on straw"))
                 .thenExecuteAfter(20, settler::stopSleeping)
                 .thenExecuteAfter(20, () -> {
-                    helper.assertFalse(settler.isNoGravity() || settler.isSleepingWithoutBed(), "No straw bed left behind");
+                    helper.assertFalse(settler.getGravity() == 0.0 || settler.isSleepingWithoutBed(), "No straw bed left behind");
                     helper.assertTrue(settler.onGround() && Math.abs(settler.getY() - floor) < 0.01,
                             "On the floor, not floating: " + (settler.getY() - floor) + " above the floor");
                 })
@@ -235,7 +236,7 @@ public final class WakeUpGameTests {
                 .thenWaitUntil(() -> helper.assertFalse(settler.isSleeping() || settler.isSleepingWithoutBed(), "Wakes up"))
                 .thenExecuteAfter(40, () -> {
                     helper.assertTrue(settler.getPose() == Pose.STANDING, "Standing: " + settler.getPose());
-                    helper.assertFalse(settler.isNoGravity(), "Gravity again");
+                    helper.assertTrue(settler.getGravity() > 0.0, "Gravity again");
                     helper.assertTrue(settler.onGround() && Math.abs(settler.getY() - floor) < 0.01,
                             "On the floor, not floating: " + (settler.getY() - floor) + " above the floor, on ground " + settler.onGround());
                     helper.assertFalse(level.getBlockState(settler.blockPosition()).getBlock() instanceof BedBlock, "Not on the bed");
@@ -253,5 +254,41 @@ public final class WakeUpGameTests {
                     cleanUp(helper, settler);
                 })
                 .thenSucceed();
+    }
+
+    /**
+     * A settler saved while lying on straw (no gravity while it lies there) has gravity again after loading and waking:
+     * the save keeps no NoGravity flag, and a flag older saves wrote is dropped on load. Before, such settlers floated on
+     * the block edge, found no path (never on the ground) and were teleported by the anti-stuck rule instead of walking.
+     */
+    private static void savedOnStraw(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        for (int x = 0; x < 3; x++) {
+            for (int z = 0; z < 3; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
+        BlockPos spot = helper.absolutePos(new BlockPos(1, 1, 1));
+        Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
+        settler.snapTo(spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5, 0.0F, 0.0F);
+        settler.sleepOnStraw(new com.gilfort.civmod.npc.SettlerBeds.StrawSpot(spot, Direction.NORTH), true);
+        helper.assertTrue(settler.getGravity() == 0.0, "No gravity while lying on straw");
+
+        net.minecraft.world.level.storage.TagValueOutput output = net.minecraft.world.level.storage.TagValueOutput.createWithContext(
+                net.minecraft.util.ProblemReporter.DISCARDING, level.registryAccess());
+        settler.saveWithoutId(output);
+        net.minecraft.nbt.CompoundTag tag = output.buildResult();
+        helper.assertFalse(tag.getBooleanOr("NoGravity", false), "The lying state is not saved as a NoGravity flag");
+
+        // An older save that has the flag: dropped on load.
+        tag.putBoolean("NoGravity", true);
+        Settler loaded = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.LOAD);
+        loaded.load(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING, level.registryAccess(), tag));
+        loaded.wakeUp();
+        helper.assertFalse(loaded.isNoGravity(), "No NoGravity flag after loading");
+        helper.assertTrue(loaded.getGravity() > 0.0, "Gravity again after loading and waking");
+        settler.discard();
+        loaded.discard();
+        helper.succeed();
     }
 }
