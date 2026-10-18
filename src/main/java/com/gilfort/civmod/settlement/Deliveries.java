@@ -26,7 +26,8 @@ import net.minecraft.world.item.Item;
  * by a producer on "Deliveryman" that put a result into its drop-off ({@link #postResult}); it counts as in delivery for
  * the requesting Clerk ({@link #inDelivery}) until it arrives there. An input delivery is posted by a producer on
  * "Deliveryman" for the inputs of a round a store holds ({@link #postInput}); taking it reserves them there, picking them
- * up consumes the reservation ({@link #pickUpInput}). A Deliveryman picks the best free task of its
+ * up consumes the reservation ({@link #pickUpInput}). A surplus task is an input delivery from a Served Clerk into its
+ * Warehouse's store for the stock above a stock rule's Max ({@link #setSurplus}). A Deliveryman picks the best free task of its
  * Warehouse ({@link #pick}), adds further tasks to the same destination ({@link #batch}) and locks them ({@link #take});
  * a locked task is freed when the Deliveryman changes job, the day ends or the source is unreachable ({@link #release},
  * {@link #releaseAll}), and removed once the source is empty ({@link #done}). A picked-up result stays carried
@@ -126,6 +127,63 @@ public final class Deliveries {
                 Optional.of(new DeliveryTask.Input(items, to.immutable(), Optional.empty())), Optional.empty()));
         data.setDirty();
         return id;
+    }
+
+    /**
+     * Sets the surplus of an item at a Served Clerk that waits for a Deliveryman of its Warehouse: the free surplus task
+     * of that Clerk and item (not taken today, not carried) is created, resized or removed; taken ones stay as they are
+     * (their items are reserved and no longer counted as stock).
+     *
+     * @param data       the dimension's settlement data
+     * @param settlement the settlement
+     * @param clerk      the Served Clerk JobBlock holding the surplus
+     * @param warehouse  where it goes: the Warehouse's store
+     * @param item       the item
+     * @param count      how many should go (0 or less: none)
+     * @param gameTime   the game time now
+     * @param day        the day now (a lock of an earlier day is over)
+     */
+    public static void setSurplus(SettlementData data, Settlement settlement, BlockPos clerk, BlockPos warehouse, Item item, int count,
+            long gameTime, long day) {
+        Optional<DeliveryTask> free = freeSurplus(settlement, clerk, item, day);
+        if (free.isPresent()) {
+            if (count <= 0) {
+                done(data, settlement, free.get().id());
+            } else if (free.get().input().orElseThrow().count() != count || !free.get().input().orElseThrow().to().equals(warehouse)) {
+                update(data, settlement, free.get().id(), task -> task.withInput(new DeliveryTask.Input(Map.of(item, count), warehouse.immutable(),
+                        Optional.empty())).withTaker(Optional.empty()));
+            }
+            return;
+        }
+        if (count > 0) {
+            settlement.mutableDeliveries().add(new DeliveryTask(UUID.randomUUID(), clerk.immutable(), clerk.immutable(), gameTime, false,
+                    Optional.empty(), Optional.of(new DeliveryTask.Input(Map.of(item, count), warehouse.immutable(), Optional.empty())),
+                    Optional.empty()));
+            data.setDirty();
+        }
+    }
+
+    /**
+     * @param settlement a settlement
+     * @param clerk      a Clerk JobBlock
+     * @param item       an item
+     * @param day        the day now
+     * @return the surplus task of that Clerk and item no Deliveryman has taken today
+     */
+    public static Optional<DeliveryTask> freeSurplus(Settlement settlement, BlockPos clerk, Item item, long day) {
+        return settlement.deliveries().stream().filter(task -> task.surplus() && task.source().equals(clerk) && !task.carried()
+                && task.takerOn(day).isEmpty() && task.input().orElseThrow().items().containsKey(item)).findFirst();
+    }
+
+    /**
+     * @param settlement a settlement
+     * @param warehouse  a Warehouse
+     * @param item       an item
+     * @return how many of it surplus tasks bring into that Warehouse's store
+     */
+    public static int surplusTo(Settlement settlement, BlockPos warehouse, Item item) {
+        return settlement.deliveries().stream().filter(DeliveryTask::surplus).flatMap(task -> task.input().stream())
+                .filter(input -> input.to().equals(warehouse)).mapToInt(input -> input.items().getOrDefault(item, 0)).sum();
     }
 
     /**

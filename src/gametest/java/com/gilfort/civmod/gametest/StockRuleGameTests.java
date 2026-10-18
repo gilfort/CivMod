@@ -127,7 +127,7 @@ public final class StockRuleGameTests {
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
         StockRules.setRule(data, clerk, StockRule.minimum(0, Items.TORCH, 32, 0));
-        StockRules.setRule(data, clerk, StockRule.minimum(1, Items.TORCH, 16, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(1, Items.LANTERN, 16, 0));
         StockRules.setRule(data, clerk, StockRule.minimum(2, Items.STICK, 8, 0));
         for (int i = 0; i < 3; i++) {
             StockRules.check(level, clerk, ClerkGameTests.MORNING);

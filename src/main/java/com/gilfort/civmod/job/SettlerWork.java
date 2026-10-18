@@ -1919,13 +1919,14 @@ public final class SettlerWork {
     }
 
     /**
-     * A found resource of a JobBlock was included again: a job paused with "All resources excluded" checks again at
-     * the next decision instead of after its 30 s.
+     * A found resource of a JobBlock was included again: a job paused with "All resources excluded" or "Nothing to
+     * produce" checks again at the next decision instead of after its 30 s.
      *
      * @param jobBlock the JobBlock
      */
     public void recheckExcluded(BlockPos jobBlock) {
-        existingWorkplace(jobBlock).filter(workplace -> workplace.status() == JobStatus.ALL_EXCLUDED).ifPresent(Workplace::unblock);
+        existingWorkplace(jobBlock).filter(workplace -> workplace.status() == JobStatus.ALL_EXCLUDED
+                || workplace.status() == JobStatus.NOTHING_TO_PRODUCE).ifPresent(Workplace::unblock);
     }
 
     /**

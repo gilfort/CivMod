@@ -1,7 +1,10 @@
 package com.gilfort.civmod.job;
 
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
@@ -14,6 +17,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
@@ -144,13 +148,50 @@ public interface JobProfile {
 
     /**
      * The main resources of the job in an area (logs, stones and ores, fish): when every one of them is excluded at
-     * the JobBlock the job pauses ("All resources excluded"); rare drops and treasure never keep it running.
+     * the JobBlock or at its Max at the Home Clerk the job pauses ("All resources excluded" / "Maximum reached" /
+     * "Nothing to produce"); rare drops and treasure never keep it running.
      *
      * @param scan the scan result
      * @return the main resource types, by default the found block types
      */
     default List<Identifier> mainResources(ScanResult scan) {
         return scan.foundBlocks();
+    }
+
+    /**
+     * The item a found type drops, for the Max check of its Home Clerk's stock rule (vault
+     * {@code Systems/Resource Collection Jobs.md}): by default the block's item.
+     *
+     * @param level the level
+     * @param pos   where it would be mined (loot context origin)
+     * @param type  a found type (block id, for the Fisherman the fish item id)
+     * @param tool  the tool it would be obtained with (Silk Touch / Fortune considered; may be empty)
+     * @return the dropped item ({@code minecraft:air} if it drops nothing)
+     */
+    default Item dropped(ServerLevel level, BlockPos pos, Identifier type, ItemStack tool) {
+        return BuiltInRegistries.BLOCK.getValue(type).asItem();
+    }
+
+    /**
+     * The types a roll leaves out of its group (vault {@code Systems/Resource Collection Jobs.md}): those excluded at
+     * the JobBlock and those whose dropped item is at its Max at the Home Clerk.
+     *
+     * @param context the production context
+     * @param types   the types of the rolled group
+     * @return the types left out
+     */
+    default Set<Identifier> leftOut(Context context, Collection<Identifier> types) {
+        Set<Identifier> excluded = context.block().excluded();
+        if (context.atMax().isEmpty()) {
+            return excluded;
+        }
+        Set<Identifier> left = new HashSet<>(excluded);
+        for (Identifier type : types) {
+            if (!left.contains(type) && context.atMax().contains(dropped(context.level(), context.poi(), type, context.tool()))) {
+                left.add(type);
+            }
+        }
+        return left;
     }
 
     /**
@@ -209,9 +250,10 @@ public interface JobProfile {
      * @param secondary  the secondary tool, if any
      * @param block      the JobBlock
      * @param skillLevel the skill level
+     * @param atMax      the items at their Max at the Home Clerk (left out of the roll)
      */
     record Context(ServerLevel level, Settler settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Optional<ItemStack> secondary,
-            SettlementBlock block, int skillLevel) {
+            SettlementBlock block, int skillLevel, Set<Item> atMax) {
     }
 
     /**

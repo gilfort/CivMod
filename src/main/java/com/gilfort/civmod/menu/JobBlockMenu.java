@@ -59,8 +59,11 @@ public class JobBlockMenu extends CivMenu {
     public static final int TAB_PATTERNS = 2;
     /** Found tab (Resource Collection Jobs only): the found resources and their exclusions. */
     public static final int TAB_FOUND = 2;
-    /** Panel height of the Clerk's and the Craftsperson's menu (a grid of 45 / 54 slots and the player inventory). */
-    public static final int CLERK_HEIGHT = 240;
+    /**
+     * Panel height of the Clerk's and the Craftsperson's menu (a grid of 45 / 54 slots, the Clerk's three-row stock
+     * rule editor and the player inventory).
+     */
+    public static final int CLERK_HEIGHT = 262;
     /** Ticks between two checks whether the Clerk, Patterns or Found tab changed. */
     private static final int TAB_SYNC_INTERVAL = 20;
 

@@ -9,6 +9,7 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.settlement.SettlementBlock;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.Holder;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.Registries;
@@ -20,6 +21,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.SwingAnimation;
@@ -217,13 +219,20 @@ public final class FishermanProfile implements JobProfile {
             items = level.getServer().reloadableRegistries().getLootTable(TREASURE).getRandomItems(params);
         } else {
             // A fish roll with every fish excluded catches nothing (an empty roll), never treasure instead.
-            items = FishTable.get().pick(context.block().excluded(), level.getRandom()).map(fish -> List.of(new ItemStack(fish))).orElse(List.of());
+            items = FishTable.get().pick(leftOut(context, FishTable.get().ids()), level.getRandom()).map(fish -> List.of(new ItemStack(fish)))
+                    .orElse(List.of());
         }
         context.settler().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
         Vec3 surface = Vec3.atCenterOf(context.poi()).add(0.0, 0.5, 0.0);
         level.sendParticles(ParticleTypes.SPLASH, surface.x, surface.y, surface.z, 12, 0.3, 0.0, 0.3, 0.1);
         level.playSound(null, context.poi(), SoundEvents.FISHING_BOBBER_RETRIEVE, SoundSource.NEUTRAL, 0.6F, 1.0F);
         return Optional.of(new Produced(items, context.tool()));
+    }
+
+    /** A fish type is the fish item itself. */
+    @Override
+    public Item dropped(ServerLevel level, BlockPos pos, Identifier type, ItemStack tool) {
+        return BuiltInRegistries.ITEM.getValue(type);
     }
 
     @Override

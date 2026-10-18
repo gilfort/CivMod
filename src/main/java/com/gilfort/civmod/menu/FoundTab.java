@@ -2,11 +2,14 @@ package com.gilfort.civmod.menu;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.job.JobProfile;
 import com.gilfort.civmod.job.SavedScan;
 import com.gilfort.civmod.job.ScanResult;
@@ -23,6 +26,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -47,8 +51,9 @@ public record FoundTab(boolean scanned, List<Entry> entries, List<Component> lin
      * @param icon      the icon
      * @param needsTool whether the working settler's tool cannot obtain it (never without a settler)
      * @param excluded  whether it is excluded at the JobBlock
+     * @param maxAt     the Home Clerk whose stock rule Max its dropped item has reached, empty if it is produced
      */
-    public record Entry(Identifier type, ItemStack icon, boolean needsTool, boolean excluded) {
+    public record Entry(Identifier type, ItemStack icon, boolean needsTool, boolean excluded, Optional<Component> maxAt) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Entry> STREAM_CODEC = StreamCodec.composite(
@@ -56,18 +61,19 @@ public record FoundTab(boolean scanned, List<Entry> entries, List<Component> lin
                 ItemStack.OPTIONAL_STREAM_CODEC, Entry::icon,
                 ByteBufCodecs.BOOL, Entry::needsTool,
                 ByteBufCodecs.BOOL, Entry::excluded,
+                ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs::optional), Entry::maxAt,
                 Entry::new);
 
         @Override
         public boolean equals(Object other) {
             // ItemStack has no value equality.
             return other instanceof Entry entry && type.equals(entry.type) && ItemStack.matches(icon, entry.icon) && needsTool == entry.needsTool
-                    && excluded == entry.excluded;
+                    && excluded == entry.excluded && maxAt.equals(entry.maxAt);
         }
 
         @Override
         public int hashCode() {
-            return type.hashCode() * 31 + (needsTool ? 2 : 0) + (excluded ? 1 : 0);
+            return type.hashCode() * 31 + maxAt.hashCode() * 7 + (needsTool ? 2 : 0) + (excluded ? 1 : 0);
         }
     }
 
@@ -128,8 +134,14 @@ public record FoundTab(boolean scanned, List<Entry> entries, List<Component> lin
             return EMPTY;
         }
         Optional<JobProfile.Worker> worker = Optional.ofNullable(settler).flatMap(working -> working.getWork().worker(pos));
+        // Max: the dropped item with the working settler's tool (without one the plain drop).
+        JobBlockSite site = JobBlockSite.at(level, pos).orElseThrow();
+        Set<Item> atMax = StockRules.atMax(level, site);
+        Optional<Component> clerk = block.homeClerk().flatMap(site.settlement()::block).map(ClerkStorage::name);
+        ItemStack tool = worker.map(JobProfile.Worker::tool).orElse(ItemStack.EMPTY);
         List<Entry> entries = profile.get().found(scan, worker).stream()
-                .map(entry -> new Entry(entry.type(), entry.icon(), !entry.available(), block.excluded().contains(entry.type())))
+                .map(entry -> new Entry(entry.type(), entry.icon(), !entry.available(), block.excluded().contains(entry.type()),
+                        !atMax.isEmpty() && atMax.contains(profile.get().dropped(level, pos, entry.type(), tool)) ? clerk : Optional.empty()))
                 .toList();
         return new FoundTab(true, entries, profile.get().foundLines(scan, worker));
     }
