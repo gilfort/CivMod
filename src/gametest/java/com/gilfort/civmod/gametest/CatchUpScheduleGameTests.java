@@ -128,7 +128,7 @@ public final class CatchUpScheduleGameTests {
         boolean[] done = new boolean[1];
         helper.onEachTick(() -> {
             // The live scan is saved with the settler; the catch-up needs it.
-            if (done[0] || settler.getWork().found(settler.getJobs().get(0)).isEmpty()) {
+            if (done[0] || LumberjackGameTests.foundNothing(settler, settler.getJobs().get(0))) {
                 return;
             }
             done[0] = true;

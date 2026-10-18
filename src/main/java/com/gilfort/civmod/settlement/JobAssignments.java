@@ -7,10 +7,12 @@ import java.util.UUID;
 
 import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.job.SavedScan;
 import com.gilfort.civmod.registry.ModJobs;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.Identifier;
 
 /**
  * Rules for work points and job assignment of JobBlocks (vault {@code Systems/Scroll of Assignment.md}).
@@ -413,6 +415,37 @@ public final class JobAssignments {
             data.changed();
         });
         return block.map(SettlementBlock::collectLeaves).orElse(false);
+    }
+
+    /**
+     * Excludes or includes a found resource of a Resource Collection JobBlock (vault
+     * {@code Systems/Resource Collection Jobs.md}): the job no longer produces an excluded type.
+     *
+     * @param data     the dimension's settlement data
+     * @param jobBlock the JobBlock position
+     * @param type     the found resource type
+     * @return whether the type is excluded now
+     */
+    public static boolean toggleExcluded(SettlementData data, BlockPos jobBlock, Identifier type) {
+        Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
+        boolean excluded = block.map(found -> found.toggleExcluded(type)).orElse(false);
+        block.ifPresent(found -> data.changed());
+        return excluded;
+    }
+
+    /**
+     * Keeps the latest scan of a settler working a JobBlock on the JobBlock, so its Found tab shows it without a
+     * settler.
+     *
+     * @param data     the dimension's settlement data
+     * @param jobBlock the JobBlock position
+     * @param scan     the scan
+     */
+    public static void rememberScan(SettlementData data, BlockPos jobBlock, SavedScan scan) {
+        JobBlockSite.blockAt(data, jobBlock).filter(block -> !block.foundScan().equals(Optional.of(scan))).ifPresent(block -> {
+            block.setFoundScan(scan);
+            data.changed();
+        });
     }
 
     /**

@@ -11,7 +11,9 @@ import java.util.function.Supplier;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.core.BlockPos;
@@ -173,6 +175,11 @@ final class Workplace {
         blockedUntil = gameTime + BLOCKED_RETRY;
     }
 
+    /** Ends a block early: the next decision checks the job again. */
+    void unblock() {
+        blockedUntil = 0L;
+    }
+
     /**
      * @param gameTime the game time now
      * @return whether the job still waits after being blocked
@@ -252,6 +259,9 @@ final class Workplace {
             scan = result;
             scanKey = key;
             scanning = null;
+            // The JobBlock keeps the latest scan for its Found tab.
+            SavedScan.of(jobBlock, key.center(), key.radius(), key.day(), result)
+                    .ifPresent(saved -> JobAssignments.rememberScan(SettlementData.get(level), jobBlock, saved));
         });
     }
 

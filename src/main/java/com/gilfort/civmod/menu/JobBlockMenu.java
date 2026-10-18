@@ -39,7 +39,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 /**
  * Menu of a JobBlock: tab "Storage" (27 slots + player inventory), tab "Info" and, on the Mission Board, tab
  * "Missions"; the Clerk adds the tabs "Stock" (stock rules, with the player inventory to pick items from), "Requests"
- * and "Deliveries" ({@link ClerkTab}).
+ * and "Deliveries" ({@link ClerkTab}); Resource Collection JobBlocks add the tab "Found" ({@link FoundTab}).
  */
 public class JobBlockMenu extends CivMenu {
 
@@ -57,9 +57,11 @@ public class JobBlockMenu extends CivMenu {
     public static final int TAB_DELIVERIES = 4;
     /** Patterns tab (Craftsperson only): the pattern library, with the player inventory to pick items from. */
     public static final int TAB_PATTERNS = 2;
+    /** Found tab (Resource Collection Jobs only): the found resources and their exclusions. */
+    public static final int TAB_FOUND = 2;
     /** Panel height of the Clerk's and the Craftsperson's menu (a grid of 45 / 54 slots and the player inventory). */
     public static final int CLERK_HEIGHT = 240;
-    /** Ticks between two checks whether the Clerk or Patterns tab changed. */
+    /** Ticks between two checks whether the Clerk, Patterns or Found tab changed. */
     private static final int TAB_SYNC_INTERVAL = 20;
 
     /** Button id: free the JobBlock (remove the job from its settler). */
@@ -93,6 +95,7 @@ public class JobBlockMenu extends CivMenu {
     private ClerkTab clerkTab = ClerkTab.EMPTY;
     private int tabSyncIn;
     private PatternTab patternTab = PatternTab.EMPTY;
+    private FoundTab foundTab = FoundTab.EMPTY;
 
     /**
      * Client constructor.
@@ -114,7 +117,7 @@ public class JobBlockMenu extends CivMenu {
      * @param info        the info snapshot
      */
     public JobBlockMenu(int containerId, Inventory inventory, Container container, JobBlockInfo info) {
-        super(ModMenuTypes.JOB_BLOCK.get(), containerId, isClerk(info) ? 5 : isMissionBoard(info) || isCraftsperson(info) ? 3 : 2);
+        super(ModMenuTypes.JOB_BLOCK.get(), containerId, isClerk(info) ? 5 : isMissionBoard(info) || isCraftsperson(info) || hasFoundTab(info) ? 3 : 2);
         checkContainerSize(container, JobBlockEntity.SLOTS);
         this.container = container;
         this.player = inventory.player;
@@ -149,6 +152,50 @@ public class JobBlockMenu extends CivMenu {
      */
     public static boolean isCraftsperson(JobBlockInfo info) {
         return info.jobType() == ModJobs.CRAFTSPERSON.get();
+    }
+
+    /**
+     * @param info a JobBlock info
+     * @return whether the JobBlock offers a Resource Collection Job (Found tab)
+     */
+    public static boolean hasFoundTab(JobBlockInfo info) {
+        return FoundTab.isCollection(info.jobType().category());
+    }
+
+    /**
+     * @return the found resources as last synced (Resource Collection Jobs only)
+     */
+    public FoundTab getFoundTab() {
+        return foundTab;
+    }
+
+    /**
+     * Client: the server sent a new Found tab.
+     *
+     * @param tab the tab
+     */
+    public void setFoundTab(FoundTab tab) {
+        foundTab = tab;
+    }
+
+    /**
+     * Server: excludes or includes a found resource and sends the tab at once. Only a type the tab lists is taken.
+     *
+     * @param type the resource type
+     * @return whether it was toggled
+     */
+    public boolean toggleExcluded(Identifier type) {
+        if (!hasFoundTab(info) || !(container instanceof JobBlockEntity jobBlock) || !(jobBlock.getLevel() instanceof ServerLevel level)
+                || !stillValid(player)) {
+            return false;
+        }
+        BlockPos pos = jobBlock.getBlockPos();
+        if (FoundTab.of(level, pos).entry(type).isEmpty()) {
+            return false;
+        }
+        SettlementWorld.toggleExcluded(level, pos, type);
+        tabSyncIn = 0;
+        return true;
     }
 
     /**
@@ -252,11 +299,19 @@ public class JobBlockMenu extends CivMenu {
     @Override
     public void broadcastChanges() {
         super.broadcastChanges();
-        if (!isTall() || !(player instanceof ServerPlayer serverPlayer) || !(container instanceof JobBlockEntity jobBlock)
+        if (!(isTall() || hasFoundTab(info)) || !(player instanceof ServerPlayer serverPlayer) || !(container instanceof JobBlockEntity jobBlock)
                 || !(jobBlock.getLevel() instanceof ServerLevel level) || --tabSyncIn > 0) {
             return;
         }
         tabSyncIn = TAB_SYNC_INTERVAL;
+        if (hasFoundTab(info)) {
+            FoundTab found = FoundTab.of(level, jobBlock.getBlockPos());
+            if (!found.equals(foundTab)) {
+                foundTab = found;
+                PacketDistributor.sendToPlayer(serverPlayer, new FoundTab.Sync(containerId, found));
+            }
+            return;
+        }
         if (isCraftsperson(info)) {
             // A metal pattern checked in an older save loses its checkmark as soon as the tab shows it.
             com.gilfort.civmod.settlement.Patterns.uncheckMetal(level, jobBlock.getBlockPos());

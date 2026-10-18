@@ -111,8 +111,12 @@ public final class MinerProfile implements JobProfile {
         }
         ServerLevel level = context.level();
         Identifier poi = BuiltInRegistries.BLOCK.getKey(level.getBlockState(context.poi()).getBlock());
-        Optional<Identifier> rolled = MinerOutput.roll(scan, poi, type -> canObtain(context.tool(), type), context.skillLevel(),
+        MinerOutput.Roll roll = MinerOutput.roll(scan, poi, type -> canObtain(context.tool(), type), context.block().excluded(), context.skillLevel(),
                 MinerWeights.get(), level.getRandom());
+        if (roll.emptyRoll()) {
+            return Optional.of(new Produced(List.of(), context.tool()));
+        }
+        Optional<Identifier> rolled = roll.type();
         if (rolled.isEmpty()) {
             return Optional.empty();
         }

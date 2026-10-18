@@ -39,6 +39,14 @@ _Avoid_: A second production loop for catch-up; a "quiet" flag in the rules
 The block a Resource Collection settler works at today (a tree, a stone face, water), chosen each day among the JobBlock's work points or by the job's auto search; part of the Workplace, not the same thing. Code: `Workplace.workPlaceOfDay`, saved as `SettlerWork.WorkPlaceEntry` (`poi`).
 _Avoid_: Workplace (the whole per-job state), POI in prose
 
+**Found tab**:
+The JobBlock tab of a Resource Collection Job listing what its scan found (Lumberjack wood types, Miner stone and ore types, Fisherman the fish of the fishing fish loot table), with "Needs a better tool" and the treasure chance computed for the settler working there, the water info, and "Not scanned yet" before the first scan. It shows the working settler's scan, else the last scan the JobBlock kept. The settler's job tab shows none of it. Code: `FoundTab` (payloads `Sync` / `Toggle`, `JobBlockMenu.TAB_FOUND`), `FoundTabView`; entries from `JobProfile.found` / `foundLines`, the kept scan in `SettlementBlock.foundScan()` (set through `JobAssignments.rememberScan`); fish list `FishTable`.
+_Avoid_: Scan tab, resource list in the settler window
+
+**Excluded resource**:
+A found type the player right-clicked off in the Found tab; the job no longer produces it. Stored per JobBlock in the settlement data (survives a settler change, applies in catch-up, kept when a scan no longer finds it). Inside the rolled group (Miner stone / ore, Lumberjack logs vs rare drops, Fisherman fish vs treasure) the weights spread over the rest; a fully excluded group gives an empty roll (EXP and tool wear, no item). Every main resource excluded (`JobProfile.mainResources`) pauses the job with "All resources excluded" (`JobStatus.ALL_EXCLUDED`, retried after 30 s, at once when one is included). Code: `SettlementBlock.excluded()`, toggled through `SettlementWorld.toggleExcluded` / `JobAssignments.toggleExcluded`; `WorkRules.allExcluded`, `MinerOutput.Roll`.
+_Avoid_: Blacklist, filter
+
 **Base Job**:
 A Job a Level 1 JobBlock offers; root of a specialization tree.
 
