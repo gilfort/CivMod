@@ -42,7 +42,7 @@ import net.minecraft.world.phys.Vec3;
  * 5 Fisherman) in a chain along +X, their work places, a pond, a working Clerk with 8 half-full linked chests and stock
  * rules, 4 Deliverymen at the Clerk with a pickup at 12 of the collecting jobs, 2 Craftspersons with crafting tables
  * and materials, a second working Clerk served by the first one as Warehouse with 2 more Craftspersons on "Delivery:
- * Deliveryman" crafting for it, and 30 equipped settlers.
+ * Deliveryman" crafting for it from its materials (input deliveries), and 30 equipped settlers.
  */
 public final class Benchmark {
 
@@ -155,11 +155,13 @@ public final class Benchmark {
             BlockPos craft = origin.offset(-3, 0, 6 + 4 * i);
             level.setBlock(craft, ModBlocks.CRAFTSPERSON_BLOCK.get().defaultBlockState(), Block.UPDATE_ALL);
             level.setBlock(craft.offset(-2, 0, 0), Blocks.CRAFTING_TABLE.defaultBlockState(), FLAGS);
-            if (level.getBlockEntity(craft) instanceof Container materials) {
-                materials.setItem(0, new ItemStack(Items.OAK_LOG, 64));
-                materials.setItem(1, new ItemStack(Items.COBBLESTONE, 64));
-                materials.setItem(2, new ItemStack(Items.COBBLESTONE, 64));
-                materials.setItem(3, new ItemStack(Items.COAL, 64));
+            // On "Deliveryman" the materials lie in the second Clerk: input deliveries bring them.
+            if (level.getBlockEntity(i < CRAFTSPERSONS ? craft : second) instanceof Container store) {
+                int first = i < CRAFTSPERSONS ? 0 : 4 * (i - CRAFTSPERSONS);
+                store.setItem(first, new ItemStack(Items.OAK_LOG, 64));
+                store.setItem(first + 1, new ItemStack(Items.COBBLESTONE, 64));
+                store.setItem(first + 2, new ItemStack(Items.COBBLESTONE, 64));
+                store.setItem(first + 3, new ItemStack(Items.COAL, 64));
             }
             for (int slot = 0; slot < CRAFTED.size(); slot++) {
                 if (Patterns.setOutput(level, craft, slot, CRAFTED.get(slot)).isPresent()) {

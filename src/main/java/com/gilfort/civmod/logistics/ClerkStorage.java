@@ -165,8 +165,23 @@ public final class ClerkStorage {
      * @return the reachable stock
      */
     public static Stock stock(ServerLevel level, BlockPos pos, long dayTime, boolean atCounter) {
+        return stock(level, pos, dayTime, atCounter, null);
+    }
+
+    /**
+     * What a visitor reaches at a position under the access rule, for a Delivery task (a pickup at a foreign Clerk's
+     * counter).
+     *
+     * @param level     the level
+     * @param pos       a Clerk JobBlock or any container
+     * @param dayTime   the day time
+     * @param atCounter whether the visitor stands at the Clerk's counter (catch-up: always)
+     * @param task      the Delivery task asking, which sees what is reserved for it; null for everybody else
+     * @return the reachable stock, without what the Clerk reserved for other tasks
+     */
+    public static Stock stock(ServerLevel level, BlockPos pos, long dayTime, boolean atCounter, @Nullable UUID task) {
         Optional<SettlementBlock> clerk = JobBlockSite.blockAt(level, pos).filter(ClerkStorage::isClerk);
-        return stock(level, pos, clerk.isPresent() && atCounter && working(level, clerk.get(), dayTime));
+        return stock(level, pos, clerk.isPresent() && atCounter && working(level, clerk.get(), dayTime), task);
     }
 
     /**

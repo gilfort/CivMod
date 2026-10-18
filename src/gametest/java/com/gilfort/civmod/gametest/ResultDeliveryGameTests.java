@@ -164,13 +164,14 @@ public final class ResultDeliveryGameTests {
         BlockPos clerk = StockRuleGameTests.workingClerk(helper);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
-        chest.setItem(0, new ItemStack(Items.OAK_LOG, 1));
-        chest.setItem(1, new ItemStack(Items.COBBLESTONE, 3));
         helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 1, 0)), "Rule set");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
 
         BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
+        // Inputs in its own collect inventory: no input deliveries (there is no Deliveryman).
+        Container materials = (Container) level.getBlockEntity(craft);
+        materials.setItem(0, new ItemStack(Items.OAK_LOG, 1));
+        materials.setItem(1, new ItemStack(Items.COBBLESTONE, 3));
         CraftspersonGameTests.placeTable(helper, new BlockPos(3, 1, 5));
         CraftspersonGameTests.define(helper, craft, 0, Items.STONE_PICKAXE);
         CraftspersonGameTests.define(helper, craft, 1, Items.STICK);
