@@ -20,9 +20,9 @@ import net.minecraft.world.level.block.Block;
 public final class MechanicProfile implements ProducingProfile {
 
     /** The Mechanic's station: Crafters. */
-    public static final TagKey<Block> STATION = TagKey.create(Registries.BLOCK, CivMod.id("stations/mechanic"));
+    private static final TagKey<Block> STATION = TagKey.create(Registries.BLOCK, CivMod.id("stations/mechanic"));
     /** The Mechanic's domain: redstone items. */
-    public static final TagKey<Item> DOMAIN = TagKey.create(Registries.ITEM, CivMod.id("domains/redstone"));
+    private static final TagKey<Item> DOMAIN = TagKey.create(Registries.ITEM, CivMod.id("domains/redstone"));
 
     @Override
     public List<RecipeType<?>> recipeTypes() {

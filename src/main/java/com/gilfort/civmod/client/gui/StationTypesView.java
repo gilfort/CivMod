@@ -77,7 +77,7 @@ final class StationTypesView {
         StationTypeTab tab = menu.getStationTypeTab();
         Item item = menu.getCarried().getItem();
         notice = Optional.empty();
-        if (menu.getCarried().isEmpty() || slot == 0 || slot >= tab.open()) {
+        if (menu.getCarried().isEmpty() || !tab.isOpen(slot)) {
             return true;
         }
         if (tab.jobsOf(item).isEmpty()) {
@@ -121,7 +121,7 @@ final class StationTypesView {
             if (item != Items.AIR) {
                 graphics.item(new ItemStack(item), x, SLOTS_Y);
             }
-            if (slot == 0 || slot >= tab.open()) {
+            if (!tab.isOpen(slot)) {
                 // The Base Job's station is fixed; closed slots open with the JobBlock level.
                 CivGui.slotInactive(graphics, x, SLOTS_Y);
             }
