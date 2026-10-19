@@ -12,6 +12,7 @@ import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.api.SimpleCollectionProfile;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.block.UpgradeCosts;
+import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.job.JobStatus;
@@ -32,6 +33,7 @@ import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.Settlement;
+import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementWorld;
@@ -85,6 +87,7 @@ public final class ExampleAddonGameTests {
             register(helper, "example_sand_digger_exclusion", ExampleAddonGameTests::sandDiggerExclusion);
             register(helper, "example_sand_digger_blocked", ExampleAddonGameTests::sandDiggerBlocked);
             register(helper, "example_stonecutter_request", ExampleAddonGameTests::stonecutterRequest);
+            register(helper, "example_stonecutter_work_point", ExampleAddonGameTests::stonecutterWorkPoint);
             register(helper, "example_job_switch_keeps_checkmarks", ExampleAddonGameTests::jobSwitchKeepsCheckmarks);
         });
     }
@@ -316,6 +319,53 @@ public final class ExampleAddonGameTests {
         helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "Request done: " + Requests.byPriority(settlement));
         JobAssignments.unassign(data, clerk);
         settler.discard();
+        helper.succeed();
+    }
+
+    /**
+     * A stonecutter is a valid scroll work point at a level-2 Craftsperson JobBlock (the Stonecutter's station, not the
+     * Craftsperson's), and the Stonecutter works there: the stonecutter sits out of reach of the nearest-station search
+     * (more than 8 blocks above the JobBlock), so only the work point makes it the station of the day.
+     */
+    private static void stonecutterWorkPoint(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Job stonecutter = ModJobs.REGISTRY.getValue(STONECUTTER);
+        BlockPos clerk = StockRuleGameTests.workingClerk(helper);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
+        chest.setItem(0, new ItemStack(Items.STONE, 4));
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_BRICKS, 4, 0)), "Rule set");
+        StockRules.check(level, clerk, ClerkGameTests.MORNING);
+
+        BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
+        BlockPos cutter = helper.absolutePos(new BlockPos(3, 11, 5));
+        level.setBlockAndUpdate(cutter, Blocks.STONECUTTER.defaultBlockState());
+        SettlementBlock block = data.settlementAt(craft).flatMap(found -> found.block(craft)).orElseThrow();
+        helper.assertTrue(ScrollOfAssignmentItem.workPlaceJob(level, block, cutter).isEmpty(), "Level 1: no Stonecutter offered, no work point");
+
+        helper.getBlockEntity(new BlockPos(1, 1, 5), JobBlockEntity.class).setJobLevel(2);
+        SettlementManager.setLevel(data, craft, 2, SettlementManager.Listener.NONE);
+        block = data.settlementAt(craft).flatMap(found -> found.block(craft)).orElseThrow();
+        helper.assertTrue(ScrollOfAssignmentItem.workPlaceJob(level, block, cutter).filter(stonecutter::equals).isPresent(),
+                "Level 2: a work point for the Stonecutter: " + ScrollOfAssignmentItem.workPlaceJob(level, block, cutter));
+        helper.assertFalse(ModJobs.CRAFTSPERSON.get().isValidWorkPlace(level, cutter), "Not a Craftsperson station");
+        helper.assertTrue(JobAssignments.cyclePoint(data, craft, cutter, true, false) == JobAssignments.PointResult.WORK, "Work point set");
+
+        Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 7), data, settlement);
+        settler.setCustomName(Component.literal("Stella"));
+        settler.getFood().setMorningDay(Math.floorDiv(level.getOverworldClockTime(), 24000L));
+        helper.assertTrue(JobAssignments.assign(data, craft, settler.getUUID(), "Stella", settlement.id(), List.of(), stonecutter)
+                == JobAssignments.AssignResult.OK, "Stonecutter assigned");
+        settler.addJob(new SettlerJob(stonecutter, craft));
+        helper.assertTrue(Patterns.setOutput(level, craft, 0, Items.STONE_BRICKS).orElseThrow().checked(), "Bricks checked");
+        CraftspersonGameTests.catchUp(level, settler, 4000L);
+
+        helper.assertTrue(ClerkStorage.stock(level, clerk, true).count(stack -> stack.is(Items.STONE_BRICKS)) == 4,
+                "Stone bricks cut at the work point (status " + settler.getWork().status(craft) + ")");
+        JobAssignments.unassign(data, clerk);
+        settler.discard();
+        level.setBlockAndUpdate(cutter, Blocks.AIR.defaultBlockState());
         helper.succeed();
     }
 
