@@ -5,8 +5,8 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
-import com.gilfort.civmod.job.Job;
-import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
@@ -156,7 +156,9 @@ public final class JobPickerGameTests {
         SettlementManager.setLevel(data, BOARD, 2, SettlementManager.Listener.NONE);
         helper.assertTrue(assign(data, settlement, BOARD, 0, specialization) == AssignResult.OK, "Joins as the Specialization");
         helper.assertTrue(block(data, BOARD).assignees().get(0).job() == specialization, "The assignee records its Mission Job");
-        helper.assertTrue(JobPlaces.lines(block(data, BOARD)).equals(List.of(new JobPlaces.Line(adventurer, 1, 2), new JobPlaces.Line(specialization, 1, 2))),
+        // Other Mission Jobs (the example addon's Scout) share the places too; only the two used here are compared.
+        helper.assertTrue(JobPlaces.lines(block(data, BOARD)).stream().filter(line -> line.job() == adventurer || line.job() == specialization).toList()
+                .equals(List.of(new JobPlaces.Line(adventurer, 1, 2), new JobPlaces.Line(specialization, 1, 2))),
                 "Shared places: " + JobPlaces.lines(block(data, BOARD)));
         helper.assertTrue(assign(data, settlement, BOARD, 1, adventurer) == AssignResult.OK, "Second settler as Adventurer");
         helper.assertTrue(assign(data, settlement, BOARD, 2, specialization) == AssignResult.FULL, "The board is full for every Mission Job");

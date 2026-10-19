@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.registry.ModJobs;
 import com.google.gson.JsonElement;

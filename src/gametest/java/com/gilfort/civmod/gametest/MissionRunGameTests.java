@@ -11,6 +11,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.job.JobBuffer;
@@ -222,6 +223,14 @@ public final class MissionRunGameTests {
 
     /** A level-2 Mission Board with an Adventurer of skill {@value #SKILL}; the first offered mission is marked. */
     static Settler adventurer(GameTestHelper helper) {
+        return missionSettler(helper, ModJobs.ADVENTURER.get(), "Adventurer");
+    }
+
+    /**
+     * A settler holding a Mission Job on a level-2 board in a fresh settlement; the first offered mission the Job may take
+     * is marked.
+     */
+    static Settler missionSettler(GameTestHelper helper, Job missionJob, String name) {
         ServerLevel level = helper.getLevel();
         for (int x = 0; x < 9; x++) {
             for (int z = 0; z < 9; z++) {
@@ -238,15 +247,29 @@ public final class MissionRunGameTests {
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
         Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(4, 1, 4)));
         settler.snapTo(spawn.x, spawn.y, spawn.z, 0.0F, 0.0F);
-        settler.setCustomName(Component.literal("Adventurer"));
+        settler.setCustomName(Component.literal(name));
         level.addFreshEntity(settler);
         settler.joinSettlement(data, settlement);
-        settler.getSkills().set(ModJobs.ADVENTURER.get(), new SettlerSkills.Skill(SKILL, 0));
-        JobAssignments.assign(data, board, settler.getUUID(), "Adventurer", settlement.id(), List.of());
-        settler.addJob(new SettlerJob(ModJobs.ADVENTURER.get(), board));
-        List<MissionOffer.Entry> offer = MissionOffers.refresh(data, board, Math.floorDiv(level.getOverworldClockTime(), DAY),
-                Missions.all(level.registryAccess()), RandomSource.create(1L));
-        helper.assertTrue(MissionOffers.setMarked(data, board, 0, offer.get(0).mission(), true), "First mission marked");
+        settler.getSkills().set(missionJob, new SettlerSkills.Skill(SKILL, 0));
+        JobAssignments.assign(data, board, settler.getUUID(), name, settlement.id(), List.of(), missionJob);
+        settler.addJob(new SettlerJob(missionJob, board));
+        // Seeds from 1 until the daily offer holds a mission the Job may take (seed 1 for the Adventurer); each try is an
+        // earlier day, as an offer is drawn once per day (the board refills on the real day and keeps the marked entry).
+        List<MissionOffer.Entry> offer = List.of();
+        int index = 0;
+        for (long seed = 1L; seed <= 100L; seed++) {
+            offer = MissionOffers.refresh(data, board, Math.floorDiv(level.getOverworldClockTime(), DAY) - seed + 1, Missions.all(level.registryAccess()),
+                    RandomSource.create(seed));
+            index = 0;
+            while (index < offer.size() && !Missions.get(level.registryAccess(), offer.get(index).mission()).orElseThrow().jobs().contains(missionJob)) {
+                index++;
+            }
+            if (index < offer.size()) {
+                break;
+            }
+        }
+        helper.assertTrue(index < offer.size(), "The offer holds a mission for " + missionJob + ": " + offer);
+        helper.assertTrue(MissionOffers.setMarked(data, board, index, offer.get(index).mission(), true), "First mission for the Job marked");
         return settler;
     }
 
@@ -296,7 +319,7 @@ public final class MissionRunGameTests {
         Settler settler = adventurer(helper);
         settler.getWork().forceMissionOutcome(MissionRules.Outcome.SUCCESS);
         BlockPos board = helper.absolutePos(BOARD);
-        Identifier marked = offer(helper).get(0).mission();
+        Identifier marked = offer(helper).stream().filter(MissionOffer.Entry::marked).findFirst().orElseThrow().mission();
         int offered = offer(helper).size();
         Mission mission = Missions.get(level.registryAccess(), marked).orElseThrow();
         int[] expBefore = new int[1];

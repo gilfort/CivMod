@@ -85,7 +85,7 @@ public final class CivModReiPlugin implements REIClientPlugin {
 
         @Override
         public Result handle(Context context) {
-            if (!(context.getMenu() instanceof JobBlockMenu menu) || !JobBlockMenu.isCraftsperson(menu.getInfo())
+            if (!(context.getMenu() instanceof JobBlockMenu menu) || !JobBlockMenu.hasPatternsTab(menu.getInfo())
                     || !(context.getContainerScreen() instanceof JobBlockScreen screen)
                     || !CRAFTING.equals(context.getDisplay().getCategoryIdentifier())) {
                 return Result.createNotApplicable();

@@ -3,7 +3,7 @@ package com.gilfort.civmod.menu;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
-import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.npc.Settler;
 import java.util.List;

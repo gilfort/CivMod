@@ -3,7 +3,7 @@ package com.gilfort.civmod.mission;
 import java.util.List;
 import java.util.Optional;
 
-import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.job.SkillRules;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;

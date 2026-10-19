@@ -10,7 +10,7 @@ import java.util.UUID;
 import java.util.function.BiPredicate;
 
 import com.gilfort.civmod.CivMod;
-import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 

@@ -9,7 +9,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.job.SavedScan;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.StockRule;

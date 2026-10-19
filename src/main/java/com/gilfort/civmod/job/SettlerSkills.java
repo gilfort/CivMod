@@ -1,5 +1,7 @@
 package com.gilfort.civmod.job;
 
+import com.gilfort.civmod.api.Job;
+
 import java.util.HashMap;
 import java.util.Map;
 

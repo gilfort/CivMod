@@ -14,7 +14,7 @@ import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.PatternTab;
 import com.gilfort.civmod.job.JobBuffer;
-import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.StockRule;

@@ -262,7 +262,7 @@ final class MissionTabView {
 
     /** The chances of a settler of the board on a mission, from the outcome constants the server sent. */
     private MissionRules.Chances chances(Mission mission, JobBlockInfo.MissionSettler settler) {
-        return MissionRules.chances(menu.getInfo().missionTab().rules(), mission.recommendedLevel(), settler.skill());
+        return MissionRules.chances(menu.getInfo().missionTab().rules(), mission.recommendedLevel(), settler.skill(), settler.job());
     }
 
     /** "Success: 75%", "Failed: 22%", "Death: 3%" on one line each, the death chance in red when it is high. */

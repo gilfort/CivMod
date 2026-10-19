@@ -122,7 +122,7 @@ public final class CivModJeiPlugin implements IModPlugin {
         @Override
         public @Nullable IRecipeTransferError transferRecipe(JobBlockMenu container, RecipeHolder<CraftingRecipe> recipe, IRecipeSlotsView slots,
                 Player player, boolean maxTransfer, boolean doTransfer) {
-            if (!JobBlockMenu.isCraftsperson(container.getInfo()) || !(Minecraft.getInstance().gui.screen() instanceof JobBlockScreen screen)) {
+            if (!JobBlockMenu.hasPatternsTab(container.getInfo()) || !(Minecraft.getInstance().gui.screen() instanceof JobBlockScreen screen)) {
                 // Other JobBlocks have no patterns: no button.
                 return helper.createInternalError();
             }

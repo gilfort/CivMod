@@ -1,0 +1,51 @@
+// Example addon (mod id civmod_example): Jobs built on CivMod's addon API only. Built and GameTested in CI through
+// CivMod's dev runs, never published.
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev'
+}
+
+version = mod_version
+group = 'com.gilfort.civmod.example'
+base {
+    archivesName = 'civmod_example'
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+neoForge {
+    version = project.neo_version
+}
+
+dependencies {
+    // CivMod's classes: the check below allows only the com.gilfort.civmod.api package.
+    compileOnly project(':')
+}
+
+// The addon may use CivMod's addon API only: any other com.gilfort.civmod reference fails the build.
+def apiOnlySources = fileTree('src/main/java') { include '**/*.java' }
+def checkApiOnly = tasks.register('checkApiOnly') {
+    description = 'Fails if the example addon references CivMod classes outside com.gilfort.civmod.api.'
+    group = 'verification'
+    inputs.files(apiOnlySources)
+    doLast {
+        def internal = ~/com\.gilfort\.civmod\.(?!api\b|example\b)[a-zA-Z_]/
+        def offenders = []
+        apiOnlySources.files.each { file ->
+            file.readLines('UTF-8').eachWithIndex { line, index ->
+                if (internal.matcher(line).find()) {
+                    offenders << "${file.name}:${index + 1}: ${line.trim()}"
+                }
+            }
+        }
+        if (!offenders.isEmpty()) {
+            throw new GradleException("The example addon may only use com.gilfort.civmod.api:\n" + offenders.join('\n'))
+        }
+    }
+}
+tasks.named('compileJava') { dependsOn checkApiOnly }
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-Xlint:all', '-Xlint:-processing', '-Xlint:-serial']
+}

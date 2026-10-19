@@ -1,17 +1,18 @@
 package com.gilfort.civmod.registry;
 
-import java.util.Map;
 import java.util.Set;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.CivModApi;
+import com.gilfort.civmod.block.JobBlock;
+import com.gilfort.civmod.block.StarterTools;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.event.ModifyDefaultComponentsEvent;
+import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
@@ -26,17 +27,17 @@ public final class ModItems {
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(CivMod.MOD_ID);
 
     /** Item of the {@link ModBlocks#LUMBERJACK_BLOCK}. */
-    public static final DeferredItem<BlockItem> LUMBERJACK_BLOCK = ITEMS.registerSimpleBlockItem(ModBlocks.LUMBERJACK_BLOCK);
+    public static final DeferredItem<BlockItem> LUMBERJACK_BLOCK = jobBlockItem(ModBlocks.LUMBERJACK_BLOCK, Items.STONE_AXE);
     /** Item of the {@link ModBlocks#MINER_BLOCK}. */
-    public static final DeferredItem<BlockItem> MINER_BLOCK = ITEMS.registerSimpleBlockItem(ModBlocks.MINER_BLOCK);
+    public static final DeferredItem<BlockItem> MINER_BLOCK = jobBlockItem(ModBlocks.MINER_BLOCK, Items.STONE_PICKAXE);
     /** Item of the {@link ModBlocks#FISHERMAN_BLOCK}. */
-    public static final DeferredItem<BlockItem> FISHERMAN_BLOCK = ITEMS.registerSimpleBlockItem(ModBlocks.FISHERMAN_BLOCK);
+    public static final DeferredItem<BlockItem> FISHERMAN_BLOCK = jobBlockItem(ModBlocks.FISHERMAN_BLOCK, Items.FISHING_ROD);
     /** Item of the {@link ModBlocks#MISSION_BOARD}. */
-    public static final DeferredItem<BlockItem> MISSION_BOARD = ITEMS.registerSimpleBlockItem(ModBlocks.MISSION_BOARD);
+    public static final DeferredItem<BlockItem> MISSION_BOARD = jobBlockItem(ModBlocks.MISSION_BOARD);
     /** Item of the {@link ModBlocks#CLERK_BLOCK}. */
-    public static final DeferredItem<BlockItem> CLERK_BLOCK = ITEMS.registerSimpleBlockItem(ModBlocks.CLERK_BLOCK);
+    public static final DeferredItem<BlockItem> CLERK_BLOCK = jobBlockItem(ModBlocks.CLERK_BLOCK);
     /** Item of the {@link ModBlocks#CRAFTSPERSON_BLOCK}. */
-    public static final DeferredItem<BlockItem> CRAFTSPERSON_BLOCK = ITEMS.registerSimpleBlockItem(ModBlocks.CRAFTSPERSON_BLOCK);
+    public static final DeferredItem<BlockItem> CRAFTSPERSON_BLOCK = jobBlockItem(ModBlocks.CRAFTSPERSON_BLOCK);
 
     /** The Scroll of Assignment. */
     public static final DeferredItem<ScrollOfAssignmentItem> SCROLL_OF_ASSIGNMENT = ITEMS.registerItem("scroll_of_assignment",
@@ -73,17 +74,21 @@ public final class ModItems {
     public static final Set<DeferredItem<Item>> RENDER_ONLY = Set.of(UNCONNECTED_MARKER, WORK_MARKER, PRIMARY_WORK_MARKER, COLLECT_MARKER,
             DROP_OFF_MARKER, BED_MARKER, BED_ICON, STAND_SPOT_MARKER, HAMMER, THOUGHT_BUBBLE, PROBLEM_MARKER);
 
-    /**
-     * Starter tool every new JobBlock item of a job that needs a tool carries (vault {@code Systems/JobBlock.md}).
-     * Clerk, Craftsperson and Mission Board have none.
-     * <p>
-     * A new entry also needs its block loot table to drop the JobBlock without the tool (the {@code !civmod:starter_tool}
-     * component removal in {@code data/civmod/loot_table/blocks/}), or every break and re-place adds another tool.
-     */
-    public static final Map<DeferredItem<BlockItem>, Item> STARTER_TOOLS = Map.of(LUMBERJACK_BLOCK, Items.STONE_AXE,
-            MINER_BLOCK, Items.STONE_PICKAXE, FISHERMAN_BLOCK, Items.FISHING_ROD);
-
     private ModItems() {
+    }
+
+    /** The item of a JobBlock without a starter tool (Clerk, Craftsperson, Mission Board), from the JobBlock factory. */
+    private static DeferredItem<BlockItem> jobBlockItem(DeferredBlock<JobBlock> block) {
+        return ITEMS.registerItem(block.getId().getPath(), properties -> CivModApi.jobBlockItem(block.get(), properties));
+    }
+
+    /**
+     * The item of a JobBlock whose job needs a tool, from the JobBlock factory: a new item carries the starter tool (vault
+     * {@code Systems/JobBlock.md}). Its block loot table drops the JobBlock without the tool (the {@code !civmod:starter_tool}
+     * component removal in {@code data/civmod/loot_table/blocks/}), or every break and re-place would add another tool.
+     */
+    private static DeferredItem<BlockItem> jobBlockItem(DeferredBlock<JobBlock> block, Item starterTool) {
+        return ITEMS.registerItem(block.getId().getPath(), properties -> CivModApi.jobBlockItem(block.get(), () -> starterTool, properties));
     }
 
     /**
@@ -93,12 +98,6 @@ public final class ModItems {
      */
     public static void register(IEventBus modEventBus) {
         ITEMS.register(modEventBus);
-        modEventBus.addListener(ModItems::addStarterTools);
-    }
-
-    /** Gives every new JobBlock item its starter tool as a default component (crafted, creative, {@code /give}, loot). */
-    private static void addStarterTools(ModifyDefaultComponentsEvent event) {
-        STARTER_TOOLS.forEach((jobBlock, tool) -> event.modify(jobBlock,
-                (components, context, item) -> components.set(ModDataComponents.STARTER_TOOL.get(), BuiltInRegistries.ITEM.wrapAsHolder(tool))));
+        modEventBus.addListener(StarterTools::addDefaults);
     }
 }

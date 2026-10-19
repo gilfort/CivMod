@@ -2,7 +2,7 @@ package com.gilfort.civmod.block;
 
 import org.jspecify.annotations.Nullable;
 
-import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;

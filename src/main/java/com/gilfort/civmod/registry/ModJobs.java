@@ -1,9 +1,11 @@
 package com.gilfort.civmod.registry;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.CategoryProfile;
+import com.gilfort.civmod.api.CivModApi;
+import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.FishermanProfile;
-import com.gilfort.civmod.job.Job;
-import com.gilfort.civmod.job.JobCategory;
 import com.gilfort.civmod.job.LumberjackProfile;
 import com.gilfort.civmod.job.MinerProfile;
 
@@ -13,20 +15,21 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Items;
 import net.minecraft.resources.ResourceKey;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 /**
  * The {@code civmod:job} registry (vault {@code Systems/Jobs.md}): static, filled at mod load and synced to clients.
- * Addons register their Jobs here with their own namespace.
+ * CivMod registers its own Jobs through the addon API ({@link CivModApi}) like an addon does.
  */
 public final class ModJobs {
 
     /** Registry key of {@code civmod:job}. */
-    public static final ResourceKey<Registry<Job>> KEY = ResourceKey.createRegistryKey(CivMod.id("job"));
+    public static final ResourceKey<Registry<Job>> KEY = CivModApi.JOB_REGISTRY;
 
     /** Deferred register for jobs in the {@code civmod} namespace. */
-    public static final DeferredRegister<Job> JOBS = DeferredRegister.create(KEY, CivMod.MOD_ID);
+    public static final DeferredRegister<Job> JOBS = CivModApi.jobs(CivMod.MOD_ID);
 
     /** The job registry. */
     public static final Registry<Job> REGISTRY = JOBS.makeRegistry(builder -> builder.sync(true));
@@ -64,5 +67,11 @@ public final class ModJobs {
      */
     public static void register(IEventBus modEventBus) {
         JOBS.register(modEventBus);
+        modEventBus.addListener(ModJobs::checkProfiles);
+    }
+
+    /** Creates every Job's profile once, so a profile of the wrong Job Category fails at start-up, not in play. */
+    private static void checkProfiles(FMLCommonSetupEvent event) {
+        event.enqueueWork(() -> REGISTRY.forEach(job -> job.profile(CategoryProfile.class)));
     }
 }

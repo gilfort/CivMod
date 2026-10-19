@@ -7,3 +7,6 @@ pluginManagement {
 plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
+
+// Example addon: compiles against the addon API only, loaded into CivMod's dev runs (see build.gradle).
+include 'example-addon'

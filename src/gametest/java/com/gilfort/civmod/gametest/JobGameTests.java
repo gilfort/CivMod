@@ -5,9 +5,10 @@ import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.block.UpgradeCosts;
-import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.job.JobBalancing;
-import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.job.JobProfile;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.registry.ModItems;
 import com.gilfort.civmod.registry.ModJobs;
 import com.google.gson.JsonParser;
@@ -59,7 +60,7 @@ public final class JobGameTests {
         helper.assertTrue(lumberjack.id().equals(CivMod.id("lumberjack")) && ModJobs.REGISTRY.getValue(CivMod.id("miner")) == miner,
                 "Namespaced ids");
         for (Job job : List.of(lumberjack, miner, fisherman)) {
-            helper.assertTrue(job.category() == JobCategory.RESOURCE_COLLECTION && job.parent().isEmpty() && job.profile().isPresent(),
+            helper.assertTrue(job.category() == JobCategory.RESOURCE_COLLECTION && job.parent().isEmpty() && job.profile(JobProfile.class).isPresent(),
                     job + " is a Resource Collection Base Job");
         }
         helper.assertTrue(lumberjack.icon().is(ModItems.LUMBERJACK_BLOCK.get()) && fisherman.icon().is(ModItems.FISHERMAN_BLOCK.get()),

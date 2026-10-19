@@ -1,0 +1,10 @@
+{
+  "title": { "translate": "mission.civmod_example.scouting_trip" },
+  "description": { "translate": "mission.civmod_example.scouting_trip.description" },
+  "icon": "minecraft:spyglass",
+  "loot_tables": ["minecraft:chests/village/village_cartographer"],
+  "days": 1,
+  "recommended_level": 1,
+  "rolls": 2,
+  "jobs": ["civmod_example:scout"]
+}

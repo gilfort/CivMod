@@ -3,7 +3,7 @@ package com.gilfort.civmod.item;
 import java.util.List;
 
 import com.gilfort.civmod.CivMod;
-import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.SettlementBlock;

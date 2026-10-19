@@ -9,7 +9,7 @@ import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.StockRules;
-import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.SettlerSkins;

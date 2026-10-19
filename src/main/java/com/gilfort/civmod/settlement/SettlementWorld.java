@@ -10,7 +10,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.config.CivModConfig;
-import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.mission.MissionOffer;
 import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.npc.Settler;

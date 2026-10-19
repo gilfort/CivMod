@@ -1,17 +1,16 @@
 package com.gilfort.civmod.registry;
 
-import java.util.List;
 import java.util.function.Supplier;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.CivModApi;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.block.JobBlock;
-import com.gilfort.civmod.job.Job;
 
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.properties.NoteBlockInstrument;
 import net.minecraft.world.level.material.MapColor;
-import net.minecraft.world.level.material.PushReaction;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -20,7 +19,8 @@ import net.neoforged.neoforge.registries.DeferredRegister;
  * Registry holder for all blocks added by CivMod.
  * <p>
  * Every block needs a matching block item in {@link ModItems}, a blockstate, a model and a
- * {@code block.civmod.<name>} entry in {@code en_us.json}.
+ * {@code block.civmod.<name>} entry in {@code en_us.json}. JobBlocks come from the addon API's JobBlock factory
+ * ({@link CivModApi#jobBlock}), like an addon's.
  */
 public final class ModBlocks {
 
@@ -43,15 +43,11 @@ public final class ModBlocks {
     /** JobBlock offering the Craftsperson: the pattern library of the first Producing Job. */
     public static final DeferredBlock<JobBlock> CRAFTSPERSON_BLOCK = jobBlock("craftsperson_block", ModJobs.CRAFTSPERSON);
 
-    /** All JobBlocks. */
-    public static final List<DeferredBlock<JobBlock>> JOB_BLOCKS = List.of(LUMBERJACK_BLOCK, MINER_BLOCK, FISHERMAN_BLOCK, MISSION_BOARD,
-            CLERK_BLOCK, CRAFTSPERSON_BLOCK);
-
     private ModBlocks() {
     }
 
     private static DeferredBlock<JobBlock> jobBlock(String name, Supplier<Job> jobType) {
-        return BLOCKS.registerBlock(name, properties -> new JobBlock(jobType, properties), ModBlocks::jobBlockProperties);
+        return BLOCKS.registerBlock(name, properties -> (JobBlock) CivModApi.jobBlock(jobType, properties), ModBlocks::jobBlockProperties);
     }
 
     private static BlockBehaviour.Properties jobBlockProperties(BlockBehaviour.Properties properties) {
@@ -59,8 +55,7 @@ public final class ModBlocks {
                 .instrument(NoteBlockInstrument.BASS)
                 .strength(2.5F)
                 .sound(SoundType.WOOD)
-                .ignitedByLava()
-                .pushReaction(PushReaction.IMMOVEABLE);
+                .ignitedByLava();
     }
 
     /**

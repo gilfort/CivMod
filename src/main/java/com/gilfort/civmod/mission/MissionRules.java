@@ -10,7 +10,8 @@ import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.function.ToIntFunction;
 
-import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.MissionProfile;
 import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.SettlementRules;
@@ -145,6 +146,24 @@ public final class MissionRules {
         int gap = recommended - skill;
         double success = Math.clamp(rules.successBase() - rules.successPerLevel() * gap, rules.successMin(), rules.successMax());
         double death = Math.clamp(rules.deathBase() + rules.deathPerLevel() * gap, rules.deathMin(), rules.deathMax());
+        return new Chances(success, Math.min(death, 1.0 - success));
+    }
+
+    /**
+     * The outcome formula ({@link #chances(OutcomeRules, int, int)}) passed through the Mission Job's
+     * {@link MissionProfile} hooks, clamped to {@code 0..1} with death at most {@code 1 − success}.
+     *
+     * @param rules       the outcome constants
+     * @param recommended the mission's recommended level
+     * @param skill       the settler's (effective) Mission Job skill
+     * @param job         the settler's Mission Job
+     * @return the chances
+     */
+    public static Chances chances(OutcomeRules rules, int recommended, int skill, Job job) {
+        Chances base = chances(rules, recommended, skill);
+        MissionProfile profile = job.profile(MissionProfile.class).orElse(MissionProfile.NEUTRAL);
+        double success = Math.clamp(profile.successChance(base.success(), recommended, skill), 0.0, 1.0);
+        double death = Math.clamp(profile.deathChance(base.death(), recommended, skill), 0.0, 1.0);
         return new Chances(success, Math.min(death, 1.0 - success));
     }
 

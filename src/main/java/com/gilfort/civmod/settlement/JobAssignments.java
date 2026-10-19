@@ -5,8 +5,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.gilfort.civmod.job.Job;
-import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.SavedScan;
 import com.gilfort.civmod.registry.ModJobs;
 

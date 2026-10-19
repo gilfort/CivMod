@@ -1,7 +1,7 @@
 package com.gilfort.civmod.settlement;
 
-import com.gilfort.civmod.job.Job;
-import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.JobCategory;
 
 import net.minecraft.core.BlockPos;
 

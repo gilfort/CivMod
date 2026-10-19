@@ -1,4 +1,4 @@
-package com.gilfort.civmod.job;
+package com.gilfort.civmod.api;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -6,9 +6,12 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
 
+import org.jetbrains.annotations.ApiStatus;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.job.JobBalancing;
+import com.gilfort.civmod.job.JobProfile;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.google.common.base.Suppliers;
@@ -22,6 +25,7 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ItemLike;
 import net.minecraft.world.level.Level;
@@ -29,10 +33,24 @@ import net.minecraft.world.level.block.Block;
 
 /**
  * A kind of work a settler can hold (vault {@code Systems/Jobs.md}), registered in the {@code civmod:job} registry
- * ({@link ModJobs}) and identified by its namespaced id. A Job declares its {@link JobCategory}, an optional parent Base
- * Job, its icon and default balancing values; datapacks may override the balancing values per job id
- * ({@link JobBalancing}, {@link com.gilfort.civmod.block.UpgradeCosts}).
+ * ({@link CivModApi#JOB_REGISTRY}) and identified by its namespaced id. A Job declares its {@link JobCategory}, the
+ * {@link CategoryProfile} that fills in the category's work loop, an optional parent Base Job (which makes it a
+ * Specialization, offered by the parent's JobBlock from level 2), its icon and default balancing values.
+ * <p>
+ * Datapacks may override the balancing values per job id {@code <namespace>:<job>}: hunger factor and base EXP in
+ * {@code data/<namespace>/civmod_jobs/<job>.json} ({@code hunger_factor}, {@code base_exp}, both optional), the JobBlock
+ * upgrade costs in {@code data/<namespace>/civmod_upgrades/<job>.json}. The job's names come from the lang keys
+ * {@code job.<namespace>.<job>} and {@code job.<namespace>.<job>.indefinite} ("an Adventurer").
+ * <p>
+ * Register a Job with the {@code DeferredRegister} from {@link CivModApi#jobs(String)}:
+ *
+ * <pre>{@code
+ * public static final DeferredRegister<Job> JOBS = CivModApi.jobs("examplemod");
+ * public static final DeferredHolder<Job, Job> SCOUT = JOBS.register("scout", () -> Job.builder(JobCategory.MISSION)
+ *         .parent(CivModJobs.ADVENTURER).icon(() -> Items.SPYGLASS).baseExp(8).build());
+ * }</pre>
  */
+@ApiStatus.Experimental
 public final class Job {
 
     /**
@@ -52,7 +70,7 @@ public final class Job {
     private final int baseExp;
     private final double jobFactor;
     private final @Nullable TagKey<Block> station;
-    private final @Nullable Supplier<JobProfile> profile;
+    private final @Nullable Supplier<CategoryProfile> profile;
 
     private Job(Builder builder) {
         this.category = builder.category;
@@ -64,7 +82,8 @@ public final class Job {
         this.baseExp = builder.baseExp;
         this.jobFactor = builder.jobFactor;
         this.station = builder.station;
-        this.profile = builder.profile == null ? null : Suppliers.memoize(builder.profile::get);
+        Supplier<? extends CategoryProfile> declared = builder.profile;
+        this.profile = declared == null ? null : Suppliers.memoize(() -> checked(declared.get()));
     }
 
     /**
@@ -82,6 +101,13 @@ public final class Job {
         }
         Job job = ModJobs.REGISTRY.getValue(id);
         return job == null ? DataResult.error(() -> "Unknown job: " + id) : DataResult.success(job);
+    }
+
+    private CategoryProfile checked(CategoryProfile found) {
+        if (found.category() != category) {
+            throw new IllegalStateException("The profile of " + this + " belongs to " + found.category() + ", not to " + category);
+        }
+        return found;
     }
 
     /**
@@ -162,15 +188,21 @@ public final class Job {
      * @return the display item a settler holds while working this Job, for Jobs without a real tool (only a display
      *         copy in the hand, never in an inventory)
      */
-    public Optional<net.minecraft.world.item.Item> displayItem() {
+    public Optional<Item> displayItem() {
         return displayItem == null ? Optional.empty() : Optional.of(displayItem.get().asItem());
     }
 
     /**
-     * @return the Resource Collection specifics, if the Job belongs to that category
+     * The category specifics of the Job, if they are of the given type. A Mission Job always has a {@link MissionProfile}
+     * (the {@link MissionProfile#NEUTRAL} one if it declares none).
+     *
+     * @param <P>  the profile type
+     * @param type the profile type, e.g. {@code MissionProfile.class}
+     * @return the profile, if the Job has one of that type
+     * @throws IllegalStateException if the declared profile belongs to another Job Category
      */
-    public Optional<JobProfile> profile() {
-        return profile == null ? Optional.empty() : Optional.of(profile.get());
+    public <P extends CategoryProfile> Optional<P> profile(Class<P> type) {
+        return profile == null ? Optional.empty() : Optional.of(profile.get()).filter(type::isInstance).map(type::cast);
     }
 
     /**
@@ -182,7 +214,7 @@ public final class Job {
         if (station != null) {
             return level.getBlockState(pos).is(station);
         }
-        return profile().map(found -> found.isAssignableWorkPlace(level, pos)).orElse(false);
+        return profile(JobProfile.class).map(found -> found.isAssignableWorkPlace(level, pos)).orElse(false);
     }
 
     /**
@@ -236,6 +268,7 @@ public final class Job {
     /**
      * Builds a {@link Job}.
      */
+    @ApiStatus.Experimental
     public static final class Builder {
 
         private final JobCategory category;
@@ -247,14 +280,15 @@ public final class Job {
         private int baseExp = 1;
         private double jobFactor = 1.0;
         private @Nullable TagKey<Block> station;
-        private @Nullable Supplier<? extends JobProfile> profile;
+        private @Nullable Supplier<? extends CategoryProfile> profile;
 
         private Builder(JobCategory category) {
             this.category = category;
         }
 
         /**
-         * @param parent the parent Base Job (makes this Job a Specialization)
+         * @param parent the parent Base Job (makes this Job a Specialization, offered by the parent's JobBlock from
+         *               level 2)
          * @return this builder
          */
         public Builder parent(Supplier<Job> parent) {
@@ -263,7 +297,7 @@ public final class Job {
         }
 
         /**
-         * @param icon the item shown as icon (usually the JobBlock)
+         * @param icon the item shown as icon (usually the JobBlock); required
          * @return this builder
          */
         public Builder icon(Supplier<? extends ItemLike> icon) {
@@ -326,10 +360,12 @@ public final class Job {
         }
 
         /**
-         * @param profile the Resource Collection specifics (created on first use, after registration)
+         * @param profile the category specifics, created on first use (after registration); its
+         *                {@link CategoryProfile#category()} must be the Job's category. A Mission Job without one gets
+         *                {@link MissionProfile#NEUTRAL}.
          * @return this builder
          */
-        public Builder profile(Supplier<? extends JobProfile> profile) {
+        public Builder profile(Supplier<? extends CategoryProfile> profile) {
             this.profile = profile;
             return this;
         }
@@ -338,8 +374,8 @@ public final class Job {
          * @return the Job
          */
         public Job build() {
-            if (profile != null && category != JobCategory.RESOURCE_COLLECTION) {
-                throw new IllegalStateException("A job profile is the Resource Collection contract, not " + category);
+            if (profile == null && category == JobCategory.MISSION) {
+                profile = () -> MissionProfile.NEUTRAL;
             }
             return new Job(this);
         }

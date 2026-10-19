@@ -10,6 +10,8 @@ import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.api.CategoryProfile;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.SettlementBlock;
 
@@ -26,7 +28,12 @@ import net.minecraft.world.level.Level;
  * The job-specific parts of a Resource Collection Job (vault {@code Systems/Resource Collection Jobs.md}): tool,
  * work places, scan and output. Walking, fatigue, buffer, delivery and food are shared ({@link SettlerWork}).
  */
-public interface JobProfile {
+public interface JobProfile extends CategoryProfile {
+
+    @Override
+    default JobCategory category() {
+        return JobCategory.RESOURCE_COLLECTION;
+    }
 
     /**
      * @param stack an item stack

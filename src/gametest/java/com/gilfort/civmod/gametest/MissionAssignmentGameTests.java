@@ -8,10 +8,11 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
-import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.job.MissionTrip;
 import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.job.SettlerWork;
@@ -226,7 +227,9 @@ public final class MissionAssignmentGameTests {
         Job adventurer = ModJobs.ADVENTURER.get();
         JobAssignments.assign(data, board, ALICE, "Alice", settlement.id(), List.of());
         JobAssignments.assign(data, board, BOB, "Bob", settlement.id(), List.of());
-        Map<Identifier, Mission> pool = Missions.all(helper.getLevel().registryAccess());
+        // Only the Adventurer's missions: the example addon's Scout mission would take a place in the offer.
+        Map<Identifier, Mission> pool = Missions.all(helper.getLevel().registryAccess()).entrySet().stream()
+                .filter(entry -> entry.getValue().jobs().contains(ModJobs.ADVENTURER.get())).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         List<MissionOffer.Entry> offer = MissionOffers.refresh(data, board, 3L, pool, RandomSource.create(3L));
         MissionOffers.setMarked(data, board, 0, offer.get(0).mission(), true);
         MissionOffers.setMarked(data, board, 1, offer.get(1).mission(), true);

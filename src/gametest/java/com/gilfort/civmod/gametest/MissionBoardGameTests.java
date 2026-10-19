@@ -5,8 +5,8 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
-import com.gilfort.civmod.job.Job;
-import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
@@ -203,7 +203,9 @@ public final class MissionBoardGameTests {
         Job adventurer = ModJobs.ADVENTURER.get();
         Job specialization = ModJobs.REGISTRY.getValue(CivMod.id("gametest_mission_specialization"));
         helper.assertTrue(adventurer.offeredAt(1).equals(List.of(adventurer)), "Level 1: " + adventurer.offeredAt(1));
-        helper.assertTrue(adventurer.offeredAt(2).equals(List.of(adventurer, specialization)), "Level 2: " + adventurer.offeredAt(2));
+        List<Job> level2 = adventurer.offeredAt(2);
+        helper.assertTrue(level2.get(0) == adventurer && level2.contains(specialization)
+                && level2.stream().skip(1).allMatch(job -> job.parent().orElse(null) == adventurer), "Level 2: " + level2);
         helper.assertTrue(ModJobs.LUMBERJACK.get().offeredAt(5).equals(List.of(ModJobs.LUMBERJACK.get())), "No Lumberjack Specializations");
 
         helper.assertTrue(SettlementRules.skillCap(1) == 20 && SettlementRules.skillCap(5) == 100, "Skill cap 20 / 100");

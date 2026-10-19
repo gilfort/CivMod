@@ -1,6 +1,6 @@
 package com.gilfort.civmod.npc;
 
-import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.api.Job;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
