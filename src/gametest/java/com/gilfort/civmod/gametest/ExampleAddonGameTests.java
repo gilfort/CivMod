@@ -7,23 +7,33 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.MissionProfile;
+import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.api.SimpleCollectionProfile;
+import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.block.UpgradeCosts;
 import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.job.MissionTrip;
+import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.Pattern;
+import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.menu.JobBlockTabs;
 import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.settlement.Patterns;
+import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementWorld;
+import com.gilfort.civmod.settlement.StockRules;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -38,6 +48,7 @@ import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
@@ -59,6 +70,7 @@ public final class ExampleAddonGameTests {
     private static final Identifier SAND = Identifier.withDefaultNamespace("sand");
     private static final Identifier RED_SAND = Identifier.withDefaultNamespace("red_sand");
     private static final long DAY = 24000L;
+    private static final Identifier STONECUTTER = Identifier.fromNamespaceAndPath("civmod_example", "stonecutter");
 
     private ExampleAddonGameTests() {
     }
@@ -70,6 +82,7 @@ public final class ExampleAddonGameTests {
             register(helper, "example_sand_digger_produces", ExampleAddonGameTests::sandDiggerProduces);
             register(helper, "example_sand_digger_exclusion", ExampleAddonGameTests::sandDiggerExclusion);
             register(helper, "example_sand_digger_blocked", ExampleAddonGameTests::sandDiggerBlocked);
+            register(helper, "example_stonecutter_request", ExampleAddonGameTests::stonecutterRequest);
         });
     }
 
@@ -252,6 +265,54 @@ public final class ExampleAddonGameTests {
         helper.assertTrue(settler.getWork().recentThoughts().contains(new ThoughtBubble.Show(settler.getId(), ThoughtBubble.BLOCKED, Items.SAND, true)),
                 "Problem bubble with the reason's icon: " + settler.getWork().recentThoughts());
         cleanUp(level, settler, forced);
+        helper.succeed();
+    }
+
+    /**
+     * The Stonecutter is a Producing Specialization of the Craftsperson (offered from JobBlock level 2) with its own
+     * profile: at a level-2 Craftsperson JobBlock its library follows {@code stonecutting} recipes, and it fills a Clerk
+     * request for stone bricks from stone at a stonecutter.
+     */
+    private static void stonecutterRequest(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Job stonecutter = ModJobs.REGISTRY.getValue(STONECUTTER);
+        helper.assertTrue(stonecutter != null && stonecutter.category() == JobCategory.PRODUCING
+                && stonecutter.parent().orElseThrow() == ModJobs.CRAFTSPERSON.get(), "A Producing Specialization of the Craftsperson: " + stonecutter);
+        helper.assertTrue(ModJobs.CRAFTSPERSON.get().offeredAt(2).contains(stonecutter) && !ModJobs.CRAFTSPERSON.get().offeredAt(1).contains(stonecutter),
+                "Offered by the Craftsperson JobBlock from level 2");
+        helper.assertTrue(stonecutter.profile(ProducingProfile.class).orElseThrow().recipeTypes().equals(List.of(RecipeType.STONECUTTING)),
+                "Stonecutting recipes");
+
+        BlockPos clerk = StockRuleGameTests.workingClerk(helper);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
+        chest.setItem(0, new ItemStack(Items.STONE, 4));
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_BRICKS, 4, 0)), "Rule set");
+        StockRules.check(level, clerk, ClerkGameTests.MORNING);
+
+        BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
+        helper.getBlockEntity(new BlockPos(1, 1, 5), JobBlockEntity.class).setJobLevel(2);
+        SettlementManager.setLevel(data, craft, 2, SettlementManager.Listener.NONE);
+        helper.setBlock(new BlockPos(3, 1, 5), Blocks.STONECUTTER);
+        helper.assertTrue(stonecutter.isValidWorkPlace(level, helper.absolutePos(new BlockPos(3, 1, 5))), "A stonecutter is its station");
+        Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 7), data, settlement);
+        settler.setCustomName(Component.literal("Stella"));
+        settler.getFood().setMorningDay(Math.floorDiv(level.getOverworldClockTime(), 24000L));
+        helper.assertTrue(JobAssignments.assign(data, craft, settler.getUUID(), "Stella", settlement.id(), List.of(), stonecutter)
+                == JobAssignments.AssignResult.OK, "Stonecutter assigned");
+        settler.addJob(new SettlerJob(stonecutter, craft));
+
+        Pattern bricks = Patterns.setOutput(level, craft, 0, Items.STONE_BRICKS).orElseThrow();
+        helper.assertTrue(bricks.checked() && bricks.grid().getFirst() == Items.STONE && bricks.count() == 1,
+                "A stonecutting pattern, checked automatically: " + bricks);
+        CraftspersonGameTests.catchUp(level, settler, 4000L);
+
+        helper.assertTrue(ClerkStorage.stock(level, clerk, true).count(stack -> stack.is(Items.STONE_BRICKS)) == 4, "Stone bricks delivered");
+        helper.assertTrue(ClerkStorage.stock(level, clerk, true).count(stack -> stack.is(Items.STONE)) == 0, "Stone used up");
+        helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "Request done: " + Requests.byPriority(settlement));
+        JobAssignments.unassign(data, clerk);
+        settler.discard();
         helper.succeed();
     }
 }

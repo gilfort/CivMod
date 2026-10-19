@@ -213,11 +213,16 @@ public final class Job {
         if (station != null) {
             return level.getBlockState(pos).is(station);
         }
+        Optional<ProducingProfile> producing = profile(ProducingProfile.class);
+        if (producing.isPresent()) {
+            return producing.get().recipeTypes().stream().anyMatch(type -> level.getBlockState(pos).is(producing.get().station(type)));
+        }
         return profile(ResourceCollectionProfile.class).map(found -> found.isAssignableWorkPlace(level, pos)).orElse(false);
     }
 
     /**
-     * @return the block tag of the job's station ({@code <namespace>:stations/<job>}), if it works at one
+     * @return the block tag of the job's station ({@code <namespace>:stations/<job>}), if it works at one (Producing
+     *         Jobs: see {@link ProducingProfile#station})
      */
     public Optional<TagKey<Block>> station() {
         return Optional.ofNullable(station);
@@ -350,7 +355,8 @@ public final class Job {
         }
 
         /**
-         * @param station the block tag of the job's station (its work places)
+         * @param station the block tag of the job's station (its work places); Producing Jobs name theirs per recipe type in
+     *                their {@link ProducingProfile} instead
          * @return this builder
          */
         public Builder station(TagKey<Block> station) {
@@ -361,7 +367,7 @@ public final class Job {
         /**
          * @param profile the category specifics, created on first use (after registration); its
          *                {@link CategoryProfile#category()} must be the Job's category. A Mission Job without one gets
-         *                {@link MissionProfile#NEUTRAL}.
+         *                {@link MissionProfile#NEUTRAL}; a Producing Job needs a {@link ProducingProfile}.
          * @return this builder
          */
         public Builder profile(Supplier<? extends CategoryProfile> profile) {
@@ -375,6 +381,9 @@ public final class Job {
         public Job build() {
             if (profile == null && category == JobCategory.MISSION) {
                 profile = () -> MissionProfile.NEUTRAL;
+            }
+            if (profile == null && category == JobCategory.PRODUCING) {
+                throw new IllegalStateException("A Producing Job needs a ProducingProfile");
             }
             return new Job(this);
         }

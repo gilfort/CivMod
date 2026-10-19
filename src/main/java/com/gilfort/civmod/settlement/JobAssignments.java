@@ -449,7 +449,7 @@ public final class JobAssignments {
     }
 
     /**
-     * Toggles who carries a Craftsperson's results: the Craftsperson itself or Deliverymen (vault
+     * Toggles who carries a Producing JobBlock's results: its settler itself or Deliverymen (vault
      * {@code Jobs/Craftsperson.md}).
      *
      * @param data     the dimension's settlement data
@@ -457,7 +457,7 @@ public final class JobAssignments {
      * @return the new state: whether Deliverymen carry them
      */
     public static boolean toggleDelivery(SettlementData data, BlockPos jobBlock) {
-        Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock).filter(found -> found.jobType() == ModJobs.CRAFTSPERSON.get());
+        Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock).filter(Patterns::isProducing);
         block.ifPresent(b -> {
             b.setByDeliveryman(!b.byDeliveryman());
             data.changed();

@@ -20,6 +20,7 @@ import com.gilfort.civmod.api.SimpleCollectionProfile;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.block.UpgradeCosts;
 import com.gilfort.civmod.job.BlockCountScan;
+import com.gilfort.civmod.job.CraftspersonProfile;
 import com.gilfort.civmod.job.FishermanProfile;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.job.LumberjackProfile;
@@ -90,7 +91,7 @@ public final class AddonApiGameTests {
     @SubscribeEvent
     static void onRegister(RegisterEvent event) {
         event.register(CivModApi.JOB_REGISTRY, helper -> {
-            helper.register(PRODUCER, Job.builder(JobCategory.PRODUCING).icon(() -> Items.STONECUTTER).build());
+            helper.register(PRODUCER, Job.builder(JobCategory.PRODUCING).icon(() -> Items.STONECUTTER).profile(CraftspersonProfile::new).build());
             helper.register(SCOUT, Job.builder(JobCategory.MISSION).icon(() -> Items.SPYGLASS).profile(() -> new MissionProfile() {
                 @Override
                 public double successChance(double chance, int recommendedLevel, int skill) {

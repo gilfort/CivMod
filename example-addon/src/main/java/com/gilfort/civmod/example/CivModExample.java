@@ -33,6 +33,9 @@ import net.neoforged.neoforge.registries.DeferredRegister;
  * ({@code data/civmod_example/civmod/mission/scouting_trip.json}); its names are the lang keys
  * {@code job.civmod_example.scout} and {@code job.civmod_example.scout.indefinite}.
  * <p>
+ * The Stonecutter is a Producing Specialization of the Craftsperson: it has no JobBlock either, the Craftsperson JobBlock
+ * offers it from level 2, and it fills Clerk requests from {@code stonecutting} recipes at a stonecutter.
+ * <p>
  * The Sand Digger is a Resource Collection Job built with {@link SimpleCollectionProfile}: it counts the sand around its
  * JobBlock and produces its drops with a shovel, without digging the world away. Its JobBlock comes from the factory;
  * the addon ships its blockstate, models, recipe, loot table, upgrade costs
@@ -72,6 +75,14 @@ public final class CivModExample {
                     .whenNothingFound(BlockingReason.of("civmod_example.blocked.no_sand").withIcon(Items.SAND))
                     .build())
             .build());
+
+    /**
+     * A Producing Specialization of the Craftsperson: a level-2 Craftsperson JobBlock offers it; it cuts stone at a
+     * stonecutter from {@code stonecutting} recipes ({@link StonecutterProfile}).
+     */
+    public static final DeferredHolder<Job, Job> STONECUTTER = JOBS.register("stonecutter", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CivModJobs.CRAFTSPERSON).icon(() -> Items.STONECUTTER).bubbleIcon(() -> Items.STONE_BRICKS).hungerFactor(0.5).baseExp(2)
+            .jobFactor(0.5).profile(StonecutterProfile::new).build());
 
     /**
      * Registers the addon's content.

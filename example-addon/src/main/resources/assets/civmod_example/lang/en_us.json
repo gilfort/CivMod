@@ -8,5 +8,8 @@
   "job.civmod_example.sand_digger": "Sand Digger",
   "job.civmod_example.sand_digger.indefinite": "a Sand Digger",
   "civmod_example.scroll.work_place.sand_digger": "a sand block",
-  "civmod_example.blocked.no_sand": "No sand in reach"
+  "civmod_example.blocked.no_sand": "No sand in reach",
+  "job.civmod_example.stonecutter": "Stonecutter",
+  "job.civmod_example.stonecutter.indefinite": "a Stonecutter",
+  "civmod_example.scroll.work_place.stonecutter": "a stonecutter"
 }
