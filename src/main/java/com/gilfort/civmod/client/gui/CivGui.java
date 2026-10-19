@@ -136,6 +136,37 @@ public final class CivGui {
         graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, y, size, size);
     }
 
+    /** Width of a list scrollbar (vanilla's). */
+    public static final int SCROLLBAR_WIDTH = 6;
+    private static final Identifier SCROLLER = Identifier.withDefaultNamespace("widget/scroller");
+    private static final Identifier SCROLLER_BACKGROUND = Identifier.withDefaultNamespace("widget/scroller_background");
+    private static final int MIN_SCROLLER_HEIGHT = 8;
+
+    /**
+     * Draws a vanilla list scrollbar ({@value #SCROLLBAR_WIDTH} wide): the track and the scroller at the offset.
+     *
+     * @param graphics  the graphics extractor
+     * @param x         the left edge
+     * @param y         the top edge
+     * @param height    the height of the track
+     * @param offset    the current offset (rows)
+     * @param maxOffset the largest offset
+     */
+    public static void scrollbar(GuiGraphicsExtractor graphics, int x, int y, int height, int offset, int maxOffset) {
+        int scroller = scrollerHeight(height);
+        int scrollerY = maxOffset <= 0 ? y : y + offset * (height - scroller) / maxOffset;
+        graphics.blitSprite(RenderPipelines.GUI_TEXTURED, SCROLLER_BACKGROUND, x, y, SCROLLBAR_WIDTH, height);
+        graphics.blitSprite(RenderPipelines.GUI_TEXTURED, SCROLLER, x, scrollerY, SCROLLBAR_WIDTH, scroller);
+    }
+
+    /**
+     * @param height the height of a scrollbar track
+     * @return the height of its scroller
+     */
+    public static int scrollerHeight(int height) {
+        return Math.max(MIN_SCROLLER_HEIGHT, height / 3);
+    }
+
     /**
      * Draws a vanilla slot background for an item at the given position.
      *

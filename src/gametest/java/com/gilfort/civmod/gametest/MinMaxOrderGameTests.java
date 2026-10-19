@@ -22,9 +22,11 @@ import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.Settlement;
+import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.settlement.Warehouses;
+import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -64,6 +66,8 @@ public final class MinMaxOrderGameTests {
             register(helper, "min_max_order_collecting_stops_at_max", MinMaxOrderGameTests::collectingStopsAtMax);
             register(helper, "min_max_order_dropped_item_at_max", MinMaxOrderGameTests::droppedItemAtMax);
             register(helper, "min_max_order_surplus", MinMaxOrderGameTests::surplus);
+            register(helper, "min_max_order_surplus_write_through", MinMaxOrderGameTests::surplusWriteThrough);
+            register(helper, "min_max_order_duplicate_rules_on_load", MinMaxOrderGameTests::duplicateRulesOnLoad);
         });
     }
 
@@ -235,6 +239,46 @@ public final class MinMaxOrderGameTests {
                     forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
                 })
                 .thenSucceed();
+    }
+
+    /**
+     * CivMod's own stock change of an item with a Max rule creates the surplus task at once (write-through), without
+     * waiting for the 30 s rule check; an item without a Max rule creates none.
+     */
+    private static void surplusWriteThrough(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos warehouse = clerk(helper, new BlockPos(1, 1, 1));
+        BlockPos served = clerk(helper, new BlockPos(6, 1, 6));
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(warehouse).orElseThrow();
+        helper.assertTrue(Warehouses.link(data, warehouse, served) == Warehouses.LinkResult.LINKED, "Served Clerk linked");
+        StockRules.setRule(data, served, new StockRule(0, Items.TORCH, 0, 10, 0, 0));
+        ClerkStorage.stock(level, served, true).insert(new ItemStack(Items.TORCH, 30));
+        ClerkStorage.stock(level, served, true).insert(new ItemStack(Items.STICK, 30));
+        // The write-through runs at the end of the tick, long before the 30 s check comes round for most positions.
+        helper.startSequence()
+                .thenExecuteAfter(2, () -> {
+                    helper.assertTrue(Deliveries.freeSurplus(settlement, served, Items.TORCH, DayClock.day(level))
+                            .map(task -> task.input().orElseThrow().count()).orElse(0) == 20, "A surplus task for 30 − 10 = 20 right away");
+                    helper.assertTrue(Deliveries.freeSurplus(settlement, served, Items.STICK, DayClock.day(level)).isEmpty(),
+                            "No Max rule for sticks: no surplus");
+                })
+                .thenSucceed();
+    }
+
+    /** An old save with two rules for one item keeps only the first (one rule per item and Clerk). */
+    private static void duplicateRulesOnLoad(GameTestHelper helper) {
+        BlockPos clerk = clerk(helper, new BlockPos(1, 1, 1));
+        SettlementData data = SettlementData.get(helper.getLevel());
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        StockRules.setRule(data, clerk, new StockRule(0, Items.TORCH, 0, 10, 0, 0));
+        StockRules.setRule(data, clerk, new StockRule(1, Items.STICK, 0, 20, 0, 0));
+        JsonObject saved = SettlementBlock.CODEC.encodeStart(JsonOps.INSTANCE, settlement.block(clerk).orElseThrow()).getOrThrow().getAsJsonObject();
+        saved.getAsJsonArray("stock_rules").add(StockRule.CODEC.encodeStart(JsonOps.INSTANCE, new StockRule(2, Items.TORCH, 5, 50, 0, 0)).getOrThrow());
+        SettlementBlock loaded = SettlementBlock.CODEC.parse(JsonOps.INSTANCE, saved).getOrThrow();
+        helper.assertTrue(loaded.stockRules().equals(List.of(new StockRule(0, Items.TORCH, 0, 10, 0, 0), new StockRule(1, Items.STICK, 0, 20, 0, 0))),
+                "The first torch rule stays, the duplicate is dropped: " + loaded.stockRules());
+        helper.succeed();
     }
 
     private static void register(RegisterEvent.RegisterHelper<Consumer<GameTestHelper>> helper, String name, Consumer<GameTestHelper> test) {

@@ -129,6 +129,14 @@ public final class Job {
     }
 
     /**
+     * @return the translated job name with its indefinite article ({@code job.<namespace>.<path>.indefinite}, "an
+     *         Adventurer")
+     */
+    public Component indefiniteName() {
+        return Component.translatable("job." + id().getNamespace() + "." + id().getPath() + ".indefinite");
+    }
+
+    /**
      * @return the translated name of the job's work place ({@code <namespace>.scroll.work_place.<path>})
      */
     public Component workPlaceName() {

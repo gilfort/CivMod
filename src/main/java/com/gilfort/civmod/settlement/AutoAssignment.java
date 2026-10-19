@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.BiPredicate;
 
 import com.gilfort.civmod.CivMod;
@@ -105,7 +106,7 @@ public final class AutoAssignment {
 
     private static List<Settler> candidates(ServerLevel level, Settlement settlement) {
         List<Settler> candidates = new ArrayList<>();
-        for (java.util.UUID member : settlement.members()) {
+        for (UUID member : settlement.members()) {
             if (level.getEntity(member) instanceof Settler settler && jobless(settler, settlement.id())) {
                 candidates.add(settler);
             }
@@ -140,11 +141,19 @@ public final class AutoAssignment {
                     }
                     candidates.remove(settler);
                     settler.getWork().assigned(new SettlerJob(line.job(), block.pos()));
-                    notifyPlayers(level, block.pos(), Component.translatable("civmod.auto_assign.assigned", settler.getName(),
-                            line.job().displayName()));
+                    notifyPlayers(level, block.pos(), assignedMessage(settler.getName(), line.job()));
                 }
             }
         }
+    }
+
+    /**
+     * @param settler the settler's name
+     * @param job     the Job it was assigned to
+     * @return the action bar message, with the Job's article ("Ada is now an Adventurer")
+     */
+    public static Component assignedMessage(Component settler, Job job) {
+        return Component.translatable("civmod.auto_assign.assigned", settler, job.indefiniteName());
     }
 
     private static void notifyPlayers(ServerLevel level, BlockPos pos, Component message) {

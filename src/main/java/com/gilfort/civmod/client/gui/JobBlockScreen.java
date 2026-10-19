@@ -393,6 +393,9 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (JobBlockMenu.isMissionBoard(menu.getInfo()) && missions.mouseScrolled(scrollY)) {
             return true;
         }
+        if (JobBlockMenu.hasFoundTab(menu.getInfo()) && found.mouseScrolled(scrollY)) {
+            return true;
+        }
         int size = menu.getInfo().nextCosts().size();
         if (menu.getActiveTab() == JobBlockMenu.TAB_INFO && size > COST_SLOTS && costRowY >= 0
                 && mouseY >= topPos + costRowY - 2 && mouseY < topPos + costRowY + 18) {
@@ -400,6 +403,22 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
+        if (JobBlockMenu.hasFoundTab(menu.getInfo()) && found.mouseDragged(event.y())) {
+            return true;
+        }
+        return super.mouseDragged(event, dx, dy);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (JobBlockMenu.hasFoundTab(menu.getInfo()) && found.mouseReleased()) {
+            return true;
+        }
+        return super.mouseReleased(event);
     }
 
     @Override

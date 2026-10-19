@@ -210,6 +210,21 @@ public final class SettlerWork {
     }
 
     /**
+     * Decides once as while catching up: effects, messages and thought bubbles are held back (tests).
+     *
+     * @param level the level
+     */
+    public void decideQuietly(ServerLevel level) {
+        boolean was = quiet;
+        quiet = true;
+        try {
+            decide(level);
+        } finally {
+            quiet = was;
+        }
+    }
+
+    /**
      * @return whether the settler is caught up (no effects, messages or sounds)
      */
     boolean quiet() {
@@ -701,7 +716,7 @@ public final class SettlerWork {
      * @param job the job the settler was automatically assigned to
      */
     public void assigned(SettlerJob job) {
-        thoughts.assigned(job);
+        thoughts.assigned(job, !quiet);
     }
 
     /**

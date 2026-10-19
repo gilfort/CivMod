@@ -33,8 +33,8 @@ public final class MinerProfile implements JobProfile {
     private static final int AUTO_SEARCH_VERTICAL = 30;
 
     @Override
-    public net.minecraft.world.item.Item toolIcon() {
-        return net.minecraft.world.item.Items.STONE_PICKAXE;
+    public Item toolIcon() {
+        return Items.STONE_PICKAXE;
     }
 
     @Override

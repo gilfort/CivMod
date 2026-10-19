@@ -102,7 +102,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
             return false;
         }
         ItemStack tool = SettlerTools.best(settler, profile::isTool).orElse(ItemStack.EMPTY);
-        Optional<JobStatus> paused = WorkRules.pause(level, profile, workplace.scan(), site, tool, StockRules.atMax(level, site)).pauseStatus();
+        Optional<JobStatus> paused = WorkRules.pause(level, profile, workplace, site, tool, StockRules.atMax(level, site)).pauseStatus();
         if (paused.isPresent()) {
             shell.block(level, jobBlock, paused.get());
             return false;

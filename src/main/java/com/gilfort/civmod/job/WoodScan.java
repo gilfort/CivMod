@@ -165,7 +165,7 @@ public final class WoodScan implements SectionScan<WoodScan.Result> {
      * @return whether it counts as a log of a tree: {@code #minecraft:logs} without {@code #c:stripped_logs} and
      *         {@code #c:stripped_woods}
      */
-    public static boolean isLog(BlockState state) {
+    static boolean isLog(BlockState state) {
         return state.is(BlockTags.LOGS) && !state.is(Tags.Blocks.STRIPPED_LOGS) && !state.is(Tags.Blocks.STRIPPED_WOODS);
     }
 }

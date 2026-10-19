@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
@@ -192,7 +193,7 @@ public interface JobProfile {
         }
         Set<Identifier> left = new HashSet<>(excluded);
         for (Identifier type : types) {
-            if (!left.contains(type) && context.atMax().contains(dropped(context.level(), context.poi(), type, context.tool()))) {
+            if (!left.contains(type) && context.atMax().contains(context.dropped().apply(type))) {
                 left.add(type);
             }
         }
@@ -256,9 +257,10 @@ public interface JobProfile {
      * @param block      the JobBlock
      * @param skillLevel the skill level
      * @param atMax      the items at their Max at the Home Clerk (left out of the roll)
+     * @param dropped    the item a resource type drops with the tool ({@link #dropped}, cached per scan)
      */
     record Context(ServerLevel level, Settler settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Optional<ItemStack> secondary,
-            SettlementBlock block, int skillLevel, Set<Item> atMax) {
+            SettlementBlock block, int skillLevel, Set<Item> atMax, Function<Identifier, Item> dropped) {
     }
 
     /**

@@ -5,8 +5,10 @@ import com.gilfort.civmod.command.CivModCommand;
 import com.gilfort.civmod.item.JobPicker;
 import com.gilfort.civmod.menu.ClerkTab;
 import com.gilfort.civmod.menu.FoundTab;
+import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.PatternTab;
+import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.settlement.JobPointsDisplay;
 import com.gilfort.civmod.settlement.SettlementOutline;
 
@@ -96,7 +98,7 @@ public final class CivNetwork {
         registrar.playToClient(JobPointsDisplay.Sync.TYPE, JobPointsDisplay.Sync.STREAM_CODEC);
         registrar.playToClient(ClerkTab.Sync.TYPE, ClerkTab.Sync.STREAM_CODEC);
         registrar.playToClient(FoundTab.Sync.TYPE, FoundTab.Sync.STREAM_CODEC);
-        registrar.playToClient(com.gilfort.civmod.menu.JobBlockInfo.Sync.TYPE, com.gilfort.civmod.menu.JobBlockInfo.Sync.STREAM_CODEC);
-        registrar.playToClient(com.gilfort.civmod.npc.ThoughtBubble.Show.TYPE, com.gilfort.civmod.npc.ThoughtBubble.Show.STREAM_CODEC);
+        registrar.playToClient(JobBlockInfo.Sync.TYPE, JobBlockInfo.Sync.STREAM_CODEC);
+        registrar.playToClient(ThoughtBubble.Show.TYPE, ThoughtBubble.Show.STREAM_CODEC);
     }
 }

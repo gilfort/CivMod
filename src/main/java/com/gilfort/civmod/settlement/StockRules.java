@@ -12,6 +12,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.DeliveryTask;
 import com.gilfort.civmod.logistics.Request;
+import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.logistics.StockRule;
 
 import net.minecraft.core.BlockPos;
@@ -29,7 +30,9 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
  * is saved). Rules are checked every 30 s (staggered per Clerk, loaded Clerks only), right after a delivery into the
  * Clerk and once per simulated hour in catch-up. A check while the Clerk is not working, or of a rule inactive after a
  * downgrade, withdraws the rule's request (running claims are finished). Every check also checks the surplus above Max
- * ({@link #checkSurplus}); collecting jobs ask which items are at Max at their Home Clerk ({@link #atMax}).
+ * ({@link #checkSurplus}), and so does every CivMod transaction that increased a Clerk's stock of an item with a Max
+ * rule (write-through, at the end of the tick); collecting jobs ask which items are at Max at their Home Clerk
+ * ({@link #atMax}).
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class StockRules {
@@ -53,25 +56,26 @@ public final class StockRules {
      *         of the Clerk for that item)
      */
     public static boolean setRule(SettlementData data, BlockPos clerk, StockRule rule) {
-        Optional<Settlement> settlement = data.settlementAt(clerk);
-        Optional<SettlementBlock> block = settlement.flatMap(found -> found.block(clerk)).filter(ClerkStorage::isClerk);
-        if (block.isEmpty() || !rule.valid() || rule.slot() < 0 || rule.slot() >= StockRule.slots(SettlementRules.MAX_LEVEL)) {
+        Optional<ClerkAt> found = clerkAt(data, clerk);
+        if (found.isEmpty() || !rule.valid() || rule.slot() < 0 || rule.slot() >= StockRule.slots(SettlementRules.MAX_LEVEL)) {
             return false;
         }
-        if (block.get().stockRules().stream().anyMatch(other -> other.item() == rule.item() && other.slot() != rule.slot())) {
+        Settlement settlement = found.get().settlement();
+        SettlementBlock block = found.get().block();
+        if (block.stockRules().stream().anyMatch(other -> other.item() == rule.item() && other.slot() != rule.slot())) {
             // One rule per item and Clerk.
             return false;
         }
-        Optional<StockRule> previous = block.get().stockRule(rule.slot());
-        List<StockRule> rules = block.get().mutableStockRules();
+        Optional<StockRule> previous = block.stockRule(rule.slot());
+        List<StockRule> rules = block.mutableStockRules();
         rules.removeIf(existing -> existing.slot() == rule.slot());
         rules.add(rule);
         rules.sort((a, b) -> Integer.compare(a.slot(), b.slot()));
-        Requests.forRule(settlement.get(), clerk, rule.slot()).ifPresent(request -> {
+        Requests.forRule(settlement, clerk, rule.slot()).ifPresent(request -> {
             if (previous.filter(old -> old.item() == rule.item()).isEmpty()) {
-                Requests.withdraw(data, settlement.get(), request.id());
+                Requests.withdraw(data, settlement, request.id());
             } else {
-                Requests.setPriority(data, settlement.get(), request.id(), rule.priority());
+                Requests.setPriority(data, settlement, request.id(), rule.priority());
             }
         });
         data.setDirty();
@@ -87,12 +91,12 @@ public final class StockRules {
      * @return whether a rule was deleted
      */
     public static boolean removeRule(SettlementData data, BlockPos clerk, int slot) {
-        Optional<Settlement> settlement = data.settlementAt(clerk);
-        Optional<SettlementBlock> block = settlement.flatMap(found -> found.block(clerk)).filter(ClerkStorage::isClerk);
-        if (block.isEmpty() || !block.get().mutableStockRules().removeIf(rule -> rule.slot() == slot)) {
+        Optional<ClerkAt> found = clerkAt(data, clerk);
+        if (found.isEmpty() || !found.get().block().mutableStockRules().removeIf(rule -> rule.slot() == slot)) {
             return false;
         }
-        Requests.forRule(settlement.get(), clerk, slot).ifPresent(request -> Requests.withdraw(data, settlement.get(), request.id()));
+        Settlement settlement = found.get().settlement();
+        Requests.forRule(settlement, clerk, slot).ifPresent(request -> Requests.withdraw(data, settlement, request.id()));
         data.setDirty();
         return true;
     }
@@ -106,13 +110,12 @@ public final class StockRules {
      */
     public static void check(ServerLevel level, BlockPos clerk, long dayTime) {
         SettlementData data = SettlementData.get(level);
-        Optional<Settlement> found = data.settlementAt(clerk);
-        Optional<SettlementBlock> foundBlock = found.flatMap(settlement -> settlement.block(clerk)).filter(ClerkStorage::isClerk);
-        if (foundBlock.isEmpty() || !level.isLoaded(clerk)) {
+        Optional<ClerkAt> found = clerkAt(data, clerk);
+        if (found.isEmpty() || !level.isLoaded(clerk)) {
             return;
         }
-        Settlement settlement = found.get();
-        SettlementBlock block = foundBlock.get();
+        Settlement settlement = found.get().settlement();
+        SettlementBlock block = found.get().block();
         boolean working = ClerkStorage.working(block, DayClock.day(level), dayTime);
         Map<Item, Integer> stock = null;
         for (StockRule rule : block.stockRules()) {
@@ -156,13 +159,12 @@ public final class StockRules {
      */
     public static void checkSurplus(ServerLevel level, BlockPos clerk) {
         SettlementData data = SettlementData.get(level);
-        Optional<Settlement> found = data.settlementAt(clerk);
-        Optional<SettlementBlock> foundBlock = found.flatMap(settlement -> settlement.block(clerk)).filter(ClerkStorage::isClerk);
-        if (foundBlock.isEmpty() || !level.isLoaded(clerk)) {
+        Optional<ClerkAt> found = clerkAt(data, clerk);
+        if (found.isEmpty() || !level.isLoaded(clerk)) {
             return;
         }
-        Settlement settlement = found.get();
-        SettlementBlock block = foundBlock.get();
+        Settlement settlement = found.get().settlement();
+        SettlementBlock block = found.get().block();
         long day = DayClock.day(level);
         Optional<BlockPos> warehouse = surplusTarget(settlement, clerk);
         Map<Item, Integer> stock = null;
@@ -202,13 +204,12 @@ public final class StockRules {
      *         itself, has none, or its Warehouse is at its own Max for the item ("Surplus: nowhere to go")
      */
     public static List<Integer> surplusNowhere(ServerLevel level, BlockPos clerk) {
-        Optional<Settlement> found = SettlementData.get(level).settlementAt(clerk);
-        Optional<SettlementBlock> foundBlock = found.flatMap(settlement -> settlement.block(clerk)).filter(ClerkStorage::isClerk);
-        if (foundBlock.isEmpty() || !level.isLoaded(clerk) || foundBlock.get().stockRules().stream().noneMatch(StockRule::hasMax)) {
+        Optional<ClerkAt> found = clerkAt(SettlementData.get(level), clerk);
+        if (found.isEmpty() || !level.isLoaded(clerk) || found.get().block().stockRules().stream().noneMatch(StockRule::hasMax)) {
             return List.of();
         }
-        Settlement settlement = found.get();
-        SettlementBlock block = foundBlock.get();
+        Settlement settlement = found.get().settlement();
+        SettlementBlock block = found.get().block();
         Optional<BlockPos> warehouse = surplusTarget(settlement, clerk);
         Map<Item, Integer> stock = count(level, clerk);
         long day = DayClock.day(level);
@@ -243,7 +244,7 @@ public final class StockRules {
         }
         int own = Deliveries.freeSurplus(settlement, clerk, item, day).map(task -> task.input().orElseThrow().items().getOrDefault(item, 0)).orElse(0);
         int coming = Deliveries.surplusTo(settlement, warehouse, item) - own;
-        return rule.get().max() - ClerkStorage.stock(level, warehouse, true).count(stack -> stack.is(item)) - coming;
+        return rule.get().max() - ClerkStorage.stock(level, warehouse, true).count(item) - coming;
     }
 
     /**
@@ -259,14 +260,44 @@ public final class StockRules {
         if (clerk.isEmpty() || clerk.get().stockRules().stream().noneMatch(StockRule::hasMax) || !level.isLoaded(clerk.get().pos())) {
             return Set.of();
         }
-        Map<Item, Integer> stock = count(level, clerk.get().pos());
+        Stock stock = ClerkStorage.stock(level, clerk.get().pos(), true);
         Set<Item> items = new HashSet<>();
         for (StockRule rule : clerk.get().stockRules()) {
-            if (rule.hasMax() && rule.activeAt(clerk.get().level()) && stock.getOrDefault(rule.item(), 0) >= rule.max()) {
+            // A lookup in the Clerk's stock view per Max rule, no count of the whole store.
+            if (rule.hasMax() && rule.activeAt(clerk.get().level()) && stock.count(rule.item()) >= rule.max()) {
                 items.add(rule.item());
             }
         }
         return items;
+    }
+
+    /** A Clerk JobBlock and its settlement. */
+    private record ClerkAt(Settlement settlement, SettlementBlock block) {
+    }
+
+    /** The Clerk JobBlock at a position, empty for any other block. */
+    private static Optional<ClerkAt> clerkAt(SettlementData data, BlockPos clerk) {
+        return data.settlementAt(clerk).flatMap(settlement -> settlement.block(clerk).filter(ClerkStorage::isClerk)
+                .map(block -> new ClerkAt(settlement, block)));
+    }
+
+    /**
+     * Write-through of the surplus (vault {@code Jobs/Clerk.md}): checks the surplus of the Clerks whose stock CivMod's
+     * own transactions increased this tick, only where an item that went in has an active Max rule.
+     */
+    private static void checkGrownSurplus(ServerLevel level) {
+        Map<BlockPos, Set<Item>> grown = ClerkStorage.takeGrown(level);
+        if (grown.isEmpty()) {
+            return;
+        }
+        SettlementData data = SettlementData.get(level);
+        grown.forEach((clerk, items) -> {
+            Optional<ClerkAt> found = clerkAt(data, clerk);
+            if (found.isPresent() && found.get().block().stockRules().stream()
+                    .anyMatch(rule -> rule.hasMax() && rule.activeAt(found.get().block().level()) && items.contains(rule.item()))) {
+                checkSurplus(level, clerk);
+            }
+        });
     }
 
     /** Item counts over the Clerk's whole storage, counted once per check. */
@@ -276,11 +307,16 @@ public final class StockRules {
     }
 
     /**
-     * Checks the rules of every loaded Clerk every {@value #CHECK_INTERVAL} ticks, staggered by position.
+     * Checks the surplus of Clerks whose stock CivMod increased this tick, and the rules of every loaded Clerk every
+     * {@value #CHECK_INTERVAL} ticks, staggered by position.
      */
     @SubscribeEvent
     static void onLevelTick(LevelTickEvent.Post event) {
-        if (!(event.getLevel() instanceof ServerLevel level) || level.getGameTime() % PASS_INTERVAL != 0) {
+        if (!(event.getLevel() instanceof ServerLevel level)) {
+            return;
+        }
+        checkGrownSurplus(level);
+        if (level.getGameTime() % PASS_INTERVAL != 0) {
             return;
         }
         long pass = level.getGameTime() / PASS_INTERVAL;

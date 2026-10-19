@@ -59,6 +59,7 @@ public final class ThoughtBubbleGameTests {
             register(helper, "thought_bubble_no_tool", ThoughtBubbleGameTests::noTool);
             register(helper, "thought_bubble_missing_inputs", ThoughtBubbleGameTests::missingInputs);
             register(helper, "thought_bubble_live_round", ThoughtBubbleGameTests::liveRound);
+            register(helper, "thought_bubble_problem_after_catch_up", ThoughtBubbleGameTests::problemAfterCatchUp);
         });
     }
 
@@ -176,6 +177,41 @@ public final class ThoughtBubbleGameTests {
         helper.assertTrue(sent(settler).equals(List.of(show(settler, ThoughtBubble.NO_TOOL, Items.STONE_AXE),
                 off(settler, ThoughtBubble.NO_TOOL, Items.STONE_AXE))), "Problem off when it ends: " + sent(settler));
         JobAssignments.unassign(data, jobBlock);
+        settler.discard();
+        helper.succeed();
+    }
+
+    /**
+     * A problem that ends while the settler catches up goes off once the catch-up is over: players that saw "problem
+     * on" get "problem off" (nothing is sent during the catch-up itself).
+     */
+    private static void problemAfterCatchUp(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        for (int x = 0; x < 9; x++) {
+            for (int z = 0; z < 9; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
+        BlockPos relative = new BlockPos(1, 1, 1);
+        helper.setBlock(relative, ModBlocks.LUMBERJACK_BLOCK.get());
+        BlockPos jobBlock = helper.absolutePos(relative);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
+        Settler settler = ClerkGameTests.settler(helper, new BlockPos(3, 1, 3), data, settlement);
+        settler.getFood().setMorningDay(Math.floorDiv(level.getOverworldClockTime(), 24000L));
+        helper.assertTrue(SettlementWorld.assign(level, jobBlock, settler, ModJobs.LUMBERJACK.get()) == JobAssignments.AssignResult.OK,
+                "Lumberjack assigned");
+        settler.getWork().decideNow(level);
+        helper.assertTrue(sent(settler).equals(List.of(show(settler, ThoughtBubble.NO_TOOL, Items.STONE_AXE))), "Problem on: " + sent(settler));
+
+        // The settler leaves the job and decides once while it catches up (the state follows quietly).
+        settler.removeJob(jobBlock);
+        JobAssignments.unassign(data, jobBlock);
+        settler.getWork().decideQuietly(level);
+        helper.assertTrue(sent(settler).size() == 1, "Nothing sent while caught up: " + sent(settler));
+        settler.getWork().decideNow(level);
+        helper.assertTrue(sent(settler).equals(List.of(show(settler, ThoughtBubble.NO_TOOL, Items.STONE_AXE),
+                off(settler, ThoughtBubble.NO_TOOL, Items.STONE_AXE))), "Problem off after the catch-up: " + sent(settler));
         settler.discard();
         helper.succeed();
     }

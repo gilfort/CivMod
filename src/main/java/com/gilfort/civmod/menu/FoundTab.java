@@ -7,6 +7,7 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.job.JobCategory;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.settlement.StockRules;
@@ -95,19 +96,11 @@ public record FoundTab(boolean scanned, List<Entry> entries, List<Component> lin
     }
 
     /**
-     * @param block a JobBlock
-     * @return whether it offers a Resource Collection Job (and so has a Found tab)
+     * @param jobType the Job of a JobBlock
+     * @return whether it is a Resource Collection Job (and so its JobBlock has a Found tab)
      */
-    public static boolean hasTab(SettlementBlock block) {
-        return isCollection(block.jobType().category());
-    }
-
-    /**
-     * @param category a Job Category
-     * @return whether its JobBlocks have a Found tab
-     */
-    public static boolean isCollection(JobCategory category) {
-        return category == JobCategory.RESOURCE_COLLECTION;
+    public static boolean hasTab(Job jobType) {
+        return jobType.category() == JobCategory.RESOURCE_COLLECTION;
     }
 
     /**
@@ -119,12 +112,14 @@ public record FoundTab(boolean scanned, List<Entry> entries, List<Component> lin
      * @return the current tab ({@link #EMPTY} without a scan or for other JobBlocks)
      */
     public static FoundTab of(ServerLevel level, BlockPos pos) {
-        Optional<SettlementBlock> found = JobBlockSite.blockAt(level, pos).filter(FoundTab::hasTab);
-        Optional<JobProfile> profile = found.flatMap(block -> block.jobType().profile());
+        // Absent when the JobBlock left its settlement since the menu opened: the menu syncs every tick.
+        Optional<JobBlockSite> found = JobBlockSite.at(level, pos).filter(site -> hasTab(site.block().jobType()));
+        Optional<JobProfile> profile = found.flatMap(site -> site.block().jobType().profile());
         if (found.isEmpty() || profile.isEmpty()) {
             return EMPTY;
         }
-        SettlementBlock block = found.get();
+        JobBlockSite site = found.get();
+        SettlementBlock block = site.block();
         Settler settler = worker(level, block);
         ScanResult scan = settler == null ? null : settler.getWork().scan(pos).orElse(null);
         if (scan == null) {
@@ -135,7 +130,6 @@ public record FoundTab(boolean scanned, List<Entry> entries, List<Component> lin
         }
         Optional<JobProfile.Worker> worker = Optional.ofNullable(settler).flatMap(working -> working.getWork().worker(pos));
         // Max: the dropped item with the working settler's tool (without one the plain drop).
-        JobBlockSite site = JobBlockSite.at(level, pos).orElseThrow();
         Set<Item> atMax = StockRules.atMax(level, site);
         Optional<Component> clerk = block.homeClerk().flatMap(site.settlement()::block).map(ClerkStorage::name);
         ItemStack tool = worker.map(JobProfile.Worker::tool).orElse(ItemStack.EMPTY);
