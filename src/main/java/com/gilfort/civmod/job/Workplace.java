@@ -11,10 +11,12 @@ import java.util.function.Supplier;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.api.BlockingReason;
+import com.gilfort.civmod.api.ResourceCollectionProfile;
+import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementData;
-import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
@@ -48,8 +50,10 @@ final class Workplace {
     private final BlockPos jobBlock;
     private JobBuffer buffer = new JobBuffer();
     private JobStatus status = JobStatus.IDLE;
-    /** What the status is about (e.g. "Collecting – <block>"; not saved). */
+    /** What the status is about (e.g. "Collecting – <block>", a blocking reason; not saved). */
     private Optional<net.minecraft.network.chat.Component> statusSubject = Optional.empty();
+    /** The icon of a blocking reason, for the problem bubble (not saved). */
+    private Optional<Item> statusIcon = Optional.empty();
     private long blockedUntil;
     private @Nullable BlockPos workPlaceOfDay;
     private long workPlaceDay = -1L;
@@ -153,6 +157,7 @@ final class Workplace {
     void setStatus(JobStatus status) {
         this.status = status;
         this.statusSubject = Optional.empty();
+        this.statusIcon = Optional.empty();
     }
 
     /**
@@ -162,6 +167,7 @@ final class Workplace {
     void setStatus(JobStatus status, net.minecraft.network.chat.Component subject) {
         this.status = status;
         this.statusSubject = Optional.of(subject);
+        this.statusIcon = Optional.empty();
     }
 
     /**
@@ -180,6 +186,25 @@ final class Workplace {
     void block(JobStatus status, long gameTime) {
         setStatus(status);
         blockedUntil = gameTime + BLOCKED_RETRY;
+    }
+
+    /**
+     * Blocks the job for {@value #BLOCKED_RETRY} ticks with its profile's reason (status {@link JobStatus#BLOCKED}).
+     *
+     * @param reason   the reason
+     * @param gameTime the game time now
+     */
+    void block(BlockingReason reason, long gameTime) {
+        block(JobStatus.BLOCKED, gameTime);
+        statusSubject = Optional.of(reason.text());
+        statusIcon = reason.icon();
+    }
+
+    /**
+     * @return the icon of the blocking reason while the status is {@link JobStatus#BLOCKED}, if it has one
+     */
+    Optional<Item> statusIcon() {
+        return statusIcon;
     }
 
     /** Ends a block early: the next decision checks the job again. */
@@ -207,7 +232,7 @@ final class Workplace {
      * @param day     the day
      * @return the work place, null if there is none
      */
-    @Nullable BlockPos workPlaceOfDay(ServerLevel level, JobProfile profile, JobBlockSite site, long day) {
+    @Nullable BlockPos workPlaceOfDay(ServerLevel level, ResourceCollectionProfile profile, JobBlockSite site, long day) {
         return workPlaceOfDay(level, pos -> profile.isWorkPlace(level, pos), () -> profile.autoSearch(level, site.pos()), site, day);
     }
 
@@ -248,8 +273,9 @@ final class Workplace {
      * @param day     the day
      * @param dayTime the time of day
      */
-    void ensureScan(ServerLevel level, JobProfile profile, JobBlockSite site, BlockPos poi, long day, long dayTime) {
-        ScanKey key = new ScanKey(profile.scanCenter(site.block(), poi), SettlementRules.joinRadius(site.level()), profile.rescanDaily() ? day : -1L);
+    void ensureScan(ServerLevel level, ResourceCollectionProfile profile, JobBlockSite site, BlockPos poi, long day, long dayTime) {
+        ScanKey key = new ScanKey(profile.scanCenter(site.pos(), site.block().workPoints(), poi), profile.scanRadius(site.level()),
+                profile.rescanDaily() ? day : -1L);
         if (key.equals(scanKey) || scanning != null) {
             return;
         }
@@ -278,7 +304,7 @@ final class Workplace {
     }
 
     /**
-     * The item a resource type drops with a tool ({@link JobProfile#dropped}), computed once per scan and tool kind:
+     * The item a resource type drops with a tool ({@link ResourceCollectionProfile#dropped}), computed once per scan and tool kind:
      * the Max checks ask for it on every production roll.
      *
      * @param level   the level
@@ -288,7 +314,7 @@ final class Workplace {
      * @param tool    the tool
      * @return the dropped item
      */
-    Item dropped(ServerLevel level, JobProfile profile, BlockPos pos, Identifier type, ItemStack tool) {
+    Item dropped(ServerLevel level, ResourceCollectionProfile profile, BlockPos pos, Identifier type, ItemStack tool) {
         DropKey key = new DropKey(type, tool.getItem(), tool.getOrDefault(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY));
         Item item = dropped.get(key);
         if (item == null) {

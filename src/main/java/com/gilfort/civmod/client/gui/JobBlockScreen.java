@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.gilfort.civmod.job.JobProfile;
+import com.gilfort.civmod.job.LumberjackProfile;
 import com.gilfort.civmod.menu.ClerkTab;
 import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.menu.JobBlockInfo;
@@ -119,7 +119,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             rebuildWidgets();
         }).bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 28, imageWidth - 2 * CivGui.PADDING, 20).build());
         upgrade.active = !max && (minecraft.player.isCreative() || current.canAffordNext(minecraft.player.getInventory()));
-        if (menu.getInfo().jobType().profile(JobProfile.class).map(JobProfile::hasLeavesOption).orElse(false) && menu.getInfo().inSettlement()) {
+        if (menu.getInfo().jobType().profile(LumberjackProfile.class).isPresent() && menu.getInfo().inSettlement()) {
             Component label = Component.translatable(menu.getInfo().collectLeaves() ? "civmod.gui.job_block.leaves.on" : "civmod.gui.job_block.leaves.off");
             addTabWidget(JobBlockMenu.TAB_INFO, Button.builder(label, button -> {
                 clickMenuButton(JobBlockMenu.BUTTON_TOGGLE_LEAVES);
@@ -206,7 +206,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (tab == JobBlockMenu.TAB_INFO && info.inSettlement() && !info.connected()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.connect"));
         }
-        if (tab == JobBlockMenu.TAB_INFO && info.jobType().profile(JobProfile.class).map(JobProfile::hasLeavesOption).orElse(false) && info.inSettlement()) {
+        if (tab == JobBlockMenu.TAB_INFO && info.jobType().profile(LumberjackProfile.class).isPresent() && info.inSettlement()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.leaves"));
         }
         if (tab == JobBlockMenu.TAB_INFO && JobBlockMenu.hasPatternsTab(info) && info.inSettlement()) {

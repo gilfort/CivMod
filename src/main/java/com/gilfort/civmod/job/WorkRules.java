@@ -7,6 +7,8 @@ import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.api.ResourceCollectionProfile;
+import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -27,7 +29,7 @@ import net.minecraft.world.item.ItemStack;
  * hour; this is the only copy of speed × productivity, tool choice, tool wear and EXP.
  * <p>
  * Production runs one unit at a time: the job's fractional accumulator (kept in its {@link Workplace} between calls)
- * fills at speed × productivity per second; each full unit is one {@link JobProfile#produce} roll with the best tool
+ * fills at speed × productivity per second; each full unit is one {@link ResourceCollectionProfile#produce} roll with the best tool
  * on the belt. EXP is gained per roll that yields items or is an empty roll (the rolled group is fully excluded at the
  * JobBlock: the activity still counts), and a level-up speeds up the rest of the batch. The job ends when no tool is
  * left, the output is full, an empty scan means no resources or every main resource is excluded.
@@ -73,7 +75,9 @@ final class WorkRules {
         /** Every main resource the scan found is at its Max at the Home Clerk. */
         MAX_REACHED,
         /** Every main resource the scan found is excluded or at its Max, some of each. */
-        NOTHING_TO_PRODUCE;
+        NOTHING_TO_PRODUCE,
+        /** The profile reports a blocking reason ({@link ResourceCollectionProfile#blockingReason}). */
+        BLOCKED;
 
         /**
          * @return the status a job paused for this reason shows, empty for the other ends
@@ -137,7 +141,7 @@ final class WorkRules {
      * @param output    where produced items go
      * @return what came out
      */
-    static Result work(ServerLevel level, Settler settler, SettlerJob job, JobProfile profile, JobBlockSite site, Workplace workplace,
+    static Result work(ServerLevel level, Settler settler, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site, Workplace workplace,
             BlockPos poi, double workTicks, ToolSupply supply, Output output) {
         ScanResult scan = workplace.scan();
         if (profile.needsResources() && scan != null && scan.isEmpty()) {
@@ -145,6 +149,9 @@ final class WorkRules {
         }
         if (allExcluded(profile, scan, site.block())) {
             return new Result(0, 0, 0, 0, false, End.ALL_EXCLUDED, workTicks);
+        }
+        if (scan != null && profile.blockingReason(scan).isPresent()) {
+            return new Result(0, 0, 0, 0, false, End.BLOCKED, workTicks);
         }
         Optional<ItemStack> tool = tool(level, settler, profile, site, supply);
         if (tool.isEmpty()) {
@@ -180,9 +187,9 @@ final class WorkRules {
             }
             ticks -= (1.0 - accumulated) / perTick;
             accumulated = 0.0;
-            Optional<ItemStack> secondary = profile.secondaryTool(site.block()).flatMap(kind -> SettlerTools.best(settler, kind));
-            Optional<JobProfile.Produced> produced = profile.produce(new JobProfile.Context(level, settler, scan, poi, rollTool, secondary,
-                    site.block(), skillLevel, atMax, type -> workplace.dropped(level, profile, poi, type, rollTool)));
+            Optional<ItemStack> secondary = secondaryTool(profile, site.block()).flatMap(kind -> SettlerTools.best(settler, kind));
+            Optional<ResourceCollectionProfile.Produced> produced = profile.produce(new ResourceCollectionProfile.Context(level, settler, scan, poi,
+                    rollTool, secondary, site.block().excluded(), skillLevel, atMax, type -> workplace.dropped(level, profile, poi, type, rollTool)));
             rolls++;
             if (produced.isPresent()) {
                 SettlerTools.wear(level, settler, produced.get().worn());
@@ -221,7 +228,7 @@ final class WorkRules {
      * @param block   the JobBlock
      * @return whether the scan found main resources and every one of them is excluded at the JobBlock (the job pauses)
      */
-    static boolean allExcluded(JobProfile profile, @Nullable ScanResult scan, SettlementBlock block) {
+    static boolean allExcluded(ResourceCollectionProfile profile, @Nullable ScanResult scan, SettlementBlock block) {
         if (scan == null || block.excluded().isEmpty()) {
             return false;
         }
@@ -242,7 +249,7 @@ final class WorkRules {
      * @return {@link End#ALL_EXCLUDED}, {@link End#MAX_REACHED} or {@link End#NOTHING_TO_PRODUCE} for a pause, else
      *         {@link End#NONE}
      */
-    static End pause(ServerLevel level, JobProfile profile, Workplace workplace, JobBlockSite site, ItemStack tool, Set<Item> atMax) {
+    static End pause(ServerLevel level, ResourceCollectionProfile profile, Workplace workplace, JobBlockSite site, ItemStack tool, Set<Item> atMax) {
         ScanResult scan = workplace.scan();
         if (scan == null || (atMax.isEmpty() && site.block().excluded().isEmpty())) {
             return End.NONE;
@@ -266,7 +273,7 @@ final class WorkRules {
      * The best tool of the job on the belt; with {@link ToolSupply#beltAnd} missing tools are taken from the collect
      * inventory first.
      */
-    private static Optional<ItemStack> tool(ServerLevel level, Settler settler, JobProfile profile, JobBlockSite site, ToolSupply supply) {
+    private static Optional<ItemStack> tool(ServerLevel level, Settler settler, ResourceCollectionProfile profile, JobBlockSite site, ToolSupply supply) {
         Optional<ItemStack> tool = SettlerTools.best(settler, profile::isTool);
         if (tool.isEmpty() && supply.collect().isPresent()) {
             if (refill(settler, profile, site, supply.collect().get()) && supply.collect().get().counter()) {
@@ -288,13 +295,22 @@ final class WorkRules {
      * @param collect what the settler reaches at its collect inventory
      * @return the missing tool, empty if the belt is ready
      */
-    static Optional<MissingTool> missingTool(Settler settler, JobProfile profile, JobBlockSite site, Stock collect) {
+    static Optional<MissingTool> missingTool(Settler settler, ResourceCollectionProfile profile, JobBlockSite site, Stock collect) {
         if (SettlerTools.best(settler, profile::isTool).isEmpty()) {
             Predicate<ItemStack> kind = profile::isTool;
             return Optional.of(new MissingTool(kind, SettlerTools.find(collect, kind).isPresent()));
         }
-        return profile.secondaryTool(site.block()).filter(kind -> SettlerTools.best(settler, kind).isEmpty()
+        return secondaryTool(profile, site.block()).filter(kind -> SettlerTools.best(settler, kind).isEmpty()
                 && SettlerTools.find(collect, kind).isPresent()).map(kind -> new MissingTool(kind, true));
+    }
+
+    /**
+     * @param profile the job's profile
+     * @param block   the JobBlock
+     * @return a second tool the job wants with the JobBlock's settings (the Lumberjack's shears for leaves), if any
+     */
+    static Optional<Predicate<ItemStack>> secondaryTool(ResourceCollectionProfile profile, SettlementBlock block) {
+        return profile instanceof LumberjackProfile lumberjack ? lumberjack.secondaryTool(block) : Optional.empty();
     }
 
     /**
@@ -316,12 +332,12 @@ final class WorkRules {
      * @param collect what the settler reaches at its collect inventory
      * @return whether a tool was taken
      */
-    static boolean refill(Settler settler, JobProfile profile, JobBlockSite site, Stock collect) {
+    static boolean refill(Settler settler, ResourceCollectionProfile profile, JobBlockSite site, Stock collect) {
         boolean taken = false;
         if (SettlerTools.best(settler, profile::isTool).isEmpty()) {
             taken |= SettlerTools.take(settler, collect, profile::isTool);
         }
-        Optional<Predicate<ItemStack>> secondary = profile.secondaryTool(site.block());
+        Optional<Predicate<ItemStack>> secondary = secondaryTool(profile, site.block());
         if (secondary.isPresent() && SettlerTools.best(settler, secondary.get()).isEmpty()) {
             taken |= SettlerTools.take(settler, collect, secondary.get());
         }

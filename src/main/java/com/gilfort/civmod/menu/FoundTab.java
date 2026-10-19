@@ -8,14 +8,14 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
-import com.gilfort.civmod.logistics.ClerkStorage;
-import com.gilfort.civmod.settlement.StockRules;
-import com.gilfort.civmod.job.JobProfile;
+import com.gilfort.civmod.api.ResourceCollectionProfile;
+import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.job.SavedScan;
-import com.gilfort.civmod.job.ScanResult;
+import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
+import com.gilfort.civmod.settlement.StockRules;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -113,7 +113,7 @@ public record FoundTab(boolean scanned, List<Entry> entries, List<Component> lin
     public static FoundTab of(ServerLevel level, BlockPos pos) {
         // Absent when the JobBlock left its settlement since the menu opened: the menu syncs every tick.
         Optional<JobBlockSite> found = JobBlockSite.at(level, pos).filter(site -> hasTab(site.block().jobType()));
-        Optional<JobProfile> profile = found.flatMap(site -> site.block().jobType().profile(JobProfile.class));
+        Optional<ResourceCollectionProfile> profile = found.flatMap(site -> site.block().jobType().profile(ResourceCollectionProfile.class));
         if (found.isEmpty() || profile.isEmpty()) {
             return EMPTY;
         }
@@ -127,11 +127,11 @@ public record FoundTab(boolean scanned, List<Entry> entries, List<Component> lin
         if (scan == null) {
             return EMPTY;
         }
-        Optional<JobProfile.Worker> worker = Optional.ofNullable(settler).flatMap(working -> working.getWork().worker(pos));
+        Optional<ResourceCollectionProfile.Worker> worker = Optional.ofNullable(settler).flatMap(working -> working.getWork().worker(pos));
         // Max: the dropped item with the working settler's tool (without one the plain drop).
         Set<Item> atMax = StockRules.atMax(level, site);
         Optional<Component> clerk = block.homeClerk().flatMap(site.settlement()::block).map(ClerkStorage::name);
-        ItemStack tool = worker.map(JobProfile.Worker::tool).orElse(ItemStack.EMPTY);
+        ItemStack tool = worker.map(ResourceCollectionProfile.Worker::tool).orElse(ItemStack.EMPTY);
         List<Entry> entries = profile.get().found(scan, worker).stream()
                 .map(entry -> new Entry(entry.type(), entry.icon(), !entry.available(), block.excluded().contains(entry.type()),
                         !atMax.isEmpty() && atMax.contains(profile.get().dropped(level, pos, entry.type(), tool)) ? clerk : Optional.empty()))

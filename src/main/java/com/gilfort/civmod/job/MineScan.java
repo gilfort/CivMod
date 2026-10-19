@@ -5,6 +5,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import com.gilfort.civmod.api.ScanResult;
+import com.gilfort.civmod.api.SectionScan;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;

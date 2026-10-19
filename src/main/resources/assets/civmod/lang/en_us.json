@@ -337,6 +337,8 @@
   "civmod.job.status.unloading.of": "Delivering to %s",
   "civmod.job.status.storage_full": "Storage full",
   "civmod.job.status.no_pickups": "No pickups",
+  "civmod.job.status.blocked": "Blocked",
+  "civmod.job.status.blocked.of": "%s",
   "civmod.gui.settler.carrying": "Carrying: %s / %s stacks",
   "civmod.gui.clerk.tab.deliveries": "Deliveries",
   "civmod.gui.clerk.deliveries": "Deliveries: %s",

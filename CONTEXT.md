@@ -17,7 +17,7 @@ The public package `com.gilfort.civmod.api` (all `@ApiStatus.Experimental` until
 _Avoid_: Plugin API, SDK
 
 **Profile**:
-The specifics a Job fills into its category's work loop; must belong to the Job's category. Code: `CategoryProfile`, read with `Job.profile(Class)`; `MissionProfile` (public, neutral hooks for success / death chances, `MissionProfile.NEUTRAL` when a Mission Job declares none), `ProducingProfile` (public, required for a Producing Job: recipe types, station tag per recipe type, input / output `ItemFilter`s, checkmark limit, work time per recipe, "execute recipe" hook; guide `docs/api/producing.md`), `JobProfile` (Resource Collection, internal for now).
+The specifics a Job fills into its category's work loop; must belong to the Job's category. Code: `CategoryProfile`, read with `Job.profile(Class)`; `MissionProfile` (public, neutral hooks for success / death chances, `MissionProfile.NEUTRAL` when a Mission Job declares none), `ProducingProfile` (public, required for a Producing Job: recipe types, station tag per recipe type, input / output `ItemFilter`s, checkmark limit, work time per recipe, "execute recipe" hook; guide `docs/api/producing.md`), `ResourceCollectionProfile` (public; CivMod's Lumberjack, Miner and Fisherman implement it, job-specific options such as the Lumberjack's leaves stay in their Job), `SimpleCollectionProfile` (public builder: block tag, tool tag, radius rule, minimum count, productivity curve; output = drops of the found blocks weighted by count; guide `docs/api/resource-collection.md`).
 _Avoid_: Job type, behaviour
 
 **Settler Shell**:
@@ -48,11 +48,11 @@ The block a Resource Collection settler works at today (a tree, a stone face, wa
 _Avoid_: Workplace (the whole per-job state), POI in prose
 
 **Found tab**:
-The JobBlock tab of a Resource Collection Job listing what its scan found (Lumberjack wood types, Miner stone and ore types, Fisherman the fish of the fishing fish loot table), with "Needs a better tool" and the treasure chance computed for the settler working there, the water info, and "Not scanned yet" before the first scan. It shows the working settler's scan, else the last scan the JobBlock kept. The settler's job tab shows none of it. Code: `FoundTab` (payloads `Sync` / `Toggle`, `JobBlockMenu.TAB_FOUND`), `FoundTabView`; entries from `JobProfile.found` / `foundLines`, the kept scan in `SettlementBlock.foundScan()` (set through `JobAssignments.rememberScan`); fish list `FishTable`.
+The JobBlock tab of a Resource Collection Job listing what its scan found (Lumberjack wood types, Miner stone and ore types, Fisherman the fish of the fishing fish loot table), with "Needs a better tool" and the treasure chance computed for the settler working there, the water info, and "Not scanned yet" before the first scan. It shows the working settler's scan, else the last scan the JobBlock kept. The settler's job tab shows none of it. Code: `FoundTab` (payloads `Sync` / `Toggle`, `JobBlockMenu.TAB_FOUND`), `FoundTabView`; entries from `ResourceCollectionProfile.found` / `foundLines`, the kept scan in `SettlementBlock.foundScan()` (set through `JobAssignments.rememberScan`); fish list `FishTable`.
 _Avoid_: Scan tab, resource list in the settler window
 
 **Excluded resource**:
-A found type the player right-clicked off in the Found tab; the job no longer produces it. Stored per JobBlock in the settlement data (survives a settler change, applies in catch-up, kept when a scan no longer finds it). Inside the rolled group (Miner stone / ore, Lumberjack logs vs rare drops, Fisherman fish vs treasure) the weights spread over the rest; a fully excluded group gives an empty roll (EXP and tool wear, no item). Every main resource excluded (`JobProfile.mainResources`) pauses the job with "All resources excluded" (`JobStatus.ALL_EXCLUDED`, retried after 30 s, at once when one is included). Code: `SettlementBlock.excluded()`, toggled through `SettlementWorld.toggleExcluded` / `JobAssignments.toggleExcluded`; `WorkRules.allExcluded`, `MinerOutput.Roll`.
+A found type the player right-clicked off in the Found tab; the job no longer produces it. Stored per JobBlock in the settlement data (survives a settler change, applies in catch-up, kept when a scan no longer finds it). Inside the rolled group (Miner stone / ore, Lumberjack logs vs rare drops, Fisherman fish vs treasure) the weights spread over the rest; a fully excluded group gives an empty roll (EXP and tool wear, no item). Every main resource excluded (`ResourceCollectionProfile.mainResources`) pauses the job with "All resources excluded" (`JobStatus.ALL_EXCLUDED`, retried after 30 s, at once when one is included). Code: `SettlementBlock.excluded()`, toggled through `SettlementWorld.toggleExcluded` / `JobAssignments.toggleExcluded`; `WorkRules.allExcluded`, `MinerOutput.Roll`.
 _Avoid_: Blacklist, filter
 
 **Base Job**:
@@ -71,6 +71,10 @@ The block that offers a Base Job (and its Specializations) to one settler. Code:
 **Starter tool**:
 The tool a new JobBlock puts into its own inventory when it is placed for the first time (Lumberjack stone axe, Miner stone pickaxe, Fisherman fishing rod). A broken JobBlock no longer carries one.
 _Avoid_: Free tool, bonus item
+
+**Blocking reason**:
+Why a Job cannot work, in its profile's own words ("No sand in reach"): the job pauses with status "Blocked" (`JobStatus.BLOCKED`, retried after 30 s), the reason is its status text in the settler window and its problem bubble shows the reason's icon or the generic "blocked" marker (a barrier). Code: `BlockingReason` (addon API), `ResourceCollectionProfile.blockingReason`, `Workplace.block(BlockingReason, …)`, `ThoughtBubble.BLOCKED`.
+_Avoid_: custom status, status registry
 
 **Thought bubble**:
 A small icon bubble above a settler's name tag, sent when it starts something new (Job switch, drop-off, fetching, crafting, eating, bed, Mission); a red "!" marks a problem, which the client repeats while it is on. Code: `ThoughtBubble` (types and payload), `SettlerThoughts` (server), `ThoughtBubbleRenderer` (client).
@@ -129,7 +133,7 @@ _Avoid_: Threshold, mode, Minimum rule
 A stock rule's lower bound: when the stock (plus results in delivery) falls below it, the rule opens one request; without Min the rule never requests.
 
 **Max**:
-A stock rule's cap: collecting jobs whose Home Clerk holds ≥ Max of the item leave it out of their rolls (the dropped item, Silk Touch / Fortune considered; `JobProfile.dropped`, `JobProfile.leftOut`, `StockRules.atMax`) and pause when every main resource is excluded or at Max (`JobStatus.MAX_REACHED` / `NOTHING_TO_PRODUCE` / `ALL_EXCLUDED`, `WorkRules.pause`); the Found tab marks such an entry "Maximum reached at <Clerk>" (`FoundTab.Entry.maxAt`). Stock above Max is **surplus**.
+A stock rule's cap: collecting jobs whose Home Clerk holds ≥ Max of the item leave it out of their rolls (the dropped item, Silk Touch / Fortune considered; `ResourceCollectionProfile.dropped`, `ResourceCollectionProfile.leftOut`, `StockRules.atMax`) and pause when every main resource is excluded or at Max (`JobStatus.MAX_REACHED` / `NOTHING_TO_PRODUCE` / `ALL_EXCLUDED`, `WorkRules.pause`); the Found tab marks such an entry "Maximum reached at <Clerk>" (`FoundTab.Entry.maxAt`). Stock above Max is **surplus**.
 
 **Order**:
 How much a request orders on top of Min: the **target stock** of a rule is min(Min + Order, Max); without Order it is Max, without Max it is Min (`StockRule.target`). The open request asks for target − stock − amount being crafted − amount in delivery on every check and is withdrawn at the target; the open request is the hysteresis, nothing else is saved.

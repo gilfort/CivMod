@@ -8,36 +8,50 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.MissionProfile;
 import com.gilfort.civmod.api.ProducingProfile;
+import com.gilfort.civmod.api.SimpleCollectionProfile;
 import com.gilfort.civmod.block.JobBlockEntity;
+import com.gilfort.civmod.block.UpgradeCosts;
+import com.gilfort.civmod.job.CatchUp;
+import com.gilfort.civmod.job.JobBuffer;
+import com.gilfort.civmod.job.JobStatus;
+import com.gilfort.civmod.job.MissionTrip;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.StockRule;
+import com.gilfort.civmod.menu.FoundTab;
+import com.gilfort.civmod.menu.JobBlockTabs;
+import com.gilfort.civmod.mission.MissionRules;
+import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.npc.ThoughtBubble;
+import com.gilfort.civmod.registry.ModEntityTypes;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.StockRules;
-import com.gilfort.civmod.job.JobBuffer;
-import com.gilfort.civmod.job.MissionTrip;
-import com.gilfort.civmod.mission.MissionRules;
-import com.gilfort.civmod.npc.Settler;
-import com.gilfort.civmod.registry.ModJobs;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.registries.RegisterEvent;
@@ -51,6 +65,11 @@ public final class ExampleAddonGameTests {
 
     private static final Identifier SCOUT = Identifier.fromNamespaceAndPath("civmod_example", "scout");
     private static final Identifier SCOUTING_TRIP = Identifier.fromNamespaceAndPath("civmod_example", "scouting_trip");
+    private static final Identifier SAND_DIGGER = Identifier.fromNamespaceAndPath("civmod_example", "sand_digger");
+    private static final Identifier SAND_DIGGER_BLOCK = Identifier.fromNamespaceAndPath("civmod_example", "sand_digger_block");
+    private static final Identifier SAND = Identifier.withDefaultNamespace("sand");
+    private static final Identifier RED_SAND = Identifier.withDefaultNamespace("red_sand");
+    private static final long DAY = 24000L;
     private static final Identifier STONECUTTER = Identifier.fromNamespaceAndPath("civmod_example", "stonecutter");
 
     private ExampleAddonGameTests() {
@@ -60,6 +79,9 @@ public final class ExampleAddonGameTests {
     static void onRegister(RegisterEvent event) {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "example_scout_mission", ExampleAddonGameTests::scoutMission);
+            register(helper, "example_sand_digger_produces", ExampleAddonGameTests::sandDiggerProduces);
+            register(helper, "example_sand_digger_exclusion", ExampleAddonGameTests::sandDiggerExclusion);
+            register(helper, "example_sand_digger_blocked", ExampleAddonGameTests::sandDiggerBlocked);
             register(helper, "example_stonecutter_request", ExampleAddonGameTests::stonecutterRequest);
         });
     }
@@ -104,6 +126,146 @@ public final class ExampleAddonGameTests {
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });
+    }
+
+    /**
+     * Sets up a Sand Digger JobBlock at (1, 1, 1) on a stone floor and a settler with a stone shovel and plenty of food
+     * working it. Placed as a block (not from an item), the JobBlock starts without its starter tool.
+     *
+     * @param sand the blocks laid in turn on the floor at x 4–7, z 4–7 (empty for none)
+     * @return the settler (its job is the first one)
+     */
+    private static Settler sandDigger(GameTestHelper helper, List<Block> sand) {
+        ServerLevel level = helper.getLevel();
+        for (int x = 0; x < 9; x++) {
+            for (int z = 0; z < 9; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
+        BlockPos relative = new BlockPos(1, 1, 1);
+        helper.setBlock(relative, BuiltInRegistries.BLOCK.getValue(SAND_DIGGER_BLOCK));
+        int index = 0;
+        for (int x = 4; x < 8; x++) {
+            for (int z = 4; z < 8; z++) {
+                if (!sand.isEmpty()) {
+                    helper.setBlock(new BlockPos(x, 1, z), sand.get(index++ % sand.size()));
+                }
+            }
+        }
+        BlockPos jobBlock = helper.absolutePos(relative);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
+        Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
+        Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(2, 1, 2)));
+        settler.snapTo(spawn.x, spawn.y, spawn.z, 0.0F, 0.0F);
+        settler.setCustomName(Component.literal("Digger"));
+        level.addFreshEntity(settler);
+        settler.joinSettlement(data, settlement);
+        settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_SHOVEL));
+        // Plenty of food: hunger must not limit the test.
+        settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
+        helper.assertTrue(SettlementWorld.assign(level, jobBlock, settler, job(SAND_DIGGER)) == JobAssignments.AssignResult.OK,
+                "Sand Digger assigned");
+        return settler;
+    }
+
+    private static Job job(Identifier id) {
+        return ModJobs.REGISTRY.getValue(id);
+    }
+
+    private static int count(Container container, Item item) {
+        int total = 0;
+        for (int i = 0; i < container.getContainerSize(); i++) {
+            if (container.getItem(i).is(item)) {
+                total += container.getItem(i).getCount();
+            }
+        }
+        return total;
+    }
+
+    private static void cleanUp(ServerLevel level, Settler settler, List<long[]> forced) {
+        settler.discard();
+        forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+    }
+
+    /**
+     * The Sand Digger is a Resource Collection Job built with the {@link SimpleCollectionProfile} builder, with its own
+     * JobBlock (Found tab), lang key and upgrade costs. It scans the sand around its JobBlock and digs it live without
+     * touching the world; a caught-up day delivers sand into its drop-off (the JobBlock inventory).
+     */
+    private static void sandDiggerProduces(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Job digger = job(SAND_DIGGER);
+        helper.assertTrue(digger != null && digger.category() == JobCategory.RESOURCE_COLLECTION
+                && digger.profile(SimpleCollectionProfile.class).isPresent(), "The Sand Digger is a builder Resource Collection Job: " + digger);
+        helper.assertTrue(digger.displayName().getString().equals("Sand Digger"), "Lang key: " + digger.displayName().getString());
+        helper.assertTrue(JobBlockTabs.of(digger) == JobBlockTabs.FOUND, "Storage, Info, Found");
+        List<UpgradeCosts.Cost> costs = UpgradeCosts.get(digger, 2);
+        helper.assertTrue(!costs.isEmpty() && costs.get(0).item().filter(Items.SAND::equals).isPresent(), "Own upgrade costs: " + costs);
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        Settler settler = sandDigger(helper, List.of(Blocks.SAND));
+        BlockPos jobBlock = settler.getJobs().get(0).jobBlock();
+        BlockPos sand = helper.absolutePos(new BlockPos(5, 1, 5));
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(settler.getWork().buffer(jobBlock).stacks().stream().anyMatch(stack -> stack.is(Items.SAND)),
+                        "No sand dug yet (status " + settler.getWork().status(jobBlock) + ")"))
+                .thenExecute(() -> {
+                    helper.assertTrue(level.getBlockState(sand).is(Blocks.SAND), "The sand is never dug away");
+                    helper.assertTrue(FoundTab.of(level, jobBlock).entry(SAND).isPresent(), "Found tab lists sand: " + FoundTab.of(level, jobBlock));
+                    Container container = (Container) level.getBlockEntity(jobBlock);
+                    long clock = level.getOverworldClockTime();
+                    settler.getWork().setCatchUp(clock - DAY, clock);
+                    CatchUp.runNow(level, List.of(settler));
+                    helper.assertTrue(count(container, Items.SAND) >= 20, "Sand expected in the drop-off after a caught-up day: "
+                            + count(container, Items.SAND));
+                    cleanUp(level, settler, forced);
+                })
+                .thenSucceed();
+    }
+
+    /** Exclusions work for builder Jobs: with red sand excluded the Found tab marks it and a caught-up day yields only sand. */
+    private static void sandDiggerExclusion(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        Settler settler = sandDigger(helper, List.of(Blocks.SAND, Blocks.RED_SAND));
+        BlockPos jobBlock = settler.getJobs().get(0).jobBlock();
+        SettlementWorld.toggleExcluded(level, jobBlock, RED_SAND);
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(FoundTab.of(level, jobBlock).entry(RED_SAND).filter(FoundTab.Entry::excluded).isPresent(),
+                        "Red sand not listed as excluded: " + FoundTab.of(level, jobBlock)))
+                .thenExecute(() -> {
+                    Container container = (Container) level.getBlockEntity(jobBlock);
+                    long clock = level.getOverworldClockTime();
+                    settler.getWork().setCatchUp(clock - DAY, clock);
+                    CatchUp.runNow(level, List.of(settler));
+                    int red = count(container, Items.RED_SAND) + settler.getWork().buffer(jobBlock).stacks().stream()
+                            .filter(stack -> stack.is(Items.RED_SAND)).mapToInt(ItemStack::getCount).sum();
+                    helper.assertTrue(red == 0, "Excluded red sand produced: " + red);
+                    helper.assertTrue(count(container, Items.SAND) >= 20, "Sand expected: " + count(container, Items.SAND));
+                    cleanUp(level, settler, forced);
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * Without sand in reach the Sand Digger pauses with the status "Blocked" and its profile's reason: the reason is the
+     * status text, and the problem bubble shows the reason's icon.
+     */
+    private static void sandDiggerBlocked(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        Settler settler = sandDigger(helper, List.of());
+        BlockPos jobBlock = settler.getJobs().get(0).jobBlock();
+        settler.getFood().setMorningDay(Math.floorDiv(level.getOverworldClockTime(), DAY));
+        settler.getWork().decideNow(level);
+        helper.assertTrue(settler.getWork().status(jobBlock) == JobStatus.BLOCKED, "Blocked: " + settler.getWork().status(jobBlock));
+        helper.assertTrue(JobStatus.BLOCKED.isBlocked(), "The settler works its next priority meanwhile");
+        helper.assertTrue(settler.getWork().statusText(jobBlock).getString().equals("No sand in reach"),
+                "The profile's reason: " + settler.getWork().statusText(jobBlock).getString());
+        helper.assertTrue(settler.getWork().recentThoughts().contains(new ThoughtBubble.Show(settler.getId(), ThoughtBubble.BLOCKED, Items.SAND, true)),
+                "Problem bubble with the reason's icon: " + settler.getWork().recentThoughts());
+        cleanUp(level, settler, forced);
+        helper.succeed();
     }
 
     /**

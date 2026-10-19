@@ -8,6 +8,7 @@ The example addon in [`example-addon/`](../../example-addon) compiles against th
 
 - **Job** – a kind of work a settler holds, identified by a namespaced id (`examplemod:scout`). Every Job belongs to one **Job Category**, which owns the work loop; the Job fills in its specifics through the category's **profile**.
 - **Job Category** – `RESOURCE_COLLECTION`, `PRODUCING`, `MISSION` (public profiles follow per category), `LOGISTICS` (internal to CivMod), `GUARD` and `SERVICE` (not implemented yet).
+- **Profiles** – [Resource Collection](resource-collection.md) (`ResourceCollectionProfile`, `SimpleCollectionProfile`), [Producing](producing.md) (`ProducingProfile`), Mission (`MissionProfile`, below).
 - **Base Job / Specialization** – a Base Job is offered by its own JobBlock. A Job with a `parent` is a Specialization: the parent's JobBlock offers it from level 2.
 - **JobBlock** – the block that offers a Base Job to settlers and anchors the settlement. Its window shows the tabs of the Job's category.
 

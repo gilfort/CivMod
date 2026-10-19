@@ -5,7 +5,8 @@ import org.jetbrains.annotations.ApiStatus;
 /**
  * The specifics a {@link Job} fills into the work loop of its {@link JobCategory} (vault
  * {@code Systems/Job Categories.md}). Each category with a public loop has its own profile interface
- * ({@link ProducingProfile}, {@link MissionProfile} so far); a Job's profile must belong to the Job's category.
+ * ({@link ResourceCollectionProfile}, {@link ProducingProfile}, {@link MissionProfile}); a Job's profile must belong to
+ * the Job's category.
  * <p>
  * Profiles are interfaces with {@code default} methods, so new hooks do not break existing implementations.
  */

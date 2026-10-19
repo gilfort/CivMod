@@ -6,13 +6,15 @@ import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.api.BlockingReason;
+import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Pickups;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
-import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.DayClock;
+import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.StockRules;
 
 import net.minecraft.core.BlockPos;
@@ -25,7 +27,7 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * Work loop of the Resource Collection Job Category (vault {@code Systems/Resource Collection Jobs.md}); its contract
- * with the Job is the {@link JobProfile}. Per job: fetch the tool, take the work place of the day and the scan from the
+ * with the Job is the {@link ResourceCollectionProfile}. Per job: fetch the tool, take the work place of the day and the scan from the
  * job's {@link Workplace}, walk there and produce into its buffer, which the shell delivers at ~80 % or at the end of
  * the day. Production (live every work tick, catch-up per simulated hour) goes through the {@link WorkRules}; this
  * loop only adds the live effects (swing, hit sound, level-up) and chooses where output goes.
@@ -81,11 +83,11 @@ final class ResourceCollectionLoop implements CategoryLoop {
         if (workplace.buffer().shouldDeliver()) {
             return shell.startDelivery(level, job);
         }
-        Optional<JobProfile> found = job.jobType().profile(JobProfile.class);
+        Optional<ResourceCollectionProfile> found = job.jobType().profile(ResourceCollectionProfile.class);
         if (found.isEmpty()) {
             return false;
         }
-        JobProfile profile = found.get();
+        ResourceCollectionProfile profile = found.get();
         Optional<WorkRules.MissingTool> missing = WorkRules.missingTool(settler, profile, site,
                 ClerkStorage.stock(level, site.collect(), dayTime, !shell.counterUnreachable(level, site.collect())));
         if (missing.isPresent()) {
@@ -93,10 +95,16 @@ final class ResourceCollectionLoop implements CategoryLoop {
         }
         BlockPos poi = workplace.workPlaceOfDay(level, profile, site, day);
         if (poi == null) {
-            shell.block(level, jobBlock, JobStatus.NO_WORK_PLACE);
+            profile.blockingReason(null).ifPresentOrElse(reason -> shell.block(level, jobBlock, reason),
+                    () -> shell.block(level, jobBlock, JobStatus.NO_WORK_PLACE));
             return false;
         }
         workplace.ensureScan(level, profile, site, poi, day, dayTime);
+        Optional<BlockingReason> reason = workplace.scan() == null ? Optional.empty() : profile.blockingReason(workplace.scan());
+        if (reason.isPresent()) {
+            shell.block(level, jobBlock, reason.get());
+            return false;
+        }
         if (profile.needsResources() && workplace.foundNothing()) {
             shell.block(level, jobBlock, JobStatus.NO_RESOURCES);
             return false;
@@ -152,7 +160,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
     @Override
     public double reach(SettlerJob job) {
         if (step == Step.WORK) {
-            return job.jobType().profile(JobProfile.class).map(JobProfile::reach).orElse(SettlerWork.REACH);
+            return job.jobType().profile(ResourceCollectionProfile.class).map(ResourceCollectionProfile::reach).orElse(SettlerWork.REACH);
         }
         return toolVisit == null ? SettlerWork.REACH : toolVisit.reach();
     }
@@ -164,7 +172,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
         BlockPos jobBlock = job.jobBlock();
         switch (step) {
             case FETCH_TOOL -> {
-                Optional<JobProfile> profile = job.jobType().profile(JobProfile.class);
+                Optional<ResourceCollectionProfile> profile = job.jobType().profile(ResourceCollectionProfile.class);
                 Optional<JobBlockSite> site = JobBlockSite.at(level, jobBlock);
                 if (profile.isPresent() && site.isPresent()) {
                     BlockPos collect = site.get().collect();
@@ -195,13 +203,13 @@ final class ResourceCollectionLoop implements CategoryLoop {
         BlockPos jobBlock = job.jobBlock();
         settler.getNavigation().stop();
         settler.getLookControl().setLookAt(Vec3.atCenterOf(poi));
-        if (++swingTimer >= SWING_INTERVAL && job.jobType().profile(JobProfile.class).map(JobProfile::swings).orElse(true)) {
+        if (++swingTimer >= SWING_INTERVAL && job.jobType().profile(ResourceCollectionProfile.class).map(ResourceCollectionProfile::swings).orElse(true)) {
             swingTimer = 0;
             settler.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
             BlockState state = level.getBlockState(poi);
             level.playSound(null, poi, state.getSoundType().getHitSound(), net.minecraft.sounds.SoundSource.NEUTRAL, 0.5F, 1.0F);
         }
-        Optional<JobProfile> profile = job.jobType().profile(JobProfile.class);
+        Optional<ResourceCollectionProfile> profile = job.jobType().profile(ResourceCollectionProfile.class);
         Optional<JobBlockSite> site = JobBlockSite.at(level, jobBlock);
         if (profile.isEmpty() || site.isEmpty()) {
             return;
@@ -223,7 +231,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
 
     @Override
     public boolean catchUpReady(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
-        Optional<JobProfile> profile = job.jobType().profile(JobProfile.class);
+        Optional<ResourceCollectionProfile> profile = job.jobType().profile(ResourceCollectionProfile.class);
         if (profile.isEmpty()) {
             return true;
         }
@@ -249,7 +257,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
     @Override
     public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks) {
         Optional<JobBlockSite> found = JobBlockSite.at(level, job.jobBlock());
-        Optional<JobProfile> profile = job.jobType().profile(JobProfile.class);
+        Optional<ResourceCollectionProfile> profile = job.jobType().profile(ResourceCollectionProfile.class);
         Workplace workplace = shell.workplace(job.jobBlock());
         BlockPos poi = found.isEmpty() || profile.isEmpty() || workplace.scan() == null ? null
                 : workplace.workPlaceOfDay(level, profile.get(), found.get(), day);
