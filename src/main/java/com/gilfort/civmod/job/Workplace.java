@@ -17,7 +17,12 @@ import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 
 /**
  * What a settler keeps for one job at its JobBlock (vault {@code Systems/Resource Collection Jobs.md},
@@ -50,6 +55,8 @@ final class Workplace {
     private long workPlaceDay = -1L;
     private @Nullable ScanResult scan;
     private @Nullable ScanKey scanKey;
+    /** The dropped item of each resource type per tool kind, for the Max checks of every roll; cleared with the scan. */
+    private final Map<DropKey, Item> dropped = new HashMap<>();
     /** The scan in flight; its result is only stored while it is still the pending one. */
     private @Nullable ScanKey scanning;
     /** Counts scan requests; a result whose request is no longer the latest (restored in between) is dropped. */
@@ -259,10 +266,36 @@ final class Workplace {
             scan = result;
             scanKey = key;
             scanning = null;
+            dropped.clear();
             // The JobBlock keeps the latest scan for its Found tab.
             SavedScan.of(jobBlock, key.center(), key.radius(), key.day(), result)
                     .ifPresent(saved -> JobAssignments.rememberScan(SettlementData.get(level), jobBlock, saved));
         });
+    }
+
+    /** What a dropped item depends on: the resource type and the tool's item and enchantments (not its damage). */
+    private record DropKey(Identifier type, Item tool, ItemEnchantments enchantments) {
+    }
+
+    /**
+     * The item a resource type drops with a tool ({@link JobProfile#dropped}), computed once per scan and tool kind:
+     * the Max checks ask for it on every production roll.
+     *
+     * @param level   the level
+     * @param profile the job's profile
+     * @param pos     where the resource is mined
+     * @param type    the resource type
+     * @param tool    the tool
+     * @return the dropped item
+     */
+    Item dropped(ServerLevel level, JobProfile profile, BlockPos pos, Identifier type, ItemStack tool) {
+        DropKey key = new DropKey(type, tool.getItem(), tool.getOrDefault(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY));
+        Item item = dropped.get(key);
+        if (item == null) {
+            item = profile.dropped(level, pos, type, tool);
+            dropped.put(key, item);
+        }
+        return item;
     }
 
     /**
@@ -330,6 +363,7 @@ final class Workplace {
         scanKey = null;
         scanning = null;
         scanRequest++;
+        dropped.clear();
     }
 
     /**
@@ -355,6 +389,7 @@ final class Workplace {
         if (result != null) {
             scan = result;
             scanKey = new ScanKey(saved.center(), saved.radius(), saved.day());
+            dropped.clear();
         }
     }
 }

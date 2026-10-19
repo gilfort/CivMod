@@ -25,6 +25,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
 
 /**
  * A JobBlock as recorded by its settlement, including its work points and the assigned settlers with their Job
@@ -271,7 +272,9 @@ public final class SettlementBlock {
         this.storage.addAll(clerk.storage());
         this.standSpots.addAll(clerk.standSpots());
         this.spotOfDay = clerk.spotOfDay();
-        this.stockRules.addAll(clerk.stockRules());
+        // One rule per item and Clerk: an older save may hold more; the first one stays.
+        Set<Item> ruled = new HashSet<>();
+        clerk.stockRules().stream().filter(rule -> ruled.add(rule.item())).forEach(this.stockRules::add);
         this.served.addAll(clerk.served());
         this.homeClerk = homeClerk;
         this.patterns.addAll(craftsperson.patterns());

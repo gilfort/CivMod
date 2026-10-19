@@ -88,7 +88,7 @@ public final class GuiTextGameTests {
         return lang.has(key) ? lang.get(key).getAsString() : null;
     }
 
-    private static JsonObject lang(GameTestHelper helper) {
+    static JsonObject lang(GameTestHelper helper) {
         try (InputStream in = CivMod.class.getResourceAsStream("/assets/civmod/lang/en_us.json")) {
             if (in == null) {
                 throw helper.assertionException(Component.literal("en_us.json not on the classpath"));

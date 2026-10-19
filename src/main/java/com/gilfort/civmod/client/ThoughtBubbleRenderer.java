@@ -55,7 +55,7 @@ public final class ThoughtBubbleRenderer {
     /** Bubbles further away are not drawn. */
     private static final double DISTANCE = 16.0;
     /** Bubbles waiting per settler at most (older ones are dropped). */
-    private static final int QUEUE = 3;
+    private static final int MAX_QUEUED = 3;
     /** Height of the bubble centre above the top of the settler (above the name tag). */
     private static final double ABOVE_HEAD = 1.0;
     private static final float BUBBLE_SCALE = 0.6F;
@@ -66,8 +66,39 @@ public final class ThoughtBubbleRenderer {
     private static @Nullable ClientLevel lastLevel;
     private static List<Frame> frame = List.of();
 
-    /** One bubble to show. */
-    private record Bubble(ThoughtBubble type, Item icon) {
+    /** One bubble to show; its render states are made the first time it is drawn and kept while it shows. */
+    private static final class Bubble {
+        private final ThoughtBubble type;
+        private final Item icon;
+        private @Nullable Drawn drawn;
+
+        Bubble(ThoughtBubble type, Item icon) {
+            this.type = type;
+            this.icon = icon;
+        }
+
+        Drawn drawn(Minecraft minecraft) {
+            if (drawn == null) {
+                drawn = new Drawn(state(minecraft, new ItemStack(ModItems.THOUGHT_BUBBLE.get())), state(minecraft, new ItemStack(icon)),
+                        type.problem() ? state(minecraft, new ItemStack(ModItems.PROBLEM_MARKER.get())) : null);
+            }
+            return drawn;
+        }
+    }
+
+    /** The render states of a bubble: the bubble itself, its icon and the problem marker. */
+    private record Drawn(ItemStackRenderState bubble, ItemStackRenderState icon, @Nullable ItemStackRenderState marker) {
+    }
+
+    /** A problem that is on: its icon and when it shows again. */
+    private static final class Problem {
+        private final Item icon;
+        /** Shown at once, then repeated from the tick loop. */
+        private long nextRepeat = Long.MIN_VALUE;
+
+        Problem(Item icon) {
+            this.icon = icon;
+        }
     }
 
     /** The bubbles of one settler. */
@@ -75,11 +106,10 @@ public final class ThoughtBubbleRenderer {
         private final Deque<Bubble> queue = new ArrayDeque<>();
         private @Nullable Bubble current;
         private long shownAt;
-        private final Map<ThoughtBubble, Item> problems = new EnumMap<>(ThoughtBubble.class);
-        private final Map<ThoughtBubble, Long> nextRepeat = new EnumMap<>(ThoughtBubble.class);
+        private final Map<ThoughtBubble, Problem> problems = new EnumMap<>(ThoughtBubble.class);
 
         void add(Bubble bubble) {
-            if (queue.size() == QUEUE) {
+            if (queue.size() == MAX_QUEUED) {
                 queue.removeFirst();
             }
             queue.addLast(bubble);
@@ -91,7 +121,7 @@ public final class ThoughtBubbleRenderer {
     }
 
     /** A bubble drawn this frame. */
-    private record Frame(Vec3 pos, float scale, ItemStackRenderState bubble, ItemStackRenderState icon, @Nullable ItemStackRenderState marker) {
+    private record Frame(Vec3 pos, float scale, Drawn drawn) {
     }
 
     private ThoughtBubbleRenderer() {
@@ -105,20 +135,16 @@ public final class ThoughtBubbleRenderer {
      */
     public static void handle(ThoughtBubble.Show payload, IPayloadContext context) {
         Thoughts thoughts = THOUGHTS.computeIfAbsent(payload.settlerId(), id -> new Thoughts());
-        Bubble bubble = new Bubble(payload.bubble(), payload.icon());
         if (!payload.bubble().problem()) {
-            thoughts.add(bubble);
+            thoughts.add(new Bubble(payload.bubble(), payload.icon()));
             return;
         }
         if (!payload.on()) {
             thoughts.problems.remove(payload.bubble());
-            thoughts.nextRepeat.remove(payload.bubble());
-            thoughts.queue.removeIf(waiting -> waiting.type() == payload.bubble());
+            thoughts.queue.removeIf(waiting -> waiting.type == payload.bubble());
             return;
         }
-        thoughts.problems.put(payload.bubble(), payload.icon());
-        // Shown at once, then repeated from the tick loop.
-        thoughts.nextRepeat.put(payload.bubble(), Long.MIN_VALUE);
+        thoughts.problems.put(payload.bubble(), new Problem(payload.icon()));
     }
 
     private static boolean allowed(ThoughtBubble type) {
@@ -161,15 +187,15 @@ public final class ThoughtBubbleRenderer {
                 continue;
             }
             Bubble current = thoughts.current;
-            Vec3 pos = settler.getPosition(partialTick).add(0.0, settler.getBbHeight() + ABOVE_HEAD, 0.0);
-            if (current == null || settler.isSleeping() || settler.isInvisible() || settler.position().distanceTo(viewer) > DISTANCE) {
+            // Out of range: no position, no render state.
+            if (current == null || settler.isSleeping() || settler.isInvisible()
+                    || settler.position().distanceToSqr(viewer) > DISTANCE * DISTANCE) {
                 continue;
             }
+            Vec3 pos = settler.getPosition(partialTick).add(0.0, settler.getBbHeight() + ABOVE_HEAD, 0.0);
             float age = now - thoughts.shownAt + partialTick;
             float scale = Math.clamp((SHOW_TICKS - age) / FADE_TICKS, 0.0F, 1.0F);
-            frames.add(new Frame(pos, scale, icon(minecraft, new ItemStack(ModItems.THOUGHT_BUBBLE.get())),
-                    icon(minecraft, new ItemStack(current.icon())),
-                    current.type().problem() ? icon(minecraft, new ItemStack(ModItems.PROBLEM_MARKER.get())) : null));
+            frames.add(new Frame(pos, scale, current.drawn(minecraft)));
         }
         frame = frames;
     }
@@ -179,23 +205,22 @@ public final class ThoughtBubbleRenderer {
         if (thoughts.current != null && now - thoughts.shownAt >= SHOW_TICKS) {
             thoughts.current = null;
         }
-        thoughts.problems.forEach((type, icon) -> {
-            long due = thoughts.nextRepeat.getOrDefault(type, Long.MIN_VALUE);
-            if (due <= now) {
-                thoughts.nextRepeat.put(type, now + REPEAT_TICKS);
-                thoughts.add(new Bubble(type, icon));
+        thoughts.problems.forEach((type, problem) -> {
+            if (problem.nextRepeat <= now) {
+                problem.nextRepeat = now + REPEAT_TICKS;
+                thoughts.add(new Bubble(type, problem.icon));
             }
         });
         while (thoughts.current == null && !thoughts.queue.isEmpty()) {
             Bubble next = thoughts.queue.removeFirst();
-            if (allowed(next.type())) {
+            if (allowed(next.type)) {
                 thoughts.current = next;
                 thoughts.shownAt = now;
             }
         }
     }
 
-    private static ItemStackRenderState icon(Minecraft minecraft, ItemStack stack) {
+    private static ItemStackRenderState state(Minecraft minecraft, ItemStack stack) {
         ItemStackRenderState state = new ItemStackRenderState();
         minecraft.getItemModelResolver().updateForTopItem(state, stack, ItemDisplayContext.FIXED, minecraft.level, null, 0);
         return state;
@@ -218,11 +243,12 @@ public final class ThoughtBubbleRenderer {
             // Faces the camera like a name tag.
             poseStack.rotate(event.getLevelRenderState().cameraRenderState.orientation);
             poseStack.scale(bubble.scale(), bubble.scale(), bubble.scale());
-            submit(poseStack, collector, bubble.bubble(), 0.0F, 0.0F, 0.0F, BUBBLE_SCALE);
+            Drawn drawn = bubble.drawn();
+            submit(poseStack, collector, drawn.bubble(), 0.0F, 0.0F, 0.0F, BUBBLE_SCALE);
             // The icon sits in the round part of the bubble, slightly in front of it.
-            submit(poseStack, collector, bubble.icon(), 0.0F, 0.04F, 0.02F, ICON_SCALE);
-            if (bubble.marker() != null) {
-                submit(poseStack, collector, bubble.marker(), 0.2F, 0.2F, 0.04F, MARKER_SCALE);
+            submit(poseStack, collector, drawn.icon(), 0.0F, 0.04F, 0.02F, ICON_SCALE);
+            if (drawn.marker() != null) {
+                submit(poseStack, collector, drawn.marker(), 0.2F, 0.2F, 0.04F, MARKER_SCALE);
             }
             poseStack.popPose();
         }

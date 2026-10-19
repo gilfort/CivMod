@@ -52,8 +52,8 @@ public final class FishermanProfile implements JobProfile {
             Identifier.withDefaultNamespace("gameplay/fishing/treasure"));
 
     @Override
-    public net.minecraft.world.item.Item toolIcon() {
-        return net.minecraft.world.item.Items.FISHING_ROD;
+    public Item toolIcon() {
+        return Items.FISHING_ROD;
     }
 
     @Override
@@ -224,7 +224,8 @@ public final class FishermanProfile implements JobProfile {
             items = level.getServer().reloadableRegistries().getLootTable(TREASURE).getRandomItems(params);
         } else {
             // A fish roll with every fish excluded catches nothing (an empty roll), never treasure instead.
-            items = FishTable.get().pick(leftOut(context, FishTable.get().ids()), level.getRandom()).map(fish -> List.of(new ItemStack(fish)))
+            items = FishTable.get().pick(leftOut(context, FishTable.get().ids()), level.getRandom())
+                    .map(fish -> List.of(fish.caught(level, Vec3.atCenterOf(context.poi()), context.tool(), context.settler())))
                     .orElse(List.of());
         }
         context.settler().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);

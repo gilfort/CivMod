@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
 
+import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.block.UpgradeCosts;
 import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.job.JobCategory;
@@ -70,7 +71,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
     public record Sync(int containerId, JobBlockInfo info) implements CustomPacketPayload {
 
         /** Payload type. */
-        public static final Type<Sync> TYPE = new Type<>(com.gilfort.civmod.CivMod.id("job_block_info"));
+        public static final Type<Sync> TYPE = new Type<>(CivMod.id("job_block_info"));
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Sync> STREAM_CODEC = StreamCodec.composite(

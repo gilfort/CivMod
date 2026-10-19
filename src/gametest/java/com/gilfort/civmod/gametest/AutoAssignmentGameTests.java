@@ -26,6 +26,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntitySpawnReason;
@@ -58,6 +59,7 @@ public final class AutoAssignmentGameTests {
             register(helper, "auto_assign_highest_skill", AutoAssignmentGameTests::highestSkill);
             register(helper, "auto_assign_freed_place", AutoAssignmentGameTests::freedPlace);
             register(helper, "auto_assign_catch_up", AutoAssignmentGameTests::catchUp);
+            register(helper, "auto_assign_message_article", AutoAssignmentGameTests::messageArticle);
         });
     }
 
@@ -223,6 +225,35 @@ public final class AutoAssignmentGameTests {
         });
     }
 
+    /** The action bar message uses the right article: "is now an Adventurer", "is now a Lumberjack". */
+    private static void messageArticle(GameTestHelper helper) {
+        JsonObject lang = GuiTextGameTests.lang(helper);
+        String adventurer = render(lang, AutoAssignment.assignedMessage(Component.literal("Ada"), ModJobs.ADVENTURER.get()));
+        helper.assertTrue("Ada is now an Adventurer".equals(adventurer), "Article an: " + adventurer);
+        String lumberjack = render(lang, AutoAssignment.assignedMessage(Component.literal("Bo"), ModJobs.LUMBERJACK.get()));
+        helper.assertTrue("Bo is now a Lumberjack".equals(lumberjack), "Article a: " + lumberjack);
+        for (Job job : ModJobs.REGISTRY) {
+            if (!(job.displayName().getContents() instanceof TranslatableContents name) || !lang.has(name.getKey())) {
+                // Jobs registered by the tests have no lang entries.
+                continue;
+            }
+            String text = render(lang, AutoAssignment.assignedMessage(Component.literal("Cy"), job));
+            helper.assertTrue(text.matches("Cy is now an? \\p{Lu}\\S*"), "Every Job has its article: " + text);
+        }
+        helper.succeed();
+    }
+
+    /** Resolves a message with the English lang file. */
+    private static String render(JsonObject lang, Component component) {
+        if (!(component.getContents() instanceof TranslatableContents translatable)) {
+            return component.getString();
+        }
+        String format = lang.has(translatable.getKey()) ? lang.get(translatable.getKey()).getAsString() : translatable.getKey();
+        Object[] args = java.util.Arrays.stream(translatable.getArgs()).map(arg -> arg instanceof Component inner ? render(lang, inner) : String.valueOf(arg))
+                .toArray();
+        return String.format(java.util.Locale.ROOT, format, args);
+    }
+
     /**
      * A settler that lost its Job is not assigned then; a catch-up over 06:00 assigns it like the live morning.
      */
@@ -244,6 +275,7 @@ public final class AutoAssignmentGameTests {
         CatchUp.runNow(level, List.of(settler));
         helper.assertTrue(holds(helper, settler, LUMBERJACK, lumberjack), "The missed 06:00 assigns it: " + settler.getJobs());
         helper.assertTrue(settler.getJobs().stream().map(SettlerJob::jobType).toList().equals(List.of(lumberjack)), "Only that Job");
+        helper.assertTrue(settler.getWork().recentThoughts().isEmpty(), "No bubble sent while caught up: " + settler.getWork().recentThoughts());
         settler.discard();
         helper.succeed();
     }

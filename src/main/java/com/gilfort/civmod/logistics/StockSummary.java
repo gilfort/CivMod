@@ -65,6 +65,20 @@ final class StockSummary {
 
     /**
      * @param item an item
+     * @return how many of it are held (components ignored)
+     */
+    long amount(Item item) {
+        long total = 0;
+        for (Map.Entry<ItemResource, Entry> entry : entries.entrySet()) {
+            if (entry.getKey().getItem() == item) {
+                total += entry.getValue().amount;
+            }
+        }
+        return total;
+    }
+
+    /**
+     * @param item an item
      * @return whether any of it is held (components ignored)
      */
     boolean contains(Item item) {

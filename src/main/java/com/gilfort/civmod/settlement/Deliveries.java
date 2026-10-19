@@ -181,7 +181,7 @@ public final class Deliveries {
      * @param item       an item
      * @return how many of it surplus tasks bring into that Warehouse's store
      */
-    public static int surplusTo(Settlement settlement, BlockPos warehouse, Item item) {
+    static int surplusTo(Settlement settlement, BlockPos warehouse, Item item) {
         return settlement.deliveries().stream().filter(DeliveryTask::surplus).flatMap(task -> task.input().stream())
                 .filter(input -> input.to().equals(warehouse)).mapToInt(input -> input.items().getOrDefault(item, 0)).sum();
     }

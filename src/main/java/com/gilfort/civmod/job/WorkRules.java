@@ -172,7 +172,8 @@ final class WorkRules {
             }
             // The Max check per roll: the Home Clerk's stock may have changed (catch-up delivers straight into it).
             Set<Item> atMax = StockRules.atMax(level, site);
-            End pause = pause(level, profile, scan, site, tool.get(), atMax);
+            ItemStack rollTool = tool.get();
+            End pause = pause(level, profile, workplace, site, rollTool, atMax);
             if (pause != End.NONE) {
                 end = pause;
                 break;
@@ -180,8 +181,8 @@ final class WorkRules {
             ticks -= (1.0 - accumulated) / perTick;
             accumulated = 0.0;
             Optional<ItemStack> secondary = profile.secondaryTool(site.block()).flatMap(kind -> SettlerTools.best(settler, kind));
-            Optional<JobProfile.Produced> produced = profile.produce(new JobProfile.Context(level, settler, scan, poi, tool.get(), secondary,
-                    site.block(), skillLevel, atMax));
+            Optional<JobProfile.Produced> produced = profile.produce(new JobProfile.Context(level, settler, scan, poi, rollTool, secondary,
+                    site.block(), skillLevel, atMax, type -> workplace.dropped(level, profile, poi, type, rollTool)));
             rolls++;
             if (produced.isPresent()) {
                 SettlerTools.wear(level, settler, produced.get().worn());
@@ -232,16 +233,17 @@ final class WorkRules {
      * Whether a job pauses because nothing is left to produce (vault {@code Systems/Resource Collection Jobs.md}):
      * every main resource is excluded at the JobBlock or its dropped item is at Max at the Home Clerk.
      *
-     * @param level   the level
-     * @param profile the job's profile
-     * @param scan    the job's scan (null while the first scan runs)
-     * @param site    the JobBlock
-     * @param tool    the tool the drops are checked with (may be empty)
-     * @param atMax   the items at Max at the Home Clerk ({@link com.gilfort.civmod.settlement.StockRules#atMax})
+     * @param level     the level
+     * @param profile   the job's profile
+     * @param workplace the job's Workplace (its scan, null while the first scan runs, and the dropped items)
+     * @param site      the JobBlock
+     * @param tool      the tool the drops are checked with (may be empty)
+     * @param atMax     the items at Max at the Home Clerk ({@link StockRules#atMax})
      * @return {@link End#ALL_EXCLUDED}, {@link End#MAX_REACHED} or {@link End#NOTHING_TO_PRODUCE} for a pause, else
      *         {@link End#NONE}
      */
-    static End pause(ServerLevel level, JobProfile profile, @Nullable ScanResult scan, JobBlockSite site, ItemStack tool, Set<Item> atMax) {
+    static End pause(ServerLevel level, JobProfile profile, Workplace workplace, JobBlockSite site, ItemStack tool, Set<Item> atMax) {
+        ScanResult scan = workplace.scan();
         if (scan == null || (atMax.isEmpty() && site.block().excluded().isEmpty())) {
             return End.NONE;
         }
@@ -253,7 +255,7 @@ final class WorkRules {
         for (Identifier type : main) {
             if (site.block().excluded().contains(type)) {
                 excluded++;
-            } else if (!atMax.contains(profile.dropped(level, site.pos(), type, tool))) {
+            } else if (!atMax.contains(workplace.dropped(level, profile, site.pos(), type, tool))) {
                 return End.NONE;
             }
         }

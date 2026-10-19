@@ -23,6 +23,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import com.google.gson.JsonParser;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
@@ -96,17 +97,44 @@ public final class FishermanGameTests {
         helper.succeed();
     }
 
-    /** The fish list comes from the fishing fish loot table: vanilla weights, nested and modded entries included. */
+    /**
+     * The fish list comes from the server's resolved fishing fish loot table: vanilla weights; composite children count
+     * with weight 1, unknown items are skipped; tag entries list each item of the tag, nested tables share the entry's
+     * weight by their own weights; the picked entry's modifier applies to the caught item.
+     */
     private static void fishTable(GameTestHelper helper) {
-        Map<Item, Integer> loaded = FishTable.get().fish().stream().collect(Collectors.toMap(FishTable.Fish::item, FishTable.Fish::weight));
-        helper.assertTrue(loaded.equals(Map.of(Items.COD, 60, Items.SALMON, 25, Items.TROPICAL_FISH, 2, Items.PUFFERFISH, 13)),
+        Map<Item, Double> loaded = FishTable.get().fish().stream().collect(Collectors.toMap(FishTable.Fish::item, FishTable.Fish::weight));
+        helper.assertTrue(loaded.equals(Map.of(Items.COD, 60.0, Items.SALMON, 25.0, Items.TROPICAL_FISH, 2.0, Items.PUFFERFISH, 13.0)),
                 "Vanilla fish table with its weights: " + loaded);
-        FishTable parsed = FishTable.parse(JsonParser.parseString("{\"pools\":[{\"entries\":["
+        ServerLevel level = helper.getLevel();
+        HolderLookup.Provider lookup = level.getServer().reloadableRegistries().lookup();
+        FishTable parsed = FishTable.resolve(lookup, JsonParser.parseString("{\"pools\":[{\"rolls\":1,\"entries\":["
                 + "{\"type\":\"minecraft:item\",\"name\":\"minecraft:cod\",\"weight\":5},"
                 + "{\"type\":\"minecraft:alternatives\",\"children\":[{\"type\":\"minecraft:item\",\"name\":\"minecraft:salmon\"}]},"
                 + "{\"type\":\"minecraft:item\",\"name\":\"othermod:unknown_fish\",\"weight\":3}]}]}"));
         helper.assertTrue(parsed.fish().equals(List.of(new FishTable.Fish(Items.COD, 5), new FishTable.Fish(Items.SALMON, 1))),
-                "Nested entries count with weight 1; unknown items are skipped: " + parsed.fish());
+                "Composite children count with weight 1; unknown items are skipped: " + parsed.fish());
+
+        // A tag entry: every item of minecraft:fishes with the entry's weight, the entry's modifier on the catch.
+        FishTable tagged = FishTable.resolve(lookup, JsonParser.parseString("{\"pools\":[{\"rolls\":1,\"entries\":["
+                + "{\"type\":\"minecraft:tag\",\"items\":\"#minecraft:fishes\",\"expand\":true,\"weight\":2,"
+                + "\"modifier\":{\"type\":\"minecraft:set_count\",\"count\":3}}]}]}"));
+        Map<Item, Double> fromTag = tagged.fish().stream().collect(Collectors.toMap(FishTable.Fish::item, FishTable.Fish::weight));
+        helper.assertTrue(fromTag.equals(Map.of(Items.COD, 2.0, Items.COOKED_COD, 2.0, Items.SALMON, 2.0, Items.COOKED_SALMON, 2.0,
+                Items.PUFFERFISH, 2.0, Items.TROPICAL_FISH, 2.0)), "Every fish of the tag: " + fromTag);
+        FishTable.Fish cookedCod = tagged.fish().stream().filter(fish -> fish.item() == Items.COOKED_COD).findFirst().orElseThrow();
+        ItemStack caught = cookedCod.caught(level, Vec3.atCenterOf(helper.absolutePos(BlockPos.ZERO)), new ItemStack(Items.FISHING_ROD), null);
+        helper.assertTrue(caught.is(Items.COOKED_COD) && caught.getCount() == 3, "The entry's modifier applies: " + caught);
+
+        // A nested table by reference: its fish share the entry's weight 10 by their own weights (60 / 25 / 2 / 13 of 100).
+        FishTable nested = FishTable.resolve(lookup, JsonParser.parseString("{\"pools\":[{\"rolls\":1,\"entries\":["
+                + "{\"type\":\"minecraft:item\",\"name\":\"minecraft:cooked_cod\",\"weight\":5},"
+                + "{\"type\":\"minecraft:loot_table\",\"value\":\"minecraft:gameplay/fishing/fish\",\"weight\":10}]}]}"));
+        Map<Item, Double> fromNested = nested.fish().stream().collect(Collectors.toMap(FishTable.Fish::item, FishTable.Fish::weight));
+        helper.assertTrue(fromNested.keySet().equals(Set.of(Items.COOKED_COD, Items.COD, Items.SALMON, Items.TROPICAL_FISH, Items.PUFFERFISH))
+                && Math.abs(fromNested.get(Items.COOKED_COD) - 5.0) < 1.0E-9 && Math.abs(fromNested.get(Items.COD) - 6.0) < 1.0E-9
+                && Math.abs(fromNested.get(Items.SALMON) - 2.5) < 1.0E-9 && Math.abs(fromNested.get(Items.TROPICAL_FISH) - 0.2) < 1.0E-9
+                && Math.abs(fromNested.get(Items.PUFFERFISH) - 1.3) < 1.0E-9, "Nested table weights: " + fromNested);
         helper.succeed();
     }
 
@@ -117,12 +145,12 @@ public final class FishermanGameTests {
         Set<Identifier> allButSalmon = Set.of(Identifier.withDefaultNamespace("cod"), Identifier.withDefaultNamespace("tropical_fish"),
                 Identifier.withDefaultNamespace("pufferfish"));
         for (int i = 0; i < 2000; i++) {
-            helper.assertTrue(table.pick(allButSalmon, random).equals(Optional.of(Items.SALMON)), "Only salmon is enabled");
+            helper.assertTrue(table.pick(allButSalmon, random).map(FishTable.Fish::item).equals(Optional.of(Items.SALMON)), "Only salmon is enabled");
         }
         int cod = 0;
         int samples = 20000;
         for (int i = 0; i < samples; i++) {
-            if (table.pick(Set.of(Identifier.withDefaultNamespace("salmon")), random).orElseThrow() == Items.COD) {
+            if (table.pick(Set.of(Identifier.withDefaultNamespace("salmon")), random).orElseThrow().item() == Items.COD) {
                 cod++;
             }
         }

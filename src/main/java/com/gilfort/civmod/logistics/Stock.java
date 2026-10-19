@@ -189,11 +189,19 @@ public final class Stock {
         return (int) Math.min(Integer.MAX_VALUE, total);
     }
 
+    /**
+     * @param item an item (components ignored)
+     * @return how many of it are reachable: a lookup in the stock view, no predicate over every stack
+     */
+    public int count(Item item) {
+        return available(item);
+    }
+
     /** How many of an item the containers hold, reserved ones included. */
     private int held(Item item) {
         long total = 0;
         for (StockSummary summary : summaries()) {
-            total += summary.count(stack -> stack.is(item));
+            total += summary.amount(item);
         }
         return (int) Math.min(Integer.MAX_VALUE, total);
     }
