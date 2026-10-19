@@ -4,9 +4,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.SettlementBlock;
@@ -16,6 +19,8 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -26,49 +31,88 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Recipe;
 
 /**
- * What the Craftsperson's "Patterns" tab shows (vault {@code Jobs/Craftsperson.md}): the pattern library, the checkmark
- * limit of the settler last seen working it and the checkmarks last removed by a dropped limit. The server sends it
- * while the menu is open whenever it changed ({@link Sync}); the client edits patterns with {@link Edit}.
+ * What the "Patterns" tab of a Producing JobBlock shows (vault {@code Systems/Producing Jobs.md},
+ * {@code Jobs/Craftsperson.md}): the pattern library, the checkmark limit of the settler last seen working it, the
+ * checkmarks last removed by a dropped limit and the state line of a new pattern left unchecked at the limit. The server
+ * sends it while the menu is open whenever it changed ({@link Sync}); the client edits patterns with {@link Edit}.
  *
- * @param limit    the checkmark limit
- * @param patterns the patterns by slot
- * @param trim     the checkmarks last removed by a dropped limit
- * @param metal    the slots of patterns that make or need metal (the Craftsperson cannot use them)
+ * @param limit        the checkmark limit
+ * @param patterns     the patterns by slot
+ * @param trim         the checkmarks last removed by a dropped limit
+ * @param filtered     the slots of patterns the producer's filters block (the Craftsperson: metal)
+ * @param foreign      the slots of patterns of a recipe type the producer does not follow
+ * @param filteredLine the state line of a filtered pattern ("Can't work with metal")
+ * @param limitNotice  "A Craftsperson masters only 6 recipes at once – choose which to check." while a new pattern stayed
+ *                     unchecked at the limit (until the next toggle)
  */
-public record PatternTab(int limit, List<Pattern> patterns, Optional<SettlementBlock.Trim> trim, Set<Integer> metal) {
+public record PatternTab(int limit, List<Pattern> patterns, Optional<SettlementBlock.Trim> trim, Set<Integer> filtered, Set<Integer> foreign,
+        Component filteredLine, Optional<Component> limitNotice) {
 
     /** Nothing (any other JobBlock, or before the first sync). */
-    public static final PatternTab EMPTY = new PatternTab(Patterns.BASE_CHECKMARKS, List.of(), Optional.empty(), Set.of());
+    public static final PatternTab EMPTY = new PatternTab(Patterns.BASE_CHECKMARKS, List.of(), Optional.empty(), Set.of(), Set.of(),
+            Component.empty(), Optional.empty());
+
+    /** Network codec of a set of library slots. */
+    private static final StreamCodec<ByteBuf, Set<Integer>> SLOTS_CODEC = ByteBufCodecs.VAR_INT
+            .apply(ByteBufCodecs.collection(HashSet::new, Pattern.SLOTS)).map(slots -> slots, HashSet::new);
 
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, PatternTab> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.VAR_INT, PatternTab::limit,
             Pattern.STREAM_CODEC.apply(ByteBufCodecs.list(Pattern.SLOTS)), PatternTab::patterns,
             ByteBufCodecs.optional(SettlementBlock.Trim.STREAM_CODEC), PatternTab::trim,
-            ByteBufCodecs.VAR_INT.apply(ByteBufCodecs.collection(HashSet::new, Pattern.SLOTS)), tab -> new HashSet<>(tab.metal()),
+            SLOTS_CODEC, PatternTab::filtered,
+            SLOTS_CODEC, PatternTab::foreign,
+            ComponentSerialization.STREAM_CODEC, PatternTab::filteredLine,
+            ByteBufCodecs.optional(ComponentSerialization.STREAM_CODEC), PatternTab::limitNotice,
             PatternTab::new);
 
     /**
-     * @param limit    the checkmark limit
-     * @param patterns the patterns
-     * @param trim     the removed checkmarks
-     * @param metal    the slots of metal patterns
+     * @param limit        the checkmark limit
+     * @param patterns     the patterns
+     * @param trim         the removed checkmarks
+     * @param filtered     the slots of filtered patterns
+     * @param foreign      the slots of patterns of a foreign recipe type
+     * @param filteredLine the state line of a filtered pattern
+     * @param limitNotice  the state line of a new pattern left unchecked at the limit
      */
     public PatternTab {
         patterns = List.copyOf(patterns);
-        metal = Set.copyOf(metal);
+        filtered = Set.copyOf(filtered);
+        foreign = Set.copyOf(foreign);
     }
 
     /**
      * @param level the level
-     * @param pos   the Craftsperson JobBlock position
+     * @param pos   the Producing JobBlock position
      * @return the current tab of that JobBlock ({@link #EMPTY} if it is none)
      */
     public static PatternTab of(ServerLevel level, BlockPos pos) {
-        return SettlementData.get(level).settlementAt(pos).flatMap(settlement -> settlement.block(pos)).filter(Patterns::isCraftsperson)
-                .map(block -> new PatternTab(block.checkLimit(), block.patterns(), block.trim(), block.patterns().stream()
-                        .filter(pattern -> Patterns.usesMetal(level, pattern)).map(Pattern::slot).collect(Collectors.toSet())))
-                .orElse(EMPTY);
+        return SettlementData.get(level).settlementAt(pos).flatMap(settlement -> settlement.block(pos)).filter(Patterns::isProducing)
+                .map(block -> of(level, block)).orElse(EMPTY);
+    }
+
+    private static PatternTab of(ServerLevel level, SettlementBlock block) {
+        Job producer = Patterns.producer(block);
+        ProducingProfile profile = Patterns.profile(producer);
+        Set<Integer> foreign = slots(block, pattern -> Patterns.foreign(level, profile, pattern));
+        Set<Integer> filtered = slots(block, pattern -> !foreign.contains(pattern.slot()) && Patterns.filtered(level, profile, pattern));
+        Optional<Component> notice = block.atLimit()
+                ? Optional.of(Component.translatable("civmod.gui.patterns.at_limit", producer.displayName(), block.checkLimit()))
+                : Optional.empty();
+        return new PatternTab(block.checkLimit(), block.patterns(), block.trim(), filtered, foreign, profile.filteredLine(), notice);
+    }
+
+    private static Set<Integer> slots(SettlementBlock block, Predicate<Pattern> test) {
+        return block.patterns().stream().filter(test).map(Pattern::slot).collect(Collectors.toSet());
+    }
+
+    /**
+     * @param slot a library slot
+     * @return whether the producer cannot use the pattern in that slot although it makes something
+     */
+    public boolean blocked(int slot) {
+        return filtered.contains(slot) || foreign.contains(slot);
     }
 
     /**
@@ -129,7 +173,7 @@ public record PatternTab(int limit, List<Pattern> patterns, Optional<SettlementB
     }
 
     /**
-     * Client → server: change a pattern of the open Craftsperson menu.
+     * Client → server: change a pattern of the open Producing JobBlock menu.
      *
      * @param containerId the menu's container id
      * @param op          what to do

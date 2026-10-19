@@ -31,7 +31,7 @@ import net.minecraft.world.item.crafting.Recipe;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 /**
- * The Craftsperson's "Patterns" tab of the {@link JobBlockScreen} (vault {@code Jobs/Craftsperson.md}); the client side
+ * The "Patterns" tab of a Producing JobBlock in the {@link JobBlockScreen} (vault {@code Jobs/Craftsperson.md}); the client side
  * of {@link PatternTab}. Two views: the library (54 pattern slots with checkmarks) and the editor of one pattern
  * (3×3 grid, output, recipe arrows, Check / Clear / Back). Also the target of recipe viewer transfers.
  */
@@ -101,7 +101,7 @@ final class PatternTabView {
         Optional<Pattern> pattern = menu.getPatternTab().pattern(editing);
         boolean checked = pattern.map(Pattern::checked).orElse(false);
         checkButton.setMessage(Component.translatable(checked ? "civmod.gui.patterns.uncheck" : "civmod.gui.patterns.check"));
-        checkButton.active = checked || (pattern.filter(Pattern::valid).isPresent() && !menu.getPatternTab().metal().contains(editing)
+        checkButton.active = checked || (pattern.filter(Pattern::valid).isPresent() && !menu.getPatternTab().blocked(editing)
                 && menu.getPatternTab().checked() < menu.getPatternTab().limit());
         boolean recipe = pattern.filter(found -> found.valid() && !found.exact()).isPresent();
         previousButton.active = recipe;
@@ -303,8 +303,8 @@ final class PatternTabView {
                 graphics.item(icon, x, y);
                 graphics.itemDecorations(font, icon, x, y);
             });
-            if (tab.metal().contains(slot)) {
-                // Metal: the Craftsperson cannot use the pattern.
+            if (tab.blocked(slot)) {
+                // Filtered (the Craftsperson: metal) or a foreign recipe type: the producer cannot use the pattern.
                 CivGui.slotInactive(graphics, x, y);
             }
             if (pattern.filter(Pattern::checked).isPresent()) {
@@ -318,11 +318,19 @@ final class PatternTabView {
         int y = LIBRARY_Y + LIBRARY_ROWS * 18 + 2;
         graphics.text(font, Component.translatable("civmod.gui.patterns.checkmarks", tab.checked(), tab.limit()), CivGui.PADDING, y,
                 CivGui.LABEL_COLOR, false);
-        tab.trim().ifPresent(trim -> graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.patterns.trimmed", trim.removed(),
-                trim.limit()), screen.panelWidth() - 2 * CivGui.PADDING), CivGui.PADDING, y + 9, CivGui.ERROR_COLOR, false));
+        // The newer state line: a new pattern left unchecked at the limit, else the checkmarks removed by a dropped limit.
+        Optional<Component> notice = tab.limitNotice().or(() -> tab.trim().map(trim -> Component.translatable("civmod.gui.patterns.trimmed",
+                trim.removed(), trim.limit())));
+        notice.ifPresent(line -> graphics.text(font, CivGui.fit(font, line, screen.panelWidth() - 2 * CivGui.PADDING), CivGui.PADDING, y + 9,
+                CivGui.ERROR_COLOR, false));
         if (hovered >= 0) {
             graphics.setComponentTooltipForNextFrame(font, tooltip(tab, hovered), mouseX, mouseY);
         }
+    }
+
+    /** Why the producer cannot use a pattern: a foreign recipe type, else its profile's filter line ("Can't work with metal"). */
+    private static Component blockedLine(PatternTab tab, int slot) {
+        return tab.foreign().contains(slot) ? Component.translatable("civmod.gui.patterns.foreign") : tab.filteredLine();
     }
 
     private static List<Component> tooltip(PatternTab tab, int slot) {
@@ -332,8 +340,8 @@ final class PatternTabView {
             Pattern found = pattern.get();
             lines.add(Component.translatable("civmod.gui.clerk.request.amount", found.count(), new ItemStack(found.output()).getHoverName()));
             lines.add(Component.translatable(found.exact() ? "civmod.gui.patterns.exact" : "civmod.gui.patterns.recipe").withStyle(ChatFormatting.GRAY));
-            if (tab.metal().contains(slot)) {
-                lines.add(Component.translatable("civmod.gui.patterns.metal").withStyle(ChatFormatting.RED));
+            if (tab.blocked(slot)) {
+                lines.add(blockedLine(tab, slot).copy().withStyle(ChatFormatting.RED));
             } else {
                 lines.add(Component.translatable(found.checked() ? "civmod.gui.patterns.checked" : "civmod.gui.patterns.unchecked")
                         .withStyle(found.checked() ? ChatFormatting.GREEN : ChatFormatting.GRAY));
@@ -379,9 +387,8 @@ final class PatternTabView {
         int width = screen.panelWidth() - 2 * CivGui.PADDING;
         graphics.text(font, CivGui.fit(font, mode, width), CivGui.PADDING, y, pattern.isPresent() && !valid ? CivGui.ERROR_COLOR : CivGui.HINT_COLOR,
                 false);
-        if (tab.metal().contains(editing)) {
-            graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.patterns.metal"), width), CivGui.PADDING, y + 10,
-                    CivGui.ERROR_COLOR, false);
+        if (tab.blocked(editing)) {
+            graphics.text(font, CivGui.fit(font, blockedLine(tab, editing), width), CivGui.PADDING, y + 10, CivGui.ERROR_COLOR, false);
         }
         if (hovered >= TARGET_CELL && hovered < TARGET_CELL + Pattern.GRID) {
             Item item = pattern.map(found -> found.grid().get(hovered - TARGET_CELL)).orElse(Items.AIR);

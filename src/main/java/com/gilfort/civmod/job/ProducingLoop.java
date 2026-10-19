@@ -12,9 +12,10 @@ import java.util.UUID;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.CraftPlan;
-import com.gilfort.civmod.logistics.CraftingRecipes;
+import com.gilfort.civmod.logistics.PatternRecipes;
 import com.gilfort.civmod.logistics.DeliveryTask;
 import com.gilfort.civmod.logistics.ItemCounts;
 import com.gilfort.civmod.logistics.Pattern;
@@ -44,16 +45,19 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Work loop of the Producing Job Category, first implemented by the Craftsperson (vault {@code Jobs/Craftsperson.md},
- * {@code Systems/Producing Jobs.md}). A round: take the highest-priority request the Craftsperson has a checked pattern
- * for (up to {@value #MAX_TRIES} tries; a request it lacks inputs for is skipped for 30 s), claim what it can make in one
- * round, fetch the inputs (collect inventory first, then the posting Clerk's storage under the access rule) into its
- * buffer, craft intermediates and the item at its station (a crafting table) and deliver to the posting Clerk; what does
+ * Work loop of the Producing Job Category (vault {@code Systems/Producing Jobs.md}, {@code Jobs/Craftsperson.md}) for
+ * every Job with a {@link ProducingProfile} (the Craftsperson is the first). A round: take the highest-priority request
+ * the Job has a usable checked pattern for (up to {@value #MAX_TRIES} tries; a request it lacks inputs for is skipped for
+ * 30 s), claim what it can make in one round, fetch the inputs (collect inventory first, then the posting Clerk's storage
+ * under the access rule) into its buffer, work intermediates and the item at the station of each recipe type (the
+ * profile's work time per recipe, its "execute recipe" hook) and deliver to the posting Clerk; what does
  * not fit goes to its own drop-off. On "Delivery: Deliveryman" the item goes into its own drop-off with a result
  * delivery for the posting Clerk ({@link Deliveries#postResult}), and it keeps working. There it also does not fetch
  * from stores itself: the inputs its collect inventory lacks are asked for as input deliveries ({@link Deliveries#postInput})
@@ -64,11 +68,11 @@ import net.minecraft.world.phys.Vec3;
  * go to its own drop-off (leaving the JobBlock: straight into it while it is loaded; death: the death path). The round
  * lives in the job's {@link Workplace}. Catch-up runs the same round without walking.
  */
-final class CraftspersonLoop implements CategoryLoop {
+final class ProducingLoop implements CategoryLoop {
 
     /** Requests tried per decision. */
     static final int MAX_TRIES = 3;
-    /** How long a request the Craftsperson lacks inputs for is skipped (30 s). */
+    /** How long a request the producer lacks inputs for is skipped (30 s). */
     static final long SKIP_TICKS = 600L;
     /** Stations are searched within this distance of the JobBlock. */
     private static final int STATION_RADIUS = 16;
@@ -96,7 +100,7 @@ final class CraftspersonLoop implements CategoryLoop {
     /**
      * @param shell the Settler Shell driving this loop
      */
-    CraftspersonLoop(SettlerWork shell) {
+    ProducingLoop(SettlerWork shell) {
         this.shell = shell;
         this.settler = shell.settler();
     }
@@ -107,8 +111,8 @@ final class CraftspersonLoop implements CategoryLoop {
     public boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
         BlockPos jobBlock = job.jobBlock();
         releaseIfRestored(level);
-        Patterns.uncheckMetal(level, jobBlock);
-        Patterns.enforceLimit(SettlementData.get(level), jobBlock, Patterns.checkLimit(shell.effectiveLevel(job)));
+        Patterns.uncheckBlocked(level, jobBlock);
+        Patterns.enforceLimit(SettlementData.get(level), jobBlock, profile(job).checkLimit(shell.effectiveLevel(job)));
         Workplace workplace = shell.workplace(jobBlock);
         if (workplace.round() == null) {
             if (workplace.dropOffPending() || workplace.buffer().shouldDeliver()) {
@@ -141,7 +145,7 @@ final class CraftspersonLoop implements CategoryLoop {
                 walk(level, shell.reachableVisit(level, source, ClerkStorage.visit(level, source, dayTime)));
             }
             case CRAFT -> {
-                BlockPos station = station(level, job, site, day);
+                BlockPos station = stepStation(level, job, site, round, day);
                 if (station == null) {
                     release(level, jobBlock);
                     shell.block(level, jobBlock, JobStatus.NO_WORK_PLACE);
@@ -171,7 +175,7 @@ final class CraftspersonLoop implements CategoryLoop {
      * and claims what can be made of it in one round.
      *
      * @param now     the time for skipping (live: game time, catch-up: the simulated clock)
-     * @param catchUp whether the Craftsperson reaches every Clerk's counter (catch-up)
+     * @param catchUp whether the producer reaches every Clerk's counter (catch-up)
      */
     private Pick start(ServerLevel level, SettlerJob job, JobBlockSite site, long now, long dayTime, boolean catchUp) {
         BlockPos jobBlock = job.jobBlock();
@@ -180,6 +184,7 @@ final class CraftspersonLoop implements CategoryLoop {
         Workplace workplace = shell.workplace(jobBlock);
         Map<UUID, Long> skips = workplace.skips();
         skips.values().removeIf(until -> until <= now || until - now > SKIP_TICKS);
+        ProducingProfile profile = profile(job);
         List<Pattern> checked = Patterns.usable(level, site.block());
         JobBuffer buffer = workplace.buffer();
         Map<Item, Integer> held = buffer.counts();
@@ -217,10 +222,10 @@ final class CraftspersonLoop implements CategoryLoop {
                 }
                 stores.values().forEach(counts -> ItemCounts.addAll(available, counts));
             }
-            int amount = CraftPlan.most(level, checked, request.item(), request.amount(), held, available, room);
+            int amount = CraftPlan.most(level, profile, checked, request.item(), request.amount(), held, available, room);
             if (amount <= 0) {
                 // What the whole open request misses ("2× stone pickaxe" → "Missing: 6× Cobblestone").
-                CraftPlan failed = CraftPlan.plan(level, checked, request.item(), request.amount(), held, available);
+                CraftPlan failed = CraftPlan.plan(level, profile, checked, request.item(), request.amount(), held, available);
                 Requests.setMissing(data, settlement, request.id(), failed.missing());
                 skips.put(request.id(), now + SKIP_TICKS);
                 continue;
@@ -229,7 +234,7 @@ final class CraftspersonLoop implements CategoryLoop {
             if (claimed <= 0) {
                 continue;
             }
-            CraftPlan plan = CraftPlan.plan(level, checked, request.item(), claimed, held, available);
+            CraftPlan plan = CraftPlan.plan(level, profile, checked, request.item(), claimed, held, available);
             List<BlockPos> sources = new ArrayList<>();
             Map<Item, Integer> rest = new HashMap<>(plan.takes());
             if (!allot(rest, collect).isEmpty()) {
@@ -275,7 +280,7 @@ final class CraftspersonLoop implements CategoryLoop {
     }
 
     /**
-     * On "Deliveryman": what every Clerk of the settlement holds for the Deliverymen of the Craftsperson's Home Clerk –
+     * On "Deliveryman": what every Clerk of the settlement holds for the Deliverymen of the producer's Home Clerk –
      * the whole storage of the Clerks their Warehouse handles (staff), the counter under the access rule elsewhere –
      * the Home Clerk first, then by distance. A Clerk that is the collect inventory is counted there already.
      */
@@ -462,7 +467,7 @@ final class CraftspersonLoop implements CategoryLoop {
         }
         Workplace workplace = shell.workplace(job.jobBlock());
         double progress = workplace.production() + speed(job) / 20.0;
-        if (progress < 1.0) {
+        if (progress < workTime(level, job, round)) {
             workplace.setProduction(progress);
             return;
         }
@@ -477,9 +482,10 @@ final class CraftspersonLoop implements CategoryLoop {
     }
 
     /**
-     * One crafting operation of the round's current step in the buffer: inputs out, output (and remainders) in, EXP.
+     * One execution of the round's current step in the buffer: inputs out, the profile's "execute recipe" result in
+     * (by default the output and the remainders), EXP.
      *
-     * @return whether it was crafted (false: inputs gone, the round failed)
+     * @return whether it was executed (false: inputs gone, the round failed)
      */
     private boolean craftOne(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, boolean effects) {
         CraftPlan.Step step = round.steps.get(round.step);
@@ -496,8 +502,15 @@ final class CraftspersonLoop implements CategoryLoop {
             consumed.add(one);
         }
         Pattern pattern = step.pattern();
-        buffer.add(new ItemStack(pattern.output(), pattern.count()));
-        CraftingRecipes.remainders(consumed).forEach(buffer::add);
+        ItemStack result = new ItemStack(pattern.output(), pattern.count());
+        Optional<RecipeHolder<?>> recipe = recipe(level, pattern);
+        if (recipe.isPresent()) {
+            profile(job).execute(level, recipe.get(), result, List.copyOf(consumed)).forEach(buffer::add);
+        } else {
+            // The recipe is gone (datapack change): the pattern's own output, as recorded.
+            buffer.add(result);
+            PatternRecipes.remainders(consumed).forEach(buffer::add);
+        }
         shell.gainExp(level, job, job.jobType().baseExp() * site.level(), site.skillCap());
         if (++round.crafted >= step.crafts()) {
             round.step++;
@@ -600,24 +613,55 @@ final class CraftspersonLoop implements CategoryLoop {
         }
     }
 
-    /** Crafting operations per second: the shared speed formula × the job factor. */
+    /** Operations per second: the shared speed formula × the job factor. */
     private double speed(SettlerJob job) {
         return LumberjackOutput.speed(shell.effectiveLevel(job)) * job.jobType().jobFactor();
+    }
+
+    private static ProducingProfile profile(SettlerJob job) {
+        return Patterns.profile(job.jobType());
+    }
+
+    private static Optional<RecipeHolder<?>> recipe(ServerLevel level, Pattern pattern) {
+        return pattern.recipe().flatMap(id -> PatternRecipes.holder(level, id));
+    }
+
+    /** Operations one execution of the round's current step takes (the profile's work time; 1 for a recipe that is gone). */
+    private static double workTime(ServerLevel level, SettlerJob job, Round round) {
+        return recipe(level, round.steps.get(round.step).pattern()).map(profile(job)::workTime).orElse(1.0);
     }
 
     // ---------------------------------------------------------------- station
 
     /**
-     * The station of the day: a scroll work point, else the nearest station within {@value #STATION_RADIUS} blocks of
-     * the JobBlock inside the border.
+     * The station of the day: a scroll work point (a station of any of the profile's recipe types), else the nearest
+     * station of the main recipe type within {@value #STATION_RADIUS} blocks of the JobBlock inside the border.
      */
     private @Nullable BlockPos station(ServerLevel level, SettlerJob job, JobBlockSite site, long day) {
-        Optional<TagKey<Block>> tag = job.jobType().station();
-        if (tag.isEmpty()) {
-            return null;
+        ProducingProfile profile = profile(job);
+        List<TagKey<Block>> tags = profile.recipeTypes().stream().<TagKey<Block>>map(profile::station).distinct().toList();
+        TagKey<Block> main = tags.getFirst();
+        return shell.workplace(job.jobBlock()).workPlaceOfDay(level,
+                pos -> level.isLoaded(pos) && tags.stream().anyMatch(level.getBlockState(pos)::is), () -> nearestStation(level, site, main), site, day);
+    }
+
+    /**
+     * The station of the round's current step: the station of the day if it is one of the step's recipe type, else the
+     * nearest station of that type (looked up once per round and type).
+     */
+    private @Nullable BlockPos stepStation(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, long day) {
+        BlockPos ofDay = station(level, job, site, day);
+        Optional<RecipeType<?>> type = round.crafted() ? Optional.empty()
+                : recipe(level, round.steps.get(round.step).pattern()).map(holder -> holder.value().getType());
+        if (ofDay == null || type.isEmpty() || !profile(job).recipeTypes().contains(type.get())) {
+            return ofDay;
         }
-        return shell.workplace(job.jobBlock()).workPlaceOfDay(level, pos -> level.isLoaded(pos) && level.getBlockState(pos).is(tag.get()),
-                () -> nearestStation(level, site, tag.get()), site, day);
+        TagKey<Block> tag = profile(job).station(type.get());
+        if (level.getBlockState(ofDay).is(tag)) {
+            return ofDay;
+        }
+        BlockPos found = round.stations.computeIfAbsent(tag, key -> Optional.ofNullable(nearestStation(level, site, key))).orElse(null);
+        return found != null && level.isLoaded(found) && level.getBlockState(found).is(tag) ? found : null;
     }
 
     private static @Nullable BlockPos nearestStation(ServerLevel level, JobBlockSite site, TagKey<Block> tag) {
@@ -658,8 +702,8 @@ final class CraftspersonLoop implements CategoryLoop {
         }
         JobBlockSite site = found.get();
         releaseIfRestored(level);
-        Patterns.uncheckMetal(level, jobBlock);
-        Patterns.enforceLimit(SettlementData.get(level), jobBlock, Patterns.checkLimit(shell.effectiveLevel(job)));
+        Patterns.uncheckBlocked(level, jobBlock);
+        Patterns.enforceLimit(SettlementData.get(level), jobBlock, profile(job).checkLimit(shell.effectiveLevel(job)));
         if (station(level, job, site, day) == null) {
             shell.setStatus(jobBlock, JobStatus.NO_WORK_PLACE);
             return new SimulatedWork(0, workTicks);
@@ -711,7 +755,7 @@ final class CraftspersonLoop implements CategoryLoop {
             }
             double perTick = speed(job) / 20.0;
             while (round.phase == Round.Phase.CRAFT && ticks > 0.0 && workplace.round() == round) {
-                double need = (1.0 - workplace.production()) / perTick;
+                double need = (workTime(level, job, round) - workplace.production()) / perTick;
                 if (need > ticks) {
                     workplace.setProduction(workplace.production() + ticks * perTick);
                     clock += ticks;

@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.settlement.Patterns;
 
 import net.minecraft.core.Holder;
@@ -19,7 +20,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 
 /**
- * How a Craftsperson makes an amount of an item with its checked patterns (vault {@code Jobs/Craftsperson.md}): the
+ * How a Producing Job makes an amount of an item with its checked patterns (vault {@code Systems/Producing Jobs.md},
+ * {@code Jobs/Craftsperson.md}), for every recipe type of its profile: the
  * full need is computed down to base inputs; inputs it already holds come first, then the stock; a missing input it
  * has a pattern for is crafted first in its own buffer (intermediates, never put into storage), a missing base input
  * without a pattern is reported ("Missing: 6× Cobblestone").
@@ -48,16 +50,17 @@ public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integ
 
     /**
      * @param level   the level
-     * @param checked the checked patterns of the Craftsperson
+     * @param profile the producer's profile (its input filter)
+     * @param checked the checked patterns of the producer
      * @param item    the item to make
      * @param amount  how many
      * @param held    what the Craftsperson already holds in its buffer (used first)
      * @param stock   what it can take from its collect inventory and the Clerk storage
      * @return the plan, with {@link #missing()} set if it cannot be done
      */
-    public static CraftPlan plan(ServerLevel level, List<Pattern> checked, Item item, int amount, Map<Item, Integer> held,
-            Map<Item, Integer> stock) {
-        Planner planner = new Planner(level, checked, held, stock);
+    public static CraftPlan plan(ServerLevel level, ProducingProfile profile, List<Pattern> checked, Item item, int amount,
+            Map<Item, Integer> held, Map<Item, Integer> stock) {
+        Planner planner = new Planner(level, profile, checked, held, stock);
         planner.craft(item, amount, 0);
         List<Request.Missing> missing = planner.missing.entrySet().stream()
                 .map(entry -> new Request.Missing(entry.getKey(), entry.getValue())).toList();
@@ -70,6 +73,7 @@ public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integ
      * buffer.
      *
      * @param level   the level
+     * @param profile the producer's profile
      * @param checked the checked patterns
      * @param item    the item to make
      * @param wanted  how many are wanted at most
@@ -78,13 +82,13 @@ public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integ
      * @param room    how many items it can still take into its buffer
      * @return the amount, 0 if not even one can be made
      */
-    public static int most(ServerLevel level, List<Pattern> checked, Item item, int wanted, Map<Item, Integer> held, Map<Item, Integer> stock,
-            int room) {
+    public static int most(ServerLevel level, ProducingProfile profile, List<Pattern> checked, Item item, int wanted, Map<Item, Integer> held,
+            Map<Item, Integer> stock, int room) {
         int low = 0;
         int high = Math.max(0, wanted);
         while (low < high) {
             int middle = (low + high + 1) / 2;
-            CraftPlan plan = plan(level, checked, item, middle, held, stock);
+            CraftPlan plan = plan(level, profile, checked, item, middle, held, stock);
             if (plan.missing().isEmpty() && plan.taken() <= room) {
                 low = middle;
             } else {
@@ -105,6 +109,7 @@ public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integ
     private static final class Planner {
 
         private final ServerLevel level;
+        private final ProducingProfile profile;
         private final List<Pattern> checked;
         /** Items held or crafted and not used yet. */
         private final Map<Item, Integer> pool;
@@ -114,8 +119,9 @@ public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integ
         private final List<Step> steps = new ArrayList<>();
         private final Set<Item> crafting = new HashSet<>();
 
-        Planner(ServerLevel level, List<Pattern> checked, Map<Item, Integer> held, Map<Item, Integer> stock) {
+        Planner(ServerLevel level, ProducingProfile profile, List<Pattern> checked, Map<Item, Integer> held, Map<Item, Integer> stock) {
             this.level = level;
+            this.profile = profile;
             this.checked = checked;
             this.pool = new LinkedHashMap<>(held);
             this.stock = new LinkedHashMap<>(stock);
@@ -129,7 +135,7 @@ public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integ
                 return;
             }
             int crafts = (amount + pattern.get().count() - 1) / pattern.get().count();
-            List<Ingredient> inputs = Patterns.inputs(level, pattern.get());
+            List<Ingredient> inputs = Patterns.inputs(level, profile, pattern.get());
             for (Ingredient input : inputs) {
                 obtain(input, crafts, depth);
             }

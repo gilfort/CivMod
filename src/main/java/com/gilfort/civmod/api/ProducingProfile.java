@@ -1,0 +1,113 @@
+package com.gilfort.civmod.api;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.jetbrains.annotations.ApiStatus;
+
+import com.gilfort.civmod.logistics.PatternRecipes;
+import com.gilfort.civmod.settlement.Patterns;
+
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.level.block.Block;
+
+/**
+ * The specifics of a Producing Job (vault {@code Systems/Producing Jobs.md}). CivMod's Producing loop does the rest:
+ * it takes the highest-priority request of the settlement it has a checked pattern for, resolves intermediates with its
+ * own patterns, fetches the inputs (or waits for input deliveries), works the recipes at a station and delivers the
+ * result to the requesting Clerk (or into its drop-off for a Deliveryman).
+ * <p>
+ * Recipes come from recipe types, vanilla or modded ({@code crafting}, {@code stonecutting}, {@code smelting}, …): the
+ * player makes patterns from them in the JobBlock's Patterns tab. A pattern is usable if its recipe is of one of the
+ * profile's types and the {@link #inputFilter()} / {@link #outputFilter()} let it through. New patterns are checked
+ * automatically up to {@link #checkLimit(int)}.
+ * <p>
+ * The Craftsperson ({@link CivModJobs#CRAFTSPERSON}) is a profile with {@code crafting} and a filter that denies metal.
+ */
+@ApiStatus.Experimental
+public interface ProducingProfile extends CategoryProfile {
+
+    @Override
+    default JobCategory category() {
+        return JobCategory.PRODUCING;
+    }
+
+    /**
+     * @return the recipe types the Job's patterns follow, the first one is the main type (its station is the work place
+     *         of the day); at least one
+     */
+    List<RecipeType<?>> recipeTypes();
+
+    /**
+     * The station the Job works recipes of a type at, as a block tag ({@code <namespace>:stations/<job>} by convention).
+     * The station of the main recipe type is the work place of the day (set with the Scroll of Assignment, else the
+     * nearest within 16 blocks of the JobBlock); other types use the nearest station of their tag.
+     *
+     * @param type one of {@link #recipeTypes()}
+     * @return the block tag of its station
+     */
+    TagKey<Block> station(RecipeType<?> type);
+
+    /**
+     * Which inputs the Job works with. An input whose alternatives the filter all rejects blocks the pattern; rejected
+     * alternatives of a tag input are skipped.
+     *
+     * @return the input filter (every item by default)
+     */
+    default ItemFilter inputFilter() {
+        return ItemFilter.ANY;
+    }
+
+    /**
+     * @return which outputs the Job makes (every item by default); a rejected output blocks the pattern
+     */
+    default ItemFilter outputFilter() {
+        return ItemFilter.ANY;
+    }
+
+    /**
+     * @return the state line of a pattern the filters block, shown in the Patterns tab ("Can't work with metal")
+     */
+    default Component filteredLine() {
+        return Component.translatable("civmod.gui.patterns.filtered");
+    }
+
+    /**
+     * @param skill the settler's effective skill level in the Job
+     * @return how many patterns it can check at once (6 + 1 per 5 levels by default, like the Craftsperson)
+     */
+    default int checkLimit(int skill) {
+        return Patterns.checkLimit(skill);
+    }
+
+    /**
+     * The work time of one execution of a recipe, in operations of the shared speed formula × the Job's job factor.
+     *
+     * @param recipe the recipe
+     * @return the operations one execution takes (1 by default)
+     */
+    default double workTime(RecipeHolder<?> recipe) {
+        return 1.0;
+    }
+
+    /**
+     * Executes a recipe once in the settler's buffer: the consumed inputs are already taken out, the returned items go in.
+     *
+     * @param level    the level
+     * @param recipe   the recipe
+     * @param result   what the pattern makes per execution
+     * @param consumed the inputs taken out
+     * @return what goes into the buffer (by default the result plus the inputs' remainders, e.g. empty buckets)
+     */
+    default List<ItemStack> execute(ServerLevel level, RecipeHolder<?> recipe, ItemStack result, List<ItemStack> consumed) {
+        List<ItemStack> produced = new ArrayList<>();
+        produced.add(result);
+        produced.addAll(PatternRecipes.remainders(consumed));
+        return produced;
+    }
+}
