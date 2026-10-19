@@ -134,24 +134,27 @@ public final class SettlementBlock {
     }
 
     /**
-     * Checkmarks removed because the checkmark limit dropped (vault {@code Jobs/Craftsperson.md}), shown in the GUI.
-     *
-     * @param removed how many checkmarks were removed
-     * @param limit   the new limit
+     * The state line of a Producing JobBlock's Patterns tab (vault {@code Systems/Producing Jobs.md}): shown until the
+     * library is next edited (a pattern put, toggled or cleared) or replaced by a newer notice; not saved.
      */
-    public record Trim(int removed, int limit) {
+    public sealed interface Notice {
 
-        /** Save codec. */
-        public static final Codec<Trim> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                Codec.INT.fieldOf("removed").forGetter(Trim::removed),
-                Codec.INT.fieldOf("limit").forGetter(Trim::limit)
-        ).apply(instance, Trim::new));
+        /**
+         * A new pattern stayed unchecked because the checkmark limit was reached.
+         *
+         * @param limit the limit
+         */
+        record AtLimit(int limit) implements Notice {
+        }
 
-        /** Network codec. */
-        public static final StreamCodec<ByteBuf, Trim> STREAM_CODEC = StreamCodec.composite(
-                net.minecraft.network.codec.ByteBufCodecs.VAR_INT, Trim::removed,
-                net.minecraft.network.codec.ByteBufCodecs.VAR_INT, Trim::limit,
-                Trim::new);
+        /**
+         * Checkmarks were removed because the checkmark limit dropped.
+         *
+         * @param removed how many checkmarks were removed
+         * @param limit   the new limit
+         */
+        record Trimmed(int removed, int limit) implements Notice {
+        }
     }
 
     /**
@@ -159,19 +162,17 @@ public final class SettlementBlock {
      *
      * @param patterns   the pattern library
      * @param checkLimit the checkmark limit of the settler last seen working it
-     * @param trim       the last checkmarks removed by a dropped limit
      * @param byDeliveryman whether Deliverymen carry the results ("Delivery: Deliveryman"), else the Craftsperson itself
      */
-    private record CraftspersonFields(List<Pattern> patterns, int checkLimit, Optional<Trim> trim, boolean byDeliveryman) {
+    private record CraftspersonFields(List<Pattern> patterns, int checkLimit, boolean byDeliveryman) {
 
         static final MapCodec<CraftspersonFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Pattern.CODEC.listOf().optionalFieldOf("patterns", List.of()).forGetter(CraftspersonFields::patterns),
                 Codec.INT.optionalFieldOf("check_limit", Patterns.BASE_CHECKMARKS).forGetter(CraftspersonFields::checkLimit),
-                Trim.CODEC.optionalFieldOf("check_trim").forGetter(CraftspersonFields::trim),
                 Codec.BOOL.optionalFieldOf("by_deliveryman", false).forGetter(CraftspersonFields::byDeliveryman)
         ).apply(instance, CraftspersonFields::new));
 
-        static final CraftspersonFields NONE = new CraftspersonFields(List.of(), Patterns.BASE_CHECKMARKS, Optional.empty(), false);
+        static final CraftspersonFields NONE = new CraftspersonFields(List.of(), Patterns.BASE_CHECKMARKS, false);
     }
 
     /**
@@ -236,7 +237,8 @@ public final class SettlementBlock {
     private Optional<BlockPos> homeClerk;
     private final List<Pattern> patterns = new ArrayList<>();
     private int checkLimit;
-    private Optional<Trim> trim;
+    /** The Patterns tab's state line; not saved. */
+    private Optional<Notice> notice = Optional.empty();
     private boolean byDeliveryman;
     private final Set<Identifier> excluded = new HashSet<>();
     private Optional<SavedScan> foundScan;
@@ -279,7 +281,6 @@ public final class SettlementBlock {
         this.homeClerk = homeClerk;
         this.patterns.addAll(craftsperson.patterns());
         this.checkLimit = craftsperson.checkLimit();
-        this.trim = craftsperson.trim();
         this.byDeliveryman = craftsperson.byDeliveryman();
         this.autoAssign.addAll(place.autoAssign());
         this.excluded.addAll(place.excluded());
@@ -342,7 +343,7 @@ public final class SettlementBlock {
     }
 
     private CraftspersonFields craftspersonFields() {
-        return new CraftspersonFields(List.copyOf(patterns), checkLimit, trim, byDeliveryman);
+        return new CraftspersonFields(List.copyOf(patterns), checkLimit, byDeliveryman);
     }
 
     /**
@@ -380,15 +381,17 @@ public final class SettlementBlock {
     }
 
     /**
-     * @return the checkmarks last removed by a dropped limit, shown until the library is edited
+     * @return the Patterns tab's state line: a new pattern left unchecked at the limit, or the checkmarks removed by a
+     *         dropped limit; shown until the library is next edited (not saved)
      */
-    public Optional<Trim> trim() {
-        return trim;
+    public Optional<Notice> notice() {
+        return notice;
     }
 
-    void setTrim(Optional<Trim> trim) {
-        this.trim = trim;
+    void setNotice(Optional<Notice> notice) {
+        this.notice = notice;
     }
+
 
     /**
      * @return the Clerk's stock rules (read-only; Clerk only, else always empty)

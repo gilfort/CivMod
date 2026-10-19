@@ -1,13 +1,17 @@
-package com.gilfort.civmod.job;
+package com.gilfort.civmod.api;
+
+import org.jetbrains.annotations.ApiStatus;
 
 import net.minecraft.server.level.ServerLevel;
 
 /**
- * A job scan that processes one chunk section per {@link #step} call, run spread over ticks by the
- * {@link ScanScheduler}.
+ * A Resource Collection Job's scan ({@link ResourceCollectionProfile#createScan}) that processes one chunk section per
+ * {@link #step} call. CivMod runs it spread over ticks with a fixed budget per tick; a step reads only loaded chunks
+ * (skip unloaded ones) and should use the section's block palette to skip sections without relevant blocks.
  *
  * @param <R> the result type
  */
+@ApiStatus.Experimental
 public interface SectionScan<R extends ScanResult> {
 
     /**

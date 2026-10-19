@@ -1,18 +1,23 @@
 package com.gilfort.civmod.job;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import com.gilfort.civmod.logistics.CraftPlan;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
 
 /**
- * One claimed part of one request, from fetching the inputs to the delivery (vault {@code Jobs/Craftsperson.md}).
+ * One claimed part of one request, from fetching the inputs to the delivery (vault {@code Jobs/Craftsperson.md},
+ * {@code Systems/Producing Jobs.md}).
  * Kept in the {@link Workplace} of the Producing Job; not saved (a claim lost by unloading is released at the next
  * decision).
  */
@@ -30,6 +35,8 @@ final class Round {
     final List<BlockPos> sources;
     /** The input deliveries the round waits for (on "Delivery: Deliveryman"). */
     final List<UUID> inputs;
+    /** The nearest station per station tag of a recipe type other than the work place of the day's, looked up once. */
+    final Map<TagKey<Block>, Optional<BlockPos>> stations = new HashMap<>();
     Phase phase;
     int step;
     int crafted;

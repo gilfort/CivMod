@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:example_job_switch_keeps_checkmarks",
+  "max_ticks": 2400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

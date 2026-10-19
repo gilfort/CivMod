@@ -1,7 +1,6 @@
 package com.gilfort.civmod.gametest;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
@@ -81,7 +80,7 @@ public final class WorkplaceGameTests {
                 .thenExecuteAfter(200, () -> {
                     helper.assertTrue(LumberjackGameTests.foundNothing(settler, job), "The stale scan landed: " + settler.getWork().scan(jobBlock));
                     helper.assertTrue(settler.getWork().snapshot().scans().stream()
-                            .anyMatch(entry -> entry.jobBlock().equals(jobBlock) && entry.wood().equals(Optional.of(WoodScan.Result.EMPTY))),
+                            .anyMatch(entry -> entry.jobBlock().equals(jobBlock) && entry.result().equals(WoodScan.Result.EMPTY)),
                             "Restored empty scan lost: " + settler.getWork().snapshot().scans());
                 })
                 .thenExecute(() -> {

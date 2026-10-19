@@ -7,8 +7,8 @@ import org.jetbrains.annotations.ApiStatus;
  * the {@link Job} only fills in its specifics through a {@link CategoryProfile}. Fixed in CivMod; addons cannot add
  * categories.
  * <p>
- * Public profiles: Mission ({@link MissionProfile}). Logistics stays internal; Guard and Service get their profile with
- * their loop.
+ * Public profiles: Resource Collection ({@link ResourceCollectionProfile}), Producing ({@link ProducingProfile}), Mission
+ * ({@link MissionProfile}). Logistics stays internal; Guard and Service get their profile with their loop.
  */
 @ApiStatus.Experimental
 public enum JobCategory {

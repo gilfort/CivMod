@@ -8,10 +8,10 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.job.Fatigue;
 import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.job.LumberjackOutput;
-import com.gilfort.civmod.job.ScanResult;
 import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.job.ToolTiers;
 import com.gilfort.civmod.job.WoodScan;

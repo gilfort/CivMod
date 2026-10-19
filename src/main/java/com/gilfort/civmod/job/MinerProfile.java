@@ -7,7 +7,9 @@ import java.util.stream.Stream;
 
 import org.jspecify.annotations.Nullable;
 
-import com.gilfort.civmod.settlement.SettlementBlock;
+import com.gilfort.civmod.api.ResourceCollectionProfile;
+import com.gilfort.civmod.api.ScanResult;
+import com.gilfort.civmod.api.SectionScan;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -27,7 +29,7 @@ import net.neoforged.neoforge.common.Tags;
  * Miner (vault {@code Jobs/Miner.md}): pickaxe, exposed stone / ore blocks as work places, palette scan of the
  * stone and ore types around the scan centre, drops from the vanilla loot table with the settler's pickaxe.
  */
-public final class MinerProfile implements JobProfile {
+public final class MinerProfile implements ResourceCollectionProfile {
 
     private static final int AUTO_SEARCH_HORIZONTAL = 20;
     private static final int AUTO_SEARCH_VERTICAL = 30;
@@ -91,11 +93,6 @@ public final class MinerProfile implements JobProfile {
             }
         }
         return false;
-    }
-
-    @Override
-    public BlockPos scanCenter(SettlementBlock block, BlockPos poiOfDay) {
-        return block.workPoints().isEmpty() ? block.pos() : block.workPoints().get(0);
     }
 
     @Override

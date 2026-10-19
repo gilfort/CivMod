@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "civmod_example:block/sand_digger_block"
+    }
+  }
+}

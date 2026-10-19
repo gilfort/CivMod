@@ -61,7 +61,12 @@ public enum JobStatus {
     /** The store a Deliveryman delivers to is full; it keeps the rest and retries after 30 s. */
     STORAGE_FULL("storage_full"),
     /** A Deliveryman finds no free pickup of its Warehouse. */
-    NO_PICKUPS("no_pickups");
+    NO_PICKUPS("no_pickups"),
+    /**
+     * The Job's profile reports its own reason ({@link com.gilfort.civmod.api.BlockingReason}); the status text is the
+     * reason. Checked again every 30 s.
+     */
+    BLOCKED("blocked");
 
     /** Network codec. */
     public static final StreamCodec<ByteBuf, JobStatus> STREAM_CODEC = ByteBufCodecs.idMapper(i -> values()[i], JobStatus::ordinal);
@@ -78,7 +83,7 @@ public enum JobStatus {
     public boolean isBlocked() {
         // NO_REQUEST and MISSING_INPUTS do not block: the next decision tries again (vault Jobs/Craftsperson.md).
         return this == NO_TOOL || this == NO_WORK_PLACE || this == DROP_OFF_FULL || this == NO_RESOURCES || this == ALL_EXCLUDED || this == MAX_REACHED
-                || this == NOTHING_TO_PRODUCE || this == NO_MISSION || this == STORAGE_FULL;
+                || this == NOTHING_TO_PRODUCE || this == NO_MISSION || this == STORAGE_FULL || this == BLOCKED;
     }
 
     /**

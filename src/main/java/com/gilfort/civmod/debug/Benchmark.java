@@ -164,9 +164,8 @@ public final class Benchmark {
                 store.setItem(first + 3, new ItemStack(Items.COAL, 64));
             }
             for (int slot = 0; slot < CRAFTED.size(); slot++) {
-                if (Patterns.setOutput(level, craft, slot, CRAFTED.get(slot)).isPresent()) {
-                    Patterns.toggleCheck(level, craft, slot);
-                }
+                // New patterns are checked automatically (4 of the limit of 6).
+                Patterns.setOutput(level, craft, slot, CRAFTED.get(slot));
             }
             if (i >= CRAFTSPERSONS) {
                 JobAssignments.toggleDelivery(data, craft);

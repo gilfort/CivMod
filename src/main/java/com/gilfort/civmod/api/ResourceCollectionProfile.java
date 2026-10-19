@@ -1,4 +1,4 @@
-package com.gilfort.civmod.job;
+package com.gilfort.civmod.api;
 
 import java.util.Collection;
 import java.util.HashSet;
@@ -6,29 +6,39 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.function.Predicate;
 
+import org.jetbrains.annotations.ApiStatus;
 import org.jspecify.annotations.Nullable;
 
-import com.gilfort.civmod.api.CategoryProfile;
-import com.gilfort.civmod.api.JobCategory;
-import com.gilfort.civmod.npc.Settler;
-import com.gilfort.civmod.settlement.SettlementBlock;
+import com.gilfort.civmod.job.LumberjackOutput;
+import com.gilfort.civmod.job.ToolTiers;
+import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
 /**
- * The job-specific parts of a Resource Collection Job (vault {@code Systems/Resource Collection Jobs.md}): tool,
- * work places, scan and output. Walking, fatigue, buffer, delivery and food are shared ({@link SettlerWork}).
+ * The specifics of a Resource Collection Job (vault {@code Systems/Resource Collection Jobs.md}): tool, work places,
+ * scan and output. The category's loop does everything else: fetching the tool, walking, fatigue, the buffer and its
+ * delivery to the drop-off, food, EXP, catch-up, the JobBlock's Found tab with its exclusions and the Max of the Home
+ * Clerk's stock rules.
+ * <p>
+ * Most collecting Jobs count blocks and produce their drops: {@link SimpleCollectionProfile#builder} builds such a
+ * profile from a block tag and a tool tag. Implement this interface for Jobs with their own scan or roll (CivMod's
+ * Lumberjack, Miner and Fisherman do).
+ * <p>
+ * A scan runs spread over ticks ({@link SectionScan}, one chunk section per step) whenever the scan centre or radius
+ * change, or every day ({@link #rescanDaily()}); the settler keeps working with the previous result meanwhile.
  */
-public interface JobProfile extends CategoryProfile {
+@ApiStatus.Experimental
+public interface ResourceCollectionProfile extends CategoryProfile {
 
     @Override
     default JobCategory category() {
@@ -44,15 +54,7 @@ public interface JobProfile extends CategoryProfile {
     /**
      * @return the tool shown in the "no tool" thought bubble (the job's tool in its simplest usable form)
      */
-    net.minecraft.world.item.Item toolIcon();
-
-    /**
-     * @param block the JobBlock
-     * @return a second tool the job wants with these settings (e.g. shears for leaves), if any
-     */
-    default Optional<Predicate<ItemStack>> secondaryTool(SettlementBlock block) {
-        return Optional.empty();
-    }
+    Item toolIcon();
 
     /**
      * @param level the level
@@ -69,7 +71,7 @@ public interface JobProfile extends CategoryProfile {
     boolean isAssignableWorkPlace(Level level, BlockPos pos);
 
     /**
-     * Finds a work place when none is set (at most once per day).
+     * Finds a work place when the JobBlock has no valid work point (at most once per decision without one).
      *
      * @param level    the level
      * @param jobBlock the JobBlock position
@@ -78,11 +80,23 @@ public interface JobProfile extends CategoryProfile {
     @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock);
 
     /**
-     * @param block     the JobBlock
-     * @param poiOfDay the work place of the day
-     * @return the centre of the scan
+     * @param jobBlock   the JobBlock position
+     * @param workPoints the JobBlock's work points set with the Scroll of Assignment, in order
+     * @param workPlace  the work place of the day
+     * @return the centre of the scan, by default the first work point, else the JobBlock
      */
-    BlockPos scanCenter(SettlementBlock block, BlockPos poiOfDay);
+    default BlockPos scanCenter(BlockPos jobBlock, List<BlockPos> workPoints, BlockPos workPlace) {
+        return workPoints.isEmpty() ? jobBlock : workPoints.get(0);
+    }
+
+
+    /**
+     * @param jobBlockLevel the JobBlock level (1–5)
+     * @return the horizontal radius of the scan, by default the settlement radius of the JobBlock (10 × level)
+     */
+    default int scanRadius(int jobBlockLevel) {
+        return SettlementRules.joinRadius(jobBlockLevel);
+    }
 
     /**
      * @return whether the scan is repeated every day (otherwise only when centre or radius change)
@@ -91,7 +105,7 @@ public interface JobProfile extends CategoryProfile {
 
     /**
      * @param center the scan centre
-     * @param radius the horizontal radius
+     * @param radius the horizontal radius ({@link #scanRadius})
      * @return a new scan
      */
     SectionScan<? extends ScanResult> createScan(BlockPos center, int radius);
@@ -101,6 +115,19 @@ public interface JobProfile extends CategoryProfile {
      */
     default boolean needsResources() {
         return false;
+    }
+
+    /**
+     * Why the Job cannot work, in its own words (vault {@code Systems/Job Categories.md}, status "Blocked"). Asked at
+     * every work decision; a reason pauses the job like "Drop-off full": the settler works its next priority and
+     * checks again after 30 s. The reason is the job's status text in the settler window, and the settler's problem
+     * bubble shows its icon (or the generic "blocked" marker). Neutral by default.
+     *
+     * @param scan the finished scan, or null when no work place was found
+     * @return the reason, empty when the Job can work
+     */
+    default Optional<BlockingReason> blockingReason(@Nullable ScanResult scan) {
+        return Optional.empty();
     }
 
     /**
@@ -134,13 +161,6 @@ public interface JobProfile extends CategoryProfile {
      */
     default boolean swings() {
         return true;
-    }
-
-    /**
-     * @return whether the JobBlock offers the "collect leaves" option (shears as secondary tool)
-     */
-    default boolean hasLeavesOption() {
-        return false;
     }
 
     /**
@@ -194,7 +214,7 @@ public interface JobProfile extends CategoryProfile {
      * @return the types left out
      */
     default Set<Identifier> leftOut(Context context, Collection<Identifier> types) {
-        Set<Identifier> excluded = context.block().excluded();
+        Set<Identifier> excluded = context.excluded();
         if (context.atMax().isEmpty()) {
             return excluded;
         }
@@ -240,6 +260,7 @@ public interface JobProfile extends CategoryProfile {
      * @param icon      the icon
      * @param available whether the working settler's tool can obtain it (always without a settler)
      */
+    @ApiStatus.Experimental
     record Found(Identifier type, ItemStack icon, boolean available) {
     }
 
@@ -249,6 +270,7 @@ public interface JobProfile extends CategoryProfile {
      * @param tool       its best tool of the job (empty without one)
      * @param skillLevel its effective skill level in the job
      */
+    @ApiStatus.Experimental
     record Worker(ItemStack tool, int skillLevel) {
     }
 
@@ -260,14 +282,13 @@ public interface JobProfile extends CategoryProfile {
      * @param scan       the scan result (null while the first scan runs)
      * @param poi        the work place
      * @param tool       the job's tool
-     * @param secondary  the secondary tool, if any
-     * @param block      the JobBlock
+     * @param excluded   the types excluded at the JobBlock
      * @param skillLevel the skill level
      * @param atMax      the items at their Max at the Home Clerk (left out of the roll)
      * @param dropped    the item a resource type drops with the tool ({@link #dropped}, cached per scan)
      */
-    record Context(ServerLevel level, Settler settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Optional<ItemStack> secondary,
-            SettlementBlock block, int skillLevel, Set<Item> atMax, Function<Identifier, Item> dropped) {
+    @ApiStatus.Experimental
+    record Context(ServerLevel level, PathfinderMob settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Set<Identifier> excluded, int skillLevel, Set<Item> atMax, Function<Identifier, Item> dropped) {
     }
 
     /**
@@ -276,6 +297,7 @@ public interface JobProfile extends CategoryProfile {
      * @param stacks the produced items
      * @param worn   the tool that loses durability
      */
+    @ApiStatus.Experimental
     record Produced(List<ItemStack> stacks, ItemStack worn) {
     }
 }

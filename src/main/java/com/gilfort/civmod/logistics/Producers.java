@@ -1,6 +1,5 @@
 package com.gilfort.civmod.logistics;
 
-import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.Settlement;
 
@@ -9,7 +8,8 @@ import net.minecraft.world.item.Item;
 
 /**
  * Which producers of a settlement can make an item (vault {@code Systems/Producing Jobs.md}). Decides the request
- * status "No Craftsperson can make this": a staffed Craftsperson JobBlock with a checked pattern for the item.
+ * status "No Craftsperson can make this": a staffed Producing JobBlock with a checked pattern for the item its settler's
+ * Job can use.
  */
 public final class Producers {
 
@@ -23,7 +23,7 @@ public final class Producers {
      * @return whether a producer of the settlement can make it
      */
     public static boolean canMake(ServerLevel level, Settlement settlement, Item item) {
-        return settlement.blocks().stream().anyMatch(block -> Patterns.isCraftsperson(block) && block.assignee(ModJobs.CRAFTSPERSON.get()).isPresent()
+        return settlement.blocks().stream().anyMatch(block -> Patterns.isProducing(block) && !block.assignees().isEmpty()
                 && Patterns.usable(level, block).stream().anyMatch(pattern -> pattern.output() == item));
     }
 }

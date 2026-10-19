@@ -208,11 +208,12 @@ public class ScrollOfAssignmentItem extends Item {
             }
             return;
         }
-        boolean validWork = isValidWorkPlace(level, target, jobType);
+        // A station of a Specialization offered here is a work point too; each Job then works only at its own stations.
+        Optional<Job> workJob = workPlaceJob(level, block.get(), target);
         boolean container = isContainer(level, target);
-        JobAssignments.PointResult result = JobAssignments.cyclePoint(SettlementData.get(level), jobBlock, target, validWork, container);
+        JobAssignments.PointResult result = JobAssignments.cyclePoint(SettlementData.get(level), jobBlock, target, workJob.isPresent(), container);
         Component message = switch (result) {
-            case WORK -> Component.translatable("civmod.scroll.point.work", jobType.displayName());
+            case WORK -> Component.translatable("civmod.scroll.point.work", workJob.orElse(jobType).displayName());
             case COLLECT -> Component.translatable("civmod.scroll.point.collect");
             case DROP_OFF -> Component.translatable("civmod.scroll.point.drop_off");
             case REMOVED -> Component.translatable("civmod.scroll.point.removed");
@@ -348,6 +349,17 @@ public class ScrollOfAssignmentItem extends Item {
      */
     public static boolean isValidWorkPlace(Level level, BlockPos pos, Job jobType) {
         return jobType.isValidWorkPlace(level, pos);
+    }
+
+    /**
+     * @param level the level
+     * @param block a JobBlock
+     * @param pos   a position
+     * @return the first Job the JobBlock offers at its level (its Base Job first, then its Specializations) for which the
+     *         block at the position is a valid work place
+     */
+    public static Optional<Job> workPlaceJob(Level level, SettlementBlock block, BlockPos pos) {
+        return JobPlaces.lines(block).stream().map(JobPlaces.Line::job).filter(job -> job.isValidWorkPlace(level, pos)).findFirst();
     }
 
     /**

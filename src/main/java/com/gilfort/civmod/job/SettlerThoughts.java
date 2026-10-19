@@ -142,7 +142,7 @@ final class SettlerThoughts {
             case EATING, HUNGRY_NO_FOOD -> Items.BREAD;
             case BED -> ModItems.BED_ICON.get();
             case MISSION -> Items.MAP;
-            case JOB, NO_TOOL, NO_WORK_PLACE -> throw new IllegalArgumentException("Icon depends on the job: " + activity);
+            case JOB, NO_TOOL, NO_WORK_PLACE, BLOCKED -> throw new IllegalArgumentException("Icon depends on the job: " + activity);
         };
     }
 
