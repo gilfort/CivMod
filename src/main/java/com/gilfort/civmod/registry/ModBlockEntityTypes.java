@@ -6,6 +6,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.block.JobBlockEntity;
 
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
@@ -25,9 +26,9 @@ public final class ModBlockEntityTypes {
     /** Deferred register for block entity types in the {@code civmod} namespace. */
     public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITY_TYPES = DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, CivMod.MOD_ID);
 
-    /** Block entity shared by all JobBlocks. */
+    /** Block entity shared by all JobBlocks, CivMod's and addons' (every block registered before block entity types). */
     public static final Supplier<BlockEntityType<JobBlockEntity>> JOB_BLOCK = BLOCK_ENTITY_TYPES.register("job_block",
-            () -> new BlockEntityType<>(JobBlockEntity::new, ModBlocks.JOB_BLOCKS.stream().map(block -> (JobBlock) block.get())
+            () -> new BlockEntityType<>(JobBlockEntity::new, BuiltInRegistries.BLOCK.stream().filter(JobBlock.class::isInstance).map(JobBlock.class::cast)
                     .toArray(JobBlock[]::new)));
 
     private ModBlockEntityTypes() {

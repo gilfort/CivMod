@@ -7,8 +7,7 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
-import com.gilfort.civmod.job.Job;
-import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.job.JobProfile;
@@ -100,7 +99,7 @@ public record FoundTab(boolean scanned, List<Entry> entries, List<Component> lin
      * @return whether it is a Resource Collection Job (and so its JobBlock has a Found tab)
      */
     public static boolean hasTab(Job jobType) {
-        return jobType.category() == JobCategory.RESOURCE_COLLECTION;
+        return JobBlockTabs.of(jobType) == JobBlockTabs.FOUND;
     }
 
     /**
@@ -114,7 +113,7 @@ public record FoundTab(boolean scanned, List<Entry> entries, List<Component> lin
     public static FoundTab of(ServerLevel level, BlockPos pos) {
         // Absent when the JobBlock left its settlement since the menu opened: the menu syncs every tick.
         Optional<JobBlockSite> found = JobBlockSite.at(level, pos).filter(site -> hasTab(site.block().jobType()));
-        Optional<JobProfile> profile = found.flatMap(site -> site.block().jobType().profile());
+        Optional<JobProfile> profile = found.flatMap(site -> site.block().jobType().profile(JobProfile.class));
         if (found.isEmpty() || profile.isEmpty()) {
             return EMPTY;
         }

@@ -35,6 +35,9 @@ base {
     archivesName = mod_id
 }
 
+// The dev runs load the example addon's source set (neoForge.mods below).
+evaluationDependsOn(':example-addon')
+
 // Mojang ships Java 25 to end users in 26.3, so mods should target Java 25.
 java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
@@ -76,6 +79,10 @@ neoForge {
         "${mod_id}" {
             sourceSet(sourceSets.main)
             sourceSet(sourceSets.gametest)
+        }
+        // The example addon (example-addon/) runs in every dev run: client test and GameTests. Not in the mod jar.
+        civmod_example {
+            sourceSet(project(':example-addon').sourceSets.main)
         }
     }
 

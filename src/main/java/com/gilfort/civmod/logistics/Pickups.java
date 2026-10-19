@@ -7,7 +7,7 @@ import java.util.function.ToIntFunction;
 
 import org.jspecify.annotations.Nullable;
 
-import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.JobProfile;
 import com.gilfort.civmod.settlement.Deliveries;
 import com.gilfort.civmod.settlement.JobBlockSite;
@@ -172,7 +172,7 @@ public final class Pickups {
 
     /** The job's tools stay in a drop-off that is its collect inventory too. */
     private static Predicate<ItemStack> kept(JobBlockSite site, BlockPos source) {
-        Optional<JobProfile> profile = site.block().jobType().profile();
+        Optional<JobProfile> profile = site.block().jobType().profile(JobProfile.class);
         if (profile.isEmpty() || !site.collect().equals(source)) {
             return stack -> false;
         }

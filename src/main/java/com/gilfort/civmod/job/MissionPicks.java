@@ -10,6 +10,7 @@ import java.util.OptionalInt;
 import java.util.UUID;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.mission.Mission;
 import com.gilfort.civmod.mission.MissionOffer;
 import com.gilfort.civmod.mission.MissionRules;

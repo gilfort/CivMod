@@ -5,12 +5,20 @@ Code-facing glossary: maps the domain terms of the design vault to their names i
 ## Jobs
 
 **Job**:
-A kind of work a settler can hold in its job list, e.g. Lumberjack. Code: `Job`, registered in the `civmod:job` registry (`ModJobs`) by namespaced id (`civmod:lumberjack`); per-job datapack overrides in `JobBalancing` (`civmod_jobs/<job>.json`).
+A kind of work a settler can hold in its job list, e.g. Lumberjack. Code: `Job` (addon API, `com.gilfort.civmod.api`), registered in the `civmod:job` registry (`CivModApi.JOB_REGISTRY`, CivMod's own Jobs in `ModJobs`) by namespaced id (`civmod:lumberjack`); per-job datapack overrides in `JobBalancing` (`civmod_jobs/<job>.json`).
 _Avoid_: Profession, occupation
 
 **Job Category**:
-The behaviour template a Job is built on (Resource Collection, Producing, Mission, Guard, Logistics, Service); it owns the work loop, the Job only fills in its specifics. Code: `JobCategory` (fixed enum), work loop `CategoryLoop`; `JobProfile` is the Resource Collection contract.
+The behaviour template a Job is built on (Resource Collection, Producing, Mission, Guard, Logistics, Service); it owns the work loop, the Job only fills in its specifics through its profile. Code: `JobCategory` (fixed enum, addon API), work loop `CategoryLoop`; the JobBlock window's tabs follow it (`JobBlockTabs`).
 _Avoid_: Role, meta type, archetype
+
+**Addon API**:
+The public package `com.gilfort.civmod.api` (all `@ApiStatus.Experimental` until the first release) that addons compile against and CivMod uses for its own Jobs: Job definition and registration (`Job`, `CivModApi.jobs`), category profiles, the JobBlock factory (`CivModApi.jobBlock`, `CivModApi.jobBlockItem`) and the built-in Jobs (`CivModJobs`). Category loops stay internal. Guide: `docs/api/getting-started.md`; example: `example-addon/` (mod id `civmod_example`).
+_Avoid_: Plugin API, SDK
+
+**Profile**:
+The specifics a Job fills into its category's work loop; must belong to the Job's category. Code: `CategoryProfile`, read with `Job.profile(Class)`; `MissionProfile` (public, neutral hooks for success / death chances, `MissionProfile.NEUTRAL` when a Mission Job declares none), `JobProfile` (Resource Collection, internal for now).
+_Avoid_: Job type, behaviour
 
 **Settler Shell**:
 The part of a settler's behaviour shared by every Job Category (acting on the Schedule, walking, food, sleep, job priorities, EXP, catch-up). Code: `SettlerWork`; it hands control to the `CategoryLoop` of the active Job's category (`ResourceCollectionLoop`, `MissionLoop`). Shared parts the loops use: the job's Workplace, delivery and EXP in the shell, the Work rules, tools in `SettlerTools`, `Fatigue`.
@@ -58,7 +66,7 @@ _Avoid_: Advanced job, sub-job
 The implicit lowest-priority fallback Job of every settler; not a Job Category and never stored.
 
 **JobBlock**:
-The block that offers a Base Job (and its Specializations) to one settler. Code: `JobBlock`, `JobBlockEntity`.
+The block that offers a Base Job (and its Specializations) to one settler. Code: `JobBlock`, `JobBlockEntity`, created by the addon API's factory (`CivModApi.jobBlock`); a Job without upgrade costs uses `civmod_upgrades/default.json` (`UpgradeCosts`).
 
 **Starter tool**:
 The tool a new JobBlock puts into its own inventory when it is placed for the first time (Lumberjack stone axe, Miner stone pickaxe, Fisherman fishing rod). A broken JobBlock no longer carries one.

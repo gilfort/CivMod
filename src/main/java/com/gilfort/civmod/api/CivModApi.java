@@ -1,0 +1,95 @@
+package com.gilfort.civmod.api;
+
+import java.util.function.Supplier;
+
+import org.jetbrains.annotations.ApiStatus;
+
+import com.gilfort.civmod.block.JobBlock;
+import com.gilfort.civmod.block.StarterTools;
+
+import net.minecraft.core.Registry;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.ItemLike;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.material.PushReaction;
+import net.neoforged.neoforge.registries.DeferredRegister;
+
+/**
+ * Entry point of the CivMod addon API (vault {@code Systems/Jobs.md}): the Job registry and the JobBlock factory.
+ * CivMod registers its own Jobs and JobBlocks through it, exactly like an addon. The getting-started guide is
+ * {@code docs/api/getting-started.md} in the CivMod repository.
+ * <p>
+ * Everything in {@code com.gilfort.civmod.api} is experimental until the first release: breaking changes are allowed.
+ */
+@ApiStatus.Experimental
+public final class CivModApi {
+
+    /** CivMod's mod id; addons declare a dependency on it in their {@code neoforge.mods.toml}. */
+    public static final String MOD_ID = "civmod";
+
+    /** Key of the {@code civmod:job} registry: static, filled at mod load and synced to clients. */
+    public static final ResourceKey<Registry<Job>> JOB_REGISTRY = ResourceKey.createRegistryKey(Identifier.fromNamespaceAndPath(MOD_ID, "job"));
+
+    private CivModApi() {
+    }
+
+    /**
+     * @param namespace the namespace of the Jobs (the addon's mod id)
+     * @return a deferred register for Jobs in that namespace; attach it to the mod event bus
+     */
+    public static DeferredRegister<Job> jobs(String namespace) {
+        return DeferredRegister.create(JOB_REGISTRY, namespace);
+    }
+
+    /**
+     * Creates a JobBlock (vault {@code Systems/JobBlock.md}): it offers the Job (and its Specializations from level 2)
+     * to settlers, registers itself in a settlement when placed, opens the JobBlock window with the tabs of the Job's
+     * category, keeps a level from 1 to 5 and a 27-slot inventory that hoppers and pipes reach. JobBlocks cannot be
+     * pushed by pistons (the factory sets it).
+     * <p>
+     * Register it in your namespace together with an item from {@link #jobBlockItem}. You ship the blockstate, model,
+     * texture, recipe, loot table (copying the {@code civmod:job_level} component keeps the level when the block is
+     * broken), upgrade costs ({@code data/<namespace>/civmod_upgrades/<job>.json}; CivMod's default costs apply without
+     * them) and lang keys. Specializations and Mission Jobs have no JobBlock of their own.
+     *
+     * @param job        the offered Base Job (resolved lazily, Jobs register after blocks)
+     * @param properties the block properties
+     * @return the JobBlock
+     */
+    public static Block jobBlock(Supplier<Job> job, BlockBehaviour.Properties properties) {
+        return new JobBlock(job, properties.pushReaction(PushReaction.IMMOVEABLE));
+    }
+
+    /**
+     * Creates the item of a JobBlock without a starter tool. It carries the JobBlock level ({@code civmod:job_level}),
+     * so a broken JobBlock keeps its level when its loot table copies the component.
+     *
+     * @param block      the JobBlock from {@link #jobBlock}
+     * @param properties the item properties
+     * @return the JobBlock item
+     */
+    public static BlockItem jobBlockItem(Block block, Item.Properties properties) {
+        return new BlockItem(block, properties.useBlockDescriptionPrefix());
+    }
+
+    /**
+     * Creates the item of a JobBlock with a starter tool: a new item (crafted, creative, {@code /give}, loot) puts the
+     * tool into the JobBlock's inventory when it is placed for the first time. The loot table of the block must remove
+     * the {@code civmod:starter_tool} component from its drop ({@code "!civmod:starter_tool": {}}), or every break and
+     * re-place adds another tool.
+     *
+     * @param block       the JobBlock from {@link #jobBlock}
+     * @param starterTool the starter tool (resolved after registration)
+     * @param properties  the item properties
+     * @return the JobBlock item
+     */
+    public static BlockItem jobBlockItem(Block block, Supplier<? extends ItemLike> starterTool, Item.Properties properties) {
+        BlockItem item = jobBlockItem(block, properties);
+        StarterTools.register(item, starterTool);
+        return item;
+    }
+}

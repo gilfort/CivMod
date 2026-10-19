@@ -2,9 +2,9 @@ package com.gilfort.civmod.menu;
 
 import java.util.List;
 
-import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.job.JobBuffer;
-import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;

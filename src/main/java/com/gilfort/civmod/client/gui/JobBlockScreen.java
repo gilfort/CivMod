@@ -93,7 +93,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.clerk.tab.requests"), new ItemStack(Items.PAPER)));
             tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.clerk.tab.deliveries"), new ItemStack(Items.BUNDLE)));
         }
-        if (JobBlockMenu.isCraftsperson(menu.getInfo())) {
+        if (JobBlockMenu.hasPatternsTab(menu.getInfo())) {
             tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.patterns.tab"), new ItemStack(Items.CRAFTING_TABLE)));
         }
         if (JobBlockMenu.hasFoundTab(menu.getInfo())) {
@@ -108,7 +108,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (JobBlockMenu.isClerk(current)) {
             clerk.init();
         }
-        if (JobBlockMenu.isCraftsperson(current)) {
+        if (JobBlockMenu.hasPatternsTab(current)) {
             patterns.init();
         }
         boolean max = current.level() >= SettlementRules.MAX_LEVEL;
@@ -119,14 +119,14 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             rebuildWidgets();
         }).bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 28, imageWidth - 2 * CivGui.PADDING, 20).build());
         upgrade.active = !max && (minecraft.player.isCreative() || current.canAffordNext(minecraft.player.getInventory()));
-        if (menu.getInfo().jobType().profile().map(JobProfile::hasLeavesOption).orElse(false) && menu.getInfo().inSettlement()) {
+        if (menu.getInfo().jobType().profile(JobProfile.class).map(JobProfile::hasLeavesOption).orElse(false) && menu.getInfo().inSettlement()) {
             Component label = Component.translatable(menu.getInfo().collectLeaves() ? "civmod.gui.job_block.leaves.on" : "civmod.gui.job_block.leaves.off");
             addTabWidget(JobBlockMenu.TAB_INFO, Button.builder(label, button -> {
                 clickMenuButton(JobBlockMenu.BUTTON_TOGGLE_LEAVES);
                 rebuildWidgets();
             }).bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 72, imageWidth - 2 * CivGui.PADDING, 20).build());
         }
-        if (JobBlockMenu.isCraftsperson(current) && current.inSettlement()) {
+        if (JobBlockMenu.hasPatternsTab(current) && current.inSettlement()) {
             Component label = Component.translatable(current.byDeliveryman() ? "civmod.gui.job_block.delivery.deliveryman"
                     : "civmod.gui.job_block.delivery.self");
             addTabWidget(JobBlockMenu.TAB_INFO, Button.builder(label, button -> {
@@ -170,7 +170,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (JobBlockMenu.isClerk(menu.getInfo()) && clerk.extractLabels(graphics, tab, mouseX, mouseY)) {
             return;
         }
-        if (JobBlockMenu.isCraftsperson(menu.getInfo()) && tab == JobBlockMenu.TAB_PATTERNS) {
+        if (JobBlockMenu.hasPatternsTab(menu.getInfo()) && tab == JobBlockMenu.TAB_PATTERNS) {
             patterns.extractLabels(graphics, mouseX, mouseY);
             return;
         }
@@ -193,7 +193,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (JobBlockMenu.isClerk(info) && (tab == JobBlockMenu.TAB_STOCK || tab == JobBlockMenu.TAB_REQUESTS || tab == JobBlockMenu.TAB_DELIVERIES)) {
             return clerk.helpLines(tab);
         }
-        if (JobBlockMenu.isCraftsperson(info) && tab == JobBlockMenu.TAB_PATTERNS) {
+        if (JobBlockMenu.hasPatternsTab(info) && tab == JobBlockMenu.TAB_PATTERNS) {
             return patterns.helpLines();
         }
         if (JobBlockMenu.isMissionBoard(info) && tab == JobBlockMenu.TAB_MISSIONS) {
@@ -206,10 +206,10 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (tab == JobBlockMenu.TAB_INFO && info.inSettlement() && !info.connected()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.connect"));
         }
-        if (tab == JobBlockMenu.TAB_INFO && info.jobType().profile().map(JobProfile::hasLeavesOption).orElse(false) && info.inSettlement()) {
+        if (tab == JobBlockMenu.TAB_INFO && info.jobType().profile(JobProfile.class).map(JobProfile::hasLeavesOption).orElse(false) && info.inSettlement()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.leaves"));
         }
-        if (tab == JobBlockMenu.TAB_INFO && JobBlockMenu.isCraftsperson(info) && info.inSettlement()) {
+        if (tab == JobBlockMenu.TAB_INFO && JobBlockMenu.hasPatternsTab(info) && info.inSettlement()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.delivery"));
         }
         if (tab == JobBlockMenu.TAB_INFO && info.inSettlement()) {
@@ -370,7 +370,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (JobBlockMenu.isClerk(menu.getInfo()) && clerk.mouseClicked(event)) {
             return true;
         }
-        if (JobBlockMenu.isCraftsperson(menu.getInfo()) && patterns.mouseClicked(event)) {
+        if (JobBlockMenu.hasPatternsTab(menu.getInfo()) && patterns.mouseClicked(event)) {
             return true;
         }
         if (JobBlockMenu.isMissionBoard(menu.getInfo()) && missions.mouseClicked(event)) {
@@ -571,7 +571,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (JobBlockMenu.isClerk(menu.getInfo())) {
             return clerk.stockTargets();
         }
-        return JobBlockMenu.isCraftsperson(menu.getInfo()) ? patterns.targets() : new LinkedHashMap<>();
+        return JobBlockMenu.hasPatternsTab(menu.getInfo()) ? patterns.targets() : new LinkedHashMap<>();
     }
 
     /**
@@ -583,7 +583,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (JobBlockMenu.isClerk(menu.getInfo())) {
             return clerk.stockSlotAt(x, y);
         }
-        return JobBlockMenu.isCraftsperson(menu.getInfo()) ? patterns.targetAt(x, y) : -1;
+        return JobBlockMenu.hasPatternsTab(menu.getInfo()) ? patterns.targetAt(x, y) : -1;
     }
 
     /**
@@ -597,7 +597,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (JobBlockMenu.isClerk(menu.getInfo())) {
             return clerk.setStockItem(target, stack);
         }
-        return JobBlockMenu.isCraftsperson(menu.getInfo()) && patterns.setItem(target, stack);
+        return JobBlockMenu.hasPatternsTab(menu.getInfo()) && patterns.setItem(target, stack);
     }
 
     /**
@@ -609,7 +609,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      * @return the reason it cannot, empty if it can
      */
     public Optional<Component> transferPattern(Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid, boolean doTransfer) {
-        if (!JobBlockMenu.isCraftsperson(menu.getInfo())) {
+        if (!JobBlockMenu.hasPatternsTab(menu.getInfo())) {
             return Optional.of(Component.translatable("civmod.gui.patterns.not_here"));
         }
         return patterns.transfer(recipe, grid, doTransfer);

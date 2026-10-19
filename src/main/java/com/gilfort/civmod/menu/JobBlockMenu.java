@@ -4,12 +4,10 @@ import java.util.List;
 import java.util.Optional;
 
 import com.gilfort.civmod.block.JobBlockEntity;
-import com.gilfort.civmod.job.Job;
-import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.logistics.StockRule;
-import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.registry.ModMenuTypes;
 import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.StockRules;
@@ -55,12 +53,12 @@ public class JobBlockMenu extends CivMenu {
     public static final int TAB_REQUESTS = 3;
     /** Deliveries tab (Clerk only): the open Delivery tasks. */
     public static final int TAB_DELIVERIES = 4;
-    /** Patterns tab (Craftsperson only): the pattern library, with the player inventory to pick items from. */
+    /** Patterns tab (Producing Jobs only): the pattern library, with the player inventory to pick items from. */
     public static final int TAB_PATTERNS = 2;
     /** Found tab (Resource Collection Jobs only): the found resources and their exclusions. */
     public static final int TAB_FOUND = 2;
     /**
-     * Panel height of the Clerk's and the Craftsperson's menu (a grid of 45 / 54 slots, the Clerk's three-row stock
+     * Panel height of the Clerk's and a Producing Job's menu (a grid of 45 / 54 slots, the Clerk's three-row stock
      * rule editor and the player inventory).
      */
     public static final int CLERK_HEIGHT = 262;
@@ -73,7 +71,7 @@ public class JobBlockMenu extends CivMenu {
     public static final int BUTTON_TOGGLE_LEAVES = 51;
     /** Button id: upgrade to the next level. */
     public static final int BUTTON_UPGRADE = 52;
-    /** Button id: toggle who carries the results, Self / Deliveryman (Craftsperson). */
+    /** Button id: toggle who carries the results, Self / Deliveryman (Producing Jobs). */
     public static final int BUTTON_TOGGLE_DELIVERY = 53;
     /** Button ids from here: set the mark of a mission offer entry ({@link #markButtonId}). */
     private static final int BUTTON_MARK_MISSION = 100;
@@ -120,7 +118,7 @@ public class JobBlockMenu extends CivMenu {
      * @param info        the info snapshot
      */
     public JobBlockMenu(int containerId, Inventory inventory, Container container, JobBlockInfo info) {
-        super(ModMenuTypes.JOB_BLOCK.get(), containerId, isClerk(info) ? 5 : isMissionBoard(info) || isCraftsperson(info) || hasFoundTab(info) ? 3 : 2);
+        super(ModMenuTypes.JOB_BLOCK.get(), containerId, JobBlockTabs.of(info.jobType()).count());
         checkContainerSize(container, JobBlockEntity.SLOTS);
         this.container = container;
         this.player = inventory.player;
@@ -133,7 +131,7 @@ public class JobBlockMenu extends CivMenu {
         if (isClerk(info)) {
             // Stock rule items are picked from the player inventory, so it is shown on the Stock tab as well.
             addPlayerInventory(inventory, 8, CLERK_HEIGHT - 82, TAB_STORAGE, TAB_STOCK);
-        } else if (isCraftsperson(info)) {
+        } else if (hasPatternsTab(info)) {
             // Pattern items are picked from the player inventory, so it is shown on the Patterns tab as well.
             addPlayerInventory(inventory, 8, CLERK_HEIGHT - 82, TAB_STORAGE, TAB_PATTERNS);
         } else {
@@ -143,18 +141,18 @@ public class JobBlockMenu extends CivMenu {
 
     /**
      * @param info a JobBlock info
-     * @return whether the JobBlock is a Clerk JobBlock (Stock and Requests tabs)
+     * @return whether the JobBlock is a Clerk JobBlock (Stock, Requests and Deliveries tabs)
      */
     public static boolean isClerk(JobBlockInfo info) {
-        return info.jobType() == ModJobs.CLERK.get();
+        return JobBlockTabs.of(info.jobType()) == JobBlockTabs.CLERK;
     }
 
     /**
      * @param info a JobBlock info
-     * @return whether the JobBlock is a Craftsperson JobBlock (Patterns tab)
+     * @return whether the JobBlock offers a Producing Job (Patterns tab)
      */
-    public static boolean isCraftsperson(JobBlockInfo info) {
-        return info.jobType() == ModJobs.CRAFTSPERSON.get();
+    public static boolean hasPatternsTab(JobBlockInfo info) {
+        return JobBlockTabs.of(info.jobType()) == JobBlockTabs.PATTERNS;
     }
 
     /**
@@ -202,14 +200,14 @@ public class JobBlockMenu extends CivMenu {
     }
 
     /**
-     * @return whether the menu has a tall panel (Clerk, Craftsperson)
+     * @return whether the menu has a tall panel (Clerk, Producing Jobs)
      */
     public boolean isTall() {
-        return isClerk(info) || isCraftsperson(info);
+        return JobBlockTabs.of(info.jobType()).tall();
     }
 
     /**
-     * @return the Craftsperson's pattern library as last synced (Craftsperson only)
+     * @return the pattern library as last synced (Producing Jobs only)
      */
     public PatternTab getPatternTab() {
         return patternTab;
@@ -230,7 +228,7 @@ public class JobBlockMenu extends CivMenu {
      * @param edit the edit
      */
     public void editPattern(PatternTab.Edit edit) {
-        if (!isCraftsperson(info) || !(container instanceof JobBlockEntity jobBlock) || !(jobBlock.getLevel() instanceof ServerLevel level)
+        if (!hasPatternsTab(info) || !(container instanceof JobBlockEntity jobBlock) || !(jobBlock.getLevel() instanceof ServerLevel level)
                 || !stillValid(player)) {
             return;
         }
@@ -315,7 +313,7 @@ public class JobBlockMenu extends CivMenu {
             }
             return;
         }
-        if (isCraftsperson(info)) {
+        if (hasPatternsTab(info)) {
             // A metal pattern checked in an older save loses its checkmark as soon as the tab shows it.
             com.gilfort.civmod.settlement.Patterns.uncheckMetal(level, jobBlock.getBlockPos());
             PatternTab patterns = PatternTab.of(level, jobBlock.getBlockPos());
@@ -337,7 +335,7 @@ public class JobBlockMenu extends CivMenu {
      * @return whether the JobBlock is a Mission Board (offers a Mission Job)
      */
     public static boolean isMissionBoard(JobBlockInfo info) {
-        return info.jobType().category() == JobCategory.MISSION;
+        return JobBlockTabs.of(info.jobType()) == JobBlockTabs.MISSIONS;
     }
 
     /**
@@ -420,7 +418,7 @@ public class JobBlockMenu extends CivMenu {
             }
             return true;
         }
-        if (buttonId == BUTTON_TOGGLE_DELIVERY && isCraftsperson(info)) {
+        if (buttonId == BUTTON_TOGGLE_DELIVERY && hasPatternsTab(info)) {
             info = info.withDeliveryToggled();
             if (container instanceof JobBlockEntity jobBlock && jobBlock.getLevel() instanceof ServerLevel level) {
                 JobAssignments.toggleDelivery(SettlementData.get(level), jobBlock.getBlockPos());

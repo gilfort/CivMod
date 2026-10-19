@@ -7,8 +7,8 @@ import java.util.function.UnaryOperator;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.block.UpgradeCosts;
-import com.gilfort.civmod.job.Job;
-import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.mission.MissionOffer;
 import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.mission.OutcomeRules;

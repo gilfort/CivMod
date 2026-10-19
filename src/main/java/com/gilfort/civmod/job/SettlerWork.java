@@ -13,6 +13,8 @@ import java.util.OptionalLong;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.Schedule.Activity;
@@ -765,7 +767,7 @@ public final class SettlerWork {
             Job type = job.jobType();
             switch (status(job.jobBlock())) {
                 case NO_TOOL -> on.putIfAbsent(ThoughtBubble.NO_TOOL,
-                        type.profile().map(JobProfile::toolIcon).orElseGet(() -> type.bubbleIcon().getItem()));
+                        type.profile(JobProfile.class).map(JobProfile::toolIcon).orElseGet(() -> type.bubbleIcon().getItem()));
                 case DROP_OFF_FULL, STORAGE_FULL -> on.putIfAbsent(ThoughtBubble.DROP_OFF_FULL,
                         SettlerThoughts.problemIcon(ThoughtBubble.DROP_OFF_FULL));
                 case NO_WORK_PLACE -> on.putIfAbsent(ThoughtBubble.NO_WORK_PLACE, type.icon().getItem());
@@ -806,7 +808,7 @@ public final class SettlerWork {
                 || status == JobStatus.DELIVERING) {
             return ItemStack.EMPTY;
         }
-        Optional<JobProfile> profile = type.profile();
+        Optional<JobProfile> profile = type.profile(JobProfile.class);
         if (profile.isPresent()) {
             return SettlerTools.best(settler, profile.get()::isTool).map(ItemStack::copy).orElse(ItemStack.EMPTY);
         }
@@ -2058,7 +2060,7 @@ public final class SettlerWork {
      */
     public Optional<JobProfile.Worker> worker(BlockPos jobBlock) {
         return settler.getJobs().stream().filter(job -> job.jobBlock().equals(jobBlock)).findFirst()
-                .flatMap(job -> job.jobType().profile().map(profile -> new JobProfile.Worker(
+                .flatMap(job -> job.jobType().profile(JobProfile.class).map(profile -> new JobProfile.Worker(
                         SettlerTools.best(settler, profile::isTool).map(ItemStack::copy).orElse(ItemStack.EMPTY), effectiveLevel(job))));
     }
 

@@ -8,6 +8,7 @@ import java.util.OptionalLong;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.mission.Mission;
 import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.mission.Missions;
@@ -286,7 +287,7 @@ final class MissionLoop implements CategoryLoop {
         int cap = site.skillCap();
         int skill = settler.getSkills().effectiveLevel(job.jobType(), cap);
         MissionRules.Outcome outcome = forcedOutcome != null ? forcedOutcome
-                : MissionRules.roll(MissionRules.chances(rules, mission.recommendedLevel(), skill), level.getRandom());
+                : MissionRules.roll(MissionRules.chances(rules, mission.recommendedLevel(), skill, job.jobType()), level.getRandom());
         if (outcome == MissionRules.Outcome.DEATH) {
             return outcome;
         }

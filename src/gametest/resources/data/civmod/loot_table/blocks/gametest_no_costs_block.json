@@ -1,0 +1,33 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "condition": {
+        "type": "minecraft:survives_explosion"
+      },
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "modifier": [
+            {
+              "type": "minecraft:copy_components",
+              "include": [
+                "civmod:job_level"
+              ],
+              "source": "block_entity"
+            },
+            {
+              "type": "minecraft:set_components",
+              "components": {
+                "!civmod:starter_tool": {}
+              }
+            }
+          ],
+          "name": "civmod:gametest_no_costs_block"
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "civmod:blocks/gametest_no_costs_block"
+}

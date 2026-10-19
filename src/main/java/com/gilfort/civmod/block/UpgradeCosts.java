@@ -6,9 +6,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import com.gilfort.civmod.CivMod;
-import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.registry.ModJobs;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
@@ -38,6 +39,8 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 /**
  * JobBlock upgrade costs (vault {@code Systems/JobBlock.md}) from {@code data/<namespace>/civmod_upgrades/<job>.json} for the
  * job {@code <namespace>:<job>}: per target level (2–5) a list of items or tags with counts. Files of all packs are merged per level.
+ * A JobBlock whose job has no file (e.g. an addon that ships none) uses the default costs from
+ * {@code data/civmod/civmod_upgrades/default.json}, with one warning per job on every reload.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class UpgradeCosts {
@@ -46,7 +49,9 @@ public final class UpgradeCosts {
     public static final Identifier ID = CivMod.id("upgrade_costs");
 
     private static final FileToIdConverter FILES = FileToIdConverter.json("civmod_upgrades");
-    private static Map<Job, Map<Integer, List<Cost>>> costs = Map.of();
+    /** The reserved file id of the default costs ({@code civmod:default} is no job). */
+    private static final Identifier DEFAULT_ID = CivMod.id("default");
+    private static Loaded loaded = Loaded.EMPTY;
 
     private UpgradeCosts() {
     }
@@ -89,10 +94,10 @@ public final class UpgradeCosts {
     /**
      * @param job      the job of the JobBlock
      * @param newLevel the level to upgrade to
-     * @return the costs (empty if none are defined)
+     * @return the costs (the default costs if the job has no file; empty if the file or the defaults define none for the level)
      */
     public static List<Cost> get(Job job, int newLevel) {
-        return costs.getOrDefault(job, Map.of()).getOrDefault(newLevel, List.of());
+        return loaded.costs().getOrDefault(job, loaded.defaults()).getOrDefault(newLevel, List.of());
     }
 
     /**
@@ -157,20 +162,27 @@ public final class UpgradeCosts {
         event.addListener(ID, new Loader());
     }
 
-    private static final class Loader extends SimplePreparableReloadListener<Map<Job, Map<Integer, List<Cost>>>> {
+    private static final class Loader extends SimplePreparableReloadListener<Loaded> {
 
         @Override
-        protected Map<Job, Map<Integer, List<Cost>>> prepare(ResourceManager manager, ProfilerFiller profiler) {
+        protected Loaded prepare(ResourceManager manager, ProfilerFiller profiler) {
             Map<Job, List<JsonElement>> files = new HashMap<>();
+            List<JsonElement> defaultFiles = new ArrayList<>();
             FILES.listMatchingResourceStacks(manager).entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
-                Job job = ModJobs.REGISTRY.getValue(FILES.fileToId(entry.getKey()));
-                if (job == null) {
+                Identifier id = FILES.fileToId(entry.getKey());
+                Job job = ModJobs.REGISTRY.getValue(id);
+                if (job == null && !id.equals(DEFAULT_ID)) {
                     CivMod.LOGGER.warn("Upgrade costs {} name no known job", entry.getKey());
                     return;
                 }
                 for (Resource resource : entry.getValue()) {
                     try (Reader reader = resource.openAsReader()) {
-                        files.computeIfAbsent(job, key -> new ArrayList<>()).add(JsonParser.parseReader(reader));
+                        JsonElement file = JsonParser.parseReader(reader);
+                        if (job == null) {
+                            defaultFiles.add(file);
+                        } else {
+                            files.computeIfAbsent(job, key -> new ArrayList<>()).add(file);
+                        }
                     } catch (Exception e) {
                         CivMod.LOGGER.error("Failed to read upgrade costs {} from pack {}", entry.getKey(), resource.sourcePackId(), e);
                     }
@@ -184,12 +196,41 @@ public final class UpgradeCosts {
                     CivMod.LOGGER.error("Invalid upgrade costs for {}", job, e);
                 }
             });
-            return result;
+            Map<Integer, List<Cost>> defaults = Map.of();
+            try {
+                defaults = merge(defaultFiles);
+            } catch (Exception e) {
+                CivMod.LOGGER.error("Invalid default upgrade costs {}", DEFAULT_ID, e);
+            }
+            jobBlockJobs().filter(job -> !result.containsKey(job)).forEach(job -> CivMod.LOGGER.warn(
+                    "No upgrade costs for {} (data/{}/civmod_upgrades/{}.json), its JobBlock uses the default costs", job,
+                    job.id().getNamespace(), job.id().getPath()));
+            return new Loaded(result, defaults);
         }
 
         @Override
-        protected void apply(Map<Job, Map<Integer, List<Cost>>> prepared, ResourceManager manager, ProfilerFiller profiler) {
-            costs = Map.copyOf(prepared);
+        protected void apply(Loaded prepared, ResourceManager manager, ProfilerFiller profiler) {
+            loaded = prepared;
+        }
+
+        /** The Jobs offered by a registered JobBlock, CivMod's and addons'. */
+        private static Stream<Job> jobBlockJobs() {
+            return BuiltInRegistries.BLOCK.stream().filter(JobBlock.class::isInstance).map(block -> ((JobBlock) block).getJobType()).distinct();
+        }
+    }
+
+    /**
+     * The loaded costs.
+     *
+     * @param costs    job → target level → costs, for every job with a file
+     * @param defaults target level → costs for jobs without a file
+     */
+    private record Loaded(Map<Job, Map<Integer, List<Cost>>> costs, Map<Integer, List<Cost>> defaults) {
+
+        static final Loaded EMPTY = new Loaded(Map.of(), Map.of());
+
+        Loaded {
+            costs = Map.copyOf(costs);
         }
     }
 }

@@ -1,0 +1,19 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="GPL-3.0"
+
+[[mods]]
+modId="civmod_example"
+version="0.1.0"
+displayName="CivMod Example Addon"
+authors="Gilfort"
+description='''
+Example addon for CivMod's addon API: Jobs built on the API only.
+'''
+
+[[dependencies.civmod_example]]
+    modId="civmod"
+    type="required"
+    versionRange="[0.1.0,)"
+    ordering="AFTER"
+    side="BOTH"

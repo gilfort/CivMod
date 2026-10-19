@@ -6,6 +6,7 @@ import java.util.stream.IntStream;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.block.JobBlockEntity;
+import com.gilfort.civmod.block.StarterTools;
 import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.registry.ModItems;
 
@@ -112,12 +113,11 @@ public final class StarterToolGameTests {
 
     /**
      * Every JobBlock with a starter tool drops without it: guards the loot table's starter tool removal for each entry of
-     * {@link ModItems#STARTER_TOOLS}, also for jobs added later.
+     * {@link StarterTools#jobBlockItems()}, also for jobs added later.
      */
     private static void noToolInAnyDrop(GameTestHelper helper) {
         int x = 1;
-        for (var entry : ModItems.STARTER_TOOLS.entrySet()) {
-            Item jobBlockItem = entry.getKey().get();
+        for (Item jobBlockItem : StarterTools.jobBlockItems()) {
             BlockPos pos = new BlockPos(x, 1, 1);
             BlockPos absolute = helper.absolutePos(pos);
             x += 2;
@@ -155,7 +155,7 @@ public final class StarterToolGameTests {
                 .orElse(false);
     }
 
-    private static void place(GameTestHelper helper, Player player, ItemStack stack, BlockPos pos) {
+    static void place(GameTestHelper helper, Player player, ItemStack stack, BlockPos pos) {
         player.setItemInHand(InteractionHand.MAIN_HAND, stack);
         // The test area outside the empty structure is barrier; clear the target so the click places into it.
         helper.setBlock(pos, Blocks.AIR);
@@ -163,14 +163,14 @@ public final class StarterToolGameTests {
     }
 
     /** Removes placed JobBlocks so they cannot join the settlements of other tests in the shared test level. */
-    private static void remove(GameTestHelper helper, BlockPos... positions) {
+    static void remove(GameTestHelper helper, BlockPos... positions) {
         for (BlockPos pos : positions) {
             helper.getBlockEntity(pos, JobBlockEntity.class).clearContent();
             helper.getLevel().destroyBlock(helper.absolutePos(pos), false);
         }
     }
 
-    private static List<ItemStack> contents(GameTestHelper helper, BlockPos pos) {
+    static List<ItemStack> contents(GameTestHelper helper, BlockPos pos) {
         JobBlockEntity jobBlock = helper.getBlockEntity(pos, JobBlockEntity.class);
         return IntStream.range(0, jobBlock.getContainerSize())
                 .mapToObj(jobBlock::getItem)

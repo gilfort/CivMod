@@ -8,7 +8,7 @@ import java.util.function.Consumer;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.CatchUp;
-import com.gilfort.civmod.job.JobCategory;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.Schedule;
 import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.npc.Settler;

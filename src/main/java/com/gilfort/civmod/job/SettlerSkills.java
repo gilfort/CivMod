@@ -3,6 +3,7 @@ package com.gilfort.civmod.job;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.gilfort.civmod.api.Job;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 

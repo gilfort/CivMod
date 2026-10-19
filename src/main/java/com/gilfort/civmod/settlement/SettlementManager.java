@@ -8,7 +8,7 @@ import java.util.UUID;
 
 import org.jspecify.annotations.Nullable;
 
-import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.api.Job;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
