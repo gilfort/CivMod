@@ -244,14 +244,15 @@ public final class Patterns {
 
     /**
      * Fills a pattern from a recipe viewer's transfer button: the recipe if the server knows it as a recipe of the
-     * profile's types, otherwise exactly the shown items.
+     * profile's types, otherwise exactly the shown items (padded to the 3×3 grid). A known recipe of a type the producer
+     * does not follow is refused.
      *
      * @param level  the level
      * @param pos    the Producing JobBlock
      * @param slot   the library slot
      * @param recipe the recipe id the viewer showed
      * @param grid   the shown items, row by row
-     * @return the new pattern
+     * @return the new pattern, empty if refused
      */
     public static Optional<Pattern> transfer(ServerLevel level, BlockPos pos, int slot, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid) {
         Optional<SettlementBlock> block = block(level, pos);
@@ -259,8 +260,17 @@ public final class Patterns {
             return Optional.empty();
         }
         ProducingProfile profile = profile(block.get());
+        if (recipe.flatMap(id -> PatternRecipes.holder(level, id)).filter(holder -> !profile.recipeTypes().contains(holder.value().getType())).isPresent()) {
+            // "Not a recipe this Job follows": the viewer's button is disabled for it, a stale client must not get around that.
+            return Optional.empty();
+        }
         Optional<PatternRecipes.Shape> shape = recipe.flatMap(id -> PatternRecipes.byKey(level, profile.recipeTypes(), id));
-        return put(level, pos, slot, shape.map(found -> recipePattern(slot, found)).orElseGet(() -> exactPattern(level, profile, slot, grid)));
+        List<Item> cells = new ArrayList<>(grid.subList(0, Math.min(Pattern.GRID, grid.size())));
+        while (cells.size() < Pattern.GRID) {
+            // Recipes of other types than crafting show fewer inputs than the 3×3 grid.
+            cells.add(Items.AIR);
+        }
+        return put(level, pos, slot, shape.map(found -> recipePattern(slot, found)).orElseGet(() -> exactPattern(level, profile, slot, cells)));
     }
 
     /**
