@@ -83,9 +83,12 @@ public interface ResourceCollectionProfile extends CategoryProfile {
      * @param jobBlock   the JobBlock position
      * @param workPoints the JobBlock's work points set with the Scroll of Assignment, in order
      * @param workPlace  the work place of the day
-     * @return the centre of the scan
+     * @return the centre of the scan, by default the first work point, else the JobBlock
      */
-    BlockPos scanCenter(BlockPos jobBlock, List<BlockPos> workPoints, BlockPos workPlace);
+    default BlockPos scanCenter(BlockPos jobBlock, List<BlockPos> workPoints, BlockPos workPlace) {
+        return workPoints.isEmpty() ? jobBlock : workPoints.get(0);
+    }
+
 
     /**
      * @param jobBlockLevel the JobBlock level (1–5)
@@ -279,16 +282,13 @@ public interface ResourceCollectionProfile extends CategoryProfile {
      * @param scan       the scan result (null while the first scan runs)
      * @param poi        the work place
      * @param tool       the job's tool
-     * @param secondary  a second tool the JobBlock's settings ask for (CivMod's Lumberjack: shears for leaves); empty
-     *                   for other Jobs
      * @param excluded   the types excluded at the JobBlock
      * @param skillLevel the skill level
      * @param atMax      the items at their Max at the Home Clerk (left out of the roll)
      * @param dropped    the item a resource type drops with the tool ({@link #dropped}, cached per scan)
      */
     @ApiStatus.Experimental
-    record Context(ServerLevel level, PathfinderMob settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Optional<ItemStack> secondary,
-            Set<Identifier> excluded, int skillLevel, Set<Item> atMax, Function<Identifier, Item> dropped) {
+    record Context(ServerLevel level, PathfinderMob settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Set<Identifier> excluded, int skillLevel, Set<Item> atMax, Function<Identifier, Item> dropped) {
     }
 
     /**

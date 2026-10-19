@@ -187,9 +187,11 @@ final class WorkRules {
             }
             ticks -= (1.0 - accumulated) / perTick;
             accumulated = 0.0;
-            Optional<ItemStack> secondary = secondaryTool(profile, site.block()).flatMap(kind -> SettlerTools.best(settler, kind));
-            Optional<ResourceCollectionProfile.Produced> produced = profile.produce(new ResourceCollectionProfile.Context(level, settler, scan, poi,
-                    rollTool, secondary, site.block().excluded(), skillLevel, atMax, type -> workplace.dropped(level, profile, poi, type, rollTool)));
+            ResourceCollectionProfile.Context context = new ResourceCollectionProfile.Context(level, settler, scan, poi, rollTool,
+                    site.block().excluded(), skillLevel, atMax, type -> workplace.dropped(level, profile, poi, type, rollTool));
+            Optional<ResourceCollectionProfile.Produced> produced = profile instanceof SecondaryToolProfile withSecondary
+                    ? withSecondary.produce(context, withSecondary.secondaryTool(site.block()).flatMap(kind -> SettlerTools.best(settler, kind)))
+                    : profile.produce(context);
             rolls++;
             if (produced.isPresent()) {
                 SettlerTools.wear(level, settler, produced.get().worn());
@@ -310,8 +312,9 @@ final class WorkRules {
      * @return a second tool the job wants with the JobBlock's settings (the Lumberjack's shears for leaves), if any
      */
     static Optional<Predicate<ItemStack>> secondaryTool(ResourceCollectionProfile profile, SettlementBlock block) {
-        return profile instanceof LumberjackProfile lumberjack ? lumberjack.secondaryTool(block) : Optional.empty();
+        return profile instanceof SecondaryToolProfile withSecondary ? withSecondary.secondaryTool(block) : Optional.empty();
     }
+
 
     /**
      * A tool the settler lacks for its job.

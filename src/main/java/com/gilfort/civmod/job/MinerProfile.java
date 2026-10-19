@@ -96,11 +96,6 @@ public final class MinerProfile implements ResourceCollectionProfile {
     }
 
     @Override
-    public BlockPos scanCenter(BlockPos jobBlock, List<BlockPos> workPoints, BlockPos workPlace) {
-        return workPoints.isEmpty() ? jobBlock : workPoints.get(0);
-    }
-
-    @Override
     public boolean rescanDaily() {
         return false;
     }

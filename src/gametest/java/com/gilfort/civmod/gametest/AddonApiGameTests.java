@@ -237,6 +237,8 @@ public final class AddonApiGameTests {
         helper.assertTrue(Arrays.stream(ResourceCollectionProfile.class.getMethods())
                 .noneMatch(method -> method.getName().equals("secondaryTool") || method.getName().equals("hasLeavesOption")),
                 "No leaves option in the public profile");
+        helper.assertTrue(Arrays.stream(ResourceCollectionProfile.Context.class.getRecordComponents())
+                .noneMatch(component -> component.getName().equals("secondary")), "No second tool in the public production context");
         helper.succeed();
     }
 
@@ -285,7 +287,7 @@ public final class AddonApiGameTests {
         ItemStack tool = new ItemStack(Items.STONE_SHOVEL);
         for (int i = 0; i < 2000; i++) {
             Optional<ResourceCollectionProfile.Produced> produced = profile.produce(new ResourceCollectionProfile.Context(level, settler, scan, poi,
-                    tool, Optional.empty(), excluded, 1, Set.of(), type -> profile.dropped(level, poi, type, tool)));
+                    tool, excluded, 1, Set.of(), type -> profile.dropped(level, poi, type, tool)));
             items(produced).forEach(item -> counts.merge(item, 1, Integer::sum));
         }
         return counts;
