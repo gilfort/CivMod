@@ -393,6 +393,9 @@ public final class ExampleAddonGameTests {
         ResourceKey<Recipe<?>> sticks = ResourceKey.create(Registries.RECIPE, Identifier.withDefaultNamespace("stick"));
         List<Item> stickGrid = List.of(Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.AIR, Items.AIR);
 
+        helper.assertTrue(Set.copyOf(Patterns.allRecipeTypes()).equals(Set.of(RecipeType.CRAFTING, RecipeType.STONECUTTING))
+                && Patterns.allRecipeTypes().size() == 2,
+                "Recipe viewers offer the transfer for the recipe types of every Producing Job: " + Patterns.allRecipeTypes());
         PatternTab tab = PatternTab.of(level, craft);
         helper.assertTrue(tab.follows(RecipeType.CRAFTING) && !tab.follows(RecipeType.STONECUTTING), "Nobody assigned: the Craftsperson follows crafting");
         helper.assertTrue(Patterns.transfer(level, craft, 0, Optional.of(bricks), List.of(Items.STONE)).isEmpty(),

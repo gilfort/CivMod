@@ -10,6 +10,7 @@ import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.PatternRecipes;
+import com.gilfort.civmod.registry.ModJobs;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -22,6 +23,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeType;
 
 /**
  * The pattern library of a Producing JobBlock (vault {@code Systems/Producing Jobs.md}, {@code Jobs/Craftsperson.md}),
@@ -88,6 +90,15 @@ public final class Patterns {
      */
     public static ProducingProfile profile(Job job) {
         return job.profile(ProducingProfile.class).orElseThrow(() -> new IllegalStateException(job + " has no Producing profile"));
+    }
+
+    /**
+     * @return the recipe types of every registered Producing Job's profile, each once (the recipe types recipe viewers
+     *         offer the transfer button for)
+     */
+    public static List<RecipeType<?>> allRecipeTypes() {
+        return ModJobs.REGISTRY.stream().flatMap(job -> job.profile(ProducingProfile.class).stream())
+                .flatMap(profile -> profile.recipeTypes().stream()).distinct().toList();
     }
 
     /**

@@ -35,6 +35,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeType;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
@@ -601,17 +602,19 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     }
 
     /**
-     * Fills a pattern from a recipe viewer's transfer button: the open pattern, else the first empty library slot.
+     * Fills a pattern from a recipe viewer's transfer button: the open pattern, else the first empty library slot. Only
+     * recipes of a type the working Job follows can be transferred ("Not a recipe this Job follows").
      *
+     * @param type       the recipe type of the recipe the viewer shows
      * @param recipe     the recipe the viewer shows
      * @param grid       the items it shows, row by row
      * @param doTransfer whether to transfer (false: only check)
      * @return the reason it cannot, empty if it can
      */
-    public Optional<Component> transferPattern(Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid, boolean doTransfer) {
+    public Optional<Component> transferPattern(RecipeType<?> type, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid, boolean doTransfer) {
         if (!JobBlockMenu.hasPatternsTab(menu.getInfo())) {
             return Optional.of(Component.translatable("civmod.gui.patterns.not_here"));
         }
-        return patterns.transfer(recipe, grid, doTransfer);
+        return patterns.transfer(type, recipe, grid, doTransfer);
     }
 }
