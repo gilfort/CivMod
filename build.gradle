@@ -100,7 +100,10 @@ repositories {
     maven {
         name = 'BlameJared (JEI)'
         url = 'https://maven.blamejared.com/'
-        content { includeGroup 'mezz.jei' }
+        content {
+            includeGroup 'mezz.jei'
+            includeGroup 'net.mezzdev.config'
+        }
     }
     maven {
         name = 'shedaniel (REI)'
@@ -120,6 +123,9 @@ dependencies {
     compileOnly 'mezz.jei:jei-26.3-neoforge-api:31.14.0.72'
     compileOnly('me.shedaniel:RoughlyEnoughItems-api-neoforge:26.3.824') { transitive = false }
     compileOnly('dev.architectury:architectury-neoforge:22.0.3') { transitive = false }
+
+    // JEI in dev runs only (runClient etc.); not published as a dependency.
+    localRuntime 'mezz.jei:jei-26.3-neoforge:31.14.0.72'
 }
 
 // Expands the ${} properties in src/main/templates (e.g. neoforge.mods.toml).
