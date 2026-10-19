@@ -6,6 +6,17 @@ A Producing Job makes items on request: a Clerk's stock rule (or another source)
 
 A profile names one or more vanilla or modded `RecipeType`s (`crafting`, `stonecutting`, `smelting`, `campfire_cooking`, a modded type, …). There is no CivMod recipe format: the player makes patterns from those recipes in the JobBlock's Patterns tab (output only: the first matching recipe; exact inputs: the recipe they match), and recipe viewers show the same recipes. Crafting recipes keep their shape in the 3×3 grid; recipes of other types fill the cells in order with their ingredients.
 
+### Recipe viewer transfer (JEI / REI)
+
+The transfer button of JEI and REI fills a pattern (the open one, else the first empty library slot) from a recipe of every recipe type a registered Producing profile names, vanilla or modded; nothing to register in the addon. A recipe of a type the JobBlock's working Job does not follow gets a disabled button with "Not a recipe this Job follows" (the server refuses it as well). Checkmark, filter and limit rules are the same as for any new pattern.
+
+The viewers have to recognise the category of the recipe type:
+
+- **JEI:** the category's recipe type must be `IRecipeType.create(yourRecipeType)` (an `IRecipeHolderType`, uid = the recipe type's id), as JEI's own vanilla categories are.
+- **REI:** the display's category id must be the recipe type's id or `<namespace>:plugins/<path>` (REI's vanilla convention; `stone_cutting` and `campfire` are mapped too). A display naming its recipe id (`getDisplayLocation()`) makes a pattern following that recipe; without one the pattern uses exactly the shown items.
+
+Recipes in other categories (custom recipe classes, other category ids) get no button; the player drags the output from the viewer onto a pattern slot instead.
+
 ## Register a Producing Job
 
 ```java
