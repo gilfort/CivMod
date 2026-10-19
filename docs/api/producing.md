@@ -66,12 +66,29 @@ and the lang keys `job.<namespace>.<job>`, `job.<namespace>.<job>.indefinite` an
 | `station(type)` | block tag of the station for a recipe type. The main type's station is the work place of the day (Scroll of Assignment, up to 8; else the nearest within 16 blocks of the JobBlock); other types use the nearest station of their tag | required |
 | `inputFilter()` | `ItemFilter` for inputs: an input whose alternatives it all rejects blocks the pattern, rejected alternatives of a tag input are skipped | every item |
 | `outputFilter()` | `ItemFilter` for outputs: a rejected output blocks the pattern | every item |
-| `filteredLine()` | state line of a pattern the filters block, in the Patterns tab | "Not allowed for this Job" |
+| `domain()` | item tag of a crafting Specialization's domain (see [Domains](#domains)) | none: every recipe |
+| `filteredLine()` | state line of a pattern the filters or the domain block, in the Patterns tab | "Outside this Job's domain" with a domain, else "Not allowed for this Job" |
 | `checkLimit(skill)` | how many patterns can be checked at the settler's effective skill | 6 + 1 per 5 levels |
 | `workTime(recipe)` | operations one execution of a recipe takes (an operation lasts as long as the shared speed formula × job factor says) | 1 |
 | `execute(level, recipe, result, consumed)` | what one execution puts into the settler's buffer; the inputs are already taken out | the result plus the inputs' remainders (empty buckets, …) |
 
 `ItemFilter.allow(tag)`, `ItemFilter.deny(tag)` and `ItemFilter.ANY` build filters. The Craftsperson is a profile with `crafting` and its crafting-table station, without filters: it crafts everything, slowly (job factor 0.3).
+
+## Domains
+
+A crafting Specialization trades the Craftsperson's "everything, slowly" for "its domain, fast": its profile names a domain item tag, and its Job uses job factor **1.2** (four times the Craftsperson's 0.3; set it with `.jobFactor(1.2)` and let datapacks override it through `job_factor` in `civmod_jobs/<job>.json`).
+
+```java
+@Override
+public Optional<TagKey<Item>> domain() {
+    return Optional.of(TagKey.create(Registries.ITEM, Identifier.fromNamespaceAndPath("examplemod", "domains/wood")));
+}
+```
+
+- A recipe belongs to the domain if **any input** has an alternative in the tag, so a mixed recipe fits several domains (a piston – planks, cobblestone, iron, redstone – is in a wood, a stone, a metal and a redstone domain).
+- A pattern outside the domain is greyed out with "Outside this Job's domain" and cannot be checked (like a filtered pattern; it loses a checkmark it had, e.g. after the tag changed).
+- Intermediates follow the same rule: the specialist crafts only intermediates inside its domain. One outside it must be in stock, otherwise the request shows "Missing: …" (a Mechanic making repeaters needs sticks from a Craftsperson or the Clerk's storage).
+- Domains are item tags, so datapacks change them. CivMod's built-in Mechanic (unlocked by and working at a Crafter, `crafting`) uses `civmod:domains/redstone`.
 
 ## Checkmarks
 

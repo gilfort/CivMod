@@ -65,7 +65,7 @@ Every JobBlock whose Base Job has Specializations (except the Mission Board) get
 
 The unlock item is not the work place: the Job still needs its station in the world (its station tag, the Scroll of Assignment's work points). Several addons may name the same item; the tab's "?" lists every unlock item with all Jobs it unlocks, one line each, using the lang key `job.<namespace>.<job>.description` (optional) as the Job's one-line description.
 
-`CivModJobs` holds CivMod's built-in Jobs (`LUMBERJACK`, `MINER`, `FISHERMAN`, `ADVENTURER`, `CLERK`, `DELIVERYMAN`, `CRAFTSPERSON`) for parents and data.
+`CivModJobs` holds CivMod's built-in Jobs (`LUMBERJACK`, `MINER`, `FISHERMAN`, `ADVENTURER`, `CLERK`, `DELIVERYMAN`, `CRAFTSPERSON`, `MECHANIC`) for parents and data.
 
 Lang keys (in `assets/<namespace>/lang/en_us.json`):
 
