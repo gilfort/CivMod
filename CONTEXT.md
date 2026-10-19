@@ -200,6 +200,13 @@ _Avoid_: Pantry
 **Craftsperson**:
 The first Producing Job: crafts requested items from its patterns at a crafting table. Code: `ModJobs.CRAFTSPERSON` on `ModBlocks.CRAFTSPERSON_BLOCK`, profile `CraftspersonProfile` (`crafting`, no filter: crafts everything), work loop `ProducingLoop` (the Producing category's loop for every `ProducingProfile`); job factor 0.3 and base EXP 2 in `civmod_jobs/craftsperson.json` (`Job.jobFactor`, `JobBalancing`). The example addon's Stonecutter (`civmod_example:stonecutter`, `stonecutting` at a stonecutter, job factor 1.2, unlocked by a stonecutter) is a Producing Specialization of it.
 
+**Mechanic**:
+The first built-in crafting Specialization of the Craftsperson: unlocked by a Crafter in a Station Types slot, works at a Crafter (`civmod:stations/mechanic`), `crafting` recipes in the domain `civmod:domains/redstone`, job factor 1.2 (four times the Craftsperson). Code: `ModJobs.MECHANIC`, profile `MechanicProfile`, `civmod_jobs/mechanic.json`.
+
+**Domain**:
+The item tag a crafting Specialization is limited to (`ProducingProfile.domain`): a recipe belongs to it if any input has an alternative in the tag, so mixed recipes (a piston) fit several domains. Patterns outside it are filtered ("Outside this Job's domain", not checkable), and the chain resolution makes no intermediates outside it: they are taken from stock or reported "Missing". Code: `Patterns.filtered`.
+_Avoid_: Material set, category
+
 **Pattern**:
 One of the 54 slots of a pattern library: a 3×3 grid and an output. Made from the output alone it follows a recipe of the profile's recipe types (tag ingredients flexible, arrows cycle the recipes making the item; crafting recipes keep their shape, others fill the cells in order); made from inputs it uses exactly those items. Every Producing Job unlocked at a JobBlock has its own library and Patterns tab (`SettlementBlock.Library`, `SettlementBlock.patterns(job)`); a settler works only its Job's library. A library whose Job is no longer unlocked is "locked" (`Patterns.locked`): kept, unusable, not editable. A pattern of a recipe type its Job no longer follows stays ("foreign") with its checkmark. A pattern the Job cannot use (locked, foreign or filtered) is "unusable", greyed out in the tab (`Patterns.unusable`, `PatternTab.unusable`); not to be confused with the job status Blocked. Code: `Pattern` (data), `Patterns` (edit, `inputs`, `usable`, all per Job), `PatternRecipes` (recipe lookup); GUI via `PatternTab` (one per Job, `JobBlockMenu.patternJobs`).
 _Avoid_: Recipe (a pattern follows one), blueprint

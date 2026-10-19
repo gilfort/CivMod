@@ -2,6 +2,7 @@ package com.gilfort.civmod.api;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.jetbrains.annotations.ApiStatus;
 
@@ -11,6 +12,7 @@ import com.gilfort.civmod.settlement.Patterns;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
@@ -24,10 +26,11 @@ import net.minecraft.world.level.block.Block;
  * <p>
  * Recipes come from recipe types, vanilla or modded ({@code crafting}, {@code stonecutting}, {@code smelting}, …): the
  * player makes patterns from them in the JobBlock's Patterns tab. A pattern is usable if its recipe is of one of the
- * profile's types and the {@link #inputFilter()} / {@link #outputFilter()} let it through. New patterns are checked
- * automatically up to {@link #checkLimit(int)}.
+ * profile's types, the {@link #inputFilter()} / {@link #outputFilter()} let it through and it lies in the
+ * {@link #domain()}. New patterns are checked automatically up to {@link #checkLimit(int)}.
  * <p>
- * The Craftsperson ({@link CivModJobs#CRAFTSPERSON}) is a profile with {@code crafting} and a filter that denies metal.
+ * The Craftsperson ({@link CivModJobs#CRAFTSPERSON}) is a profile with {@code crafting} and no filters; the Mechanic
+ * ({@link CivModJobs#MECHANIC}) adds the domain {@code civmod:domains/redstone}.
  */
 @ApiStatus.Experimental
 public interface ProducingProfile extends CategoryProfile {
@@ -71,10 +74,22 @@ public interface ProducingProfile extends CategoryProfile {
     }
 
     /**
-     * @return the state line of a pattern the filters block, shown in the Patterns tab ("Can't work with metal")
+     * The domain of a crafting Specialization (vault {@code Systems/Producing Jobs.md}): a recipe belongs to it if
+     * <b>any</b> input is in the tag (a piston is in the domain of several Specializations). Recipes outside the domain
+     * cannot be checked, and intermediates outside it are not made but reported missing.
+     *
+     * @return the domain item tag (none by default: every recipe)
+     */
+    default Optional<TagKey<Item>> domain() {
+        return Optional.empty();
+    }
+
+    /**
+     * @return the state line of a pattern the filters or the domain block, shown in the Patterns tab ("Outside this
+     *         Job's domain" with a {@link #domain()}, else "Not allowed for this Job")
      */
     default Component filteredLine() {
-        return Component.translatable("civmod.gui.patterns.filtered");
+        return Component.translatable(domain().isPresent() ? "civmod.gui.patterns.outside_domain" : "civmod.gui.patterns.filtered");
     }
 
     /**
