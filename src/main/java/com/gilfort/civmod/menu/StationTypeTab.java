@@ -1,5 +1,6 @@
 package com.gilfort.civmod.menu;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -78,7 +79,7 @@ public record StationTypeTab(List<Item> slots, int open, List<Job> unlocked, Lis
             return EMPTY;
         }
         SettlementBlock block = found.get();
-        List<Item> slots = new java.util.ArrayList<>(block.stationTypes());
+        List<Item> slots = new ArrayList<>(block.stationTypes());
         slots.set(0, StationTypes.baseStation(block.jobType()));
         return new StationTypeTab(slots, StationTypes.open(block.level()), StationTypes.unlocked(block), block.libraryJobs(),
                 StationTypes.overview(block.jobType()));
@@ -90,6 +91,14 @@ public record StationTypeTab(List<Item> slots, int open, List<Job> unlocked, Lis
      */
     public Item item(int slot) {
         return slot >= 0 && slot < slots.size() ? slots.get(slot) : Items.AIR;
+    }
+
+    /**
+     * @param slot a slot
+     * @return whether it takes an unlock item ({@link StationTypes#isOpen(int, int)})
+     */
+    public boolean isOpen(int slot) {
+        return StationTypes.isOpen(slot, open);
     }
 
     /**

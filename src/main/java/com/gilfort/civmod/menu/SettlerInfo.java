@@ -1,5 +1,6 @@
 package com.gilfort.civmod.menu;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.gilfort.civmod.api.Job;
@@ -100,7 +101,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
          * @return the state after the switch: idle, the old Job offered instead of the new one
          */
         JobState switched(Job job, Job old) {
-            List<Job> options = new java.util.ArrayList<>(switchTo);
+            List<Job> options = new ArrayList<>(switchTo);
             options.replaceAll(option -> option == job ? old : option);
             return new JobState(JobStatus.IDLE, JobStatus.IDLE.displayName(), 0, 0, List.of(), SkillInfo.NONE, options);
         }
@@ -221,8 +222,8 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
      * @return a copy with that job switched; its state idle until the window is opened again
      */
     public SettlerInfo withSwitched(int index, Job job) {
-        List<SettlerJob> switchedJobs = new java.util.ArrayList<>(jobs);
-        List<JobState> states = new java.util.ArrayList<>(jobStates);
+        List<SettlerJob> switchedJobs = new ArrayList<>(jobs);
+        List<JobState> states = new ArrayList<>(jobStates);
         SettlerJob old = switchedJobs.get(index);
         switchedJobs.set(index, new SettlerJob(job, old.jobBlock()));
         if (index < states.size()) {

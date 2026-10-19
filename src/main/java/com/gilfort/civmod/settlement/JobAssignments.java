@@ -407,20 +407,26 @@ public final class JobAssignments {
         if (!switchOptions(data, jobBlock, settler, otherJobs).contains(job)) {
             return false;
         }
-        SettlementBlock block = JobBlockSite.blockAt(data, jobBlock).orElseThrow();
-        List<SettlementBlock.Assignee> assignees = block.mutableAssignees();
-        for (int i = 0; i < assignees.size(); i++) {
-            SettlementBlock.Assignee assignee = assignees.get(i);
-            if (assignee.id().equals(settler)) {
-                assignees.set(i, new SettlementBlock.Assignee(settler, assignee.name(), job));
-            }
-        }
+        JobBlockSite.blockAt(data, jobBlock).orElseThrow().setAssigneeJob(settler, job);
         MissionOffers.removeAssignee(data, jobBlock, settler);
         if (job == ModJobs.DELIVERYMAN.get()) {
             JobBlockSite.at(data, jobBlock).ifPresent(site -> site.settlement().blocks().forEach(other -> other.mutableServed().remove(jobBlock)));
         }
         data.changed();
         return true;
+    }
+
+    /**
+     * @param data     the dimension's settlement data
+     * @param jobBlock a JobBlock position
+     * @param settler  a settler UUID
+     * @param job      a Job
+     * @return whether the settler holds that Job at another JobBlock of the same settlement
+     */
+    public static boolean holdsElsewhere(SettlementData data, BlockPos jobBlock, UUID settler, Job job) {
+        return JobBlockSite.at(data, jobBlock).stream().flatMap(site -> site.settlement().blocks().stream())
+                .filter(block -> !block.pos().equals(jobBlock))
+                .anyMatch(block -> block.assignee(settler).filter(assignee -> assignee.job() == job).isPresent());
     }
 
     private static Job base(Job job) {
@@ -438,7 +444,7 @@ public final class JobAssignments {
         Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
         List<UUID> previous = block.map(b -> b.assignees().stream().map(SettlementBlock.Assignee::id).toList()).orElse(List.of());
         if (!previous.isEmpty()) {
-            block.get().mutableAssignees().clear();
+            block.get().clearAssignees();
             previous.forEach(settler -> MissionOffers.removeAssignee(data, jobBlock, settler));
             data.changed();
         }
@@ -456,7 +462,7 @@ public final class JobAssignments {
      */
     public static boolean unassign(SettlementData data, BlockPos jobBlock, UUID settler) {
         Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
-        boolean removed = block.map(b -> b.mutableAssignees().removeIf(assignee -> assignee.id().equals(settler))).orElse(false);
+        boolean removed = block.map(b -> b.removeAssignee(settler)).orElse(false);
         if (removed) {
             MissionOffers.removeAssignee(data, jobBlock, settler);
             data.changed();

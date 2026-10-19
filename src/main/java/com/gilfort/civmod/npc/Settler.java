@@ -449,12 +449,20 @@ public class Settler extends PathfinderMob {
                 if (valid.size() != jobs.size()) {
                     setJobs(valid);
                 }
-                // A Job that fell back to the Base Job while this settler was unloaded (a replaced Station Type).
+                // A Job that fell back to the Base Job while this settler was unloaded (a replaced Station Type); with
+                // the Base Job held at another JobBlock (an older save) it leaves this one instead.
                 for (SettlerJob job : List.copyOf(jobs)) {
                     JobBlockSite.blockAt(level, job.jobBlock())
                             .filter(block -> !StationTypes.isUnlocked(block, job.jobType()) && block.assignee(getUUID())
                                     .filter(assignee -> assignee.job() == block.jobType()).isPresent())
-                            .ifPresent(block -> replaceJob(job.jobBlock(), block.jobType()));
+                            .ifPresent(block -> {
+                                if (JobAssignments.holdsElsewhere(data, job.jobBlock(), getUUID(), block.jobType())) {
+                                    JobAssignments.unassign(data, job.jobBlock(), getUUID());
+                                    removeJob(job.jobBlock());
+                                } else {
+                                    replaceJob(job.jobBlock(), block.jobType());
+                                }
+                            });
                 }
             }
             return;

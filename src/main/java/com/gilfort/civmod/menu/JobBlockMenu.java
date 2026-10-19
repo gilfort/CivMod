@@ -1,10 +1,12 @@
 package com.gilfort.civmod.menu;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.logistics.StockRule;
@@ -169,9 +171,9 @@ public class JobBlockMenu extends CivMenu {
         if (JobBlockTabs.of(blockJob) != JobBlockTabs.PATTERNS) {
             return List.of();
         }
-        List<Job> jobs = new java.util.ArrayList<>(List.of(blockJob));
+        List<Job> jobs = new ArrayList<>(List.of(blockJob));
         if (StationTypes.hasStationTypes(blockJob)) {
-            StationTypes.specializations(blockJob).stream().filter(job -> job.category() == com.gilfort.civmod.api.JobCategory.PRODUCING)
+            StationTypes.specializations(blockJob).stream().filter(job -> job.category() == JobCategory.PRODUCING)
                     .forEach(jobs::add);
         }
         return List.copyOf(jobs);

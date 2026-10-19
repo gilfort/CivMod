@@ -494,6 +494,15 @@ public final class SettlementBlock {
         return libraries.entrySet().stream().filter(entry -> !entry.getValue().patterns().isEmpty()).map(Map.Entry::getKey).toList();
     }
 
+    /**
+     * @param job a Producing Job of this JobBlock
+     * @return the settlers whose checkmark limit its library keeps (read-only)
+     */
+    public Set<UUID> workers(Job job) {
+        Library library = libraries.get(job);
+        return library == null ? Set.of() : Collections.unmodifiableSet(library.workerLimits().keySet());
+    }
+
     Library library(Job job) {
         return libraries.computeIfAbsent(job, key -> new Library());
     }
@@ -705,5 +714,48 @@ public final class SettlementBlock {
 
     List<Assignee> mutableAssignees() {
         return assignees;
+    }
+
+    /**
+     * Switches the Job a settler holds here, keeping its place in the assignee order; the old Job's library forgets the
+     * settler's checkmark limit.
+     *
+     * @param settler the settler UUID
+     * @param job     the new Job
+     */
+    void setAssigneeJob(UUID settler, Job job) {
+        for (int i = 0; i < assignees.size(); i++) {
+            Assignee assignee = assignees.get(i);
+            if (assignee.id().equals(settler)) {
+                forgetWorker(assignee.job(), settler);
+                assignees.set(i, new Assignee(settler, assignee.name(), job));
+            }
+        }
+    }
+
+    /**
+     * Removes a settler from this JobBlock; its Job's library forgets its checkmark limit.
+     *
+     * @param settler the settler UUID
+     * @return whether it worked here
+     */
+    boolean removeAssignee(UUID settler) {
+        assignee(settler).ifPresent(assignee -> forgetWorker(assignee.job(), settler));
+        return assignees.removeIf(assignee -> assignee.id().equals(settler));
+    }
+
+    /**
+     * Removes every settler from this JobBlock; the libraries forget their checkmark limits.
+     */
+    void clearAssignees() {
+        assignees.clear();
+        libraries.values().forEach(library -> library.workerLimits().clear());
+    }
+
+    private void forgetWorker(Job job, UUID settler) {
+        Library library = libraries.get(job);
+        if (library != null) {
+            library.workerLimits().remove(settler);
+        }
     }
 }
