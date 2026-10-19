@@ -10,6 +10,7 @@ import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.PatternRecipes;
+import com.gilfort.civmod.registry.ModJobs;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -22,6 +23,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeType;
 
 /**
  * The pattern library of a Producing JobBlock (vault {@code Systems/Producing Jobs.md}, {@code Jobs/Craftsperson.md}),
@@ -88,6 +90,15 @@ public final class Patterns {
      */
     public static ProducingProfile profile(Job job) {
         return job.profile(ProducingProfile.class).orElseThrow(() -> new IllegalStateException(job + " has no Producing profile"));
+    }
+
+    /**
+     * @return the recipe types of every registered Producing Job's profile, each once (the recipe types recipe viewers
+     *         offer the transfer button for)
+     */
+    public static List<RecipeType<?>> allRecipeTypes() {
+        return ModJobs.REGISTRY.stream().flatMap(job -> job.profile(ProducingProfile.class).stream())
+                .flatMap(profile -> profile.recipeTypes().stream()).distinct().toList();
     }
 
     /**
@@ -244,14 +255,15 @@ public final class Patterns {
 
     /**
      * Fills a pattern from a recipe viewer's transfer button: the recipe if the server knows it as a recipe of the
-     * profile's types, otherwise exactly the shown items.
+     * profile's types, otherwise exactly the shown items (padded to the 3×3 grid). A known recipe of a type the producer
+     * does not follow is refused.
      *
      * @param level  the level
      * @param pos    the Producing JobBlock
      * @param slot   the library slot
      * @param recipe the recipe id the viewer showed
      * @param grid   the shown items, row by row
-     * @return the new pattern
+     * @return the new pattern, empty if refused
      */
     public static Optional<Pattern> transfer(ServerLevel level, BlockPos pos, int slot, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid) {
         Optional<SettlementBlock> block = block(level, pos);
@@ -259,8 +271,17 @@ public final class Patterns {
             return Optional.empty();
         }
         ProducingProfile profile = profile(block.get());
+        if (recipe.flatMap(id -> PatternRecipes.holder(level, id)).filter(holder -> !profile.recipeTypes().contains(holder.value().getType())).isPresent()) {
+            // "Not a recipe this Job follows": the viewer's button is disabled for it, a stale client must not get around that.
+            return Optional.empty();
+        }
         Optional<PatternRecipes.Shape> shape = recipe.flatMap(id -> PatternRecipes.byKey(level, profile.recipeTypes(), id));
-        return put(level, pos, slot, shape.map(found -> recipePattern(slot, found)).orElseGet(() -> exactPattern(level, profile, slot, grid)));
+        List<Item> cells = new ArrayList<>(grid.subList(0, Math.min(Pattern.GRID, grid.size())));
+        while (cells.size() < Pattern.GRID) {
+            // Recipes of other types than crafting show fewer inputs than the 3×3 grid.
+            cells.add(Items.AIR);
+        }
+        return put(level, pos, slot, shape.map(found -> recipePattern(slot, found)).orElseGet(() -> exactPattern(level, profile, slot, cells)));
     }
 
     /**

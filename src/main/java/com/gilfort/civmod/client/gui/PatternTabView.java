@@ -28,6 +28,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeType;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 /**
@@ -247,12 +248,16 @@ final class PatternTabView {
     /**
      * Fills a pattern from a recipe viewer's transfer button: the open pattern, else the first empty library slot.
      *
+     * @param type       the recipe type of the recipe the viewer shows
      * @param recipe     the recipe the viewer shows
      * @param grid       the items it shows, row by row
      * @param doTransfer whether to transfer (false: only check)
      * @return the reason it cannot, empty if it can
      */
-    Optional<Component> transfer(Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid, boolean doTransfer) {
+    Optional<Component> transfer(RecipeType<?> type, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid, boolean doTransfer) {
+        if (!menu.getPatternTab().follows(type)) {
+            return Optional.of(Component.translatable("civmod.gui.patterns.foreign"));
+        }
         int slot = editing;
         for (int candidate = 0; slot < 0 && candidate < Pattern.SLOTS; candidate++) {
             if (menu.getPatternTab().pattern(candidate).isEmpty()) {

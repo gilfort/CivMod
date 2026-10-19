@@ -29,6 +29,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeType;
 
 /**
  * What the "Patterns" tab of a Producing JobBlock shows (vault {@code Systems/Producing Jobs.md},
@@ -43,13 +44,14 @@ import net.minecraft.world.item.crafting.Recipe;
  * @param filteredLine the state line of a filtered pattern ("Can't work with metal")
  * @param notice       the state line: "A Craftsperson masters only 6 recipes at once – choose which to check." while a new
  *                     pattern stayed unchecked at the limit, or the checkmarks removed by a dropped limit
+ * @param recipeTypes  the recipe types the producer follows (what a recipe viewer's transfer button may fill)
  */
 public record PatternTab(int limit, List<Pattern> patterns, Set<Integer> filtered, Set<Integer> foreign, Component filteredLine,
-        Optional<Component> notice) {
+        Optional<Component> notice, List<RecipeType<?>> recipeTypes) {
 
     /** Nothing (any other JobBlock, or before the first sync). */
     public static final PatternTab EMPTY = new PatternTab(Patterns.BASE_CHECKMARKS, List.of(), Set.of(), Set.of(), Component.empty(),
-            Optional.empty());
+            Optional.empty(), List.of());
 
     /** Network codec of a set of library slots. */
     private static final StreamCodec<ByteBuf, Set<Integer>> SLOTS_CODEC = ByteBufCodecs.VAR_INT
@@ -63,6 +65,7 @@ public record PatternTab(int limit, List<Pattern> patterns, Set<Integer> filtere
             SLOTS_CODEC, PatternTab::foreign,
             ComponentSerialization.STREAM_CODEC, PatternTab::filteredLine,
             ByteBufCodecs.optional(ComponentSerialization.STREAM_CODEC), PatternTab::notice,
+            ByteBufCodecs.registry(Registries.RECIPE_TYPE).apply(ByteBufCodecs.list()), PatternTab::recipeTypes,
             PatternTab::new);
 
     /**
@@ -72,11 +75,13 @@ public record PatternTab(int limit, List<Pattern> patterns, Set<Integer> filtere
      * @param foreign      the slots of patterns of a foreign recipe type
      * @param filteredLine the state line of a filtered pattern
      * @param notice       the state line
+     * @param recipeTypes  the recipe types the producer follows
      */
     public PatternTab {
         patterns = List.copyOf(patterns);
         filtered = Set.copyOf(filtered);
         foreign = Set.copyOf(foreign);
+        recipeTypes = List.copyOf(recipeTypes);
     }
 
     /**
@@ -98,7 +103,15 @@ public record PatternTab(int limit, List<Pattern> patterns, Set<Integer> filtere
             case SettlementBlock.Notice.AtLimit atLimit -> Component.translatable("civmod.gui.patterns.at_limit", producer.displayName(), atLimit.limit());
             case SettlementBlock.Notice.Trimmed trimmed -> Component.translatable("civmod.gui.patterns.trimmed", trimmed.removed(), trimmed.limit());
         });
-        return new PatternTab(block.checkLimit(), block.patterns(), filtered, foreign, profile.filteredLine(), notice);
+        return new PatternTab(block.checkLimit(), block.patterns(), filtered, foreign, profile.filteredLine(), notice, profile.recipeTypes());
+    }
+
+    /**
+     * @param type a recipe type
+     * @return whether the producer follows recipes of that type (a recipe viewer's transfer button may fill a pattern)
+     */
+    public boolean follows(RecipeType<?> type) {
+        return recipeTypes.contains(type);
     }
 
     private static Set<Integer> slots(SettlementBlock block, Predicate<Pattern> test) {

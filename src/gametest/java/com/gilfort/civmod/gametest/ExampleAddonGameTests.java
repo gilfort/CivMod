@@ -1,6 +1,7 @@
 package com.gilfort.civmod.gametest;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -52,6 +53,7 @@ import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -89,6 +91,7 @@ public final class ExampleAddonGameTests {
             register(helper, "example_stonecutter_request", ExampleAddonGameTests::stonecutterRequest);
             register(helper, "example_stonecutter_work_point", ExampleAddonGameTests::stonecutterWorkPoint);
             register(helper, "example_job_switch_keeps_checkmarks", ExampleAddonGameTests::jobSwitchKeepsCheckmarks);
+            register(helper, "example_recipe_viewer_transfer", ExampleAddonGameTests::recipeViewerTransfer);
         });
     }
 
@@ -416,6 +419,52 @@ public final class ExampleAddonGameTests {
                 "Stonecutting patterns unusable, the 6 crafting patterns worked again: " + tab.foreign() + " " + tab.checked());
         helper.assertTrue(Patterns.usable(level, data.settlementAt(craft).flatMap(found -> found.block(craft)).orElseThrow()).size() == 6,
                 "The Craftsperson uses its 6 patterns");
+        JobAssignments.unassign(data, clerk);
+        settler.discard();
+        helper.succeed();
+    }
+
+    /**
+     * A recipe viewer's transfer button fills a pattern from every recipe type the working Job follows: at a Craftsperson
+     * JobBlock worked by the Stonecutter a stonecutting recipe becomes a recipe pattern (checked automatically), while a
+     * recipe of a type the working Job does not follow is refused and leaves the slot empty. The Patterns tab tells the
+     * client which recipe types the working Job follows.
+     */
+    private static void recipeViewerTransfer(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Job stonecutter = ModJobs.REGISTRY.getValue(STONECUTTER);
+        BlockPos clerk = StockRuleGameTests.workingClerk(helper);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
+        helper.getBlockEntity(new BlockPos(1, 1, 5), JobBlockEntity.class).setJobLevel(2);
+        SettlementManager.setLevel(data, craft, 2, SettlementManager.Listener.NONE);
+        ResourceKey<Recipe<?>> bricks = ResourceKey.create(Registries.RECIPE, Identifier.withDefaultNamespace("stone_bricks_from_stone_stonecutting"));
+        ResourceKey<Recipe<?>> sticks = ResourceKey.create(Registries.RECIPE, Identifier.withDefaultNamespace("stick"));
+        List<Item> stickGrid = List.of(Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.AIR, Items.AIR);
+
+        helper.assertTrue(Set.copyOf(Patterns.allRecipeTypes()).equals(Set.of(RecipeType.CRAFTING, RecipeType.STONECUTTING))
+                && Patterns.allRecipeTypes().size() == 2,
+                "Recipe viewers offer the transfer for the recipe types of every Producing Job: " + Patterns.allRecipeTypes());
+        PatternTab tab = PatternTab.of(level, craft);
+        helper.assertTrue(tab.follows(RecipeType.CRAFTING) && !tab.follows(RecipeType.STONECUTTING), "Nobody assigned: the Craftsperson follows crafting");
+        helper.assertTrue(Patterns.transfer(level, craft, 0, Optional.of(bricks), List.of(Items.STONE)).isEmpty(),
+                "The Craftsperson refuses a stonecutting recipe");
+        helper.assertTrue(PatternTab.of(level, craft).pattern(0).isEmpty(), "Refused: the slot stays empty");
+
+        Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 7), data, settlement);
+        helper.assertTrue(JobAssignments.assign(data, craft, settler.getUUID(), "Stella", settlement.id(), List.of(), stonecutter)
+                == JobAssignments.AssignResult.OK, "Stonecutter assigned");
+        settler.addJob(new SettlerJob(stonecutter, craft));
+        tab = PatternTab.of(level, craft);
+        helper.assertTrue(tab.follows(RecipeType.STONECUTTING) && !tab.follows(RecipeType.CRAFTING), "The Stonecutter follows stonecutting");
+
+        Pattern pattern = Patterns.transfer(level, craft, 0, Optional.of(bricks), List.of(Items.STONE)).orElseThrow();
+        helper.assertTrue(pattern.output() == Items.STONE_BRICKS && pattern.recipe().equals(Optional.of(bricks)) && !pattern.exact()
+                && pattern.grid().getFirst() == Items.STONE && pattern.checked(), "A stonecutting recipe pattern, checked automatically: " + pattern);
+        helper.assertTrue(Patterns.transfer(level, craft, 1, Optional.of(sticks), stickGrid).isEmpty(), "The Stonecutter refuses a crafting recipe");
+        helper.assertTrue(PatternTab.of(level, craft).pattern(1).isEmpty(), "Refused: the slot stays empty");
+        JobAssignments.unassign(data, craft, settler.getUUID());
         JobAssignments.unassign(data, clerk);
         settler.discard();
         helper.succeed();
