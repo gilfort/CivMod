@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
 
+import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.block.UpgradeCosts;
 import com.gilfort.civmod.job.Job;
 import com.gilfort.civmod.job.JobCategory;
@@ -33,6 +34,7 @@ import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.server.level.ServerLevel;
@@ -58,6 +60,30 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         int distance, int required, List<SettlementBlock.Assignee> assignees, List<JobPlaces.Line> places, boolean collectLeaves, boolean byDeliveryman,
         List<List<CostEntry>> costs,
         MissionTab missionTab) {
+
+    /**
+     * Server → client: the info tab changed on the server beyond what the client predicted (an automatic assignment
+     * toggle switched on assigned settlers).
+     *
+     * @param containerId the menu's container id
+     * @param info        the new info
+     */
+    public record Sync(int containerId, JobBlockInfo info) implements CustomPacketPayload {
+
+        /** Payload type. */
+        public static final Type<Sync> TYPE = new Type<>(CivMod.id("job_block_info"));
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, Sync> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, Sync::containerId,
+                JobBlockInfo.STREAM_CODEC, Sync::info,
+                Sync::new);
+
+        @Override
+        public Type<Sync> type() {
+            return TYPE;
+        }
+    }
 
     /**
      * What the missions tab of a Mission Board shows.
@@ -227,7 +253,26 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withLevel(int newLevel) {
         return new JobBlockInfo(jobType, newLevel, settlementName, inSettlement, connected, distance, required, assignees,
-                JobPlaces.lines(jobType, newLevel, assignees), collectLeaves, byDeliveryman, costs, missionTab);
+                JobPlaces.lines(jobType, newLevel, assignees, autoJobs()), collectLeaves, byDeliveryman, costs, missionTab);
+    }
+
+    /**
+     * @return the Jobs with automatic assignment switched on
+     */
+    private List<Job> autoJobs() {
+        return places.stream().filter(JobPlaces.Line::auto).map(JobPlaces.Line::job).toList();
+    }
+
+    /**
+     * @param job a Job of the block
+     * @param on  the new state of its automatic assignment toggle
+     * @return a copy with that toggle set
+     */
+    public JobBlockInfo withAuto(Job job, boolean on) {
+        List<JobPlaces.Line> changed = places.stream()
+                .map(line -> line.job() == job ? new JobPlaces.Line(line.job(), line.taken(), line.places(), on) : line).toList();
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, changed, collectLeaves,
+                byDeliveryman, costs, missionTab);
     }
 
     /**
@@ -286,7 +331,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         return new JobBlockInfo(jobType, jobLevel,
                 settlement.map(Settlement::displayName).orElse(Component.empty()),
                 settlement.isPresent(), status.connected(), status.distance(), status.required(),
-                List.copyOf(assignees), JobPlaces.lines(jobType, jobLevel, assignees),
+                List.copyOf(assignees), JobPlaces.lines(jobType, jobLevel, assignees, block.map(SettlementBlock::autoAssign).orElse(java.util.Set.of())),
                 block.map(SettlementBlock::collectLeaves).orElse(false), block.map(SettlementBlock::byDeliveryman).orElse(false),
                 costsOf(jobType),
                 new MissionTab(SettlementWorld.missionOffer(level, pos), taken, settlers, OutcomeRules.get()));
@@ -297,7 +342,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withoutAssignees() {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, List.of(),
-                JobPlaces.lines(jobType, level, List.of()), collectLeaves, byDeliveryman, costs,
+                JobPlaces.lines(jobType, level, List.of(), autoJobs()), collectLeaves, byDeliveryman, costs,
                 new MissionTab(missionTab.offer(), List.of(), List.of(), missionTab.rules()));
     }
 

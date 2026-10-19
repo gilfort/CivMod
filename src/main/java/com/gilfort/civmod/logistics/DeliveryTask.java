@@ -132,6 +132,14 @@ public record DeliveryTask(UUID id, BlockPos source, BlockPos jobBlock, long cre
     }
 
     /**
+     * @return whether it is a surplus task: an input delivery whose "producer" is the store itself, carrying the stock
+     *         above a stock rule's Max from a Served Clerk into its Warehouse's store ({@link Input#to()})
+     */
+    public boolean surplus() {
+        return input.isPresent() && jobBlock.equals(source);
+    }
+
+    /**
      * @return the Deliveryman carrying a result or inputs, empty while they wait at the source (and for a pickup)
      */
     public Optional<UUID> carrier() {

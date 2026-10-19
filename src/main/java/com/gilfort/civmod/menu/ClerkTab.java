@@ -18,6 +18,7 @@ import com.gilfort.civmod.settlement.Warehouses;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.StockRules;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -46,12 +47,13 @@ import net.minecraft.world.item.ItemStack;
  * @param deliveries the open Delivery tasks, in creation order
  * @param served     a Warehouse's Served Clerks (inactive ones marked), empty for any other Clerk
  * @param servedBy   the Warehouse serving this Clerk, if any
+ * @param nowhere    the slots of the rules whose surplus has nowhere to go ("Surplus: nowhere to go")
  */
 public record ClerkTab(int level, List<StockRule> rules, List<RequestRow> requests, List<DeliveryRow> deliveries, List<Component> served,
-        Optional<Component> servedBy) {
+        Optional<Component> servedBy, List<Integer> nowhere) {
 
     /** Nothing (any other JobBlock, or before the first sync). */
-    public static final ClerkTab EMPTY = new ClerkTab(1, List.of(), List.of(), List.of(), List.of(), Optional.empty());
+    public static final ClerkTab EMPTY = new ClerkTab(1, List.of(), List.of(), List.of(), List.of(), Optional.empty(), List.of());
 
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, ClerkTab> STREAM_CODEC = StreamCodec.composite(
@@ -61,6 +63,7 @@ public record ClerkTab(int level, List<StockRule> rules, List<RequestRow> reques
             DeliveryRow.STREAM_CODEC.apply(ByteBufCodecs.list()), ClerkTab::deliveries,
             ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), ClerkTab::served,
             ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs::optional), ClerkTab::servedBy,
+            ByteBufCodecs.VAR_INT.apply(ByteBufCodecs.list()), ClerkTab::nowhere,
             ClerkTab::new);
 
     /**
@@ -70,12 +73,14 @@ public record ClerkTab(int level, List<StockRule> rules, List<RequestRow> reques
      * @param deliveries the Delivery tasks
      * @param served     the Served Clerks
      * @param servedBy   the serving Warehouse
+     * @param nowhere    the rule slots whose surplus has nowhere to go
      */
     public ClerkTab {
         rules = List.copyOf(rules);
         requests = List.copyOf(requests);
         deliveries = List.copyOf(deliveries);
         served = List.copyOf(served);
+        nowhere = List.copyOf(nowhere);
     }
 
     /**
@@ -152,7 +157,8 @@ public record ClerkTab(int level, List<StockRule> rules, List<RequestRow> reques
                         status(level, settlement.get(), request)))
                 .toList();
         return new ClerkTab(block.get().level(), block.get().stockRules(), rows, deliveries(level, settlement.get(), block.get()),
-                served(settlement.get(), block.get()), Warehouses.servedBy(settlement.get(), clerk).map(ClerkStorage::name));
+                served(settlement.get(), block.get()), Warehouses.servedBy(settlement.get(), clerk).map(ClerkStorage::name),
+                StockRules.surplusNowhere(level, clerk));
     }
 
     /** The tasks to this Clerk; a Warehouse shows those of every Clerk it serves. */
@@ -167,12 +173,17 @@ public record ClerkTab(int level, List<StockRule> rules, List<RequestRow> reques
             int items;
             ItemStack icon;
             if (task.input().isPresent()) {
-                // An input delivery: its first input and the item count, "<store> → <producer>".
+                // An input delivery: its first input and the item count, "<store> → <producer>"; surplus "<Clerk> → <Warehouse>".
                 DeliveryTask.Input input = task.input().get();
                 items = input.count();
                 icon = input.items().keySet().stream().findFirst().map(ItemStack::new).orElse(ItemStack.EMPTY);
                 Component storeName = settlement.block(task.source()).map(ClerkStorage::name).orElse(Component.literal(task.source().toShortString()));
-                source = Component.translatable("civmod.gui.clerk.delivery.input", storeName, source);
+                if (task.surplus()) {
+                    Component to = settlement.block(input.to()).map(ClerkStorage::name).orElse(Component.literal(input.to().toShortString()));
+                    source = Component.translatable("civmod.gui.clerk.delivery.surplus", storeName, to);
+                } else {
+                    source = Component.translatable("civmod.gui.clerk.delivery.input", storeName, source);
+                }
             } else if (task.result().isPresent()) {
                 // A result delivery: the result and its count, "<producer> → <requesting Clerk>".
                 DeliveryTask.Result result = task.result().get();

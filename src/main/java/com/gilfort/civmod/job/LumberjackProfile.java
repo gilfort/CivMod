@@ -37,6 +37,11 @@ public final class LumberjackProfile implements JobProfile {
     private static final Predicate<ItemStack> SHEARS = stack -> stack.is(Items.SHEARS) || stack.is(Tags.Items.TOOLS_SHEAR);
 
     @Override
+    public net.minecraft.world.item.Item toolIcon() {
+        return net.minecraft.world.item.Items.STONE_AXE;
+    }
+
+    @Override
     public boolean isTool(ItemStack stack) {
         return stack.is(ItemTags.AXES);
     }
@@ -87,8 +92,8 @@ public final class LumberjackProfile implements JobProfile {
         Identifier poiLog = BuiltInRegistries.BLOCK.getKey(context.level().getBlockState(context.poi()).getBlock());
         boolean silkTouch = hasSilkTouch(context.level(), context.tool());
         boolean leaves = context.block().collectLeaves() && context.secondary().isPresent();
-        return LumberjackOutput.produce(scan, poiLog, leaves, silkTouch, context.level().getRandom()).map(produced -> new Produced(
-                List.of(produced.stack()),
+        return LumberjackOutput.produce(scan, poiLog, leaves, silkTouch, leftOut(context, scan.logs().keySet()), context.level().getRandom())
+                .map(produced -> new Produced(produced.stack().isEmpty() ? List.of() : List.of(produced.stack()),
                 produced.kind() == LumberjackOutput.Kind.LEAVES && !silkTouch ? context.secondary().orElse(context.tool()) : context.tool()));
     }
 
@@ -98,7 +103,7 @@ public final class LumberjackProfile implements JobProfile {
     }
 
     /**
-     * Finds the nearest log around a JobBlock (±{@value #AUTO_SEARCH_HORIZONTAL} / ±{@value #AUTO_SEARCH_VERTICAL});
+     * Finds the nearest log ({@link WoodScan#isLog}: not of a building) around a JobBlock (±{@value #AUTO_SEARCH_HORIZONTAL} / ±{@value #AUTO_SEARCH_VERTICAL});
      * sections without logs are skipped via their palette.
      */
     @Override
@@ -120,13 +125,13 @@ public final class LumberjackProfile implements JobProfile {
                         continue;
                     }
                     LevelChunkSection section = chunk.getSection(index);
-                    if (section.hasOnlyAir() || !section.maybeHas(state -> state.is(BlockTags.LOGS))) {
+                    if (section.hasOnlyAir() || !section.maybeHas(WoodScan::isLog)) {
                         continue;
                     }
                     for (int x = 0; x < 16; x++) {
                         for (int y = 0; y < 16; y++) {
                             for (int z = 0; z < 16; z++) {
-                                if (!section.getBlockState(x, y, z).is(BlockTags.LOGS)) {
+                                if (!WoodScan.isLog(section.getBlockState(x, y, z))) {
                                     continue;
                                 }
                                 BlockPos pos = new BlockPos(SectionPos.sectionToBlockCoord(sx) + x, SectionPos.sectionToBlockCoord(sy) + y,

@@ -2,6 +2,8 @@ package com.gilfort.civmod.job;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Stream;
 
 import org.jspecify.annotations.Nullable;
 
@@ -13,7 +15,9 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -27,6 +31,11 @@ public final class MinerProfile implements JobProfile {
 
     private static final int AUTO_SEARCH_HORIZONTAL = 20;
     private static final int AUTO_SEARCH_VERTICAL = 30;
+
+    @Override
+    public Item toolIcon() {
+        return Items.STONE_PICKAXE;
+    }
 
     @Override
     public boolean isTool(ItemStack stack) {
@@ -111,14 +120,27 @@ public final class MinerProfile implements JobProfile {
         }
         ServerLevel level = context.level();
         Identifier poi = BuiltInRegistries.BLOCK.getKey(level.getBlockState(context.poi()).getBlock());
-        Optional<Identifier> rolled = MinerOutput.roll(scan, poi, type -> canObtain(context.tool(), type), context.skillLevel(),
+        Set<Identifier> leftOut = leftOut(context, Stream.concat(scan.stones().stream(), scan.ores().stream()).toList());
+        MinerOutput.Roll roll = MinerOutput.roll(scan, poi, type -> canObtain(context.tool(), type), leftOut, context.skillLevel(),
                 MinerWeights.get(), level.getRandom());
+        if (roll.emptyRoll()) {
+            return Optional.of(new Produced(List.of(), context.tool()));
+        }
+        Optional<Identifier> rolled = roll.type();
         if (rolled.isEmpty()) {
             return Optional.empty();
         }
         BlockState state = BuiltInRegistries.BLOCK.getValue(rolled.get()).defaultBlockState();
         List<ItemStack> drops = Block.getDrops(state, level, context.poi(), null, context.settler(), context.tool());
         return Optional.of(new Produced(drops, context.tool()));
+    }
+
+    /** The first item of the block's loot with the tool: cobblestone for stone without Silk Touch, raw iron for iron ore. */
+    @Override
+    public Item dropped(ServerLevel level, BlockPos pos, Identifier type, ItemStack tool) {
+        BlockState state = BuiltInRegistries.BLOCK.getValue(type).defaultBlockState();
+        return Block.getDrops(state, level, pos, null, null, tool).stream().filter(stack -> !stack.isEmpty()).findFirst()
+                .map(ItemStack::getItem).orElse(Items.AIR);
     }
 
     @Override

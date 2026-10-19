@@ -62,13 +62,10 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
      *                 {@link JobBuffer#CAPACITY} items)
      * @param buffered the number of buffered items
      * @param preview  the buffered stacks (up to 18, a Deliveryman's whole load)
-     * @param found    icons of the resource types found by the scan
-     * @param missing  per found type: whether the current tool cannot obtain it
-     * @param notes    per found type: tooltip lines (empty: the item name)
      * @param skill    level and EXP in this job
      */
-    public record JobState(JobStatus status, Component text, int carry, int buffered, List<ItemStack> preview, List<ItemStack> found,
-            List<Boolean> missing, List<List<Component>> notes, SkillInfo skill) {
+    public record JobState(JobStatus status, Component text, int carry, int buffered, List<ItemStack> preview,
+            SkillInfo skill) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, JobState> STREAM_CODEC = StreamCodec.composite(
@@ -77,9 +74,6 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
                 ByteBufCodecs.VAR_INT, JobState::carry,
                 ByteBufCodecs.VAR_INT, JobState::buffered,
                 ItemStack.OPTIONAL_STREAM_CODEC.apply(ByteBufCodecs.list()), JobState::preview,
-                ItemStack.OPTIONAL_STREAM_CODEC.apply(ByteBufCodecs.list()), JobState::found,
-                ByteBufCodecs.BOOL.apply(ByteBufCodecs.list()), JobState::missing,
-                ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()).apply(ByteBufCodecs.list()), JobState::notes,
                 SkillInfo.STREAM_CODEC, JobState::skill,
                 JobState::new);
     }
@@ -154,14 +148,9 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
         }
         List<JobState> states = settler.getJobs().stream().map(job -> {
             JobBuffer buffer = settler.getWork().buffer(job.jobBlock());
-            List<com.gilfort.civmod.job.JobProfile.Found> found = settler.getWork().found(job);
             int carry = settler.getWork().carryStacks(job);
             return new JobState(settler.getWork().status(job.jobBlock()), settler.getWork().statusText(job.jobBlock()), carry, buffer.count(),
-                    buffer.stacks().stream().limit(Math.max(18, carry)).map(ItemStack::copy).toList(),
-                    found.stream().map(com.gilfort.civmod.job.JobProfile.Found::icon).toList(),
-                    found.stream().map(entry -> !entry.available()).toList(),
-                    found.stream().map(com.gilfort.civmod.job.JobProfile.Found::tooltip).toList(),
-                    skillInfo(settler, job));
+                    buffer.stacks().stream().limit(Math.max(18, carry)).map(ItemStack::copy).toList(), skillInfo(settler, job));
         }).toList();
         com.gilfort.civmod.food.SettlerFood food = settler.getFood();
         float appetite = food.appetite(settler.getRandom(), com.gilfort.civmod.config.CivModConfig.APPETITE_MIN.get(),
@@ -191,7 +180,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
     public SettlerInfo withJobs(List<SettlerJob> jobs) {
         List<JobState> states = jobs.stream().map(job -> {
             int index = this.jobs.indexOf(job);
-            return index >= 0 && index < jobStates.size() ? jobStates.get(index) : new JobState(JobStatus.IDLE, JobStatus.IDLE.displayName(), 0, 0, List.of(), List.of(), List.of(), List.of(),
+            return index >= 0 && index < jobStates.size() ? jobStates.get(index) : new JobState(JobStatus.IDLE, JobStatus.IDLE.displayName(), 0, 0, List.of(),
                     SkillInfo.NONE);
         }).toList();
         return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(jobs), states, bed, food, mission);

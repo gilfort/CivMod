@@ -10,7 +10,7 @@ import net.minecraft.resources.Identifier;
 public interface ScanResult {
 
     /**
-     * @return the block types found (shown in the settler's job tab)
+     * @return the block types found (listed in the JobBlock's Found tab)
      */
     List<Identifier> foundBlocks();
 

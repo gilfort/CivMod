@@ -13,6 +13,7 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.DayClock;
+import com.gilfort.civmod.settlement.StockRules;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -98,6 +99,12 @@ final class ResourceCollectionLoop implements CategoryLoop {
         workplace.ensureScan(level, profile, site, poi, day, dayTime);
         if (profile.needsResources() && workplace.foundNothing()) {
             shell.block(level, jobBlock, JobStatus.NO_RESOURCES);
+            return false;
+        }
+        ItemStack tool = SettlerTools.best(settler, profile::isTool).orElse(ItemStack.EMPTY);
+        Optional<JobStatus> paused = WorkRules.pause(level, profile, workplace, site, tool, StockRules.atMax(level, site)).pauseStatus();
+        if (paused.isPresent()) {
+            shell.block(level, jobBlock, paused.get());
             return false;
         }
         shell.setActiveJob(job);
@@ -260,16 +267,5 @@ final class ResourceCollectionLoop implements CategoryLoop {
         shell.endCatchUpJob(job.jobBlock());
         // The next job takes over the rest of the time.
         return new SimulatedWork(result.rolls(), result.ticksLeft());
-    }
-
-    @Override
-    public List<JobProfile.Found> found(SettlerJob job) {
-        ScanResult scan = shell.existingWorkplace(job.jobBlock()).map(Workplace::scan).orElse(null);
-        Optional<JobProfile> profile = job.jobType().profile();
-        if (scan == null || profile.isEmpty()) {
-            return List.of();
-        }
-        ItemStack tool = SettlerTools.best(settler, profile.get()::isTool).orElse(ItemStack.EMPTY);
-        return profile.get().found(scan, tool, shell.effectiveLevel(job));
     }
 }

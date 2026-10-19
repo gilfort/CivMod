@@ -39,6 +39,14 @@ _Avoid_: A second production loop for catch-up; a "quiet" flag in the rules
 The block a Resource Collection settler works at today (a tree, a stone face, water), chosen each day among the JobBlock's work points or by the job's auto search; part of the Workplace, not the same thing. Code: `Workplace.workPlaceOfDay`, saved as `SettlerWork.WorkPlaceEntry` (`poi`).
 _Avoid_: Workplace (the whole per-job state), POI in prose
 
+**Found tab**:
+The JobBlock tab of a Resource Collection Job listing what its scan found (Lumberjack wood types, Miner stone and ore types, Fisherman the fish of the fishing fish loot table), with "Needs a better tool" and the treasure chance computed for the settler working there, the water info, and "Not scanned yet" before the first scan. It shows the working settler's scan, else the last scan the JobBlock kept. The settler's job tab shows none of it. Code: `FoundTab` (payloads `Sync` / `Toggle`, `JobBlockMenu.TAB_FOUND`), `FoundTabView`; entries from `JobProfile.found` / `foundLines`, the kept scan in `SettlementBlock.foundScan()` (set through `JobAssignments.rememberScan`); fish list `FishTable`.
+_Avoid_: Scan tab, resource list in the settler window
+
+**Excluded resource**:
+A found type the player right-clicked off in the Found tab; the job no longer produces it. Stored per JobBlock in the settlement data (survives a settler change, applies in catch-up, kept when a scan no longer finds it). Inside the rolled group (Miner stone / ore, Lumberjack logs vs rare drops, Fisherman fish vs treasure) the weights spread over the rest; a fully excluded group gives an empty roll (EXP and tool wear, no item). Every main resource excluded (`JobProfile.mainResources`) pauses the job with "All resources excluded" (`JobStatus.ALL_EXCLUDED`, retried after 30 s, at once when one is included). Code: `SettlementBlock.excluded()`, toggled through `SettlementWorld.toggleExcluded` / `JobAssignments.toggleExcluded`; `WorkRules.allExcluded`, `MinerOutput.Roll`.
+_Avoid_: Blacklist, filter
+
 **Base Job**:
 A Job a Level 1 JobBlock offers; root of a specialization tree.
 
@@ -55,6 +63,15 @@ The block that offers a Base Job (and its Specializations) to one settler. Code:
 **Starter tool**:
 The tool a new JobBlock puts into its own inventory when it is placed for the first time (Lumberjack stone axe, Miner stone pickaxe, Fisherman fishing rod). A broken JobBlock no longer carries one.
 _Avoid_: Free tool, bonus item
+
+**Thought bubble**:
+A small icon bubble above a settler's name tag, sent when it starts something new (Job switch, drop-off, fetching, crafting, eating, bed, Mission); a red "!" marks a problem, which the client repeats while it is on. Code: `ThoughtBubble` (types and payload), `SettlerThoughts` (server), `ThoughtBubbleRenderer` (client).
+
+**Bubble icon**:
+The typical item of a Job shown in its thought bubble (Lumberjack axe, Fisherman raw cod, …); separate from the Job's GUI icon, which stays the JobBlock.
+
+**Display item**:
+An item a settler holds while working a Job without a real tool (Craftsperson hammer, Deliveryman bundle); only a copy in the hand, never in an inventory and not obtainable.
 
 **JobBlock site**:
 A JobBlock as a settler sees it: its settlement, settlement block, level, skill cap, drop-off and collect inventory. The one way to resolve a JobBlock position outside the settlement storage. Code: `JobBlockSite` (`JobBlockSite.at(level, pos)`, `JobBlockSite.blockAt(level, pos)` for the block alone), backed by `SettlementData`.
@@ -97,11 +114,24 @@ Where a working Clerk serves: within 3 blocks of the stand spot of the day (or n
 A block a Clerk stands on, with a facing; up to 8 per Clerk JobBlock; one is picked each morning and at 12:00, never the same twice in a row. Code: `SettlementBlock.StandSpot`, `ClerkSpots.today`, saved as `SettlementBlock.spotOfDay()`.
 
 **Stock rule**:
-A Clerk's "keep at least X of item Y" with a priority (−100…+100, higher first); 9 per JobBlock level in rows of 9, extra ones after a downgrade kept but inactive. Only the Minimum mode exists. Active only while a Clerk settler is on shift; checked every 30 s (staggered), right after a delivery into the Clerk and once per simulated hour in catch-up. Shown in the Clerk's "Stock" tab (`JobBlockMenu.TAB_STOCK`). Code: `StockRule` (data), `StockRules` (edit, `check`), saved in `SettlementBlock.stockRules()`.
-_Avoid_: Threshold, order
+A Clerk's rule for one item with the optional fields **Min**, **Max** and **Order** (0 = not set, "—") and a priority (−100…+100, higher first); one rule per item and Clerk, at least one of Min / Max, Min ≤ Max, Order only with Min (Min = Max is "exact", both set a band). 9 per JobBlock level in rows of 9, extra ones after a downgrade kept but inactive. Requests (Min) are active only while a Clerk settler is on shift; checked every 30 s (staggered), right after a delivery into the Clerk and once per simulated hour in catch-up. Shown in the Clerk's "Stock" tab (`JobBlockMenu.TAB_STOCK`; editor rows Min / Max / Order with − / text field / +, steps 1 / Shift 10 / Ctrl 64). Old saves: a Minimum rule's `amount` loads as Min. Code: `StockRule` (data, `target`, `withMin` / `withMax` clamp against each other), `StockRules` (edit, `check`, `checkSurplus`, `atMax`), saved in `SettlementBlock.stockRules()`.
+_Avoid_: Threshold, mode, Minimum rule
+
+**Min**:
+A stock rule's lower bound: when the stock (plus results in delivery) falls below it, the rule opens one request; without Min the rule never requests.
+
+**Max**:
+A stock rule's cap: collecting jobs whose Home Clerk holds ≥ Max of the item leave it out of their rolls (the dropped item, Silk Touch / Fortune considered; `JobProfile.dropped`, `JobProfile.leftOut`, `StockRules.atMax`) and pause when every main resource is excluded or at Max (`JobStatus.MAX_REACHED` / `NOTHING_TO_PRODUCE` / `ALL_EXCLUDED`, `WorkRules.pause`); the Found tab marks such an entry "Maximum reached at <Clerk>" (`FoundTab.Entry.maxAt`). Stock above Max is **surplus**.
+
+**Order**:
+How much a request orders on top of Min: the **target stock** of a rule is min(Min + Order, Max); without Order it is Max, without Max it is Min (`StockRule.target`). The open request asks for target − stock − amount being crafted − amount in delivery on every check and is withdrawn at the target; the open request is the hysteresis, nothing else is saved.
+_Avoid_: Request (that is the open order itself)
+
+**Surplus**:
+Stock above a rule's Max at a Clerk. At a Served Clerk it becomes a surplus task for the serving Warehouse's Deliverymen into the Warehouse's store, as far as the Warehouse is below its own Max for the item; a Warehouse itself, a Clerk without Warehouse or a Warehouse at its Max keeps it, the rule shows "Surplus: nowhere to go" (`StockRules.surplusNowhere`, `ClerkTab.nowhere`). Checked with every rule check and in the Deliveryman's end-of-work sweep (`StockRules.checkSurplus`), no minimum amount. A surplus task is an input delivery whose `jobBlock` is its source Clerk (`DeliveryTask.surplus`, `Deliveries.setSurplus` / `freeSurplus`); Deliveries tab: "Surplus: <Clerk> → <Warehouse>".
 
 **Request**:
-"Produce N more of item Y" for the settlement, with a priority and the Clerk to deliver to. A stock rule keeps at most one open (amount = X − stock − amount being crafted); other sources post with priority 0, sub-requests inherit their parent's priority. Producers see them by priority and claim the part they can do in one round (`Request.Claim`); `amount()` is what is still open, `crafting()` what is claimed. Code: `Request` (data), `Requests` (`claimable`, `claim`, `release`, `releaseAll`, `finish`, `setMissing`, `post`, `withdraw`), saved in `Settlement.requests()`; status in the Clerk's Requests tab via `ClerkTab`, "No Craftsperson can make this" from `Producers.canMake`. A removed Clerk takes its rules' requests with it; other requests that deliver to it lose their target (own drop-off). "Missing" lists every missing base input for the whole open amount (`Request.missing`, a list).
+"Produce N more of item Y" for the settlement, with a priority and the Clerk to deliver to. A stock rule keeps at most one open (amount = target stock − stock − amount being crafted − amount in delivery); other sources post with priority 0, sub-requests inherit their parent's priority. Producers see them by priority and claim the part they can do in one round (`Request.Claim`); `amount()` is what is still open, `crafting()` what is claimed. Code: `Request` (data), `Requests` (`claimable`, `claim`, `release`, `releaseAll`, `finish`, `setMissing`, `post`, `withdraw`), saved in `Settlement.requests()`; status in the Clerk's Requests tab via `ClerkTab`, "No Craftsperson can make this" from `Producers.canMake`. A removed Clerk takes its rules' requests with it; other requests that deliver to it lose their target (own drop-off). "Missing" lists every missing base input for the whole open amount (`Request.missing`, a list).
 _Avoid_: Order, job, task
 
 **Deliveryman**:
@@ -119,7 +149,7 @@ A Clerk JobBlock linked to a Warehouse with the Scroll of Assignment (2 / 4 / 6 
 The Clerk JobBlock a JobBlock belongs to: the nearest one of its settlement (a Clerk JobBlock is its own), stored and recomputed only when a Clerk JobBlock is placed or removed or a JobBlock is added. The Warehouse serving it handles the JobBlock's transports. Code: `SettlementBlock.homeClerk()`, set in `SettlementData.addBlock` / `removeBlock` through `Warehouses.assignHomeClerks`.
 
 **Delivery task**:
-One transport for a Warehouse's Deliverymen: a pickup (empty a drop-off into the Home Clerk, `DeliveryTask.pickup`), a result delivery (producer to requesting Clerk), an input delivery (store to a producer's collect inventory). Each task has an id (`DeliveryTask.id`); at most one open pickup per source; taken tasks are locked to one Deliveryman until done, released or the day ends. A pickup is created when a settler delivers into a drop-off that then holds a stack or is half full, by the end-of-work sweep, urgently on "Drop-off full"; none for a Clerk JobBlock drop-off; the job's tools stay in a drop-off that is its collect inventory too. A trip batches tasks to the same store (`Deliveries.destination`). Code: `DeliveryTask` (`DeliveryTask.Taker`, not saved; `carrier`, `carried`), `Deliveries` (`request`, `pick`, `batch`, `score`, `take`, `release`, `releaseAll`, `done`, `destination`, `warehouseOf`, `staff`), saved in `Settlement.deliveries()`; created by `Pickups` (`delivered`, `sweep`, `due`); shown in the Clerk's "Deliveries" tab (`JobBlockMenu.TAB_DELIVERIES`, `ClerkTab.DeliveryRow`).
+One transport for a Warehouse's Deliverymen: a pickup (empty a drop-off into the Home Clerk, `DeliveryTask.pickup`), a result delivery (producer to requesting Clerk), an input delivery (store to a producer's collect inventory), a surplus task (Served Clerk to its Warehouse, see Surplus). Each task has an id (`DeliveryTask.id`); at most one open pickup per source; taken tasks are locked to one Deliveryman until done, released or the day ends. A pickup is created when a settler delivers into a drop-off that then holds a stack or is half full, by the end-of-work sweep, urgently on "Drop-off full"; none for a Clerk JobBlock drop-off; the job's tools stay in a drop-off that is its collect inventory too. A trip batches tasks to the same store (`Deliveries.destination`). Code: `DeliveryTask` (`DeliveryTask.Taker`, not saved; `carrier`, `carried`), `Deliveries` (`request`, `pick`, `batch`, `score`, `take`, `release`, `releaseAll`, `done`, `destination`, `warehouseOf`, `staff`), saved in `Settlement.deliveries()`; created by `Pickups` (`delivered`, `sweep`, `due`); shown in the Clerk's "Deliveries" tab (`JobBlockMenu.TAB_DELIVERIES`, `ClerkTab.DeliveryRow`).
 _Avoid_: Request (that is "produce more"), order, job
 
 **Result delivery**:
@@ -135,7 +165,11 @@ An amount of an item in a Clerk's storage held for one Delivery task (so far an 
 _Avoid_: Claim (that is a producer's share of a Request)
 
 **Job picker**:
-The window that opens when the scroll assigns a settler to a JobBlock: the block's Jobs with taken / places (full ones greyed out); a settler holds at most one Job per JobBlock. Code: `JobPicker` (payloads `Open` / `Choose`), `JobPickerScreen`; Jobs and places per JobBlock in `JobPlaces` (`JobPlaces.Line`; a Base Job and its Specializations share places), checked by `JobAssignments.check` before it opens and assigned with `JobAssignments.assign(…, job)`; each assignee records its Job (`SettlementBlock.Assignee.job()`, the Clerk of a block: `SettlementBlock.assignee(ModJobs.CLERK.get())`).
+The window that opens when the scroll assigns a settler to a JobBlock: the block's Jobs with taken / places (full ones greyed out); a settler holds at most one Job per JobBlock. Code: `JobPicker` (payloads `Open` / `Choose`), `JobPickerScreen`; Jobs and places per JobBlock in `JobPlaces` (`JobPlaces.Line`; a Base Job and its Specializations share places), checked by `JobAssignments.check` before it opens and assigned through `SettlementWorld.assign` (`JobAssignments.assign(…, job)` plus the settler's job list; shared with automatic assignment); each assignee records its Job (`SettlementBlock.Assignee.job()`, the Clerk of a block: `SettlementBlock.assignee(ModJobs.CLERK.get())`).
+
+**Automatic assignment**:
+A toggle per Job a JobBlock offers (checkbox at the end of its line in the info tab, default off, old saves and the Mission Board included): when it is switched on and every morning at 06:00 (catch-up too, for settlers whose missed time contains that morning) jobless settlers of the settlement (Laborer only; loaded settlers) take that Job's free places, highest skill in the Job first, ties nearest to the JobBlock, until no place or candidate is left; never on other events, so a freed place stays free until the next morning. Players within 32 blocks see "<Name> is now a <Job>". Code: `AutoAssignment` (`setAuto`, `morning`, `catchUpMorning`, the 06:00 check in its server tick), `SettlementBlock.autoAssign()` (saved as `auto_assign`), `JobPlaces.Line.auto()`, menu button `JobBlockMenu.autoButtonId`, refreshed info `JobBlockInfo.Sync`.
+_Avoid_: auto-hire, auto-job
 
 **Food point**:
 Every Clerk JobBlock; settlers take food from the nearest one whose reachable stock has food (a Clerk from its own storage first). Code: `ClerkStorage.nearestFood` → `ClerkStorage.FoodPoint`.

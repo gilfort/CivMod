@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:min_max_order_surplus",
+  "max_ticks": 3000,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -3,7 +3,9 @@ package com.gilfort.civmod.logistics;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 
@@ -26,6 +28,7 @@ import com.gilfort.civmod.settlement.SettlementRules;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.capabilities.Capabilities;
@@ -223,6 +226,17 @@ public final class ClerkStorage {
      */
     public static void forgetStock(ServerLevel level, JobBlockEntity block) {
         ClerkStock.forget(level, block);
+    }
+
+    /**
+     * The write-through seam of the surplus check: the Clerks whose stock CivMod's own transactions (drop-offs,
+     * results, deliveries, unloads) increased since the last call.
+     *
+     * @param level the level
+     * @return those Clerk JobBlocks with the items that went in; the record is cleared
+     */
+    public static Map<BlockPos, Set<Item>> takeGrown(ServerLevel level) {
+        return ClerkStock.takeGrown(level);
     }
 
     /**

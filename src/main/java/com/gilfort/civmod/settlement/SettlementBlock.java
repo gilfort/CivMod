@@ -2,11 +2,15 @@ package com.gilfort.civmod.settlement;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import com.gilfort.civmod.job.Job;
+import com.gilfort.civmod.job.SavedScan;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.mission.MissionOffer;
@@ -20,6 +24,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
 
 /**
  * A JobBlock as recorded by its settlement, including its work points and the assigned settlers with their Job
@@ -168,6 +174,25 @@ public final class SettlementBlock {
         static final CraftspersonFields NONE = new CraftspersonFields(List.of(), Patterns.BASE_CHECKMARKS, Optional.empty(), false);
     }
 
+    /**
+     * The settings of a JobBlock's places, grouped for the save codec (saved flat, next to the other fields).
+     *
+     * @param autoAssign the Jobs whose free places jobless settlers take by themselves
+     * @param excluded   the found resource types excluded by the player (Resource Collection Jobs; kept when a scan no
+     *                   longer finds them)
+     * @param scan       the last scan of a settler working the JobBlock (the Found tab without a settler)
+     */
+    private record PlaceFields(List<Job> autoAssign, Set<Identifier> excluded, Optional<SavedScan> scan) {
+
+        static final MapCodec<PlaceFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+                Job.CODEC.listOf().optionalFieldOf("auto_assign", List.of()).forGetter(PlaceFields::autoAssign),
+                Identifier.CODEC.listOf().optionalFieldOf("excluded", List.of()).forGetter(fields -> fields.excluded().stream().sorted().toList()),
+                SavedScan.CODEC.optionalFieldOf("found_scan").forGetter(PlaceFields::scan)
+        ).apply(instance, (autoAssign, excluded, scan) -> new PlaceFields(autoAssign, Set.copyOf(excluded), scan)));
+
+        static final PlaceFields NONE = new PlaceFields(List.of(), Set.of(), Optional.empty());
+    }
+
     /** Maximum number of work POIs per JobBlock. */
     public static final int MAX_WORK_POINTS = 8;
 
@@ -189,7 +214,8 @@ public final class SettlementBlock {
             MissionOffer.CODEC.optionalFieldOf("mission_offer", MissionOffer.EMPTY).forGetter(SettlementBlock::missionOffer),
             ClerkFields.MAP_CODEC.forGetter(SettlementBlock::clerkFields),
             CraftspersonFields.MAP_CODEC.forGetter(SettlementBlock::craftspersonFields),
-            BlockPos.CODEC.optionalFieldOf("home_clerk").forGetter(SettlementBlock::homeClerk)
+            BlockPos.CODEC.optionalFieldOf("home_clerk").forGetter(SettlementBlock::homeClerk),
+            PlaceFields.MAP_CODEC.forGetter(SettlementBlock::placeFields)
     ).apply(instance, SettlementBlock::new));
 
     private final BlockPos pos;
@@ -212,6 +238,9 @@ public final class SettlementBlock {
     private int checkLimit;
     private Optional<Trim> trim;
     private boolean byDeliveryman;
+    private final Set<Identifier> excluded = new HashSet<>();
+    private Optional<SavedScan> foundScan;
+    private final Set<Job> autoAssign = new LinkedHashSet<>();
 
     /**
      * @param pos       the block position
@@ -221,13 +250,13 @@ public final class SettlementBlock {
      */
     public SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected) {
         this(pos, jobType, level, connected, List.of(), Optional.empty(), Optional.empty(), List.of(), Optional.empty(), Optional.empty(), false,
-                MissionOffer.EMPTY, ClerkFields.NONE, CraftspersonFields.NONE, Optional.empty());
+                MissionOffer.EMPTY, ClerkFields.NONE, CraftspersonFields.NONE, Optional.empty(), PlaceFields.NONE);
     }
 
     private SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected, List<BlockPos> workPoints,
             Optional<BlockPos> collect, Optional<BlockPos> dropOff, List<SavedAssignee> assignees, Optional<UUID> legacyAssignee,
             Optional<String> legacyAssigneeName, boolean collectLeaves, MissionOffer missionOffer, ClerkFields clerk,
-            CraftspersonFields craftsperson, Optional<BlockPos> homeClerk) {
+            CraftspersonFields craftsperson, Optional<BlockPos> homeClerk, PlaceFields place) {
         this.pos = pos.immutable();
         this.jobType = jobType;
         this.level = SettlementRules.clampLevel(level);
@@ -243,13 +272,69 @@ public final class SettlementBlock {
         this.storage.addAll(clerk.storage());
         this.standSpots.addAll(clerk.standSpots());
         this.spotOfDay = clerk.spotOfDay();
-        this.stockRules.addAll(clerk.stockRules());
+        // One rule per item and Clerk: an older save may hold more; the first one stays.
+        Set<Item> ruled = new HashSet<>();
+        clerk.stockRules().stream().filter(rule -> ruled.add(rule.item())).forEach(this.stockRules::add);
         this.served.addAll(clerk.served());
         this.homeClerk = homeClerk;
         this.patterns.addAll(craftsperson.patterns());
         this.checkLimit = craftsperson.checkLimit();
         this.trim = craftsperson.trim();
         this.byDeliveryman = craftsperson.byDeliveryman();
+        this.autoAssign.addAll(place.autoAssign());
+        this.excluded.addAll(place.excluded());
+        this.foundScan = place.scan();
+    }
+
+    private PlaceFields placeFields() {
+        return new PlaceFields(List.copyOf(autoAssign), Set.copyOf(excluded), foundScan);
+    }
+
+    /**
+     * @return the found resource types excluded at this JobBlock (read-only; Resource Collection Jobs, else empty)
+     */
+    public Set<Identifier> excluded() {
+        return Collections.unmodifiableSet(excluded);
+    }
+
+    /**
+     * @param type a found resource type
+     * @return whether it is excluded now (toggled)
+     */
+    boolean toggleExcluded(Identifier type) {
+        if (!excluded.remove(type)) {
+            excluded.add(type);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * @return the last scan of a settler working this JobBlock, if any
+     */
+    public Optional<SavedScan> foundScan() {
+        return foundScan;
+    }
+
+    void setFoundScan(SavedScan scan) {
+        foundScan = Optional.of(scan);
+    }
+
+    /**
+     * @return the Jobs whose free places jobless settlers take by themselves (vault {@code Systems/Scroll of
+     *         Assignment.md}); default none (read-only; Jobs no longer offered at the block's level may stay in it)
+     */
+    public Set<Job> autoAssign() {
+        return Collections.unmodifiableSet(autoAssign);
+    }
+
+    /**
+     * @param job a Job
+     * @param on  whether jobless settlers take its free places by themselves
+     * @return whether the state changed
+     */
+    boolean setAutoAssign(Job job, boolean on) {
+        return on ? autoAssign.add(job) : autoAssign.remove(job);
     }
 
     private ClerkFields clerkFields() {

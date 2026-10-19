@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:found_tab_toggle_and_pause",
+  "max_ticks": 2400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

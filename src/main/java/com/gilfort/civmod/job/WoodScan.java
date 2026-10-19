@@ -12,10 +12,11 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.neoforged.neoforge.common.Tags;
 
 /**
- * Lumberjack scan (vault {@code Jobs/Lumberjack.md}): counts logs per block type and leaves per block type in a
- * cylinder around the primary work place.
+ * Lumberjack scan (vault {@code Jobs/Lumberjack.md}): counts logs per block type ({@link #isLog}: stripped logs and wood
+ * are left out) and leaves per block type in a cylinder around the primary work place.
  * <p>
  * Processes one chunk section per {@link #step} call, skips sections without logs or leaves (palette pre-filter)
  * and unloaded chunks, and samples every 4th block (2×2 grid in x/z), extrapolating ×4.
@@ -142,7 +143,7 @@ public final class WoodScan implements SectionScan<WoodScan.Result> {
                         continue;
                     }
                     BlockState state = section.getBlockState(x, y, z);
-                    if (state.is(BlockTags.LOGS)) {
+                    if (isLog(state)) {
                         logs.merge(BuiltInRegistries.BLOCK.getKey(state.getBlock()), SAMPLE_FACTOR, Integer::sum);
                     } else if (state.is(BlockTags.LEAVES)) {
                         leaves.merge(BuiltInRegistries.BLOCK.getKey(state.getBlock()), SAMPLE_FACTOR, Integer::sum);
@@ -153,6 +154,18 @@ public final class WoodScan implements SectionScan<WoodScan.Result> {
     }
 
     private static boolean isRelevant(BlockState state) {
-        return state.is(BlockTags.LOGS) || state.is(BlockTags.LEAVES);
+        return isLog(state) || state.is(BlockTags.LEAVES);
+    }
+
+    /**
+     * Stripped logs and stripped wood only come from buildings, so they are no forest (vault
+     * {@code Jobs/Lumberjack.md}).
+     *
+     * @param state a block state
+     * @return whether it counts as a log of a tree: {@code #minecraft:logs} without {@code #c:stripped_logs} and
+     *         {@code #c:stripped_woods}
+     */
+    static boolean isLog(BlockState state) {
+        return state.is(BlockTags.LOGS) && !state.is(Tags.Blocks.STRIPPED_LOGS) && !state.is(Tags.Blocks.STRIPPED_WOODS);
     }
 }

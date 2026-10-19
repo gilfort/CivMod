@@ -9,6 +9,7 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.settlement.SettlementBlock;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.Holder;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.Registries;
@@ -20,6 +21,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.SwingAnimation;
@@ -35,7 +37,8 @@ import net.neoforged.neoforge.common.Tags;
 
 /**
  * Fisherman (vault {@code Jobs/Fisherman.md}): fishing rod, open water with a shore in reach as work place, water
- * count scan, fish and treasure from the vanilla fishing loot tables.
+ * count scan; a catch is treasure (vanilla treasure loot table) by the treasure chance, otherwise a fish of the
+ * {@link FishTable} among those not excluded at the JobBlock.
  */
 public final class FishermanProfile implements JobProfile {
 
@@ -45,11 +48,13 @@ public final class FishermanProfile implements JobProfile {
     public static final int WATER_THRESHOLD = 50;
     private static final int AUTO_SEARCH_HORIZONTAL = 20;
     private static final int AUTO_SEARCH_VERTICAL = 15;
-    private static final ResourceKey<LootTable> FISH = ResourceKey.create(Registries.LOOT_TABLE, Identifier.withDefaultNamespace("gameplay/fishing/fish"));
     private static final ResourceKey<LootTable> TREASURE = ResourceKey.create(Registries.LOOT_TABLE,
             Identifier.withDefaultNamespace("gameplay/fishing/treasure"));
-    private static final List<ItemStack> FISH_ICONS = List.of(new ItemStack(Items.COD), new ItemStack(Items.SALMON),
-            new ItemStack(Items.TROPICAL_FISH), new ItemStack(Items.PUFFERFISH));
+
+    @Override
+    public Item toolIcon() {
+        return Items.FISHING_ROD;
+    }
 
     @Override
     public boolean isTool(ItemStack stack) {
@@ -209,12 +214,20 @@ public final class FishermanProfile implements JobProfile {
         ServerLevel level = context.level();
         boolean treasure = level.getRandom().nextDouble()
                 < treasureChance(context.skillLevel(), enchantmentLevel(context.tool(), Enchantments.LUCK_OF_THE_SEA));
-        LootParams params = new LootParams.Builder(level)
-                .withParameter(LootContextParams.ORIGIN, Vec3.atCenterOf(context.poi()))
-                .withParameter(LootContextParams.TOOL, context.tool())
-                .withOptionalParameter(LootContextParams.THIS_ENTITY, context.settler())
-                .create(LootContextParamSets.FISHING);
-        List<ItemStack> items = level.getServer().reloadableRegistries().getLootTable(treasure ? TREASURE : FISH).getRandomItems(params);
+        List<ItemStack> items;
+        if (treasure) {
+            LootParams params = new LootParams.Builder(level)
+                    .withParameter(LootContextParams.ORIGIN, Vec3.atCenterOf(context.poi()))
+                    .withParameter(LootContextParams.TOOL, context.tool())
+                    .withOptionalParameter(LootContextParams.THIS_ENTITY, context.settler())
+                    .create(LootContextParamSets.FISHING);
+            items = level.getServer().reloadableRegistries().getLootTable(TREASURE).getRandomItems(params);
+        } else {
+            // A fish roll with every fish excluded catches nothing (an empty roll), never treasure instead.
+            items = FishTable.get().pick(leftOut(context, FishTable.get().ids()), level.getRandom())
+                    .map(fish -> List.of(fish.caught(level, Vec3.atCenterOf(context.poi()), context.tool(), context.settler())))
+                    .orElse(List.of());
+        }
         context.settler().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
         Vec3 surface = Vec3.atCenterOf(context.poi()).add(0.0, 0.5, 0.0);
         level.sendParticles(ParticleTypes.SPLASH, surface.x, surface.y, surface.z, 12, 0.3, 0.0, 0.3, 0.1);
@@ -222,21 +235,32 @@ public final class FishermanProfile implements JobProfile {
         return Optional.of(new Produced(items, context.tool()));
     }
 
+    /** A fish type is the fish item itself. */
     @Override
-    public List<Found> found(ScanResult scan, ItemStack tool, int skillLevel) {
-        List<Found> found = new ArrayList<>();
+    public Item dropped(ServerLevel level, BlockPos pos, Identifier type, ItemStack tool) {
+        return BuiltInRegistries.ITEM.getValue(type);
+    }
+
+    @Override
+    public List<Identifier> mainResources(ScanResult scan) {
+        return FishTable.get().ids();
+    }
+
+    @Override
+    public List<Found> found(ScanResult scan, Optional<Worker> worker) {
+        return FishTable.get().fish().stream().map(fish -> new Found(fish.id(), new ItemStack(fish.item()), true)).toList();
+    }
+
+    @Override
+    public List<Component> foundLines(ScanResult scan, Optional<Worker> worker) {
         int water = scan instanceof WaterScan.Result result ? result.water() : 0;
-        List<Component> waterLines = new ArrayList<>(List.of(Component.translatable("civmod.gui.settler.found.water", water)));
+        List<Component> lines = new ArrayList<>(List.of(Component.translatable("civmod.gui.found.water", water)));
         if (water < WATER_THRESHOLD) {
-            waterLines.add(Component.translatable("civmod.gui.settler.found.water_penalty", Math.round((1.0 - waterProductivity(water)) * 100)));
+            lines.add(Component.translatable("civmod.gui.found.water_penalty", Math.round((1.0 - waterProductivity(water)) * 100)));
         }
-        found.add(new Found(new ItemStack(Items.WATER_BUCKET), true, List.copyOf(waterLines)));
-        FISH_ICONS.forEach(icon -> found.add(new Found(icon.copy(), true, List.of())));
-        double chance = treasureChance(skillLevel, enchantmentLevel(tool, Enchantments.LUCK_OF_THE_SEA));
-        if (chance > 0.0) {
-            found.add(new Found(new ItemStack(Items.NAME_TAG), true,
-                    List.of(Component.translatable("civmod.gui.settler.found.treasure", Math.round(chance * 1000) / 10.0))));
-        }
-        return found;
+        lines.add(worker.<Component>map(found -> Component.translatable("civmod.gui.found.treasure",
+                        Math.round(treasureChance(found.skillLevel(), enchantmentLevel(found.tool(), Enchantments.LUCK_OF_THE_SEA)) * 1000) / 10.0))
+                .orElseGet(() -> Component.translatable("civmod.gui.found.treasure_none")));
+        return lines;
     }
 }

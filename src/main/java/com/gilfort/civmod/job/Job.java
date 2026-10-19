@@ -46,6 +46,8 @@ public final class Job {
     private final JobCategory category;
     private final @Nullable Supplier<Job> parent;
     private final Supplier<? extends ItemLike> icon;
+    private final @Nullable Supplier<? extends ItemLike> bubbleIcon;
+    private final @Nullable Supplier<? extends ItemLike> displayItem;
     private final double hungerFactor;
     private final int baseExp;
     private final double jobFactor;
@@ -56,6 +58,8 @@ public final class Job {
         this.category = builder.category;
         this.parent = builder.parent;
         this.icon = Objects.requireNonNull(builder.icon, "icon");
+        this.bubbleIcon = builder.bubbleIcon;
+        this.displayItem = builder.displayItem;
         this.hungerFactor = builder.hungerFactor;
         this.baseExp = builder.baseExp;
         this.jobFactor = builder.jobFactor;
@@ -125,6 +129,14 @@ public final class Job {
     }
 
     /**
+     * @return the translated job name with its indefinite article ({@code job.<namespace>.<path>.indefinite}, "an
+     *         Adventurer")
+     */
+    public Component indefiniteName() {
+        return Component.translatable("job." + id().getNamespace() + "." + id().getPath() + ".indefinite");
+    }
+
+    /**
      * @return the translated name of the job's work place ({@code <namespace>.scroll.work_place.<path>})
      */
     public Component workPlaceName() {
@@ -136,6 +148,22 @@ public final class Job {
      */
     public ItemStack icon() {
         return new ItemStack(icon.get());
+    }
+
+    /**
+     * @return the item in the settler's thought bubble when it switches to this Job (its typical item; the GUI icon if
+     *         the Job sets none)
+     */
+    public ItemStack bubbleIcon() {
+        return new ItemStack(bubbleIcon == null ? icon.get() : bubbleIcon.get());
+    }
+
+    /**
+     * @return the display item a settler holds while working this Job, for Jobs without a real tool (only a display
+     *         copy in the hand, never in an inventory)
+     */
+    public Optional<net.minecraft.world.item.Item> displayItem() {
+        return displayItem == null ? Optional.empty() : Optional.of(displayItem.get().asItem());
     }
 
     /**
@@ -213,6 +241,8 @@ public final class Job {
         private final JobCategory category;
         private @Nullable Supplier<Job> parent;
         private @Nullable Supplier<? extends ItemLike> icon;
+        private @Nullable Supplier<? extends ItemLike> bubbleIcon;
+        private @Nullable Supplier<? extends ItemLike> displayItem;
         private double hungerFactor = 1.0;
         private int baseExp = 1;
         private double jobFactor = 1.0;
@@ -238,6 +268,24 @@ public final class Job {
          */
         public Builder icon(Supplier<? extends ItemLike> icon) {
             this.icon = icon;
+            return this;
+        }
+
+        /**
+         * @param bubbleIcon the item shown in the thought bubble on a switch to this Job (default: the icon)
+         * @return this builder
+         */
+        public Builder bubbleIcon(Supplier<? extends ItemLike> bubbleIcon) {
+            this.bubbleIcon = bubbleIcon;
+            return this;
+        }
+
+        /**
+         * @param displayItem the item held while working, for Jobs without a real tool
+         * @return this builder
+         */
+        public Builder displayItem(Supplier<? extends ItemLike> displayItem) {
+            this.displayItem = displayItem;
             return this;
         }
 

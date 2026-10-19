@@ -1,7 +1,11 @@
 package com.gilfort.civmod.job;
 
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
@@ -10,8 +14,11 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.SettlementBlock;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
@@ -26,6 +33,11 @@ public interface JobProfile {
      * @return whether it is the job's tool
      */
     boolean isTool(ItemStack stack);
+
+    /**
+     * @return the tool shown in the "no tool" thought bubble (the job's tool in its simplest usable form)
+     */
+    net.minecraft.world.item.Item toolIcon();
 
     /**
      * @param block the JobBlock
@@ -141,29 +153,96 @@ public interface JobProfile {
     }
 
     /**
-     * What the job tab shows as found: by default the found block types.
+     * The main resources of the job in an area (logs, stones and ores, fish): when every one of them is excluded at
+     * the JobBlock or at its Max at the Home Clerk the job pauses ("All resources excluded" / "Maximum reached" /
+     * "Nothing to produce"); rare drops and treasure never keep it running.
      *
-     * @param scan       the scan result
-     * @param tool       the current tool (may be empty)
-     * @param skillLevel the skill level
+     * @param scan the scan result
+     * @return the main resource types, by default the found block types
+     */
+    default List<Identifier> mainResources(ScanResult scan) {
+        return scan.foundBlocks();
+    }
+
+    /**
+     * The item a found type drops, for the Max check of its Home Clerk's stock rule (vault
+     * {@code Systems/Resource Collection Jobs.md}): by default the block's item.
+     *
+     * @param level the level
+     * @param pos   where it would be mined (loot context origin)
+     * @param type  a found type (block id, for the Fisherman the fish item id)
+     * @param tool  the tool it would be obtained with (Silk Touch / Fortune considered; may be empty)
+     * @return the dropped item ({@code minecraft:air} if it drops nothing)
+     */
+    default Item dropped(ServerLevel level, BlockPos pos, Identifier type, ItemStack tool) {
+        return BuiltInRegistries.BLOCK.getValue(type).asItem();
+    }
+
+    /**
+     * The types a roll leaves out of its group (vault {@code Systems/Resource Collection Jobs.md}): those excluded at
+     * the JobBlock and those whose dropped item is at its Max at the Home Clerk.
+     *
+     * @param context the production context
+     * @param types   the types of the rolled group
+     * @return the types left out
+     */
+    default Set<Identifier> leftOut(Context context, Collection<Identifier> types) {
+        Set<Identifier> excluded = context.block().excluded();
+        if (context.atMax().isEmpty()) {
+            return excluded;
+        }
+        Set<Identifier> left = new HashSet<>(excluded);
+        for (Identifier type : types) {
+            if (!left.contains(type) && context.atMax().contains(context.dropped().apply(type))) {
+                left.add(type);
+            }
+        }
+        return left;
+    }
+
+    /**
+     * What the JobBlock's Found tab lists (by default the found block types); each entry can be excluded.
+     *
+     * @param scan   the scan result
+     * @param worker the settler working the JobBlock, if any (without one no tool marks)
      * @return the entries
      */
-    default List<Found> found(ScanResult scan, ItemStack tool, int skillLevel) {
+    default List<Found> found(ScanResult scan, Optional<Worker> worker) {
         return scan.foundBlocks().stream()
-                .map(block -> new Found(new ItemStack(net.minecraft.core.registries.BuiltInRegistries.BLOCK.getValue(block)), canObtain(tool, block),
-                        List.<net.minecraft.network.chat.Component>of()))
+                .map(block -> new Found(block, new ItemStack(BuiltInRegistries.BLOCK.getValue(block)),
+                        worker.map(found -> canObtain(found.tool(), block)).orElse(true)))
                 .filter(found -> !found.icon().isEmpty())
                 .toList();
     }
 
     /**
-     * A found resource shown in the job tab.
+     * Scan info the Found tab shows above the entries (e.g. the Fisherman's water and treasure chance).
      *
-     * @param icon      the icon
-     * @param available whether the current tool can obtain it
-     * @param tooltip   tooltip lines (empty: the item name)
+     * @param scan   the scan result
+     * @param worker the settler working the JobBlock, if any
+     * @return the lines, one per value
      */
-    record Found(ItemStack icon, boolean available, List<net.minecraft.network.chat.Component> tooltip) {
+    default List<Component> foundLines(ScanResult scan, Optional<Worker> worker) {
+        return List.of();
+    }
+
+    /**
+     * A found resource listed in the Found tab.
+     *
+     * @param type      the type (block id, for the Fisherman the fish item id); the key of an exclusion
+     * @param icon      the icon
+     * @param available whether the working settler's tool can obtain it (always without a settler)
+     */
+    record Found(Identifier type, ItemStack icon, boolean available) {
+    }
+
+    /**
+     * The settler working a JobBlock, as far as the Found tab needs it.
+     *
+     * @param tool       its best tool of the job (empty without one)
+     * @param skillLevel its effective skill level in the job
+     */
+    record Worker(ItemStack tool, int skillLevel) {
     }
 
     /**
@@ -177,9 +256,11 @@ public interface JobProfile {
      * @param secondary  the secondary tool, if any
      * @param block      the JobBlock
      * @param skillLevel the skill level
+     * @param atMax      the items at their Max at the Home Clerk (left out of the roll)
+     * @param dropped    the item a resource type drops with the tool ({@link #dropped}, cached per scan)
      */
     record Context(ServerLevel level, Settler settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Optional<ItemStack> secondary,
-            SettlementBlock block, int skillLevel) {
+            SettlementBlock block, int skillLevel, Set<Item> atMax, Function<Identifier, Item> dropped) {
     }
 
     /**

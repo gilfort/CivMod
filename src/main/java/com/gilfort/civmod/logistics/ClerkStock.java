@@ -2,8 +2,10 @@ package com.gilfort.civmod.logistics;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.WeakHashMap;
 
 import org.jspecify.annotations.Nullable;
@@ -30,7 +32,7 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
  * re-read interval, {@value #MIN_REREAD} ticks after a re-read that found a change, doubling up to
  * {@value #MAX_REREAD} ticks (10 s) while nothing changes.</li>
  * <li>Every transaction CivMod makes through a {@link Stock} is written through at once; an extraction that finds
- * less than expected re-reads the container.</li>
+ * less than expected re-reads the container. Increases are noted for the surplus check ({@link #takeGrown}).</li>
  * <li>Unloaded linked containers are skipped, never loaded; each linked position keeps a capability cache.</li>
  * </ul>
  * Kept per level and position while the block entity exists.
@@ -43,6 +45,8 @@ final class ClerkStock {
     static final int MAX_REREAD = 200;
 
     private static final Map<ServerLevel, Map<BlockPos, ClerkStock>> VIEWS = new WeakHashMap<>();
+    /** Per level: the Clerks whose stock a CivMod transaction increased since the last {@link #takeGrown}, with the items. */
+    private static final Map<ServerLevel, Map<BlockPos, Set<Item>>> GROWN = new WeakHashMap<>();
 
     private final ServerLevel level;
     private final JobBlockEntity block;
@@ -104,9 +108,27 @@ final class ClerkStock {
      * @param level the level
      */
     static void forget(ServerLevel level) {
+        GROWN.remove(level);
         Map<BlockPos, ClerkStock> views = VIEWS.remove(level);
         if (views != null) {
             views.values().forEach(view -> view.valid = false);
+        }
+    }
+
+    /**
+     * @param level the level
+     * @return the Clerks whose stock a CivMod transaction increased since the last call, with the items; cleared
+     */
+    static Map<BlockPos, Set<Item>> takeGrown(ServerLevel level) {
+        Map<BlockPos, Set<Item>> grown = GROWN.remove(level);
+        return grown == null ? Map.of() : grown;
+    }
+
+    /** Notes an increase by a CivMod transaction (own slots or a linked container). */
+    private void grew(ItemResource resource, long delta) {
+        if (delta > 0) {
+            GROWN.computeIfAbsent(level, key -> new HashMap<>()).computeIfAbsent(block.getBlockPos().immutable(), key -> new HashSet<>())
+                    .add(resource.getItem());
         }
     }
 
@@ -183,6 +205,7 @@ final class ClerkStock {
 
         @Override
         public void changed(long mark, ItemResource resource, long delta) {
+            grew(resource, delta);
             if (mark != ownChanges) {
                 return;
             }
@@ -255,6 +278,7 @@ final class ClerkStock {
 
         @Override
         public void changed(long mark, ItemResource resource, long delta) {
+            grew(resource, delta);
             if (!summary.covers(resource, delta)) {
                 reread();
                 return;
