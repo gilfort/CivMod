@@ -55,6 +55,8 @@ Builder values:
 | `displayItem` | item held while working, for Jobs without a real tool | none |
 | `station` | block tag of the Job's work places (Scroll of Assignment) | none |
 
+Producing Jobs: see [producing.md](producing.md) (the profile is required).
+
 `CivModJobs` holds CivMod's built-in Jobs (`LUMBERJACK`, `MINER`, `FISHERMAN`, `ADVENTURER`, `CLERK`, `DELIVERYMAN`, `CRAFTSPERSON`) for parents and data.
 
 Lang keys (in `assets/<namespace>/lang/en_us.json`):
