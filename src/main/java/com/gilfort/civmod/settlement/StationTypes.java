@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
@@ -22,7 +23,8 @@ import net.minecraft.world.item.Items;
  * Base Job at this JobBlock. Slot 0 is the Base Job's station ({@link Job#unlockItem()}, else its icon), filled and
  * locked from level 1; every further level opens one more slot. An unlock item put into an open slot is consumed and
  * unlocks every Specialization of the Base Job naming it; put into a filled slot it replaces the old one, and settlers
- * working a Job no longer unlocked fall back to the Base Job (its library stays, unusable until it is unlocked again).
+ * working a Job no longer unlocked fall back to the Base Job (its library stays, unusable until it is unlocked again);
+ * a settler already holding the Base Job at another JobBlock leaves this one instead.
  * The unlock item is not the work place: a Specialization still needs its station in the world.
  * <p>
  * Every JobBlock whose Base Job has Specializations has Station Types, except the Mission Board: it still offers its
@@ -125,6 +127,15 @@ public final class StationTypes {
     }
 
     /**
+     * @param slot a slot
+     * @param open how many slots are in use ({@link #open(int)})
+     * @return whether the slot takes an unlock item: in use and not the Base Job's station
+     */
+    public static boolean isOpen(int slot, int open) {
+        return slot >= 1 && slot < open;
+    }
+
+    /**
      * @param blockJob     the Job of a JobBlock
      * @param level        its level
      * @param stationTypes its Station Types slots ({@link SettlementBlock#stationTypes()}, empty for none)
@@ -166,7 +177,8 @@ public final class StationTypes {
     /**
      * Puts one unlock item into a Station Types slot of a JobBlock (vault {@code Systems/JobBlock.md}). An item that
      * unlocks something new is consumed (one taken from the stack); replacing a slot makes settlers working a Job no
-     * longer unlocked fall back to the Base Job (loaded ones at once, others at their next membership check).
+     * longer unlocked fall back to the Base Job, or leave the JobBlock if they hold the Base Job at another one (loaded
+     * ones at once, others at their next membership check).
      *
      * @param level the dimension
      * @param pos   the JobBlock
@@ -181,7 +193,7 @@ public final class StationTypes {
             return PutResult.NO_JOB_BLOCK;
         }
         SettlementBlock block = found.get();
-        if (slot < 1 || slot >= open(block.level())) {
+        if (!isOpen(slot, open(block.level()))) {
             return PutResult.LOCKED;
         }
         Item item = stack.getItem();
@@ -195,14 +207,19 @@ public final class StationTypes {
         stack.shrink(1);
         block.setStationType(slot, item);
         List<Job> unlocked = unlocked(block);
-        List<SettlementBlock.Assignee> assignees = block.mutableAssignees();
-        for (int i = 0; i < assignees.size(); i++) {
-            SettlementBlock.Assignee assignee = assignees.get(i);
-            if (assignee.job().parent().filter(block.jobType()::equals).isPresent() && !unlocked.contains(assignee.job())) {
-                assignees.set(i, new SettlementBlock.Assignee(assignee.id(), assignee.name(), block.jobType()));
-                if (level.getEntity(assignee.id()) instanceof Settler settler) {
-                    settler.replaceJob(pos, block.jobType());
-                }
+        Job base = block.jobType();
+        List<UUID> lost = block.assignees().stream()
+                .filter(assignee -> assignee.job().parent().filter(base::equals).isPresent() && !unlocked.contains(assignee.job()))
+                .map(SettlementBlock.Assignee::id).toList();
+        for (UUID id : lost) {
+            Optional<Settler> settler = level.getEntity(id) instanceof Settler loaded ? Optional.of(loaded) : Optional.empty();
+            if (JobAssignments.holdsElsewhere(data, pos, id, base)) {
+                // A settler holds each Job once: with the Base Job at another JobBlock it leaves this one.
+                JobAssignments.unassign(data, pos, id);
+                settler.ifPresent(loaded -> loaded.removeJob(pos));
+            } else {
+                block.setAssigneeJob(id, base);
+                settler.ifPresent(loaded -> loaded.replaceJob(pos, base));
             }
         }
         data.changed();

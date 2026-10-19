@@ -1,7 +1,9 @@
 package com.gilfort.civmod.gametest;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -41,6 +43,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
@@ -84,8 +87,8 @@ public final class JobSwitcherGameTests {
     }
 
     private static void assertSettlers(GameTestHelper helper, Job job, int... expected) {
-        helper.assertTrue(java.util.Arrays.equals(settlers(job), expected),
-                job + ": " + java.util.Arrays.toString(settlers(job)) + " instead of " + java.util.Arrays.toString(expected));
+        helper.assertTrue(Arrays.equals(settlers(job), expected),
+                job + ": " + Arrays.toString(settlers(job)) + " instead of " + Arrays.toString(expected));
     }
 
     /**
@@ -107,7 +110,7 @@ public final class JobSwitcherGameTests {
 
         List<JsonElement> files = List.of(JsonParser.parseString("{\"settlers\": [1, 1, 2, 2, 3], \"2\": []}"),
                 JsonParser.parseString("{\"settlers\": [2, 2, 2, 2, 2]}"), JsonParser.parseString("{\"3\": []}"));
-        helper.assertTrue(UpgradeCosts.mergeSettlers(files).equals(java.util.Optional.of(List.of(2, 2, 2, 2, 2))),
+        helper.assertTrue(UpgradeCosts.mergeSettlers(files).equals(Optional.of(List.of(2, 2, 2, 2, 2))),
                 "A later pack replaces the list, one without keeps it: " + UpgradeCosts.mergeSettlers(files));
 
         Job craftsperson = ModJobs.CRAFTSPERSON.get();
@@ -212,7 +215,11 @@ public final class JobSwitcherGameTests {
         helper.assertFalse(menu.switchJob(player, 1, StationTypeGameTests.job(CivMod.id("gametest_smith"))), "Not unlocked there: refused");
         helper.assertFalse(menu.switchJob(player, 0, stonecutter), "Not offered at the Lumberjack block: refused");
 
+        helper.assertTrue(StationTypeGameTests.block(level, craft).workers(craftsperson).contains(settler.getUUID()),
+                "The Craftsperson library knows the settler's checkmark limit");
         helper.assertTrue(menu.switchJob(player, 1, stonecutter), "Switched to the Stonecutter");
+        helper.assertFalse(StationTypeGameTests.block(level, craft).workers(craftsperson).contains(settler.getUUID()),
+                "The switch drops it from the Craftsperson library");
         helper.assertTrue(settler.getJobs().equals(List.of(lumberJob, new SettlerJob(stonecutter, craft))),
                 "Same JobBlock, same priority: " + settler.getJobs());
         helper.assertTrue(menu.getInfo().jobs().equals(settler.getJobs()), "The window shows the new Job: " + menu.getInfo().jobs());
@@ -268,7 +275,7 @@ public final class JobSwitcherGameTests {
         master.getWork().decideNow(level);
         helper.assertTrue(StationTypeGameTests.block(level, craft).checkLimit(craftsperson) == masterLimit,
                 "The master's limit: " + StationTypeGameTests.block(level, craft).checkLimit(craftsperson));
-        net.minecraft.world.item.Item[] outputs = {Items.STICK, Items.OAK_PLANKS, Items.TORCH, Items.CHEST, Items.STONE_PICKAXE, Items.STONE_AXE,
+        Item[] outputs = {Items.STICK, Items.OAK_PLANKS, Items.TORCH, Items.CHEST, Items.STONE_PICKAXE, Items.STONE_AXE,
                 Items.STONE_SHOVEL, Items.LADDER, Items.BOWL, Items.CRAFTING_TABLE};
         for (int slot = 0; slot < outputs.length; slot++) {
             CraftspersonGameTests.define(helper, craft, slot, outputs[slot]);
@@ -280,6 +287,8 @@ public final class JobSwitcherGameTests {
 
         master.removeJob(craft);
         JobAssignments.unassign(SettlementData.get(level), craft, master.getUUID());
+        helper.assertTrue(StationTypeGameTests.block(level, craft).workers(craftsperson).equals(Set.of(novice.getUUID())),
+                "Unassigning drops the master's limit at once: " + StationTypeGameTests.block(level, craft).workers(craftsperson));
         novice.getWork().decideNow(level);
         block = StationTypeGameTests.block(level, craft);
         helper.assertTrue(block.checkLimit(craftsperson) == noviceLimit && Patterns.checked(block, craftsperson).size() == noviceLimit,

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
@@ -18,6 +19,7 @@ import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.PatternTab;
 import com.gilfort.civmod.menu.StationTypeTab;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobPlaces;
@@ -39,6 +41,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeType;
@@ -82,6 +85,8 @@ public final class StationTypeGameTests {
             register(helper, "station_types_item_unlocks_two_jobs", StationTypeGameTests::itemUnlocksTwoJobs);
             register(helper, "station_types_overwrite", StationTypeGameTests::overwrite);
             register(helper, "station_types_library_per_job", StationTypeGameTests::libraryPerJob);
+            register(helper, "station_types_fallback_held_elsewhere", StationTypeGameTests::fallbackHeldElsewhere);
+            register(helper, "station_types_catch_up_held_elsewhere", StationTypeGameTests::catchUpHeldElsewhere);
         });
     }
 
@@ -112,7 +117,7 @@ public final class StationTypeGameTests {
      *
      * @return whether the slot took the item
      */
-    static boolean unlock(GameTestHelper helper, BlockPos pos, int slot, net.minecraft.world.item.Item item) {
+    static boolean unlock(GameTestHelper helper, BlockPos pos, int slot, Item item) {
         Player player = helper.makeMockPlayer(GameType.SURVIVAL);
         JobBlockMenu menu = menu(helper, player, pos);
         menu.setCarried(new ItemStack(item));
@@ -280,12 +285,95 @@ public final class StationTypeGameTests {
                 && loaded.stationTypes().equals(block.stationTypes()), "Libraries and Station Types are saved");
         JsonObject saved = blockJson(json, pos);
         saved.remove("libraries");
-        saved.add("patterns", JsonOps.INSTANCE.createList(java.util.stream.Stream.of(
+        saved.add("patterns", JsonOps.INSTANCE.createList(Stream.of(
                 Pattern.CODEC.encodeStart(JsonOps.INSTANCE, block.patterns(craftsperson).getFirst()).getOrThrow())));
         saved.addProperty("check_limit", 7);
         SettlementBlock old = Settlement.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow().block(pos).orElseThrow();
         helper.assertTrue(old.patterns(craftsperson).isEmpty() && old.libraryJobs().isEmpty(), "An old shared library is dropped");
         helper.succeed();
+    }
+
+    /**
+     * A settler that holds the Base Job at another JobBlock is unassigned instead of falling back when a Station Type
+     * is replaced (a settler holds each Job once): Craftsperson at block A and Mechanic at block B, the smithing table
+     * replaces B's crafter, and the settler leaves B. An unloaded settler (only in the data) leaves B as well; a
+     * settler without the Base Job elsewhere still falls back. The left Job's library forgets its checkmark limit.
+     */
+    private static void fallbackHeldElsewhere(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Job craftsperson = ModJobs.CRAFTSPERSON.get();
+        Job mechanic = ModJobs.MECHANIC.get();
+        BlockPos a = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 1));
+        BlockPos relativeB = new BlockPos(1, 1, 5);
+        BlockPos b = CraftspersonGameTests.craftsperson(helper, relativeB);
+        setLevel(helper, relativeB, 2);
+        helper.assertTrue(unlock(helper, b, 1, Items.CRAFTER), "Mechanic unlocked at B");
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(a).orElseThrow();
+        helper.assertTrue(data.settlementAt(b).filter(settlement::equals).isPresent(), "A and B in one settlement");
+        Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 3), data, settlement);
+        helper.assertTrue(SettlementWorld.assign(level, a, settler, craftsperson) == JobAssignments.AssignResult.OK, "Craftsperson at A");
+        helper.assertTrue(SettlementWorld.assign(level, b, settler, mechanic) == JobAssignments.AssignResult.OK, "Mechanic at B");
+        Patterns.enforceLimit(level, b, mechanic, settler.getUUID(), Patterns.BASE_CHECKMARKS);
+        helper.assertTrue(block(level, b).workers(mechanic).contains(settler.getUUID()), "B's Mechanic library knows the settler's limit");
+
+        helper.assertTrue(unlock(helper, b, 1, Items.SMITHING_TABLE), "The smithing table replaces the crafter");
+        helper.assertFalse(block(level, b).isAssignee(settler.getUUID()), "Craftsperson at A already: the settler leaves B");
+        helper.assertTrue(settler.getJobs().equals(List.of(new SettlerJob(craftsperson, a))),
+                "Only the Craftsperson at A is left: " + settler.getJobs());
+        helper.assertFalse(block(level, b).workers(mechanic).contains(settler.getUUID()), "B's Mechanic library forgets the settler");
+
+        UUID unloaded = UUID.randomUUID();
+        UUID single = UUID.randomUUID();
+        helper.assertTrue(unlock(helper, b, 1, Items.CRAFTER), "The crafter again");
+        setLevel(helper, relativeB, 3);
+        setLevel(helper, new BlockPos(1, 1, 1), 3);
+        helper.assertTrue(JobAssignments.assign(data, a, unloaded, "Una", settlement.id(), List.of(), craftsperson) == JobAssignments.AssignResult.OK,
+                "Unloaded Una: Craftsperson at A");
+        helper.assertTrue(JobAssignments.assign(data, b, unloaded, "Una", settlement.id(), List.of(craftsperson), mechanic) == JobAssignments.AssignResult.OK,
+                "Una: Mechanic at B");
+        helper.assertTrue(JobAssignments.assign(data, b, single, "Sid", settlement.id(), List.of(), mechanic) == JobAssignments.AssignResult.OK,
+                "Sid: Mechanic at B only");
+        helper.assertTrue(unlock(helper, b, 1, Items.SMITHING_TABLE), "Replaced again");
+        helper.assertFalse(block(level, b).isAssignee(unloaded), "Unloaded Una leaves B too");
+        helper.assertTrue(block(level, b).assignee(single).map(SettlementBlock.Assignee::job).equals(Optional.of(craftsperson)),
+                "Sid holds no Craftsperson elsewhere: falls back");
+        settler.discard();
+        JobAssignments.unassign(data, a);
+        JobAssignments.unassign(data, b);
+        // Back to level 1: a bigger block left in the settlement data would push later tests' blocks out.
+        setLevel(helper, relativeB, 1);
+        setLevel(helper, new BlockPos(1, 1, 1), 1);
+        helper.succeed();
+    }
+
+    /**
+     * The catch-up of a settler that was unloaded while its Job fell back (an older save): it holds the Craftsperson at
+     * block A and finds itself listed as Craftsperson at block B, where its Mechanic is no longer unlocked. It leaves B
+     * instead of holding the Craftsperson twice.
+     */
+    private static void catchUpHeldElsewhere(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Job craftsperson = ModJobs.CRAFTSPERSON.get();
+        Job mechanic = ModJobs.MECHANIC.get();
+        BlockPos a = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 1));
+        BlockPos b = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(a).orElseThrow();
+        Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 3), data, settlement);
+        settler.setNoAi(false);
+        helper.assertTrue(SettlementWorld.assign(level, a, settler, craftsperson) == JobAssignments.AssignResult.OK, "Craftsperson at A");
+        // An older save: B fell back to the Craftsperson while the settler, unloaded, still held the Mechanic there.
+        helper.assertTrue(JobAssignments.assign(data, b, settler.getUUID(), "Cora", settlement.id(), List.of(), craftsperson)
+                == JobAssignments.AssignResult.OK, "B lists the settler as Craftsperson");
+        settler.addJob(new SettlerJob(mechanic, b));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(settler.getJobs().equals(List.of(new SettlerJob(craftsperson, a))),
+                    "Only the Craftsperson at A is left: " + settler.getJobs());
+            helper.assertFalse(block(level, b).isAssignee(settler.getUUID()), "B no longer lists the settler");
+            settler.discard();
+            JobAssignments.unassign(data, a);
+        });
     }
 
     /** The saved JobBlock at a position inside a saved settlement. */
