@@ -34,7 +34,7 @@ final class StonecutterProfile implements ProducingProfile {
 }
 ```
 
-A Producing Job needs a profile (`build()` fails without one). As a Specialization (`parent`) it works at its parent's JobBlock from level 2 and uses that JobBlock's pattern library; as a Base Job it needs a JobBlock from `CivModApi.jobBlock` (its window gets the Storage, Info and Patterns tabs). The pattern library follows the Job of the settler working the JobBlock: patterns of a recipe type the Job does not follow stay in the library, unchecked.
+A Producing Job needs a profile (`build()` fails without one). As a Specialization (`parent`) it works at its parent's JobBlock from level 2 and uses that JobBlock's pattern library; as a Base Job it needs a JobBlock from `CivModApi.jobBlock` (its window gets the Storage, Info and Patterns tabs). The pattern library follows the Job of the settler working the JobBlock: patterns of a recipe type the Job does not follow stay in the library, greyed out and skipped, but keep their checkmark; they work again once a Job of their type works the JobBlock.
 
 Ship the station tag, e.g. `data/examplemod/tags/block/stations/stonecutter.json`:
 
@@ -61,7 +61,8 @@ and the lang keys `job.<namespace>.<job>`, `job.<namespace>.<job>.indefinite` an
 
 ## Checkmarks
 
-Only checked patterns are worked. A new pattern is checked automatically if it makes something, the profile can use it and a checkmark is free. At the limit it stays unchecked, and the Patterns tab shows "A Stonecutter masters only 6 recipes at once – choose which to check." until the player's next toggle. A pattern the filters block stays unchecked without that line. Replacing a pattern keeps its checkmark. When the limit drops (a weaker settler), the last checked patterns lose theirs.
+Only checked patterns are worked. Only checked patterns the Job can use count against its limit; patterns of another Job's recipe type keep their checkmark outside it. A new pattern is checked automatically if it makes something, the profile can use it and a checkmark is free. At the limit it stays unchecked, and the Patterns tab shows "A Stonecutter masters only 6 recipes at once – choose which to check." until the player's next edit of the library. A pattern the filters reject stays unchecked without that line, and loses a checkmark it had. Replacing a pattern keeps its checkmark. When the limit drops (a weaker settler), the last checked patterns the Job can use lose theirs.
+
 
 ## Not part of the profile
 

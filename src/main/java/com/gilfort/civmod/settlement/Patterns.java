@@ -33,7 +33,9 @@ import net.minecraft.world.item.crafting.Recipe;
  * The library follows the {@link ProducingProfile} of the Job working the JobBlock (its assignee, else the JobBlock's
  * own Job): a pattern is usable if its recipe is of one of the profile's types and the profile's filters let it through
  * (the Craftsperson's filter denies metal, item tag {@code civmod:metals}); rejected alternatives of a tag input are
- * skipped. A new pattern is checked automatically while the limit allows.
+ * skipped. A pattern of another recipe type ("foreign", e.g. a crafting pattern while a Stonecutter works the JobBlock)
+ * keeps its checkmark: it is skipped and does not count against the limit, and works again once its Job does. A
+ * filtered pattern loses its checkmark. A new pattern is checked automatically while the limit allows.
  */
 public final class Patterns {
 
@@ -108,7 +110,8 @@ public final class Patterns {
     /**
      * @param level the level
      * @param block a Producing JobBlock
-     * @return its checked patterns its producer can use (see {@link #allowed}), in list order
+     * @return its checked patterns its producer can use (of the producer's recipe types, passing its filters), in list
+     *         order; only these count against the checkmark limit
      */
     public static List<Pattern> usable(ServerLevel level, SettlementBlock block) {
         ProducingProfile profile = profile(block);
@@ -130,7 +133,7 @@ public final class Patterns {
      * @return whether the profile can use it: it makes something, follows a recipe of the profile's types and passes its
      *         filters
      */
-    public static boolean allowed(ServerLevel level, ProducingProfile profile, Pattern pattern) {
+    static boolean allowed(ServerLevel level, ProducingProfile profile, Pattern pattern) {
         return pattern.valid() && !foreign(level, profile, pattern) && !filtered(level, profile, pattern);
     }
 
@@ -140,7 +143,7 @@ public final class Patterns {
      * @param pattern a pattern
      * @return whether its producer cannot use the pattern although it makes something (foreign recipe type or filtered)
      */
-    public static boolean blocked(ServerLevel level, SettlementBlock block, Pattern pattern) {
+    public static boolean unusable(ServerLevel level, SettlementBlock block, Pattern pattern) {
         ProducingProfile profile = profile(block);
         return pattern.valid() && !allowed(level, profile, pattern);
     }
@@ -261,8 +264,8 @@ public final class Patterns {
     }
 
     /**
-     * Checks or unchecks a pattern; checking needs a pattern its producer can use ({@link #allowed}) and a free
-     * checkmark. Every toggle ends the "masters only n recipes" state line.
+     * Checks or unchecks a pattern; checking needs a pattern its producer can use and a free checkmark (counted over
+     * the {@link #usable} patterns). Every toggle ends the state line ({@link SettlementBlock#notice()}).
      *
      * @param level the level
      * @param pos   the Producing JobBlock
@@ -277,9 +280,9 @@ public final class Patterns {
             return false;
         }
         SettlementBlock block = found.get();
-        block.setAtLimit(false);
+        block.setNotice(Optional.empty());
         boolean check = !pattern.get().checked();
-        if (check && (!allowed(level, profile(block), pattern.get()) || checked(block).size() >= block.checkLimit())) {
+        if (check && (!allowed(level, profile(block), pattern.get()) || usable(level, block).size() >= block.checkLimit())) {
             return false;
         }
         replace(data, block, pattern.get().withChecked(check));
@@ -296,22 +299,24 @@ public final class Patterns {
     public static void clear(SettlementData data, BlockPos pos, int slot) {
         block(data, pos).ifPresent(block -> {
             if (block.mutablePatterns().removeIf(pattern -> pattern.slot() == slot)) {
-                block.setTrim(Optional.empty());
+                block.setNotice(Optional.empty());
                 data.setDirty();
             }
         });
     }
 
     /**
-     * Applies the checkmark limit of the settler working the JobBlock: if it dropped, the last checked patterns in list
-     * order lose their checkmark until the count fits, and the GUI shows how many were removed.
+     * Applies the checkmark limit of the settler working the JobBlock: if it dropped, the last {@link #usable} patterns in
+     * list order lose their checkmark until the count fits, and the GUI shows how many were removed. Foreign patterns
+     * (another Job's recipe type) keep theirs.
      *
-     * @param data  the dimension's settlement data
+     * @param level the level
      * @param pos   the Producing JobBlock
      * @param limit the checkmark limit
      * @return how many checkmarks were removed
      */
-    public static int enforceLimit(SettlementData data, BlockPos pos, int limit) {
+    public static int enforceLimit(ServerLevel level, BlockPos pos, int limit) {
+        SettlementData data = SettlementData.get(level);
         Optional<SettlementBlock> found = block(data, pos);
         if (found.isEmpty()) {
             return 0;
@@ -321,43 +326,45 @@ public final class Patterns {
             block.setCheckLimit(limit);
             data.setDirty();
         }
-        List<Pattern> checked = checked(block);
+        List<Pattern> checked = usable(level, block);
         int removed = Math.max(0, checked.size() - limit);
         for (Pattern pattern : checked.subList(checked.size() - removed, checked.size())) {
             replace(data, block, pattern.withChecked(false));
         }
         if (removed > 0) {
-            block.setTrim(Optional.of(new SettlementBlock.Trim(removed, limit)));
+            block.setNotice(Optional.of(new SettlementBlock.Notice.Trimmed(removed, limit)));
             data.setDirty();
         }
         return removed;
     }
 
     /**
-     * Removes the checkmark of every pattern its producer cannot use (filtered, e.g. metal for the Craftsperson, or of
-     * a foreign recipe type): such a pattern is never checked, also when it was checked in an older save, before a
-     * filter tag changed or by another Job of the JobBlock.
+     * Removes the checkmark of every pattern of its producer's recipe types that the producer's filters reject (e.g.
+     * metal for the Craftsperson): such a pattern is never checked, also when it was checked in an older save or before
+     * a filter tag changed. Foreign patterns (another Job's recipe type) keep their checkmark for that Job.
      *
      * @param level the level
      * @param pos   the Producing JobBlock
      * @return how many checkmarks were removed
      */
-    public static int uncheckBlocked(ServerLevel level, BlockPos pos) {
+    public static int uncheckFiltered(ServerLevel level, BlockPos pos) {
         SettlementData data = SettlementData.get(level);
-        return block(data, pos).map(block -> uncheckBlocked(level, data, block)).orElse(0);
+        return block(data, pos).map(block -> uncheckFiltered(level, data, block)).orElse(0);
     }
 
     /**
      * @param level the level
      * @param data  the dimension's settlement data (marked dirty on a change)
      * @param block a Producing JobBlock
-     * @return how many checkmarks of blocked patterns were removed
-     * @see #uncheckBlocked(ServerLevel, BlockPos)
+     * @return how many checkmarks of filtered patterns were removed
+     * @see #uncheckFiltered(ServerLevel, BlockPos)
      */
-    public static int uncheckBlocked(ServerLevel level, SettlementData data, SettlementBlock block) {
-        List<Pattern> blocked = block.patterns().stream().filter(pattern -> pattern.checked() && blocked(level, block, pattern)).toList();
-        blocked.forEach(pattern -> replace(data, block, pattern.withChecked(false)));
-        return blocked.size();
+    public static int uncheckFiltered(ServerLevel level, SettlementData data, SettlementBlock block) {
+        ProducingProfile profile = profile(block);
+        List<Pattern> filtered = block.patterns().stream()
+                .filter(pattern -> pattern.checked() && !foreign(level, profile, pattern) && filtered(level, profile, pattern)).toList();
+        filtered.forEach(pattern -> replace(data, block, pattern.withChecked(false)));
+        return filtered.size();
     }
 
     /**
@@ -403,7 +410,8 @@ public final class Patterns {
     /**
      * Puts a pattern into its slot. Replacing a pattern that made something keeps its checkmark if the new one is
      * usable; a new pattern (empty slot, or one that made nothing) is checked automatically if it is usable and a
-     * checkmark is free, at the limit it stays unchecked with the "masters only n recipes" state line.
+     * checkmark is free (counted over the {@link #usable} patterns), at the limit it stays unchecked with the "masters
+     * only n recipes" state line. Any other edit ends the state line.
      */
     private static Optional<Pattern> put(ServerLevel level, BlockPos pos, int slot, Pattern pattern) {
         SettlementData data = SettlementData.get(level);
@@ -418,12 +426,13 @@ public final class Patterns {
         if (replaced.isPresent() || !allowed) {
             checked = allowed && replaced.map(Pattern::checked).orElse(false);
         } else {
-            checked = checked(block).size() < block.checkLimit();
-            block.setAtLimit(!checked);
+            checked = usable(level, block).size() < block.checkLimit();
         }
+        boolean atLimit = replaced.isEmpty() && allowed && !checked;
+        block.setNotice(atLimit ? Optional.of(new SettlementBlock.Notice.AtLimit(block.checkLimit())) : Optional.empty());
         Pattern placed = pattern.withChecked(checked);
         replace(data, block, placed);
-        block.setTrim(Optional.empty());
+
         return Optional.of(placed);
     }
 

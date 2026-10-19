@@ -1,6 +1,7 @@
 package com.gilfort.civmod.gametest;
 
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
@@ -20,6 +21,7 @@ import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.menu.JobBlockTabs;
+import com.gilfort.civmod.menu.PatternTab;
 import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -83,6 +85,7 @@ public final class ExampleAddonGameTests {
             register(helper, "example_sand_digger_exclusion", ExampleAddonGameTests::sandDiggerExclusion);
             register(helper, "example_sand_digger_blocked", ExampleAddonGameTests::sandDiggerBlocked);
             register(helper, "example_stonecutter_request", ExampleAddonGameTests::stonecutterRequest);
+            register(helper, "example_job_switch_keeps_checkmarks", ExampleAddonGameTests::jobSwitchKeepsCheckmarks);
         });
     }
 
@@ -314,5 +317,62 @@ public final class ExampleAddonGameTests {
         JobAssignments.unassign(data, clerk);
         settler.discard();
         helper.succeed();
+    }
+
+    /**
+     * Switching the settler of one JobBlock between the Craftsperson and the Stonecutter keeps both libraries: patterns
+     * of the other Job's recipe type are unusable but keep their checkmark, the limit counts only the working Job's
+     * usable patterns (none trimmed), and switching back works them again.
+     */
+    private static void jobSwitchKeepsCheckmarks(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Job stonecutter = ModJobs.REGISTRY.getValue(STONECUTTER);
+        BlockPos clerk = StockRuleGameTests.workingClerk(helper);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
+        helper.getBlockEntity(new BlockPos(1, 1, 5), JobBlockEntity.class).setJobLevel(2);
+        SettlementManager.setLevel(data, craft, 2, SettlementManager.Listener.NONE);
+        helper.setBlock(new BlockPos(3, 1, 5), Blocks.STONECUTTER);
+        helper.setBlock(new BlockPos(3, 1, 4), Blocks.CRAFTING_TABLE);
+
+        Item[] crafting = {Items.STICK, Items.OAK_PLANKS, Items.TORCH, Items.CHEST, Items.STONE_PICKAXE, Items.STONE_AXE};
+        for (int slot = 0; slot < crafting.length; slot++) {
+            helper.assertTrue(Patterns.setOutput(level, craft, slot, crafting[slot]).orElseThrow().checked(), "Craftsperson: " + crafting[slot] + " checked");
+        }
+
+        Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 7), data, settlement);
+        settler.getFood().setMorningDay(Math.floorDiv(level.getOverworldClockTime(), 24000L));
+        helper.assertTrue(JobAssignments.assign(data, craft, settler.getUUID(), "Stella", settlement.id(), List.of(), stonecutter)
+                == JobAssignments.AssignResult.OK, "Stonecutter assigned");
+        settler.addJob(new SettlerJob(stonecutter, craft));
+        helper.assertTrue(Patterns.setOutput(level, craft, 6, Items.STONE_BRICKS).orElseThrow().checked(), "Stonecutter: bricks checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, 7, Items.STONE_SLAB).orElseThrow().checked(), "Stonecutter: slabs checked");
+        CraftspersonGameTests.catchUp(level, settler, 2000L);
+        assertChecked(helper, level, craft, 8, "Stonecutter works");
+        PatternTab tab = PatternTab.of(level, craft);
+        helper.assertTrue(tab.foreign().equals(Set.of(0, 1, 2, 3, 4, 5)) && tab.unusable(0) && !tab.unusable(6), "Crafting patterns unusable: " + tab.foreign());
+        helper.assertTrue(tab.checked() == 2 && tab.notice().isEmpty(), "The limit counts the Stonecutter's 2 patterns, nothing trimmed: " + tab.checked());
+
+        JobAssignments.unassign(data, craft, settler.getUUID());
+        settler.removeJob(craft);
+        helper.assertTrue(JobAssignments.assign(data, craft, settler.getUUID(), "Stella", settlement.id(), List.of(), ModJobs.CRAFTSPERSON.get())
+                == JobAssignments.AssignResult.OK, "Craftsperson assigned");
+        settler.addJob(new SettlerJob(ModJobs.CRAFTSPERSON.get(), craft));
+        CraftspersonGameTests.catchUp(level, settler, 2000L);
+        assertChecked(helper, level, craft, 8, "Back to the Craftsperson");
+        tab = PatternTab.of(level, craft);
+        helper.assertTrue(tab.foreign().equals(Set.of(6, 7)) && tab.checked() == 6 && tab.notice().isEmpty(),
+                "Stonecutting patterns unusable, the 6 crafting patterns worked again: " + tab.foreign() + " " + tab.checked());
+        helper.assertTrue(Patterns.usable(level, data.settlementAt(craft).flatMap(found -> found.block(craft)).orElseThrow()).size() == 6,
+                "The Craftsperson uses its 6 patterns");
+        JobAssignments.unassign(data, clerk);
+        settler.discard();
+        helper.succeed();
+    }
+
+    private static void assertChecked(GameTestHelper helper, ServerLevel level, BlockPos pos, int count, String when) {
+        List<Pattern> checked = Patterns.checked(SettlementData.get(level).settlementAt(pos).flatMap(found -> found.block(pos)).orElseThrow());
+        helper.assertTrue(checked.size() == count, when + ": every checkmark kept, " + checked.size() + " of " + count);
     }
 }

@@ -314,8 +314,8 @@ public class JobBlockMenu extends CivMenu {
             return;
         }
         if (hasPatternsTab(info)) {
-            // A pattern its producer cannot use (metal, a foreign recipe type) loses its checkmark as soon as the tab shows it.
-            com.gilfort.civmod.settlement.Patterns.uncheckBlocked(level, jobBlock.getBlockPos());
+            // A pattern its producer filters out (metal) loses its checkmark as soon as the tab shows it; foreign ones keep theirs.
+            com.gilfort.civmod.settlement.Patterns.uncheckFiltered(level, jobBlock.getBlockPos());
             PatternTab patterns = PatternTab.of(level, jobBlock.getBlockPos());
             if (!patterns.equals(patternTab)) {
                 patternTab = patterns;
