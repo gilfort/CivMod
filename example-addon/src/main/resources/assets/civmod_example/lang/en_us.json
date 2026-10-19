@@ -3,5 +3,10 @@
   "job.civmod_example.scout.indefinite": "a Scout",
   "civmod_example.scroll.work_place.scout": "no work place (missions are chosen on the board)",
   "mission.civmod_example.scouting_trip": "Scouting Trip",
-  "mission.civmod_example.scouting_trip.description": "Scout the surroundings and bring back what lies around."
+  "mission.civmod_example.scouting_trip.description": "Scout the surroundings and bring back what lies around.",
+  "block.civmod_example.sand_digger_block": "Sand Digger Block",
+  "job.civmod_example.sand_digger": "Sand Digger",
+  "job.civmod_example.sand_digger.indefinite": "a Sand Digger",
+  "civmod_example.scroll.work_place.sand_digger": "a sand block",
+  "civmod_example.blocked.no_sand": "No sand in reach"
 }

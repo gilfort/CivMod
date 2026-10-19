@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:api_simple_collection_profile",
+  "max_ticks": 20,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

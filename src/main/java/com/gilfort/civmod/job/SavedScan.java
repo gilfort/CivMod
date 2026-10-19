@@ -7,6 +7,8 @@ import java.util.Set;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.api.ScanResult;
+
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
@@ -23,9 +25,10 @@ import net.minecraft.resources.Identifier;
  * @param wood     a Lumberjack result
  * @param mine     a Miner result
  * @param water    a Fisherman result (water count)
+ * @param counts   a {@link com.gilfort.civmod.api.SimpleCollectionProfile} result (block count per type)
  */
 public record SavedScan(BlockPos jobBlock, BlockPos center, int radius, long day, Optional<WoodScan.Result> wood,
-        Optional<MineScan.Result> mine, Optional<Integer> water) {
+        Optional<MineScan.Result> mine, Optional<Integer> water, Optional<Map<Identifier, Integer>> counts) {
 
     private static final Codec<WoodScan.Result> WOOD = RecordCodecBuilder.create(instance -> instance.group(
             Codec.unboundedMap(Identifier.CODEC, Codec.INT).fieldOf("logs").forGetter(WoodScan.Result::logs),
@@ -45,7 +48,8 @@ public record SavedScan(BlockPos jobBlock, BlockPos center, int radius, long day
             Codec.LONG.fieldOf("day").forGetter(SavedScan::day),
             WOOD.optionalFieldOf("wood").forGetter(SavedScan::wood),
             MINE.optionalFieldOf("mine").forGetter(SavedScan::mine),
-            Codec.INT.optionalFieldOf("water").forGetter(SavedScan::water)
+            Codec.INT.optionalFieldOf("water").forGetter(SavedScan::water),
+            Codec.unboundedMap(Identifier.CODEC, Codec.INT).optionalFieldOf("counts").forGetter(SavedScan::counts)
     ).apply(instance, SavedScan::new));
 
     /**
@@ -58,10 +62,14 @@ public record SavedScan(BlockPos jobBlock, BlockPos center, int radius, long day
      */
     public static Optional<SavedScan> of(BlockPos jobBlock, BlockPos center, int radius, long day, ScanResult result) {
         return switch (result) {
-            case WoodScan.Result wood -> Optional.of(new SavedScan(jobBlock, center, radius, day, Optional.of(wood), Optional.empty(), Optional.empty()));
-            case MineScan.Result mine -> Optional.of(new SavedScan(jobBlock, center, radius, day, Optional.empty(), Optional.of(mine), Optional.empty()));
+            case WoodScan.Result wood -> Optional.of(new SavedScan(jobBlock, center, radius, day, Optional.of(wood), Optional.empty(), Optional.empty(),
+                    Optional.empty()));
+            case MineScan.Result mine -> Optional.of(new SavedScan(jobBlock, center, radius, day, Optional.empty(), Optional.of(mine), Optional.empty(),
+                    Optional.empty()));
             case WaterScan.Result water -> Optional.of(new SavedScan(jobBlock, center, radius, day, Optional.empty(), Optional.empty(),
-                    Optional.of(water.water())));
+                    Optional.of(water.water()), Optional.empty()));
+            case BlockCountScan.Result counted -> Optional.of(new SavedScan(jobBlock, center, radius, day, Optional.empty(), Optional.empty(),
+                    Optional.empty(), Optional.of(counted.counts())));
             default -> Optional.empty();
         };
     }
@@ -75,6 +83,9 @@ public record SavedScan(BlockPos jobBlock, BlockPos center, int radius, long day
         }
         if (mine.isPresent()) {
             return mine.get();
+        }
+        if (counts.isPresent()) {
+            return new BlockCountScan.Result(Map.copyOf(counts.get()));
         }
         return water.map(WaterScan.Result::new).orElse(null);
     }

@@ -11,7 +11,6 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.job.JobBalancing;
-import com.gilfort.civmod.job.JobProfile;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.google.common.base.Suppliers;
@@ -214,7 +213,7 @@ public final class Job {
         if (station != null) {
             return level.getBlockState(pos).is(station);
         }
-        return profile(JobProfile.class).map(found -> found.isAssignableWorkPlace(level, pos)).orElse(false);
+        return profile(ResourceCollectionProfile.class).map(found -> found.isAssignableWorkPlace(level, pos)).orElse(false);
     }
 
     /**

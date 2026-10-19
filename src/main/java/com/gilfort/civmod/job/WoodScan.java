@@ -3,6 +3,9 @@ package com.gilfort.civmod.job;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.gilfort.civmod.api.ScanResult;
+import com.gilfort.civmod.api.SectionScan;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;

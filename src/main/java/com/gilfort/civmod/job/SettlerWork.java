@@ -13,8 +13,11 @@ import java.util.OptionalLong;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.BlockingReason;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
+import com.gilfort.civmod.api.ResourceCollectionProfile;
+import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.Schedule.Activity;
@@ -30,12 +33,12 @@ import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.StockRules;
-import com.gilfort.civmod.settlement.DayClock;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
@@ -767,12 +770,14 @@ public final class SettlerWork {
             Job type = job.jobType();
             switch (status(job.jobBlock())) {
                 case NO_TOOL -> on.putIfAbsent(ThoughtBubble.NO_TOOL,
-                        type.profile(JobProfile.class).map(JobProfile::toolIcon).orElseGet(() -> type.bubbleIcon().getItem()));
+                        type.profile(ResourceCollectionProfile.class).map(ResourceCollectionProfile::toolIcon).orElseGet(() -> type.bubbleIcon().getItem()));
                 case DROP_OFF_FULL, STORAGE_FULL -> on.putIfAbsent(ThoughtBubble.DROP_OFF_FULL,
                         SettlerThoughts.problemIcon(ThoughtBubble.DROP_OFF_FULL));
                 case NO_WORK_PLACE -> on.putIfAbsent(ThoughtBubble.NO_WORK_PLACE, type.icon().getItem());
                 case MISSING_INPUTS -> on.putIfAbsent(ThoughtBubble.MISSING_INPUTS,
                         SettlerThoughts.problemIcon(ThoughtBubble.MISSING_INPUTS));
+                case BLOCKED -> on.putIfAbsent(ThoughtBubble.BLOCKED,
+                        existingWorkplace(job.jobBlock()).flatMap(Workplace::statusIcon).orElse(Items.BARRIER));
                 default -> {
                 }
             }
@@ -808,7 +813,7 @@ public final class SettlerWork {
                 || status == JobStatus.DELIVERING) {
             return ItemStack.EMPTY;
         }
-        Optional<JobProfile> profile = type.profile(JobProfile.class);
+        Optional<ResourceCollectionProfile> profile = type.profile(ResourceCollectionProfile.class);
         if (profile.isPresent()) {
             return SettlerTools.best(settler, profile.get()::isTool).map(ItemStack::copy).orElse(ItemStack.EMPTY);
         }
@@ -1080,6 +1085,20 @@ public final class SettlerWork {
      */
     void block(ServerLevel level, BlockPos jobBlock, JobStatus status) {
         workplace(jobBlock).block(status, level.getGameTime());
+        if (activeJob != null && activeJob.jobBlock().equals(jobBlock)) {
+            stop();
+        }
+    }
+
+    /**
+     * Blocks a job for a while with its profile's reason (status {@link JobStatus#BLOCKED}).
+     *
+     * @param level    the level
+     * @param jobBlock the JobBlock position
+     * @param reason   the reason
+     */
+    void block(ServerLevel level, BlockPos jobBlock, BlockingReason reason) {
+        workplace(jobBlock).block(reason, level.getGameTime());
         if (activeJob != null && activeJob.jobBlock().equals(jobBlock)) {
             stop();
         }
@@ -2058,9 +2077,9 @@ public final class SettlerWork {
      * @return the settler as the Found tab of that JobBlock sees it (best tool, effective skill level), empty without
      *         that job
      */
-    public Optional<JobProfile.Worker> worker(BlockPos jobBlock) {
+    public Optional<ResourceCollectionProfile.Worker> worker(BlockPos jobBlock) {
         return settler.getJobs().stream().filter(job -> job.jobBlock().equals(jobBlock)).findFirst()
-                .flatMap(job -> job.jobType().profile(JobProfile.class).map(profile -> new JobProfile.Worker(
+                .flatMap(job -> job.jobType().profile(ResourceCollectionProfile.class).map(profile -> new ResourceCollectionProfile.Worker(
                         SettlerTools.best(settler, profile::isTool).map(ItemStack::copy).orElse(ItemStack.EMPTY), effectiveLevel(job))));
     }
 

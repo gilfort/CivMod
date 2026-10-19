@@ -6,7 +6,9 @@ import java.util.Optional;
 
 import org.jspecify.annotations.Nullable;
 
-import com.gilfort.civmod.settlement.SettlementBlock;
+import com.gilfort.civmod.api.ResourceCollectionProfile;
+import com.gilfort.civmod.api.ScanResult;
+import com.gilfort.civmod.api.SectionScan;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -40,7 +42,7 @@ import net.neoforged.neoforge.common.Tags;
  * count scan; a catch is treasure (vanilla treasure loot table) by the treasure chance, otherwise a fish of the
  * {@link FishTable} among those not excluded at the JobBlock.
  */
-public final class FishermanProfile implements JobProfile {
+public final class FishermanProfile implements ResourceCollectionProfile {
 
     /** Fishing reach: the settler stands on the shore within this distance. */
     public static final double FISHING_REACH = 6.0;
@@ -183,8 +185,8 @@ public final class FishermanProfile implements JobProfile {
     // ---------------------------------------------------------------- scan
 
     @Override
-    public BlockPos scanCenter(SettlementBlock block, BlockPos poiOfDay) {
-        return block.workPoints().isEmpty() ? block.pos() : block.workPoints().get(0);
+    public BlockPos scanCenter(BlockPos jobBlock, List<BlockPos> workPoints, BlockPos workPlace) {
+        return workPoints.isEmpty() ? jobBlock : workPoints.get(0);
     }
 
     @Override

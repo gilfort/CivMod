@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.ScanResult;
+import com.gilfort.civmod.api.SectionScan;
 
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
