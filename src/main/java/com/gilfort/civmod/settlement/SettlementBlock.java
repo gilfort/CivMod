@@ -237,6 +237,8 @@ public final class SettlementBlock {
     private final List<Pattern> patterns = new ArrayList<>();
     private int checkLimit;
     private Optional<Trim> trim;
+    /** A new pattern stayed unchecked at the checkmark limit; shown until the next toggle, not saved. */
+    private boolean atLimit;
     private boolean byDeliveryman;
     private final Set<Identifier> excluded = new HashSet<>();
     private Optional<SavedScan> foundScan;
@@ -388,6 +390,18 @@ public final class SettlementBlock {
 
     void setTrim(Optional<Trim> trim) {
         this.trim = trim;
+    }
+
+    /**
+     * @return whether a new pattern last stayed unchecked because the checkmark limit was reached (shown until the next
+     *         toggle; not saved)
+     */
+    public boolean atLimit() {
+        return atLimit;
+    }
+
+    void setAtLimit(boolean atLimit) {
+        this.atLimit = atLimit;
     }
 
     /**

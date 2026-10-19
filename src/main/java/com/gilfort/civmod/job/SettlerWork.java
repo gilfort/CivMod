@@ -188,7 +188,7 @@ public final class SettlerWork {
         clerks = new ClerkLoop(this);
         loops.put(JobCategory.LOGISTICS, clerks);
         // The Craftsperson is the only Producing Job so far.
-        loops.put(JobCategory.PRODUCING, new CraftspersonLoop(this));
+        loops.put(JobCategory.PRODUCING, new ProducingLoop(this));
         deliverymen = new DeliverymanLoop(this);
         thoughts = new SettlerThoughts(settler);
     }

@@ -5,13 +5,12 @@ import com.gilfort.civmod.api.CategoryProfile;
 import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
+import com.gilfort.civmod.job.CraftspersonProfile;
 import com.gilfort.civmod.job.FishermanProfile;
 import com.gilfort.civmod.job.LumberjackProfile;
 import com.gilfort.civmod.job.MinerProfile;
 
 import net.minecraft.core.Registry;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Items;
 import net.minecraft.resources.ResourceKey;
 import net.neoforged.bus.api.IEventBus;
@@ -55,7 +54,7 @@ public final class ModJobs {
     /** See vault {@code Jobs/Craftsperson.md}; crafts requested items from its patterns, the first Producing Job. */
     public static final DeferredHolder<Job, Job> CRAFTSPERSON = JOBS.register("craftsperson", () -> Job.builder(JobCategory.PRODUCING)
             .icon(ModItems.CRAFTSPERSON_BLOCK).bubbleIcon(ModItems.HAMMER).displayItem(ModItems.HAMMER).hungerFactor(0.5).baseExp(2).jobFactor(0.3)
-            .station(TagKey.create(Registries.BLOCK, CivMod.id("stations/craftsperson"))).build());
+            .profile(CraftspersonProfile::new).build());
 
     private ModJobs() {
     }
