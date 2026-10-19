@@ -153,6 +153,9 @@ The window's tabs follow the category: Resource Collection → Storage, Info, Fo
 ```
 
 - upgrade costs `data/<namespace>/civmod_upgrades/<job>.json` (per target level 2–5 a list of `{"item": …, "count": n}` or `{"tag": …, "count": n}`). Without the file the JobBlock uses CivMod's default costs (`data/civmod/civmod_upgrades/default.json`) and the server logs one warning per job on every reload.
+- settlers per level in the same file: `"settlers": [1, 1, 2, 2, 3]` (one number per JobBlock level 1–5, each 1–10). That many settlers hold the Base Job and its Specializations at the JobBlock, each in any Job unlocked there. Without the list the Job has 1 place on every level (the default file's list is not used). CivMod's values: Producing 1 / 1 / 2 / 2 / 3, Resource Collection 1, Mission Board (`adventurer`) 1 / 2 / 4 / 6 / 10, Clerk 1, Deliveryman (own places on the Clerk JobBlock) 1 / 2 / 4 / 6 / 8.
+
+Settlers linked to a JobBlock switch between the Jobs unlocked there in their settler window (job switcher): the JobBlock link and the priority stay, a running Producing round is released like on any job switch, and the skill stays per Job.
 
 ## Datapack overrides
 
@@ -162,4 +165,4 @@ Packs can override a Job's balancing values per job id in `data/<namespace>/civm
 { "hunger_factor": 0.8, "base_exp": 10, "job_factor": 1.2, "unlock_item": "minecraft:stonecutter" }
 ```
 
-`unlock_item` overrides the builder's `unlockItem`. All values are optional; later packs override earlier ones per value. Upgrade costs merge per level the same way.
+`unlock_item` overrides the builder's `unlockItem`. All values are optional; later packs override earlier ones per value. Upgrade costs merge per level the same way; a later `settlers` list replaces an earlier one.

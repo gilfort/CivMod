@@ -2,6 +2,7 @@ package com.gilfort.civmod.client.gui;
 
 import java.util.List;
 
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.menu.SettlerInfo;
@@ -13,14 +14,17 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.ConfirmScreen;
+import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 /**
- * Screen of a settler: Overview (name, status, settlement, dismiss when homeless), Jobs (priority list), Inventory
+ * Screen of a settler: Overview (name, status, settlement, dismiss when homeless), Jobs (priority list; "⇄" opens the
+ * job switcher listing the other Jobs unlocked at that job's JobBlock), Inventory
  * (tool belt, offhand, pockets), Mission (the one Mission Job, chosen from those the Mission Board offers; only for
  * settlers with a Mission Job) and one tab per job below the panel (status and buffer).
  */
@@ -36,6 +40,12 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
     private static final int BUFFER_COLUMNS = 9;
     private static final int SMALL_BUTTON = 16;
     private static final int FOOD_Y = 72;
+    /** Y of the job switcher's first Job button. */
+    private static final int SWITCH_TOP = 34;
+    private static final int SWITCH_ICON = 16;
+
+    /** The job whose switcher the Jobs tab shows, -1 for the priority list. */
+    private int switching = -1;
 
     /**
      * @param menu      the menu
@@ -59,14 +69,51 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         }
         List<SettlerJob> jobs = info.jobs();
         int right = leftPos + imageWidth - CivGui.PADDING;
+        if (switching >= 0 && switching < jobs.size()) {
+            initSwitcher(info, switching);
+            return;
+        }
+        switching = -1;
         for (int i = 0; i < jobs.size(); i++) {
             int y = topPos + 22 + i * ROW_HEIGHT;
+            int index = i;
+            if (state(info, i).filter(state -> !state.switchTo().isEmpty()).isPresent()) {
+                Button change = addTabWidget(SettlerMenu.TAB_JOBS, Button.builder(Component.literal("⇄"), b -> {
+                    switching = index;
+                    rebuildWidgets();
+                }).bounds(right - 4 * SMALL_BUTTON - 6, y, SMALL_BUTTON, SMALL_BUTTON).build());
+                change.setTooltip(Tooltip.create(Component.translatable("civmod.gui.settler.job.switch")));
+            }
             Button up = jobButton("▲", "civmod.gui.settler.job.up", SettlerJobs.MOVE_UP + i, right - 3 * SMALL_BUTTON - 4, y);
             up.active = i > 0;
             Button down = jobButton("▼", "civmod.gui.settler.job.down", SettlerJobs.MOVE_DOWN + i, right - 2 * SMALL_BUTTON - 2, y);
             down.active = i < jobs.size() - 1;
             jobButton("✕", "civmod.gui.settler.job.remove", SettlerJobs.REMOVE + i, right - SMALL_BUTTON, y);
         }
+    }
+
+    /** The job switcher in the Jobs tab: one button per Job unlocked at the job's JobBlock, and Cancel. */
+    private void initSwitcher(SettlerInfo info, int index) {
+        List<Job> options = state(info, index).map(SettlerInfo.JobState::switchTo).orElse(List.of());
+        int x = leftPos + CivGui.PADDING + SWITCH_ICON + 4;
+        int width = imageWidth - 2 * CivGui.PADDING - SWITCH_ICON - 4;
+        for (int i = 0; i < options.size(); i++) {
+            Job job = options.get(i);
+            addTabWidget(SettlerMenu.TAB_JOBS, Button.builder(job.displayName(), b -> switchTo(index, job))
+                    .bounds(x, topPos + SWITCH_TOP + i * ROW_HEIGHT, width, 20).build());
+        }
+        addTabWidget(SettlerMenu.TAB_JOBS, Button.builder(CommonComponents.GUI_CANCEL, b -> {
+            switching = -1;
+            rebuildWidgets();
+        }).bounds(x, topPos + SWITCH_TOP + options.size() * ROW_HEIGHT, width, 20).build());
+    }
+
+    private void switchTo(int index, Job job) {
+        if (menu.switchJob(minecraft.player, index, job)) {
+            ClientPacketDistributor.sendToServer(new SettlerMenu.SwitchJob(menu.containerId, index, job));
+        }
+        switching = -1;
+        rebuildWidgets();
     }
 
     private Button jobButton(String label, String tooltip, int buttonId, int x, int y) {
@@ -111,6 +158,16 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                         CivGui.HINT_COLOR, false);
             }
             case SettlerMenu.TAB_JOBS -> {
+                if (switching >= 0 && switching < info.jobs().size()) {
+                    graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.settler.switch.title",
+                            info.jobs().get(switching).jobType().displayName()), imageWidth - 2 * CivGui.PADDING), CivGui.PADDING, 22,
+                            CivGui.LABEL_COLOR, false);
+                    List<Job> options = state(info, switching).map(SettlerInfo.JobState::switchTo).orElse(List.of());
+                    for (int i = 0; i < options.size(); i++) {
+                        graphics.item(options.get(i).icon(), CivGui.PADDING, SWITCH_TOP + i * ROW_HEIGHT + 2);
+                    }
+                    return;
+                }
                 int y = 24;
                 for (int i = 0; i < info.jobs().size(); i++) {
                     SettlerJob job = info.jobs().get(i);
@@ -120,7 +177,8 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                     state(info, i).ifPresent(state -> {
                         graphics.text(font, Component.translatable("civmod.gui.settler.level_short", state.skill().level()), levelX, rowY,
                                 state.skill().limited() ? LIMITED_COLOR : CivGui.HINT_COLOR, false);
-                        graphics.text(font, CivGui.fit(font, state.text(), imageWidth - 2 * CivGui.PADDING - 3 * SMALL_BUTTON - 6), CivGui.PADDING,
+                        int buttons = state.switchTo().isEmpty() ? 3 * SMALL_BUTTON + 6 : 4 * SMALL_BUTTON + 8;
+                        graphics.text(font, CivGui.fit(font, state.text(), imageWidth - 2 * CivGui.PADDING - buttons), CivGui.PADDING,
                                 rowY + 10, CivGui.HINT_COLOR, false);
                     });
                     y += ROW_HEIGHT;
@@ -161,6 +219,9 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
     protected List<Component> helpLines(int tab) {
         if (tab >= SettlerMenu.FIRST_JOB_TAB) {
             return List.of(Component.translatable("civmod.gui.settler.help.cap"));
+        }
+        if (tab == SettlerMenu.TAB_JOBS) {
+            return List.of(Component.translatable("civmod.gui.settler.help.switch"), Component.translatable("civmod.gui.settler.help.switch_skill"));
         }
         return List.of();
     }

@@ -223,7 +223,8 @@ public class Settler extends PathfinderMob {
 
     /**
      * Switches the Job held at a JobBlock, keeping its priority; the work state there is forgotten (a running round is
-     * released, the buffer emptied). Used when a Station Type is replaced and the Job falls back to the Base Job.
+     * released, the buffer emptied). Used by the job switcher and when a Station Type is replaced and the Job falls back
+     * to the Base Job.
      *
      * @param jobBlock the JobBlock position
      * @param job      the new Job

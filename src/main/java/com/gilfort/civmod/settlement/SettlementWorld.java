@@ -154,6 +154,41 @@ public final class SettlementWorld {
     }
 
     /**
+     * The job switcher's choices for one of a settler's Jobs ({@link JobAssignments#switchOptions}).
+     *
+     * @param level    the dimension
+     * @param jobBlock the JobBlock of the Job
+     * @param settler  the settler
+     * @return the Jobs it may switch to there
+     */
+    public static List<Job> switchOptions(ServerLevel level, BlockPos jobBlock, Settler settler) {
+        return JobAssignments.switchOptions(SettlementData.get(level), jobBlock, settler.getUUID(), otherJobs(settler, jobBlock));
+    }
+
+    /**
+     * Switches a settler's Job at a JobBlock (the job switcher of the settler window): the JobBlock link and the
+     * priority stay, the work state at that JobBlock is forgotten like on any job switch (a running Producing round is
+     * released, fetched inputs go into the own drop-off). The skill of the new Job is the settler's own in it.
+     *
+     * @param level    the dimension
+     * @param jobBlock the JobBlock of the Job
+     * @param settler  the settler
+     * @param job      the new Job, one of {@link #switchOptions}
+     * @return whether the Job was switched
+     */
+    public static boolean switchJob(ServerLevel level, BlockPos jobBlock, Settler settler, Job job) {
+        if (!JobAssignments.switchJob(SettlementData.get(level), jobBlock, settler.getUUID(), otherJobs(settler, jobBlock), job)) {
+            return false;
+        }
+        settler.replaceJob(jobBlock, job);
+        return true;
+    }
+
+    private static List<Job> otherJobs(Settler settler, BlockPos jobBlock) {
+        return settler.getJobs().stream().filter(held -> !held.jobBlock().equals(jobBlock)).map(SettlerJob::jobType).toList();
+    }
+
+    /**
      * Applies a JobBlock level to its settlement entry.
      *
      * @param level    the dimension

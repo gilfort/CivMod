@@ -2,7 +2,11 @@ package com.gilfort.civmod.settlement;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
@@ -28,7 +32,8 @@ import net.minecraft.world.item.crafting.RecipeType;
 /**
  * The pattern libraries of a JobBlock (vault {@code Systems/Producing Jobs.md}, {@code Jobs/Craftsperson.md}): one per
  * Producing Job unlocked there (its Base Job or a Specialization of its Station Types), kept in its
- * {@link SettlementBlock}: 54 pattern slots, of which {@link SettlementBlock#checkLimit(Job)} can be checked. A pattern
+ * {@link SettlementBlock}: 54 pattern slots, of which {@link SettlementBlock#checkLimit(Job)} can be checked (the limit of
+ * the best settler working that Job at the JobBlock). A pattern
  * is made from its output alone (the first matching recipe of the profile's recipe types fills the grid, arrows cycle the
  * alternatives) or from exact inputs (the output follows the recipe they match), or by a recipe viewer's transfer button.
  * A settler works only the library of its Job.
@@ -344,7 +349,41 @@ public final class Patterns {
     }
 
     /**
-     * Applies the checkmark limit of the settler working a Job's library: if it dropped, the last {@link #usable}
+     * Applies the checkmark limit of a settler working a Job's library together with the others working that Job at the
+     * JobBlock (vault {@code Systems/Producing Jobs.md}): the library's limit is the highest one any of them last
+     * reported (settlers no longer in the Job at the block are forgotten), trimmed as in
+     * {@link #enforceLimit(ServerLevel, BlockPos, Job, int)} when it drops.
+     *
+     * @param level   the level
+     * @param pos     the JobBlock
+     * @param job     the Producing Job whose library it is
+     * @param settler the settler working it
+     * @param limit   that settler's checkmark limit (from its effective skill)
+     * @return how many checkmarks were removed
+     */
+    public static int enforceLimit(ServerLevel level, BlockPos pos, Job job, UUID settler, int limit) {
+        SettlementData data = SettlementData.get(level);
+        Optional<SettlementBlock> found = block(data, pos, job);
+        if (found.isEmpty()) {
+            return 0;
+        }
+        SettlementBlock block = found.get();
+        Map<UUID, Integer> workers = block.library(job).workerLimits();
+        Set<UUID> holders = block.assignees().stream().filter(assignee -> assignee.job() == job).map(SettlementBlock.Assignee::id)
+                .collect(Collectors.toSet());
+        boolean changed = workers.keySet().retainAll(holders);
+        if (holders.contains(settler)) {
+            changed |= !Integer.valueOf(limit).equals(workers.put(settler, limit));
+        }
+        if (changed) {
+            data.setDirty();
+        }
+        int best = workers.values().stream().mapToInt(Integer::intValue).max().orElse(limit);
+        return enforceLimit(level, pos, job, best);
+    }
+
+    /**
+     * Applies a checkmark limit to a Job's library: if it dropped, the last {@link #usable}
      * patterns in list order lose their checkmark until the count fits, and the GUI shows how many were removed. Foreign
      * patterns keep theirs.
      *
