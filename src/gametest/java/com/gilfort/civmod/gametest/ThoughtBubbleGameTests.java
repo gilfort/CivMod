@@ -82,7 +82,7 @@ public final class ThoughtBubbleGameTests {
     /** Each Job has its typical item as bubble icon; the GUI icon stays the JobBlock. */
     private static void jobIcons(GameTestHelper helper) {
         Map<Job, Item> expected = Map.of(ModJobs.LUMBERJACK.get(), Items.IRON_AXE, ModJobs.MINER.get(), Items.IRON_PICKAXE,
-                ModJobs.FISHERMAN.get(), Items.COD, ModJobs.CLERK.get(), Items.EMERALD, ModJobs.CRAFTSPERSON.get(), Items.STICK,
+                ModJobs.FISHERMAN.get(), Items.COD, ModJobs.CLERK.get(), Items.EMERALD, ModJobs.CRAFTSPERSON.get(), ModItems.HAMMER.get(),
                 ModJobs.DELIVERYMAN.get(), Items.BUNDLE, ModJobs.ADVENTURER.get(), Items.MAP);
         expected.forEach((job, icon) -> helper.assertTrue(job.bubbleIcon().is(icon), job + " bubble icon " + icon + ": " + job.bubbleIcon()));
         helper.assertTrue(ModJobs.LUMBERJACK.get().icon().is(ModItems.LUMBERJACK_BLOCK.get()), "The GUI icon stays the JobBlock");
@@ -248,7 +248,7 @@ public final class ThoughtBubbleGameTests {
         }
         helper.assertTrue(settler.getWork().status(craft) == JobStatus.FETCHING_INPUTS, "Fetching: " + settler.getWork().status(craft));
         List<ThoughtBubble.Show> sent = sent(settler);
-        helper.assertTrue(sent.contains(show(settler, ThoughtBubble.JOB, Items.STICK)), "The Job's bubble: " + sent);
+        helper.assertTrue(sent.contains(show(settler, ThoughtBubble.JOB, ModItems.HAMMER.get())), "The Job's bubble: " + sent);
         helper.assertTrue(sent.getLast().equals(show(settler, ThoughtBubble.COLLECT, ModItems.COLLECT_MARKER.get())),
                 "Fetching inputs: the collect marker " + sent);
         helper.assertTrue(!sent.contains(show(settler, ThoughtBubble.MISSING_INPUTS, Items.CRAFTING_TABLE))

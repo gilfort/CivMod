@@ -166,6 +166,7 @@
   "civmod.configuration.antiStuckSeconds": "Anti-Stuck Teleport (s)",
   "civmod.gui.settler.buffer": "Buffer: %s / %s",
   "item.civmod.bed_marker": "Bed",
+  "item.civmod.bed_icon": "Bed",
   "civmod.settler.status.sleeping": "Sleeping",
   "civmod.gui.settler.bed": "Bed: %s",
   "civmod.gui.settler.bed.none": "none yet",

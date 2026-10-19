@@ -55,6 +55,8 @@ public final class ModItems {
 
     /** Render-only icon: bed. */
     public static final DeferredItem<Item> BED_MARKER = ITEMS.registerSimpleItem("bed_marker");
+    /** Render-only icon: the red bed of the "going to bed" thought bubble (the vanilla bed model shows its underside there). */
+    public static final DeferredItem<Item> BED_ICON = ITEMS.registerSimpleItem("bed_icon");
 
     /** Render-only icon: Clerk stand spot, numbered by the stack count (1–8). */
     public static final DeferredItem<Item> STAND_SPOT_MARKER = ITEMS.registerSimpleItem("stand_spot_marker");
@@ -69,7 +71,7 @@ public final class ModItems {
 
     /** Items that are only used for rendering and never shown in the creative tab. */
     public static final Set<DeferredItem<Item>> RENDER_ONLY = Set.of(UNCONNECTED_MARKER, WORK_MARKER, PRIMARY_WORK_MARKER, COLLECT_MARKER,
-            DROP_OFF_MARKER, BED_MARKER, STAND_SPOT_MARKER, HAMMER, THOUGHT_BUBBLE, PROBLEM_MARKER);
+            DROP_OFF_MARKER, BED_MARKER, BED_ICON, STAND_SPOT_MARKER, HAMMER, THOUGHT_BUBBLE, PROBLEM_MARKER);
 
     /**
      * Starter tool every new JobBlock item of a job that needs a tool carries (vault {@code Systems/JobBlock.md}).

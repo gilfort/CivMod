@@ -140,7 +140,7 @@ final class SettlerThoughts {
             case COLLECT -> ModItems.COLLECT_MARKER.get();
             case CRAFTING, MISSING_INPUTS -> Items.CRAFTING_TABLE;
             case EATING, HUNGRY_NO_FOOD -> Items.BREAD;
-            case BED -> Items.BED.pick(net.minecraft.world.item.DyeColor.RED);
+            case BED -> ModItems.BED_ICON.get();
             case MISSION -> Items.MAP;
             case JOB, NO_TOOL, NO_WORK_PLACE -> throw new IllegalArgumentException("Icon depends on the job: " + activity);
         };

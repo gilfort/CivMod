@@ -51,7 +51,7 @@ public final class ModJobs {
             .icon(() -> Items.BUNDLE).bubbleIcon(() -> Items.BUNDLE).displayItem(() -> Items.BUNDLE).hungerFactor(1.0).baseExp(1).build());
     /** See vault {@code Jobs/Craftsperson.md}; crafts requested items from its patterns, the first Producing Job. */
     public static final DeferredHolder<Job, Job> CRAFTSPERSON = JOBS.register("craftsperson", () -> Job.builder(JobCategory.PRODUCING)
-            .icon(ModItems.CRAFTSPERSON_BLOCK).bubbleIcon(() -> Items.STICK).displayItem(ModItems.HAMMER).hungerFactor(0.5).baseExp(2).jobFactor(0.3)
+            .icon(ModItems.CRAFTSPERSON_BLOCK).bubbleIcon(ModItems.HAMMER).displayItem(ModItems.HAMMER).hungerFactor(0.5).baseExp(2).jobFactor(0.3)
             .station(TagKey.create(Registries.BLOCK, CivMod.id("stations/craftsperson"))).build());
 
     private ModJobs() {
