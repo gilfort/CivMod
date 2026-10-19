@@ -20,6 +20,9 @@ import net.neoforged.neoforge.registries.DeferredRegister;
  * Mission Board offers it from level 2. Its mission {@code civmod_example:scouting_trip} names it in the datapack
  * ({@code data/civmod_example/civmod/mission/scouting_trip.json}); its names are the lang keys
  * {@code job.civmod_example.scout} and {@code job.civmod_example.scout.indefinite}.
+ * <p>
+ * The Stonecutter is a Producing Specialization of the Craftsperson: it has no JobBlock either, the Craftsperson JobBlock
+ * offers it from level 2, and it fills Clerk requests from {@code stonecutting} recipes at a stonecutter.
  */
 @Mod(CivModExample.MOD_ID)
 public final class CivModExample {
@@ -33,6 +36,14 @@ public final class CivModExample {
     /** A careful Mission Job: half the death chance of the outcome formula. */
     public static final DeferredHolder<Job, Job> SCOUT = JOBS.register("scout", () -> Job.builder(JobCategory.MISSION)
             .parent(CivModJobs.ADVENTURER).icon(() -> Items.SPYGLASS).hungerFactor(1.0).baseExp(8).profile(ScoutProfile::new).build());
+
+    /**
+     * A Producing Specialization of the Craftsperson: a level-2 Craftsperson JobBlock offers it; it cuts stone at a
+     * stonecutter from {@code stonecutting} recipes ({@link StonecutterProfile}).
+     */
+    public static final DeferredHolder<Job, Job> STONECUTTER = JOBS.register("stonecutter", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CivModJobs.CRAFTSPERSON).icon(() -> Items.STONECUTTER).bubbleIcon(() -> Items.STONE_BRICKS).hungerFactor(0.5).baseExp(2)
+            .jobFactor(0.5).profile(StonecutterProfile::new).build());
 
     /**
      * Registers the addon's content.
