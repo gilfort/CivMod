@@ -91,6 +91,12 @@ public final class CivNetwork {
                 JobPicker.choose(player, payload);
             }
         });
+        registrar.playToServer(com.gilfort.civmod.menu.SettlerMenu.SwitchJob.TYPE, com.gilfort.civmod.menu.SettlerMenu.SwitchJob.STREAM_CODEC,
+                (payload, context) -> {
+                    if (context.player() instanceof ServerPlayer player) {
+                        payload.handle(player);
+                    }
+                });
         // Client handler is registered in CivModClient (RegisterClientPayloadHandlersEvent).
         registrar.playToClient(JobPicker.Open.TYPE, JobPicker.Open.STREAM_CODEC);
         registrar.playToClient(PatternTab.Sync.TYPE, PatternTab.Sync.STREAM_CODEC);

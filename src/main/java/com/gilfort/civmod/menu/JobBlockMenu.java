@@ -88,7 +88,7 @@ public class JobBlockMenu extends CivMenu {
     /** Upper bound (exclusive) of the mark button ids. */
     private static final int BUTTON_MARK_MISSION_END = BUTTON_MARK_MISSION + 2 * MissionRules.MAX_OFFER_SIZE;
     /** Assign buttons per offer entry: unlock, then one per board settler. */
-    private static final int ASSIGN_SLOTS = 1 + SettlementRules.MAX_MISSION_BOARD_CAPACITY;
+    private static final int ASSIGN_SLOTS = 1 + SettlementRules.MAX_SETTLERS;
     /** Button ids from here: assign or unlock a mission offer entry ({@link #assignButtonId}). */
     private static final int BUTTON_ASSIGN_MISSION = BUTTON_MARK_MISSION_END;
     /** Upper bound (exclusive) of the assign button ids. */

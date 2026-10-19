@@ -1,7 +1,7 @@
 package com.gilfort.civmod.settlement;
 
 import com.gilfort.civmod.api.Job;
-import com.gilfort.civmod.api.JobCategory;
+import com.gilfort.civmod.block.UpgradeCosts;
 
 import net.minecraft.core.BlockPos;
 
@@ -20,13 +20,8 @@ public final class SettlementRules {
     public static final int EXCLUSION_RADIUS_PER_LEVEL = 30;
     /** Maximum skill level per JobBlock level. */
     public static final int SKILL_CAP_PER_LEVEL = 20;
-    /** Settlers a Mission Board holds per level (index 0 = level 1). */
-    private static final int[] MISSION_BOARD_CAPACITY = {1, 2, 4, 6, 10};
-    /** The most settlers a Mission Board holds (at the maximum level). */
-    public static final int MAX_MISSION_BOARD_CAPACITY = MISSION_BOARD_CAPACITY[MISSION_BOARD_CAPACITY.length - 1];
-
-    /** Deliveryman places on a Clerk JobBlock per level (index 0 = level 1). */
-    private static final int[] DELIVERYMAN_PLACES = {1, 2, 4, 6, 8};
+    /** The most settlers a JobBlock holds in one Job (with its Specializations), whatever its datapack file says. */
+    public static final int MAX_SETTLERS = 10;
 
     /** Served Clerks a Warehouse links per level (index 0 = level 1). */
     private static final int[] SERVED_CLERKS = {2, 4, 6, 8, 12};
@@ -75,22 +70,13 @@ public final class SettlementRules {
     }
 
     /**
-     * @param jobType the job a JobBlock offers
+     * @param baseJob a Base Job a JobBlock offers
      * @param level   the JobBlock level
-     * @return how many settlers the JobBlock holds in its own Job (with its Specializations): the Mission Board
-     *         1 / 2 / 4 / 6 / 10 by level, every other one 1; further Jobs of the block have own places
-     *         ({@link JobPlaces})
+     * @return how many settlers the JobBlock holds in that Base Job and its Specializations: the {@code settlers} list
+     *         of {@code civmod_upgrades/<job>.json} ({@link UpgradeCosts#settlers}), 1 without one
      */
-    public static int capacity(Job jobType, int level) {
-        return jobType.category() == JobCategory.MISSION ? MISSION_BOARD_CAPACITY[clampLevel(level) - MIN_LEVEL] : 1;
-    }
-
-    /**
-     * @param level the Clerk JobBlock level
-     * @return how many Deliverymen a Clerk JobBlock holds at that level: 1 / 2 / 4 / 6 / 8
-     */
-    public static int deliverymanPlaces(int level) {
-        return DELIVERYMAN_PLACES[clampLevel(level) - MIN_LEVEL];
+    public static int capacity(Job baseJob, int level) {
+        return UpgradeCosts.settlers(baseJob, level);
     }
 
     /**

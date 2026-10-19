@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:settlers_per_level",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 4
+}

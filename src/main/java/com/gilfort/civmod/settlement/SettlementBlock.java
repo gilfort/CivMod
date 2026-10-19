@@ -2,6 +2,7 @@ package com.gilfort.civmod.settlement;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
@@ -171,6 +172,15 @@ public final class SettlementBlock {
         private final List<Pattern> patterns = new ArrayList<>();
         private int checkLimit = Patterns.BASE_CHECKMARKS;
         private Optional<Notice> notice = Optional.empty();
+        /** The checkmark limit each settler working this library last reported (the best one counts). */
+        private final Map<UUID, Integer> workerLimits = new HashMap<>();
+
+        /**
+         * @return the checkmark limit each settler working this library last reported, by settler
+         */
+        Map<UUID, Integer> workerLimits() {
+            return workerLimits;
+        }
 
         /**
          * @return the patterns, by slot (read-only)
@@ -184,7 +194,7 @@ public final class SettlementBlock {
         }
 
         /**
-         * @return the checkmark limit of the settler last seen working this library
+         * @return the checkmark limit of the best settler working this library, as last applied
          */
         public int checkLimit() {
             return checkLimit;
@@ -213,13 +223,15 @@ public final class SettlementBlock {
      * @param job        the Job it belongs to
      * @param patterns   its patterns
      * @param checkLimit its checkmark limit
+     * @param workers    the checkmark limit each settler working it last reported
      */
-    private record SavedLibrary(Job job, List<Pattern> patterns, int checkLimit) {
+    private record SavedLibrary(Job job, List<Pattern> patterns, int checkLimit, Map<UUID, Integer> workers) {
 
         static final Codec<SavedLibrary> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                 Job.CODEC.fieldOf("job").forGetter(SavedLibrary::job),
                 Pattern.CODEC.listOf().optionalFieldOf("patterns", List.of()).forGetter(SavedLibrary::patterns),
-                Codec.INT.optionalFieldOf("check_limit", Patterns.BASE_CHECKMARKS).forGetter(SavedLibrary::checkLimit)
+                Codec.INT.optionalFieldOf("check_limit", Patterns.BASE_CHECKMARKS).forGetter(SavedLibrary::checkLimit),
+                Codec.unboundedMap(UUIDUtil.STRING_CODEC, Codec.INT).optionalFieldOf("workers", Map.of()).forGetter(SavedLibrary::workers)
         ).apply(instance, SavedLibrary::new));
     }
 
@@ -350,6 +362,7 @@ public final class SettlementBlock {
             Library library = library(saved.job());
             library.mutablePatterns().addAll(saved.patterns());
             library.setCheckLimit(saved.checkLimit());
+            library.workerLimits().putAll(saved.workers());
         });
         this.byDeliveryman = producing.byDeliveryman();
         this.autoAssign.addAll(place.autoAssign());
@@ -430,7 +443,8 @@ public final class SettlementBlock {
 
     private ProducingFields producingFields() {
         List<SavedLibrary> saved = libraries.entrySet().stream().filter(entry -> !entry.getValue().patterns().isEmpty())
-                .map(entry -> new SavedLibrary(entry.getKey(), List.copyOf(entry.getValue().patterns()), entry.getValue().checkLimit())).toList();
+                .map(entry -> new SavedLibrary(entry.getKey(), List.copyOf(entry.getValue().patterns()), entry.getValue().checkLimit(),
+                        Map.copyOf(entry.getValue().workerLimits()))).toList();
         return new ProducingFields(saved, byDeliveryman);
     }
 
@@ -457,7 +471,7 @@ public final class SettlementBlock {
 
     /**
      * @param job a Producing Job of this JobBlock
-     * @return the checkmark limit of the settler last seen working its library
+     * @return the checkmark limit of its library: the one of the best settler working it, as last applied
      */
     public int checkLimit(Job job) {
         Library library = libraries.get(job);

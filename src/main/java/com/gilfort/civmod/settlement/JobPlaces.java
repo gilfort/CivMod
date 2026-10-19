@@ -96,8 +96,7 @@ public final class JobPlaces {
      * @return the places the Job uses at that level (shared with its Base Job and that one's Specializations)
      */
     public static int places(Job blockJob, Job job, int level) {
-        Job base = base(job);
-        return base == blockJob ? SettlementRules.capacity(blockJob, level) : SettlementRules.deliverymanPlaces(level);
+        return SettlementRules.capacity(base(job), level);
     }
 
     /**

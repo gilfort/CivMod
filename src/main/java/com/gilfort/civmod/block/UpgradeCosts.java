@@ -11,6 +11,7 @@ import java.util.stream.Stream;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.SettlementRules;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;
@@ -41,6 +42,10 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
  * job {@code <namespace>:<job>}: per target level (2–5) a list of items or tags with counts. Files of all packs are merged per level.
  * A JobBlock whose job has no file (e.g. an addon that ships none) uses the default costs from
  * {@code data/civmod/civmod_upgrades/default.json}, with one warning per job on every reload.
+ * <p>
+ * The same file names how many settlers hold the job at a JobBlock per level: {@code "settlers": [1, 1, 2, 2, 3]} (one
+ * number per level, 1 to {@value SettlementRules#MAX_SETTLERS}; the last pack naming a list wins). A job without a list
+ * has 1 place on every level; the default file's list is not used.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class UpgradeCosts {
@@ -51,6 +56,11 @@ public final class UpgradeCosts {
     private static final FileToIdConverter FILES = FileToIdConverter.json("civmod_upgrades");
     /** The reserved file id of the default costs ({@code civmod:default} is no job). */
     private static final Identifier DEFAULT_ID = CivMod.id("default");
+    /** The key of the settlers list next to the levels. */
+    private static final String SETTLERS_KEY = "settlers";
+    /** Settlers per level: one entry per JobBlock level, each 1 to {@value SettlementRules#MAX_SETTLERS}. */
+    private static final Codec<List<Integer>> SETTLERS_CODEC = Codec.intRange(1, SettlementRules.MAX_SETTLERS)
+            .listOf(SettlementRules.MAX_LEVEL, SettlementRules.MAX_LEVEL);
     private static Loaded loaded = Loaded.EMPTY;
 
     private UpgradeCosts() {
@@ -98,6 +108,33 @@ public final class UpgradeCosts {
      */
     public static List<Cost> get(Job job, int newLevel) {
         return loaded.costs().getOrDefault(job, loaded.defaults()).getOrDefault(newLevel, List.of());
+    }
+
+    /**
+     * @param job   a Job
+     * @param level a JobBlock level
+     * @return how many settlers hold the Job at a JobBlock of that level
+     */
+    public static int settlers(Job job, int level) {
+        List<Integer> settlers = loaded.settlers().get(job);
+        return settlers == null ? 1 : settlers.get(SettlementRules.clampLevel(level) - SettlementRules.MIN_LEVEL);
+    }
+
+    /**
+     * Merges the {@code settlers} lists of one job's files in order (a later list replaces an earlier one; a file
+     * without one keeps it).
+     *
+     * @param files parsed JSON files of one job, in pack order
+     * @return the settlers per level (index 0 = level 1), empty if no file names them
+     */
+    public static Optional<List<Integer>> mergeSettlers(List<JsonElement> files) {
+        Optional<List<Integer>> merged = Optional.empty();
+        for (JsonElement file : files) {
+            if (file.isJsonObject() && file.getAsJsonObject().has(SETTLERS_KEY)) {
+                merged = Optional.of(List.copyOf(SETTLERS_CODEC.parse(JsonOps.INSTANCE, file.getAsJsonObject().get(SETTLERS_KEY)).getOrThrow()));
+            }
+        }
+        return merged;
     }
 
     /**
@@ -152,7 +189,12 @@ public final class UpgradeCosts {
         Map<Integer, List<Cost>> merged = new HashMap<>();
         Codec<Map<String, List<Cost>>> codec = Codec.unboundedMap(Codec.STRING, Cost.CODEC.listOf());
         for (JsonElement file : files) {
-            codec.parse(JsonOps.INSTANCE, file).getOrThrow().forEach((level, list) -> merged.put(Integer.parseInt(level), List.copyOf(list)));
+            JsonElement levels = file;
+            if (file.isJsonObject() && file.getAsJsonObject().has(SETTLERS_KEY)) {
+                levels = file.getAsJsonObject().deepCopy();
+                levels.getAsJsonObject().remove(SETTLERS_KEY);
+            }
+            codec.parse(JsonOps.INSTANCE, levels).getOrThrow().forEach((level, list) -> merged.put(Integer.parseInt(level), List.copyOf(list)));
         }
         return Map.copyOf(merged);
     }
@@ -189,11 +231,18 @@ public final class UpgradeCosts {
                 }
             });
             Map<Job, Map<Integer, List<Cost>>> result = new HashMap<>();
+            Map<Job, List<Integer>> settlers = new HashMap<>();
             files.forEach((job, list) -> {
                 try {
                     result.put(job, merge(list));
                 } catch (Exception e) {
                     CivMod.LOGGER.error("Invalid upgrade costs for {}", job, e);
+                }
+                try {
+                    mergeSettlers(list).ifPresent(perLevel -> settlers.put(job, perLevel));
+                } catch (Exception e) {
+                    CivMod.LOGGER.error("Invalid settlers for {} (a list of {} numbers from 1 to {}), its JobBlock holds 1", job,
+                            SettlementRules.MAX_LEVEL, SettlementRules.MAX_SETTLERS, e);
                 }
             });
             Map<Integer, List<Cost>> defaults = Map.of();
@@ -205,7 +254,7 @@ public final class UpgradeCosts {
             jobBlockJobs().filter(job -> !result.containsKey(job)).forEach(job -> CivMod.LOGGER.warn(
                     "No upgrade costs for {} (data/{}/civmod_upgrades/{}.json), its JobBlock uses the default costs", job,
                     job.id().getNamespace(), job.id().getPath()));
-            return new Loaded(result, defaults);
+            return new Loaded(result, defaults, settlers);
         }
 
         @Override
@@ -224,13 +273,15 @@ public final class UpgradeCosts {
      *
      * @param costs    job → target level → costs, for every job with a file
      * @param defaults target level → costs for jobs without a file
+     * @param settlers job → settlers per level (index 0 = level 1), for every job whose files name them
      */
-    private record Loaded(Map<Job, Map<Integer, List<Cost>>> costs, Map<Integer, List<Cost>> defaults) {
+    private record Loaded(Map<Job, Map<Integer, List<Cost>>> costs, Map<Integer, List<Cost>> defaults, Map<Job, List<Integer>> settlers) {
 
-        static final Loaded EMPTY = new Loaded(Map.of(), Map.of());
+        static final Loaded EMPTY = new Loaded(Map.of(), Map.of(), Map.of());
 
         Loaded {
             costs = Map.copyOf(costs);
+            settlers = Map.copyOf(settlers);
         }
     }
 }
