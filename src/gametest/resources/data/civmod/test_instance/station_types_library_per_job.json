@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:station_types_library_per_job",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

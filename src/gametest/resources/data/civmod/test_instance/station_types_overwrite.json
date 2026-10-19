@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "civmod:day",
-  "function": "civmod:craftsperson_metal_unchecked",
+  "function": "civmod:station_types_overwrite",
   "max_ticks": 100,
   "structure": "minecraft:empty",
   "padding": 40

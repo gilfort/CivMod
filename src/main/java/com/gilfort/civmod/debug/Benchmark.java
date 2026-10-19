@@ -165,7 +165,7 @@ public final class Benchmark {
             }
             for (int slot = 0; slot < CRAFTED.size(); slot++) {
                 // New patterns are checked automatically (4 of the limit of 6).
-                Patterns.setOutput(level, craft, slot, CRAFTED.get(slot));
+                Patterns.setOutput(level, craft, ModJobs.CRAFTSPERSON.get(), slot, CRAFTED.get(slot));
             }
             if (i >= CRAFTSPERSONS) {
                 JobAssignments.toggleDelivery(data, craft);

@@ -15,7 +15,8 @@ import net.minecraft.network.codec.StreamCodec;
 
 /**
  * Which Jobs a JobBlock offers and how many places each has (vault {@code Systems/JobBlock.md}). A JobBlock offers
- * its own Base Job and, on a Clerk JobBlock, the Deliveryman; every Base Job brings its Specializations from level 2.
+ * its own Base Job and, on a Clerk JobBlock, the Deliveryman; its Base Job brings the Specializations its Station Types
+ * unlock ({@link StationTypes}), the Mission Board its Mission Jobs from level 2.
  * A Base Job and its Specializations share the Base Job's places (the Mission Board's settlers, whatever Mission Job
  * they have). A downgrade keeps every assignee; a Job with more assignees than places stays full until enough leave.
  */
@@ -72,10 +73,20 @@ public final class JobPlaces {
     /**
      * @param blockJob the Job the JobBlock was made for
      * @param level    the JobBlock level
-     * @return the Jobs the JobBlock offers at that level, in picker order
+     * @return the Jobs such a JobBlock offers at that level without any Station Type, in picker order
      */
-    static List<Job> offered(Job blockJob, int level) {
+    public static List<Job> offered(Job blockJob, int level) {
         return baseJobs(blockJob).stream().flatMap(base -> base.offeredAt(level).stream()).toList();
+    }
+
+    /**
+     * @param block a JobBlock
+     * @return the Jobs it offers, in picker order: its Base Job with the Specializations its Station Types unlock, then
+     *         the other Base Jobs (the Deliveryman)
+     */
+    public static List<Job> offered(SettlementBlock block) {
+        return baseJobs(block.jobType()).stream()
+                .flatMap(base -> (base == block.jobType() ? StationTypes.unlocked(block) : base.offeredAt(block.level())).stream()).toList();
     }
 
     /**
@@ -117,29 +128,31 @@ public final class JobPlaces {
      * @return every Job the block offers at its level with taken / places
      */
     public static List<Line> lines(SettlementBlock block) {
-        return lines(block.jobType(), block.level(), block.assignees(), block.autoAssign());
+        return lines(block.jobType(), block.level(), offered(block), block.assignees(), block.autoAssign());
     }
 
     /**
      * @param blockJob  the Job the JobBlock was made for
      * @param level     the JobBlock level
      * @param assignees the block's assignees
-     * @return every Job such a block offers at that level with taken / places, automatic assignment off
+     * @return every Job such a block offers at that level without Station Types, with taken / places, automatic
+     *         assignment off
      */
     public static List<Line> lines(Job blockJob, int level, List<SettlementBlock.Assignee> assignees) {
-        return lines(blockJob, level, assignees, Set.of());
+        return lines(blockJob, level, offered(blockJob, level), assignees, Set.of());
     }
 
     /**
      * @param blockJob  the Job the JobBlock was made for
      * @param level     the JobBlock level
+     * @param offered   the Jobs the block offers ({@link #offered(SettlementBlock)})
      * @param assignees the block's assignees
      * @param auto      the Jobs with automatic assignment switched on
-     * @return every Job such a block offers at that level with taken / places
+     * @return a line with taken / places for every offered Job
      */
-    public static List<Line> lines(Job blockJob, int level, List<SettlementBlock.Assignee> assignees, Collection<Job> auto) {
+    public static List<Line> lines(Job blockJob, int level, List<Job> offered, List<SettlementBlock.Assignee> assignees, Collection<Job> auto) {
         List<Line> lines = new ArrayList<>();
-        for (Job job : offered(blockJob, level)) {
+        for (Job job : offered) {
             lines.add(new Line(job, holders(assignees, job).size(), places(blockJob, job, level), auto.contains(job)));
         }
         return List.copyOf(lines);

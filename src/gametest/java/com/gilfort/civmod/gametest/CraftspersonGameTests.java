@@ -8,6 +8,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.job.CatchUp;
@@ -77,12 +78,11 @@ public final class CraftspersonGameTests {
             register(helper, "craftsperson_live_round", CraftspersonGameTests::liveRound);
             register(helper, "craftsperson_menu", CraftspersonGameTests::menu);
             register(helper, "craftsperson_live_linked_storage", CraftspersonGameTests::liveLinkedStorage);
-            register(helper, "craftsperson_no_metal", CraftspersonGameTests::noMetal);
+            register(helper, "craftsperson_crafts_metal", CraftspersonGameTests::craftsMetal);
             register(helper, "craftsperson_live_linked_storage_far", CraftspersonGameTests::liveLinkedStorageFar);
             register(helper, "craftsperson_live_two_sources_off_shift", test -> liveTwoSources(test, false));
             register(helper, "craftsperson_live_two_sources_on_shift", test -> liveTwoSources(test, true));
             register(helper, "craftsperson_unreachable_inputs", CraftspersonGameTests::unreachableInputs);
-            register(helper, "craftsperson_metal_unchecked", CraftspersonGameTests::metalUnchecked);
             register(helper, "craftsperson_counter_check_in_air", CraftspersonGameTests::counterCheckInAir);
         });
     }
@@ -99,7 +99,7 @@ public final class CraftspersonGameTests {
         BlockPos pos = craftsperson(helper, new BlockPos(1, 1, 1));
         SettlementBlock block = SettlementData.get(helper.getLevel()).settlementAt(pos).flatMap(s -> s.block(pos)).orElseThrow();
         helper.assertTrue(block.jobType() == ModJobs.CRAFTSPERSON.get(), "JobBlock offers the Craftsperson");
-        helper.assertTrue(block.patterns().isEmpty(), "Empty library");
+        helper.assertTrue(block.patterns(craftJob()).isEmpty(), "Empty library");
         helper.assertTrue(ModJobs.CRAFTSPERSON.get().isValidWorkPlace(helper.getLevel(), placeTable(helper, new BlockPos(3, 1, 1))),
                 "A crafting table is the station");
         helper.succeed();
@@ -112,7 +112,7 @@ public final class CraftspersonGameTests {
     private static void patternMatching(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos pos = craftsperson(helper, new BlockPos(1, 1, 1));
-        Pattern pickaxe = Patterns.setOutput(level, pos, 0, Items.STONE_PICKAXE).orElseThrow();
+        Pattern pickaxe = Patterns.setOutput(level, pos, craftJob(), 0, Items.STONE_PICKAXE).orElseThrow();
         helper.assertTrue(!pickaxe.exact() && pickaxe.recipe().isPresent() && pickaxe.output() == Items.STONE_PICKAXE && pickaxe.count() == 1,
                 "Output only: a recipe pattern " + pickaxe);
         helper.assertTrue(pickaxe.grid().get(4) == Items.STICK && pickaxe.grid().get(7) == Items.STICK
@@ -122,16 +122,16 @@ public final class CraftspersonGameTests {
         helper.assertTrue(inputs.stream().anyMatch(input -> input.test(new ItemStack(Items.COBBLESTONE)) && input.test(new ItemStack(Items.BLACKSTONE))),
                 "Tag ingredients stay flexible");
 
-        Pattern stick = Patterns.setOutput(level, pos, 1, Items.STICK).orElseThrow();
-        Pattern other = Patterns.cycle(level, pos, 1, 1).orElseThrow();
+        Pattern stick = Patterns.setOutput(level, pos, craftJob(), 1, Items.STICK).orElseThrow();
+        Pattern other = Patterns.cycle(level, pos, craftJob(), 1, 1).orElseThrow();
         helper.assertFalse(other.recipe().equals(stick.recipe()), "Arrows cycle the alternatives: " + stick.recipe() + " / " + other.recipe());
         helper.assertTrue(other.output() == Items.STICK, "Still sticks");
-        helper.assertTrue(Patterns.cycle(level, pos, 1, -1).orElseThrow().recipe().equals(stick.recipe()), "And back");
+        helper.assertTrue(Patterns.cycle(level, pos, craftJob(), 1, -1).orElseThrow().recipe().equals(stick.recipe()), "And back");
 
-        Pattern exact = Patterns.setInput(level, pos, 2, 1, Items.STICK).orElseThrow();
+        Pattern exact = Patterns.setInput(level, pos, craftJob(), 2, 1, Items.STICK).orElseThrow();
         helper.assertTrue(exact.exact() && exact.output() == Items.AIR, "One stick matches no recipe");
-        helper.assertTrue(Patterns.setInput(level, pos, 2, 1, Items.BIRCH_PLANKS).isPresent(), "Plank set");
-        exact = Patterns.setInput(level, pos, 2, 4, Items.BIRCH_PLANKS).orElseThrow();
+        helper.assertTrue(Patterns.setInput(level, pos, craftJob(), 2, 1, Items.BIRCH_PLANKS).isPresent(), "Plank set");
+        exact = Patterns.setInput(level, pos, craftJob(), 2, 4, Items.BIRCH_PLANKS).orElseThrow();
         helper.assertTrue(exact.exact() && exact.output() == Items.STICK && exact.count() == 4, "Two birch planks: 4 sticks " + exact);
         List<Ingredient> exactInputs = Patterns.inputs(level, profile(), exact);
         helper.assertTrue(exactInputs.size() == 2 && exactInputs.stream().noneMatch(input -> input.test(new ItemStack(Items.OAK_PLANKS))),
@@ -141,10 +141,10 @@ public final class CraftspersonGameTests {
         Settlement settlement = data.settlementAt(pos).orElseThrow();
         Settlement loaded = Settlement.CODEC.parse(JsonOps.INSTANCE, Settlement.CODEC.encodeStart(JsonOps.INSTANCE, settlement).getOrThrow())
                 .getOrThrow();
-        helper.assertTrue(loaded.block(pos).orElseThrow().patterns().equals(settlement.block(pos).orElseThrow().patterns()),
+        helper.assertTrue(loaded.block(pos).orElseThrow().patterns(craftJob()).equals(settlement.block(pos).orElseThrow().patterns(craftJob())),
                 "Patterns are saved");
-        Patterns.clear(data, pos, 2);
-        helper.assertTrue(Patterns.pattern(settlement.block(pos).orElseThrow(), 2).isEmpty(), "Cleared");
+        Patterns.clear(data, pos, craftJob(), 2);
+        helper.assertTrue(Patterns.pattern(settlement.block(pos).orElseThrow(), craftJob(), 2).isEmpty(), "Cleared");
         helper.succeed();
     }
 
@@ -161,12 +161,12 @@ public final class CraftspersonGameTests {
 
         Item[] outputs = {Items.STICK, Items.OAK_PLANKS, Items.TORCH, Items.CHEST, Items.STONE_PICKAXE, Items.STONE_AXE, Items.STONE_SHOVEL,
                 Items.LADDER, Items.BOWL};
-        Patterns.setOutput(level, pos, 1, Items.STICK);
-        helper.assertFalse(Patterns.toggleCheck(level, pos, 1), "Unchecked by hand");
+        Patterns.setOutput(level, pos, craftJob(), 1, Items.STICK);
+        helper.assertFalse(Patterns.toggleCheck(level, pos, craftJob(), 1), "Unchecked by hand");
         helper.assertFalse(Producers.canMake(level, settlement, Items.STICK), "Unchecked: nobody makes sticks");
-        Patterns.clear(data, pos, 1);
+        Patterns.clear(data, pos, craftJob(), 1);
         for (int slot = 0; slot < outputs.length; slot++) {
-            boolean checked = Patterns.setOutput(level, pos, slot * 2, outputs[slot]).orElseThrow().checked();
+            boolean checked = Patterns.setOutput(level, pos, craftJob(), slot * 2, outputs[slot]).orElseThrow().checked();
             helper.assertTrue(checked == slot < 6, "Checkmark " + slot + " within the limit of 6: " + checked);
         }
         helper.assertFalse(Producers.canMake(level, settlement, Items.STICK), "No settler: nobody makes sticks");
@@ -174,18 +174,18 @@ public final class CraftspersonGameTests {
         helper.assertTrue(Producers.canMake(level, settlement, Items.STICK), "Checked and staffed: sticks can be made");
         helper.assertFalse(Producers.canMake(level, settlement, Items.LADDER), "Not checked: no ladders");
 
-        helper.assertTrue(Patterns.enforceLimit(level, pos, 4) == 2, "Limit 4: two checkmarks removed");
+        helper.assertTrue(Patterns.enforceLimit(level, pos, craftJob(), 4) == 2, "Limit 4: two checkmarks removed");
         SettlementBlock block = settlement.block(pos).orElseThrow();
-        helper.assertTrue(Patterns.checked(block).stream().map(Pattern::output).toList()
+        helper.assertTrue(Patterns.checked(block, craftJob()).stream().map(Pattern::output).toList()
                 .equals(List.of(Items.STICK, Items.OAK_PLANKS, Items.TORCH, Items.CHEST)), "The last ones in list order lose theirs");
-        helper.assertTrue(block.notice().equals(Optional.of(new SettlementBlock.Notice.Trimmed(2, 4))), "Notice: 2 removed, 4 left");
-        helper.assertTrue(Patterns.enforceLimit(level, pos, 4) == 0, "Within the limit: nothing removed");
-        helper.assertTrue(block.notice().isPresent(), "The notice stays while nothing changes");
-        helper.assertFalse(Patterns.toggleCheck(level, pos, 0), "Sticks unchecked");
-        helper.assertTrue(block.notice().isEmpty(), "A toggle ends the notice");
-        helper.assertTrue(Patterns.enforceLimit(level, pos, 2) == 1, "Limit 2: one more removed");
-        Patterns.clear(data, pos, 2);
-        helper.assertTrue(block.notice().isEmpty(), "Clearing a slot ends the notice");
+        helper.assertTrue(block.notice(craftJob()).equals(Optional.of(new SettlementBlock.Notice.Trimmed(2, 4))), "Notice: 2 removed, 4 left");
+        helper.assertTrue(Patterns.enforceLimit(level, pos, craftJob(), 4) == 0, "Within the limit: nothing removed");
+        helper.assertTrue(block.notice(craftJob()).isPresent(), "The notice stays while nothing changes");
+        helper.assertFalse(Patterns.toggleCheck(level, pos, craftJob(), 0), "Sticks unchecked");
+        helper.assertTrue(block.notice(craftJob()).isEmpty(), "A toggle ends the notice");
+        helper.assertTrue(Patterns.enforceLimit(level, pos, craftJob(), 2) == 1, "Limit 2: one more removed");
+        Patterns.clear(data, pos, craftJob(), 2);
+        helper.assertTrue(block.notice(craftJob()).isEmpty(), "Clearing a slot ends the notice");
         helper.succeed();
     }
 
@@ -199,7 +199,7 @@ public final class CraftspersonGameTests {
         define(helper, pos, 0, Items.STONE_PICKAXE);
         define(helper, pos, 1, Items.OAK_PLANKS);
         SettlementData data = SettlementData.get(level);
-        List<Pattern> checked = Patterns.checked(SettlementData.get(level).settlementAt(pos).flatMap(s -> s.block(pos)).orElseThrow());
+        List<Pattern> checked = Patterns.checked(SettlementData.get(level).settlementAt(pos).flatMap(s -> s.block(pos)).orElseThrow(), craftJob());
         Map<Item, Integer> stock = Map.of(Items.OAK_LOG, 1, Items.COBBLESTONE, 3);
 
         CraftPlan noSticks = CraftPlan.plan(level, profile(), checked, Items.STONE_PICKAXE, 1, Map.of(), stock);
@@ -207,7 +207,7 @@ public final class CraftspersonGameTests {
                 "No stick pattern: Missing 2× Stick " + noSticks.missing());
 
         define(helper, pos, 2, Items.STICK);
-        checked = Patterns.checked(data.settlementAt(pos).flatMap(s -> s.block(pos)).orElseThrow());
+        checked = Patterns.checked(data.settlementAt(pos).flatMap(s -> s.block(pos)).orElseThrow(), craftJob());
         CraftPlan one = CraftPlan.plan(level, profile(), checked, Items.STONE_PICKAXE, 1, Map.of(), stock);
         helper.assertTrue(one.missing().isEmpty(), "Everything there: " + one.missing());
         helper.assertTrue(one.takes().equals(Map.of(Items.OAK_LOG, 1, Items.COBBLESTONE, 3)), "Takes a log and 3 cobblestone: " + one.takes());
@@ -684,7 +684,7 @@ public final class CraftspersonGameTests {
         player.snapTo(pos.getX() + 0.5, pos.getY() + 1, pos.getZ() + 0.5);
         JobBlockEntity entity = (JobBlockEntity) level.getBlockEntity(pos);
         JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(level, pos, ModJobs.CRAFTSPERSON.get(), 1));
-        helper.assertTrue(menu.getTabCount() == 3, "Storage, Info, Patterns");
+        helper.assertTrue(menu.getTabCount() > JobBlockMenu.TAB_STATION_TYPES, "Storage, Info, Patterns, Station Types and the Specializations' Patterns");
         menu.setActiveTab(JobBlockMenu.TAB_PATTERNS);
         helper.assertTrue(menu.slots.get(JobBlockEntity.SLOTS).isActive() && !menu.slots.get(0).isActive(),
                 "Patterns tab: player inventory, no storage slots");
@@ -699,112 +699,54 @@ public final class CraftspersonGameTests {
         entity.clearContent();
         menu.setActiveTab(JobBlockMenu.TAB_PATTERNS);
 
-        menu.editPattern(PatternTab.Edit.setOutput(1, 3, Items.TORCH));
-        menu.editPattern(PatternTab.Edit.transfer(1, 5, Optional.empty(), List.of(Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.OAK_PLANKS,
+        menu.editPattern(PatternTab.Edit.setOutput(1, craftJob(), 3, Items.TORCH));
+        menu.editPattern(PatternTab.Edit.transfer(1, craftJob(), 5, Optional.empty(), List.of(Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.OAK_PLANKS,
                 Items.AIR, Items.AIR, Items.AIR, Items.AIR)));
-        PatternTab tab = PatternTab.of(level, pos);
+        PatternTab tab = PatternTab.of(level, pos, craftJob());
         helper.assertTrue(tab.pattern(3).filter(Pattern::checked).map(Pattern::output).equals(Optional.of(Items.TORCH)), "Torch pattern checked: " + tab);
         helper.assertTrue(tab.pattern(5).map(Pattern::output).equals(Optional.of(Items.STICK)) && tab.pattern(5).orElseThrow().exact(),
                 "Transfer without a known recipe: exactly the shown items");
         helper.assertTrue(tab.limit() == Patterns.BASE_CHECKMARKS && tab.notice().isEmpty(), "Limit 6, nothing removed");
-        menu.editPattern(PatternTab.Edit.clear(1, 3));
-        helper.assertTrue(PatternTab.of(level, pos).pattern(3).isEmpty(), "Cleared through the menu");
+        menu.editPattern(PatternTab.Edit.clear(1, craftJob(), 3));
+        helper.assertTrue(PatternTab.of(level, pos, craftJob()).pattern(3).isEmpty(), "Cleared through the menu");
         helper.assertTrue(data.settlementAt(pos).isPresent(), "Still registered");
         helper.succeed();
     }
 
     /**
-     * The Craftsperson never crafts with metal (item tag {@code civmod:metals}): a pattern whose output or inputs are
-     * metal cannot be checked, loses its checkmark when it becomes one, is marked in the Patterns tab and never counts
-     * for "can make"; the chain resolution does not craft metal intermediates.
+     * The Craftsperson crafts everything, metal too (#92): an iron pickaxe pattern is checked automatically, counts for
+     * "can make", and a chain with ingots works; {@code civmod:metals} stays as a tag.
      */
-    private static void noMetal(GameTestHelper helper) {
+    private static void craftsMetal(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos pos = craftsperson(helper, new BlockPos(1, 1, 1));
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(pos).orElseThrow();
-        helper.assertTrue(Patterns.isMetal(Items.IRON_INGOT) && Patterns.isMetal(Items.GOLD_NUGGET) && Patterns.isMetal(Items.RAW_COPPER)
-                && Patterns.isMetal(Items.IRON_BLOCK) && !Patterns.isMetal(Items.COBBLESTONE) && !Patterns.isMetal(Items.OAK_PLANKS),
-                "Ingots, nuggets, raw materials and metal blocks are metal");
-        Pattern pickaxe = Patterns.setOutput(level, pos, 0, Items.IRON_PICKAXE).orElseThrow();
-        helper.assertTrue(Patterns.unusable(level, settlement.block(pos).orElseThrow(), pickaxe), "An iron pickaxe uses metal");
-        helper.assertFalse(Patterns.toggleCheck(level, pos, 0), "A metal pattern cannot be checked");
-        helper.assertTrue(PatternTab.of(level, pos).filtered().contains(0), "The Patterns tab marks it");
-        Patterns.setOutput(level, pos, 1, Items.IRON_INGOT);
-        helper.assertTrue(PatternTab.of(level, pos).filtered().contains(1), "Metal output: marked");
-
-        define(helper, pos, 2, Items.STICK);
-        helper.assertTrue(Patterns.setOutput(level, pos, 2, Items.IRON_NUGGET).isPresent(), "The checked slot becomes a metal pattern");
+        helper.assertTrue(Patterns.isMetal(Items.IRON_INGOT) && !Patterns.isMetal(Items.OAK_PLANKS), "The metals tag stays");
+        Pattern pickaxe = Patterns.setOutput(level, pos, craftJob(), 0, Items.IRON_PICKAXE).orElseThrow();
+        helper.assertTrue(pickaxe.checked(), "An iron pickaxe pattern is checked");
         SettlementBlock block = settlement.block(pos).orElseThrow();
-        helper.assertTrue(Patterns.pattern(block, 2).filter(Pattern::checked).isEmpty(), "It loses its checkmark");
+        helper.assertFalse(Patterns.unusable(level, block, craftJob(), pickaxe), "Usable");
+        helper.assertTrue(PatternTab.of(level, pos, craftJob()).filtered().isEmpty(), "Nothing filtered");
+        define(helper, pos, 1, Items.IRON_NUGGET);
         JobAssignments.assign(data, pos, UUID.randomUUID(), "Cora", settlement.id(), List.of());
-        helper.assertFalse(Producers.canMake(level, settlement, Items.IRON_NUGGET), "Nobody makes metal");
-
-        define(helper, pos, 3, Items.STONE_PICKAXE);
-        define(helper, pos, 4, Items.STICK);
-        List<Pattern> usable = Patterns.usable(level, block);
-        helper.assertTrue(usable.stream().noneMatch(pattern -> Patterns.unusable(level, block, pattern)), "Only non-metal patterns are usable");
-        CraftPlan plan = CraftPlan.plan(level, profile(), usable, Items.STONE_PICKAXE, 1, Map.of(), Map.of(Items.COBBLESTONE, 3, Items.OAK_PLANKS, 2));
-        helper.assertTrue(plan.missing().isEmpty(), "A non-metal chain still works: " + plan.missing());
-        CraftPlan iron = CraftPlan.plan(level, profile(), usable, Items.IRON_PICKAXE, 1, Map.of(), Map.of(Items.IRON_INGOT, 3, Items.STICK, 2));
-        helper.assertFalse(iron.missing().isEmpty(), "No metal crafting, even with the ingots in stock");
+        helper.assertTrue(Producers.canMake(level, settlement, Items.IRON_PICKAXE), "The Craftsperson makes iron pickaxes");
+        CraftPlan plan = CraftPlan.plan(level, profile(), Patterns.usable(level, block, craftJob()), Items.IRON_PICKAXE, 1, Map.of(),
+                Map.of(Items.IRON_INGOT, 3, Items.STICK, 2));
+        helper.assertTrue(plan.missing().isEmpty(), "Metal crafting with the ingots in stock: " + plan.missing());
         JobAssignments.unassign(data, pos);
         helper.succeed();
     }
 
-    /**
-     * Client test #54: a metal pattern checked in an older save (before the metal rule or a change of the metals tag)
-     * loses its checkmark; the next decision and the Patterns tab sync do this for the JobBlock.
-     */
-    private static void metalUnchecked(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos pos = craftsperson(helper, new BlockPos(1, 1, 1));
-        SettlementData data = SettlementData.get(level);
-        Settlement settlement = data.settlementAt(pos).orElseThrow();
-        helper.assertTrue(Patterns.setOutput(level, pos, 2, Items.SHEARS).isPresent(), "Shears pattern");
-        define(helper, pos, 3, Items.STICK);
-        // An older save: the iron shears pattern is checked although it uses metal.
-        com.google.gson.JsonElement json = Settlement.CODEC.encodeStart(JsonOps.INSTANCE, settlement).getOrThrow();
-        helper.assertTrue(checkSlot(json, 2), "Shears pattern found in the save");
-        Settlement loaded = Settlement.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
-        SettlementBlock block = loaded.block(pos).orElseThrow();
-        helper.assertTrue(Patterns.pattern(block, 2).filter(Pattern::checked).isPresent(), "Checked in the old save");
-        helper.assertTrue(Patterns.uncheckFiltered(level, new SettlementData(), block) == 1, "One metal checkmark removed");
-        helper.assertTrue(Patterns.pattern(block, 2).filter(Pattern::checked).isEmpty(), "The iron shears are no longer checked");
-        helper.assertTrue(Patterns.pattern(block, 3).filter(Pattern::checked).isPresent(), "The stick pattern keeps its checkmark");
-        helper.assertTrue(Patterns.uncheckFiltered(level, pos) == 0, "Nothing to remove in the live JobBlock");
-
-        helper.succeed();
-    }
-
-    /** Sets {@code checked} on the saved pattern of a library slot. */
-    private static boolean checkSlot(com.google.gson.JsonElement json, int slot) {
-        if (json.isJsonArray()) {
-            boolean found = false;
-            for (com.google.gson.JsonElement element : json.getAsJsonArray()) {
-                found |= checkSlot(element, slot);
-            }
-            return found;
-        }
-        if (!json.isJsonObject()) {
-            return false;
-        }
-        com.google.gson.JsonObject object = json.getAsJsonObject();
-        if (object.has("slot") && object.has("grid") && object.get("slot").getAsInt() == slot) {
-            object.addProperty("checked", true);
-            return true;
-        }
-        boolean found = false;
-        for (String key : object.keySet()) {
-            found |= checkSlot(object.get(key), slot);
-        }
-        return found;
-    }
-
     /** Puts a checked pattern for an item into a library slot. */
     static void define(GameTestHelper helper, BlockPos pos, int slot, Item output) {
-        Pattern pattern = Patterns.setOutput(helper.getLevel(), pos, slot, output).orElseThrow();
-        helper.assertTrue(pattern.checked() || Patterns.toggleCheck(helper.getLevel(), pos, slot), "Checked " + output);
+        Pattern pattern = Patterns.setOutput(helper.getLevel(), pos, craftJob(), slot, output).orElseThrow();
+        helper.assertTrue(pattern.checked() || Patterns.toggleCheck(helper.getLevel(), pos, craftJob(), slot), "Checked " + output);
+    }
+
+    /** The Craftsperson, whose library the tests use. */
+    static Job craftJob() {
+        return ModJobs.CRAFTSPERSON.get();
     }
 
     /** The Craftsperson's Producing profile. */

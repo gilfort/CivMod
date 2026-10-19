@@ -502,8 +502,8 @@ public final class ClerkGameTests {
         helper.setBlock(new BlockPos(4, 1, 1), Blocks.CHEST);
         BlockPos clerk = helper.absolutePos(new BlockPos(1, 1, 1));
         BlockPos chest = helper.absolutePos(new BlockPos(4, 1, 1));
-        helper.assertTrue(JobAssignments.cycleClerkPoint(SettlementData.get(level), clerk, chest, true, false, Direction.NORTH)
-                == JobAssignments.PointResult.STORAGE, "Chest linked as storage");
+        JobAssignments.PointResult linked = JobAssignments.cycleClerkPoint(SettlementData.get(level), clerk, chest, true, false, Direction.NORTH);
+        helper.assertTrue(linked == JobAssignments.PointResult.STORAGE, "Chest linked as storage: " + linked);
         return clerk;
     }
 
