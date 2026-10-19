@@ -94,6 +94,7 @@ public final class CivNetwork {
         // Client handler is registered in CivModClient (RegisterClientPayloadHandlersEvent).
         registrar.playToClient(JobPicker.Open.TYPE, JobPicker.Open.STREAM_CODEC);
         registrar.playToClient(PatternTab.Sync.TYPE, PatternTab.Sync.STREAM_CODEC);
+        registrar.playToClient(com.gilfort.civmod.menu.StationTypeTab.Sync.TYPE, com.gilfort.civmod.menu.StationTypeTab.Sync.STREAM_CODEC);
         registrar.playToClient(SettlementOutline.Sync.TYPE, SettlementOutline.Sync.STREAM_CODEC);
         registrar.playToClient(JobPointsDisplay.Sync.TYPE, JobPointsDisplay.Sync.STREAM_CODEC);
         registrar.playToClient(ClerkTab.Sync.TYPE, ClerkTab.Sync.STREAM_CODEC);

@@ -1,8 +1,8 @@
 {
   "type": "minecraft:function",
   "environment": "civmod:day",
-  "function": "civmod:example_job_switch_keeps_checkmarks",
-  "max_ticks": 2400,
+  "function": "civmod:station_types_item_unlocks_two_jobs",
+  "max_ticks": 100,
   "structure": "minecraft:empty",
   "padding": 40
 }

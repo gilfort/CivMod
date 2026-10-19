@@ -18,6 +18,7 @@ import com.gilfort.civmod.settlement.MissionOffers;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
+import com.gilfort.civmod.settlement.StationTypes;
 import com.gilfort.civmod.settlement.DayClock;
 
 import net.minecraft.core.BlockPos;
@@ -37,7 +38,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
 /**
  * Menu of a JobBlock: tab "Storage" (27 slots + player inventory), tab "Info" and, on the Mission Board, tab
  * "Missions"; the Clerk adds the tabs "Stock" (stock rules, with the player inventory to pick items from), "Requests"
- * and "Deliveries" ({@link ClerkTab}); Resource Collection JobBlocks add the tab "Found" ({@link FoundTab}).
+ * and "Deliveries" ({@link ClerkTab}); Resource Collection JobBlocks add the tab "Found" ({@link FoundTab}). Producing
+ * JobBlocks add the Base Job's "Patterns" tab ({@link PatternTab}), the "Station Types" tab ({@link StationTypeTab},
+ * shown when the Base Job has Specializations) and one "Patterns" tab per Specialization (shown while it is unlocked or
+ * its library holds a pattern).
  */
 public class JobBlockMenu extends CivMenu {
 
@@ -53,8 +57,12 @@ public class JobBlockMenu extends CivMenu {
     public static final int TAB_REQUESTS = 3;
     /** Deliveries tab (Clerk only): the open Delivery tasks. */
     public static final int TAB_DELIVERIES = 4;
-    /** Patterns tab (Producing Jobs only): the pattern library, with the player inventory to pick items from. */
+    /** Patterns tab of the Base Job (Producing Jobs only): its pattern library, with the player inventory to pick items from. */
     public static final int TAB_PATTERNS = 2;
+    /** Station Types tab (Producing Jobs only, shown if the Base Job has Specializations). */
+    public static final int TAB_STATION_TYPES = 3;
+    /** Patterns tab of the first Specialization; the others follow in registry order. */
+    private static final int TAB_SPECIALIZATION_PATTERNS = 4;
     /** Found tab (Resource Collection Jobs only): the found resources and their exclusions. */
     public static final int TAB_FOUND = 2;
     /**
@@ -73,6 +81,8 @@ public class JobBlockMenu extends CivMenu {
     public static final int BUTTON_UPGRADE = 52;
     /** Button id: toggle who carries the results, Self / Deliveryman (Producing Jobs). */
     public static final int BUTTON_TOGGLE_DELIVERY = 53;
+    /** Button ids from here: put the carried item into a Station Types slot ({@link #stationTypeButtonId}). */
+    private static final int BUTTON_STATION_TYPE = 54;
     /** Button ids from here: set the mark of a mission offer entry ({@link #markButtonId}). */
     private static final int BUTTON_MARK_MISSION = 100;
     /** Upper bound (exclusive) of the mark button ids. */
@@ -96,7 +106,10 @@ public class JobBlockMenu extends CivMenu {
     private ClerkTab clerkTab = ClerkTab.EMPTY;
     private int tabSyncIn;
     private PatternTab patternTab = PatternTab.EMPTY;
+    private StationTypeTab stationTypeTab = StationTypeTab.EMPTY;
     private FoundTab foundTab = FoundTab.EMPTY;
+    /** The Producing Jobs with a Patterns tab: the Base Job, then its Specializations (Station Types). */
+    private final List<Job> patternJobs;
 
     /**
      * Client constructor.
@@ -118,11 +131,12 @@ public class JobBlockMenu extends CivMenu {
      * @param info        the info snapshot
      */
     public JobBlockMenu(int containerId, Inventory inventory, Container container, JobBlockInfo info) {
-        super(ModMenuTypes.JOB_BLOCK.get(), containerId, JobBlockTabs.of(info.jobType()).count());
+        super(ModMenuTypes.JOB_BLOCK.get(), containerId, tabCount(info.jobType()));
         checkContainerSize(container, JobBlockEntity.SLOTS);
         this.container = container;
         this.player = inventory.player;
         this.info = info;
+        this.patternJobs = patternJobs(info.jobType());
         for (int row = 0; row < 3; row++) {
             for (int column = 0; column < 9; column++) {
                 addTabSlot(container, column + row * 9, 8 + column * 18, 18 + row * 18, TAB_STORAGE);
@@ -132,11 +146,93 @@ public class JobBlockMenu extends CivMenu {
             // Stock rule items are picked from the player inventory, so it is shown on the Stock tab as well.
             addPlayerInventory(inventory, 8, CLERK_HEIGHT - 82, TAB_STORAGE, TAB_STOCK);
         } else if (hasPatternsTab(info)) {
-            // Pattern items are picked from the player inventory, so it is shown on the Patterns tab as well.
-            addPlayerInventory(inventory, 8, CLERK_HEIGHT - 82, TAB_STORAGE, TAB_PATTERNS);
+            // Pattern and unlock items are picked from the player inventory, so it is shown on those tabs as well.
+            int[] tabs = new int[patternJobs.size() + 2];
+            tabs[0] = TAB_STORAGE;
+            tabs[1] = TAB_STATION_TYPES;
+            for (int i = 0; i < patternJobs.size(); i++) {
+                tabs[i + 2] = patternsTab(i);
+            }
+            addPlayerInventory(inventory, 8, CLERK_HEIGHT - 82, tabs);
         } else {
             addPlayerInventory(inventory, 8, 84, TAB_STORAGE);
         }
+    }
+
+    private static int tabCount(Job blockJob) {
+        JobBlockTabs tabs = JobBlockTabs.of(blockJob);
+        return tabs == JobBlockTabs.PATTERNS ? TAB_SPECIALIZATION_PATTERNS + patternJobs(blockJob).size() - 1 : tabs.count();
+    }
+
+    /** The Producing Jobs with a Patterns tab at a JobBlock: its Job, then the Specializations of its Station Types. */
+    private static List<Job> patternJobs(Job blockJob) {
+        if (JobBlockTabs.of(blockJob) != JobBlockTabs.PATTERNS) {
+            return List.of();
+        }
+        List<Job> jobs = new java.util.ArrayList<>(List.of(blockJob));
+        if (StationTypes.hasStationTypes(blockJob)) {
+            StationTypes.specializations(blockJob).stream().filter(job -> job.category() == com.gilfort.civmod.api.JobCategory.PRODUCING)
+                    .forEach(jobs::add);
+        }
+        return List.copyOf(jobs);
+    }
+
+    /** The tab index of the Patterns tab of the {@code index}-th pattern Job. */
+    private static int patternsTab(int index) {
+        return index == 0 ? TAB_PATTERNS : TAB_SPECIALIZATION_PATTERNS + index - 1;
+    }
+
+    /**
+     * @return the Producing Jobs with a Patterns tab, in tab order (the Base Job first; empty without Patterns tabs)
+     */
+    public List<Job> patternJobs() {
+        return patternJobs;
+    }
+
+    /**
+     * @param job a Producing Job of the JobBlock
+     * @return the index of its Patterns tab, {@code -1} if it has none
+     */
+    public int patternsTabOf(Job job) {
+        int index = patternJobs.indexOf(job);
+        return index < 0 ? -1 : patternsTab(index);
+    }
+
+    /**
+     * @param tab a tab index
+     * @return the Job whose Patterns tab it is, if it is one
+     */
+    public Optional<Job> patternJob(int tab) {
+        for (int i = 0; i < patternJobs.size(); i++) {
+            if (patternsTab(i) == tab) {
+                return Optional.of(patternJobs.get(i));
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * @param slot a Station Types slot
+     * @return the menu button id that puts the carried item into it
+     */
+    public static int stationTypeButtonId(int slot) {
+        return BUTTON_STATION_TYPE + slot;
+    }
+
+    /**
+     * @return the Station Types tab as last synced (Producing Jobs only)
+     */
+    public StationTypeTab getStationTypeTab() {
+        return stationTypeTab;
+    }
+
+    /**
+     * Client: the server sent a new Station Types tab.
+     *
+     * @param tab the tab
+     */
+    public void setStationTypeTab(StationTypeTab tab) {
+        stationTypeTab = tab;
     }
 
     /**
@@ -207,7 +303,7 @@ public class JobBlockMenu extends CivMenu {
     }
 
     /**
-     * @return the pattern library as last synced (Producing Jobs only)
+     * @return the pattern library of the Patterns tab last looked at, as last synced (Producing Jobs only)
      */
     public PatternTab getPatternTab() {
         return patternTab;
@@ -223,29 +319,56 @@ public class JobBlockMenu extends CivMenu {
     }
 
     /**
-     * Server: changes a pattern of the library and sends the tab at once.
+     * Server: changes a pattern of one library and sends the tab at once.
      *
      * @param edit the edit
      */
     public void editPattern(PatternTab.Edit edit) {
-        if (!hasPatternsTab(info) || !(container instanceof JobBlockEntity jobBlock) || !(jobBlock.getLevel() instanceof ServerLevel level)
+        if (!patternJobs.contains(edit.job()) || !(container instanceof JobBlockEntity jobBlock) || !(jobBlock.getLevel() instanceof ServerLevel level)
                 || !stillValid(player)) {
             return;
         }
         BlockPos pos = jobBlock.getBlockPos();
         SettlementData data = SettlementData.get(level);
+        Job job = edit.job();
         Optional<?> ignored = switch (edit.op()) {
-            case SET_OUTPUT -> Patterns.setOutput(level, pos, edit.slot(), edit.item());
-            case SET_INPUT -> Patterns.setInput(level, pos, edit.slot(), edit.index(), edit.item());
-            case CYCLE -> Patterns.cycle(level, pos, edit.slot(), edit.index());
-            case TOGGLE_CHECK -> Optional.of(Patterns.toggleCheck(level, pos, edit.slot()));
+            case SET_OUTPUT -> Patterns.setOutput(level, pos, job, edit.slot(), edit.item());
+            case SET_INPUT -> Patterns.setInput(level, pos, job, edit.slot(), edit.index(), edit.item());
+            case CYCLE -> Patterns.cycle(level, pos, job, edit.slot(), edit.index());
+            case TOGGLE_CHECK -> Optional.of(Patterns.toggleCheck(level, pos, job, edit.slot()));
             case CLEAR -> {
-                Patterns.clear(data, pos, edit.slot());
+                Patterns.clear(data, pos, job, edit.slot());
                 yield Optional.empty();
             }
-            case TRANSFER -> Patterns.transfer(level, pos, edit.slot(), edit.recipe(), edit.grid());
+            case TRANSFER -> Patterns.transfer(level, pos, job, edit.slot(), edit.recipe(), edit.grid());
         };
         tabSyncIn = 0;
+    }
+
+    /**
+     * Server: puts one of the carried items into a Station Types slot ({@link StationTypes#put}) and sends the tabs at once.
+     *
+     * @param slot the slot
+     * @return whether the item was taken
+     */
+    private boolean putStationType(int slot) {
+        if (!(container instanceof JobBlockEntity jobBlock) || !(jobBlock.getLevel() instanceof ServerLevel level)) {
+            // Client: the server decides; the carried stack follows from it.
+            return hasPatternsTab(info);
+        }
+        if (!hasPatternsTab(info) || !stillValid(player)) {
+            return false;
+        }
+        StationTypes.PutResult result = StationTypes.put(level, jobBlock.getBlockPos(), slot, getCarried());
+        if (result != StationTypes.PutResult.UNLOCKED && result != StationTypes.PutResult.REPLACED) {
+            return false;
+        }
+        info = JobBlockInfo.of(level, jobBlock.getBlockPos(), info.jobType(), info.level());
+        if (player instanceof ServerPlayer serverPlayer) {
+            PacketDistributor.sendToPlayer(serverPlayer, new JobBlockInfo.Sync(containerId, info));
+        }
+        tabSyncIn = 0;
+        return true;
     }
 
     /**
@@ -314,12 +437,19 @@ public class JobBlockMenu extends CivMenu {
             return;
         }
         if (hasPatternsTab(info)) {
-            // A pattern its producer filters out (metal) loses its checkmark as soon as the tab shows it; foreign ones keep theirs.
-            com.gilfort.civmod.settlement.Patterns.uncheckFiltered(level, jobBlock.getBlockPos());
-            PatternTab patterns = PatternTab.of(level, jobBlock.getBlockPos());
+            // The library of the Patterns tab looked at last (the Base Job's before any).
+            Job job = patternJob(getActiveTab()).orElseGet(() -> patternTab.job().orElse(info.jobType()));
+            // A pattern its Job filters out loses its checkmark as soon as the tab shows it; foreign ones keep theirs.
+            Patterns.uncheckFiltered(level, jobBlock.getBlockPos(), job);
+            PatternTab patterns = PatternTab.of(level, jobBlock.getBlockPos(), job);
             if (!patterns.equals(patternTab)) {
                 patternTab = patterns;
                 PacketDistributor.sendToPlayer(serverPlayer, new PatternTab.Sync(containerId, patterns));
+            }
+            StationTypeTab stations = StationTypeTab.of(level, jobBlock.getBlockPos());
+            if (!stations.equals(stationTypeTab)) {
+                stationTypeTab = stations;
+                PacketDistributor.sendToPlayer(serverPlayer, new StationTypeTab.Sync(containerId, stations));
             }
             return;
         }
@@ -418,6 +548,13 @@ public class JobBlockMenu extends CivMenu {
             }
             return true;
         }
+        if (buttonId >= BUTTON_STATION_TYPE && buttonId < BUTTON_STATION_TYPE + StationTypes.SLOTS) {
+            return putStationType(buttonId - BUTTON_STATION_TYPE);
+        }
+        if (buttonId >= tabButtonId(0) && buttonId < tabButtonId(getTabCount())) {
+            // A new tab: its Patterns or Station Types content is sent at once.
+            tabSyncIn = 0;
+        }
         if (buttonId == BUTTON_TOGGLE_DELIVERY && hasPatternsTab(info)) {
             info = info.withDeliveryToggled();
             if (container instanceof JobBlockEntity jobBlock && jobBlock.getLevel() instanceof ServerLevel level) {
@@ -496,7 +633,7 @@ public class JobBlockMenu extends CivMenu {
 
     /**
      * Shift-click moves between the player inventory and the JobBlock storage on the Storage tab only; on the other
-     * tabs (Stock, Patterns: the player inventory is there to pick ghost items from) it does nothing.
+     * tabs (Stock, Patterns, Station Types: the player inventory is there to pick items from) it does nothing.
      */
     @Override
     public ItemStack quickMoveStack(Player player, int slotIndex) {

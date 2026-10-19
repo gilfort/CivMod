@@ -1,4 +1,5 @@
 {
   "hunger_factor": 2.5,
-  "base_exp": 7
+  "base_exp": 7,
+  "unlock_item": "minecraft:stick"
 }

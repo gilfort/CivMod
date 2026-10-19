@@ -32,26 +32,28 @@ import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeType;
 
 /**
- * What the "Patterns" tab of a Producing JobBlock shows (vault {@code Systems/Producing Jobs.md},
- * {@code Jobs/Craftsperson.md}): the pattern library, the checkmark limit of the settler last seen working it and the
- * state line ({@link SettlementBlock#notice()}). The server sends it while the menu is open whenever it changed
- * ({@link Sync}); the client edits patterns with {@link Edit}.
+ * What one "Patterns" tab of a JobBlock shows (vault {@code Systems/Producing Jobs.md}, {@code Jobs/Craftsperson.md}):
+ * the pattern library of one Producing Job, the checkmark limit of the settler last seen working it and the state line
+ * ({@link SettlementBlock#notice(Job)}). The server sends the tab of the Job the player looks at while the menu is open
+ * whenever it changed ({@link Sync}); the client edits patterns with {@link Edit}.
  *
+ * @param job          the Job whose library it is (empty: nothing synced yet)
+ * @param locked       whether the Job is no longer unlocked at the JobBlock: its library is kept but unusable
  * @param limit        the checkmark limit
  * @param patterns     the patterns by slot
- * @param filtered     the slots of patterns the producer's filters reject (the Craftsperson: metal)
- * @param foreign      the slots of patterns of a recipe type the producer does not follow (they keep their checkmark)
- * @param filteredLine the state line of a filtered pattern ("Can't work with metal")
+ * @param filtered     the slots of patterns the Job's filters reject
+ * @param foreign      the slots of patterns of a recipe type the Job does not follow (they keep their checkmark)
+ * @param filteredLine the state line of a filtered pattern ("Not allowed for this Job")
  * @param notice       the state line: "A Craftsperson masters only 6 recipes at once – choose which to check." while a new
  *                     pattern stayed unchecked at the limit, or the checkmarks removed by a dropped limit
- * @param recipeTypes  the recipe types the producer follows (what a recipe viewer's transfer button may fill)
+ * @param recipeTypes  the recipe types the Job follows (what a recipe viewer's transfer button may fill)
  */
-public record PatternTab(int limit, List<Pattern> patterns, Set<Integer> filtered, Set<Integer> foreign, Component filteredLine,
-        Optional<Component> notice, List<RecipeType<?>> recipeTypes) {
+public record PatternTab(Optional<Job> job, boolean locked, int limit, List<Pattern> patterns, Set<Integer> filtered, Set<Integer> foreign,
+        Component filteredLine, Optional<Component> notice, List<RecipeType<?>> recipeTypes) {
 
     /** Nothing (any other JobBlock, or before the first sync). */
-    public static final PatternTab EMPTY = new PatternTab(Patterns.BASE_CHECKMARKS, List.of(), Set.of(), Set.of(), Component.empty(),
-            Optional.empty(), List.of());
+    public static final PatternTab EMPTY = new PatternTab(Optional.empty(), false, Patterns.BASE_CHECKMARKS, List.of(), Set.of(), Set.of(),
+            Component.empty(), Optional.empty(), List.of());
 
     /** Network codec of a set of library slots. */
     private static final StreamCodec<ByteBuf, Set<Integer>> SLOTS_CODEC = ByteBufCodecs.VAR_INT
@@ -59,6 +61,8 @@ public record PatternTab(int limit, List<Pattern> patterns, Set<Integer> filtere
 
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, PatternTab> STREAM_CODEC = StreamCodec.composite(
+            ByteBufCodecs.optional(Job.STREAM_CODEC), PatternTab::job,
+            ByteBufCodecs.BOOL, PatternTab::locked,
             ByteBufCodecs.VAR_INT, PatternTab::limit,
             Pattern.STREAM_CODEC.apply(ByteBufCodecs.list(Pattern.SLOTS)), PatternTab::patterns,
             SLOTS_CODEC, PatternTab::filtered,
@@ -69,6 +73,8 @@ public record PatternTab(int limit, List<Pattern> patterns, Set<Integer> filtere
             PatternTab::new);
 
     /**
+     * @param job          the Job whose library it is
+     * @param locked       whether the Job is no longer unlocked at the JobBlock
      * @param limit        the checkmark limit
      * @param patterns     the patterns
      * @param filtered     the slots of filtered patterns
@@ -86,24 +92,26 @@ public record PatternTab(int limit, List<Pattern> patterns, Set<Integer> filtere
 
     /**
      * @param level the level
-     * @param pos   the Producing JobBlock position
-     * @return the current tab of that JobBlock ({@link #EMPTY} if it is none)
+     * @param pos   the JobBlock position
+     * @param job   a Producing Job of it
+     * @return the current tab of the Job's library at that JobBlock ({@link #EMPTY} if it keeps none for the Job)
      */
-    public static PatternTab of(ServerLevel level, BlockPos pos) {
-        return SettlementData.get(level).settlementAt(pos).flatMap(settlement -> settlement.block(pos)).filter(Patterns::isProducing)
-                .map(block -> of(level, block)).orElse(EMPTY);
+    public static PatternTab of(ServerLevel level, BlockPos pos, Job job) {
+        return SettlementData.get(level).settlementAt(pos).flatMap(settlement -> settlement.block(pos)).filter(block -> Patterns.hasLibrary(block, job))
+                .map(block -> of(level, block, job)).orElse(EMPTY);
     }
 
-    private static PatternTab of(ServerLevel level, SettlementBlock block) {
-        Job producer = Patterns.producer(block);
-        ProducingProfile profile = Patterns.profile(producer);
-        Set<Integer> foreign = slots(block, pattern -> Patterns.foreign(level, profile, pattern));
-        Set<Integer> filtered = slots(block, pattern -> !foreign.contains(pattern.slot()) && Patterns.filtered(level, profile, pattern));
-        Optional<Component> notice = block.notice().map(found -> switch (found) {
-            case SettlementBlock.Notice.AtLimit atLimit -> Component.translatable("civmod.gui.patterns.at_limit", producer.displayName(), atLimit.limit());
+    private static PatternTab of(ServerLevel level, SettlementBlock block, Job job) {
+        ProducingProfile profile = Patterns.profile(job);
+        List<Pattern> patterns = block.patterns(job);
+        Set<Integer> foreign = slots(patterns, pattern -> Patterns.foreign(level, profile, pattern));
+        Set<Integer> filtered = slots(patterns, pattern -> !foreign.contains(pattern.slot()) && Patterns.filtered(level, profile, pattern));
+        Optional<Component> notice = block.notice(job).map(found -> switch (found) {
+            case SettlementBlock.Notice.AtLimit atLimit -> Component.translatable("civmod.gui.patterns.at_limit", job.displayName(), atLimit.limit());
             case SettlementBlock.Notice.Trimmed trimmed -> Component.translatable("civmod.gui.patterns.trimmed", trimmed.removed(), trimmed.limit());
         });
-        return new PatternTab(block.checkLimit(), block.patterns(), filtered, foreign, profile.filteredLine(), notice, profile.recipeTypes());
+        return new PatternTab(Optional.of(job), Patterns.locked(block, job), block.checkLimit(job), patterns, filtered, foreign, profile.filteredLine(),
+                notice, profile.recipeTypes());
     }
 
     /**
@@ -111,19 +119,20 @@ public record PatternTab(int limit, List<Pattern> patterns, Set<Integer> filtere
      * @return whether the producer follows recipes of that type (a recipe viewer's transfer button may fill a pattern)
      */
     public boolean follows(RecipeType<?> type) {
-        return recipeTypes.contains(type);
+        return !locked && recipeTypes.contains(type);
     }
 
-    private static Set<Integer> slots(SettlementBlock block, Predicate<Pattern> test) {
-        return block.patterns().stream().filter(test).map(Pattern::slot).collect(Collectors.toSet());
+    private static Set<Integer> slots(List<Pattern> patterns, Predicate<Pattern> test) {
+        return patterns.stream().filter(test).map(Pattern::slot).collect(Collectors.toSet());
     }
 
     /**
      * @param slot a library slot
-     * @return whether the producer cannot use the pattern in that slot although it makes something
+     * @return whether the Job cannot use the pattern in that slot although it makes something (also every pattern of a
+     *         locked library)
      */
     public boolean unusable(int slot) {
-        return filtered.contains(slot) || foreign.contains(slot);
+        return filtered.contains(slot) || foreign.contains(slot) || (locked && pattern(slot).filter(Pattern::valid).isPresent());
     }
 
     /**
@@ -186,9 +195,10 @@ public record PatternTab(int limit, List<Pattern> patterns, Set<Integer> filtere
     }
 
     /**
-     * Client → server: change a pattern of the open Producing JobBlock menu.
+     * Client → server: change a pattern of one library of the open JobBlock menu.
      *
      * @param containerId the menu's container id
+     * @param job         the Job whose library it is
      * @param op          what to do
      * @param slot        the library slot
      * @param index       the grid cell ({@link Op#SET_INPUT}) or the direction ({@link Op#CYCLE})
@@ -196,7 +206,7 @@ public record PatternTab(int limit, List<Pattern> patterns, Set<Integer> filtere
      * @param recipe      the recipe the viewer showed ({@link Op#TRANSFER})
      * @param grid        the items the viewer showed, row by row ({@link Op#TRANSFER})
      */
-    public record Edit(int containerId, Op op, int slot, int index, Item item, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid)
+    public record Edit(int containerId, Job job, Op op, int slot, int index, Item item, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid)
             implements CustomPacketPayload {
 
         /** Payload type. */
@@ -205,6 +215,7 @@ public record PatternTab(int limit, List<Pattern> patterns, Set<Integer> filtere
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Edit> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, Edit::containerId,
+                Job.STREAM_CODEC, Edit::job,
                 Op.STREAM_CODEC, Edit::op,
                 ByteBufCodecs.VAR_INT, Edit::slot,
                 ByteBufCodecs.INT, Edit::index,
@@ -215,62 +226,68 @@ public record PatternTab(int limit, List<Pattern> patterns, Set<Integer> filtere
 
         /**
          * @param containerId the menu's container id
+         * @param job         the Job whose library it is
          * @param slot        the library slot
          * @param output      the item to craft
          * @return the edit
          */
-        public static Edit setOutput(int containerId, int slot, Item output) {
-            return new Edit(containerId, Op.SET_OUTPUT, slot, 0, output, Optional.empty(), List.of());
+        public static Edit setOutput(int containerId, Job job, int slot, Item output) {
+            return new Edit(containerId, job, Op.SET_OUTPUT, slot, 0, output, Optional.empty(), List.of());
         }
 
         /**
          * @param containerId the menu's container id
+         * @param job         the Job whose library it is
          * @param slot        the library slot
          * @param index       the grid cell
          * @param item        the item, {@link Items#AIR} to empty the cell
          * @return the edit
          */
-        public static Edit setInput(int containerId, int slot, int index, Item item) {
-            return new Edit(containerId, Op.SET_INPUT, slot, index, item, Optional.empty(), List.of());
+        public static Edit setInput(int containerId, Job job, int slot, int index, Item item) {
+            return new Edit(containerId, job, Op.SET_INPUT, slot, index, item, Optional.empty(), List.of());
         }
 
         /**
          * @param containerId the menu's container id
+         * @param job         the Job whose library it is
          * @param slot        the library slot
          * @param direction   +1 next, -1 previous
          * @return the edit
          */
-        public static Edit cycle(int containerId, int slot, int direction) {
-            return new Edit(containerId, Op.CYCLE, slot, direction, Items.AIR, Optional.empty(), List.of());
+        public static Edit cycle(int containerId, Job job, int slot, int direction) {
+            return new Edit(containerId, job, Op.CYCLE, slot, direction, Items.AIR, Optional.empty(), List.of());
         }
 
         /**
          * @param containerId the menu's container id
+         * @param job         the Job whose library it is
          * @param slot        the library slot
          * @return the edit
          */
-        public static Edit toggleCheck(int containerId, int slot) {
-            return new Edit(containerId, Op.TOGGLE_CHECK, slot, 0, Items.AIR, Optional.empty(), List.of());
+        public static Edit toggleCheck(int containerId, Job job, int slot) {
+            return new Edit(containerId, job, Op.TOGGLE_CHECK, slot, 0, Items.AIR, Optional.empty(), List.of());
         }
 
         /**
          * @param containerId the menu's container id
+         * @param job         the Job whose library it is
          * @param slot        the library slot
          * @return the edit
          */
-        public static Edit clear(int containerId, int slot) {
-            return new Edit(containerId, Op.CLEAR, slot, 0, Items.AIR, Optional.empty(), List.of());
+        public static Edit clear(int containerId, Job job, int slot) {
+            return new Edit(containerId, job, Op.CLEAR, slot, 0, Items.AIR, Optional.empty(), List.of());
         }
 
         /**
          * @param containerId the menu's container id
+         * @param job         the Job whose library it is
          * @param slot        the library slot
          * @param recipe      the recipe the viewer showed
          * @param grid        the items it showed, row by row
          * @return the edit
          */
-        public static Edit transfer(int containerId, int slot, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid) {
-            return new Edit(containerId, Op.TRANSFER, slot, 0, Items.AIR, recipe, grid);
+        public static Edit transfer(int containerId, Job job, int slot, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid) {
+            return new Edit(containerId, job, Op.TRANSFER, slot, 0, Items.AIR, recipe, grid);
         }
 
         @Override

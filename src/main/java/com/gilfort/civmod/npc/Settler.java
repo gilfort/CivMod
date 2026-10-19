@@ -3,12 +3,15 @@ package com.gilfort.civmod.npc;
 import java.util.List;
 import java.util.Optional;
 
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.StationTypes;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
@@ -215,6 +218,21 @@ public class Settler extends PathfinderMob {
      */
     public void removeJob(BlockPos jobBlock) {
         jobs = jobs.stream().filter(job -> !job.jobBlock().equals(jobBlock)).toList();
+        work.forget(jobBlock);
+    }
+
+    /**
+     * Switches the Job held at a JobBlock, keeping its priority; the work state there is forgotten (a running round is
+     * released, the buffer emptied). Used when a Station Type is replaced and the Job falls back to the Base Job.
+     *
+     * @param jobBlock the JobBlock position
+     * @param job      the new Job
+     */
+    public void replaceJob(BlockPos jobBlock, Job job) {
+        if (jobs.stream().noneMatch(held -> held.jobBlock().equals(jobBlock) && held.jobType() != job)) {
+            return;
+        }
+        jobs = jobs.stream().map(held -> held.jobBlock().equals(jobBlock) ? new SettlerJob(job, jobBlock) : held).toList();
         work.forget(jobBlock);
     }
 
@@ -429,6 +447,13 @@ public class Settler extends PathfinderMob {
                 List<SettlerJob> valid = jobs.stream().filter(job -> JobAssignments.isAssignee(data, job.jobBlock(), getUUID())).toList();
                 if (valid.size() != jobs.size()) {
                     setJobs(valid);
+                }
+                // A Job that fell back to the Base Job while this settler was unloaded (a replaced Station Type).
+                for (SettlerJob job : List.copyOf(jobs)) {
+                    JobBlockSite.blockAt(level, job.jobBlock())
+                            .filter(block -> !StationTypes.isUnlocked(block, job.jobType()) && block.assignee(getUUID())
+                                    .filter(assignee -> assignee.job() == block.jobType()).isPresent())
+                            .ifPresent(block -> replaceJob(job.jobBlock(), block.jobType()));
                 }
             }
             return;

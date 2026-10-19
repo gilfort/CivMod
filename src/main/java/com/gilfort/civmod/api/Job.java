@@ -34,12 +34,15 @@ import net.minecraft.world.level.block.Block;
  * A kind of work a settler can hold (vault {@code Systems/Jobs.md}), registered in the {@code civmod:job} registry
  * ({@link CivModApi#JOB_REGISTRY}) and identified by its namespaced id. A Job declares its {@link JobCategory}, the
  * {@link CategoryProfile} that fills in the category's work loop, an optional parent Base Job (which makes it a
- * Specialization, offered by the parent's JobBlock from level 2), its icon and default balancing values.
+ * Specialization, unlocked at the parent's JobBlock by its unlock item in a Station Types slot; a Mission Job is offered by
+ * the Mission Board from level 2), its unlock item, its icon and default balancing values.
  * <p>
- * Datapacks may override the balancing values per job id {@code <namespace>:<job>}: hunger factor and base EXP in
- * {@code data/<namespace>/civmod_jobs/<job>.json} ({@code hunger_factor}, {@code base_exp}, both optional), the JobBlock
- * upgrade costs in {@code data/<namespace>/civmod_upgrades/<job>.json}. The job's names come from the lang keys
- * {@code job.<namespace>.<job>} and {@code job.<namespace>.<job>.indefinite} ("an Adventurer").
+ * Datapacks may override the balancing values per job id {@code <namespace>:<job>}: hunger factor, base EXP, job factor
+ * and unlock item in {@code data/<namespace>/civmod_jobs/<job>.json} ({@code hunger_factor}, {@code base_exp},
+ * {@code job_factor}, {@code unlock_item}, all optional), the JobBlock upgrade costs in
+ * {@code data/<namespace>/civmod_upgrades/<job>.json}. The job's names come from the lang keys
+ * {@code job.<namespace>.<job>} and {@code job.<namespace>.<job>.indefinite} ("an Adventurer"), its one-line description
+ * in the Station Types overview from {@code job.<namespace>.<job>.description}.
  * <p>
  * Register a Job with the {@code DeferredRegister} from {@link CivModApi#jobs(String)}:
  *
@@ -69,6 +72,7 @@ public final class Job {
     private final int baseExp;
     private final double jobFactor;
     private final @Nullable TagKey<Block> station;
+    private final @Nullable Supplier<? extends ItemLike> unlockItem;
     private final @Nullable Supplier<CategoryProfile> profile;
 
     private Job(Builder builder) {
@@ -81,6 +85,7 @@ public final class Job {
         this.baseExp = builder.baseExp;
         this.jobFactor = builder.jobFactor;
         this.station = builder.station;
+        this.unlockItem = builder.unlockItem;
         Supplier<? extends CategoryProfile> declared = builder.profile;
         this.profile = declared == null ? null : Suppliers.memoize(() -> requireOwnCategory(declared.get()));
     }
@@ -131,8 +136,9 @@ public final class Job {
     }
 
     /**
-     * The Jobs this Base Job's JobBlock offers at a level (vault {@code Systems/JobBlock.md}): the Base Job itself, plus
-     * its Specializations from level 2, in registry order.
+     * The Jobs this Base Job's JobBlock offers at a level without any Station Type (vault {@code Systems/JobBlock.md}):
+     * the Base Job itself; a Mission Job (the Mission Board) also its Specializations from level 2, in registry order.
+     * Other Specializations are unlocked per JobBlock by their {@link #unlockItem()} in a Station Types slot.
      *
      * @param level the JobBlock level
      * @return the offered Jobs, this Job first
@@ -140,7 +146,7 @@ public final class Job {
     public List<Job> offeredAt(int level) {
         List<Job> offered = new ArrayList<>();
         offered.add(this);
-        if (level > SettlementRules.MIN_LEVEL) {
+        if (category == JobCategory.MISSION && level > SettlementRules.MIN_LEVEL) {
             ModJobs.REGISTRY.stream().filter(job -> job.parent().filter(this::equals).isPresent()).forEach(offered::add);
         }
         return List.copyOf(offered);
@@ -159,6 +165,23 @@ public final class Job {
      */
     public Component indefiniteName() {
         return Component.translatable("job." + id().getNamespace() + "." + id().getPath() + ".indefinite");
+    }
+
+    /**
+     * @return the one-line description of the Station Types overview ({@code job.<namespace>.<path>.description}, empty
+     *         without a lang entry)
+     */
+    public Component description() {
+        return Component.translatableWithFallback("job." + id().getNamespace() + "." + id().getPath() + ".description", "");
+    }
+
+    /**
+     * @return the item that unlocks this Specialization in a Station Types slot of its parent's JobBlock (datapack
+     *         override {@code unlock_item} or default); a Base Job's unlock item is its station, shown in the first slot
+     */
+    public Optional<Item> unlockItem() {
+        Optional<Item> override = JobBalancing.of(this).unlockItem();
+        return override.isPresent() ? override : Optional.ofNullable(unlockItem).map(found -> found.get().asItem());
     }
 
     /**
@@ -284,6 +307,7 @@ public final class Job {
         private int baseExp = 1;
         private double jobFactor = 1.0;
         private @Nullable TagKey<Block> station;
+        private @Nullable Supplier<? extends ItemLike> unlockItem;
         private @Nullable Supplier<? extends CategoryProfile> profile;
 
         private Builder(JobCategory category) {
@@ -291,7 +315,8 @@ public final class Job {
         }
 
         /**
-         * @param parent the parent Base Job (makes this Job a Specialization, offered by the parent's JobBlock from
+         * @param parent the parent Base Job (makes this Job a Specialization: unlocked at the parent's JobBlock by its
+         *               {@link #unlockItem(Supplier) unlock item}; a Mission Job is offered by the Mission Board from
          *               level 2)
          * @return this builder
          */
@@ -361,6 +386,17 @@ public final class Job {
          */
         public Builder station(TagKey<Block> station) {
             this.station = station;
+            return this;
+        }
+
+        /**
+         * @param unlockItem the item that unlocks this Specialization in a Station Types slot of its parent's JobBlock
+         *                   (several Jobs may name the same item; datapacks override it with {@code unlock_item}); for a
+         *                   Base Job its station, shown in the first slot
+         * @return this builder
+         */
+        public Builder unlockItem(Supplier<? extends ItemLike> unlockItem) {
+            this.unlockItem = unlockItem;
             return this;
         }
 

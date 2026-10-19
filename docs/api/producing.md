@@ -8,7 +8,7 @@ A profile names one or more vanilla or modded `RecipeType`s (`crafting`, `stonec
 
 ### Recipe viewer transfer (JEI / REI)
 
-The transfer button of JEI and REI fills a pattern (the open one, else the first empty library slot) from a recipe of every recipe type a registered Producing profile names, vanilla or modded; nothing to register in the addon. A recipe of a type the JobBlock's working Job does not follow gets a disabled button with "Not a recipe this Job follows" (the server refuses it as well). Checkmark, filter and limit rules are the same as for any new pattern.
+The transfer button of JEI and REI fills a pattern (the open one, else the first empty library slot) from a recipe of every recipe type a registered Producing profile names, vanilla or modded; nothing to register in the addon. The transfer fills the library of the Patterns tab shown (or looked at last). A recipe of a type that library's Job does not follow gets a disabled button with "Not a recipe this Job follows" (the server refuses it as well). Checkmark, filter and limit rules are the same as for any new pattern.
 
 The viewers have to recognise the category of the recipe type:
 
@@ -22,10 +22,11 @@ Recipes in other categories (custom recipe classes, other category ids) get no b
 ```java
 public static final DeferredHolder<Job, Job> STONECUTTER = JOBS.register("stonecutter", () -> Job.builder(JobCategory.PRODUCING)
         .parent(CivModJobs.CRAFTSPERSON)
+        .unlockItem(() -> Items.STONECUTTER)
         .icon(() -> Items.STONECUTTER)
         .hungerFactor(0.5)
         .baseExp(2)
-        .jobFactor(0.5)
+        .jobFactor(1.2)
         .profile(StonecutterProfile::new)
         .build());
 
@@ -45,7 +46,9 @@ final class StonecutterProfile implements ProducingProfile {
 }
 ```
 
-A Producing Job needs a profile (`build()` fails without one). As a Specialization (`parent`) it works at its parent's JobBlock from level 2 and uses that JobBlock's pattern library; as a Base Job it needs a JobBlock from `CivModApi.jobBlock` (its window gets the Storage, Info and Patterns tabs). The pattern library follows the Job of the settler working the JobBlock: patterns of a recipe type the Job does not follow stay in the library, greyed out and skipped, but keep their checkmark; they work again once a Job of their type works the JobBlock.
+A Producing Job needs a profile (`build()` fails without one). As a Specialization (`parent`) it works at its parent's JobBlock once its `unlockItem` is in a Station Types slot there ([getting-started.md](getting-started.md#station-types)); as a Base Job it needs a JobBlock from `CivModApi.jobBlock` (its window gets the Storage, Info, Patterns and, with Specializations, Station Types tabs).
+
+Every Producing Job unlocked at a JobBlock has its **own pattern library** and Patterns tab (the Base Job's on top, one per Specialization below the window); a settler works only its Job's library. The library of a Job that is no longer unlocked (its Station Type was replaced) is kept, greyed out and not editable, and works again once the Job is unlocked again.
 
 Ship the station tag, e.g. `data/examplemod/tags/block/stations/stonecutter.json`:
 
@@ -68,11 +71,11 @@ and the lang keys `job.<namespace>.<job>`, `job.<namespace>.<job>.indefinite` an
 | `workTime(recipe)` | operations one execution of a recipe takes (an operation lasts as long as the shared speed formula × job factor says) | 1 |
 | `execute(level, recipe, result, consumed)` | what one execution puts into the settler's buffer; the inputs are already taken out | the result plus the inputs' remainders (empty buckets, …) |
 
-`ItemFilter.allow(tag)`, `ItemFilter.deny(tag)` and `ItemFilter.ANY` build filters. The Craftsperson is a profile with `crafting`, its crafting-table station and `ItemFilter.deny(civmod:metals)` for inputs and outputs.
+`ItemFilter.allow(tag)`, `ItemFilter.deny(tag)` and `ItemFilter.ANY` build filters. The Craftsperson is a profile with `crafting` and its crafting-table station, without filters: it crafts everything, slowly (job factor 0.3).
 
 ## Checkmarks
 
-Only checked patterns are worked. Only checked patterns the Job can use count against its limit; patterns of another Job's recipe type keep their checkmark outside it. A new pattern is checked automatically if it makes something, the profile can use it and a checkmark is free. At the limit it stays unchecked, and the Patterns tab shows "A Stonecutter masters only 6 recipes at once – choose which to check." until the player's next edit of the library. A pattern the filters reject stays unchecked without that line, and loses a checkmark it had. Replacing a pattern keeps its checkmark. When the limit drops (a weaker settler), the last checked patterns the Job can use lose theirs.
+Only checked patterns are worked. Each library has its own checkmark limit; only checked patterns the Job can use count against it. A new pattern is checked automatically if it makes something, the profile can use it and a checkmark is free. At the limit it stays unchecked, and the Patterns tab shows "A Stonecutter masters only 6 recipes at once – choose which to check." until the player's next edit of the library. A pattern the filters reject stays unchecked without that line, and loses a checkmark it had. Replacing a pattern keeps its checkmark. When the limit drops (a weaker settler), the last checked patterns the Job can use lose theirs.
 
 
 ## Not part of the profile
