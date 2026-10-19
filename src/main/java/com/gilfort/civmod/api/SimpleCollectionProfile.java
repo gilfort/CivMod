@@ -47,8 +47,8 @@ import net.minecraft.world.level.block.state.BlockState;
  * <li>Work place: the nearest exposed block of the tag (a settler can stand next to or on top of it) within 20 blocks of
  * the JobBlock, or a block of the tag set with the Scroll of Assignment. The world is never changed.</li>
  * <li>Scan: every day, around the first work point (else the JobBlock), radius by JobBlock level (default 10 × level),
- * {@code halfHeight} up and down; each block type of the tag is counted, types found fewer than {@code minimumCount}
- * times are left out.</li>
+ * 10 blocks up and down; each block type of the tag is counted, types found fewer than {@code minimumCount} times are
+ * left out.</li>
  * <li>Roll: a found type weighted by its count, then the drops of its loot table with the settler's tool (Silk Touch and
  * Fortune apply). Types the tool cannot harvest are never rolled; types excluded at the JobBlock or at their Max at the
  * Home Clerk leave the roll. Every found type is a main resource.</li>
@@ -61,12 +61,13 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class SimpleCollectionProfile implements ResourceCollectionProfile {
 
     private static final int AUTO_SEARCH_HORIZONTAL = 20;
+    /** How far up and down the scan and the work place search reach. */
+    private static final int HALF_HEIGHT = 10;
 
     private final TagKey<Block> blocks;
     private final TagKey<Item> tool;
     private final Supplier<? extends ItemLike> toolIcon;
     private final @Nullable IntUnaryOperator radius;
-    private final int halfHeight;
     private final int minimumCount;
     private final DoubleUnaryOperator productivity;
     private final Optional<BlockingReason> nothingFound;
@@ -76,7 +77,6 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
         this.tool = Objects.requireNonNull(builder.tool, "tool");
         this.toolIcon = Objects.requireNonNull(builder.toolIcon, "tool icon");
         this.radius = builder.radius;
-        this.halfHeight = builder.halfHeight;
         this.minimumCount = builder.minimumCount;
         this.productivity = builder.productivity;
         this.nothingFound = Optional.ofNullable(builder.nothingFound);
@@ -112,13 +112,8 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
 
     @Override
     public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock) {
-        return BlockSearch.nearest(level, jobBlock, AUTO_SEARCH_HORIZONTAL, halfHeight, state -> state.is(blocks),
+        return BlockSearch.nearest(level, jobBlock, AUTO_SEARCH_HORIZONTAL, HALF_HEIGHT, state -> state.is(blocks),
                 pos -> MinerProfile.isExposed(level, pos));
-    }
-
-    @Override
-    public BlockPos scanCenter(BlockPos jobBlock, List<BlockPos> workPoints, BlockPos workPlace) {
-        return workPoints.isEmpty() ? jobBlock : workPoints.get(0);
     }
 
     @Override
@@ -133,7 +128,7 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
 
     @Override
     public SectionScan<? extends ScanResult> createScan(BlockPos center, int radius) {
-        return new BlockCountScan(center, radius, halfHeight, state -> state.is(blocks), minimumCount);
+        return new BlockCountScan(center, radius, HALF_HEIGHT, state -> state.is(blocks), minimumCount);
     }
 
     @Override
@@ -148,14 +143,17 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
 
     @Override
     public double productivity(@Nullable ScanResult scan) {
-        return productivity.applyAsDouble(scan instanceof BlockCountScan.Result counted ? counted.total() : 0);
+        return productivity.applyAsDouble(counted(scan).total());
+    }
+
+    /** The scan of this profile ({@link #createScan}), empty while none is done. */
+    private static BlockCountScan.Result counted(@Nullable ScanResult scan) {
+        return scan instanceof BlockCountScan.Result counted ? counted : BlockCountScan.Result.EMPTY;
     }
 
     @Override
     public Optional<Produced> produce(Context context) {
-        if (!(context.scan() instanceof BlockCountScan.Result scan)) {
-            return Optional.empty();
-        }
+        BlockCountScan.Result scan = counted(context.scan());
         List<Identifier> harvestable = scan.foundBlocks().stream().filter(type -> canObtain(context.tool(), type)).toList();
         if (harvestable.isEmpty()) {
             return Optional.empty();
@@ -205,7 +203,6 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
         private @Nullable TagKey<Item> tool;
         private @Nullable Supplier<? extends ItemLike> toolIcon;
         private @Nullable IntUnaryOperator radius;
-        private int halfHeight = 10;
         private int minimumCount = 1;
         private DoubleUnaryOperator productivity = total -> 1.0;
         private @Nullable BlockingReason nothingFound;
@@ -235,14 +232,6 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
             return this;
         }
 
-        /**
-         * @param halfHeight how far up and down from the scan centre the scan reaches (default 10)
-         * @return this builder
-         */
-        public Builder halfHeight(int halfHeight) {
-            this.halfHeight = halfHeight;
-            return this;
-        }
 
         /**
          * @param minimumCount how often a block type must be in the scan to count as found (default 1)

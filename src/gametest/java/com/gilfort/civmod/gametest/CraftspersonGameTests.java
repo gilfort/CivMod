@@ -174,12 +174,18 @@ public final class CraftspersonGameTests {
         helper.assertTrue(Producers.canMake(level, settlement, Items.STICK), "Checked and staffed: sticks can be made");
         helper.assertFalse(Producers.canMake(level, settlement, Items.LADDER), "Not checked: no ladders");
 
-        helper.assertTrue(Patterns.enforceLimit(data, pos, 4) == 2, "Limit 4: two checkmarks removed");
+        helper.assertTrue(Patterns.enforceLimit(level, pos, 4) == 2, "Limit 4: two checkmarks removed");
         SettlementBlock block = settlement.block(pos).orElseThrow();
         helper.assertTrue(Patterns.checked(block).stream().map(Pattern::output).toList()
                 .equals(List.of(Items.STICK, Items.OAK_PLANKS, Items.TORCH, Items.CHEST)), "The last ones in list order lose theirs");
-        helper.assertTrue(block.trim().equals(Optional.of(new SettlementBlock.Trim(2, 4))), "Notice: 2 removed, 4 left");
-        helper.assertTrue(Patterns.enforceLimit(data, pos, 4) == 0, "Within the limit: nothing removed");
+        helper.assertTrue(block.notice().equals(Optional.of(new SettlementBlock.Notice.Trimmed(2, 4))), "Notice: 2 removed, 4 left");
+        helper.assertTrue(Patterns.enforceLimit(level, pos, 4) == 0, "Within the limit: nothing removed");
+        helper.assertTrue(block.notice().isPresent(), "The notice stays while nothing changes");
+        helper.assertFalse(Patterns.toggleCheck(level, pos, 0), "Sticks unchecked");
+        helper.assertTrue(block.notice().isEmpty(), "A toggle ends the notice");
+        helper.assertTrue(Patterns.enforceLimit(level, pos, 2) == 1, "Limit 2: one more removed");
+        Patterns.clear(data, pos, 2);
+        helper.assertTrue(block.notice().isEmpty(), "Clearing a slot ends the notice");
         helper.succeed();
     }
 
@@ -700,7 +706,7 @@ public final class CraftspersonGameTests {
         helper.assertTrue(tab.pattern(3).filter(Pattern::checked).map(Pattern::output).equals(Optional.of(Items.TORCH)), "Torch pattern checked: " + tab);
         helper.assertTrue(tab.pattern(5).map(Pattern::output).equals(Optional.of(Items.STICK)) && tab.pattern(5).orElseThrow().exact(),
                 "Transfer without a known recipe: exactly the shown items");
-        helper.assertTrue(tab.limit() == Patterns.BASE_CHECKMARKS && tab.trim().isEmpty(), "Limit 6, nothing removed");
+        helper.assertTrue(tab.limit() == Patterns.BASE_CHECKMARKS && tab.notice().isEmpty(), "Limit 6, nothing removed");
         menu.editPattern(PatternTab.Edit.clear(1, 3));
         helper.assertTrue(PatternTab.of(level, pos).pattern(3).isEmpty(), "Cleared through the menu");
         helper.assertTrue(data.settlementAt(pos).isPresent(), "Still registered");
@@ -721,7 +727,7 @@ public final class CraftspersonGameTests {
                 && Patterns.isMetal(Items.IRON_BLOCK) && !Patterns.isMetal(Items.COBBLESTONE) && !Patterns.isMetal(Items.OAK_PLANKS),
                 "Ingots, nuggets, raw materials and metal blocks are metal");
         Pattern pickaxe = Patterns.setOutput(level, pos, 0, Items.IRON_PICKAXE).orElseThrow();
-        helper.assertTrue(Patterns.blocked(level, settlement.block(pos).orElseThrow(), pickaxe), "An iron pickaxe uses metal");
+        helper.assertTrue(Patterns.unusable(level, settlement.block(pos).orElseThrow(), pickaxe), "An iron pickaxe uses metal");
         helper.assertFalse(Patterns.toggleCheck(level, pos, 0), "A metal pattern cannot be checked");
         helper.assertTrue(PatternTab.of(level, pos).filtered().contains(0), "The Patterns tab marks it");
         Patterns.setOutput(level, pos, 1, Items.IRON_INGOT);
@@ -737,7 +743,7 @@ public final class CraftspersonGameTests {
         define(helper, pos, 3, Items.STONE_PICKAXE);
         define(helper, pos, 4, Items.STICK);
         List<Pattern> usable = Patterns.usable(level, block);
-        helper.assertTrue(usable.stream().noneMatch(pattern -> Patterns.blocked(level, block, pattern)), "Only non-metal patterns are usable");
+        helper.assertTrue(usable.stream().noneMatch(pattern -> Patterns.unusable(level, block, pattern)), "Only non-metal patterns are usable");
         CraftPlan plan = CraftPlan.plan(level, profile(), usable, Items.STONE_PICKAXE, 1, Map.of(), Map.of(Items.COBBLESTONE, 3, Items.OAK_PLANKS, 2));
         helper.assertTrue(plan.missing().isEmpty(), "A non-metal chain still works: " + plan.missing());
         CraftPlan iron = CraftPlan.plan(level, profile(), usable, Items.IRON_PICKAXE, 1, Map.of(), Map.of(Items.IRON_INGOT, 3, Items.STICK, 2));
@@ -763,10 +769,11 @@ public final class CraftspersonGameTests {
         Settlement loaded = Settlement.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
         SettlementBlock block = loaded.block(pos).orElseThrow();
         helper.assertTrue(Patterns.pattern(block, 2).filter(Pattern::checked).isPresent(), "Checked in the old save");
-        helper.assertTrue(Patterns.uncheckBlocked(level, new SettlementData(), block) == 1, "One metal checkmark removed");
+        helper.assertTrue(Patterns.uncheckFiltered(level, new SettlementData(), block) == 1, "One metal checkmark removed");
         helper.assertTrue(Patterns.pattern(block, 2).filter(Pattern::checked).isEmpty(), "The iron shears are no longer checked");
         helper.assertTrue(Patterns.pattern(block, 3).filter(Pattern::checked).isPresent(), "The stick pattern keeps its checkmark");
-        helper.assertTrue(Patterns.uncheckBlocked(level, pos) == 0, "Nothing to remove in the live JobBlock");
+        helper.assertTrue(Patterns.uncheckFiltered(level, pos) == 0, "Nothing to remove in the live JobBlock");
+
         helper.succeed();
     }
 

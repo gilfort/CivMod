@@ -185,11 +185,6 @@ public final class FishermanProfile implements ResourceCollectionProfile {
     // ---------------------------------------------------------------- scan
 
     @Override
-    public BlockPos scanCenter(BlockPos jobBlock, List<BlockPos> workPoints, BlockPos workPlace) {
-        return workPoints.isEmpty() ? jobBlock : workPoints.get(0);
-    }
-
-    @Override
     public boolean rescanDaily() {
         return false;
     }

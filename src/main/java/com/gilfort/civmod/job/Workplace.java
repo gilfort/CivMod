@@ -408,14 +408,11 @@ final class Workplace {
     }
 
     /**
-     * @param saved the saved scan (ignored without a result)
+     * @param saved the saved scan
      */
     void restoreScan(SavedScan saved) {
-        ScanResult result = saved.result();
-        if (result != null) {
-            scan = result;
-            scanKey = new ScanKey(saved.center(), saved.radius(), saved.day());
-            dropped.clear();
-        }
+        scan = saved.result();
+        scanKey = new ScanKey(saved.center(), saved.radius(), saved.day());
+        dropped.clear();
     }
 }

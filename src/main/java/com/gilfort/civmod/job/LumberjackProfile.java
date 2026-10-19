@@ -30,7 +30,7 @@ import net.neoforged.neoforge.common.Tags;
  * Lumberjack (vault {@code Jobs/Lumberjack.md}): axe, logs as work places, daily wood scan, optional leaves with
  * shears.
  */
-public final class LumberjackProfile implements ResourceCollectionProfile {
+public final class LumberjackProfile implements SecondaryToolProfile {
 
     private static final int AUTO_SEARCH_HORIZONTAL = 20;
     private static final int AUTO_SEARCH_VERTICAL = 30;
@@ -49,10 +49,8 @@ public final class LumberjackProfile implements ResourceCollectionProfile {
     /**
      * The Lumberjack's leaves option (vault {@code Jobs/Lumberjack.md}): with "collect leaves" set at the JobBlock it
      * also wants shears.
-     *
-     * @param block the JobBlock
-     * @return the second tool the job wants with these settings, if any
      */
+    @Override
     public Optional<Predicate<ItemStack>> secondaryTool(SettlementBlock block) {
         return block.collectLeaves() ? Optional.of(SHEARS) : Optional.empty();
     }
@@ -88,15 +86,16 @@ public final class LumberjackProfile implements ResourceCollectionProfile {
     }
 
     @Override
-    public Optional<Produced> produce(Context context) {
+    public Optional<Produced> produce(Context context, Optional<ItemStack> shears) {
         WoodScan.Result scan = context.scan() instanceof WoodScan.Result wood ? wood : WoodScan.Result.EMPTY;
         Identifier poiLog = BuiltInRegistries.BLOCK.getKey(context.level().getBlockState(context.poi()).getBlock());
         boolean silkTouch = hasSilkTouch(context.level(), context.tool());
         // The shears are only looked up while "collect leaves" is set (secondaryTool).
-        boolean leaves = context.secondary().isPresent();
+        boolean leaves = shears.isPresent();
         return LumberjackOutput.produce(scan, poiLog, leaves, silkTouch, leftOut(context, scan.logs().keySet()), context.level().getRandom())
                 .map(produced -> new Produced(produced.stack().isEmpty() ? List.of() : List.of(produced.stack()),
-                produced.kind() == LumberjackOutput.Kind.LEAVES && !silkTouch ? context.secondary().orElse(context.tool()) : context.tool()));
+                produced.kind() == LumberjackOutput.Kind.LEAVES && !silkTouch ? shears.orElse(context.tool())
+ : context.tool()));
     }
 
     private static boolean hasSilkTouch(ServerLevel level, ItemStack stack) {

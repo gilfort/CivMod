@@ -32,25 +32,24 @@ import net.minecraft.world.item.crafting.Recipe;
 
 /**
  * What the "Patterns" tab of a Producing JobBlock shows (vault {@code Systems/Producing Jobs.md},
- * {@code Jobs/Craftsperson.md}): the pattern library, the checkmark limit of the settler last seen working it, the
- * checkmarks last removed by a dropped limit and the state line of a new pattern left unchecked at the limit. The server
- * sends it while the menu is open whenever it changed ({@link Sync}); the client edits patterns with {@link Edit}.
+ * {@code Jobs/Craftsperson.md}): the pattern library, the checkmark limit of the settler last seen working it and the
+ * state line ({@link SettlementBlock#notice()}). The server sends it while the menu is open whenever it changed
+ * ({@link Sync}); the client edits patterns with {@link Edit}.
  *
  * @param limit        the checkmark limit
  * @param patterns     the patterns by slot
- * @param trim         the checkmarks last removed by a dropped limit
- * @param filtered     the slots of patterns the producer's filters block (the Craftsperson: metal)
- * @param foreign      the slots of patterns of a recipe type the producer does not follow
+ * @param filtered     the slots of patterns the producer's filters reject (the Craftsperson: metal)
+ * @param foreign      the slots of patterns of a recipe type the producer does not follow (they keep their checkmark)
  * @param filteredLine the state line of a filtered pattern ("Can't work with metal")
- * @param limitNotice  "A Craftsperson masters only 6 recipes at once – choose which to check." while a new pattern stayed
- *                     unchecked at the limit (until the next toggle)
+ * @param notice       the state line: "A Craftsperson masters only 6 recipes at once – choose which to check." while a new
+ *                     pattern stayed unchecked at the limit, or the checkmarks removed by a dropped limit
  */
-public record PatternTab(int limit, List<Pattern> patterns, Optional<SettlementBlock.Trim> trim, Set<Integer> filtered, Set<Integer> foreign,
-        Component filteredLine, Optional<Component> limitNotice) {
+public record PatternTab(int limit, List<Pattern> patterns, Set<Integer> filtered, Set<Integer> foreign, Component filteredLine,
+        Optional<Component> notice) {
 
     /** Nothing (any other JobBlock, or before the first sync). */
-    public static final PatternTab EMPTY = new PatternTab(Patterns.BASE_CHECKMARKS, List.of(), Optional.empty(), Set.of(), Set.of(),
-            Component.empty(), Optional.empty());
+    public static final PatternTab EMPTY = new PatternTab(Patterns.BASE_CHECKMARKS, List.of(), Set.of(), Set.of(), Component.empty(),
+            Optional.empty());
 
     /** Network codec of a set of library slots. */
     private static final StreamCodec<ByteBuf, Set<Integer>> SLOTS_CODEC = ByteBufCodecs.VAR_INT
@@ -60,21 +59,19 @@ public record PatternTab(int limit, List<Pattern> patterns, Optional<SettlementB
     public static final StreamCodec<RegistryFriendlyByteBuf, PatternTab> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.VAR_INT, PatternTab::limit,
             Pattern.STREAM_CODEC.apply(ByteBufCodecs.list(Pattern.SLOTS)), PatternTab::patterns,
-            ByteBufCodecs.optional(SettlementBlock.Trim.STREAM_CODEC), PatternTab::trim,
             SLOTS_CODEC, PatternTab::filtered,
             SLOTS_CODEC, PatternTab::foreign,
             ComponentSerialization.STREAM_CODEC, PatternTab::filteredLine,
-            ByteBufCodecs.optional(ComponentSerialization.STREAM_CODEC), PatternTab::limitNotice,
+            ByteBufCodecs.optional(ComponentSerialization.STREAM_CODEC), PatternTab::notice,
             PatternTab::new);
 
     /**
      * @param limit        the checkmark limit
      * @param patterns     the patterns
-     * @param trim         the removed checkmarks
      * @param filtered     the slots of filtered patterns
      * @param foreign      the slots of patterns of a foreign recipe type
      * @param filteredLine the state line of a filtered pattern
-     * @param limitNotice  the state line of a new pattern left unchecked at the limit
+     * @param notice       the state line
      */
     public PatternTab {
         patterns = List.copyOf(patterns);
@@ -97,10 +94,11 @@ public record PatternTab(int limit, List<Pattern> patterns, Optional<SettlementB
         ProducingProfile profile = Patterns.profile(producer);
         Set<Integer> foreign = slots(block, pattern -> Patterns.foreign(level, profile, pattern));
         Set<Integer> filtered = slots(block, pattern -> !foreign.contains(pattern.slot()) && Patterns.filtered(level, profile, pattern));
-        Optional<Component> notice = block.atLimit()
-                ? Optional.of(Component.translatable("civmod.gui.patterns.at_limit", producer.displayName(), block.checkLimit()))
-                : Optional.empty();
-        return new PatternTab(block.checkLimit(), block.patterns(), block.trim(), filtered, foreign, profile.filteredLine(), notice);
+        Optional<Component> notice = block.notice().map(found -> switch (found) {
+            case SettlementBlock.Notice.AtLimit atLimit -> Component.translatable("civmod.gui.patterns.at_limit", producer.displayName(), atLimit.limit());
+            case SettlementBlock.Notice.Trimmed trimmed -> Component.translatable("civmod.gui.patterns.trimmed", trimmed.removed(), trimmed.limit());
+        });
+        return new PatternTab(block.checkLimit(), block.patterns(), filtered, foreign, profile.filteredLine(), notice);
     }
 
     private static Set<Integer> slots(SettlementBlock block, Predicate<Pattern> test) {
@@ -111,7 +109,7 @@ public record PatternTab(int limit, List<Pattern> patterns, Optional<SettlementB
      * @param slot a library slot
      * @return whether the producer cannot use the pattern in that slot although it makes something
      */
-    public boolean blocked(int slot) {
+    public boolean unusable(int slot) {
         return filtered.contains(slot) || foreign.contains(slot);
     }
 
@@ -124,11 +122,13 @@ public record PatternTab(int limit, List<Pattern> patterns, Optional<SettlementB
     }
 
     /**
-     * @return how many patterns are checked
+     * @return how many patterns are checked and usable by the producer (what counts against the limit; foreign patterns
+     *         keep their checkmark without counting)
      */
     public long checked() {
-        return patterns.stream().filter(Pattern::checked).count();
+        return patterns.stream().filter(pattern -> pattern.checked() && !unusable(pattern.slot())).count();
     }
+
 
     /** What an {@link Edit} does. */
     public enum Op {
