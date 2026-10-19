@@ -40,7 +40,8 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  * Draws thought bubbles above settlers (vault {@code Systems/Thought Bubbles.md}): a pixel bubble above the name tag
  * with an item icon, a red "!" in the corner for problems. Each bubble shows for {@value #SHOW_TICKS} ticks and shrinks
  * away at the end; bubbles that arrive meanwhile wait their turn. Problems repeat every {@value #REPEAT_TICKS} ticks
- * while they are on. Only within {@value #DISTANCE} blocks, never while the settler sleeps or is away (Mission), and as
+ * while they are on. Only within {@value #DISTANCE} blocks, never while the settler sleeps (except the bed bubble, which
+ * plays out) or is away (Mission), and as
  * the client option "Show thought bubbles" allows.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID, value = Dist.CLIENT)
@@ -187,8 +188,9 @@ public final class ThoughtBubbleRenderer {
                 continue;
             }
             Bubble current = thoughts.current;
-            // Out of range: no position, no render state.
-            if (current == null || settler.isSleeping() || settler.isInvisible()
+            // Out of range: no position, no render state. The bed bubble plays out while the settler falls asleep, so a
+            // settler whose bed is close does not swallow it.
+            if (current == null || settler.isSleeping() && current.type != ThoughtBubble.BED || settler.isInvisible()
                     || settler.position().distanceToSqr(viewer) > DISTANCE * DISTANCE) {
                 continue;
             }
