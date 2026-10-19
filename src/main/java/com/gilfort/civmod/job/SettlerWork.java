@@ -12,9 +12,9 @@ import java.util.OptionalLong;
 
 import org.jspecify.annotations.Nullable;
 
-import com.gilfort.civmod.api.JobCategory;
-import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.Schedule.Activity;

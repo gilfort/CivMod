@@ -160,7 +160,7 @@ public class JobBlockMenu extends CivMenu {
      * @return whether the JobBlock offers a Resource Collection Job (Found tab)
      */
     public static boolean hasFoundTab(JobBlockInfo info) {
-        return JobBlockTabs.of(info.jobType()) == JobBlockTabs.FOUND;
+        return FoundTab.hasTab(info.jobType());
     }
 
     /**

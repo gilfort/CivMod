@@ -50,7 +50,7 @@ public final class UpgradeCosts {
 
     private static final FileToIdConverter FILES = FileToIdConverter.json("civmod_upgrades");
     /** The reserved file id of the default costs ({@code civmod:default} is no job). */
-    public static final Identifier DEFAULT_ID = CivMod.id("default");
+    private static final Identifier DEFAULT_ID = CivMod.id("default");
     private static Loaded loaded = Loaded.EMPTY;
 
     private UpgradeCosts() {

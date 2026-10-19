@@ -119,6 +119,15 @@ public final class MissionRules {
         private static final double HIGH_DEATH = 0.20;
 
         /**
+         * @param success the success chance
+         * @param death   the death chance
+         * @return the chances with death capped at {@code 1 − success}
+         */
+        static Chances of(double success, double death) {
+            return new Chances(success, Math.min(death, 1.0 - success));
+        }
+
+        /**
          * @return whether the death chance is high enough to warn the player
          */
         public boolean highDeath() {
@@ -146,7 +155,7 @@ public final class MissionRules {
         int gap = recommended - skill;
         double success = Math.clamp(rules.successBase() - rules.successPerLevel() * gap, rules.successMin(), rules.successMax());
         double death = Math.clamp(rules.deathBase() + rules.deathPerLevel() * gap, rules.deathMin(), rules.deathMax());
-        return new Chances(success, Math.min(death, 1.0 - success));
+        return Chances.of(success, death);
     }
 
     /**
@@ -164,7 +173,7 @@ public final class MissionRules {
         MissionProfile profile = job.profile(MissionProfile.class).orElse(MissionProfile.NEUTRAL);
         double success = Math.clamp(profile.successChance(base.success(), recommended, skill), 0.0, 1.0);
         double death = Math.clamp(profile.deathChance(base.death(), recommended, skill), 0.0, 1.0);
-        return new Chances(success, Math.min(death, 1.0 - success));
+        return Chances.of(success, death);
     }
 
     /**

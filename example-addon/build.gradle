@@ -29,7 +29,7 @@ def checkApiOnly = tasks.register('checkApiOnly') {
     group = 'verification'
     inputs.files(apiOnlySources)
     doLast {
-        def internal = ~/com\.gilfort\.civmod\.(?!api\b|example\b)[a-zA-Z_]/
+        def internal = ~/com\.gilfort\.civmod\.(?!api\b|example\b)/
         def offenders = []
         apiOnlySources.files.each { file ->
             file.readLines('UTF-8').eachWithIndex { line, index ->

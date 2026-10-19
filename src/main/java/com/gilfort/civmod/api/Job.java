@@ -83,7 +83,7 @@ public final class Job {
         this.jobFactor = builder.jobFactor;
         this.station = builder.station;
         Supplier<? extends CategoryProfile> declared = builder.profile;
-        this.profile = declared == null ? null : Suppliers.memoize(() -> checked(declared.get()));
+        this.profile = declared == null ? null : Suppliers.memoize(() -> requireOwnCategory(declared.get()));
     }
 
     /**
@@ -103,7 +103,7 @@ public final class Job {
         return job == null ? DataResult.error(() -> "Unknown job: " + id) : DataResult.success(job);
     }
 
-    private CategoryProfile checked(CategoryProfile found) {
+    private CategoryProfile requireOwnCategory(CategoryProfile found) {
         if (found.category() != category) {
             throw new IllegalStateException("The profile of " + this + " belongs to " + found.category() + ", not to " + category);
         }

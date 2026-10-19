@@ -66,7 +66,7 @@ _Avoid_: Advanced job, sub-job
 The implicit lowest-priority fallback Job of every settler; not a Job Category and never stored.
 
 **JobBlock**:
-The block that offers a Base Job (and its Specializations) to one settler. Code: `JobBlock`, `JobBlockEntity`, created by the addon API's factory (`CivModApi.jobBlock`); a Job without upgrade costs uses `civmod_upgrades/default.json` (`UpgradeCosts.DEFAULT_ID`).
+The block that offers a Base Job (and its Specializations) to one settler. Code: `JobBlock`, `JobBlockEntity`, created by the addon API's factory (`CivModApi.jobBlock`); a Job without upgrade costs uses `civmod_upgrades/default.json` (`UpgradeCosts`).
 
 **Starter tool**:
 The tool a new JobBlock puts into its own inventory when it is placed for the first time (Lumberjack stone axe, Miner stone pickaxe, Fisherman fishing rod). A broken JobBlock no longer carries one.
