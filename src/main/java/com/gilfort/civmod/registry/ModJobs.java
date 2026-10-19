@@ -8,6 +8,7 @@ import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.CraftspersonProfile;
 import com.gilfort.civmod.job.FishermanProfile;
 import com.gilfort.civmod.job.LumberjackProfile;
+import com.gilfort.civmod.job.MechanicProfile;
 import com.gilfort.civmod.job.MinerProfile;
 
 import net.minecraft.core.Registry;
@@ -55,6 +56,10 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> CRAFTSPERSON = JOBS.register("craftsperson", () -> Job.builder(JobCategory.PRODUCING)
             .icon(ModItems.CRAFTSPERSON_BLOCK).bubbleIcon(ModItems.HAMMER).displayItem(ModItems.HAMMER).hungerFactor(0.5).baseExp(2).jobFactor(0.3)
             .unlockItem(() -> Items.CRAFTING_TABLE).profile(CraftspersonProfile::new).build());
+    /** See vault {@code Jobs/Mechanic.md}; crafts redstone recipes fast at a Crafter, the first crafting Specialization. */
+    public static final DeferredHolder<Job, Job> MECHANIC = JOBS.register("mechanic", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.CRAFTER).bubbleIcon(() -> Items.REDSTONE).displayItem(() -> Items.REDSTONE).hungerFactor(0.5)
+            .baseExp(2).jobFactor(1.2).unlockItem(() -> Items.CRAFTER).profile(MechanicProfile::new).build());
 
     private ModJobs() {
     }
