@@ -542,6 +542,14 @@ public final class SettlerWork {
         }
     }
 
+    /**
+     * Empties the buffers of every job without dropping or delivering them: a settler that perished loses what it
+     * carried. Call before its jobs are forgotten.
+     */
+    public void loseBuffers() {
+        jobWorkplaces.values().forEach(workplace -> workplace.buffer().takeAll(stack -> true));
+    }
+
     // ---------------------------------------------------------------- decisions
 
     /**

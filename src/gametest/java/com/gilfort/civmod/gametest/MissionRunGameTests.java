@@ -428,6 +428,11 @@ public final class MissionRunGameTests {
         return settler;
     }
 
+    /** Something in the Mission Job's buffer while away, which a death must not drop either. */
+    private static void fillBuffer(Settler settler, MissionTrip trip) {
+        settler.getWork().buffer(trip.board()).add(new ItemStack(Items.GOLD_INGOT, 5));
+    }
+
     /** The settler is gone for good: removed, bed and Mission Board slot free, no member, its items not dropped. */
     private static void assertDead(GameTestHelper helper, Settler settler) {
         ServerLevel level = helper.getLevel();
@@ -452,6 +457,7 @@ public final class MissionRunGameTests {
                 return;
             }
             MissionTrip trip = settler.getWork().missionTrip().orElseThrow();
+            fillBuffer(settler, trip);
             helper.assertTrue(settler.getWork().returnFromMission(level, trip.returnTime()), "The mission ends at the return time");
             assertDead(helper, settler);
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
@@ -469,6 +475,7 @@ public final class MissionRunGameTests {
                 return;
             }
             MissionTrip trip = settler.getWork().missionTrip().orElseThrow();
+            fillBuffer(settler, trip);
             settler.getWork().setCatchUp(level.getOverworldClockTime(), trip.returnTime() + 1000);
             CatchUp.runNow(level, List.of(settler));
             assertDead(helper, settler);

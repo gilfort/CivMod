@@ -550,6 +550,8 @@ public class Settler extends PathfinderMob {
      */
     public void perish(ServerLevel level) {
         SettlementData data = SettlementData.get(level);
+        // Lost, not dropped: forgetting the jobs below would drop the buffers or deliver them into a drop-off.
+        work.loseBuffers();
         jobs.forEach(job -> JobAssignments.unassign(data, job.jobBlock(), getUUID()));
         data.settlement(settlementId).ifPresent(settlement -> {
             settlement.bedOf(getUUID()).ifPresent(bed -> {
