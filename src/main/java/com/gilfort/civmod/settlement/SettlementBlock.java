@@ -2,9 +2,12 @@ package com.gilfort.civmod.settlement;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -23,14 +26,17 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 
 /**
  * A JobBlock as recorded by its settlement, including its work points and the assigned settlers with their Job
- * (vault {@code Systems/Scroll of Assignment.md}); places per Job in {@link JobPlaces}. The Mission Board keeps its
- * daily {@link MissionOffer}.
+ * (vault {@code Systems/Scroll of Assignment.md}); places per Job in {@link JobPlaces}, the Station Types slots in
+ * {@link StationTypes}, one pattern {@link Library} per Producing Job. The Mission Board keeps its daily
+ * {@link MissionOffer}.
  */
 public final class SettlementBlock {
 
@@ -158,21 +164,93 @@ public final class SettlementBlock {
     }
 
     /**
-     * The Craftsperson's fields, grouped for the save codec (saved flat, next to the other fields).
-     *
-     * @param patterns   the pattern library
-     * @param checkLimit the checkmark limit of the settler last seen working it
-     * @param byDeliveryman whether Deliverymen carry the results ("Delivery: Deliveryman"), else the Craftsperson itself
+     * The pattern library of one Producing Job at this JobBlock (vault {@code Systems/Producing Jobs.md}): its patterns
+     * by slot, the checkmark limit of the settler last seen working it and the Patterns tab's state line (not saved).
      */
-    private record CraftspersonFields(List<Pattern> patterns, int checkLimit, boolean byDeliveryman) {
+    public static final class Library {
 
-        static final MapCodec<CraftspersonFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
-                Pattern.CODEC.listOf().optionalFieldOf("patterns", List.of()).forGetter(CraftspersonFields::patterns),
-                Codec.INT.optionalFieldOf("check_limit", Patterns.BASE_CHECKMARKS).forGetter(CraftspersonFields::checkLimit),
-                Codec.BOOL.optionalFieldOf("by_deliveryman", false).forGetter(CraftspersonFields::byDeliveryman)
-        ).apply(instance, CraftspersonFields::new));
+        private final List<Pattern> patterns = new ArrayList<>();
+        private int checkLimit = Patterns.BASE_CHECKMARKS;
+        private Optional<Notice> notice = Optional.empty();
+        /** The checkmark limit each settler working this library last reported (the best one counts). */
+        private final Map<UUID, Integer> workerLimits = new HashMap<>();
 
-        static final CraftspersonFields NONE = new CraftspersonFields(List.of(), Patterns.BASE_CHECKMARKS, false);
+        /**
+         * @return the checkmark limit each settler working this library last reported, by settler
+         */
+        Map<UUID, Integer> workerLimits() {
+            return workerLimits;
+        }
+
+        /**
+         * @return the patterns, by slot (read-only)
+         */
+        public List<Pattern> patterns() {
+            return Collections.unmodifiableList(patterns);
+        }
+
+        List<Pattern> mutablePatterns() {
+            return patterns;
+        }
+
+        /**
+         * @return the checkmark limit of the best settler working this library, as last applied
+         */
+        public int checkLimit() {
+            return checkLimit;
+        }
+
+        void setCheckLimit(int checkLimit) {
+            this.checkLimit = checkLimit;
+        }
+
+        /**
+         * @return the Patterns tab's state line: a new pattern left unchecked at the limit, or the checkmarks removed by a
+         *         dropped limit; shown until the library is next edited (not saved)
+         */
+        public Optional<Notice> notice() {
+            return notice;
+        }
+
+        void setNotice(Optional<Notice> notice) {
+            this.notice = notice;
+        }
+    }
+
+    /**
+     * A library as saved.
+     *
+     * @param job        the Job it belongs to
+     * @param patterns   its patterns
+     * @param checkLimit its checkmark limit
+     * @param workers    the checkmark limit each settler working it last reported
+     */
+    private record SavedLibrary(Job job, List<Pattern> patterns, int checkLimit, Map<UUID, Integer> workers) {
+
+        static final Codec<SavedLibrary> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                Job.CODEC.fieldOf("job").forGetter(SavedLibrary::job),
+                Pattern.CODEC.listOf().optionalFieldOf("patterns", List.of()).forGetter(SavedLibrary::patterns),
+                Codec.INT.optionalFieldOf("check_limit", Patterns.BASE_CHECKMARKS).forGetter(SavedLibrary::checkLimit),
+                Codec.unboundedMap(UUIDUtil.STRING_CODEC, Codec.INT).optionalFieldOf("workers", Map.of()).forGetter(SavedLibrary::workers)
+        ).apply(instance, SavedLibrary::new));
+    }
+
+    /**
+     * The Producing fields, grouped for the save codec (saved flat, next to the other fields). The one shared library
+     * saved before Station Types ({@code patterns}) is dropped on load; a library of a Job that no longer exists drops
+     * every library of the block.
+     *
+     * @param libraries     the pattern library per Job
+     * @param byDeliveryman whether Deliverymen carry the results ("Delivery: Deliveryman"), else the producer itself
+     */
+    private record ProducingFields(List<SavedLibrary> libraries, boolean byDeliveryman) {
+
+        static final MapCodec<ProducingFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+                SavedLibrary.CODEC.listOf().lenientOptionalFieldOf("libraries", List.of()).forGetter(ProducingFields::libraries),
+                Codec.BOOL.optionalFieldOf("by_deliveryman", false).forGetter(ProducingFields::byDeliveryman)
+        ).apply(instance, ProducingFields::new));
+
+        static final ProducingFields NONE = new ProducingFields(List.of(), false);
     }
 
     /**
@@ -182,16 +260,19 @@ public final class SettlementBlock {
      * @param excluded   the found resource types excluded by the player (Resource Collection Jobs; kept when a scan no
      *                   longer finds them)
      * @param scan       the last scan of a settler working the JobBlock (the Found tab without a settler)
+     * @param stationTypes the unlock items in the Station Types slots, by slot ({@link Items#AIR}: empty; slot 0 is the
+     *                   Base Job's station and never read back)
      */
-    private record PlaceFields(List<Job> autoAssign, Set<Identifier> excluded, Optional<SavedScan> scan) {
+    private record PlaceFields(List<Job> autoAssign, Set<Identifier> excluded, Optional<SavedScan> scan, List<Item> stationTypes) {
 
         static final MapCodec<PlaceFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Job.CODEC.listOf().optionalFieldOf("auto_assign", List.of()).forGetter(PlaceFields::autoAssign),
                 Identifier.CODEC.listOf().optionalFieldOf("excluded", List.of()).forGetter(fields -> fields.excluded().stream().sorted().toList()),
-                SavedScan.CODEC.optionalFieldOf("found_scan").forGetter(PlaceFields::scan)
-        ).apply(instance, (autoAssign, excluded, scan) -> new PlaceFields(autoAssign, Set.copyOf(excluded), scan)));
+                SavedScan.CODEC.optionalFieldOf("found_scan").forGetter(PlaceFields::scan),
+                BuiltInRegistries.ITEM.byNameCodec().listOf().lenientOptionalFieldOf("station_types", List.of()).forGetter(PlaceFields::stationTypes)
+        ).apply(instance, (autoAssign, excluded, scan, stationTypes) -> new PlaceFields(autoAssign, Set.copyOf(excluded), scan, stationTypes)));
 
-        static final PlaceFields NONE = new PlaceFields(List.of(), Set.of(), Optional.empty());
+        static final PlaceFields NONE = new PlaceFields(List.of(), Set.of(), Optional.empty(), List.of());
     }
 
     /** Maximum number of work POIs per JobBlock. */
@@ -214,7 +295,7 @@ public final class SettlementBlock {
             Codec.BOOL.optionalFieldOf("collect_leaves", false).forGetter(SettlementBlock::collectLeaves),
             MissionOffer.CODEC.optionalFieldOf("mission_offer", MissionOffer.EMPTY).forGetter(SettlementBlock::missionOffer),
             ClerkFields.MAP_CODEC.forGetter(SettlementBlock::clerkFields),
-            CraftspersonFields.MAP_CODEC.forGetter(SettlementBlock::craftspersonFields),
+            ProducingFields.MAP_CODEC.forGetter(SettlementBlock::producingFields),
             BlockPos.CODEC.optionalFieldOf("home_clerk").forGetter(SettlementBlock::homeClerk),
             PlaceFields.MAP_CODEC.forGetter(SettlementBlock::placeFields)
     ).apply(instance, SettlementBlock::new));
@@ -235,14 +316,12 @@ public final class SettlementBlock {
     private final List<StockRule> stockRules = new ArrayList<>();
     private final List<BlockPos> served = new ArrayList<>();
     private Optional<BlockPos> homeClerk;
-    private final List<Pattern> patterns = new ArrayList<>();
-    private int checkLimit;
-    /** The Patterns tab's state line; not saved. */
-    private Optional<Notice> notice = Optional.empty();
+    private final Map<Job, Library> libraries = new LinkedHashMap<>();
     private boolean byDeliveryman;
     private final Set<Identifier> excluded = new HashSet<>();
     private Optional<SavedScan> foundScan;
     private final Set<Job> autoAssign = new LinkedHashSet<>();
+    private final List<Item> stationTypes = new ArrayList<>(Collections.nCopies(StationTypes.SLOTS, Items.AIR));
 
     /**
      * @param pos       the block position
@@ -252,13 +331,13 @@ public final class SettlementBlock {
      */
     public SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected) {
         this(pos, jobType, level, connected, List.of(), Optional.empty(), Optional.empty(), List.of(), Optional.empty(), Optional.empty(), false,
-                MissionOffer.EMPTY, ClerkFields.NONE, CraftspersonFields.NONE, Optional.empty(), PlaceFields.NONE);
+                MissionOffer.EMPTY, ClerkFields.NONE, ProducingFields.NONE, Optional.empty(), PlaceFields.NONE);
     }
 
     private SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected, List<BlockPos> workPoints,
             Optional<BlockPos> collect, Optional<BlockPos> dropOff, List<SavedAssignee> assignees, Optional<UUID> legacyAssignee,
             Optional<String> legacyAssigneeName, boolean collectLeaves, MissionOffer missionOffer, ClerkFields clerk,
-            CraftspersonFields craftsperson, Optional<BlockPos> homeClerk, PlaceFields place) {
+            ProducingFields producing, Optional<BlockPos> homeClerk, PlaceFields place) {
         this.pos = pos.immutable();
         this.jobType = jobType;
         this.level = SettlementRules.clampLevel(level);
@@ -279,16 +358,36 @@ public final class SettlementBlock {
         clerk.stockRules().stream().filter(rule -> ruled.add(rule.item())).forEach(this.stockRules::add);
         this.served.addAll(clerk.served());
         this.homeClerk = homeClerk;
-        this.patterns.addAll(craftsperson.patterns());
-        this.checkLimit = craftsperson.checkLimit();
-        this.byDeliveryman = craftsperson.byDeliveryman();
+        producing.libraries().forEach(saved -> {
+            Library library = library(saved.job());
+            library.mutablePatterns().addAll(saved.patterns());
+            library.setCheckLimit(saved.checkLimit());
+            library.workerLimits().putAll(saved.workers());
+        });
+        this.byDeliveryman = producing.byDeliveryman();
         this.autoAssign.addAll(place.autoAssign());
         this.excluded.addAll(place.excluded());
         this.foundScan = place.scan();
+        // Slot 0 holds the Base Job's station; only the unlock items of the other slots are kept.
+        for (int slot = 1; slot < Math.min(StationTypes.SLOTS, place.stationTypes().size()); slot++) {
+            this.stationTypes.set(slot, place.stationTypes().get(slot));
+        }
     }
 
     private PlaceFields placeFields() {
-        return new PlaceFields(List.copyOf(autoAssign), Set.copyOf(excluded), foundScan);
+        return new PlaceFields(List.copyOf(autoAssign), Set.copyOf(excluded), foundScan, List.copyOf(stationTypes));
+    }
+
+    /**
+     * @return the unlock items in the Station Types slots, by slot (read-only, {@value StationTypes#SLOTS} entries,
+     *         {@link Items#AIR} for an empty slot; slot 0 stands for the Base Job's station, see {@link StationTypes})
+     */
+    public List<Item> stationTypes() {
+        return Collections.unmodifiableList(stationTypes);
+    }
+
+    void setStationType(int slot, Item item) {
+        stationTypes.set(slot, item);
     }
 
     /**
@@ -342,8 +441,11 @@ public final class SettlementBlock {
         return new ClerkFields(List.copyOf(storage), List.copyOf(standSpots), spotOfDay, List.copyOf(stockRules), List.copyOf(served));
     }
 
-    private CraftspersonFields craftspersonFields() {
-        return new CraftspersonFields(List.copyOf(patterns), checkLimit, byDeliveryman);
+    private ProducingFields producingFields() {
+        List<SavedLibrary> saved = libraries.entrySet().stream().filter(entry -> !entry.getValue().patterns().isEmpty())
+                .map(entry -> new SavedLibrary(entry.getKey(), List.copyOf(entry.getValue().patterns()), entry.getValue().checkLimit(),
+                        Map.copyOf(entry.getValue().workerLimits()))).toList();
+        return new ProducingFields(saved, byDeliveryman);
     }
 
     /**
@@ -359,39 +461,51 @@ public final class SettlementBlock {
     }
 
     /**
-     * @return the Craftsperson's pattern library, by slot (read-only; Craftsperson only, else always empty)
+     * @param job a Producing Job of this JobBlock
+     * @return its pattern library, by slot (read-only; empty for a Job without one)
      */
-    public List<Pattern> patterns() {
-        return Collections.unmodifiableList(patterns);
-    }
-
-    List<Pattern> mutablePatterns() {
-        return patterns;
+    public List<Pattern> patterns(Job job) {
+        Library library = libraries.get(job);
+        return library == null ? List.of() : library.patterns();
     }
 
     /**
-     * @return the checkmark limit of the settler last seen working this Craftsperson JobBlock
+     * @param job a Producing Job of this JobBlock
+     * @return the checkmark limit of its library: the one of the best settler working it, as last applied
      */
-    public int checkLimit() {
-        return checkLimit;
-    }
-
-    void setCheckLimit(int checkLimit) {
-        this.checkLimit = checkLimit;
+    public int checkLimit(Job job) {
+        Library library = libraries.get(job);
+        return library == null ? Patterns.BASE_CHECKMARKS : library.checkLimit();
     }
 
     /**
-     * @return the Patterns tab's state line: a new pattern left unchecked at the limit, or the checkmarks removed by a
-     *         dropped limit; shown until the library is next edited (not saved)
+     * @param job a Producing Job of this JobBlock
+     * @return the state line of its Patterns tab (not saved)
      */
-    public Optional<Notice> notice() {
-        return notice;
+    public Optional<Notice> notice(Job job) {
+        Library library = libraries.get(job);
+        return library == null ? Optional.empty() : library.notice();
     }
 
-    void setNotice(Optional<Notice> notice) {
-        this.notice = notice;
+    /**
+     * @return the Jobs whose library holds a pattern, in the order their libraries were made
+     */
+    public List<Job> libraryJobs() {
+        return libraries.entrySet().stream().filter(entry -> !entry.getValue().patterns().isEmpty()).map(Map.Entry::getKey).toList();
     }
 
+    /**
+     * @param job a Producing Job of this JobBlock
+     * @return the settlers whose checkmark limit its library keeps (read-only)
+     */
+    public Set<UUID> workers(Job job) {
+        Library library = libraries.get(job);
+        return library == null ? Set.of() : Collections.unmodifiableSet(library.workerLimits().keySet());
+    }
+
+    Library library(Job job) {
+        return libraries.computeIfAbsent(job, key -> new Library());
+    }
 
     /**
      * @return the Clerk's stock rules (read-only; Clerk only, else always empty)
@@ -600,5 +714,48 @@ public final class SettlementBlock {
 
     List<Assignee> mutableAssignees() {
         return assignees;
+    }
+
+    /**
+     * Switches the Job a settler holds here, keeping its place in the assignee order; the old Job's library forgets the
+     * settler's checkmark limit.
+     *
+     * @param settler the settler UUID
+     * @param job     the new Job
+     */
+    void setAssigneeJob(UUID settler, Job job) {
+        for (int i = 0; i < assignees.size(); i++) {
+            Assignee assignee = assignees.get(i);
+            if (assignee.id().equals(settler)) {
+                forgetWorker(assignee.job(), settler);
+                assignees.set(i, new Assignee(settler, assignee.name(), job));
+            }
+        }
+    }
+
+    /**
+     * Removes a settler from this JobBlock; its Job's library forgets its checkmark limit.
+     *
+     * @param settler the settler UUID
+     * @return whether it worked here
+     */
+    boolean removeAssignee(UUID settler) {
+        assignee(settler).ifPresent(assignee -> forgetWorker(assignee.job(), settler));
+        return assignees.removeIf(assignee -> assignee.id().equals(settler));
+    }
+
+    /**
+     * Removes every settler from this JobBlock; the libraries forget their checkmark limits.
+     */
+    void clearAssignees() {
+        assignees.clear();
+        libraries.values().forEach(library -> library.workerLimits().clear());
+    }
+
+    private void forgetWorker(Job job, UUID settler) {
+        Library library = libraries.get(job);
+        if (library != null) {
+            library.workerLimits().remove(settler);
+        }
     }
 }

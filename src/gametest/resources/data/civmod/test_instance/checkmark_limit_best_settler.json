@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:own_area_best_settler",
+  "function": "civmod:checkmark_limit_best_settler",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

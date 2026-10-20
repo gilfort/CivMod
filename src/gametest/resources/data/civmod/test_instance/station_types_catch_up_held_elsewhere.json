@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:own_area_catch_up",
+  "function": "civmod:station_types_catch_up_held_elsewhere",
+  "max_ticks": 300,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

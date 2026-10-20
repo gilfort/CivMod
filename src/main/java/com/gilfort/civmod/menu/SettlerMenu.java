@@ -3,6 +3,7 @@ package com.gilfort.civmod.menu;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.npc.Settler;
@@ -13,10 +14,14 @@ import com.gilfort.civmod.npc.SettlerJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.MissionOffers;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.registry.ModMenuTypes;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.TagKey;
@@ -144,6 +149,68 @@ public class SettlerMenu extends CivMenu {
             return true;
         }
         return super.clickMenuButton(player, buttonId);
+    }
+
+    /**
+     * The job switcher (vault {@code Systems/Jobs.md}): switches the job at an index to another Job unlocked at its
+     * JobBlock. The client applies it to its snapshot and sends {@link SwitchJob}; the server switches the settler
+     * ({@link SettlementWorld#switchJob}) and takes a fresh snapshot.
+     *
+     * @param player the player using the window
+     * @param index  the index of the job in the priority list
+     * @param job    the Job to switch to, one the job's state offers ({@link SettlerInfo.JobState#switchTo()})
+     * @return whether the job was switched
+     */
+    public boolean switchJob(Player player, int index, Job job) {
+        if (index < 0 || index >= info.jobs().size() || index >= info.jobStates().size() || !info.jobStates().get(index).switchTo().contains(job)) {
+            return false;
+        }
+        if (settler == null) {
+            info = info.withSwitched(index, job);
+            return true;
+        }
+        if (!(settler.level() instanceof ServerLevel level) || !stillValid(player)
+                || !SettlementWorld.switchJob(level, info.jobs().get(index).jobBlock(), settler, job)) {
+            return false;
+        }
+        info = SettlerInfo.of(settler);
+        return true;
+    }
+
+    /**
+     * Client → server: the job switcher's choice.
+     *
+     * @param containerId the settler window's container id
+     * @param index       the index of the job in the priority list
+     * @param job         the Job to switch to
+     */
+    public record SwitchJob(int containerId, int index, Job job) implements CustomPacketPayload {
+
+        /** Payload type. */
+        public static final Type<SwitchJob> TYPE = new Type<>(CivMod.id("settler_switch_job"));
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, SwitchJob> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, SwitchJob::containerId,
+                ByteBufCodecs.VAR_INT, SwitchJob::index,
+                Job.STREAM_CODEC, SwitchJob::job,
+                SwitchJob::new);
+
+        @Override
+        public Type<SwitchJob> type() {
+            return TYPE;
+        }
+
+        /**
+         * Applies the choice to the player's open settler window.
+         *
+         * @param player the player
+         */
+        public void handle(ServerPlayer player) {
+            if (player.containerMenu instanceof SettlerMenu menu && menu.containerId == containerId) {
+                menu.switchJob(player, index, job);
+            }
+        }
     }
 
     @Override

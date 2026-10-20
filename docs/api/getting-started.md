@@ -9,7 +9,7 @@ The example addon in [`example-addon/`](../../example-addon) compiles against th
 - **Job** – a kind of work a settler holds, identified by a namespaced id (`examplemod:scout`). Every Job belongs to one **Job Category**, which owns the work loop; the Job fills in its specifics through the category's **profile**.
 - **Job Category** – `RESOURCE_COLLECTION`, `PRODUCING`, `MISSION` (public profiles follow per category), `LOGISTICS` (internal to CivMod), `GUARD` and `SERVICE` (not implemented yet).
 - **Profiles** – [Resource Collection](resource-collection.md) (`ResourceCollectionProfile`, `SimpleCollectionProfile`), [Producing](producing.md) (`ProducingProfile`), Mission (`MissionProfile`, below).
-- **Base Job / Specialization** – a Base Job is offered by its own JobBlock. A Job with a `parent` is a Specialization: the parent's JobBlock offers it from level 2.
+- **Base Job / Specialization** – a Base Job is offered by its own JobBlock. A Job with a `parent` is a Specialization: its unlock item (`unlockItem`) in a Station Types slot of the parent's JobBlock unlocks it there (see below); Mission Jobs are offered by the Mission Board from level 2.
 - **JobBlock** – the block that offers a Base Job to settlers and anchors the settlement. Its window shows the tabs of the Job's category.
 
 ## Setup
@@ -48,6 +48,7 @@ Builder values:
 |---|---|---|
 | `icon` | item shown in GUIs (usually the JobBlock) | required |
 | `parent` | parent Base Job; makes the Job a Specialization | none |
+| `unlockItem` | the item that unlocks the Specialization in a Station Types slot of its parent's JobBlock; for a Base Job its station, shown in the first slot | none (a Specialization without one is never unlocked) |
 | `hungerFactor` | how much hungrier work makes than standing around | 1.0 |
 | `baseExp` | base EXP per produced resource (per mission for Mission Jobs) | 1 |
 | `jobFactor` | factor on the shared speed formula | 1.0 |
@@ -58,7 +59,13 @@ Builder values:
 
 Producing Jobs: see [producing.md](producing.md) (the profile is required).
 
-`CivModJobs` holds CivMod's built-in Jobs (`LUMBERJACK`, `MINER`, `FISHERMAN`, `ADVENTURER`, `CLERK`, `DELIVERYMAN`, `CRAFTSPERSON`) for parents and data.
+## Station Types
+
+Every JobBlock whose Base Job has Specializations (except the Mission Board) gets a **Station Types** tab with 5 slots. Slot 1 shows the Base Job's station (its `unlockItem`, else its icon) and is locked; each JobBlock level above 1 opens one more slot. A player puts an unlock item into an open slot: it is consumed and unlocks **every** Specialization of that Base Job naming the item, at this JobBlock only. Items that unlock nothing (or nothing new) are refused. An item put into a filled slot replaces the old one: settlers working a Job that is no longer unlocked fall back to the Base Job, and its pattern library stays (greyed out) until the Job is unlocked again.
+
+The unlock item is not the work place: the Job still needs its station in the world (its station tag, the Scroll of Assignment's work points). Several addons may name the same item; the tab's "?" lists every unlock item with all Jobs it unlocks, one line each, using the lang key `job.<namespace>.<job>.description` (optional) as the Job's one-line description.
+
+`CivModJobs` holds CivMod's built-in Jobs (`LUMBERJACK`, `MINER`, `FISHERMAN`, `ADVENTURER`, `CLERK`, `DELIVERYMAN`, `CRAFTSPERSON`, `MECHANIC`) for parents and data.
 
 Lang keys (in `assets/<namespace>/lang/en_us.json`):
 
@@ -146,13 +153,16 @@ The window's tabs follow the category: Resource Collection → Storage, Info, Fo
 ```
 
 - upgrade costs `data/<namespace>/civmod_upgrades/<job>.json` (per target level 2–5 a list of `{"item": …, "count": n}` or `{"tag": …, "count": n}`). Without the file the JobBlock uses CivMod's default costs (`data/civmod/civmod_upgrades/default.json`) and the server logs one warning per job on every reload.
+- settlers per level in the same file: `"settlers": [1, 1, 2, 2, 3]` (one number per JobBlock level 1–5, each 1–10). That many settlers hold the Base Job and its Specializations at the JobBlock, each in any Job unlocked there. Without the list the Job has 1 place on every level (the default file's list is not used). CivMod's values: Producing 1 / 1 / 2 / 2 / 3, Resource Collection 1, Mission Board (`adventurer`) 1 / 2 / 4 / 6 / 10, Clerk 1, Deliveryman (own places on the Clerk JobBlock) 1 / 2 / 4 / 6 / 8.
+
+Settlers linked to a JobBlock switch between the Jobs unlocked there in their settler window (job switcher): the JobBlock link and the priority stay, a running Producing round is released like on any job switch, and the skill stays per Job.
 
 ## Datapack overrides
 
 Packs can override a Job's balancing values per job id in `data/<namespace>/civmod_jobs/<job>.json`:
 
 ```json
-{ "hunger_factor": 0.8, "base_exp": 10, "job_factor": 1.2 }
+{ "hunger_factor": 0.8, "base_exp": 10, "job_factor": 1.2, "unlock_item": "minecraft:stonecutter" }
 ```
 
-All values are optional; later packs override earlier ones per value. Upgrade costs merge per level the same way.
+`unlock_item` overrides the builder's `unlockItem`. All values are optional; later packs override earlier ones per value. Upgrade costs merge per level the same way; a later `settlers` list replaces an earlier one.

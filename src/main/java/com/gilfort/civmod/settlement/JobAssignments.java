@@ -365,6 +365,75 @@ public final class JobAssignments {
     }
 
     /**
+     * The job switcher's choices (vault {@code Systems/Jobs.md}): the other Jobs unlocked at the settler's JobBlock it
+     * may switch to. A Job sharing the settler's places (same Base Job) always has room; a Job with own places (the
+     * Clerk JobBlock's Deliveryman) needs a free one. Jobs the settler holds at other JobBlocks and a second Mission Job
+     * are left out, like in the job picker.
+     *
+     * @param data      the dimension's settlement data
+     * @param jobBlock  the JobBlock the settler works
+     * @param settler   the settler UUID
+     * @param otherJobs the Jobs the settler holds at other JobBlocks
+     * @return the Jobs it may switch to, in picker order; empty if it does not work the JobBlock
+     */
+    public static List<Job> switchOptions(SettlementData data, BlockPos jobBlock, UUID settler, Collection<Job> otherJobs) {
+        Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
+        Optional<SettlementBlock.Assignee> own = block.flatMap(found -> found.assignee(settler));
+        if (own.isEmpty()) {
+            return List.of();
+        }
+        Job current = own.get().job();
+        boolean otherMission = otherJobs.stream().anyMatch(job -> job.category() == JobCategory.MISSION);
+        return JobPlaces.lines(block.get()).stream()
+                .filter(line -> line.job() != current && !otherJobs.contains(line.job()))
+                .filter(line -> !(otherMission && line.job().category() == JobCategory.MISSION))
+                .filter(line -> base(line.job()) == base(current) || !line.full())
+                .map(JobPlaces.Line::job).toList();
+    }
+
+    /**
+     * Switches the Job a settler holds at a JobBlock to one of its {@link #switchOptions}, keeping its place in the
+     * block's assignee order. On a Mission Board its mission assignments are removed (the missions stay locked), as
+     * the new Mission Job may not be allowed on them.
+     *
+     * @param data      the dimension's settlement data
+     * @param jobBlock  the JobBlock the settler works
+     * @param settler   the settler UUID
+     * @param otherJobs the Jobs the settler holds at other JobBlocks
+     * @param job       the new Job
+     * @return whether the Job was switched
+     */
+    public static boolean switchJob(SettlementData data, BlockPos jobBlock, UUID settler, Collection<Job> otherJobs, Job job) {
+        if (!switchOptions(data, jobBlock, settler, otherJobs).contains(job)) {
+            return false;
+        }
+        JobBlockSite.blockAt(data, jobBlock).orElseThrow().setAssigneeJob(settler, job);
+        MissionOffers.removeAssignee(data, jobBlock, settler);
+        if (job == ModJobs.DELIVERYMAN.get()) {
+            JobBlockSite.at(data, jobBlock).ifPresent(site -> site.settlement().blocks().forEach(other -> other.mutableServed().remove(jobBlock)));
+        }
+        data.changed();
+        return true;
+    }
+
+    /**
+     * @param data     the dimension's settlement data
+     * @param jobBlock a JobBlock position
+     * @param settler  a settler UUID
+     * @param job      a Job
+     * @return whether the settler holds that Job at another JobBlock of the same settlement
+     */
+    public static boolean holdsElsewhere(SettlementData data, BlockPos jobBlock, UUID settler, Job job) {
+        return JobBlockSite.at(data, jobBlock).stream().flatMap(site -> site.settlement().blocks().stream())
+                .filter(block -> !block.pos().equals(jobBlock))
+                .anyMatch(block -> block.assignee(settler).filter(assignee -> assignee.job() == job).isPresent());
+    }
+
+    private static Job base(Job job) {
+        return job.parent().orElse(job);
+    }
+
+    /**
      * Frees a JobBlock of all its settlers (and removes their mission assignments, see {@link #unassign(SettlementData, BlockPos, UUID)}).
      *
      * @param data     the dimension's settlement data
@@ -375,7 +444,7 @@ public final class JobAssignments {
         Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
         List<UUID> previous = block.map(b -> b.assignees().stream().map(SettlementBlock.Assignee::id).toList()).orElse(List.of());
         if (!previous.isEmpty()) {
-            block.get().mutableAssignees().clear();
+            block.get().clearAssignees();
             previous.forEach(settler -> MissionOffers.removeAssignee(data, jobBlock, settler));
             data.changed();
         }
@@ -393,7 +462,7 @@ public final class JobAssignments {
      */
     public static boolean unassign(SettlementData data, BlockPos jobBlock, UUID settler) {
         Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
-        boolean removed = block.map(b -> b.mutableAssignees().removeIf(assignee -> assignee.id().equals(settler))).orElse(false);
+        boolean removed = block.map(b -> b.removeAssignee(settler)).orElse(false);
         if (removed) {
             MissionOffers.removeAssignee(data, jobBlock, settler);
             data.changed();

@@ -3,19 +3,17 @@ package com.gilfort.civmod.job;
 import java.util.List;
 
 import com.gilfort.civmod.CivMod;
-import com.gilfort.civmod.api.ItemFilter;
 import com.gilfort.civmod.api.ProducingProfile;
-import com.gilfort.civmod.settlement.Patterns;
 
 import net.minecraft.core.registries.Registries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.Block;
 
 /**
  * The Craftsperson's Producing specifics (vault {@code Jobs/Craftsperson.md}): {@code crafting} recipes at a crafting
- * table ({@code civmod:stations/craftsperson}), never with metal (item tag {@code civmod:metals}, as input or output).
+ * table ({@code civmod:stations/craftsperson}), any item; it is slow (job factor 0.3), crafting Specializations are
+ * faster within their domain.
  */
 public final class CraftspersonProfile implements ProducingProfile {
 
@@ -30,20 +28,5 @@ public final class CraftspersonProfile implements ProducingProfile {
     @Override
     public TagKey<Block> station(RecipeType<?> type) {
         return STATION;
-    }
-
-    @Override
-    public ItemFilter inputFilter() {
-        return ItemFilter.deny(Patterns.METALS);
-    }
-
-    @Override
-    public ItemFilter outputFilter() {
-        return ItemFilter.deny(Patterns.METALS);
-    }
-
-    @Override
-    public Component filteredLine() {
-        return Component.translatable("civmod.gui.patterns.metal");
     }
 }

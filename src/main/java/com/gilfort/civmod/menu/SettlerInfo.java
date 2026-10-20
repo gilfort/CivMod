@@ -1,5 +1,6 @@
 package com.gilfort.civmod.menu;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.gilfort.civmod.api.Job;
@@ -11,6 +12,7 @@ import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.SettlementWorld;
 
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
@@ -63,9 +65,10 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
      * @param buffered the number of buffered items
      * @param preview  the buffered stacks (up to 18, a Deliveryman's whole load)
      * @param skill    level and EXP in this job
+     * @param switchTo the Jobs the job switcher offers instead at the same JobBlock (empty: no switcher)
      */
     public record JobState(JobStatus status, Component text, int carry, int buffered, List<ItemStack> preview,
-            SkillInfo skill) {
+            SkillInfo skill, List<Job> switchTo) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, JobState> STREAM_CODEC = StreamCodec.composite(
@@ -75,7 +78,33 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
                 ByteBufCodecs.VAR_INT, JobState::buffered,
                 ItemStack.OPTIONAL_STREAM_CODEC.apply(ByteBufCodecs.list()), JobState::preview,
                 SkillInfo.STREAM_CODEC, JobState::skill,
+                Job.STREAM_CODEC.apply(ByteBufCodecs.list()), JobState::switchTo,
                 JobState::new);
+
+        /**
+         * @param status   the job status
+         * @param text     the status as text
+         * @param carry    a Deliveryman's carry capacity in stacks, 0 for other jobs
+         * @param buffered the number of buffered items
+         * @param preview  the buffered stacks
+         * @param skill    level and EXP in this job
+         * @param switchTo the Jobs the job switcher offers instead
+         */
+        public JobState {
+            preview = List.copyOf(preview);
+            switchTo = List.copyOf(switchTo);
+        }
+
+        /**
+         * @param job the Job switched to
+         * @param old the Job switched from
+         * @return the state after the switch: idle, the old Job offered instead of the new one
+         */
+        JobState switched(Job job, Job old) {
+            List<Job> options = new ArrayList<>(switchTo);
+            options.replaceAll(option -> option == job ? old : option);
+            return new JobState(JobStatus.IDLE, JobStatus.IDLE.displayName(), 0, 0, List.of(), SkillInfo.NONE, options);
+        }
     }
 
     /**
@@ -149,8 +178,9 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
         List<JobState> states = settler.getJobs().stream().map(job -> {
             JobBuffer buffer = settler.getWork().buffer(job.jobBlock());
             int carry = settler.getWork().carryStacks(job);
+            List<Job> switchTo = settler.level() instanceof ServerLevel level ? SettlementWorld.switchOptions(level, job.jobBlock(), settler) : List.of();
             return new JobState(settler.getWork().status(job.jobBlock()), settler.getWork().statusText(job.jobBlock()), carry, buffer.count(),
-                    buffer.stacks().stream().limit(Math.max(18, carry)).map(ItemStack::copy).toList(), skillInfo(settler, job));
+                    buffer.stacks().stream().limit(Math.max(18, carry)).map(ItemStack::copy).toList(), skillInfo(settler, job), switchTo);
         }).toList();
         com.gilfort.civmod.food.SettlerFood food = settler.getFood();
         float appetite = food.appetite(settler.getRandom(), com.gilfort.civmod.config.CivModConfig.APPETITE_MIN.get(),
@@ -181,8 +211,24 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
         List<JobState> states = jobs.stream().map(job -> {
             int index = this.jobs.indexOf(job);
             return index >= 0 && index < jobStates.size() ? jobStates.get(index) : new JobState(JobStatus.IDLE, JobStatus.IDLE.displayName(), 0, 0, List.of(),
-                    SkillInfo.NONE);
+                    SkillInfo.NONE, List.of());
         }).toList();
         return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(jobs), states, bed, food, mission);
+    }
+
+    /**
+     * @param index the index of a job
+     * @param job   the Job it switched to (same JobBlock)
+     * @return a copy with that job switched; its state idle until the window is opened again
+     */
+    public SettlerInfo withSwitched(int index, Job job) {
+        List<SettlerJob> switchedJobs = new ArrayList<>(jobs);
+        List<JobState> states = new ArrayList<>(jobStates);
+        SettlerJob old = switchedJobs.get(index);
+        switchedJobs.set(index, new SettlerJob(job, old.jobBlock()));
+        if (index < states.size()) {
+            states.set(index, states.get(index).switched(job, old.jobType()));
+        }
+        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(switchedJobs), List.copyOf(states), bed, food, mission);
     }
 }

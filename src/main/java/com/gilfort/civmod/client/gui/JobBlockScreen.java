@@ -12,6 +12,7 @@ import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.PatternTab;
+import com.gilfort.civmod.menu.StationTypeTab;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementRules;
@@ -41,7 +42,8 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 /**
  * Screen of a JobBlock: storage tab and info tab (job, level, skill cap, settlement status, upgrade button). Job tabs
  * are drawn by their views: the Mission Board's missions tab ({@link MissionTabView}), the Clerk's Stock and Requests
- * tabs ({@link ClerkTabView}), the Craftsperson's Patterns tab ({@link PatternTabView}) and the Found tab of Resource
+ * tabs ({@link ClerkTabView}), the Patterns tabs of a Producing JobBlock ({@link PatternTabView}; the Base Job's on top,
+ * one per Specialization below the panel), its Station Types tab ({@link StationTypesView}) and the Found tab of Resource
  * Collection JobBlocks ({@link FoundTabView}).
  * <p>
  * Unconnected JobBlocks show the info greyed out with a red hint; storage keeps working.
@@ -65,6 +67,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     private final MissionTabView missions;
     private final ClerkTabView clerk;
     private final PatternTabView patterns;
+    private final StationTypesView stationTypes;
     private final FoundTabView found;
     private int costOffset;
     private int costRowY = -1;
@@ -79,6 +82,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         missions = new MissionTabView(this);
         clerk = new ClerkTabView(this);
         patterns = new PatternTabView(this);
+        stationTypes = new StationTypesView(this);
         found = new FoundTabView(this);
     }
 
@@ -95,12 +99,33 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.clerk.tab.deliveries"), new ItemStack(Items.BUNDLE)));
         }
         if (JobBlockMenu.hasPatternsTab(menu.getInfo())) {
-            tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.patterns.tab"), new ItemStack(Items.CRAFTING_TABLE)));
+            tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.patterns.tab_job", menu.getInfo().jobType().displayName()),
+                    new ItemStack(Items.CRAFTING_TABLE)));
+            tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.station_types.tab"), new ItemStack(Items.SMITHING_TABLE)));
         }
         if (JobBlockMenu.hasFoundTab(menu.getInfo())) {
             tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.job_block.tab.found"), new ItemStack(Items.SPYGLASS)));
         }
         return tabs;
+    }
+
+    /** One Patterns tab per Specialization below the panel (hidden until it is unlocked or its library holds a pattern). */
+    @Override
+    protected List<TabBar.Tab> bottomTabs() {
+        return menu.patternJobs().stream().skip(1)
+                .map(job -> new TabBar.Tab(Component.translatable("civmod.gui.patterns.tab_job", job.displayName()), job.icon())).toList();
+    }
+
+    @Override
+    protected boolean isTabShown(int tab) {
+        if (!JobBlockMenu.hasPatternsTab(menu.getInfo())) {
+            return true;
+        }
+        if (tab == JobBlockMenu.TAB_STATION_TYPES) {
+            return menu.patternJobs().size() > 1;
+        }
+        return menu.patternJob(tab).filter(job -> job == menu.getInfo().jobType() || menu.getStationTypeTab().unlocked().contains(job)
+                || menu.getStationTypeTab().libraries().contains(job)).isPresent() || menu.patternJob(tab).isEmpty();
     }
 
     @Override
@@ -164,6 +189,9 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (JobBlockMenu.isMissionBoard(menu.getInfo())) {
             missions.onTabChanged();
         }
+        if (JobBlockMenu.hasPatternsTab(menu.getInfo())) {
+            patterns.onTabChanged();
+        }
     }
 
     @Override
@@ -171,8 +199,12 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (JobBlockMenu.isClerk(menu.getInfo()) && clerk.extractLabels(graphics, tab, mouseX, mouseY)) {
             return;
         }
-        if (JobBlockMenu.hasPatternsTab(menu.getInfo()) && tab == JobBlockMenu.TAB_PATTERNS) {
+        if (JobBlockMenu.hasPatternsTab(menu.getInfo()) && menu.patternJob(tab).isPresent()) {
             patterns.extractLabels(graphics, mouseX, mouseY);
+            return;
+        }
+        if (JobBlockMenu.hasPatternsTab(menu.getInfo()) && tab == JobBlockMenu.TAB_STATION_TYPES) {
+            stationTypes.extractLabels(graphics, mouseX, mouseY);
             return;
         }
         if (tab == JobBlockMenu.TAB_MISSIONS && JobBlockMenu.isMissionBoard(menu.getInfo())) {
@@ -194,8 +226,11 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (JobBlockMenu.isClerk(info) && (tab == JobBlockMenu.TAB_STOCK || tab == JobBlockMenu.TAB_REQUESTS || tab == JobBlockMenu.TAB_DELIVERIES)) {
             return clerk.helpLines(tab);
         }
-        if (JobBlockMenu.hasPatternsTab(info) && tab == JobBlockMenu.TAB_PATTERNS) {
+        if (JobBlockMenu.hasPatternsTab(info) && menu.patternJob(tab).isPresent()) {
             return patterns.helpLines();
+        }
+        if (JobBlockMenu.hasPatternsTab(info) && tab == JobBlockMenu.TAB_STATION_TYPES) {
+            return stationTypes.helpLines();
         }
         if (JobBlockMenu.isMissionBoard(info) && tab == JobBlockMenu.TAB_MISSIONS) {
             return missions.helpLines();
@@ -371,7 +406,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (JobBlockMenu.isClerk(menu.getInfo()) && clerk.mouseClicked(event)) {
             return true;
         }
-        if (JobBlockMenu.hasPatternsTab(menu.getInfo()) && patterns.mouseClicked(event)) {
+        if (JobBlockMenu.hasPatternsTab(menu.getInfo()) && (patterns.mouseClicked(event) || stationTypes.mouseClicked(event))) {
             return true;
         }
         if (JobBlockMenu.isMissionBoard(menu.getInfo()) && missions.mouseClicked(event)) {
@@ -499,7 +534,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         minecraft.gameMode.handleInventoryButtonClick(menu.containerId, button);
     }
 
-    // ---------------------------------------------------------------- Clerk and Craftsperson: sync and recipe viewers
+    // ---------------------------------------------------------------- Clerk and Producing JobBlocks: sync and recipe viewers
 
     /**
      * Client handler of {@link ClerkTab.Sync}: updates the open Clerk menu.
@@ -558,6 +593,22 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             open.setPatternTab(payload.tab());
             if (minecraft.gui.screen() instanceof JobBlockScreen screen) {
                 screen.patterns.update();
+            }
+        }
+    }
+
+    /**
+     * Client handler of {@link StationTypeTab.Sync}: updates the open JobBlock menu and which Patterns tabs it shows.
+     *
+     * @param payload the payload
+     * @param context the payload context
+     */
+    public static void handleStationTypeTab(StationTypeTab.Sync payload, IPayloadContext context) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player != null && minecraft.player.containerMenu instanceof JobBlockMenu open && open.containerId == payload.containerId()) {
+            open.setStationTypeTab(payload.tab());
+            if (minecraft.gui.screen() instanceof JobBlockScreen screen) {
+                screen.rebuildWidgets();
             }
         }
     }

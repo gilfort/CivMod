@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:own_area_two_jobs",
+  "function": "civmod:settlers_two_jobs_at_one_block",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

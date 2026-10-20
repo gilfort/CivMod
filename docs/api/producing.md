@@ -8,7 +8,7 @@ A profile names one or more vanilla or modded `RecipeType`s (`crafting`, `stonec
 
 ### Recipe viewer transfer (JEI / REI)
 
-The transfer button of JEI and REI fills a pattern (the open one, else the first empty library slot) from a recipe of every recipe type a registered Producing profile names, vanilla or modded; nothing to register in the addon. A recipe of a type the JobBlock's working Job does not follow gets a disabled button with "Not a recipe this Job follows" (the server refuses it as well). Checkmark, filter and limit rules are the same as for any new pattern.
+The transfer button of JEI and REI fills a pattern (the open one, else the first empty library slot) from a recipe of every recipe type a registered Producing profile names, vanilla or modded; nothing to register in the addon. The transfer fills the library of the Patterns tab shown (or looked at last). A recipe of a type that library's Job does not follow gets a disabled button with "Not a recipe this Job follows" (the server refuses it as well). Checkmark, filter and limit rules are the same as for any new pattern.
 
 The viewers have to recognise the category of the recipe type:
 
@@ -22,10 +22,11 @@ Recipes in other categories (custom recipe classes, other category ids) get no b
 ```java
 public static final DeferredHolder<Job, Job> STONECUTTER = JOBS.register("stonecutter", () -> Job.builder(JobCategory.PRODUCING)
         .parent(CivModJobs.CRAFTSPERSON)
+        .unlockItem(() -> Items.STONECUTTER)
         .icon(() -> Items.STONECUTTER)
         .hungerFactor(0.5)
         .baseExp(2)
-        .jobFactor(0.5)
+        .jobFactor(1.2)
         .profile(StonecutterProfile::new)
         .build());
 
@@ -45,7 +46,9 @@ final class StonecutterProfile implements ProducingProfile {
 }
 ```
 
-A Producing Job needs a profile (`build()` fails without one). As a Specialization (`parent`) it works at its parent's JobBlock from level 2 and uses that JobBlock's pattern library; as a Base Job it needs a JobBlock from `CivModApi.jobBlock` (its window gets the Storage, Info and Patterns tabs). The pattern library follows the Job of the settler working the JobBlock: patterns of a recipe type the Job does not follow stay in the library, greyed out and skipped, but keep their checkmark; they work again once a Job of their type works the JobBlock.
+A Producing Job needs a profile (`build()` fails without one). As a Specialization (`parent`) it works at its parent's JobBlock once its `unlockItem` is in a Station Types slot there ([getting-started.md](getting-started.md#station-types)); as a Base Job it needs a JobBlock from `CivModApi.jobBlock` (its window gets the Storage, Info, Patterns and, with Specializations, Station Types tabs).
+
+Every Producing Job unlocked at a JobBlock has its **own pattern library** and Patterns tab (the Base Job's on top, one per Specialization below the window); a settler works only its Job's library. The library of a Job that is no longer unlocked (its Station Type was replaced) is kept, greyed out and not editable, and works again once the Job is unlocked again.
 
 Ship the station tag, e.g. `data/examplemod/tags/block/stations/stonecutter.json`:
 
@@ -63,16 +66,33 @@ and the lang keys `job.<namespace>.<job>`, `job.<namespace>.<job>.indefinite` an
 | `station(type)` | block tag of the station for a recipe type. The main type's station is the work place of the day (Scroll of Assignment, up to 8; else the nearest within 16 blocks of the JobBlock); other types use the nearest station of their tag | required |
 | `inputFilter()` | `ItemFilter` for inputs: an input whose alternatives it all rejects blocks the pattern, rejected alternatives of a tag input are skipped | every item |
 | `outputFilter()` | `ItemFilter` for outputs: a rejected output blocks the pattern | every item |
-| `filteredLine()` | state line of a pattern the filters block, in the Patterns tab | "Not allowed for this Job" |
+| `domain()` | item tag of a crafting Specialization's domain (see [Domains](#domains)) | none: every recipe |
+| `filteredLine()` | state line of a pattern the filters or the domain block, in the Patterns tab | "Outside this Job's domain" with a domain, else "Not allowed for this Job" |
 | `checkLimit(skill)` | how many patterns can be checked at the settler's effective skill | 6 + 1 per 5 levels |
 | `workTime(recipe)` | operations one execution of a recipe takes (an operation lasts as long as the shared speed formula × job factor says) | 1 |
 | `execute(level, recipe, result, consumed)` | what one execution puts into the settler's buffer; the inputs are already taken out | the result plus the inputs' remainders (empty buckets, …) |
 
-`ItemFilter.allow(tag)`, `ItemFilter.deny(tag)` and `ItemFilter.ANY` build filters. The Craftsperson is a profile with `crafting`, its crafting-table station and `ItemFilter.deny(civmod:metals)` for inputs and outputs.
+`ItemFilter.allow(tag)`, `ItemFilter.deny(tag)` and `ItemFilter.ANY` build filters. The Craftsperson is a profile with `crafting` and its crafting-table station, without filters: it crafts everything, slowly (job factor 0.3).
+
+## Domains
+
+A crafting Specialization trades the Craftsperson's "everything, slowly" for "its domain, fast": its profile names a domain item tag, and its Job uses job factor **1.2** (four times the Craftsperson's 0.3; set it with `.jobFactor(1.2)` and let datapacks override it through `job_factor` in `civmod_jobs/<job>.json`).
+
+```java
+@Override
+public Optional<TagKey<Item>> domain() {
+    return Optional.of(TagKey.create(Registries.ITEM, Identifier.fromNamespaceAndPath("examplemod", "domains/wood")));
+}
+```
+
+- A recipe belongs to the domain if **any input** has an alternative in the tag, so a mixed recipe fits several domains (a piston – planks, cobblestone, iron, redstone – is in a wood, a stone, a metal and a redstone domain).
+- A pattern outside the domain is greyed out with "Outside this Job's domain" and cannot be checked (like a filtered pattern; it loses a checkmark it had, e.g. after the tag changed).
+- Intermediates follow the same rule: the specialist crafts only intermediates inside its domain. One outside it must be in stock, otherwise the request shows "Missing: …" (a Mechanic making repeaters needs sticks from a Craftsperson or the Clerk's storage).
+- Domains are item tags, so datapacks change them. CivMod's built-in Mechanic (unlocked by and working at a Crafter, `crafting`) uses `civmod:domains/redstone`.
 
 ## Checkmarks
 
-Only checked patterns are worked. Only checked patterns the Job can use count against its limit; patterns of another Job's recipe type keep their checkmark outside it. A new pattern is checked automatically if it makes something, the profile can use it and a checkmark is free. At the limit it stays unchecked, and the Patterns tab shows "A Stonecutter masters only 6 recipes at once – choose which to check." until the player's next edit of the library. A pattern the filters reject stays unchecked without that line, and loses a checkmark it had. Replacing a pattern keeps its checkmark. When the limit drops (a weaker settler), the last checked patterns the Job can use lose theirs.
+Only checked patterns are worked. Each library has its own checkmark limit; only checked patterns the Job can use count against it. A new pattern is checked automatically if it makes something, the profile can use it and a checkmark is free. At the limit it stays unchecked, and the Patterns tab shows "A Stonecutter masters only 6 recipes at once – choose which to check." until the player's next edit of the library. A pattern the filters reject stays unchecked without that line, and loses a checkmark it had. Replacing a pattern keeps its checkmark. Several settlers working the same Job at one JobBlock share its library; its limit is the one of the highest effective skill among them (`checkLimit` of the best settler). When the limit drops (the best settler leaves or switches Job), the last checked patterns the Job can use lose theirs.
 
 
 ## Not part of the profile

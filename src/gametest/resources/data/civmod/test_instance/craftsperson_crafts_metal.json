@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "civmod:day",
-  "function": "civmod:craftsperson_no_metal",
+  "function": "civmod:craftsperson_crafts_metal",
   "max_ticks": 100,
   "structure": "minecraft:empty",
   "padding": 40

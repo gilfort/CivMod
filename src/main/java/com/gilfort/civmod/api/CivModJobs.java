@@ -26,6 +26,8 @@ public final class CivModJobs {
     public static final DeferredHolder<Job, Job> DELIVERYMAN = job("deliveryman");
     /** Producing: crafts requested items from its patterns. */
     public static final DeferredHolder<Job, Job> CRAFTSPERSON = job("craftsperson");
+    /** Producing: Specialization of the Craftsperson, crafts redstone recipes fast; unlocked by a Crafter. */
+    public static final DeferredHolder<Job, Job> MECHANIC = job("mechanic");
 
     private CivModJobs() {
     }

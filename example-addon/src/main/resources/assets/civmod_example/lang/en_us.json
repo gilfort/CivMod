@@ -11,5 +11,6 @@
   "civmod_example.blocked.no_sand": "No sand in reach",
   "job.civmod_example.stonecutter": "Stonecutter",
   "job.civmod_example.stonecutter.indefinite": "a Stonecutter",
+  "job.civmod_example.stonecutter.description": "Cuts stone fast at a stonecutter",
   "civmod_example.scroll.work_place.stonecutter": "a stonecutter"
 }

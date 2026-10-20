@@ -8,6 +8,8 @@ import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.PatternTab;
+import com.gilfort.civmod.menu.SettlerMenu;
+import com.gilfort.civmod.menu.StationTypeTab;
 import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.settlement.JobPointsDisplay;
 import com.gilfort.civmod.settlement.SettlementOutline;
@@ -91,9 +93,16 @@ public final class CivNetwork {
                 JobPicker.choose(player, payload);
             }
         });
+        registrar.playToServer(SettlerMenu.SwitchJob.TYPE, SettlerMenu.SwitchJob.STREAM_CODEC,
+                (payload, context) -> {
+                    if (context.player() instanceof ServerPlayer player) {
+                        payload.handle(player);
+                    }
+                });
         // Client handler is registered in CivModClient (RegisterClientPayloadHandlersEvent).
         registrar.playToClient(JobPicker.Open.TYPE, JobPicker.Open.STREAM_CODEC);
         registrar.playToClient(PatternTab.Sync.TYPE, PatternTab.Sync.STREAM_CODEC);
+        registrar.playToClient(StationTypeTab.Sync.TYPE, StationTypeTab.Sync.STREAM_CODEC);
         registrar.playToClient(SettlementOutline.Sync.TYPE, SettlementOutline.Sync.STREAM_CODEC);
         registrar.playToClient(JobPointsDisplay.Sync.TYPE, JobPointsDisplay.Sync.STREAM_CODEC);
         registrar.playToClient(ClerkTab.Sync.TYPE, ClerkTab.Sync.STREAM_CODEC);

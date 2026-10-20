@@ -111,8 +111,8 @@ final class ProducingLoop implements CategoryLoop {
     public boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
         BlockPos jobBlock = job.jobBlock();
         releaseIfRestored(level);
-        Patterns.uncheckFiltered(level, jobBlock);
-        Patterns.enforceLimit(level, jobBlock, profile(job).checkLimit(shell.effectiveLevel(job)));
+        Patterns.uncheckFiltered(level, jobBlock, job.jobType());
+        Patterns.enforceLimit(level, jobBlock, job.jobType(), settler.getUUID(), profile(job).checkLimit(shell.effectiveLevel(job)));
         Workplace workplace = shell.workplace(jobBlock);
         if (workplace.round() == null) {
             if (workplace.dropOffPending() || workplace.buffer().shouldDeliver()) {
@@ -185,7 +185,7 @@ final class ProducingLoop implements CategoryLoop {
         Map<UUID, Long> skips = workplace.skips();
         skips.values().removeIf(until -> until <= now || until - now > SKIP_TICKS);
         ProducingProfile profile = profile(job);
-        List<Pattern> checked = Patterns.usable(level, site.block());
+        List<Pattern> checked = Patterns.usable(level, site.block(), job.jobType());
         JobBuffer buffer = workplace.buffer();
         Map<Item, Integer> held = buffer.counts();
         int room = Math.max(0, JobBuffer.CAPACITY - buffer.count());
@@ -702,8 +702,8 @@ final class ProducingLoop implements CategoryLoop {
         }
         JobBlockSite site = found.get();
         releaseIfRestored(level);
-        Patterns.uncheckFiltered(level, jobBlock);
-        Patterns.enforceLimit(level, jobBlock, profile(job).checkLimit(shell.effectiveLevel(job)));
+        Patterns.uncheckFiltered(level, jobBlock, job.jobType());
+        Patterns.enforceLimit(level, jobBlock, job.jobType(), settler.getUUID(), profile(job).checkLimit(shell.effectiveLevel(job)));
         if (station(level, job, site, day) == null) {
             shell.setStatus(jobBlock, JobStatus.NO_WORK_PLACE);
             return new SimulatedWork(0, workTicks);

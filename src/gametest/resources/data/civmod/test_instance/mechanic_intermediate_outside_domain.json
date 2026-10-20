@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "civmod:day",
-  "function": "civmod:example_job_switch_keeps_checkmarks",
+  "function": "civmod:mechanic_intermediate_outside_domain",
   "max_ticks": 2400,
   "structure": "minecraft:empty",
   "padding": 40
