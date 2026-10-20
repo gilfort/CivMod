@@ -436,7 +436,13 @@ public class Settler extends PathfinderMob {
         }
     }
 
-    private void checkMembership(ServerLevel level) {
+    /**
+     * Checks the settlement membership and catches up on Jobs changed while unloaded. Runs every
+     * {@value #CHECK_INTERVAL} ticks of the AI step; tests call it directly.
+     *
+     * @param level the settler's level
+     */
+    public void checkMembership(ServerLevel level) {
         SettlementData data = SettlementData.get(level);
         if (!isHomeless()) {
             Optional<Settlement> settlement = data.settlement(settlementId);
