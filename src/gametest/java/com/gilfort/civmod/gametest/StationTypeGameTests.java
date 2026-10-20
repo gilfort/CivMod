@@ -361,19 +361,19 @@ public final class StationTypeGameTests {
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(a).orElseThrow();
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 3), data, settlement);
-        settler.setNoAi(false);
         helper.assertTrue(SettlementWorld.assign(level, a, settler, craftsperson) == JobAssignments.AssignResult.OK, "Craftsperson at A");
         // An older save: B fell back to the Craftsperson while the settler, unloaded, still held the Mechanic there.
         helper.assertTrue(JobAssignments.assign(data, b, settler.getUUID(), "Cora", settlement.id(), List.of(), craftsperson)
                 == JobAssignments.AssignResult.OK, "B lists the settler as Craftsperson");
         settler.addJob(new SettlerJob(mechanic, b));
-        helper.succeedWhen(() -> {
-            helper.assertTrue(settler.getJobs().equals(List.of(new SettlerJob(craftsperson, a))),
-                    "Only the Craftsperson at A is left: " + settler.getJobs());
-            helper.assertFalse(block(level, b).isAssignee(settler.getUUID()), "B no longer lists the settler");
-            settler.discard();
-            JobAssignments.unassign(data, a);
-        });
+        // Directly, not through the AI step: the test chunks are not forced, the settler may not tick in time.
+        settler.checkMembership(level);
+        helper.assertTrue(settler.getJobs().equals(List.of(new SettlerJob(craftsperson, a))),
+                "Only the Craftsperson at A is left: " + settler.getJobs());
+        helper.assertFalse(block(level, b).isAssignee(settler.getUUID()), "B no longer lists the settler");
+        settler.discard();
+        JobAssignments.unassign(data, a);
+        helper.succeed();
     }
 
     /** The saved JobBlock at a position inside a saved settlement. */
