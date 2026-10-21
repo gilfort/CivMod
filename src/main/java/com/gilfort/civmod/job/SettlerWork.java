@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.function.BooleanSupplier;
 
 import org.jspecify.annotations.Nullable;
 
@@ -621,7 +622,8 @@ public final class SettlerWork {
         }
         // The body first: stay asleep, wake, return to the rest place after a skipped night, keep foraging.
         boolean woke = false;
-        Optional<Intent> body = Schedule.wakeUp(snapshot(level, day, dayTime, jumped, false, new FoodLookup(level, dayTime)));
+        Optional<Intent> body = Schedule.wakeUp(snapshot(level, day, dayTime, new FoodLookup(level, dayTime),
+                liveFacts(level, jumped, false)));
         while (body.isPresent()) {
             Intent intent = body.get();
             if (intent == Intent.SLEEP) {
@@ -643,7 +645,7 @@ public final class SettlerWork {
                 // The night was skipped while this settler was not in bed: appear at the bed as if it slept there.
                 teleportToRestPlace(level, day);
             }
-            body = Schedule.wakeUp(snapshot(level, day, dayTime, false, woke, new FoodLookup(level, dayTime)));
+            body = Schedule.wakeUp(snapshot(level, day, dayTime, new FoodLookup(level, dayTime), liveFacts(level, false, woke)));
         }
         SettlerFood food = settler.getFood();
         if (food.level() >= SettlerFood.HUNGRY) {
@@ -652,7 +654,7 @@ public final class SettlerWork {
         checkStuck(level);
 
         FoodLookup foodLookup = new FoodLookup(level, dayTime);
-        Decision decision = Schedule.next(snapshot(level, day, dayTime, false, woke, foodLookup));
+        Decision decision = Schedule.next(snapshot(level, day, dayTime, foodLookup, liveFacts(level, false, woke)));
         act(level, decision, foodLookup, day, dayTime);
     }
 
@@ -665,21 +667,66 @@ public final class SettlerWork {
     }
 
     /**
-     * Builds the Schedule snapshot. Food points are looked up (once) only if a rule asks; the job step is asked only
-     * during a job step.
+     * The facts of a Schedule snapshot in which a live decision and a simulated catch-up hour differ; everything else
+     * is read from the settler the same way for both ({@link #snapshot}).
      *
-     * @param woke whether the settler was just woken in this decision (it counts as awake)
+     * @param nightSkipped    whether the night was skipped since the last decision
+     * @param sleeping        whether the settler is asleep
+     * @param activity        the current activity
+     * @param jobStepHolds    whether the current job step holds the decision
+     * @param deliveryPending whether a job has items to deliver to a drop-off that is not full
+     * @param noFood          whether a meal just found nothing to take, so no food point or pocket food counts for
+     *                        this decision
      */
-    private Schedule.Snapshot snapshot(ServerLevel level, long day, long dayTime, boolean nightSkipped, boolean woke, FoodLookup foodLookup) {
-        SettlerFood food = settler.getFood();
+    private record SnapshotFacts(boolean nightSkipped, boolean sleeping, Activity activity, BooleanSupplier jobStepHolds,
+            boolean deliveryPending, boolean noFood) {
+
+        /**
+         * Catch-up: awake, no skipped night (catch-up runs whole hours of the day), idle, no job step holding the
+         * decision (work is simulated per hour), nothing left to deliver (output goes straight to the drop-off).
+         *
+         * @param noFood whether a meal just found nothing to take
+         */
+        static SnapshotFacts catchUp(boolean noFood) {
+            boolean nightSkipped = false;
+            boolean sleeping = false;
+            Activity activity = Activity.IDLE;
+            BooleanSupplier jobStepHolds = () -> false;
+            boolean deliveryPending = false;
+            return new SnapshotFacts(nightSkipped, sleeping, activity, jobStepHolds, deliveryPending, noFood);
+        }
+    }
+
+    /**
+     * The snapshot facts of a live decision: the settler as it is now.
+     *
+     * @param nightSkipped whether the night was skipped since the last decision
+     * @param woke         whether the settler was just woken in this decision (it counts as awake)
+     */
+    private SnapshotFacts liveFacts(ServerLevel level, boolean nightSkipped, boolean woke) {
+        boolean sleeping = settler.isSleeping() && !woke;
+        BooleanSupplier jobStepHolds = () -> jobStepHolds(level);
         boolean deliveryPending = settler.getJobs().stream()
                 .anyMatch(job -> !buffer(job.jobBlock()).isEmpty() && !status(job.jobBlock()).waitsForRoom());
+        boolean noFood = false;
+        return new SnapshotFacts(nightSkipped, sleeping, activity, jobStepHolds, deliveryPending, noFood);
+    }
+
+    /**
+     * Builds the Schedule snapshot, for live play and catch-up alike. Food points are looked up (once) only if a rule
+     * asks; the job step is asked only during a job step.
+     *
+     * @param facts what differs between a live decision ({@link #liveFacts}) and catch-up ({@link SnapshotFacts#catchUp})
+     */
+    private Schedule.Snapshot snapshot(ServerLevel level, long day, long dayTime, FoodLookup foodLookup, SnapshotFacts facts) {
+        SettlerFood food = settler.getFood();
+        boolean noFood = facts.noFood();
         return new Schedule.Snapshot(day, dayTime, food.level(),
                 SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE),
-                CivModConfig.PROVISION_NUTRITION.get(), SettlerFood.choose(pocketStacks(), food.level()).isPresent(),
-                () -> foodLookup.get().isPresent(), () -> clerkToWaitAt(level).isPresent(), settler.isHomeless(),
-                settler.isSleeping() && !woke, food.forageDay(), nightSkipped, activity, () -> jobStepHolds(level),
-                food.morningDay() == day, food.eatenDay() == day, waitStart(day), deliveryPending, dayTimes(day));
+                CivModConfig.PROVISION_NUTRITION.get(), !noFood && SettlerFood.choose(pocketStacks(), food.level()).isPresent(),
+                () -> !noFood && foodLookup.get().isPresent(), () -> clerkToWaitAt(level).isPresent(), settler.isHomeless(),
+                facts.sleeping(), food.forageDay(), facts.nightSkipped(), facts.activity(), facts.jobStepHolds(),
+                food.morningDay() == day, food.eatenDay() == day, waitStart(day), facts.deliveryPending(), dayTimes(day));
     }
 
     /**
@@ -1518,7 +1565,7 @@ public final class SettlerWork {
         try {
             for (int step = 0; step < CATCH_UP_DECISIONS; step++) {
                 FoodLookup foodLookup = new FoodLookup(level, dayTime);
-                Schedule.Snapshot snapshot = catchUpSnapshot(level, day, dayTime, foodLookup, noFood);
+                Schedule.Snapshot snapshot = snapshot(level, day, dayTime, foodLookup, SnapshotFacts.catchUp(noFood));
                 Optional<Intent> body = Schedule.wakeUp(snapshot);
                 if (body.isPresent()) {
                     // Only foraging settles the body in catch-up (awake, no skipped night).
@@ -1583,22 +1630,6 @@ public final class SettlerWork {
             }
             settler.getInventory().setChanged();
         }
-    }
-
-    /**
-     * The Schedule snapshot during catch-up: awake, idle, nothing left to deliver (output goes straight to the
-     * drop-off).
-     *
-     * @param noFood whether a meal just found nothing to take (no food point or pocket food for this decision)
-     */
-    private Schedule.Snapshot catchUpSnapshot(ServerLevel level, long day, long dayTime, FoodLookup foodLookup, boolean noFood) {
-        SettlerFood food = settler.getFood();
-        return new Schedule.Snapshot(day, dayTime, food.level(),
-                SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE),
-                CivModConfig.PROVISION_NUTRITION.get(), !noFood && SettlerFood.choose(pocketStacks(), food.level()).isPresent(),
-                () -> !noFood && foodLookup.get().isPresent(), () -> clerkToWaitAt(level).isPresent(), settler.isHomeless(),
-                false, food.forageDay(), false, Activity.IDLE, () -> false, food.morningDay() == day, food.eatenDay() == day,
-                waitStart(day), false, dayTimes(day));
     }
 
     /**
