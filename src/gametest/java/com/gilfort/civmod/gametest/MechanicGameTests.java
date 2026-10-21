@@ -19,6 +19,7 @@ import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
+import com.gilfort.civmod.settlement.TestAssignments;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -192,7 +193,7 @@ public final class MechanicGameTests {
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 7), setup.data(), setup.settlement());
         settler.setCustomName(Component.literal("Mira"));
         settler.getFood().setMorningDay(Math.floorDiv(helper.getLevel().getOverworldClockTime(), 24000L));
-        helper.assertTrue(JobAssignments.assign(setup.data(), craft, settler.getUUID(), "Mira", setup.settlement().id(), List.of(), job)
+        helper.assertTrue(TestAssignments.assign(setup.data(), craft, settler.getUUID(), "Mira", setup.settlement().id(), List.of(), job)
                 == JobAssignments.AssignResult.OK, job + " assigned");
         settler.addJob(new SettlerJob(job, craft));
         return settler;
@@ -203,7 +204,7 @@ public final class MechanicGameTests {
     }
 
     private static void cleanUp(Setup setup, Settler settler) {
-        JobAssignments.unassign(setup.data(), setup.clerk());
+        TestAssignments.unassign(setup.data(), setup.clerk());
         settler.discard();
     }
 }

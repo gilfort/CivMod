@@ -22,6 +22,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementWorld;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -178,7 +179,7 @@ public final class FoundTabGameTests {
                     second[0].joinSettlement(data, settlement);
                     second[0].getInventory().setItem(Settler.BELT_START, new ItemStack(Items.NETHERITE_AXE));
                     second[0].getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
-                    helper.assertTrue(JobAssignments.assign(data, jobBlock, second[0].getUUID(), "Second", settlement.id(), List.of())
+                    helper.assertTrue(TestAssignments.assign(data, jobBlock, second[0].getUUID(), "Second", settlement.id(), List.of())
                             == JobAssignments.AssignResult.OK, "Second assignment failed");
                     second[0].addJob(new SettlerJob(ModJobs.LUMBERJACK.get(), jobBlock));
                 })
@@ -258,7 +259,7 @@ public final class FoundTabGameTests {
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_PICKAXE));
         settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
         JobAssignments.cyclePoint(data, jobBlock, helper.absolutePos(new BlockPos(5, 1, 5)), true, false);
-        helper.assertTrue(JobAssignments.assign(data, jobBlock, settler.getUUID(), "Digger", settlement.id(), List.of())
+        helper.assertTrue(TestAssignments.assign(data, jobBlock, settler.getUUID(), "Digger", settlement.id(), List.of())
                 == JobAssignments.AssignResult.OK, "Assignment failed");
         settler.addJob(new SettlerJob(ModJobs.MINER.get(), jobBlock));
         boolean[] done = new boolean[1];

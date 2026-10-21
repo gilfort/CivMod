@@ -21,6 +21,7 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.google.gson.JsonParser;
 
 import net.minecraft.core.BlockPos;
@@ -205,7 +206,7 @@ public final class MinerGameTests {
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_PICKAXE));
         BlockPos poi = helper.absolutePos(new BlockPos(5, 1, 5));
         JobAssignments.cyclePoint(data, jobBlock, poi, true, false);
-        helper.assertTrue(JobAssignments.assign(data, jobBlock, settler.getUUID(), "Digger", settlement.id(), List.of())
+        helper.assertTrue(TestAssignments.assign(data, jobBlock, settler.getUUID(), "Digger", settlement.id(), List.of())
                 == JobAssignments.AssignResult.OK, "Assignment failed");
         settler.addJob(new SettlerJob(ModJobs.MINER.get(), jobBlock));
         helper.succeedWhen(() -> {

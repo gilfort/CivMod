@@ -38,6 +38,7 @@ import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementWorld;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -329,7 +330,7 @@ public final class AddonApiGameTests {
         ThoughtBubble.Show marker = new ThoughtBubble.Show(settler.getId(), ThoughtBubble.BLOCKED, Items.BARRIER, true);
         helper.assertTrue(settler.getWork().recentThoughts().equals(List.of(marker)),
                 "Generic marker: " + settler.getWork().recentThoughts());
-        JobAssignments.unassign(data, jobBlock);
+        TestAssignments.unassign(data, jobBlock);
         settler.discard();
         helper.succeed();
     }

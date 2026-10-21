@@ -24,6 +24,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.StockRules;
+import com.gilfort.civmod.settlement.TestAssignments;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -117,7 +118,7 @@ public final class ThoughtBubbleGameTests {
 
         settler.getWork().decideNow(level);
         helper.assertTrue(sent(settler).size() == 1, "Shown once, not on every decision: " + sent(settler));
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         settler.discard();
         helper.succeed();
     }
@@ -176,7 +177,7 @@ public final class ThoughtBubbleGameTests {
         settler.getWork().decideNow(level);
         helper.assertTrue(sent(settler).equals(List.of(show(settler, ThoughtBubble.NO_TOOL, Items.STONE_AXE),
                 off(settler, ThoughtBubble.NO_TOOL, Items.STONE_AXE))), "Problem off when it ends: " + sent(settler));
-        JobAssignments.unassign(data, jobBlock);
+        TestAssignments.unassign(data, jobBlock);
         settler.discard();
         helper.succeed();
     }
@@ -206,7 +207,7 @@ public final class ThoughtBubbleGameTests {
 
         // The settler leaves the job and decides once while it catches up (the state follows quietly).
         settler.removeJob(jobBlock);
-        JobAssignments.unassign(data, jobBlock);
+        TestAssignments.unassign(data, jobBlock);
         settler.getWork().decideQuietly(level);
         helper.assertTrue(sent(settler).size() == 1, "Nothing sent while caught up: " + sent(settler));
         settler.getWork().decideNow(level);
@@ -256,7 +257,7 @@ public final class ThoughtBubbleGameTests {
         helper.assertTrue(Requests.forRule(settlement, clerk, 1).orElseThrow().claimOf(settler.getUUID()).map(Request.Claim::amount)
                 .equals(Optional.of(1)), "The hoe is claimed");
         settler.removeJob(craft);
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         settler.discard();
         helper.succeed();
     }

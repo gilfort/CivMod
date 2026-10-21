@@ -39,6 +39,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.StockRules;
+import com.gilfort.civmod.settlement.TestAssignments;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -309,7 +310,7 @@ public final class ExampleAddonGameTests {
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 7), data, settlement);
         settler.setCustomName(Component.literal("Stella"));
         settler.getFood().setMorningDay(Math.floorDiv(level.getOverworldClockTime(), 24000L));
-        helper.assertTrue(JobAssignments.assign(data, craft, settler.getUUID(), "Stella", settlement.id(), List.of(), stonecutter)
+        helper.assertTrue(TestAssignments.assign(data, craft, settler.getUUID(), "Stella", settlement.id(), List.of(), stonecutter)
                 == JobAssignments.AssignResult.OK, "Stonecutter assigned");
         settler.addJob(new SettlerJob(stonecutter, craft));
 
@@ -321,7 +322,7 @@ public final class ExampleAddonGameTests {
         helper.assertTrue(ClerkStorage.stock(level, clerk, true).count(stack -> stack.is(Items.STONE_BRICKS)) == 4, "Stone bricks delivered");
         helper.assertTrue(ClerkStorage.stock(level, clerk, true).count(stack -> stack.is(Items.STONE)) == 0, "Stone used up");
         helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "Request done: " + Requests.byPriority(settlement));
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         settler.discard();
         helper.succeed();
     }
@@ -360,7 +361,7 @@ public final class ExampleAddonGameTests {
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 7), data, settlement);
         settler.setCustomName(Component.literal("Stella"));
         settler.getFood().setMorningDay(Math.floorDiv(level.getOverworldClockTime(), 24000L));
-        helper.assertTrue(JobAssignments.assign(data, craft, settler.getUUID(), "Stella", settlement.id(), List.of(), stonecutter)
+        helper.assertTrue(TestAssignments.assign(data, craft, settler.getUUID(), "Stella", settlement.id(), List.of(), stonecutter)
                 == JobAssignments.AssignResult.OK, "Stonecutter assigned");
         settler.addJob(new SettlerJob(stonecutter, craft));
         helper.assertTrue(Patterns.setOutput(level, craft, stonecutter, 0, Items.STONE_BRICKS).orElseThrow().checked(), "Bricks checked");
@@ -368,7 +369,7 @@ public final class ExampleAddonGameTests {
 
         helper.assertTrue(ClerkStorage.stock(level, clerk, true).count(stack -> stack.is(Items.STONE_BRICKS)) == 4,
                 "Stone bricks cut at the work point (status " + settler.getWork().status(craft) + ")");
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         settler.discard();
         level.setBlockAndUpdate(cutter, Blocks.AIR.defaultBlockState());
         helper.succeed();
@@ -410,7 +411,7 @@ public final class ExampleAddonGameTests {
         helper.assertTrue(Patterns.transfer(level, craft, stonecutter, 1, Optional.of(sticks), stickGrid).isEmpty(),
                 "The Stonecutter refuses a crafting recipe");
         helper.assertTrue(PatternTabData.of(level, craft, stonecutter).pattern(1).isEmpty(), "Refused: the slot stays empty");
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         helper.succeed();
     }
 }

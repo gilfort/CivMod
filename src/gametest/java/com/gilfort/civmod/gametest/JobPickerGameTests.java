@@ -9,14 +9,15 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.registry.ModJobs;
-import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobAssignments.AssignResult;
+import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementRules;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 
@@ -76,7 +77,7 @@ public final class JobPickerGameTests {
     }
 
     private static AssignResult assign(SettlementData data, Settlement settlement, BlockPos pos, int settler, Job job) {
-        return JobAssignments.assign(data, pos, SETTLERS[settler], "Settler " + settler, settlement.id(), List.of(), job);
+        return TestAssignments.assign(data, pos, SETTLERS[settler], "Settler " + settler, settlement.id(), List.of(), job);
     }
 
     private static Job specialization() {
@@ -123,9 +124,9 @@ public final class JobPickerGameTests {
         SettlementManager.setLevel(data, CLERK, 1, SettlementManager.Listener.NONE);
         helper.assertTrue(block(data, CLERK).assignees().size() == 3, "A downgrade keeps every assignee");
         helper.assertTrue(JobPlaces.lines(block(data, CLERK)).get(1).equals(new JobPlaces.Line(deliveryman, 2, 1)), "Deliveryman 2/1 after the downgrade");
-        JobAssignments.unassign(data, CLERK, SETTLERS[0]);
+        TestAssignments.unassign(data, CLERK, SETTLERS[0]);
         helper.assertTrue(assign(data, settlement, CLERK, 4, deliveryman) == AssignResult.OCCUPIED, "1/1 is still taken");
-        JobAssignments.unassign(data, CLERK, SETTLERS[1]);
+        TestAssignments.unassign(data, CLERK, SETTLERS[1]);
         helper.assertTrue(assign(data, settlement, CLERK, 4, deliveryman) == AssignResult.OK, "A place is free again");
         helper.succeed();
     }
@@ -141,7 +142,7 @@ public final class JobPickerGameTests {
         helper.assertTrue(block(data, CLERK).assignees().size() == 1, "Nothing added");
         helper.assertTrue(assign(data, settlement, LUMBERJACK, 1, ModJobs.DELIVERYMAN.get()) == AssignResult.NOT_OFFERED,
                 "A Lumberjack Block offers no Deliveryman");
-        helper.assertTrue(JobAssignments.assign(data, CLERK, SETTLERS[2], "Settler 2", settlement.id(), List.of(ModJobs.DELIVERYMAN.get()),
+        helper.assertTrue(TestAssignments.assign(data, CLERK, SETTLERS[2], "Settler 2", settlement.id(), List.of(ModJobs.DELIVERYMAN.get()),
                 ModJobs.DELIVERYMAN.get()) == AssignResult.DUPLICATE, "A settler holds a Job once");
         helper.succeed();
     }

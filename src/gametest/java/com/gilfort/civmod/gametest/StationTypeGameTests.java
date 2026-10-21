@@ -31,6 +31,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.StationTypes;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
@@ -275,7 +276,7 @@ public final class StationTypeGameTests {
 
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(pos).orElseThrow();
-        helper.assertTrue(JobAssignments.assign(data, pos, UUID.randomUUID(), "Stella", settlement.id(), List.of(), stonecutter)
+        helper.assertTrue(TestAssignments.assign(data, pos, UUID.randomUUID(), "Stella", settlement.id(), List.of(), stonecutter)
                 == JobAssignments.AssignResult.OK, "Stonecutter assigned");
         helper.assertTrue(Producers.canMake(level, settlement, Items.STONE_BRICKS), "The Stonecutter makes bricks");
         helper.assertFalse(Producers.canMake(level, settlement, Items.STICK), "Not the Craftsperson's sticks");
@@ -329,19 +330,19 @@ public final class StationTypeGameTests {
         helper.assertTrue(unlock(helper, b, 1, Items.CRAFTER), "The crafter again");
         setLevel(helper, relativeB, 3);
         setLevel(helper, new BlockPos(1, 1, 1), 3);
-        helper.assertTrue(JobAssignments.assign(data, a, unloaded, "Una", settlement.id(), List.of(), craftsperson) == JobAssignments.AssignResult.OK,
+        helper.assertTrue(TestAssignments.assign(data, a, unloaded, "Una", settlement.id(), List.of(), craftsperson) == JobAssignments.AssignResult.OK,
                 "Unloaded Una: Craftsperson at A");
-        helper.assertTrue(JobAssignments.assign(data, b, unloaded, "Una", settlement.id(), List.of(craftsperson), mechanic) == JobAssignments.AssignResult.OK,
+        helper.assertTrue(TestAssignments.assign(data, b, unloaded, "Una", settlement.id(), List.of(craftsperson), mechanic) == JobAssignments.AssignResult.OK,
                 "Una: Mechanic at B");
-        helper.assertTrue(JobAssignments.assign(data, b, single, "Sid", settlement.id(), List.of(), mechanic) == JobAssignments.AssignResult.OK,
+        helper.assertTrue(TestAssignments.assign(data, b, single, "Sid", settlement.id(), List.of(), mechanic) == JobAssignments.AssignResult.OK,
                 "Sid: Mechanic at B only");
         helper.assertTrue(unlock(helper, b, 1, Items.SMITHING_TABLE), "Replaced again");
         helper.assertFalse(block(level, b).isAssignee(unloaded), "Unloaded Una leaves B too");
         helper.assertTrue(block(level, b).assignee(single).map(SettlementBlock.Assignee::job).equals(Optional.of(craftsperson)),
                 "Sid holds no Craftsperson elsewhere: falls back");
         settler.discard();
-        JobAssignments.unassign(data, a);
-        JobAssignments.unassign(data, b);
+        TestAssignments.unassign(data, a);
+        TestAssignments.unassign(data, b);
         // Back to level 1: a bigger block left in the settlement data would push later tests' blocks out.
         setLevel(helper, relativeB, 1);
         setLevel(helper, new BlockPos(1, 1, 1), 1);
@@ -364,7 +365,7 @@ public final class StationTypeGameTests {
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 3), data, settlement);
         helper.assertTrue(SettlementWorld.assign(level, a, settler, craftsperson) == JobAssignments.AssignResult.OK, "Craftsperson at A");
         // An older save: B fell back to the Craftsperson while the settler, unloaded, still held the Mechanic there.
-        helper.assertTrue(JobAssignments.assign(data, b, settler.getUUID(), "Cora", settlement.id(), List.of(), craftsperson)
+        helper.assertTrue(TestAssignments.assign(data, b, settler.getUUID(), "Cora", settlement.id(), List.of(), craftsperson)
                 == JobAssignments.AssignResult.OK, "B lists the settler as Craftsperson");
         settler.addJob(new SettlerJob(mechanic, b));
         // Directly, not through the AI step: the test chunks are not forced, the settler may not tick in time.
@@ -373,7 +374,7 @@ public final class StationTypeGameTests {
                 "Only the Craftsperson at A is left: " + settler.getJobs());
         helper.assertFalse(block(level, b).isAssignee(settler.getUUID()), "B no longer lists the settler");
         settler.discard();
-        JobAssignments.unassign(data, a);
+        TestAssignments.unassign(data, a);
         helper.succeed();
     }
 

@@ -8,13 +8,13 @@ import java.util.function.Consumer;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.job.CatchUp;
-import com.gilfort.civmod.menu.JobBlockInfo;
-import com.gilfort.civmod.menu.JobBlockMenu;
-import com.gilfort.civmod.menu.StockTab;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.logistics.StockRule;
+import com.gilfort.civmod.menu.JobBlockInfo;
+import com.gilfort.civmod.menu.JobBlockMenu;
+import com.gilfort.civmod.menu.StockTab;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModJobs;
@@ -24,6 +24,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.StockRules;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -117,7 +118,7 @@ public final class StockRuleGameTests {
         delivered.insert(new ItemStack(Items.STONE_PICKAXE));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "Delivered and stocked: no request");
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         helper.succeed();
     }
 
@@ -141,7 +142,7 @@ public final class StockRuleGameTests {
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(Requests.byPriority(settlement).size() == 3 && Requests.claimable(settlement).size() == 2,
                 "A fully claimed request stays the rule's one request");
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(Requests.byPriority(settlement).size() == 1, "Claimed request stays until delivered");
         Requests.finish(data, settlement, torches.id(), CARL);
@@ -163,7 +164,7 @@ public final class StockRuleGameTests {
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "No Clerk settler: no request");
 
-        JobAssignments.assign(data, clerk, CLARA, "Clara", settlement.id(), List.of());
+        TestAssignments.assign(data, clerk, CLARA, "Clara", settlement.id(), List.of());
         StockRules.check(level, clerk, ClerkGameTests.EVENING);
         helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "After the shift: no request");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
@@ -178,17 +179,17 @@ public final class StockRuleGameTests {
         helper.assertTrue(settlement.block(clerk).orElseThrow().stockRule(9).isPresent(), "Extra rule kept");
         StockRules.check(level, clerk, ClerkGameTests.EVENING);
         helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "Shift over: requests withdrawn");
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
 
         // Catch-up: the Clerk settler checks the rules per simulated hour of its shift.
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 3), data, settlement);
-        JobAssignments.assign(data, clerk, settler.getUUID(), "Clerk", settlement.id(), List.of());
+        TestAssignments.assign(data, clerk, settler.getUUID(), "Clerk", settlement.id(), List.of());
         settler.addJob(new SettlerJob(ModJobs.CLERK.get(), clerk));
         long dayStart = Math.floorDiv(level.getOverworldClockTime(), 24000L) * 24000L;
         settler.getWork().setCatchUp(dayStart - 24000L, dayStart - 24000L + 3000L);
         CatchUp.runNow(level, List.of(settler));
         helper.assertTrue(Requests.forRule(settlement, clerk, 0).isPresent(), "Catch-up checks the rules");
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         settler.discard();
         helper.succeed();
     }
@@ -220,7 +221,7 @@ public final class StockRuleGameTests {
                 && Requests.get(settlement, sticks.id()).orElseThrow().priority() == -50, "Priority change moves the request and its sub-requests");
         helper.assertTrue(Requests.claimable(settlement).get(0).item() == Items.TORCH, "New order");
         Requests.withdraw(data, settlement, other.id());
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "Off: all withdrawn " + Requests.byPriority(settlement));
         helper.succeed();
@@ -258,7 +259,7 @@ public final class StockRuleGameTests {
         helper.assertTrue(Requests.forRule(settlement, clerk, 2).isEmpty(), "New item: the old request is withdrawn");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(Requests.forRule(settlement, clerk, 2).orElseThrow().item() == Items.LANTERN, "Next check: the new item");
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.succeed();
     }
@@ -293,7 +294,7 @@ public final class StockRuleGameTests {
         menu.tab(StockTab.class).orElseThrow().editRule(0, Optional.empty());
         helper.assertTrue(settlement.block(clerk).orElseThrow().stockRules().isEmpty() && Requests.byPriority(settlement).isEmpty(),
                 "Deleted through the menu");
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         helper.succeed();
     }
 
@@ -343,7 +344,7 @@ public final class StockRuleGameTests {
         BlockPos clerk = ClerkGameTests.clerkWithStorage(helper);
         SettlementData data = SettlementData.get(helper.getLevel());
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        helper.assertTrue(JobAssignments.assign(data, clerk, CLARA, "Clara", settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
+        helper.assertTrue(TestAssignments.assign(data, clerk, CLARA, "Clara", settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
                 "Clerk assigned");
         return clerk;
     }
