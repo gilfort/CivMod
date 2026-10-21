@@ -20,6 +20,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -42,6 +43,7 @@ public final class JobStepGameTests {
     static void onRegister(RegisterEvent event) {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "job_step_clerk_walks_to_counter", JobStepGameTests::clerkWalksToCounter);
+            register(helper, "job_step_lumberjack_blocked_without_tool", JobStepGameTests::lumberjackBlockedWithoutTool);
         });
     }
 
@@ -71,6 +73,34 @@ public final class JobStepGameTests {
         helper.assertTrue(work.apply(level, job, step), "The step keeps the settler busy");
         helper.assertTrue(work.activeJob().filter(job::equals).isPresent(), "The shell sets the active job");
         helper.assertTrue(work.status(clerk) == JobStatus.SERVING, "The shell sets the status: " + work.status(clerk));
+        settler.discard();
+        helper.succeed();
+    }
+
+    /** A Lumberjack without an axe on its belt or in its collect inventory answers "blocked: no tool". */
+    private static void lumberjackBlockedWithoutTool(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        for (int x = 0; x < 9; x++) {
+            for (int z = 0; z < 9; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
+        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
+        BlockPos jobBlock = helper.absolutePos(new BlockPos(1, 1, 1));
+        Settler settler = settler(helper, jobBlock, new BlockPos(3, 1, 3));
+        SettlerJob job = new SettlerJob(ModJobs.LUMBERJACK.get(), jobBlock);
+        settler.addJob(job);
+        SettlerWork work = settler.getWork();
+        JobBlockSite site = JobBlockSite.at(level, jobBlock).orElseThrow();
+
+        JobStep step = Objects.requireNonNull(work.loop(job)).plan(level, job, site, DayClock.day(level), MORNING);
+
+        helper.assertTrue(step instanceof JobStep.Blocked blocked && blocked.status() == JobStatus.NO_TOOL && blocked.reason() == null,
+                "Blocked without a tool: " + step);
+        helper.assertTrue(work.status(jobBlock) == JobStatus.IDLE, "The loop does not set the status: " + work.status(jobBlock));
+        helper.assertFalse(work.apply(level, job, step), "A blocked job leaves the settler to its next priority");
+        helper.assertTrue(work.status(jobBlock) == JobStatus.NO_TOOL, "The shell blocks the job: " + work.status(jobBlock));
+        helper.assertTrue(work.workplace(jobBlock).isBlocked(level.getGameTime()), "Retried after a while");
         settler.discard();
         helper.succeed();
     }
