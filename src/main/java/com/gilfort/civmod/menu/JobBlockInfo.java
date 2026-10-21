@@ -68,26 +68,35 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
     /**
      * The biome bonuses of the JobBlock's Job (vault {@code Systems/JobBlock.md}, decisions on biome bonuses).
      *
-     * @param today    today's biome with its effects ({@link BiomeBonusText#line}), empty while no biome is known
+     * @param biome    today's biome, empty while no biome is known
+     * @param effects  its effects ({@link BiomeBonusText#effects}), empty without an effect
      * @param overview the "?" overview of every biome with an effect for the Job ({@link BiomeBonusText#overview})
      */
-    public record BiomeInfo(Optional<Component> today, List<Component> overview) {
+    public record BiomeInfo(Optional<Component> biome, List<Component> effects, List<Component> overview) {
 
         /** No biome known, no overview (before the first sync). */
-        public static final BiomeInfo NONE = new BiomeInfo(Optional.empty(), List.of());
+        public static final BiomeInfo NONE = new BiomeInfo(Optional.empty(), List.of(), List.of());
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, BiomeInfo> STREAM_CODEC = StreamCodec.composite(
-                ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs::optional), BiomeInfo::today,
+                ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs::optional), BiomeInfo::biome,
+                ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), BiomeInfo::effects,
                 ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), BiomeInfo::overview,
                 BiomeInfo::new);
 
         /**
-         * @param today    today's biome line
+         * @param biome    today's biome
+         * @param effects  its effects
          * @param overview the overview lines
          */
         public BiomeInfo {
+            effects = List.copyOf(effects);
             overview = List.copyOf(overview);
+        }
+
+        /** @return today's biome with its effects ("Desert · Ore chance ×1.5"), empty while no biome is known */
+        public Optional<Component> today() {
+            return biome.map(name -> BiomeBonusText.line(name, effects));
         }
 
         /**
@@ -101,20 +110,22 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
          * @return the info
          */
         static BiomeInfo of(ServerLevel level, BlockPos pos, Job job, List<SettlementBlock.Assignee> assignees) {
-            Optional<Component> today = Optional.empty();
+            Job read = job;
+            BiomeBonus today = BiomeBonus.NONE;
             for (SettlementBlock.Assignee assignee : assignees) {
                 if (level.getEntity(assignee.id()) instanceof Settler settler) {
-                    BiomeBonus bonus = CivModApi.biomeBonus(settler, pos);
-                    today = BiomeBonusText.line(assignee.job(), bonus);
-                    if (today.isPresent()) {
+                    today = CivModApi.biomeBonus(settler, pos);
+                    read = assignee.job();
+                    if (today.biome().isPresent()) {
                         break;
                     }
                 }
             }
-            if (today.isEmpty()) {
-                today = BiomeBonusText.line(job, BiomeBonuses.today(level, job, pos, null));
+            if (today.biome().isEmpty()) {
+                read = job;
+                today = BiomeBonuses.today(level, job, pos, null);
             }
-            return new BiomeInfo(today, BiomeBonusText.overview(job));
+            return new BiomeInfo(BiomeBonusText.biome(today), BiomeBonusText.effects(read, today), BiomeBonusText.overview(job));
         }
     }
 

@@ -22,13 +22,14 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 
 /**
  * The "Info" tab of the {@link JobBlockScreen}; the client side of {@link InfoTab}: Job, level and skill cap, settlement
- * status, one line per offered Job with its automatic assignment checkbox, today's biome with its bonus effects (the "?"
- * lists every biome with an effect for the Job), upgrade costs (a row of slots that scrolls
- * with the mouse wheel) and the Upgrade, leaf collection and Free buttons. Other tabs' views add their own lines,
- * buttons and help lines ({@link JobBlockTabView#extractInfo}, {@link JobBlockTabView#initInfo}).
+ * status, one line per offered Job with its automatic assignment checkbox, today's biome on the Job line (its bonus
+ * effects on hover; the "?" lists every biome with an effect for the Job), upgrade costs (a row of slots that scrolls
+ * with the mouse wheel) and the Upgrade, leaf collection and Free buttons. Other tabs' views add their own lines and
+ * buttons ({@link JobBlockTabView#extractInfo}, {@link JobBlockTabView#initInfo}).
  * <p>
  * Unconnected JobBlocks show the info greyed out with a red hint; storage keeps working.
  */
@@ -117,10 +118,6 @@ final class InfoTabView implements JobBlockTabView {
         if (info.jobType().profile(LumberjackProfile.class).isPresent() && info.inSettlement()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.leaves"));
         }
-        if (info.inSettlement()) {
-            screen.views().forEach(view -> lines.addAll(view.infoHelpLines()));
-            lines.add(Component.translatable("civmod.gui.job_block.help.auto_assign"));
-        }
         // The biomes that change something for the Job, and that all others do not.
         lines.addAll(info.biome().overview());
         return lines;
@@ -135,13 +132,29 @@ final class InfoTabView implements JobBlockTabView {
         int left = screen.left();
         int top = screen.top();
         int y = 22;
-        graphics.text(font, Component.translatable("civmod.gui.job_block.job", info.jobType().displayName()), CivGui.PADDING, y, color, false);
+        int width = screen.panelWidth() - 2 * CivGui.PADDING;
+        // The Job line also names today's biome (one line: the buttons below leave no room for more); a star marks
+        // effects, which show on hover (vault Systems/JobBlock.md, biome bonuses).
+        JobBlockInfo.BiomeInfo biome = info.biome();
+        MutableComponent jobLine = Component.translatable("civmod.gui.job_block.job", info.jobType().displayName());
+        biome.biome().ifPresent(name -> {
+            jobLine.append(" · ").append(name);
+            if (!biome.effects().isEmpty()) {
+                jobLine.append(" ").append(CivGui.STAR.copy().withColor(CivGui.STAR_COLOR & 0xFFFFFF));
+            }
+        });
+        graphics.text(font, CivGui.fit(font, jobLine, width), CivGui.PADDING, y, color, false);
+        if (biome.biome().isPresent() && overLine(y, width, mouseX, mouseY)) {
+            List<Component> lines = new ArrayList<>();
+            lines.add(biome.biome().get());
+            lines.addAll(biome.effects());
+            graphics.setComponentTooltipForNextFrame(font, lines, mouseX, mouseY);
+        }
         y += LINE_HEIGHT;
         graphics.text(font, Component.translatable("civmod.gui.job_block.level_cap", info.level(), SettlementRules.MAX_LEVEL,
                 SettlementRules.skillCap(info.level())), CivGui.PADDING, y, color, false);
         y += LINE_HEIGHT;
         // The settlement line also carries the connection state (one line: the buttons below leave no room for more).
-        int width = screen.panelWidth() - 2 * CivGui.PADDING;
         if (!info.inSettlement()) {
             graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.job_block.not_registered"), width), CivGui.PADDING, y,
                     CivGui.ERROR_COLOR, false);
@@ -180,16 +193,6 @@ final class InfoTabView implements JobBlockTabView {
             if (!holders.isEmpty() && mouseX >= left + CivGui.PADDING && mouseX < left + CivGui.PADDING + Math.min(textWidth, font.width(text))
                     && mouseY >= top + y && mouseY < top + y + font.lineHeight) {
                 graphics.setComponentTooltipForNextFrame(font, settlerLines(info, holders), mouseX, mouseY);
-            }
-            y += LINE_HEIGHT;
-        }
-        // Today's biome of the work place with its effects (vault Systems/JobBlock.md, biome bonuses).
-        if (info.biome().today().isPresent()) {
-            Component biome = info.biome().today().get();
-            graphics.text(font, CivGui.fit(font, biome, width), CivGui.PADDING, y, color, false);
-            // Shortened to fit: the whole line on hover.
-            if (font.width(biome) > width && overLine(y, width, mouseX, mouseY)) {
-                graphics.setComponentTooltipForNextFrame(font, List.of(biome), mouseX, mouseY);
             }
             y += LINE_HEIGHT;
         }

@@ -101,16 +101,16 @@ public final class BiomeBonusGuiGameTests {
                     FoundTabData.Entry iron = tab.entry(Identifier.withDefaultNamespace("iron_ore")).orElseThrow();
                     helper.assertTrue(iron.rareBonus() && iron.doubleBonus(), "Iron ore: two stars: " + iron);
                     helper.assertTrue(strings(iron.bonusLines()).equals(List.of("Ore chance ×1.5 (biome bonus civmod:test_gui_miner_a)",
-                            "Raw Iron drops +50 % (biome bonus civmod:test_gui_miner_a)", "Raw Iron drops +25 % (biome bonus civmod:test_gui_miner_b)")),
+                            "Raw Iron drops +50% (biome bonus civmod:test_gui_miner_a)", "Raw Iron drops +25% (biome bonus civmod:test_gui_miner_b)")),
                             "Iron ore tooltip: " + strings(iron.bonusLines()));
                     FoundTabData.Entry stone = tab.entry(Identifier.withDefaultNamespace("stone")).orElseThrow();
                     helper.assertTrue(!stone.rareBonus() && stone.doubleBonus(), "Stone: one star: " + stone);
-                    helper.assertTrue(strings(stone.bonusLines()).equals(List.of("Cobblestone drops +25 % (biome bonus civmod:test_gui_miner_a)")),
+                    helper.assertTrue(strings(stone.bonusLines()).equals(List.of("Cobblestone drops +25% (biome bonus civmod:test_gui_miner_a)")),
                             "Stone tooltip: " + strings(stone.bonusLines()));
                     FoundTabData.Entry granite = tab.entry(Identifier.withDefaultNamespace("granite")).orElseThrow();
                     helper.assertTrue(!granite.rareBonus() && !granite.doubleBonus() && granite.bonusLines().isEmpty(), "Granite: no star: " + granite);
                     Optional<String> line = today(JobBlockInfo.of(level, jobBlock, ModJobs.MINER.get(), 1));
-                    helper.assertTrue(line.equals(Optional.of("Desert · Ore chance ×1.5 · Raw Iron drops +75 % · Cobblestone drops +25 %")),
+                    helper.assertTrue(line.equals(Optional.of("Desert · Ore chance ×1.5 · Raw Iron drops +75% · Cobblestone drops +25%")),
                             "JobBlock line: " + line);
                     settler.discard();
                     fillBiome(helper, new BlockPos(0, -4, 0), new BlockPos(16, 8, 16), Biomes.PLAINS);
@@ -177,9 +177,9 @@ public final class BiomeBonusGuiGameTests {
         List<String> miner = strings(BiomeBonusText.overview(ModJobs.MINER.get()));
         helper.assertTrue(miner.size() > 2 && miner.get(0).equals("Biome bonuses:") && miner.get(miner.size() - 1).equals("All other biomes: no effect"),
                 "Title and note: " + miner);
-        helper.assertTrue(miner.contains("Desert: Ore chance ×1.5 · Raw Iron drops +50 % · Cobblestone drops +25 %"), "Both effects of a file: " + miner);
-        helper.assertTrue(miner.contains("Desert: Raw Iron drops +25 %"), "One line per file: " + miner);
-        helper.assertTrue(miner.contains("Mushroom Fields: Ore chance ×2 · Cobblestone, Granite drops +100 %"), "An item list: " + miner);
+        helper.assertTrue(miner.contains("Desert: Ore chance ×1.5 · Raw Iron drops +50% · Cobblestone drops +25%"), "Both effects of a file: " + miner);
+        helper.assertTrue(miner.contains("Desert: Raw Iron drops +25%"), "One line per file: " + miner);
+        helper.assertTrue(miner.contains("Mushroom Fields: Ore chance ×2 · Cobblestone, Granite drops +100%"), "An item list: " + miner);
         helper.assertTrue(miner.contains("Mountains: Ore chance ×1.1"), "A biome tag by its name: " + miner);
         List<String> lumberjack = strings(BiomeBonusText.overview(ModJobs.LUMBERJACK.get()));
         helper.assertTrue(lumberjack.stream().noneMatch(line -> line.contains("Desert")), "Rare chance does nothing for the Lumberjack: " + lumberjack);
@@ -190,8 +190,8 @@ public final class BiomeBonusGuiGameTests {
 
     /**
      * Double drop entries with overlapping item lists show the sum S per produced item, like the mechanics roll it:
-     * {@code [raw_iron, raw_gold] +50 %}, {@code [raw_iron] +25 %} and {@code [raw_copper, raw_gold] +10 %} give Raw
-     * Iron +75 %, Raw Gold +60 % and Raw Copper +10 %.
+     * {@code [raw_iron, raw_gold] +50%}, {@code [raw_iron] +25%} and {@code [raw_copper, raw_gold] +10%} give Raw
+     * Iron +75%, Raw Gold +60% and Raw Copper +10%.
      */
     private static void overlappingDrops(GameTestHelper helper) {
         BiomeBonus bonus = new BiomeBonus(Optional.of(Biomes.DESERT), BiomeBonus.Factor.ONE, BiomeBonus.Factor.ONE, List.of(
@@ -199,7 +199,7 @@ public final class BiomeBonusGuiGameTests {
                 new BiomeBonus.DoubleDrop(List.of(item("raw_iron")), 0.25, CivMod.id("b")),
                 new BiomeBonus.DoubleDrop(List.of(item("raw_copper"), item("raw_gold")), 0.1, CivMod.id("c"))));
         Optional<String> line = BiomeBonusText.line(ModJobs.MINER.get(), bonus).map(Component::getString);
-        helper.assertTrue(line.equals(Optional.of("Desert · Raw Iron drops +75 % · Raw Gold drops +60 % · Raw Copper drops +10 %")),
+        helper.assertTrue(line.equals(Optional.of("Desert · Raw Iron drops +75% · Raw Gold drops +60% · Raw Copper drops +10%")),
                 "The sum per item: " + line);
         helper.succeed();
     }
@@ -218,7 +218,7 @@ public final class BiomeBonusGuiGameTests {
         fillBiome(helper,new BlockPos(0, -4, 0), new BlockPos(12, 8, 12), Biomes.DESERT);
         fillBiome(helper,new BlockPos(20, -4, 20), new BlockPos(32, 8, 32), Biomes.SAVANNA);
         String desert = ScrollOfAssignmentItem.workPointMessage(level, ModJobs.MINER.get(), helper.absolutePos(new BlockPos(6, 1, 6))).getString();
-        helper.assertTrue(desert.equals("Work place for Miner added · Desert · Ore chance ×1.5 · Raw Iron drops +75 % · Cobblestone drops +25 %"),
+        helper.assertTrue(desert.equals("Work place for Miner added · Desert · Ore chance ×1.5 · Raw Iron drops +75% · Cobblestone drops +25%"),
                 "Desert: " + desert);
         String savanna = ScrollOfAssignmentItem.workPointMessage(level, ModJobs.MINER.get(), helper.absolutePos(new BlockPos(26, 1, 26))).getString();
         helper.assertTrue(savanna.equals("Work place for Miner added · Savanna"), "Savanna: " + savanna);

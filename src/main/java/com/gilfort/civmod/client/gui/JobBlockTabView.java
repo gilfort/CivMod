@@ -180,13 +180,6 @@ interface JobBlockTabView {
     }
 
     /**
-     * @return the view's help lines of the Info tab
-     */
-    default List<Component> infoHelpLines() {
-        return List.of();
-    }
-
-    /**
      * @return whether the Info tab offers to free the JobBlock's only place
      */
     default boolean offersUnassign() {

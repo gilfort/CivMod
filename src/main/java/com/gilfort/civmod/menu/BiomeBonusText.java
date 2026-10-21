@@ -17,6 +17,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.job.BiomeBonuses;
 
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -30,7 +31,7 @@ import net.minecraft.world.item.ItemStack;
 
 /**
  * The texts that show biome bonuses (vault {@code Systems/JobBlock.md}, decisions on biome bonuses): the effects of a
- * resolved bonus ("Speed ×1.1", "Ore chance ×1.1", "Raw Iron drops +50 %"), the line of today's biome for the JobBlock
+ * resolved bonus ("Speed ×1.1", "Ore chance ×1.1", "Raw Iron drops +50%"), the line of today's biome for the JobBlock
  * window and the action bar ("Desert · Ore chance ×1.5"), and the "?" overview of every bonus file acting on a Job.
  */
 public final class BiomeBonusText {
@@ -48,12 +49,27 @@ public final class BiomeBonusText {
      *         a biome
      */
     public static Optional<Component> line(Job job, BiomeBonus bonus) {
-        return bonus.biome().map(biome -> {
-            List<Component> parts = new ArrayList<>();
-            parts.add(Component.translatable(Util.makeDescriptionId("biome", biome.identifier())));
-            parts.addAll(effects(job, bonus));
-            return join(parts, SEPARATOR);
-        });
+        return biome(bonus).map(name -> line(name, effects(job, bonus)));
+    }
+
+    /**
+     * @param biome   a biome name
+     * @param effects its effects
+     * @return the biome and its effects ("Desert · Ore chance ×1.5"), the biome alone without an effect
+     */
+    public static Component line(Component biome, List<Component> effects) {
+        List<Component> parts = new ArrayList<>();
+        parts.add(biome);
+        parts.addAll(effects);
+        return join(parts, SEPARATOR);
+    }
+
+    /**
+     * @param bonus a resolved bonus
+     * @return the name of its biome ("Desert"), empty without a biome
+     */
+    public static Optional<Component> biome(BiomeBonus bonus) {
+        return bonus.biome().map(biome -> Component.translatable(Util.makeDescriptionId("biome", biome.identifier())));
     }
 
     /**
@@ -61,7 +77,7 @@ public final class BiomeBonusText {
      * @param bonus a resolved bonus
      * @return its effects: speed, rare chance, then the double drops ({@link #doubleDrops})
      */
-    private static List<Component> effects(Job job, BiomeBonus bonus) {
+    public static List<Component> effects(Job job, BiomeBonus bonus) {
         List<Component> effects = new ArrayList<>();
         if (!bonus.speed().sources().isEmpty()) {
             effects.add(speed(bonus.speed().value()));
@@ -77,8 +93,8 @@ public final class BiomeBonusText {
      * The double drops of a resolved bonus as the mechanics roll them: one effect per group of produced items matched
      * by the same entries, with the sum S of those entries' chances ({@link BiomeBonus#doubleDropChance}). A group is
      * named like an entry whose items are exactly the group (so entries with the same items read as one), else by its
-     * items: {@code [raw_iron, raw_gold] +50 %} and {@code [raw_iron] +25 %} read "Raw Iron drops +75 %", "Raw Gold drops
-     * +50 %". Entries that match no item are left out.
+     * items: {@code [raw_iron, raw_gold] +50%} and {@code [raw_iron] +25%} read "Raw Iron drops +75%", "Raw Gold drops
+     * +50%". Entries that match no item are left out.
      */
     private static List<Component> doubleDrops(BiomeBonus bonus) {
         Map<List<BiomeBonus.DoubleDrop>, List<Item>> groups = new LinkedHashMap<>();
@@ -116,7 +132,7 @@ public final class BiomeBonusText {
 
     /**
      * The "?" overview of a Job's biome bonuses: a title, one line per bonus file with an effect for the Job ("Desert:
-     * Ore chance ×1.5 · Raw Iron drops +50 %") and the note that all other biomes have no effect.
+     * Ore chance ×1.5 · Raw Iron drops +50%") and the note that all other biomes have no effect.
      *
      * @param job a Job
      * @return the lines, empty for a Job without biome position (Mission Jobs)
@@ -135,7 +151,8 @@ public final class BiomeBonusText {
             file.rareChance().flatMap(value -> rareChance(job, value)).ifPresent(effects::add);
             file.doubleDrop().forEach(drop -> effects.add(doubleDrop(drop.items(), drop.chance())));
             if (!effects.isEmpty()) {
-                Component biomes = join(file.biomes().stream().map(BiomeBonusText::biome).toList(), ", ");
+                // The biomes stand out, so an entry wrapped over two tooltip lines still reads as one.
+                Component biomes = join(file.biomes().stream().map(BiomeBonusText::biome).toList(), ", ").copy().withStyle(ChatFormatting.YELLOW);
                 lines.add(Component.translatable("civmod.biome_bonus.overview_line", biomes, join(effects, SEPARATOR)));
             }
         }
@@ -168,7 +185,7 @@ public final class BiomeBonusText {
     /**
      * @param items  the item ids and {@code #item tags} of a double drop entry
      * @param chance its chance
-     * @return "Raw Iron drops +50 %"
+     * @return "Raw Iron drops +50%"
      */
     private static Component doubleDrop(List<ExtraCodecs.TagOrElementLocation> items, double chance) {
         Component names = join(items.stream().map(BiomeBonusText::item).toList(), ", ");
@@ -227,9 +244,9 @@ public final class BiomeBonusText {
         return "×" + BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
     }
 
-    /** A chance in percent with its sign: +50 %, −40 %. */
+    /** A chance in percent with its sign: +50%, −40% (no space: a wrapped tooltip never shows "%" alone). */
     private static String percent(double chance) {
         long percent = Math.round(chance * 100);
-        return (percent < 0 ? "−" + -percent : "+" + percent) + " %";
+        return (percent < 0 ? "−" + -percent : "+" + percent) + "%";
     }
 }

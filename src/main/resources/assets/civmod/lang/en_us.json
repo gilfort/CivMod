@@ -157,8 +157,6 @@
   "civmod.gui.job_block.help.leaves": "Leaves need shears in the collect inventory",
   "civmod.gui.job_block.delivery.self": "Delivery: Self",
   "civmod.gui.job_block.delivery.deliveryman": "Delivery: Deliveryman",
-  "civmod.gui.job_block.help.delivery": "Deliverymen carry results from the drop-off",
-  "civmod.gui.job_block.help.auto_assign": "Checkbox: jobless settlers join daily at 06:00",
   "civmod.gui.job_block.auto_assign.on": "Automatic assignment: On",
   "civmod.gui.job_block.auto_assign.off": "Automatic assignment: Off",
   "civmod.auto_assign.assigned": "%s is now %s",

@@ -103,11 +103,6 @@ final class PatternsTabView implements JobBlockTabView {
         }
     }
 
-    @Override
-    public List<Component> infoHelpLines() {
-        return List.of(Component.translatable("civmod.gui.job_block.help.delivery"));
-    }
-
     /** Another tab: the editor closes. */
     @Override
     public void onTabChanged() {
