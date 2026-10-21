@@ -49,22 +49,22 @@ import net.minecraft.world.item.ItemStack;
  * @param servedBy   the Warehouse serving this Clerk, if any
  * @param nowhere    the slots of the rules whose surplus has nowhere to go ("Surplus: nowhere to go")
  */
-public record ClerkTab(int level, List<StockRule> rules, List<RequestRow> requests, List<DeliveryRow> deliveries, List<Component> served,
+public record ClerkTabData(int level, List<StockRule> rules, List<RequestRow> requests, List<DeliveryRow> deliveries, List<Component> served,
         Optional<Component> servedBy, List<Integer> nowhere) {
 
     /** Nothing (any other JobBlock, or before the first sync). */
-    public static final ClerkTab EMPTY = new ClerkTab(1, List.of(), List.of(), List.of(), List.of(), Optional.empty(), List.of());
+    public static final ClerkTabData EMPTY = new ClerkTabData(1, List.of(), List.of(), List.of(), List.of(), Optional.empty(), List.of());
 
     /** Network codec. */
-    public static final StreamCodec<RegistryFriendlyByteBuf, ClerkTab> STREAM_CODEC = StreamCodec.composite(
-            ByteBufCodecs.VAR_INT, ClerkTab::level,
-            StockRule.STREAM_CODEC.apply(ByteBufCodecs.list()), ClerkTab::rules,
-            RequestRow.STREAM_CODEC.apply(ByteBufCodecs.list()), ClerkTab::requests,
-            DeliveryRow.STREAM_CODEC.apply(ByteBufCodecs.list()), ClerkTab::deliveries,
-            ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), ClerkTab::served,
-            ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs::optional), ClerkTab::servedBy,
-            ByteBufCodecs.VAR_INT.apply(ByteBufCodecs.list()), ClerkTab::nowhere,
-            ClerkTab::new);
+    public static final StreamCodec<RegistryFriendlyByteBuf, ClerkTabData> STREAM_CODEC = StreamCodec.composite(
+            ByteBufCodecs.VAR_INT, ClerkTabData::level,
+            StockRule.STREAM_CODEC.apply(ByteBufCodecs.list()), ClerkTabData::rules,
+            RequestRow.STREAM_CODEC.apply(ByteBufCodecs.list()), ClerkTabData::requests,
+            DeliveryRow.STREAM_CODEC.apply(ByteBufCodecs.list()), ClerkTabData::deliveries,
+            ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), ClerkTabData::served,
+            ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs::optional), ClerkTabData::servedBy,
+            ByteBufCodecs.VAR_INT.apply(ByteBufCodecs.list()), ClerkTabData::nowhere,
+            ClerkTabData::new);
 
     /**
      * @param level      the Clerk JobBlock level
@@ -75,7 +75,7 @@ public record ClerkTab(int level, List<StockRule> rules, List<RequestRow> reques
      * @param servedBy   the serving Warehouse
      * @param nowhere    the rule slots whose surplus has nowhere to go
      */
-    public ClerkTab {
+    public ClerkTabData {
         rules = List.copyOf(rules);
         requests = List.copyOf(requests);
         deliveries = List.copyOf(deliveries);
@@ -146,7 +146,7 @@ public record ClerkTab(int level, List<StockRule> rules, List<RequestRow> reques
      * @param clerk the Clerk JobBlock position
      * @return the current tab of that Clerk ({@link #EMPTY} if it is none)
      */
-    public static ClerkTab of(ServerLevel level, BlockPos clerk) {
+    public static ClerkTabData of(ServerLevel level, BlockPos clerk) {
         Optional<Settlement> settlement = SettlementData.get(level).settlementAt(clerk);
         Optional<SettlementBlock> block = settlement.flatMap(found -> found.block(clerk)).filter(ClerkStorage::isClerk);
         if (block.isEmpty()) {
@@ -156,7 +156,7 @@ public record ClerkTab(int level, List<StockRule> rules, List<RequestRow> reques
                 .map(request -> new RequestRow(request.item(), request.amount() + request.crafting(), request.priority(),
                         status(level, settlement.get(), request)))
                 .toList();
-        return new ClerkTab(block.get().level(), block.get().stockRules(), rows, deliveries(level, settlement.get(), block.get()),
+        return new ClerkTabData(block.get().level(), block.get().stockRules(), rows, deliveries(level, settlement.get(), block.get()),
                 served(settlement.get(), block.get()), Warehouses.servedBy(settlement.get(), clerk).map(ClerkStorage::name),
                 StockRules.surplusNowhere(level, clerk));
     }
@@ -243,7 +243,7 @@ public record ClerkTab(int level, List<StockRule> rules, List<RequestRow> reques
      * @param containerId the menu's container id
      * @param tab         the tab
      */
-    public record Sync(int containerId, ClerkTab tab) implements CustomPacketPayload {
+    public record Sync(int containerId, ClerkTabData tab) implements CustomPacketPayload {
 
         /** Payload type. */
         public static final Type<Sync> TYPE = new Type<>(CivMod.id("clerk_tab"));
@@ -251,7 +251,7 @@ public record ClerkTab(int level, List<StockRule> rules, List<RequestRow> reques
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Sync> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, Sync::containerId,
-                ClerkTab.STREAM_CODEC, Sync::tab,
+                ClerkTabData.STREAM_CODEC, Sync::tab,
                 Sync::new);
 
         @Override

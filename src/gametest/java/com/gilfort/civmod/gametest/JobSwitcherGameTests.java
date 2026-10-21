@@ -19,8 +19,8 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModJobs;
-import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobAssignments.AssignResult;
+import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.Requests;
@@ -31,6 +31,7 @@ import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.StockRules;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 
@@ -143,24 +144,24 @@ public final class JobSwitcherGameTests {
         Settlement settlement = data.settlementAt(pos).orElseThrow();
         UUID cora = UUID.randomUUID();
         UUID stella = UUID.randomUUID();
-        helper.assertTrue(JobAssignments.assign(data, pos, cora, "Cora", settlement.id(), List.of(), craftsperson) == AssignResult.OK,
+        helper.assertTrue(TestAssignments.assign(data, pos, cora, "Cora", settlement.id(), List.of(), craftsperson) == AssignResult.OK,
                 "Cora: Craftsperson");
-        helper.assertTrue(JobAssignments.assign(data, pos, cora, "Cora", settlement.id(), List.of(craftsperson), stonecutter) == AssignResult.SAME_BLOCK,
+        helper.assertTrue(TestAssignments.assign(data, pos, cora, "Cora", settlement.id(), List.of(craftsperson), stonecutter) == AssignResult.SAME_BLOCK,
                 "One Job per JobBlock");
-        helper.assertTrue(JobAssignments.assign(data, pos, stella, "Stella", settlement.id(), List.of(), stonecutter) == AssignResult.OK,
+        helper.assertTrue(TestAssignments.assign(data, pos, stella, "Stella", settlement.id(), List.of(), stonecutter) == AssignResult.OK,
                 "Stella: Stonecutter at the same block");
         SettlementBlock block = StationTypeGameTests.block(level, pos);
         helper.assertTrue(JobPlaces.lines(block).stream().allMatch(line -> line.taken() == 2 && line.places() == 2)
                 && JobPlaces.lines(block).stream().map(JobPlaces.Line::job).toList().containsAll(List.of(craftsperson, stonecutter)),
                 "Every Job of the block shares its 2 places: " + JobPlaces.lines(block));
-        helper.assertTrue(JobAssignments.assign(data, pos, UUID.randomUUID(), "Carl", settlement.id(), List.of(), craftsperson) == AssignResult.FULL,
+        helper.assertTrue(TestAssignments.assign(data, pos, UUID.randomUUID(), "Carl", settlement.id(), List.of(), craftsperson) == AssignResult.FULL,
                 "A third settler finds the block full");
 
         helper.assertTrue(Patterns.setOutput(level, pos, craftsperson, 0, Items.STICK).orElseThrow().checked(), "Craftsperson: sticks");
         helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 0, Items.STONE_BRICKS).orElseThrow().checked(), "Stonecutter: bricks");
         helper.assertTrue(Producers.canMake(level, settlement, Items.STICK) && Producers.canMake(level, settlement, Items.STONE_BRICKS),
                 "Workshop and Stonecutter at once");
-        JobAssignments.unassign(data, pos);
+        TestAssignments.unassign(data, pos);
         // Back to level 1: a level-3 block left in the settlement data would push later tests' blocks out.
         StationTypeGameTests.setLevel(helper, relative, 1);
         helper.succeed();
@@ -238,15 +239,15 @@ public final class JobSwitcherGameTests {
         SettlementManager.place(boardData, board, adventurer, 2, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
         Settlement boardSettlement = boardData.settlementAt(board).orElseThrow();
         UUID scout = UUID.randomUUID();
-        helper.assertTrue(JobAssignments.assign(boardData, board, scout, "Sam", boardSettlement.id(), List.of(), adventurer) == AssignResult.OK,
+        helper.assertTrue(TestAssignments.assign(boardData, board, scout, "Sam", boardSettlement.id(), List.of(), adventurer) == AssignResult.OK,
                 "Adventurer on the Mission Board");
         List<Job> missionJobs = JobAssignments.switchOptions(boardData, board, scout, List.of());
         helper.assertTrue(!missionJobs.isEmpty() && missionJobs.stream().allMatch(job -> job.parent().filter(adventurer::equals).isPresent()),
                 "The Mission Board offers its Mission Jobs: " + missionJobs);
-        helper.assertTrue(JobAssignments.switchJob(boardData, board, scout, List.of(), missionJobs.getFirst()), "Switched to a Mission Job");
+        helper.assertTrue(TestAssignments.switchJob(boardData, board, scout, List.of(), missionJobs.getFirst()), "Switched to a Mission Job");
         helper.assertTrue(JobAssignments.switchOptions(boardData, board, scout, List.of()).contains(adventurer), "And back");
 
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         SettlementWorld.unassign(level, lumber);
         settler.discard();
         helper.succeed();
@@ -286,7 +287,7 @@ public final class JobSwitcherGameTests {
                 "The novice works with the master's limit: " + block.checkLimit(craftsperson) + ", " + Patterns.checked(block, craftsperson).size());
 
         master.removeJob(craft);
-        JobAssignments.unassign(SettlementData.get(level), craft, master.getUUID());
+        TestAssignments.unassign(SettlementData.get(level), craft, master.getUUID());
         helper.assertTrue(StationTypeGameTests.block(level, craft).workers(craftsperson).equals(Set.of(novice.getUUID())),
                 "Unassigning drops the master's limit at once: " + StationTypeGameTests.block(level, craft).workers(craftsperson));
         novice.getWork().decideNow(level);
@@ -297,7 +298,7 @@ public final class JobSwitcherGameTests {
                 "Trimmed as before: " + block.notice(craftsperson));
         novice.discard();
         master.discard();
-        JobAssignments.unassign(SettlementData.get(level), craft);
+        TestAssignments.unassign(SettlementData.get(level), craft);
         // Back to level 1: a level-3 block left in the settlement data would push later tests' blocks out.
         StationTypeGameTests.setLevel(helper, relative, 1);
         helper.succeed();

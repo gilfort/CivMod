@@ -38,6 +38,7 @@ import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementWorld;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -144,15 +145,22 @@ public final class AddonApiGameTests {
 
     /** The window's tabs follow the Job Category; only the Clerk keeps its own tabs. */
     private static void tabsByCategory(GameTestHelper helper) {
-        helper.assertTrue(JobBlockTabs.of(ModJobs.LUMBERJACK.get()) == JobBlockTabs.FOUND, "Resource Collection: Found tab");
-        helper.assertTrue(JobBlockTabs.of(ModJobs.CRAFTSPERSON.get()) == JobBlockTabs.PATTERNS, "Craftsperson: Patterns tab");
-        helper.assertTrue(JobBlockTabs.of(job(PRODUCER)) == JobBlockTabs.PATTERNS, "Any Producing Job: Patterns tab");
-        helper.assertTrue(JobBlockTabs.of(ModJobs.ADVENTURER.get()) == JobBlockTabs.MISSIONS, "Mission: Missions tab");
-        helper.assertTrue(JobBlockTabs.of(ModJobs.CLERK.get()) == JobBlockTabs.CLERK, "Clerk keeps its tabs");
-        helper.assertTrue(JobBlockTabs.of(job(NO_COSTS)) == JobBlockTabs.STANDARD, "Service: Storage and Info only");
-        helper.assertTrue(JobBlockTabs.PATTERNS.count() == 3 && JobBlockTabs.PATTERNS.tall() && JobBlockTabs.CLERK.count() == 5
-                && !JobBlockTabs.FOUND.tall(), "Tab counts and panel heights");
+        String storage = "civmod.gui.job_block.tab.storage";
+        String info = "civmod.gui.job_block.tab.info";
+        helper.assertValueEqual(tabs(ModJobs.LUMBERJACK.get()), List.of(storage, info, "civmod.gui.job_block.tab.found"), "Resource Collection: Found tab");
+        List<String> producing = List.of(storage, info, "civmod.gui.patterns.tab_job", "civmod.gui.station_types.tab");
+        helper.assertValueEqual(tabs(ModJobs.CRAFTSPERSON.get()).subList(0, 4), producing, "Craftsperson: Patterns tab");
+        helper.assertValueEqual(tabs(job(PRODUCER)), producing, "Any Producing Job: Patterns tab");
+        helper.assertValueEqual(tabs(ModJobs.ADVENTURER.get()), List.of(storage, info, "civmod.gui.job_block.tab.missions"), "Mission: Missions tab");
+        helper.assertValueEqual(tabs(ModJobs.CLERK.get()), List.of(storage, info, "civmod.gui.clerk.tab.stock", "civmod.gui.clerk.tab.requests",
+                "civmod.gui.clerk.tab.deliveries"), "Clerk keeps its tabs");
+        helper.assertValueEqual(tabs(job(NO_COSTS)), List.of(storage, info), "Service: Storage and Info only");
         helper.succeed();
+    }
+
+    /** The label keys of the tabs a JobBlock window of that Job gets. */
+    private static List<String> tabs(Job job) {
+        return JobBlockTabGameTests.keys(JobBlockTabs.of(job));
     }
 
     /** A job without an upgrade cost file uses the default costs; a job with a file keeps its own. */
@@ -322,7 +330,7 @@ public final class AddonApiGameTests {
         ThoughtBubble.Show marker = new ThoughtBubble.Show(settler.getId(), ThoughtBubble.BLOCKED, Items.BARRIER, true);
         helper.assertTrue(settler.getWork().recentThoughts().equals(List.of(marker)),
                 "Generic marker: " + settler.getWork().recentThoughts());
-        JobAssignments.unassign(data, jobBlock);
+        TestAssignments.unassign(data, jobBlock);
         settler.discard();
         helper.succeed();
     }

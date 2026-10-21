@@ -9,7 +9,6 @@ import java.util.UUID;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
-import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.registry.ModJobs;
 
 import net.minecraft.core.BlockPos;
@@ -211,17 +210,7 @@ public final class StationTypes {
         List<UUID> lost = block.assignees().stream()
                 .filter(assignee -> assignee.job().parent().filter(base::equals).isPresent() && !unlocked.contains(assignee.job()))
                 .map(SettlementBlock.Assignee::id).toList();
-        for (UUID id : lost) {
-            Optional<Settler> settler = level.getEntity(id) instanceof Settler loaded ? Optional.of(loaded) : Optional.empty();
-            if (JobAssignments.holdsElsewhere(data, pos, id, base)) {
-                // A settler holds each Job once: with the Base Job at another JobBlock it leaves this one.
-                JobAssignments.unassign(data, pos, id);
-                settler.ifPresent(loaded -> loaded.removeJob(pos));
-            } else {
-                block.setAssigneeJob(id, base);
-                settler.ifPresent(loaded -> loaded.replaceJob(pos, base));
-            }
-        }
+        lost.forEach(id -> SettlementWorld.fallBackToBaseJob(level, pos, id));
         data.changed();
         return replaced ? PutResult.REPLACED : PutResult.UNLOCKED;
     }

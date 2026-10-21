@@ -23,6 +23,7 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.TestAssignments;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
@@ -253,7 +254,7 @@ public final class LumberjackGameTests {
         settler.joinSettlement(data, settlement);
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_AXE));
         JobAssignments.cyclePoint(data, jobBlock, helper.absolutePos(new BlockPos(4, 1, 1)), true, false);
-        helper.assertTrue(JobAssignments.assign(data, jobBlock, settler.getUUID(), "Tester", settlement.id(), java.util.List.of())
+        helper.assertTrue(TestAssignments.assign(data, jobBlock, settler.getUUID(), "Tester", settlement.id(), java.util.List.of())
                 == JobAssignments.AssignResult.OK, "Assignment failed");
         settler.addJob(new SettlerJob(ModJobs.LUMBERJACK.get(), jobBlock));
         if (onBed) {
@@ -302,7 +303,7 @@ public final class LumberjackGameTests {
         settler.joinSettlement(data, settlement);
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_AXE));
         JobAssignments.cyclePoint(data, jobBlock, helper.absolutePos(new BlockPos(4, 1, 1)), true, false);
-        helper.assertTrue(JobAssignments.assign(data, jobBlock, settler.getUUID(), "Tester", settlement.id(), java.util.List.of())
+        helper.assertTrue(TestAssignments.assign(data, jobBlock, settler.getUUID(), "Tester", settlement.id(), java.util.List.of())
                 == JobAssignments.AssignResult.OK, "Assignment failed");
         SettlerJob job = new SettlerJob(ModJobs.LUMBERJACK.get(), jobBlock);
         settler.addJob(job);

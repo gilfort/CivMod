@@ -18,6 +18,7 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -124,7 +125,7 @@ public final class CatchUpGameTests {
         // Plenty of food: hunger must not limit the test.
         settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
         JobAssignments.cyclePoint(data, jobBlock, helper.absolutePos(new BlockPos(4, 1, 1)), true, false);
-        JobAssignments.assign(data, jobBlock, settler.getUUID(), "Catcher", settlement.id(), List.of());
+        TestAssignments.assign(data, jobBlock, settler.getUUID(), "Catcher", settlement.id(), List.of());
         settler.addJob(new SettlerJob(ModJobs.LUMBERJACK.get(), jobBlock));
         return settler;
     }

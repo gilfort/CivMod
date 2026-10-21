@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:job_step_lumberjack_blocked_without_tool",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

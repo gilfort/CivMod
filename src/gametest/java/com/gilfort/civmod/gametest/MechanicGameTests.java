@@ -10,7 +10,7 @@ import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
-import com.gilfort.civmod.menu.PatternTab;
+import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobAssignments;
@@ -19,6 +19,7 @@ import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
+import com.gilfort.civmod.settlement.TestAssignments;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -92,7 +93,7 @@ public final class MechanicGameTests {
         Pattern sticks = Patterns.setOutput(level, pos, mechanic, 2, Items.STICK).orElseThrow();
         helper.assertFalse(sticks.checked(), "Sticks are outside the domain: unchecked");
         helper.assertFalse(Patterns.toggleCheck(level, pos, mechanic, 2), "And cannot be checked");
-        PatternTab tab = PatternTab.of(level, pos, mechanic);
+        PatternsTabData tab = PatternsTabData.of(level, pos, mechanic);
         helper.assertTrue(tab.filtered().contains(2) && !tab.filtered().contains(0) && tab.unusable(2),
                 "Greyed out: " + tab.filtered());
         helper.assertTrue(tab.filteredLine().equals(Component.translatable("civmod.gui.patterns.outside_domain")),
@@ -192,7 +193,7 @@ public final class MechanicGameTests {
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 7), setup.data(), setup.settlement());
         settler.setCustomName(Component.literal("Mira"));
         settler.getFood().setMorningDay(Math.floorDiv(helper.getLevel().getOverworldClockTime(), 24000L));
-        helper.assertTrue(JobAssignments.assign(setup.data(), craft, settler.getUUID(), "Mira", setup.settlement().id(), List.of(), job)
+        helper.assertTrue(TestAssignments.assign(setup.data(), craft, settler.getUUID(), "Mira", setup.settlement().id(), List.of(), job)
                 == JobAssignments.AssignResult.OK, job + " assigned");
         settler.addJob(new SettlerJob(job, craft));
         return settler;
@@ -203,7 +204,7 @@ public final class MechanicGameTests {
     }
 
     private static void cleanUp(Setup setup, Settler settler) {
-        JobAssignments.unassign(setup.data(), setup.clerk());
+        TestAssignments.unassign(setup.data(), setup.clerk());
         settler.discard();
     }
 }

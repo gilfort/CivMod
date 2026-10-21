@@ -19,8 +19,8 @@ import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.job.MissionTrip;
 import com.gilfort.civmod.job.Schedule;
 import com.gilfort.civmod.job.SettlerSkills;
-import com.gilfort.civmod.job.SkillRules;
 import com.gilfort.civmod.job.SettlerWork;
+import com.gilfort.civmod.job.SkillRules;
 import com.gilfort.civmod.mission.Mission;
 import com.gilfort.civmod.mission.MissionOffer;
 import com.gilfort.civmod.mission.MissionRules;
@@ -36,6 +36,7 @@ import com.gilfort.civmod.settlement.MissionOffers;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 
@@ -251,7 +252,7 @@ public final class MissionRunGameTests {
         level.addFreshEntity(settler);
         settler.joinSettlement(data, settlement);
         settler.getSkills().set(missionJob, new SettlerSkills.Skill(SKILL, 0));
-        JobAssignments.assign(data, board, settler.getUUID(), name, settlement.id(), List.of(), missionJob);
+        TestAssignments.assign(data, board, settler.getUUID(), name, settlement.id(), List.of(), missionJob);
         settler.addJob(new SettlerJob(missionJob, board));
         // Seeds from 1 until the daily offer holds a mission the Job may take (seed 1 for the Adventurer); each try is an
         // earlier day, as an offer is drawn once per day (the board refills on the real day and keeps the marked entry).

@@ -285,7 +285,7 @@ public final class JobAssignments {
      * @param currentJobs  the job types the settler already has
      * @return the result
      */
-    public static AssignResult assign(SettlementData data, BlockPos jobBlock, UUID settler, String settlerName, int settlementId,
+    static AssignResult assign(SettlementData data, BlockPos jobBlock, UUID settler, String settlerName, int settlementId,
             Collection<Job> currentJobs) {
         return JobBlockSite.blockAt(data, jobBlock)
                 .map(block -> assign(data, jobBlock, settler, settlerName, settlementId, currentJobs, block.jobType()))
@@ -323,6 +323,8 @@ public final class JobAssignments {
     /**
      * Assigns one Job of a JobBlock to a settler (the job picker's choice). A settler holds at most one Job per JobBlock,
      * each Job once and at most one Mission Job; a Job takes settlers up to its places ({@link JobPlaces}).
+     * <p>Edits only the JobBlock side: game code goes through {@link SettlementWorld}, which keeps the settler's job list
+     * and Workplace in sync; GameTests that build settlement data without settler entities use {@code TestAssignments}.
      *
      * @param data         the dimension's settlement data
      * @param jobBlock     the JobBlock position
@@ -333,7 +335,7 @@ public final class JobAssignments {
      * @param job          the chosen Job
      * @return the result
      */
-    public static AssignResult assign(SettlementData data, BlockPos jobBlock, UUID settler, String settlerName, int settlementId,
+    static AssignResult assign(SettlementData data, BlockPos jobBlock, UUID settler, String settlerName, int settlementId,
             Collection<Job> currentJobs, Job job) {
         AssignResult checked = check(data, jobBlock, settler, settlementId);
         if (checked != AssignResult.OK) {
@@ -395,6 +397,8 @@ public final class JobAssignments {
      * Switches the Job a settler holds at a JobBlock to one of its {@link #switchOptions}, keeping its place in the
      * block's assignee order. On a Mission Board its mission assignments are removed (the missions stay locked), as
      * the new Mission Job may not be allowed on them.
+     * <p>Edits only the JobBlock side: game code goes through {@link SettlementWorld}, which keeps the settler's job list
+     * and Workplace in sync; GameTests that build settlement data without settler entities use {@code TestAssignments}.
      *
      * @param data      the dimension's settlement data
      * @param jobBlock  the JobBlock the settler works
@@ -403,7 +407,7 @@ public final class JobAssignments {
      * @param job       the new Job
      * @return whether the Job was switched
      */
-    public static boolean switchJob(SettlementData data, BlockPos jobBlock, UUID settler, Collection<Job> otherJobs, Job job) {
+    static boolean switchJob(SettlementData data, BlockPos jobBlock, UUID settler, Collection<Job> otherJobs, Job job) {
         if (!switchOptions(data, jobBlock, settler, otherJobs).contains(job)) {
             return false;
         }
@@ -435,12 +439,14 @@ public final class JobAssignments {
 
     /**
      * Frees a JobBlock of all its settlers (and removes their mission assignments, see {@link #unassign(SettlementData, BlockPos, UUID)}).
+     * <p>Edits only the JobBlock side: game code goes through {@link SettlementWorld}, which keeps the settler's job list
+     * and Workplace in sync; GameTests that build settlement data without settler entities use {@code TestAssignments}.
      *
      * @param data     the dimension's settlement data
      * @param jobBlock the JobBlock position
      * @return the settlers that worked it
      */
-    public static List<UUID> unassign(SettlementData data, BlockPos jobBlock) {
+    static List<UUID> unassign(SettlementData data, BlockPos jobBlock) {
         Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
         List<UUID> previous = block.map(b -> b.assignees().stream().map(SettlementBlock.Assignee::id).toList()).orElse(List.of());
         if (!previous.isEmpty()) {
@@ -454,13 +460,15 @@ public final class JobAssignments {
     /**
      * Removes one settler from a JobBlock; on a Mission Board its mission assignments are removed (the missions stay
      * locked).
+     * <p>Edits only the JobBlock side: game code goes through {@link SettlementWorld}, which keeps the settler's job list
+     * and Workplace in sync; GameTests that build settlement data without settler entities use {@code TestAssignments}.
      *
      * @param data     the dimension's settlement data
      * @param jobBlock the JobBlock position
      * @param settler  the settler UUID
      * @return whether the settler worked it
      */
-    public static boolean unassign(SettlementData data, BlockPos jobBlock, UUID settler) {
+    static boolean unassign(SettlementData data, BlockPos jobBlock, UUID settler) {
         Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
         boolean removed = block.map(b -> b.removeAssignee(settler)).orElse(false);
         if (removed) {

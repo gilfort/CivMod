@@ -12,7 +12,7 @@ import com.gilfort.civmod.job.MineScan;
 import com.gilfort.civmod.job.MinerOutput;
 import com.gilfort.civmod.job.MinerProfile;
 import com.gilfort.civmod.job.MinerWeights;
-import com.gilfort.civmod.menu.FoundTab;
+import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
@@ -21,6 +21,7 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.google.gson.JsonParser;
 
 import net.minecraft.core.BlockPos;
@@ -205,14 +206,14 @@ public final class MinerGameTests {
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_PICKAXE));
         BlockPos poi = helper.absolutePos(new BlockPos(5, 1, 5));
         JobAssignments.cyclePoint(data, jobBlock, poi, true, false);
-        helper.assertTrue(JobAssignments.assign(data, jobBlock, settler.getUUID(), "Digger", settlement.id(), List.of())
+        helper.assertTrue(TestAssignments.assign(data, jobBlock, settler.getUUID(), "Digger", settlement.id(), List.of())
                 == JobAssignments.AssignResult.OK, "Assignment failed");
         settler.addJob(new SettlerJob(ModJobs.MINER.get(), jobBlock));
         helper.succeedWhen(() -> {
             helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0,
                     "Nothing mined yet (status " + settler.getWork().status(jobBlock) + ")");
             helper.assertTrue(level.getBlockState(poi).is(Blocks.GRANITE), "The work place is never destroyed");
-            helper.assertTrue(FoundTab.of(level, jobBlock).entry(GRANITE).isPresent(), "Found tab lists granite");
+            helper.assertTrue(FoundTabData.of(level, jobBlock).entry(GRANITE).isPresent(), "Found tab lists granite");
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });

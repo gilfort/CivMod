@@ -4,11 +4,11 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.client.gui.DebugScreen;
 import com.gilfort.civmod.client.gui.JobBlockScreen;
 import com.gilfort.civmod.client.gui.JobPickerScreen;
-import com.gilfort.civmod.menu.ClerkTab;
+import com.gilfort.civmod.menu.ClerkTabData;
 import com.gilfort.civmod.client.gui.SettlerScreen;
 import com.gilfort.civmod.item.JobPicker;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
-import com.gilfort.civmod.menu.StationTypeTab;
+import com.gilfort.civmod.menu.StationTypesTabData;
 import com.gilfort.civmod.registry.ModBlockEntityTypes;
 import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.registry.ModEntityTypes;
@@ -100,11 +100,11 @@ public final class CivModClient {
     static void onRegisterClientPayloads(RegisterClientPayloadHandlersEvent event) {
         event.register(SettlementOutline.Sync.TYPE, SettlementOutlineRenderer::handle);
         event.register(JobPointsDisplay.Sync.TYPE, JobPointsRenderer::handle);
-        event.register(ClerkTab.Sync.TYPE, JobBlockScreen::handleClerkTab);
+        event.register(ClerkTabData.Sync.TYPE, JobBlockScreen::handleClerkTab);
         event.register(JobPicker.Open.TYPE, JobPickerScreen::handle);
-        event.register(com.gilfort.civmod.menu.PatternTab.Sync.TYPE, JobBlockScreen::handlePatternTab);
-        event.register(StationTypeTab.Sync.TYPE, JobBlockScreen::handleStationTypeTab);
-        event.register(com.gilfort.civmod.menu.FoundTab.Sync.TYPE, JobBlockScreen::handleFoundTab);
+        event.register(com.gilfort.civmod.menu.PatternsTabData.Sync.TYPE, JobBlockScreen::handlePatternTab);
+        event.register(StationTypesTabData.Sync.TYPE, JobBlockScreen::handleStationTypeTab);
+        event.register(com.gilfort.civmod.menu.FoundTabData.Sync.TYPE, JobBlockScreen::handleFoundTab);
         event.register(com.gilfort.civmod.menu.JobBlockInfo.Sync.TYPE, JobBlockScreen::handleInfo);
         event.register(com.gilfort.civmod.npc.ThoughtBubble.Show.TYPE, ThoughtBubbleRenderer::handle);
     }

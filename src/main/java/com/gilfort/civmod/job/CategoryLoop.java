@@ -13,9 +13,15 @@ import net.minecraft.server.level.ServerLevel;
  * {@code Systems/Job Categories.md}). The shell runs schedule, walking, food, sleep, job priorities, status, EXP and
  * the catch-up driver, picks the active Job by priority and hands control to the loop of that Job's category.
  * <p>
+ * A loop answers the shell with {@link JobStep}s (walk to a target, deliver, wait, blocked, skip, pause / hold, work,
+ * done): it never changes the settler's activity, walking target or active job itself, and a job's status changes
+ * through a step or, outside one (catch-up, a status between steps), through the job's {@link Workplace} only. The
+ * shell applies each step after the loop returned ({@link SettlerWork#apply}).
+ * <p>
  * One instance per settler, shared by all of its jobs of that category; per-job state (buffer, status, work place of
- * the day, scan) lives in the job's {@link Workplace}; a loop keeps its own loop state and uses the shell's
- * shared parts (walking, buffers and delivery, statuses, EXP) through the {@link SettlerWork} it was created for.
+ * the day, scan) lives in the job's {@link Workplace}; a loop keeps its own loop state and uses the shell's shared
+ * services (Workplace and buffer, effective level, EXP, catch-up delivery, counters, the hand, announcements) through
+ * the {@link SettlerWork} it was created for.
  */
 interface CategoryLoop {
 
@@ -27,9 +33,9 @@ interface CategoryLoop {
      * @param site    the job's JobBlock site
      * @param day     the day
      * @param dayTime the time of day
-     * @return whether the job can work (the settler is busy with it)
+     * @return what the job wants next ({@link JobStep}); the shell applies it
      */
-    boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime);
+    JobStep plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime);
 
     /**
      * Called at a decision for a job of this loop that was not planned because a higher priority job works.
@@ -57,9 +63,10 @@ interface CategoryLoop {
      *
      * @param level the level
      * @param job   the active job
-     * @return true to keep the current step and skip the decision (e.g. a work break)
+     * @return a step that holds the decision ({@link JobStep.Pause}, {@link JobStep.Hold}, {@link JobStep.Wait}, e.g. a
+     *         work break), or {@link JobStep.Skip} to decide as usual
      */
-    boolean holdsDecision(ServerLevel level, SettlerJob job);
+    JobStep holdsDecision(ServerLevel level, SettlerJob job);
 
     /**
      * Called every tick while the settler has reached the target of a step of this loop.
@@ -67,14 +74,9 @@ interface CategoryLoop {
      * @param level  the level
      * @param job    the active job
      * @param target the target of the step
+     * @return {@link JobStep#WORK} / {@link JobStep#STAY} to go on, {@link JobStep.Done} when the step is over
      */
-    void tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target);
-
-    /**
-     * @param job the active job
-     * @return the reach for the target of the current step
-     */
-    double reach(SettlerJob job);
+    JobStep tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target);
 
     /**
      * Whether everything a job needs for catch-up is loaded and prepared (starts preparing it otherwise).

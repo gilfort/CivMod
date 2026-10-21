@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.function.BooleanSupplier;
 
 import org.jspecify.annotations.Nullable;
 
@@ -157,7 +158,7 @@ public final class SettlerWork {
     private ClerkStorage.@Nullable Visit deliveryVisit;
     /** Clerk JobBlocks whose counter this settler found unreachable, with the day (only their block slots that day). */
     private final Map<BlockPos, Long> unreachableCounters = new HashMap<>();
-    /** Reach of the current walking target outside job steps. */
+    /** Reach of the current walking target (for a job step: the reach of its {@link JobStep.Walk}). */
     private double targetReach = REACH;
     /** Thought bubbles: sent when what the settler does changes. */
     private final SettlerThoughts thoughts;
@@ -312,7 +313,7 @@ public final class SettlerWork {
      * @param job a job
      * @return the work loop of the job's category (null if the category is not implemented)
      */
-    private @Nullable CategoryLoop loop(SettlerJob job) {
+    @Nullable CategoryLoop loop(SettlerJob job) {
         if (job.jobType() == ModJobs.DELIVERYMAN.get()) {
             return deliverymen;
         }
@@ -606,7 +607,7 @@ public final class SettlerWork {
             }
             if (activity != Activity.JOB) {
                 // Walking out was interrupted (loaded again, or not started): it goes on before anything else.
-                missions.resumeLeaving(level);
+                missions.resumeLeaving().ifPresent(job -> apply(level, job, missions.leave(level)));
                 return;
             }
         }
@@ -621,7 +622,8 @@ public final class SettlerWork {
         }
         // The body first: stay asleep, wake, return to the rest place after a skipped night, keep foraging.
         boolean woke = false;
-        Optional<Intent> body = Schedule.wakeUp(snapshot(level, day, dayTime, jumped, false, new FoodLookup(level, dayTime)));
+        Optional<Intent> body = Schedule.wakeUp(snapshot(level, day, dayTime, new FoodLookup(level, dayTime),
+                liveFacts(level, jumped, false)));
         while (body.isPresent()) {
             Intent intent = body.get();
             if (intent == Intent.SLEEP) {
@@ -643,7 +645,7 @@ public final class SettlerWork {
                 // The night was skipped while this settler was not in bed: appear at the bed as if it slept there.
                 teleportToRestPlace(level, day);
             }
-            body = Schedule.wakeUp(snapshot(level, day, dayTime, false, woke, new FoodLookup(level, dayTime)));
+            body = Schedule.wakeUp(snapshot(level, day, dayTime, new FoodLookup(level, dayTime), liveFacts(level, false, woke)));
         }
         SettlerFood food = settler.getFood();
         if (food.level() >= SettlerFood.HUNGRY) {
@@ -652,7 +654,7 @@ public final class SettlerWork {
         checkStuck(level);
 
         FoodLookup foodLookup = new FoodLookup(level, dayTime);
-        Decision decision = Schedule.next(snapshot(level, day, dayTime, false, woke, foodLookup));
+        Decision decision = Schedule.next(snapshot(level, day, dayTime, foodLookup, liveFacts(level, false, woke)));
         act(level, decision, foodLookup, day, dayTime);
     }
 
@@ -665,21 +667,66 @@ public final class SettlerWork {
     }
 
     /**
-     * Builds the Schedule snapshot. Food points are looked up (once) only if a rule asks; the job step is asked only
-     * during a job step.
+     * The facts of a Schedule snapshot in which a live decision and a simulated catch-up hour differ; everything else
+     * is read from the settler the same way for both ({@link #snapshot}).
      *
-     * @param woke whether the settler was just woken in this decision (it counts as awake)
+     * @param nightSkipped    whether the night was skipped since the last decision
+     * @param sleeping        whether the settler is asleep
+     * @param activity        the current activity
+     * @param jobStepHolds    whether the current job step holds the decision
+     * @param deliveryPending whether a job has items to deliver to a drop-off that is not full
+     * @param noFood          whether a meal just found nothing to take, so no food point or pocket food counts for
+     *                        this decision
      */
-    private Schedule.Snapshot snapshot(ServerLevel level, long day, long dayTime, boolean nightSkipped, boolean woke, FoodLookup foodLookup) {
-        SettlerFood food = settler.getFood();
+    private record SnapshotFacts(boolean nightSkipped, boolean sleeping, Activity activity, BooleanSupplier jobStepHolds,
+            boolean deliveryPending, boolean noFood) {
+
+        /**
+         * Catch-up: awake, no skipped night (catch-up runs whole hours of the day), idle, no job step holding the
+         * decision (work is simulated per hour), nothing left to deliver (output goes straight to the drop-off).
+         *
+         * @param noFood whether a meal just found nothing to take
+         */
+        static SnapshotFacts catchUp(boolean noFood) {
+            boolean nightSkipped = false;
+            boolean sleeping = false;
+            Activity activity = Activity.IDLE;
+            BooleanSupplier jobStepHolds = () -> false;
+            boolean deliveryPending = false;
+            return new SnapshotFacts(nightSkipped, sleeping, activity, jobStepHolds, deliveryPending, noFood);
+        }
+    }
+
+    /**
+     * The snapshot facts of a live decision: the settler as it is now.
+     *
+     * @param nightSkipped whether the night was skipped since the last decision
+     * @param woke         whether the settler was just woken in this decision (it counts as awake)
+     */
+    private SnapshotFacts liveFacts(ServerLevel level, boolean nightSkipped, boolean woke) {
+        boolean sleeping = settler.isSleeping() && !woke;
+        BooleanSupplier jobStepHolds = () -> jobStepHolds(level);
         boolean deliveryPending = settler.getJobs().stream()
                 .anyMatch(job -> !buffer(job.jobBlock()).isEmpty() && !status(job.jobBlock()).waitsForRoom());
+        boolean noFood = false;
+        return new SnapshotFacts(nightSkipped, sleeping, activity, jobStepHolds, deliveryPending, noFood);
+    }
+
+    /**
+     * Builds the Schedule snapshot, for live play and catch-up alike. Food points are looked up (once) only if a rule
+     * asks; the job step is asked only during a job step.
+     *
+     * @param facts what differs between a live decision ({@link #liveFacts}) and catch-up ({@link SnapshotFacts#catchUp})
+     */
+    private Schedule.Snapshot snapshot(ServerLevel level, long day, long dayTime, FoodLookup foodLookup, SnapshotFacts facts) {
+        SettlerFood food = settler.getFood();
+        boolean noFood = facts.noFood();
         return new Schedule.Snapshot(day, dayTime, food.level(),
                 SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE),
-                CivModConfig.PROVISION_NUTRITION.get(), SettlerFood.choose(pocketStacks(), food.level()).isPresent(),
-                () -> foodLookup.get().isPresent(), () -> clerkToWaitAt(level).isPresent(), settler.isHomeless(),
-                settler.isSleeping() && !woke, food.forageDay(), nightSkipped, activity, () -> jobStepHolds(level),
-                food.morningDay() == day, food.eatenDay() == day, waitStart(day), deliveryPending, dayTimes(day));
+                CivModConfig.PROVISION_NUTRITION.get(), !noFood && SettlerFood.choose(pocketStacks(), food.level()).isPresent(),
+                () -> !noFood && foodLookup.get().isPresent(), () -> clerkToWaitAt(level).isPresent(), settler.isHomeless(),
+                facts.sleeping(), food.forageDay(), facts.nightSkipped(), facts.activity(), facts.jobStepHolds(),
+                food.morningDay() == day, food.eatenDay() == day, waitStart(day), facts.deliveryPending(), dayTimes(day));
     }
 
     /**
@@ -707,7 +754,7 @@ public final class SettlerWork {
     private boolean jobStepHolds(ServerLevel level) {
         SettlerJob job = activeJob;
         CategoryLoop loop = job == null ? null : loop(job);
-        return activity == Activity.JOB && loop != null && loop.holdsDecision(level, job);
+        return activity == Activity.JOB && loop != null && apply(level, job, loop.holdsDecision(level, job));
     }
 
     // ---------------------------------------------------------------- thought bubbles and held item
@@ -855,7 +902,7 @@ public final class SettlerWork {
                     delivery = job;
                     break;
                 }
-                workplace(job.jobBlock()).setStatus(JobStatus.IDLE);
+                setStatus(job.jobBlock(), JobStatus.IDLE);
             }
         } else {
             restPlace = null;
@@ -966,10 +1013,103 @@ public final class SettlerWork {
         if (site.isEmpty() || loop == null) {
             return false;
         }
-        return loop.plan(level, job, site.get(), day, dayTime);
+        return apply(level, job, loop.plan(level, job, site.get(), day, dayTime));
+    }
+
+    /**
+     * Applies what a job wants next: the one place where a job step changes the settler's activity, walking target,
+     * active job and the job's status. A step that ends ({@link JobStep.Done}) decides again only here, after the loop
+     * returned.
+     *
+     * @param level the level
+     * @param job   the job
+     * @param step  what the job wants
+     * @return whether the job keeps the settler busy (an answer of {@link CategoryLoop#plan}) or holds the decision (an
+     *         answer of {@link CategoryLoop#holdsDecision})
+     */
+    boolean apply(ServerLevel level, SettlerJob job, JobStep step) {
+        BlockPos jobBlock = job.jobBlock();
+        return switch (step) {
+            case JobStep.Walk walk -> {
+                activeJob = job;
+                if (activity != Activity.JOB || !walk.target().equals(target)) {
+                    moveTo(level, Activity.JOB, walk.target(), walk.reach());
+                }
+                targetReach = walk.reach();
+                walk.subject().ifPresentOrElse(subject -> setStatus(jobBlock, walk.status(), subject),
+                        () -> setStatus(jobBlock, walk.status()));
+                yield true;
+            }
+            case JobStep.Deliver deliver -> startDelivery(level, job);
+            case JobStep.Wait wait -> {
+                stop();
+                activeJob = job;
+                setStatus(jobBlock, wait.status());
+                yield true;
+            }
+            case JobStep.Blocked blocked -> {
+                blocked.reason().ifPresentOrElse(reason -> block(level, jobBlock, reason), () -> block(level, jobBlock, blocked.status()));
+                yield false;
+            }
+            case JobStep.Skip skip -> {
+                skip.status().ifPresent(status -> setStatus(jobBlock, status));
+                yield false;
+            }
+            case JobStep.Pause pause -> {
+                setStatus(jobBlock, pause.status());
+                settler.getNavigation().stop();
+                yield true;
+            }
+            case JobStep.Hold hold -> {
+                setStatus(jobBlock, hold.status());
+                yield true;
+            }
+            case JobStep.AtTarget at -> {
+                if (at.stands()) {
+                    settler.getNavigation().stop();
+                }
+                if (at.worked()) {
+                    countWorkTick(job);
+                }
+                yield true;
+            }
+            case JobStep.Done done -> {
+                if (done.stands()) {
+                    settler.getNavigation().stop();
+                }
+                if (done.worked()) {
+                    countWorkTick(job);
+                }
+                activity = Activity.IDLE;
+                decide(level);
+                yield false;
+            }
+        };
     }
 
     // ---------------------------------------------------------------- shared parts used by the category loops
+
+    /**
+     * Sets a job's status: the one way to do it. Job steps set it through {@link #apply}; a loop calls this only for
+     * what happens outside a decision (a mission reserved or given back, a settler back from its mission, catch-up).
+     *
+     * @param jobBlock the job's JobBlock
+     * @param status   the new status
+     */
+    void setStatus(BlockPos jobBlock, JobStatus status) {
+        workplace(jobBlock).setStatus(status);
+    }
+
+    /**
+     * Sets a job's status naming what it is about ({@link #setStatus(BlockPos, JobStatus)}).
+     *
+     * @param jobBlock the job's JobBlock
+     * @param status   the new status
+     * @param subject  what the status is about
+     */
+    void setStatus(BlockPos jobBlock, JobStatus status, net.minecraft.network.chat.Component subject) {
+        workplace(jobBlock).setStatus(status, subject);
+    }
 
     /**
      * @param jobBlock a JobBlock position
@@ -988,73 +1128,32 @@ public final class SettlerWork {
     }
 
     /**
-     * @param job the job the settler works on from now on
+     * @return the settler's jobs in priority order
      */
-    void setActiveJob(SettlerJob job) {
-        activeJob = job;
+    List<SettlerJob> jobs() {
+        return settler.getJobs();
     }
 
     /**
-     * @param jobBlock a JobBlock position
-     * @param status   the new status of that job
-     */
-    void setStatus(BlockPos jobBlock, JobStatus status) {
-        workplace(jobBlock).setStatus(status);
-    }
-
-    /**
-     * @param jobBlock a JobBlock position
-     * @param status   the new status of that job
-     * @param subject  what the status is about
-     */
-    void setStatus(BlockPos jobBlock, JobStatus status, net.minecraft.network.chat.Component subject) {
-        workplace(jobBlock).setStatus(status, subject);
-    }
-
-    /**
-     * @param pos a position
-     * @return whether the settler is already walking to (or at) that position for a step of a category loop
-     */
-    boolean walkingTo(BlockPos pos) {
-        return activity == Activity.JOB && pos.equals(target);
-    }
-
-    /**
-     * Starts walking to the target of a step of a category loop.
+     * Shows an item in the settler's hand (a display copy, never an inventory item).
      *
-     * @param level the level
-     * @param pos   the target
+     * @param stack the item
      */
-    void moveToJob(ServerLevel level, BlockPos pos) {
-        moveTo(level, Activity.JOB, pos);
+    void hold(ItemStack stack) {
+        if (!ItemStack.matches(stack, settler.getItemBySlot(EquipmentSlot.MAINHAND))) {
+            settler.setItemSlot(EquipmentSlot.MAINHAND, stack);
+        }
     }
 
     /**
-     * Ends the current step of a category loop and decides again.
-     *
-     * @param level the level
+     * @param away whether the settler is away outside the settlement (invisible) or back
      */
-    void stepDone(ServerLevel level) {
-        activity = Activity.IDLE;
-        decide(level);
+    void setAway(boolean away) {
+        settler.setInvisible(away);
     }
 
-    /**
-     * Stops the current step and stays idle while working on a job (e.g. waiting for a departure).
-     *
-     * @param job the job
-     */
-    void idleWith(SettlerJob job) {
-        stop();
-        activeJob = job;
-    }
-
-    /**
-     * Counts one tick of work of a job for hunger.
-     *
-     * @param job the job
-     */
-    void countWorkTick(SettlerJob job) {
+    /** Counts one tick of work of a job for hunger. */
+    private void countWorkTick(SettlerJob job) {
         weightedWorkTicks += job.jobType().hungerFactor();
     }
 
@@ -1065,17 +1164,17 @@ public final class SettlerWork {
      * @param job   the job
      * @return true (the settler is busy with it)
      */
-    boolean startDelivery(ServerLevel level, SettlerJob job) {
+    private boolean startDelivery(ServerLevel level, SettlerJob job) {
         ClerkStorage.Visit visit;
         activeJob = job;
         if (loop(job) == deliverymen) {
             // A Deliveryman unloads into its store as staff: at the block, no counter.
             visit = ClerkStorage.blockVisit(deliverymen.unloadTarget(level, job));
-            workplace(job.jobBlock()).setStatus(JobStatus.UNLOADING, deliverymen.unloadName(level, job));
+            setStatus(job.jobBlock(), JobStatus.UNLOADING, deliverymen.unloadName(level, job));
         } else {
             BlockPos dropOff = JobBlockSite.at(level, job.jobBlock()).map(JobBlockSite::dropOff).orElse(job.jobBlock());
             visit = reachableVisit(level, dropOff, ClerkStorage.visit(level, dropOff, DayClock.dayTime(level)));
-            workplace(job.jobBlock()).setStatus(JobStatus.DELIVERING);
+            setStatus(job.jobBlock(), JobStatus.DELIVERING);
         }
         if (activity != Activity.DELIVER || !visit.target().equals(target)) {
             deliveryVisit = visit;
@@ -1091,7 +1190,7 @@ public final class SettlerWork {
      * @param jobBlock the JobBlock position
      * @param status   the status explaining why
      */
-    void block(ServerLevel level, BlockPos jobBlock, JobStatus status) {
+    private void block(ServerLevel level, BlockPos jobBlock, JobStatus status) {
         workplace(jobBlock).block(status, level.getGameTime());
         if (activeJob != null && activeJob.jobBlock().equals(jobBlock)) {
             stop();
@@ -1105,7 +1204,7 @@ public final class SettlerWork {
      * @param jobBlock the JobBlock position
      * @param reason   the reason
      */
-    void block(ServerLevel level, BlockPos jobBlock, BlockingReason reason) {
+    private void block(ServerLevel level, BlockPos jobBlock, BlockingReason reason) {
         workplace(jobBlock).block(reason, level.getGameTime());
         if (activeJob != null && activeJob.jobBlock().equals(jobBlock)) {
             stop();
@@ -1322,14 +1421,9 @@ public final class SettlerWork {
     }
 
     /**
-     * @return the reach for the current target (the category loop's reach in a job step, otherwise the reach the walk
-     *         was started with)
+     * @return the reach for the current target (a job step's walk brings its own)
      */
     private double reach() {
-        CategoryLoop loop = activeJob == null ? null : loop(activeJob);
-        if (activity == Activity.JOB && loop != null) {
-            return loop.reach(activeJob);
-        }
         return targetReach;
     }
 
@@ -1518,7 +1612,7 @@ public final class SettlerWork {
         try {
             for (int step = 0; step < CATCH_UP_DECISIONS; step++) {
                 FoodLookup foodLookup = new FoodLookup(level, dayTime);
-                Schedule.Snapshot snapshot = catchUpSnapshot(level, day, dayTime, foodLookup, noFood);
+                Schedule.Snapshot snapshot = snapshot(level, day, dayTime, foodLookup, SnapshotFacts.catchUp(noFood));
                 Optional<Intent> body = Schedule.wakeUp(snapshot);
                 if (body.isPresent()) {
                     // Only foraging settles the body in catch-up (awake, no skipped night).
@@ -1583,22 +1677,6 @@ public final class SettlerWork {
             }
             settler.getInventory().setChanged();
         }
-    }
-
-    /**
-     * The Schedule snapshot during catch-up: awake, idle, nothing left to deliver (output goes straight to the
-     * drop-off).
-     *
-     * @param noFood whether a meal just found nothing to take (no food point or pocket food for this decision)
-     */
-    private Schedule.Snapshot catchUpSnapshot(ServerLevel level, long day, long dayTime, FoodLookup foodLookup, boolean noFood) {
-        SettlerFood food = settler.getFood();
-        return new Schedule.Snapshot(day, dayTime, food.level(),
-                SettlerFood.pocketNutrition(settler.getInventory(), Settler.POCKETS_START, Settler.POCKETS_SIZE),
-                CivModConfig.PROVISION_NUTRITION.get(), !noFood && SettlerFood.choose(pocketStacks(), food.level()).isPresent(),
-                () -> !noFood && foodLookup.get().isPresent(), () -> clerkToWaitAt(level).isPresent(), settler.isHomeless(),
-                false, food.forageDay(), false, Activity.IDLE, () -> false, food.morningDay() == day, food.eatenDay() == day,
-                waitStart(day), false, dayTimes(day));
     }
 
     /**
@@ -1753,16 +1831,26 @@ public final class SettlerWork {
         if (counterUnreachable(level, pos)) {
             return ClerkStorage.blockVisit(pos);
         }
-        if (settler.position().distanceTo(Vec3.atCenterOf(visit.target())) <= COUNTER_PATH_CHECK) {
-            net.minecraft.world.level.pathfinder.Path path = settler.getNavigation().createPath(visit.target(), (int) visit.reach());
-            // No path at all says nothing: vanilla searches none while the settler is in the air (a jump on its walk).
-            // Only a searched path that ends short of the counter makes it unreachable for the day.
-            if (path != null && !path.canReach()) {
-                unreachableCounters.put(pos.immutable(), DayClock.day(level));
-                return ClerkStorage.blockVisit(pos);
-            }
+        // Only a searched path that ends short of the counter makes it unreachable for the day.
+        if (settler.position().distanceTo(Vec3.atCenterOf(visit.target())) <= COUNTER_PATH_CHECK
+                && pathEndsShort(visit.target(), visit.reach())) {
+            unreachableCounters.put(pos.immutable(), DayClock.day(level));
+            return ClerkStorage.blockVisit(pos);
         }
         return visit;
+    }
+
+    /**
+     * One path search from the settler to a target. A path search is costly: call it once per walk, not per tick.
+     *
+     * @param target the target
+     * @param reach  how close the settler has to come
+     * @return whether a searched path ends short of the target; false when none was searched, which says nothing
+     *         (vanilla searches none while the settler is in the air, e.g. a jump on its walk)
+     */
+    boolean pathEndsShort(BlockPos target, double reach) {
+        net.minecraft.world.level.pathfinder.Path path = settler.getNavigation().createPath(target, (int) reach);
+        return path != null && !path.canReach();
     }
 
     /**
@@ -2226,7 +2314,9 @@ public final class SettlerWork {
         }
         if (activity == Activity.DELIVER) {
             if (loop(activeJob) == deliverymen) {
-                deliverymen.unload(level, activeJob);
+                if (!deliverymen.unload(level, activeJob)) {
+                    block(level, activeJob.jobBlock(), JobStatus.STORAGE_FULL);
+                }
             } else {
                 deliver(level, activeJob.jobBlock(), deliveryVisit != null && deliveryVisit.counter());
             }
@@ -2234,9 +2324,11 @@ public final class SettlerWork {
             deliveryVisit = null;
             decide(level);
         } else if (activity == Activity.JOB) {
-            CategoryLoop loop = loop(activeJob);
+            SettlerJob job = activeJob;
+            CategoryLoop loop = loop(job);
             if (loop != null) {
-                loop.tickAtTarget(level, activeJob, target);
+                // At the target of a job step the loop works there; the step says whether the settler stands still.
+                apply(level, job, loop.tickAtTarget(level, job, target));
             }
         }
     }

@@ -6,7 +6,9 @@ import java.util.Optional;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.menu.JobBlockMenu;
-import com.gilfort.civmod.menu.StationTypeTab;
+import com.gilfort.civmod.menu.JobBlockTab;
+import com.gilfort.civmod.menu.StationTypesTabData;
+import com.gilfort.civmod.menu.StationTypesTab;
 import com.gilfort.civmod.settlement.StationTypes;
 
 import net.minecraft.ChatFormatting;
@@ -21,10 +23,10 @@ import net.minecraft.world.item.Items;
 
 /**
  * The "Station Types" tab of a JobBlock in the {@link JobBlockScreen} (vault {@code Systems/JobBlock.md}); the client side
- * of {@link StationTypeTab}. Five slots in a row: the Base Job's station (locked), then the unlock items, one more open
+ * of {@link StationTypesTab}. Five slots in a row: the Base Job's station (locked), then the unlock items, one more open
  * slot per JobBlock level; below them the Jobs the JobBlock offers. The "?" lists every unlock item with its Jobs.
  */
-final class StationTypesView {
+final class StationTypesTabView implements JobBlockTabView {
 
     /** The 5 slots, centred in the panel. */
     private static final int SLOTS_X = 44;
@@ -34,15 +36,24 @@ final class StationTypesView {
 
     private final JobBlockScreen screen;
     private final JobBlockMenu menu;
+    private final StationTypesTab stations;
     /** The state line after a refused item ("Unlocks nothing here"), until the next click. */
     private Optional<Component> notice = Optional.empty();
 
     /**
      * @param screen the screen showing the tab
+     * @param tab    the tab
      */
-    StationTypesView(JobBlockScreen screen) {
+    StationTypesTabView(JobBlockScreen screen, StationTypesTab tab) {
         this.screen = screen;
         this.menu = screen.getMenu();
+        this.stations = tab;
+    }
+
+    /** New Station Types change which Patterns tabs the tab bar shows. */
+    @Override
+    public void dataChanged() {
+        screen.rebuild();
     }
 
     private static int slotX(int slot) {
@@ -51,9 +62,6 @@ final class StationTypesView {
 
     /** The slot under the mouse, {@code -1} if none. */
     private int slotAt(double mouseX, double mouseY) {
-        if (menu.getActiveTab() != JobBlockMenu.TAB_STATION_TYPES) {
-            return -1;
-        }
         int x = (int) Math.floor(mouseX - screen.left());
         int y = (int) Math.floor(mouseY - screen.top());
         for (int slot = 0; slot < StationTypes.SLOTS; slot++) {
@@ -69,12 +77,13 @@ final class StationTypesView {
      *
      * @return whether the click was taken
      */
-    boolean mouseClicked(MouseButtonEvent event) {
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event) {
         int slot = slotAt(event.x(), event.y());
         if (slot < 0) {
             return false;
         }
-        StationTypeTab tab = menu.getStationTypeTab();
+        StationTypesTabData tab = stations.data().get();
         Item item = menu.getCarried().getItem();
         notice = Optional.empty();
         if (menu.getCarried().isEmpty() || !tab.isOpen(slot)) {
@@ -85,7 +94,7 @@ final class StationTypesView {
         } else if (tab.slots().contains(item)) {
             notice = Optional.of(Component.translatable("civmod.gui.station_types.already", new ItemStack(item).getHoverName()));
         } else {
-            screen.clickMenuButton(JobBlockMenu.stationTypeButtonId(slot));
+            screen.clickMenuButton(stations.slotButtonId(slot));
             screen.clickSound();
         }
         return true;
@@ -94,10 +103,11 @@ final class StationTypesView {
     /**
      * @return the help lines: how slots work, then one line per unlock item and Job ("Stonecutter: Stonecutter – …")
      */
-    List<Component> helpLines() {
+    @Override
+    public List<Component> helpLines(JobBlockTab shown) {
         List<Component> lines = new ArrayList<>(List.of(Component.translatable("civmod.gui.station_types.help.put"),
                 Component.translatable("civmod.gui.station_types.help.replace"), Component.translatable("civmod.gui.station_types.help.station")));
-        for (StationTypes.Unlock unlock : menu.getStationTypeTab().overview()) {
+        for (StationTypes.Unlock unlock : stations.data().get().overview()) {
             Component item = new ItemStack(unlock.item()).getHoverName();
             for (Job job : unlock.jobs()) {
                 Component description = job.description();
@@ -109,9 +119,10 @@ final class StationTypesView {
     }
 
     /** Draws the slots, the offered Jobs and the state line. */
-    void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    @Override
+    public void extractLabels(GuiGraphicsExtractor graphics, JobBlockTab shown, int mouseX, int mouseY) {
         Font font = screen.getFont();
-        StationTypeTab tab = menu.getStationTypeTab();
+        StationTypesTabData tab = stations.data().get();
         graphics.text(font, Component.translatable("civmod.gui.station_types.title"), CivGui.PADDING, 18, CivGui.LABEL_COLOR, false);
         int hovered = slotAt(mouseX, mouseY);
         for (int slot = 0; slot < StationTypes.SLOTS; slot++) {
@@ -140,7 +151,7 @@ final class StationTypesView {
         }
     }
 
-    private static List<Component> tooltip(StationTypeTab tab, int slot) {
+    private static List<Component> tooltip(StationTypesTabData tab, int slot) {
         List<Component> lines = new ArrayList<>();
         Item item = tab.item(slot);
         if (slot >= tab.open()) {

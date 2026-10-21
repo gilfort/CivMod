@@ -4,7 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.gilfort.civmod.menu.FoundTab;
+import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.menu.JobBlockMenu;
+import com.gilfort.civmod.menu.JobBlockTab;
 import com.mojang.blaze3d.platform.InputConstants;
 
 import net.minecraft.ChatFormatting;
@@ -21,7 +23,7 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
  * ("Maximum reached at &lt;Clerk&gt;"); a right click excludes or includes one. A list that does not fit the panel
  * scrolls by rows (mouse wheel, or the scrollbar right of the grid, which then has 8 columns).
  */
-final class FoundTabView {
+final class FoundTabView implements JobBlockTabView {
 
     private static final int TOP = 22;
     private static final int LINE_HEIGHT = 11;
@@ -32,6 +34,7 @@ final class FoundTabView {
 
     private final JobBlockScreen screen;
     private final JobBlockMenu menu;
+    private final FoundTab found;
     /** The first row shown. */
     private int rowOffset;
     /** Whether the scrollbar is being dragged. */
@@ -39,59 +42,61 @@ final class FoundTabView {
 
     /**
      * @param screen the screen showing the tab
+     * @param tab    the tab
      */
-    FoundTabView(JobBlockScreen screen) {
+    FoundTabView(JobBlockScreen screen, FoundTab tab) {
         this.screen = screen;
         this.menu = screen.getMenu();
+        this.found = tab;
     }
 
     /** Top edge of the grid (below the info lines). */
-    private int gridY(FoundTab tab) {
+    private int gridY(FoundTabData tab) {
         return TOP + tab.lines().size() * LINE_HEIGHT + (tab.lines().isEmpty() ? 0 : 2);
     }
 
     /** How many rows fit the panel. */
-    private int rows(FoundTab tab) {
+    private int rows(FoundTabData tab) {
         return Math.max(0, (screen.panelHeight() - BOTTOM_MARGIN - gridY(tab)) / 18);
     }
 
     /** Whether the list does not fit the panel (then it scrolls). */
-    private boolean scrolls(FoundTab tab) {
+    private boolean scrolls(FoundTabData tab) {
         return tab.entries().size() > rows(tab) * COLUMNS;
     }
 
     /** Columns of the grid: one fewer while the scrollbar needs the room. */
-    private int columns(FoundTab tab) {
+    private int columns(FoundTabData tab) {
         return scrolls(tab) ? COLUMNS - 1 : COLUMNS;
     }
 
     /** The largest row offset. */
-    private int maxOffset(FoundTab tab) {
+    private int maxOffset(FoundTabData tab) {
         int columns = columns(tab);
         int total = (tab.entries().size() + columns - 1) / columns;
         return Math.max(0, total - rows(tab));
     }
 
     /** The first entry shown. */
-    private int first(FoundTab tab) {
+    private int first(FoundTabData tab) {
         rowOffset = Math.clamp(rowOffset, 0, maxOffset(tab));
         return rowOffset * columns(tab);
     }
 
     /** One past the last entry shown. */
-    private int end(FoundTab tab) {
+    private int end(FoundTabData tab) {
         return Math.min(tab.entries().size(), first(tab) + rows(tab) * columns(tab));
     }
 
     /** Left edge of the scrollbar (panel coordinates). */
-    private int scrollbarX(FoundTab tab) {
+    private int scrollbarX(FoundTabData tab) {
         return CivGui.PADDING + columns(tab) * 18 + SCROLLBAR_GAP;
     }
 
     /**
      * @return the index of the entry under the mouse, {@code -1} if none
      */
-    private int entryAt(FoundTab tab, double mouseX, double mouseY) {
+    private int entryAt(FoundTabData tab, double mouseX, double mouseY) {
         if (!tab.scanned()) {
             return -1;
         }
@@ -105,16 +110,11 @@ final class FoundTabView {
         return index < end(tab) ? index : -1;
     }
 
-    /**
-     * Draws the tab.
-     *
-     * @param graphics the graphics extractor (panel coordinates)
-     * @param mouseX   the mouse x position
-     * @param mouseY   the mouse y position
-     */
-    void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    /** Draws the tab. */
+    @Override
+    public void extractLabels(GuiGraphicsExtractor graphics, JobBlockTab shown, int mouseX, int mouseY) {
         Font font = screen.getFont();
-        FoundTab tab = menu.getFoundTab();
+        FoundTabData tab = found.data().get();
         int width = screen.panelWidth() - 2 * CivGui.PADDING;
         if (!tab.scanned()) {
             graphics.text(font, Component.translatable("civmod.gui.found.not_scanned"), CivGui.PADDING, TOP, CivGui.LABEL_COLOR, false);
@@ -135,7 +135,7 @@ final class FoundTabView {
             CivGui.scrollbar(graphics, scrollbarX(tab), gridY - 1, rows(tab) * 18, rowOffset, maxOffset(tab));
         }
         for (int i = first; i < end(tab); i++) {
-            FoundTab.Entry entry = tab.entries().get(i);
+            FoundTabData.Entry entry = tab.entries().get(i);
             int x = CivGui.PADDING + ((i - first) % columns) * 18;
             int y = gridY + ((i - first) / columns) * 18;
             CivGui.slot(graphics, x, y);
@@ -162,17 +162,10 @@ final class FoundTabView {
         }
     }
 
-    /**
-     * A right click on an entry excludes or includes it.
-     *
-     * @param event the click
-     * @return whether the click was taken
-     */
-    boolean mouseClicked(MouseButtonEvent event) {
-        if (menu.getActiveTab() != JobBlockMenu.TAB_FOUND) {
-            return false;
-        }
-        FoundTab tab = menu.getFoundTab();
+    /** A right click on an entry excludes or includes it; a left click on the scrollbar starts dragging it. */
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event) {
+        FoundTabData tab = found.data().get();
         if (event.button() == InputConstants.MOUSE_BUTTON_LEFT && overScrollbar(tab, event.x(), event.y())) {
             dragging = true;
             dragTo(tab, event.y());
@@ -185,20 +178,16 @@ final class FoundTabView {
         if (index < 0) {
             return false;
         }
-        ClientPacketDistributor.sendToServer(new FoundTab.Toggle(menu.containerId, tab.entries().get(index).type()));
+        ClientPacketDistributor.sendToServer(new FoundTabData.Toggle(menu.containerId, tab.entries().get(index).type()));
         screen.clickSound();
         return true;
     }
 
-    /**
-     * Scrolls the list by one row per wheel step.
-     *
-     * @param scrollY the wheel movement
-     * @return whether the wheel was taken
-     */
-    boolean mouseScrolled(double scrollY) {
-        FoundTab tab = menu.getFoundTab();
-        if (menu.getActiveTab() != JobBlockMenu.TAB_FOUND || !tab.scanned() || !scrolls(tab)) {
+    /** Scrolls the list by one row per wheel step. */
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
+        FoundTabData tab = found.data().get();
+        if (!tab.scanned() || !scrolls(tab)) {
             return false;
         }
         rowOffset = Math.clamp(rowOffset - (int) Math.signum(scrollY), 0, maxOffset(tab));
@@ -208,14 +197,15 @@ final class FoundTabView {
     /**
      * Drags the scrollbar.
      *
-     * @param mouseY the mouse y position
+     * @param event the drag
      * @return whether the scrollbar is being dragged
      */
-    boolean mouseDragged(double mouseY) {
-        if (!dragging || menu.getActiveTab() != JobBlockMenu.TAB_FOUND) {
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event) {
+        if (!dragging) {
             return false;
         }
-        dragTo(menu.getFoundTab(), mouseY);
+        dragTo(found.data().get(), event.y());
         return true;
     }
 
@@ -224,13 +214,14 @@ final class FoundTabView {
      *
      * @return whether it was being dragged
      */
-    boolean mouseReleased() {
+    @Override
+    public boolean mouseReleased() {
         boolean was = dragging;
         dragging = false;
         return was;
     }
 
-    private boolean overScrollbar(FoundTab tab, double mouseX, double mouseY) {
+    private boolean overScrollbar(FoundTabData tab, double mouseX, double mouseY) {
         if (!tab.scanned() || !scrolls(tab)) {
             return false;
         }
@@ -240,7 +231,7 @@ final class FoundTabView {
     }
 
     /** Moves the list so the scroller's centre follows the mouse. */
-    private void dragTo(FoundTab tab, double mouseY) {
+    private void dragTo(FoundTabData tab, double mouseY) {
         int height = rows(tab) * 18;
         int track = height - CivGui.scrollerHeight(height);
         if (track <= 0) {
@@ -253,7 +244,8 @@ final class FoundTabView {
     /**
      * @return the help lines of the tab
      */
-    List<Component> helpLines() {
+    @Override
+    public List<Component> helpLines(JobBlockTab shown) {
         return List.of(Component.translatable("civmod.gui.found.help.toggle"));
     }
 }

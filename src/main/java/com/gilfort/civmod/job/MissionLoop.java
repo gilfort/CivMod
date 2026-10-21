@@ -3,6 +3,7 @@ package com.gilfort.civmod.job;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 
@@ -126,27 +127,25 @@ final class MissionLoop implements CategoryLoop {
     // ---------------------------------------------------------------- decisions
 
     @Override
-    public boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
+    public JobStep plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
         BlockPos board = job.jobBlock();
         if (departed()) {
-            return leave(level, job);
+            return leave(level);
         }
         if (!shell.buffer(board).isEmpty()) {
-            return shell.startDelivery(level, job);
+            return JobStep.DELIVER;
         }
         if (trip != null && !trip.board().equals(board)) {
             forget(trip.board());
         }
         if (trip == null) {
             MissionPicks.request(level, board, settler);
-            return false;
+            return JobStep.skip();
         }
-        shell.idleWith(job);
         if (dayTime < DEPARTURE_END) {
-            return depart(level, job, day);
+            return depart(level, day);
         }
-        shell.setStatus(board, JobStatus.WAITING_DEPARTURE);
-        return true;
+        return new JobStep.Wait(JobStatus.WAITING_DEPARTURE);
     }
 
     /**
@@ -170,66 +169,63 @@ final class MissionLoop implements CategoryLoop {
      */
     void noMission(ServerLevel level, BlockPos board) {
         if (shell.buffer(board).isEmpty()) {
-            shell.block(level, board, JobStatus.NO_MISSION);
+            shell.workplace(board).block(JobStatus.NO_MISSION, level.getGameTime());
         }
     }
 
-    private boolean depart(ServerLevel level, SettlerJob job, long day) {
+    private JobStep depart(ServerLevel level, long day) {
         MissionTrip reserved = trip;
         Optional<Mission> mission = reserved == null ? Optional.empty() : Missions.get(level.registryAccess(), reserved.mission());
         if (reserved == null || mission.isEmpty()) {
             // The mission was removed from the datapacks since it was reserved.
             trip = null;
-            shell.setStatus(job.jobBlock(), JobStatus.IDLE);
-            return false;
+            return JobStep.skip(JobStatus.IDLE);
         }
         trip = reserved.departing(MissionRules.returnTime(day, mission.get().days()));
         leaveTarget = null;
-        return leave(level, job);
-    }
-
-    /** Walks out of the settlement (the shell's anti-stuck teleport keeps it going). */
-    private boolean leave(ServerLevel level, SettlerJob job) {
-        if (leaveTarget == null) {
-            leaveTarget = shell.outsideTarget(level);
-            leaveStart = level.getGameTime();
-        }
-        shell.setActiveJob(job);
-        if (!shell.walkingTo(leaveTarget)) {
-            shell.moveToJob(level, leaveTarget);
-        }
-        shell.setStatus(job.jobBlock(), JobStatus.ON_MISSION);
-        return true;
+        return leave(level);
     }
 
     /**
-     * Goes on walking out after the walk was interrupted (e.g. the settler was saved while leaving).
+     * Walks out of the settlement (the shell's anti-stuck teleport keeps it going).
      *
      * @param level the level
+     * @return the walk out
      */
-    void resumeLeaving(ServerLevel level) {
-        MissionTrip current = trip;
-        if (current == null) {
-            return;
+    JobStep leave(ServerLevel level) {
+        BlockPos target = leaveTarget;
+        if (target == null) {
+            target = shell.outsideTarget(level);
+            leaveTarget = target;
+            leaveStart = level.getGameTime();
         }
-        Optional<SettlerJob> job = missionJob(settler, current.board());
-        if (job.isEmpty()) {
-            forget(current.board());
-            return;
-        }
-        leave(level, job.get());
+        return JobStep.walk(target, SettlerWork.REACH, JobStatus.ON_MISSION);
     }
 
-    /** Vanishes outside the settlement: from now on the settler is away. */
-    private void vanish(SettlerJob job) {
+    /**
+     * Goes on walking out after the walk was interrupted (e.g. the settler was saved while leaving): the shell walks
+     * the job out with {@link #leave}.
+     *
+     * @return the Mission Job to walk out with, empty if the settler no longer has it (the trip is forgotten)
+     */
+    Optional<SettlerJob> resumeLeaving() {
         MissionTrip current = trip;
         if (current == null) {
-            return;
+            return Optional.empty();
         }
-        trip = current.withExit(settler.blockPosition());
+        Optional<SettlerJob> job = missionJob(shell.jobs(), current.board());
+        if (job.isEmpty()) {
+            forget(current.board());
+        }
+        return job;
+    }
+
+    /** Vanishes outside the settlement: from now on the settler is away, standing with its Mission Job. */
+    private JobStep vanish() {
+        trip = Objects.requireNonNull(trip).withExit(settler.blockPosition());
         leaveTarget = null;
-        settler.setInvisible(true);
-        shell.idleWith(job);
+        shell.setAway(true);
+        return new JobStep.Wait(JobStatus.ON_MISSION);
     }
 
     @Override
@@ -262,9 +258,9 @@ final class MissionLoop implements CategoryLoop {
         trip = null;
         leaveTarget = null;
         returnedAt = ended.returnTime();
-        settler.setInvisible(false);
+        shell.setAway(false);
         BlockPos board = ended.board();
-        Optional<SettlerJob> job = missionJob(settler, board);
+        Optional<SettlerJob> job = missionJob(shell.jobs(), board);
         Optional<JobBlockSite> site = JobBlockSite.at(level, board);
         Optional<Mission> mission = Missions.get(level.registryAccess(), ended.mission());
         if (job.isEmpty() || site.isEmpty()) {
@@ -275,7 +271,7 @@ final class MissionLoop implements CategoryLoop {
             die(level, board, mission.get());
             return true;
         }
-        if (settler.getJobs().get(0).equals(job.get())) {
+        if (shell.jobs().get(0).equals(job.get())) {
             MissionPicks.request(level, board, settler);
         }
         return true;
@@ -337,12 +333,12 @@ final class MissionLoop implements CategoryLoop {
     }
 
     /**
-     * @param settler a settler
-     * @param board   a Mission Board
+     * @param jobs  a settler's jobs
+     * @param board a Mission Board
      * @return the settler's Mission Job at that board
      */
-    static Optional<SettlerJob> missionJob(Settler settler, BlockPos board) {
-        return settler.getJobs().stream()
+    static Optional<SettlerJob> missionJob(List<SettlerJob> jobs, BlockPos board) {
+        return jobs.stream()
                 .filter(job -> job.jobBlock().equals(board) && job.jobType().category() == JobCategory.MISSION).findFirst();
     }
 
@@ -364,26 +360,19 @@ final class MissionLoop implements CategoryLoop {
      * Walking out holds every decision (also the evening) until the settler vanishes.
      */
     @Override
-    public boolean holdsDecision(ServerLevel level, SettlerJob job) {
+    public JobStep holdsDecision(ServerLevel level, SettlerJob job) {
         if (!departed() || isAway()) {
-            return false;
+            return JobStep.skip();
         }
         if (leaveTarget == null || level.getGameTime() - leaveStart >= LEAVE_WALK_TICKS) {
-            vanish(job);
+            return vanish();
         }
-        return true;
+        return new JobStep.Hold(JobStatus.ON_MISSION);
     }
 
     @Override
-    public void tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
-        if (departed() && !isAway()) {
-            vanish(job);
-        }
-    }
-
-    @Override
-    public double reach(SettlerJob job) {
-        return SettlerWork.REACH;
+    public JobStep tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
+        return departed() && !isAway() ? vanish() : JobStep.STAY;
     }
 
     // ---------------------------------------------------------------- catch-up
@@ -414,7 +403,7 @@ final class MissionLoop implements CategoryLoop {
         trip = null;
         leaveTarget = null;
         if (current.departed()) {
-            settler.setInvisible(false);
+            shell.setAway(false);
         } else if (settler.level() instanceof ServerLevel level) {
             // The settler left the board: an assigned mission stays locked for the others.
             MissionOffers.giveBack(SettlementData.get(level), jobBlock, current.mission(), Optional.empty(), current.assigned());

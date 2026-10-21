@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:job_step_only_standing_steps_stop_the_walk",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -6,8 +6,8 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
-import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments.AssignResult;
 import com.gilfort.civmod.settlement.JobAssignments.PointResult;
@@ -16,6 +16,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -130,14 +131,14 @@ public final class ScrollGameTests {
         BlockPos unconnected = new BlockPos(20, 64, 0);
         place(data, unconnected, ModJobs.MINER.get());
 
-        helper.assertTrue(JobAssignments.assign(data, JOB_BLOCK, ALICE, "Alice", settlement.id(), List.of()) == AssignResult.OK, "Alice assigned");
-        helper.assertTrue(JobAssignments.assign(data, JOB_BLOCK, BOB, "Bob", settlement.id(), List.of()) == AssignResult.OCCUPIED, "Occupied");
+        helper.assertTrue(TestAssignments.assign(data, JOB_BLOCK, ALICE, "Alice", settlement.id(), List.of()) == AssignResult.OK, "Alice assigned");
+        helper.assertTrue(TestAssignments.assign(data, JOB_BLOCK, BOB, "Bob", settlement.id(), List.of()) == AssignResult.OCCUPIED, "Occupied");
         helper.assertTrue(block(data, JOB_BLOCK).assignees().get(0).name().equals("Alice"), "Assignee name stored");
-        helper.assertTrue(JobAssignments.assign(data, second, ALICE, "Alice", settlement.id(), List.of(ModJobs.LUMBERJACK.get())) == AssignResult.DUPLICATE,
+        helper.assertTrue(TestAssignments.assign(data, second, ALICE, "Alice", settlement.id(), List.of(ModJobs.LUMBERJACK.get())) == AssignResult.DUPLICATE,
                 "Alice already is a Lumberjack");
-        helper.assertTrue(JobAssignments.assign(data, unconnected, BOB, "Bob", settlement.id(), List.of()) == AssignResult.UNCONNECTED, "Unconnected");
-        helper.assertTrue(JobAssignments.assign(data, second, BOB, "Bob", -1, List.of()) == AssignResult.OTHER_SETTLEMENT, "Homeless settler");
-        helper.assertTrue(JobAssignments.assign(data, second, BOB, "Bob", settlement.id(), List.of()) == AssignResult.OK, "Bob takes the second block");
+        helper.assertTrue(TestAssignments.assign(data, unconnected, BOB, "Bob", settlement.id(), List.of()) == AssignResult.UNCONNECTED, "Unconnected");
+        helper.assertTrue(TestAssignments.assign(data, second, BOB, "Bob", -1, List.of()) == AssignResult.OTHER_SETTLEMENT, "Homeless settler");
+        helper.assertTrue(TestAssignments.assign(data, second, BOB, "Bob", settlement.id(), List.of()) == AssignResult.OK, "Bob takes the second block");
         helper.succeed();
     }
 
@@ -147,11 +148,11 @@ public final class ScrollGameTests {
         Settlement settlement = place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get()).settlement();
         BlockPos second = new BlockPos(5, 64, 0);
         place(data, second, ModJobs.MINER.get());
-        JobAssignments.assign(data, JOB_BLOCK, ALICE, "Alice", settlement.id(), List.of());
-        helper.assertTrue(JobAssignments.unassign(data, JOB_BLOCK).equals(List.of(ALICE)), "Unassign returns the settler");
+        TestAssignments.assign(data, JOB_BLOCK, ALICE, "Alice", settlement.id(), List.of());
+        helper.assertTrue(TestAssignments.unassign(data, JOB_BLOCK).equals(List.of(ALICE)), "Unassign returns the settler");
         helper.assertTrue(block(data, JOB_BLOCK).assignees().isEmpty(), "Block is free again");
 
-        JobAssignments.assign(data, second, BOB, "Bob", settlement.id(), List.of());
+        TestAssignments.assign(data, second, BOB, "Bob", settlement.id(), List.of());
         List<UUID> lostJob = new ArrayList<>();
         SettlementManager.remove(data, second, new SettlementManager.Listener() {
             @Override
@@ -179,7 +180,7 @@ public final class ScrollGameTests {
         JobAssignments.cyclePoint(data, JOB_BLOCK, new BlockPos(3, 64, 0), true, false);
         JobAssignments.cyclePoint(data, JOB_BLOCK, new BlockPos(2, 64, 2), false, true);
         JobAssignments.cyclePoint(data, JOB_BLOCK, new BlockPos(2, 64, 2), false, true);
-        JobAssignments.assign(data, JOB_BLOCK, ALICE, "Alice", settlement.id(), List.of());
+        TestAssignments.assign(data, JOB_BLOCK, ALICE, "Alice", settlement.id(), List.of());
         var ops = helper.getLevel().registryAccess().createSerializationContext(JsonOps.INSTANCE);
         SettlementData loaded = SettlementData.CODEC.parse(ops, SettlementData.CODEC.encodeStart(ops, data).getOrThrow()).getOrThrow();
         SettlementBlock copy = block(loaded, JOB_BLOCK);

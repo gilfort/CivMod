@@ -11,7 +11,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.job.FishTable;
 import com.gilfort.civmod.job.FishermanProfile;
 import com.gilfort.civmod.job.WaterScan;
-import com.gilfort.civmod.menu.FoundTab;
+import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
@@ -20,6 +20,7 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.google.gson.JsonParser;
 
 import net.minecraft.core.BlockPos;
@@ -199,15 +200,15 @@ public final class FishermanGameTests {
         settler.joinSettlement(data, settlement);
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.FISHING_ROD));
         JobAssignments.cyclePoint(data, jobBlock, helper.absolutePos(new BlockPos(6, 2, 6)), true, false);
-        helper.assertTrue(JobAssignments.assign(data, jobBlock, settler.getUUID(), "Angler", settlement.id(), List.of())
+        helper.assertTrue(TestAssignments.assign(data, jobBlock, settler.getUUID(), "Angler", settlement.id(), List.of())
                 == JobAssignments.AssignResult.OK, "Assignment failed");
         settler.addJob(new SettlerJob(ModJobs.FISHERMAN.get(), jobBlock));
         helper.succeedWhen(() -> {
             helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0,
                     "Nothing caught yet (status " + settler.getWork().status(jobBlock) + ")");
             helper.assertFalse(settler.isInWater(), "The Fisherman stands on the shore");
-            FoundTab tab = FoundTab.of(level, jobBlock);
-            helper.assertTrue(tab.entries().stream().map(FoundTab.Entry::type).toList().equals(FishTable.get().ids()),
+            FoundTabData tab = FoundTabData.of(level, jobBlock);
+            helper.assertTrue(tab.entries().stream().map(FoundTabData.Entry::type).toList().equals(FishTable.get().ids()),
                     "The Found tab lists the fish of the loot table: " + tab);
             helper.assertTrue(tab.lines().size() >= 2, "Water and treasure lines: " + tab.lines());
             settler.discard();

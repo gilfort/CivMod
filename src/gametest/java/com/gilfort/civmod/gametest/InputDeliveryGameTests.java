@@ -23,6 +23,7 @@ import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.Reservations;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.TestAssignments;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -132,8 +133,8 @@ public final class InputDeliveryGameTests {
 
         void cleanUp(GameTestHelper helper) {
             SettlementData data = SettlementData.get(helper.getLevel());
-            JobAssignments.unassign(data, home);
-            JobAssignments.unassign(data, craft);
+            TestAssignments.unassign(data, home);
+            TestAssignments.unassign(data, craft);
             cora.discard();
             dora.discard();
             forced.forEach(chunk -> helper.getLevel().setChunkForced((int) chunk[0], (int) chunk[1], false));

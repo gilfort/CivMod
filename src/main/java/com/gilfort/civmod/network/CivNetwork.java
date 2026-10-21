@@ -3,13 +3,16 @@ package com.gilfort.civmod.network;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.command.CivModCommand;
 import com.gilfort.civmod.item.JobPicker;
-import com.gilfort.civmod.menu.ClerkTab;
+import com.gilfort.civmod.menu.ClerkTabData;
 import com.gilfort.civmod.menu.FoundTab;
+import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
-import com.gilfort.civmod.menu.PatternTab;
+import com.gilfort.civmod.menu.PatternsTabData;
+import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.menu.SettlerMenu;
-import com.gilfort.civmod.menu.StationTypeTab;
+import com.gilfort.civmod.menu.StationTypesTabData;
+import com.gilfort.civmod.menu.StockTab;
 import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.settlement.JobPointsDisplay;
 import com.gilfort.civmod.settlement.SettlementOutline;
@@ -73,19 +76,19 @@ public final class CivNetwork {
                 CivModCommand.openDebugMenu(player);
             }
         });
-        registrar.playToServer(ClerkTab.Edit.TYPE, ClerkTab.Edit.STREAM_CODEC, (payload, context) -> {
+        registrar.playToServer(ClerkTabData.Edit.TYPE, ClerkTabData.Edit.STREAM_CODEC, (payload, context) -> {
             if (context.player().containerMenu instanceof JobBlockMenu menu && menu.containerId == payload.containerId()) {
-                menu.editStockRule(payload.slot(), payload.rule());
+                menu.tab(StockTab.class).ifPresent(tab -> tab.editRule(payload.slot(), payload.rule()));
             }
         });
-        registrar.playToServer(PatternTab.Edit.TYPE, PatternTab.Edit.STREAM_CODEC, (payload, context) -> {
+        registrar.playToServer(PatternsTabData.Edit.TYPE, PatternsTabData.Edit.STREAM_CODEC, (payload, context) -> {
             if (context.player().containerMenu instanceof JobBlockMenu menu && menu.containerId == payload.containerId()) {
-                menu.editPattern(payload);
+                PatternsTab.of(menu, payload.job()).ifPresent(tab -> tab.edit(payload));
             }
         });
-        registrar.playToServer(FoundTab.Toggle.TYPE, FoundTab.Toggle.STREAM_CODEC, (payload, context) -> {
+        registrar.playToServer(FoundTabData.Toggle.TYPE, FoundTabData.Toggle.STREAM_CODEC, (payload, context) -> {
             if (context.player().containerMenu instanceof JobBlockMenu menu && menu.containerId == payload.containerId()) {
-                menu.toggleExcluded(payload.resource());
+                menu.tab(FoundTab.class).ifPresent(tab -> tab.toggleExcluded(payload.resource()));
             }
         });
         registrar.playToServer(JobPicker.Choose.TYPE, JobPicker.Choose.STREAM_CODEC, (payload, context) -> {
@@ -101,12 +104,12 @@ public final class CivNetwork {
                 });
         // Client handler is registered in CivModClient (RegisterClientPayloadHandlersEvent).
         registrar.playToClient(JobPicker.Open.TYPE, JobPicker.Open.STREAM_CODEC);
-        registrar.playToClient(PatternTab.Sync.TYPE, PatternTab.Sync.STREAM_CODEC);
-        registrar.playToClient(StationTypeTab.Sync.TYPE, StationTypeTab.Sync.STREAM_CODEC);
+        registrar.playToClient(PatternsTabData.Sync.TYPE, PatternsTabData.Sync.STREAM_CODEC);
+        registrar.playToClient(StationTypesTabData.Sync.TYPE, StationTypesTabData.Sync.STREAM_CODEC);
         registrar.playToClient(SettlementOutline.Sync.TYPE, SettlementOutline.Sync.STREAM_CODEC);
         registrar.playToClient(JobPointsDisplay.Sync.TYPE, JobPointsDisplay.Sync.STREAM_CODEC);
-        registrar.playToClient(ClerkTab.Sync.TYPE, ClerkTab.Sync.STREAM_CODEC);
-        registrar.playToClient(FoundTab.Sync.TYPE, FoundTab.Sync.STREAM_CODEC);
+        registrar.playToClient(ClerkTabData.Sync.TYPE, ClerkTabData.Sync.STREAM_CODEC);
+        registrar.playToClient(FoundTabData.Sync.TYPE, FoundTabData.Sync.STREAM_CODEC);
         registrar.playToClient(JobBlockInfo.Sync.TYPE, JobBlockInfo.Sync.STREAM_CODEC);
         registrar.playToClient(ThoughtBubble.Show.TYPE, ThoughtBubble.Show.STREAM_CODEC);
     }

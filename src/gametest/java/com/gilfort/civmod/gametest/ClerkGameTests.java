@@ -6,25 +6,26 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.CatchUp;
-import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.Schedule;
 import com.gilfort.civmod.job.SettlerWork;
-import com.gilfort.civmod.npc.Settler;
-import com.gilfort.civmod.npc.SettlerJob;
-import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Stock;
+import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
+import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.ClerkSpots;
-import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobAssignments.PointResult;
+import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -110,7 +111,7 @@ public final class ClerkGameTests {
 
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        helper.assertTrue(JobAssignments.assign(data, clerk, CLARA, "Clara", settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
+        helper.assertTrue(TestAssignments.assign(data, clerk, CLARA, "Clara", settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
                 "Clerk assigned");
         helper.assertTrue(count(ClerkStorage.stock(level, clerk, MORNING, true)) == 7, "Working Clerk: linked storage at the counter");
         helper.assertTrue(count(ClerkStorage.stock(level, clerk, MORNING, false)) == 2, "Not at the counter: block slots only");
@@ -121,7 +122,7 @@ public final class ClerkGameTests {
         helper.assertTrue(rest.getCount() < 64 * 26, "A working Clerk fills the linked storage as well: rest " + rest.getCount());
         Stock closed = ClerkStorage.stock(level, clerk, EVENING, true);
         helper.assertTrue(closed.insert(new ItemStack(Items.STICK, 64)).getCount() == 64, "Closed Clerk with full block slots takes nothing");
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         helper.succeed();
     }
 
@@ -230,7 +231,7 @@ public final class ClerkGameTests {
         helper.assertTrue(food(level, settlement, from, MORNING, Optional.empty(), pos -> true).equals(Optional.of(far)),
                 "The near Clerk has food only in its linked storage and no settler: the far one");
 
-        helper.assertTrue(JobAssignments.assign(data, near, CLARA, "Clara", settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
+        helper.assertTrue(TestAssignments.assign(data, near, CLARA, "Clara", settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
                 "Clerk assigned");
         Optional<ClerkStorage.FoodPoint> working = ClerkStorage.nearestFood(level, settlement, from, MORNING, Optional.empty(), pos -> true);
         helper.assertTrue(working.map(ClerkStorage.FoodPoint::clerk).equals(Optional.of(near)), "Working Clerk: the near one");
@@ -242,7 +243,7 @@ public final class ClerkGameTests {
                 "After the shift the linked storage is closed");
         helper.assertTrue(food(level, settlement, helper.absolutePos(new BlockPos(8, 1, 8)), EVENING, Optional.of(near), pos -> true)
                 .equals(Optional.of(near)), "The Clerk eats from its own storage after the shift");
-        JobAssignments.unassign(data, near);
+        TestAssignments.unassign(data, near);
         helper.succeed();
     }
 
@@ -285,7 +286,7 @@ public final class ClerkGameTests {
             helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0, "The output waits in the buffer");
 
             Settlement settlement = data.settlementAt(clerk).orElseThrow();
-            JobAssignments.assign(data, clerk, CLARA, "Clara", settlement.id(), List.of());
+            TestAssignments.assign(data, clerk, CLARA, "Clara", settlement.id(), List.of());
             settler.getWork().setCatchUp(dayStart - 24000L, dayStart);
             CatchUp.runNow(level, List.of(settler));
             helper.assertTrue(logs(chest) > 0, "Working Clerk: deliveries go into the linked storage, got " + logs(chest));
@@ -298,7 +299,7 @@ public final class ClerkGameTests {
             CatchUp.runNow(level, List.of(settler));
             helper.assertTrue(settler.getInventory().getItem(Settler.BELT_START).is(Items.STONE_AXE) && chest.getItem(26).isEmpty(),
                     "Tool from the linked storage of a working Clerk: " + settler.getInventory().getItem(Settler.BELT_START));
-            JobAssignments.unassign(data, clerk);
+            TestAssignments.unassign(data, clerk);
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
             helper.succeed();
@@ -318,7 +319,7 @@ public final class ClerkGameTests {
         Settlement settlement = data.settlementAt(clerkPos).orElseThrow();
         Settler customer = settler(helper, new BlockPos(2, 1, 3), data, settlement);
         Settler clerk = settler(helper, new BlockPos(3, 1, 3), data, settlement);
-        JobAssignments.assign(data, clerkPos, clerk.getUUID(), "Clerk", settlement.id(), List.of());
+        TestAssignments.assign(data, clerkPos, clerk.getUUID(), "Clerk", settlement.id(), List.of());
         clerk.addJob(new SettlerJob(ModJobs.CLERK.get(), clerkPos));
         customer.getFood().setLevel(4);
         customer.getFood().setSaturation(0.0F);
@@ -332,7 +333,7 @@ public final class ClerkGameTests {
         int exp = clerk.getSkills().get(ModJobs.CLERK.get()).exp() + 1000 * clerk.getSkills().get(ModJobs.CLERK.get()).level();
         helper.assertTrue(exp > 1000, "Hand-outs give the Clerk EXP: " + clerk.getSkills().get(ModJobs.CLERK.get()));
 
-        JobAssignments.unassign(data, clerkPos);
+        TestAssignments.unassign(data, clerkPos);
         clerk.removeJob(clerkPos);
         customer.getFood().setLevel(4);
         customer.getFood().setSaturation(0.0F);
@@ -393,7 +394,7 @@ public final class ClerkGameTests {
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerkPos).orElseThrow();
         Settler clerk = settler(helper, new BlockPos(1, 1, 3), data, settlement);
-        JobAssignments.assign(data, clerkPos, clerk.getUUID(), "Clerk", settlement.id(), List.of());
+        TestAssignments.assign(data, clerkPos, clerk.getUUID(), "Clerk", settlement.id(), List.of());
         clerk.addJob(new SettlerJob(ModJobs.CLERK.get(), clerkPos));
         Settler customer = settler(helper, new BlockPos(7, 1, 7), data, settlement);
         customer.setNoAi(false);
@@ -403,7 +404,7 @@ public final class ClerkGameTests {
                     + customer.statusText().getString() + ")");
             helper.assertTrue(chest.getItem(0).getCount() < 16, "Served from the linked storage");
             helper.assertTrue(clerk.getSkills().get(ModJobs.CLERK.get()).exp() > 0, "The Clerk gains EXP per hand-out");
-            JobAssignments.unassign(data, clerkPos);
+            TestAssignments.unassign(data, clerkPos);
             customer.discard();
             clerk.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
