@@ -100,7 +100,11 @@ final class DeliverymanLoop implements CategoryLoop {
     // ---------------------------------------------------------------- decisions
 
     @Override
-    public boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
+    public JobStep plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
+        return new JobStep.Steered(planSteered(level, job, site, day, dayTime));
+    }
+
+    private boolean planSteered(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
         warehouse = job.jobBlock();
         if (unreachableDay != day) {
             unreachable.clear();
@@ -215,7 +219,11 @@ final class DeliverymanLoop implements CategoryLoop {
     }
 
     @Override
-    public boolean holdsDecision(ServerLevel level, SettlerJob job) {
+    public JobStep holdsDecision(ServerLevel level, SettlerJob job) {
+        return holdsSteered(level, job) ? new JobStep.Steered(true) : JobStep.skip();
+    }
+
+    private boolean holdsSteered(ServerLevel level, SettlerJob job) {
         return false;
     }
 
@@ -228,7 +236,12 @@ final class DeliverymanLoop implements CategoryLoop {
 
     /** At a source: takes what fits of every task there; at a foreign Clerk's counter it waits for its turn first. */
     @Override
-    public void tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
+    public JobStep tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
+        tickSteered(level, job, target);
+        return JobStep.STAY;
+    }
+
+    private void tickSteered(ServerLevel level, SettlerJob job, BlockPos target) {
         BlockPos source = visiting != null ? visiting : target;
         boolean counter = visit != null && visit.counter();
         if (counter && !shell.waitAtCounter(level, source)) {

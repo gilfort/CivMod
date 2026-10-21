@@ -76,7 +76,11 @@ final class ResourceCollectionLoop implements CategoryLoop {
     // ---------------------------------------------------------------- decisions
 
     @Override
-    public boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
+    public JobStep plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
+        return new JobStep.Steered(planSteered(level, job, site, day, dayTime));
+    }
+
+    private boolean planSteered(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
         BlockPos jobBlock = job.jobBlock();
         Workplace workplace = shell.workplace(jobBlock);
 
@@ -148,7 +152,11 @@ final class ResourceCollectionLoop implements CategoryLoop {
     }
 
     @Override
-    public boolean holdsDecision(ServerLevel level, SettlerJob job) {
+    public JobStep holdsDecision(ServerLevel level, SettlerJob job) {
+        return holdsSteered(level, job) ? new JobStep.Steered(true) : JobStep.skip();
+    }
+
+    private boolean holdsSteered(ServerLevel level, SettlerJob job) {
         if (step == Step.WORK && fatigue.advance(SettlerWork.DECISION_INTERVAL, level.getRandom())) {
             shell.setStatus(job.jobBlock(), JobStatus.PAUSING);
             settler.getNavigation().stop();
@@ -168,7 +176,12 @@ final class ResourceCollectionLoop implements CategoryLoop {
     // ---------------------------------------------------------------- per-tick work
 
     @Override
-    public void tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
+    public JobStep tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
+        tickSteered(level, job, target);
+        return JobStep.STAY;
+    }
+
+    private void tickSteered(ServerLevel level, SettlerJob job, BlockPos target) {
         BlockPos jobBlock = job.jobBlock();
         switch (step) {
             case FETCH_TOOL -> {

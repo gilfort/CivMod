@@ -27,9 +27,9 @@ interface CategoryLoop {
      * @param site    the job's JobBlock site
      * @param day     the day
      * @param dayTime the time of day
-     * @return whether the job can work (the settler is busy with it)
+     * @return what the job wants next ({@link JobStep}); the shell applies it
      */
-    boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime);
+    JobStep plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime);
 
     /**
      * Called at a decision for a job of this loop that was not planned because a higher priority job works.
@@ -57,9 +57,10 @@ interface CategoryLoop {
      *
      * @param level the level
      * @param job   the active job
-     * @return true to keep the current step and skip the decision (e.g. a work break)
+     * @return a step that holds the decision ({@link JobStep.Pause}, {@link JobStep.Hold}, {@link JobStep.Wait}, e.g. a
+     *         work break), or {@link JobStep.Skip} to decide as usual
      */
-    boolean holdsDecision(ServerLevel level, SettlerJob job);
+    JobStep holdsDecision(ServerLevel level, SettlerJob job);
 
     /**
      * Called every tick while the settler has reached the target of a step of this loop.
@@ -67,14 +68,17 @@ interface CategoryLoop {
      * @param level  the level
      * @param job    the active job
      * @param target the target of the step
+     * @return {@link JobStep#WORK} / {@link JobStep#STAY} to go on, {@link JobStep.Done} when the step is over
      */
-    void tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target);
+    JobStep tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target);
 
     /**
      * @param job the active job
-     * @return the reach for the target of the current step
+     * @return the reach for the target of the current step; NaN (default): the reach of the last {@link JobStep.Walk}
      */
-    double reach(SettlerJob job);
+    default double reach(SettlerJob job) {
+        return Double.NaN;
+    }
 
     /**
      * Whether everything a job needs for catch-up is loaded and prepared (starts preparing it otherwise).

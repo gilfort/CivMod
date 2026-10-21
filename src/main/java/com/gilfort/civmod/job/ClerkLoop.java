@@ -47,52 +47,37 @@ final class ClerkLoop implements CategoryLoop {
     }
 
     @Override
-    public boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
+    public JobStep plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
         if (!ClerkStorage.inShift(settler.getUUID(), day, dayTime)) {
-            return false;
+            return JobStep.skip();
         }
         Optional<SettlementBlock.StandSpot> today = ClerkSpots.today(SettlementData.get(level), site.pos(), day, dayTime, level.getRandom());
         spot = today.orElse(null);
         BlockPos target = today.map(found -> found.pos().above()).orElse(site.pos());
-        shell.setActiveJob(job);
-        if (!shell.walkingTo(target)) {
-            shell.moveToJob(level, target);
-        }
-        shell.setStatus(job.jobBlock(), fatigue.onBreak() ? JobStatus.PAUSING : JobStatus.SERVING);
-        return true;
+        return JobStep.walk(target, spot != null ? SPOT_REACH : SettlerWork.REACH, fatigue.onBreak() ? JobStatus.PAUSING : JobStatus.SERVING);
     }
 
+    /** A break holds the Clerk where it is (walking on to its spot); breaks start only between customers. */
     @Override
-    public boolean holdsDecision(ServerLevel level, SettlerJob job) {
+    public JobStep holdsDecision(ServerLevel level, SettlerJob job) {
         if (fatigue.onBreak()) {
             boolean still = fatigue.advance(SettlerWork.DECISION_INTERVAL, level.getRandom());
-            shell.setStatus(job.jobBlock(), still ? JobStatus.PAUSING : JobStatus.SERVING);
-            return still;
+            return still ? new JobStep.Hold(JobStatus.PAUSING) : JobStep.skip(JobStatus.SERVING);
         }
-        // Breaks only between customers.
         if (!ClerkCounter.busy(level, job.jobBlock()) && fatigue.advance(SettlerWork.DECISION_INTERVAL, level.getRandom())) {
-            shell.setStatus(job.jobBlock(), JobStatus.PAUSING);
-            return true;
+            return new JobStep.Hold(JobStatus.PAUSING);
         }
-        return false;
+        return JobStep.skip();
     }
 
     @Override
-    public void tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
-        settler.getNavigation().stop();
+    public JobStep tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
         if (spot != null) {
             Vec3 eye = settler.getEyePosition();
             settler.getLookControl().setLookAt(eye.add(Vec3.atLowerCornerOf(spot.facing().getUnitVec3i())));
             settler.setYBodyRot(spot.facing().toYRot());
         }
-        if (!fatigue.onBreak()) {
-            shell.countWorkTick(job);
-        }
-    }
-
-    @Override
-    public double reach(SettlerJob job) {
-        return spot != null ? SPOT_REACH : SettlerWork.REACH;
+        return fatigue.onBreak() ? JobStep.STAY : JobStep.WORK;
     }
 
     /**

@@ -1,0 +1,91 @@
+package com.gilfort.civmod.job;
+
+import java.util.Objects;
+import java.util.function.Consumer;
+
+import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.registry.ModBlocks;
+import com.gilfort.civmod.registry.ModEntityTypes;
+import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.DayClock;
+import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.Settlement;
+import com.gilfort.civmod.settlement.SettlementData;
+
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.phys.Vec3;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.registries.RegisterEvent;
+
+/**
+ * GameTests for the seam between the Settler Shell and the category loops (#100): a loop answers with a
+ * {@link JobStep} and leaves the shell untouched; only the shell applies the step (active job, walking target, status).
+ */
+@EventBusSubscriber(modid = CivMod.MOD_ID)
+public final class JobStepGameTests {
+
+    /** Day time 08:00. */
+    private static final long MORNING = 2000L;
+
+    private JobStepGameTests() {
+    }
+
+    @SubscribeEvent
+    static void onRegister(RegisterEvent event) {
+        event.register(Registries.TEST_FUNCTION, helper -> {
+            register(helper, "job_step_clerk_walks_to_counter", JobStepGameTests::clerkWalksToCounter);
+        });
+    }
+
+    private static void register(RegisterEvent.RegisterHelper<Consumer<GameTestHelper>> helper, String name, Consumer<GameTestHelper> test) {
+        helper.register(ResourceKey.create(Registries.TEST_FUNCTION, CivMod.id(name)), test);
+    }
+
+    /** A Clerk on shift asks to walk to its counter (next to the JobBlock without stand spots); the shell applies it. */
+    private static void clerkWalksToCounter(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.CLERK_BLOCK.get());
+        BlockPos clerk = helper.absolutePos(new BlockPos(1, 1, 1));
+        Settler settler = settler(helper, clerk, new BlockPos(5, 1, 5));
+        SettlerJob job = new SettlerJob(ModJobs.CLERK.get(), clerk);
+        settler.addJob(job);
+        SettlerWork work = settler.getWork();
+        JobBlockSite site = JobBlockSite.at(level, clerk).orElseThrow();
+        long day = DayClock.day(level);
+
+        JobStep step = Objects.requireNonNull(work.loop(job)).plan(level, job, site, day, MORNING);
+
+        helper.assertTrue(step instanceof JobStep.Walk walk && walk.target().equals(clerk) && walk.reach() == SettlerWork.REACH
+                && walk.status() == JobStatus.SERVING, "Walk to the counter, serving: " + step);
+        helper.assertTrue(work.activeJob().isEmpty(), "The loop does not set the active job");
+        helper.assertTrue(work.status(clerk) == JobStatus.IDLE, "The loop does not set the status: " + work.status(clerk));
+
+        helper.assertTrue(work.apply(level, job, step), "The step keeps the settler busy");
+        helper.assertTrue(work.activeJob().filter(job::equals).isPresent(), "The shell sets the active job");
+        helper.assertTrue(work.status(clerk) == JobStatus.SERVING, "The shell sets the status: " + work.status(clerk));
+        settler.discard();
+        helper.succeed();
+    }
+
+    /** A settler of the JobBlock's settlement at a relative position, without AI. */
+    private static Settler settler(GameTestHelper helper, BlockPos jobBlock, BlockPos relative) {
+        ServerLevel level = helper.getLevel();
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
+        Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
+        Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(relative));
+        settler.snapTo(spawn.x, spawn.y, spawn.z, 0.0F, 0.0F);
+        settler.setNoAi(true);
+        level.addFreshEntity(settler);
+        settler.joinSettlement(data, settlement);
+        return settler;
+    }
+}

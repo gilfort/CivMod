@@ -126,7 +126,11 @@ final class MissionLoop implements CategoryLoop {
     // ---------------------------------------------------------------- decisions
 
     @Override
-    public boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
+    public JobStep plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
+        return new JobStep.Steered(planSteered(level, job, site, day, dayTime));
+    }
+
+    private boolean planSteered(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
         BlockPos board = job.jobBlock();
         if (departed()) {
             return leave(level, job);
@@ -364,7 +368,11 @@ final class MissionLoop implements CategoryLoop {
      * Walking out holds every decision (also the evening) until the settler vanishes.
      */
     @Override
-    public boolean holdsDecision(ServerLevel level, SettlerJob job) {
+    public JobStep holdsDecision(ServerLevel level, SettlerJob job) {
+        return holdsSteered(level, job) ? new JobStep.Steered(true) : JobStep.skip();
+    }
+
+    private boolean holdsSteered(ServerLevel level, SettlerJob job) {
         if (!departed() || isAway()) {
             return false;
         }
@@ -375,7 +383,12 @@ final class MissionLoop implements CategoryLoop {
     }
 
     @Override
-    public void tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
+    public JobStep tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
+        tickSteered(level, job, target);
+        return JobStep.STAY;
+    }
+
+    private void tickSteered(ServerLevel level, SettlerJob job, BlockPos target) {
         if (departed() && !isAway()) {
             vanish(job);
         }

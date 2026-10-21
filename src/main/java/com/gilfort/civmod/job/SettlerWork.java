@@ -313,7 +313,7 @@ public final class SettlerWork {
      * @param job a job
      * @return the work loop of the job's category (null if the category is not implemented)
      */
-    private @Nullable CategoryLoop loop(SettlerJob job) {
+    @Nullable CategoryLoop loop(SettlerJob job) {
         if (job.jobType() == ModJobs.DELIVERYMAN.get()) {
             return deliverymen;
         }
@@ -754,7 +754,7 @@ public final class SettlerWork {
     private boolean jobStepHolds(ServerLevel level) {
         SettlerJob job = activeJob;
         CategoryLoop loop = job == null ? null : loop(job);
-        return activity == Activity.JOB && loop != null && loop.holdsDecision(level, job);
+        return activity == Activity.JOB && loop != null && apply(level, job, loop.holdsDecision(level, job));
     }
 
     // ---------------------------------------------------------------- thought bubbles and held item
@@ -1013,7 +1013,77 @@ public final class SettlerWork {
         if (site.isEmpty() || loop == null) {
             return false;
         }
-        return loop.plan(level, job, site.get(), day, dayTime);
+        return apply(level, job, loop.plan(level, job, site.get(), day, dayTime));
+    }
+
+    /**
+     * Applies what a job wants next: the one place where a job step changes the settler's activity, walking target,
+     * active job and the job's status. A step that ends ({@link JobStep.Done}) decides again only here, after the loop
+     * returned.
+     *
+     * @param level the level
+     * @param job   the job
+     * @param step  what the job wants
+     * @return whether the job keeps the settler busy (an answer of {@link CategoryLoop#plan}) or holds the decision (an
+     *         answer of {@link CategoryLoop#holdsDecision})
+     */
+    boolean apply(ServerLevel level, SettlerJob job, JobStep step) {
+        BlockPos jobBlock = job.jobBlock();
+        return switch (step) {
+            case JobStep.Walk walk -> {
+                activeJob = job;
+                if (activity != Activity.JOB || !walk.target().equals(target)) {
+                    moveTo(level, Activity.JOB, walk.target(), walk.reach());
+                }
+                targetReach = walk.reach();
+                walk.subject().ifPresentOrElse(subject -> workplace(jobBlock).setStatus(walk.status(), subject),
+                        () -> workplace(jobBlock).setStatus(walk.status()));
+                yield true;
+            }
+            case JobStep.Deliver deliver -> startDelivery(level, job);
+            case JobStep.Wait wait -> {
+                stop();
+                activeJob = job;
+                workplace(jobBlock).setStatus(wait.status());
+                yield true;
+            }
+            case JobStep.Blocked blocked -> {
+                if (blocked.reason() != null) {
+                    block(level, jobBlock, blocked.reason());
+                } else {
+                    block(level, jobBlock, blocked.status());
+                }
+                yield false;
+            }
+            case JobStep.Skip skip -> {
+                skip.status().ifPresent(status -> workplace(jobBlock).setStatus(status));
+                yield false;
+            }
+            case JobStep.Pause pause -> {
+                workplace(jobBlock).setStatus(pause.status());
+                settler.getNavigation().stop();
+                yield true;
+            }
+            case JobStep.Hold hold -> {
+                workplace(jobBlock).setStatus(hold.status());
+                yield true;
+            }
+            case JobStep.AtTarget at -> {
+                if (at.worked()) {
+                    countWorkTick(job);
+                }
+                yield true;
+            }
+            case JobStep.Done done -> {
+                if (done.worked()) {
+                    countWorkTick(job);
+                }
+                activity = Activity.IDLE;
+                decide(level);
+                yield false;
+            }
+            case JobStep.Steered steered -> steered.busy();
+        };
     }
 
     // ---------------------------------------------------------------- shared parts used by the category loops
@@ -1094,6 +1164,31 @@ public final class SettlerWork {
     void idleWith(SettlerJob job) {
         stop();
         activeJob = job;
+    }
+
+    /**
+     * @return the settler's jobs in priority order
+     */
+    List<SettlerJob> jobs() {
+        return settler.getJobs();
+    }
+
+    /**
+     * Shows an item in the settler's hand (a display copy, never an inventory item).
+     *
+     * @param stack the item
+     */
+    void hold(ItemStack stack) {
+        if (!ItemStack.matches(stack, settler.getItemBySlot(EquipmentSlot.MAINHAND))) {
+            settler.setItemSlot(EquipmentSlot.MAINHAND, stack);
+        }
+    }
+
+    /**
+     * @param away whether the settler is away outside the settlement (invisible) or back
+     */
+    void setAway(boolean away) {
+        settler.setInvisible(away);
     }
 
     /**
@@ -1374,7 +1469,7 @@ public final class SettlerWork {
      */
     private double reach() {
         CategoryLoop loop = activeJob == null ? null : loop(activeJob);
-        if (activity == Activity.JOB && loop != null) {
+        if (activity == Activity.JOB && loop != null && !Double.isNaN(loop.reach(activeJob))) {
             return loop.reach(activeJob);
         }
         return targetReach;
@@ -2265,9 +2360,12 @@ public final class SettlerWork {
             deliveryVisit = null;
             decide(level);
         } else if (activity == Activity.JOB) {
-            CategoryLoop loop = loop(activeJob);
+            SettlerJob job = activeJob;
+            CategoryLoop loop = loop(job);
             if (loop != null) {
-                loop.tickAtTarget(level, activeJob, target);
+                // At the target of a job step the settler stands; the loop works there.
+                settler.getNavigation().stop();
+                apply(level, job, loop.tickAtTarget(level, job, target));
             }
         }
     }

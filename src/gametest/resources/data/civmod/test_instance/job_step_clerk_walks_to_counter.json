@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:job_step_clerk_walks_to_counter",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

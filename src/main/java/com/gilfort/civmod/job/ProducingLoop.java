@@ -108,7 +108,11 @@ final class ProducingLoop implements CategoryLoop {
     // ---------------------------------------------------------------- decisions
 
     @Override
-    public boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
+    public JobStep plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
+        return new JobStep.Steered(planSteered(level, job, site, day, dayTime));
+    }
+
+    private boolean planSteered(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
         BlockPos jobBlock = job.jobBlock();
         releaseIfRestored(level);
         Patterns.uncheckFiltered(level, jobBlock, job.jobType());
@@ -365,7 +369,11 @@ final class ProducingLoop implements CategoryLoop {
     }
 
     @Override
-    public boolean holdsDecision(ServerLevel level, SettlerJob job) {
+    public JobStep holdsDecision(ServerLevel level, SettlerJob job) {
+        return holdsSteered(level, job) ? new JobStep.Steered(true) : JobStep.skip();
+    }
+
+    private boolean holdsSteered(ServerLevel level, SettlerJob job) {
         Round round = shell.workplace(job.jobBlock()).round();
         if (round != null && round.phase == Round.Phase.CRAFT && fatigue.advance(SettlerWork.DECISION_INTERVAL, level.getRandom())) {
             shell.setStatus(job.jobBlock(), JobStatus.PAUSING);
@@ -383,7 +391,12 @@ final class ProducingLoop implements CategoryLoop {
     // ---------------------------------------------------------------- per-tick work
 
     @Override
-    public void tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
+    public JobStep tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
+        tickSteered(level, job, target);
+        return JobStep.STAY;
+    }
+
+    private void tickSteered(ServerLevel level, SettlerJob job, BlockPos target) {
         Workplace workplace = shell.workplace(job.jobBlock());
         Round round = workplace.round();
         Optional<JobBlockSite> site = JobBlockSite.at(level, job.jobBlock());
