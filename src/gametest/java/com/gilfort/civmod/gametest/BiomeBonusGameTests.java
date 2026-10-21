@@ -76,6 +76,7 @@ public final class BiomeBonusGameTests {
             register(helper, "biome_bonus_positions", BiomeBonusGameTests::positions);
             register(helper, "biome_bonus_fisherman_treasure", BiomeBonusGameTests::fishermanTreasure);
             register(helper, "biome_bonus_miner_work_place", BiomeBonusGameTests::minerWorkPlace);
+            register(helper, "biome_bonus_rechosen_work_place", BiomeBonusGameTests::rechosenWorkPlace);
             register(helper, "biome_bonus_lumberjack_double_drop", BiomeBonusGameTests::lumberjackDoubleDrop);
             register(helper, "biome_bonus_fisherman_double_drop", BiomeBonusGameTests::fishermanDoubleDrop);
             register(helper, "biome_bonus_craftsperson_station", BiomeBonusGameTests::craftspersonStation);
@@ -118,11 +119,11 @@ public final class BiomeBonusGameTests {
         helper.assertTrue(near(BiomeBonuses.resolve(ModJobs.FISHERMAN.get(), biome(helper, Biomes.FROZEN_RIVER)).doubleDropChance(new ItemStack(Items.SALMON)), 0.5)
                 && near(BiomeBonuses.resolve(ModJobs.FISHERMAN.get(), biome(helper, Biomes.FROZEN_RIVER)).speed().value(), 1.1),
                 "Fisherman at a frozen river: cold salmon and river speed");
-        for (Map.Entry<Identifier, BiomeBonuses.File> entry : BiomeBonuses.files().entrySet()) {
+        for (Map.Entry<Identifier, BiomeBonuses.BonusFile> entry : BiomeBonuses.files().entrySet()) {
             if (entry.getKey().getPath().startsWith("test_")) {
                 continue;
             }
-            BiomeBonuses.File file = entry.getValue();
+            BiomeBonuses.BonusFile file = entry.getValue();
             helper.assertTrue(file.speed().orElse(1.0) >= 1.0 && file.rareChance().orElse(1.0) >= 1.0
                     && file.doubleDrop().stream().allMatch(drop -> drop.chance() >= 0.0), "Default file without drawbacks: " + entry.getKey());
         }
@@ -188,8 +189,8 @@ public final class BiomeBonusGameTests {
 
     /**
      * A Miner whose work point lies in mushroom fields (its JobBlock in plains) gets the double drop of that biome:
-     * every cobblestone and granite comes twice. A biome change at the work place does not change today's bonus;
-     * the next day's choice reads the new biome.
+     * every cobblestone and granite comes twice. A biome change at the work place does not change today's bonus, nor
+     * does a save and reload on the same day; the next day's choice reads the new biome.
      */
     private static void minerWorkPlace(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -243,11 +244,20 @@ public final class BiomeBonusGameTests {
                 .thenExecuteAfter(40, () -> helper.assertTrue(CivModApi.biomeBonus(settler, jobBlock).biome()
                         .equals(Optional.of(Biomes.MUSHROOM_FIELDS)), "The bonus stays fixed for the day"))
                 .thenExecute(() -> {
-                    // The work place was chosen yesterday: the next decision chooses it again for today.
+                    // Saved and loaded again on the same day: the day's biome is saved with the work place.
+                    settler.getWork().restore(settler.getWork().snapshot());
+                    helper.assertTrue(CivModApi.biomeBonus(settler, jobBlock).biome().equals(Optional.of(Biomes.MUSHROOM_FIELDS)),
+                            "A reload on the same day keeps the day's biome: " + CivModApi.biomeBonus(settler, jobBlock));
+                })
+                .thenExecute(() -> {
+                    // The work place and its biome were chosen yesterday: the bonus stays until the next decision
+                    // chooses the work place for today.
                     SettlerWork.BuffersSnapshot saved = settler.getWork().snapshot();
                     settler.getWork().restore(new SettlerWork.BuffersSnapshot(List.of(), saved.workPlaces().stream()
-                            .map(entry -> new SettlerWork.WorkPlaceEntry(entry.jobBlock(), entry.poi(), entry.day() - 1)).toList(),
+                            .map(entry -> new SettlerWork.WorkPlaceEntry(entry.jobBlock(), entry.poi(), entry.day() - 1, entry.biome())).toList(),
                             saved.scans(), saved.catchUp()));
+                    helper.assertTrue(CivModApi.biomeBonus(settler, jobBlock).biome().equals(Optional.of(Biomes.MUSHROOM_FIELDS)),
+                            "Yesterday's biome until today's choice: " + CivModApi.biomeBonus(settler, jobBlock));
                 })
                 .thenWaitUntil(() -> {
                     BiomeBonus next = CivModApi.biomeBonus(settler, jobBlock);
@@ -256,6 +266,64 @@ public final class BiomeBonusGameTests {
                 })
                 .thenExecute(() -> {
                     settler.discard();
+                    forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * A work place chosen anew on the same day (the old one is no longer a work place) reads the new place's biome: the
+     * Miner's work point in mushroom fields is dug away, the next work point stands in plains.
+     */
+    private static void rechosenWorkPlace(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(24, 0, 24));
+        for (int x = 0; x < 18; x++) {
+            for (int z = 0; z < 18; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+                for (int y = 1; y < 4; y++) {
+                    helper.setBlock(new BlockPos(x, y, z), Blocks.AIR);
+                }
+            }
+        }
+        int boundary = cellStart(helper, 4);
+        fillBiome(helper, new BlockPos(0, -4, 0), new BlockPos(boundary - 1, 8, 24), Biomes.PLAINS);
+        fillBiome(helper, new BlockPos(boundary, -4, 0), new BlockPos(24, 8, 24), Biomes.MUSHROOM_FIELDS);
+        BlockPos jobBlockRelative = new BlockPos(boundary - 3, 1, 3);
+        BlockPos mushroomRelative = new BlockPos(boundary + 5, 1, 3);
+        BlockPos plainsRelative = new BlockPos(boundary - 3, 1, 9);
+        helper.setBlock(jobBlockRelative, ModBlocks.MINER_BLOCK.get());
+        helper.setBlock(mushroomRelative, Blocks.GRANITE);
+        helper.setBlock(plainsRelative, Blocks.GRANITE);
+        BlockPos jobBlock = helper.absolutePos(jobBlockRelative);
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
+        Settler settler = ClerkGameTests.settler(helper, new BlockPos(boundary - 3, 1, 6), data, settlement);
+        settler.setNoAi(false);
+        settler.setCustomName(Component.literal("Digger"));
+        settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_PICKAXE));
+        settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
+        helper.assertTrue(JobAssignments.cyclePoint(data, jobBlock, helper.absolutePos(mushroomRelative), true, false)
+                == JobAssignments.PointResult.WORK, "Work point set");
+        helper.assertTrue(TestAssignments.assign(data, jobBlock, settler.getUUID(), "Digger", settlement.id(),
+                List.of()) == JobAssignments.AssignResult.OK, "Assignment failed");
+        settler.addJob(new SettlerJob(ModJobs.MINER.get(), jobBlock));
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(CivModApi.biomeBonus(settler, jobBlock).biome().equals(Optional.of(Biomes.MUSHROOM_FIELDS)),
+                        "The work place in mushroom fields is not chosen yet (status " + settler.getWork().status(jobBlock) + ")"))
+                .thenExecute(() -> {
+                    helper.setBlock(mushroomRelative, Blocks.AIR);
+                    helper.assertTrue(JobAssignments.cyclePoint(data, jobBlock, helper.absolutePos(plainsRelative), true, false)
+                            == JobAssignments.PointResult.WORK, "Second work point set");
+                })
+                .thenWaitUntil(() -> {
+                    BiomeBonus today = CivModApi.biomeBonus(settler, jobBlock);
+                    helper.assertTrue(today.biome().equals(Optional.of(Biomes.PLAINS)) && today.isEmpty(),
+                            "The work place chosen anew reads its own biome: " + today);
+                })
+                .thenExecute(() -> {
+                    settler.discard();
+                    fillBiome(helper, new BlockPos(0, -4, 0), new BlockPos(24, 8, 24), Biomes.PLAINS);
                     forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
                 })
                 .thenSucceed();
@@ -379,7 +447,8 @@ public final class BiomeBonusGameTests {
 
         BiomeBonus miner = BiomeBonuses.resolve(ModJobs.MINER.get(), biome(helper, Biomes.MUSHROOM_FIELDS));
         helper.assertTrue(near(miner.rareChance().value(), 6.0), "Rare chance 2 × 3 = 6: " + miner.rareChance());
-        helper.assertTrue(near(miner.rareChance(0.1), 0.6) && near(miner.rareChance(0.34), 1.0), "Rare chance capped at 1.0");
+        helper.assertTrue(near(BiomeBonus.cappedChance(0.1, miner.rareChance().value()), 0.6)
+                && near(BiomeBonus.cappedChance(0.34, miner.rareChance().value()), 1.0), "Rare chance capped at 1.0");
         helper.assertTrue(near(miner.speed().value(), 1.0) && miner.speed().sources().isEmpty(), "No speed file for the Miner: " + miner.speed());
 
         BiomeBonus plains = BiomeBonuses.resolve(dummy(), biome(helper, Biomes.PLAINS));

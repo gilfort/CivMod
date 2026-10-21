@@ -189,6 +189,14 @@ public class Settler extends PathfinderMob {
     }
 
     /**
+     * @param jobBlock a JobBlock position
+     * @return the job the settler holds at that JobBlock, empty if none
+     */
+    public Optional<SettlerJob> jobAt(BlockPos jobBlock) {
+        return jobs.stream().filter(job -> job.jobBlock().equals(jobBlock)).findFirst();
+    }
+
+    /**
      * Replaces the job list; the work state of JobBlocks no longer in the list is forgotten (a changed Mission Job at the
      * same board keeps it).
      *

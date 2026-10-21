@@ -6,10 +6,11 @@ import java.util.Optional;
 
 import org.jetbrains.annotations.ApiStatus;
 
+import com.gilfort.civmod.job.BiomeBonuses;
+
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.tags.TagKey;
 import net.minecraft.util.ExtraCodecs;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
@@ -27,7 +28,7 @@ import net.minecraft.world.level.biome.Biome;
  * @param biome       the biome the bonuses were read at, empty if the Job has no biome position (Mission Jobs) or no
  *                    work place yet
  * @param speed       the factor on the Job's work speed
- * @param rareChance  the factor on the chance of the rare group of a roll ({@link #rareChance(double)})
+ * @param rareChance  the factor on the chance of the rare group of a roll ({@link #cappedChance})
  * @param doubleDrops the {@code double_drop} entries of all matching files, in file order
  */
 @ApiStatus.Experimental
@@ -54,12 +55,15 @@ public record BiomeBonus(Optional<ResourceKey<Biome>> biome, Factor speed, Facto
     }
 
     /**
+     * The chance of the rare group with a {@code rare_chance} factor: the one cap for every rare roll.
+     *
      * @param baseChance the chance of the rare group without bonuses (Miner: the ore share, Fisherman: the treasure
      *                   chance)
-     * @return the chance with the rare chance factor, capped at 1.0
+     * @param factor     the rare chance factor ({@link #rareChance()}'s value)
+     * @return the chance times the factor, capped at 1.0
      */
-    public double rareChance(double baseChance) {
-        return Math.min(1.0, baseChance * rareChance.value());
+    public static double cappedChance(double baseChance, double factor) {
+        return Math.min(1.0, baseChance * factor);
     }
 
     /**
@@ -171,12 +175,7 @@ public record BiomeBonus(Optional<ResourceKey<Biome>> biome, Factor speed, Facto
          * @return whether the entry matches its item
          */
         public boolean matches(ItemStack stack) {
-            for (ExtraCodecs.TagOrElementLocation item : items) {
-                if (item.tag() ? stack.typeHolder().is(TagKey.create(Registries.ITEM, item.id())) : stack.typeHolder().is(item.id())) {
-                    return true;
-                }
-            }
-            return false;
+            return BiomeBonuses.matches(items, stack.typeHolder(), Registries.ITEM);
         }
     }
 }

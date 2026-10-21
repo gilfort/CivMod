@@ -51,6 +51,7 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -60,6 +61,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.AbstractBedBlock;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -375,14 +377,27 @@ public final class SettlerWork {
      * @param jobBlock the JobBlock of the job
      * @param poi      the work place
      * @param day      the day it was chosen for
+     * @param biome    the biome its biome bonuses were read at that day, empty if they were not read yet
      */
-    public record WorkPlaceEntry(BlockPos jobBlock, BlockPos poi, long day) {
+    public record WorkPlaceEntry(BlockPos jobBlock, BlockPos poi, long day, Optional<ResourceKey<Biome>> biome) {
         /** Save codec. */
         public static final Codec<WorkPlaceEntry> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                 BlockPos.CODEC.fieldOf("job_block").forGetter(WorkPlaceEntry::jobBlock),
                 BlockPos.CODEC.fieldOf("poi").forGetter(WorkPlaceEntry::poi),
-                Codec.LONG.fieldOf("day").forGetter(WorkPlaceEntry::day)
+                Codec.LONG.fieldOf("day").forGetter(WorkPlaceEntry::day),
+                ResourceKey.codec(Registries.BIOME).optionalFieldOf("biome").forGetter(WorkPlaceEntry::biome)
         ).apply(instance, WorkPlaceEntry::new));
+
+        /**
+         * A work place whose biome was not read yet.
+         *
+         * @param jobBlock the JobBlock of the job
+         * @param poi      the work place
+         * @param day      the day it was chosen for
+         */
+        public WorkPlaceEntry(BlockPos jobBlock, BlockPos poi, long day) {
+            this(jobBlock, poi, day, Optional.empty());
+        }
     }
 
     /**
@@ -456,14 +471,14 @@ public final class SettlerWork {
 
     /**
      * The biome bonuses acting on the settler's job at a JobBlock today (vault {@code Systems/JobBlock.md}): read at
-     * the Job's biome position, for the work place once per day of the work place.
+     * the Job's biome position once per day and place.
      *
      * @param level    the level
      * @param jobBlock a JobBlock position
      * @return the bonuses, {@link BiomeBonus#NONE} if the settler holds no job there or has no work place yet
      */
     public BiomeBonus biomeBonus(ServerLevel level, BlockPos jobBlock) {
-        Optional<SettlerJob> job = jobs().stream().filter(held -> held.jobBlock().equals(jobBlock)).findFirst();
+        Optional<SettlerJob> job = settler.jobAt(jobBlock);
         if (job.isEmpty()) {
             return BiomeBonus.NONE;
         }

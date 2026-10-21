@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.BiomeBonus;
 import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 import com.gilfort.civmod.menu.BiomeBonusText;
@@ -25,6 +26,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.util.ExtraCodecs;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -54,6 +56,7 @@ public final class BiomeBonusGuiGameTests {
             register(helper, "biome_bonus_gui_action_bar", BiomeBonusGuiGameTests::actionBar);
             register(helper, "biome_bonus_gui_info_line", BiomeBonusGuiGameTests::infoLine);
             register(helper, "biome_bonus_gui_found_stars", BiomeBonusGuiGameTests::foundStars);
+            register(helper, "biome_bonus_gui_overlapping_drops", BiomeBonusGuiGameTests::overlappingDrops);
         });
     }
 
@@ -183,6 +186,26 @@ public final class BiomeBonusGuiGameTests {
         helper.assertTrue(lumberjack.contains("Forests: Speed ×1.1"), "The forest speed: " + lumberjack);
         helper.assertTrue(BiomeBonusText.overview(ModJobs.ADVENTURER.get()).isEmpty(), "A Mission Job has no biome bonuses");
         helper.succeed();
+    }
+
+    /**
+     * Double drop entries with overlapping item lists show the sum S per produced item, like the mechanics roll it:
+     * {@code [raw_iron, raw_gold] +50 %}, {@code [raw_iron] +25 %} and {@code [raw_copper, raw_gold] +10 %} give Raw
+     * Iron +75 %, Raw Gold +60 % and Raw Copper +10 %.
+     */
+    private static void overlappingDrops(GameTestHelper helper) {
+        BiomeBonus bonus = new BiomeBonus(Optional.of(Biomes.DESERT), BiomeBonus.Factor.ONE, BiomeBonus.Factor.ONE, List.of(
+                new BiomeBonus.DoubleDrop(List.of(item("raw_iron"), item("raw_gold")), 0.5, CivMod.id("a")),
+                new BiomeBonus.DoubleDrop(List.of(item("raw_iron")), 0.25, CivMod.id("b")),
+                new BiomeBonus.DoubleDrop(List.of(item("raw_copper"), item("raw_gold")), 0.1, CivMod.id("c"))));
+        Optional<String> line = BiomeBonusText.line(ModJobs.MINER.get(), bonus).map(Component::getString);
+        helper.assertTrue(line.equals(Optional.of("Desert · Raw Iron drops +75 % · Raw Gold drops +60 % · Raw Copper drops +10 %")),
+                "The sum per item: " + line);
+        helper.succeed();
+    }
+
+    private static ExtraCodecs.TagOrElementLocation item(String path) {
+        return new ExtraCodecs.TagOrElementLocation(Identifier.withDefaultNamespace(path), false);
     }
 
     /**

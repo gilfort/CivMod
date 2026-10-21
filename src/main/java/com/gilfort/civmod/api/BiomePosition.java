@@ -12,10 +12,10 @@ public enum BiomePosition {
 
     /**
      * The work place of the day: a Resource Collection Job's work place, a Producing Job's station of the day. Read
-     * once per day when the work place is chosen.
+     * once per day when the work place is chosen (again when it is chosen anew during the day).
      */
     WORK_PLACE,
-    /** The JobBlock's position (Logistics). */
+    /** The JobBlock's position (Logistics). Read once per day. */
     JOB_BLOCK,
     /** No biome bonus (Mission Jobs, who work away from the settlement). */
     NONE;

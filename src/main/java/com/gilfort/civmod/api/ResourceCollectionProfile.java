@@ -340,7 +340,7 @@ public interface ResourceCollectionProfile extends CategoryProfile {
          * @return the chance with the {@link #rareChanceFactor()}, capped at 1.0
          */
         public double rareChance(double baseChance) {
-            return Math.min(1.0, baseChance * rareChanceFactor);
+            return BiomeBonus.cappedChance(baseChance, rareChanceFactor);
         }
     }
 

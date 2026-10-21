@@ -3,10 +3,13 @@ package com.gilfort.civmod.menu;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import com.gilfort.civmod.api.BiomeBonus;
 import com.gilfort.civmod.api.BiomePosition;
@@ -15,11 +18,14 @@ import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.job.BiomeBonuses;
 
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentUtils;
 import net.minecraft.resources.Identifier;
+import net.minecraft.tags.TagKey;
 import net.minecraft.util.ExtraCodecs;
 import net.minecraft.util.Util;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -53,9 +59,9 @@ public final class BiomeBonusText {
     /**
      * @param job   the Job the bonus was resolved for
      * @param bonus a resolved bonus
-     * @return its effects: speed, rare chance, then one double drop per item (chances of the same items added)
+     * @return its effects: speed, rare chance, then the double drops ({@link #doubleDrops})
      */
-    public static List<Component> effects(Job job, BiomeBonus bonus) {
+    private static List<Component> effects(Job job, BiomeBonus bonus) {
         List<Component> effects = new ArrayList<>();
         if (!bonus.speed().sources().isEmpty()) {
             effects.add(speed(bonus.speed().value()));
@@ -63,10 +69,49 @@ public final class BiomeBonusText {
         if (!bonus.rareChance().sources().isEmpty()) {
             rareChance(job, bonus.rareChance().value()).ifPresent(effects::add);
         }
-        Map<List<ExtraCodecs.TagOrElementLocation>, Double> drops = new LinkedHashMap<>();
-        bonus.doubleDrops().forEach(drop -> drops.merge(drop.items(), drop.chance(), Double::sum));
-        drops.forEach((items, chance) -> effects.add(doubleDrop(items, chance)));
+        effects.addAll(doubleDrops(bonus));
         return effects;
+    }
+
+    /**
+     * The double drops of a resolved bonus as the mechanics roll them: one effect per group of produced items matched
+     * by the same entries, with the sum S of those entries' chances ({@link BiomeBonus#doubleDropChance}). A group is
+     * named like an entry whose items are exactly the group (so entries with the same items read as one), else by its
+     * items: {@code [raw_iron, raw_gold] +50 %} and {@code [raw_iron] +25 %} read "Raw Iron drops +75 %", "Raw Gold drops
+     * +50 %". Entries that match no item are left out.
+     */
+    private static List<Component> doubleDrops(BiomeBonus bonus) {
+        Map<List<BiomeBonus.DoubleDrop>, List<Item>> groups = new LinkedHashMap<>();
+        Set<Item> seen = new HashSet<>();
+        for (BiomeBonus.DoubleDrop drop : bonus.doubleDrops()) {
+            for (Item item : items(drop.items())) {
+                if (seen.add(item)) {
+                    groups.computeIfAbsent(bonus.doubleDrops(new ItemStack(item)), matching -> new ArrayList<>()).add(item);
+                }
+            }
+        }
+        List<Component> effects = new ArrayList<>();
+        groups.forEach((matching, items) -> {
+            Set<Item> group = Set.copyOf(items);
+            List<ExtraCodecs.TagOrElementLocation> names = matching.stream().map(BiomeBonus.DoubleDrop::items)
+                    .filter(written -> items(written).equals(group)).findFirst()
+                    .orElseGet(() -> items.stream().map(item -> new ExtraCodecs.TagOrElementLocation(BuiltInRegistries.ITEM.getKey(item), false)).toList());
+            effects.add(doubleDrop(names, bonus.doubleDropChance(new ItemStack(items.getFirst()))));
+        });
+        return effects;
+    }
+
+    /** The items that item ids and {@code #item tags} name, in their order (unknown ids and empty tags name none). */
+    private static Set<Item> items(List<ExtraCodecs.TagOrElementLocation> entries) {
+        Set<Item> items = new LinkedHashSet<>();
+        for (ExtraCodecs.TagOrElementLocation entry : entries) {
+            if (entry.tag()) {
+                BuiltInRegistries.ITEM.getTagOrEmpty(TagKey.create(Registries.ITEM, entry.id())).forEach(holder -> items.add(holder.value()));
+            } else {
+                BuiltInRegistries.ITEM.getOptional(entry.id()).ifPresent(items::add);
+            }
+        }
+        return items;
     }
 
     /**
@@ -81,7 +126,7 @@ public final class BiomeBonusText {
             return List.of();
         }
         List<Component> lines = new ArrayList<>();
-        for (BiomeBonuses.File file : BiomeBonuses.files().values()) {
+        for (BiomeBonuses.BonusFile file : BiomeBonuses.files().values()) {
             if (!file.jobs().contains(job)) {
                 continue;
             }
@@ -106,7 +151,7 @@ public final class BiomeBonusText {
      * @param value a speed factor
      * @return "Speed ×1.1"
      */
-    public static Component speed(double value) {
+    private static Component speed(double value) {
         return Component.translatable("civmod.biome_bonus.speed", factor(value));
     }
 
@@ -115,7 +160,7 @@ public final class BiomeBonusText {
      * @param value a rare chance factor
      * @return "Ore chance ×1.1", empty if the Job has no rare group
      */
-    public static Optional<Component> rareChance(Job job, double value) {
+    private static Optional<Component> rareChance(Job job, double value) {
         return job.profile(ResourceCollectionProfile.class).flatMap(ResourceCollectionProfile::rareGroup)
                 .map(group -> Component.translatable("civmod.biome_bonus.rare_chance", group, factor(value)));
     }
@@ -125,7 +170,7 @@ public final class BiomeBonusText {
      * @param chance its chance
      * @return "Raw Iron drops +50 %"
      */
-    public static Component doubleDrop(List<ExtraCodecs.TagOrElementLocation> items, double chance) {
+    private static Component doubleDrop(List<ExtraCodecs.TagOrElementLocation> items, double chance) {
         Component names = join(items.stream().map(BiomeBonusText::item).toList(), ", ");
         return Component.translatable("civmod.biome_bonus.double_drop", names, percent(chance));
     }
@@ -144,7 +189,7 @@ public final class BiomeBonusText {
         List<Component> lines = new ArrayList<>();
         if (rare) {
             for (Identifier source : bonus.rareChance().sources()) {
-                Optional.ofNullable(BiomeBonuses.files().get(source)).flatMap(BiomeBonuses.File::rareChance).flatMap(value -> rareChance(job, value))
+                Optional.ofNullable(BiomeBonuses.files().get(source)).flatMap(BiomeBonuses.BonusFile::rareChance).flatMap(value -> rareChance(job, value))
                         .ifPresent(effect -> lines.add(withSource(effect, source)));
             }
         }

@@ -26,9 +26,11 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.FileToIdConverter;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
@@ -55,13 +57,13 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 public final class BiomeBonuses {
 
     /** Reload listener id. */
-    public static final Identifier ID = CivMod.id("biome_bonuses");
+    private static final Identifier ID = CivMod.id("biome_bonuses");
 
     private static final FileToIdConverter FILES = FileToIdConverter.json("civmod_biome_bonuses");
     private static final Codec<List<ExtraCodecs.TagOrElementLocation>> IDS_OR_TAGS = ExtraCodecs.compactListCodec(ExtraCodecs.TAG_OR_ELEMENT_ID,
             ExtraCodecs.nonEmptyList(ExtraCodecs.TAG_OR_ELEMENT_ID.listOf()));
     private static final Codec<Double> FACTOR = Codec.doubleRange(0.1, 10.0);
-    private static Map<Identifier, File> loaded = Map.of();
+    private static Map<Identifier, BonusFile> loaded = Map.of();
 
     private BiomeBonuses() {
     }
@@ -89,43 +91,56 @@ public final class BiomeBonuses {
      * @param rareChance the factor on the rare group's chance
      * @param doubleDrop the double drop entries
      */
-    public record File(List<Job> jobs, List<ExtraCodecs.TagOrElementLocation> biomes, Optional<Double> speed, Optional<Double> rareChance,
+    public record BonusFile(List<Job> jobs, List<ExtraCodecs.TagOrElementLocation> biomes, Optional<Double> speed, Optional<Double> rareChance,
             List<DoubleDropEntry> doubleDrop) {
 
-        static final Codec<File> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                ExtraCodecs.nonEmptyList(Job.CODEC.listOf()).fieldOf("jobs").forGetter(File::jobs),
-                IDS_OR_TAGS.fieldOf("biomes").forGetter(File::biomes),
-                FACTOR.optionalFieldOf("speed").forGetter(File::speed),
-                FACTOR.optionalFieldOf("rare_chance").forGetter(File::rareChance),
-                DoubleDropEntry.CODEC.listOf().optionalFieldOf("double_drop", List.of()).forGetter(File::doubleDrop)
-        ).apply(instance, File::new));
+        static final Codec<BonusFile> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                ExtraCodecs.nonEmptyList(Job.CODEC.listOf()).fieldOf("jobs").forGetter(BonusFile::jobs),
+                IDS_OR_TAGS.fieldOf("biomes").forGetter(BonusFile::biomes),
+                FACTOR.optionalFieldOf("speed").forGetter(BonusFile::speed),
+                FACTOR.optionalFieldOf("rare_chance").forGetter(BonusFile::rareChance),
+                DoubleDropEntry.CODEC.listOf().optionalFieldOf("double_drop", List.of()).forGetter(BonusFile::doubleDrop)
+        ).apply(instance, BonusFile::new));
 
         /**
          * @param biome a biome
          * @return whether the file matches it
          */
         public boolean matches(Holder<Biome> biome) {
-            for (ExtraCodecs.TagOrElementLocation entry : biomes) {
-                if (entry.tag() ? biome.is(TagKey.create(Registries.BIOME, entry.id())) : biome.is(entry.id())) {
-                    return true;
-                }
-            }
-            return false;
+            return BiomeBonuses.matches(biomes, biome, Registries.BIOME);
         }
+    }
+
+    /**
+     * The match of a file's {@code biomes} and a {@code double_drop} entry's {@code items}.
+     *
+     * @param <T>      the registry's element type
+     * @param entries  ids and {@code #tags}
+     * @param holder   a biome or an item
+     * @param registry the registry the ids and tags belong to
+     * @return whether one entry names the holder or a tag it is in
+     */
+    public static <T> boolean matches(List<ExtraCodecs.TagOrElementLocation> entries, Holder<T> holder, ResourceKey<? extends Registry<T>> registry) {
+        for (ExtraCodecs.TagOrElementLocation entry : entries) {
+            if (entry.tag() ? holder.is(TagKey.create(registry, entry.id())) : holder.is(entry.id())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
      * @param json a bonus file
      * @return the parsed file, or the error that makes it invalid
      */
-    public static DataResult<File> parse(JsonElement json) {
-        return File.CODEC.parse(JsonOps.INSTANCE, json);
+    public static DataResult<BonusFile> parse(JsonElement json) {
+        return BonusFile.CODEC.parse(JsonOps.INSTANCE, json);
     }
 
     /**
      * @return the loaded bonus files by id
      */
-    public static Map<Identifier, File> files() {
+    public static Map<Identifier, BonusFile> files() {
         return loaded;
     }
 
@@ -143,8 +158,8 @@ public final class BiomeBonuses {
         List<Identifier> speedSources = new ArrayList<>();
         List<Identifier> rareSources = new ArrayList<>();
         List<BiomeBonus.DoubleDrop> doubleDrops = new ArrayList<>();
-        for (Map.Entry<Identifier, File> entry : loaded.entrySet()) {
-            File file = entry.getValue();
+        for (Map.Entry<Identifier, BonusFile> entry : loaded.entrySet()) {
+            BonusFile file = entry.getValue();
             if (!file.jobs().contains(job) || !file.matches(biome)) {
                 continue;
             }
@@ -201,12 +216,12 @@ public final class BiomeBonuses {
         event.addListener(ID, new Loader());
     }
 
-    private static final class Loader extends SimplePreparableReloadListener<Map<Identifier, File>> {
+    private static final class Loader extends SimplePreparableReloadListener<Map<Identifier, BonusFile>> {
 
         @Override
-        protected Map<Identifier, File> prepare(ResourceManager manager, ProfilerFiller profiler) {
+        protected Map<Identifier, BonusFile> prepare(ResourceManager manager, ProfilerFiller profiler) {
             // Sorted by id: the order of the sources and of the double drop entries does not depend on the packs.
-            Map<Identifier, File> files = new TreeMap<>();
+            Map<Identifier, BonusFile> files = new TreeMap<>();
             // The top pack's file per id: a pack overrides a single bonus by shipping the same id.
             FILES.listMatchingResources(manager).forEach((path, resource) -> {
                 Identifier id = FILES.fileToId(path);
@@ -215,9 +230,9 @@ public final class BiomeBonuses {
             return files;
         }
 
-        private static Optional<File> read(Identifier id, Resource resource) {
+        private static Optional<BonusFile> read(Identifier id, Resource resource) {
             try (Reader reader = resource.openAsReader()) {
-                DataResult<File> parsed = parse(JsonParser.parseReader(reader));
+                DataResult<BonusFile> parsed = parse(JsonParser.parseReader(reader));
                 parsed.error().ifPresent(error -> CivMod.LOGGER.error("Ignoring invalid biome bonus {} from pack {}: {}", id, resource.sourcePackId(),
                         error.message()));
                 return parsed.result();
@@ -228,7 +243,7 @@ public final class BiomeBonuses {
         }
 
         @Override
-        protected void apply(Map<Identifier, File> prepared, ResourceManager manager, ProfilerFiller profiler) {
+        protected void apply(Map<Identifier, BonusFile> prepared, ResourceManager manager, ProfilerFiller profiler) {
             // A copy in insertion order keeps the sorted order.
             loaded = Collections.unmodifiableMap(new LinkedHashMap<>(prepared));
             CivMod.LOGGER.info("Loaded {} biome bonus(es)", prepared.size());
