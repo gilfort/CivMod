@@ -157,7 +157,7 @@ final class MissionLoop implements CategoryLoop {
      */
     void reserve(BlockPos board, Identifier mission, boolean assigned) {
         trip = new MissionTrip(board, mission, -1L, Optional.empty(), assigned);
-        shell.workplace(board).setStatus(JobStatus.WAITING_DEPARTURE);
+        shell.setStatus(board, JobStatus.WAITING_DEPARTURE);
     }
 
     /**
@@ -236,7 +236,7 @@ final class MissionLoop implements CategoryLoop {
             MissionOffers.giveBack(SettlementData.get(level), trip.board(), trip.mission(),
                     trip.assigned() ? Optional.of(settler.getUUID()) : Optional.empty(), trip.assigned());
             trip = null;
-            shell.workplace(job.jobBlock()).setStatus(JobStatus.IDLE);
+            shell.setStatus(job.jobBlock(), JobStatus.IDLE);
         }
     }
 
@@ -266,7 +266,7 @@ final class MissionLoop implements CategoryLoop {
         if (job.isEmpty() || site.isEmpty()) {
             return true;
         }
-        shell.workplace(board).setStatus(JobStatus.IDLE);
+        shell.setStatus(board, JobStatus.IDLE);
         if (mission.isPresent() && finish(level, job.get(), site.get(), mission.get(), catchUp) == MissionRules.Outcome.DEATH) {
             die(level, board, mission.get());
             return true;

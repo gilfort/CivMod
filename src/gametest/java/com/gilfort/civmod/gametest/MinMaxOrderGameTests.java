@@ -25,6 +25,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.gilfort.civmod.settlement.Warehouses;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
@@ -152,7 +153,7 @@ public final class MinMaxOrderGameTests {
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.IRON_PICKAXE));
         settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
         JobAssignments.cyclePoint(data, jobBlock, helper.absolutePos(new BlockPos(5, 1, 5)), true, false);
-        helper.assertTrue(JobAssignments.assign(data, jobBlock, settler.getUUID(), "Digger", settlement.id(), List.of())
+        helper.assertTrue(TestAssignments.assign(data, jobBlock, settler.getUUID(), "Digger", settlement.id(), List.of())
                 == JobAssignments.AssignResult.OK, "Assignment failed");
         settler.addJob(new SettlerJob(ModJobs.MINER.get(), jobBlock));
         settler.setNoAi(false);
@@ -201,7 +202,7 @@ public final class MinMaxOrderGameTests {
         Settlement settlement = data.settlementAt(warehouse).orElseThrow();
         Settler dora = ClerkGameTests.settler(helper, new BlockPos(3, 1, 3), data, settlement);
         dora.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.BREAD, 16));
-        helper.assertTrue(JobAssignments.assign(data, warehouse, dora.getUUID(), "Dora", settlement.id(), List.of(), ModJobs.DELIVERYMAN.get())
+        helper.assertTrue(TestAssignments.assign(data, warehouse, dora.getUUID(), "Dora", settlement.id(), List.of(), ModJobs.DELIVERYMAN.get())
                 == JobAssignments.AssignResult.OK, "Deliveryman assigned");
         dora.addJob(new SettlerJob(ModJobs.DELIVERYMAN.get(), warehouse));
         helper.assertTrue(Warehouses.link(data, warehouse, served) == Warehouses.LinkResult.LINKED, "Served Clerk linked");
@@ -234,7 +235,7 @@ public final class MinMaxOrderGameTests {
                     StockRules.check(level, warehouse, ClerkGameTests.MORNING);
                     helper.assertTrue(settlement.deliveries().stream().noneMatch(task -> task.surplus()), "A Warehouse keeps its surplus");
                     helper.assertTrue(StockRules.surplusNowhere(level, warehouse).equals(List.of(0)), "Warehouse: nowhere to go");
-                    JobAssignments.unassign(data, warehouse);
+                    TestAssignments.unassign(data, warehouse);
                     dora.discard();
                     forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
                 })
@@ -360,7 +361,7 @@ public final class MinMaxOrderGameTests {
         StockRule edited = new StockRule(1, Items.STICK, 64, 256, 0, 0);
         helper.assertTrue(edited.withMin(300).min() == 256 && edited.withMax(10).max() == 64 && edited.withMax(0).max() == 0
                 && edited.withMin(0).withOrder(5).order() == 0, "Editor: Min and Max clamp against each other, Order needs Min");
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.succeed();
     }

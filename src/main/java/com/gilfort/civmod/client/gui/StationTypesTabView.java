@@ -7,7 +7,7 @@ import java.util.Optional;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.JobBlockTab;
-import com.gilfort.civmod.menu.StationTypeTabData;
+import com.gilfort.civmod.menu.StationTypesTabData;
 import com.gilfort.civmod.menu.StationTypesTab;
 import com.gilfort.civmod.settlement.StationTypes;
 
@@ -26,7 +26,7 @@ import net.minecraft.world.item.Items;
  * of {@link StationTypesTab}. Five slots in a row: the Base Job's station (locked), then the unlock items, one more open
  * slot per JobBlock level; below them the Jobs the JobBlock offers. The "?" lists every unlock item with its Jobs.
  */
-final class StationTypesView implements JobBlockTabView {
+final class StationTypesTabView implements JobBlockTabView {
 
     /** The 5 slots, centred in the panel. */
     private static final int SLOTS_X = 44;
@@ -44,7 +44,7 @@ final class StationTypesView implements JobBlockTabView {
      * @param screen the screen showing the tab
      * @param tab    the tab
      */
-    StationTypesView(JobBlockScreen screen, StationTypesTab tab) {
+    StationTypesTabView(JobBlockScreen screen, StationTypesTab tab) {
         this.screen = screen;
         this.menu = screen.getMenu();
         this.stations = tab;
@@ -83,7 +83,7 @@ final class StationTypesView implements JobBlockTabView {
         if (slot < 0) {
             return false;
         }
-        StationTypeTabData tab = stations.data().get();
+        StationTypesTabData tab = stations.data().get();
         Item item = menu.getCarried().getItem();
         notice = Optional.empty();
         if (menu.getCarried().isEmpty() || !tab.isOpen(slot)) {
@@ -122,7 +122,7 @@ final class StationTypesView implements JobBlockTabView {
     @Override
     public void extractLabels(GuiGraphicsExtractor graphics, JobBlockTab shown, int mouseX, int mouseY) {
         Font font = screen.getFont();
-        StationTypeTabData tab = stations.data().get();
+        StationTypesTabData tab = stations.data().get();
         graphics.text(font, Component.translatable("civmod.gui.station_types.title"), CivGui.PADDING, 18, CivGui.LABEL_COLOR, false);
         int hovered = slotAt(mouseX, mouseY);
         for (int slot = 0; slot < StationTypes.SLOTS; slot++) {
@@ -151,7 +151,7 @@ final class StationTypesView implements JobBlockTabView {
         }
     }
 
-    private static List<Component> tooltip(StationTypeTabData tab, int slot) {
+    private static List<Component> tooltip(StationTypesTabData tab, int slot) {
         List<Component> lines = new ArrayList<>();
         Item item = tab.item(slot);
         if (slot >= tab.open()) {

@@ -11,6 +11,7 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.TestAssignments;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -64,7 +65,7 @@ public final class WalkGameTests {
         // Level 5: the work place 41 blocks away lies inside the border.
         com.gilfort.civmod.settlement.SettlementManager.setLevel(data, jobBlock, 5, com.gilfort.civmod.settlement.SettlementManager.Listener.NONE);
         helper.assertTrue(JobAssignments.cyclePoint(data, jobBlock, log, true, false) == JobAssignments.PointResult.WORK, "Work place set");
-        JobAssignments.assign(data, jobBlock, settler.getUUID(), "Walker", settlement.id(), List.of());
+        TestAssignments.assign(data, jobBlock, settler.getUUID(), "Walker", settlement.id(), List.of());
         settler.addJob(new SettlerJob(ModJobs.LUMBERJACK.get(), jobBlock));
         Vec3[] last = {settler.position()};
         int[] ticks = {0};

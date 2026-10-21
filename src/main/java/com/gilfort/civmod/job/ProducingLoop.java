@@ -82,8 +82,14 @@ final class ProducingLoop implements CategoryLoop {
     /** How long a crafted item is shown in the hand. */
     private static final int HAND_TICKS = 20;
 
-    /** Result of picking a request. */
-    private record Pick(Optional<Round> round, boolean more) {
+    /**
+     * Result of picking a request.
+     *
+     * @param round  the round started, empty if none
+     * @param more   whether more requests are left to try at the next decision
+     * @param status the job's status without a round ("Missing inputs", "No request"), empty with one
+     */
+    private record Pick(Optional<Round> round, boolean more, Optional<JobStatus> status) {
     }
 
     private final SettlerWork shell;
@@ -123,14 +129,16 @@ final class ProducingLoop implements CategoryLoop {
             }
             Pick pick = start(level, job, site, level.getGameTime(), dayTime, false);
             if (pick.round().isEmpty()) {
-                return JobStep.skip();
+                return pick.status().map(JobStep::skip).orElseGet(JobStep::skip);
             }
             workplace.setRound(pick.round().get());
         }
         Round round = Objects.requireNonNull(workplace.round());
-        if (round.phase == Round.Phase.WAIT && !inputsArrived(level, site, round, dayTime, level.getGameTime())) {
+        Optional<JobStatus> waiting = round.phase == Round.Phase.WAIT ? waitForInputs(level, site, round, dayTime, level.getGameTime())
+                : Optional.empty();
+        if (waiting.isPresent()) {
             // Waiting for input deliveries: the next priority works meanwhile.
-            return JobStep.skip();
+            return JobStep.skip(waiting.get());
         }
         return switch (round.phase) {
             // WAIT: the inputs arrived (above), the round fetches them at the collect inventory.
@@ -249,10 +257,9 @@ final class ProducingLoop implements CategoryLoop {
                     sources = List.of(site.collect());
                 }
             }
-            return new Pick(Optional.of(new Round(request.id(), request.item(), plan, sources, inputs)), true);
+            return new Pick(Optional.of(new Round(request.id(), request.item(), plan, sources, inputs)), true, Optional.empty());
         }
-        workplace.setStatus(tries > 0 || skipped ? JobStatus.MISSING_INPUTS : JobStatus.NO_REQUEST);
-        return new Pick(Optional.empty(), more);
+        return new Pick(Optional.empty(), more, Optional.of(tries > 0 || skipped ? JobStatus.MISSING_INPUTS : JobStatus.NO_REQUEST));
     }
 
     /** Takes what a source has off the needed items; what it gives, by item. */
@@ -302,14 +309,15 @@ final class ProducingLoop implements CategoryLoop {
      * pickup frees it again and the next check sees it.
      *
      * @param now the time for skipping (live: game time, catch-up: the simulated clock)
-     * @return whether the inputs arrived (the round fetches now)
+     * @return the job's status while it still waits ("Missing inputs", "Waiting for inputs"), empty once the inputs
+     *         arrived (the round fetches now)
      */
-    private boolean inputsArrived(ServerLevel level, JobBlockSite site, Round round, long dayTime, long now) {
+    private Optional<JobStatus> waitForInputs(ServerLevel level, JobBlockSite site, Round round, long dayTime, long now) {
         Settlement settlement = site.settlement();
         List<DeliveryTask> open = round.inputs.stream().map(id -> Deliveries.get(settlement, id)).flatMap(Optional::stream).toList();
         if (open.isEmpty()) {
             round.phase = Round.Phase.FETCH;
-            return true;
+            return Optional.empty();
         }
         long day = DayClock.day(level);
         List<Request.Missing> lacking = new ArrayList<>();
@@ -328,11 +336,9 @@ final class ProducingLoop implements CategoryLoop {
         }
         if (!lacking.isEmpty()) {
             fail(level, site.pos(), round, lacking, now);
-            shell.workplace(site.pos()).setStatus(JobStatus.MISSING_INPUTS);
-            return false;
+            return Optional.of(JobStatus.MISSING_INPUTS);
         }
-        shell.workplace(site.pos()).setStatus(JobStatus.WAITING_FOR_INPUTS);
-        return false;
+        return Optional.of(JobStatus.WAITING_FOR_INPUTS);
     }
 
     private Stock stock(ServerLevel level, BlockPos pos, long dayTime, boolean catchUp) {
@@ -686,7 +692,7 @@ final class ProducingLoop implements CategoryLoop {
         Patterns.uncheckFiltered(level, jobBlock, job.jobType());
         Patterns.enforceLimit(level, jobBlock, job.jobType(), settler.getUUID(), profile(job).checkLimit(shell.effectiveLevel(job)));
         if (station(level, job, site, day) == null) {
-            shell.workplace(jobBlock).setStatus(JobStatus.NO_WORK_PLACE);
+            shell.setStatus(jobBlock, JobStatus.NO_WORK_PLACE);
             return new SimulatedWork(0, workTicks);
         }
         // The time of day follows the simulated clock: a round crossing 18:30 no longer reaches the linked storage.
@@ -704,6 +710,7 @@ final class ProducingLoop implements CategoryLoop {
                     }
                 }
                 Pick pick = start(level, job, site, (long) clock, DayClock.dayTime((long) clock), true);
+                pick.status().ifPresent(status -> shell.setStatus(jobBlock, status));
                 if (pick.round().isEmpty()) {
                     if (!pick.more()) {
                         // Nothing doable: the next job takes the rest of the time.
@@ -726,7 +733,9 @@ final class ProducingLoop implements CategoryLoop {
             Round round = workplace.round();
             if (round.phase == Round.Phase.WAIT) {
                 long now = (long) clock;
-                if (inputsArrived(level, site, round, DayClock.dayTime(now), now)) {
+                Optional<JobStatus> waiting = waitForInputs(level, site, round, DayClock.dayTime(now), now);
+                waiting.ifPresent(status -> shell.setStatus(jobBlock, status));
+                if (waiting.isEmpty()) {
                     fetch(level, job, round, site.collect(), ClerkStorage.stock(level, site.collect(), DayClock.dayTime(now), true), false);
                 } else if (workplace.round() != null) {
                     // The Deliverymen bring the inputs later: the next job takes the rest of the time.

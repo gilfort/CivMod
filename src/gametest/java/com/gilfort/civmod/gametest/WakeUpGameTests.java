@@ -10,9 +10,9 @@ import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.DayClock;
-import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.TestAssignments;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -99,7 +99,7 @@ public final class WakeUpGameTests {
         level.addFreshEntity(settler);
         settler.joinSettlement(data, settlement);
         settler.getFood().setMorningDay(DayClock.day(level));
-        JobAssignments.assign(data, clerk, settler.getUUID(), "Clara", settlement.id(), List.of());
+        TestAssignments.assign(data, clerk, settler.getUUID(), "Clara", settlement.id(), List.of());
         settler.addJob(new SettlerJob(ModJobs.CLERK.get(), clerk));
         double[] jump = {0.0};
         Vec3[] last = {null};
@@ -137,7 +137,7 @@ public final class WakeUpGameTests {
                         "Walks back to the counter: at " + helper.relativePos(settler.blockPosition())))
                 .thenExecute(() -> {
                     helper.assertTrue(jump[0] < 1.0, "Walked back, not teleported: largest step " + jump[0]);
-                    JobAssignments.unassign(data, clerk);
+                    TestAssignments.unassign(data, clerk);
                     settler.discard();
                     forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
                 })
@@ -173,7 +173,7 @@ public final class WakeUpGameTests {
         // Fed and done for the day: it only goes to bed.
         settler.getFood().setMorningDay(day);
         settler.getFood().setEatenDay(day);
-        JobAssignments.assign(data, board, settler.getUUID(), "Sleeper", settlement.id(), List.of());
+        TestAssignments.assign(data, board, settler.getUUID(), "Sleeper", settlement.id(), List.of());
         settler.addJob(new SettlerJob(ModJobs.ADVENTURER.get(), board));
         return settler;
     }
@@ -191,7 +191,7 @@ public final class WakeUpGameTests {
 
     private static void cleanUp(GameTestHelper helper, Settler settler) {
         ServerLevel level = helper.getLevel();
-        JobAssignments.unassign(SettlementData.get(level), helper.absolutePos(BOARD));
+        TestAssignments.unassign(SettlementData.get(level), helper.absolutePos(BOARD));
         settler.discard();
     }
 

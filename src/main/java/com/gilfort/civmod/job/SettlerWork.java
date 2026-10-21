@@ -902,7 +902,7 @@ public final class SettlerWork {
                     delivery = job;
                     break;
                 }
-                workplace(job.jobBlock()).setStatus(JobStatus.IDLE);
+                setStatus(job.jobBlock(), JobStatus.IDLE);
             }
         } else {
             restPlace = null;
@@ -1036,45 +1036,47 @@ public final class SettlerWork {
                     moveTo(level, Activity.JOB, walk.target(), walk.reach());
                 }
                 targetReach = walk.reach();
-                walk.subject().ifPresentOrElse(subject -> workplace(jobBlock).setStatus(walk.status(), subject),
-                        () -> workplace(jobBlock).setStatus(walk.status()));
+                walk.subject().ifPresentOrElse(subject -> setStatus(jobBlock, walk.status(), subject),
+                        () -> setStatus(jobBlock, walk.status()));
                 yield true;
             }
             case JobStep.Deliver deliver -> startDelivery(level, job);
             case JobStep.Wait wait -> {
                 stop();
                 activeJob = job;
-                workplace(jobBlock).setStatus(wait.status());
+                setStatus(jobBlock, wait.status());
                 yield true;
             }
             case JobStep.Blocked blocked -> {
-                if (blocked.reason() != null) {
-                    block(level, jobBlock, blocked.reason());
-                } else {
-                    block(level, jobBlock, blocked.status());
-                }
+                blocked.reason().ifPresentOrElse(reason -> block(level, jobBlock, reason), () -> block(level, jobBlock, blocked.status()));
                 yield false;
             }
             case JobStep.Skip skip -> {
-                skip.status().ifPresent(status -> workplace(jobBlock).setStatus(status));
+                skip.status().ifPresent(status -> setStatus(jobBlock, status));
                 yield false;
             }
             case JobStep.Pause pause -> {
-                workplace(jobBlock).setStatus(pause.status());
+                setStatus(jobBlock, pause.status());
                 settler.getNavigation().stop();
                 yield true;
             }
             case JobStep.Hold hold -> {
-                workplace(jobBlock).setStatus(hold.status());
+                setStatus(jobBlock, hold.status());
                 yield true;
             }
             case JobStep.AtTarget at -> {
+                if (at.stands()) {
+                    settler.getNavigation().stop();
+                }
                 if (at.worked()) {
                     countWorkTick(job);
                 }
                 yield true;
             }
             case JobStep.Done done -> {
+                if (done.stands()) {
+                    settler.getNavigation().stop();
+                }
                 if (done.worked()) {
                     countWorkTick(job);
                 }
@@ -1086,6 +1088,28 @@ public final class SettlerWork {
     }
 
     // ---------------------------------------------------------------- shared parts used by the category loops
+
+    /**
+     * Sets a job's status: the one way to do it. Job steps set it through {@link #apply}; a loop calls this only for
+     * what happens outside a decision (a mission reserved or given back, a settler back from its mission, catch-up).
+     *
+     * @param jobBlock the job's JobBlock
+     * @param status   the new status
+     */
+    void setStatus(BlockPos jobBlock, JobStatus status) {
+        workplace(jobBlock).setStatus(status);
+    }
+
+    /**
+     * Sets a job's status naming what it is about ({@link #setStatus(BlockPos, JobStatus)}).
+     *
+     * @param jobBlock the job's JobBlock
+     * @param status   the new status
+     * @param subject  what the status is about
+     */
+    void setStatus(BlockPos jobBlock, JobStatus status, net.minecraft.network.chat.Component subject) {
+        workplace(jobBlock).setStatus(status, subject);
+    }
 
     /**
      * @param jobBlock a JobBlock position
@@ -1146,11 +1170,11 @@ public final class SettlerWork {
         if (loop(job) == deliverymen) {
             // A Deliveryman unloads into its store as staff: at the block, no counter.
             visit = ClerkStorage.blockVisit(deliverymen.unloadTarget(level, job));
-            workplace(job.jobBlock()).setStatus(JobStatus.UNLOADING, deliverymen.unloadName(level, job));
+            setStatus(job.jobBlock(), JobStatus.UNLOADING, deliverymen.unloadName(level, job));
         } else {
             BlockPos dropOff = JobBlockSite.at(level, job.jobBlock()).map(JobBlockSite::dropOff).orElse(job.jobBlock());
             visit = reachableVisit(level, dropOff, ClerkStorage.visit(level, dropOff, DayClock.dayTime(level)));
-            workplace(job.jobBlock()).setStatus(JobStatus.DELIVERING);
+            setStatus(job.jobBlock(), JobStatus.DELIVERING);
         }
         if (activity != Activity.DELIVER || !visit.target().equals(target)) {
             deliveryVisit = visit;
@@ -1807,16 +1831,26 @@ public final class SettlerWork {
         if (counterUnreachable(level, pos)) {
             return ClerkStorage.blockVisit(pos);
         }
-        if (settler.position().distanceTo(Vec3.atCenterOf(visit.target())) <= COUNTER_PATH_CHECK) {
-            net.minecraft.world.level.pathfinder.Path path = settler.getNavigation().createPath(visit.target(), (int) visit.reach());
-            // No path at all says nothing: vanilla searches none while the settler is in the air (a jump on its walk).
-            // Only a searched path that ends short of the counter makes it unreachable for the day.
-            if (path != null && !path.canReach()) {
-                unreachableCounters.put(pos.immutable(), DayClock.day(level));
-                return ClerkStorage.blockVisit(pos);
-            }
+        // Only a searched path that ends short of the counter makes it unreachable for the day.
+        if (settler.position().distanceTo(Vec3.atCenterOf(visit.target())) <= COUNTER_PATH_CHECK
+                && pathEndsShort(visit.target(), visit.reach())) {
+            unreachableCounters.put(pos.immutable(), DayClock.day(level));
+            return ClerkStorage.blockVisit(pos);
         }
         return visit;
+    }
+
+    /**
+     * One path search from the settler to a target. A path search is costly: call it once per walk, not per tick.
+     *
+     * @param target the target
+     * @param reach  how close the settler has to come
+     * @return whether a searched path ends short of the target; false when none was searched, which says nothing
+     *         (vanilla searches none while the settler is in the air, e.g. a jump on its walk)
+     */
+    boolean pathEndsShort(BlockPos target, double reach) {
+        net.minecraft.world.level.pathfinder.Path path = settler.getNavigation().createPath(target, (int) reach);
+        return path != null && !path.canReach();
     }
 
     /**
@@ -2293,8 +2327,7 @@ public final class SettlerWork {
             SettlerJob job = activeJob;
             CategoryLoop loop = loop(job);
             if (loop != null) {
-                // At the target of a job step the settler stands; the loop works there.
-                settler.getNavigation().stop();
+                // At the target of a job step the loop works there; the step says whether the settler stands still.
                 apply(level, job, loop.tickAtTarget(level, job, target));
             }
         }

@@ -33,10 +33,10 @@ import net.minecraft.world.item.Items;
  * @param libraries the Jobs whose library holds a pattern (a locked one keeps its Patterns tab)
  * @param overview  every unlock item of the Base Job's Specializations with the Jobs it unlocks
  */
-public record StationTypeTabData(List<Item> slots, int open, List<Job> unlocked, List<Job> libraries, List<StationTypes.Unlock> overview) {
+public record StationTypesTabData(List<Item> slots, int open, List<Job> unlocked, List<Job> libraries, List<StationTypes.Unlock> overview) {
 
     /** Nothing (before the first sync). */
-    public static final StationTypeTabData EMPTY = new StationTypeTabData(List.of(), 1, List.of(), List.of(), List.of());
+    public static final StationTypesTabData EMPTY = new StationTypesTabData(List.of(), 1, List.of(), List.of(), List.of());
 
     private static final StreamCodec<RegistryFriendlyByteBuf, Item> ITEM_CODEC = ByteBufCodecs.registry(Registries.ITEM);
 
@@ -46,13 +46,13 @@ public record StationTypeTabData(List<Item> slots, int open, List<Job> unlocked,
             StationTypes.Unlock::new);
 
     /** Network codec. */
-    public static final StreamCodec<RegistryFriendlyByteBuf, StationTypeTabData> STREAM_CODEC = StreamCodec.composite(
-            ITEM_CODEC.apply(ByteBufCodecs.list(StationTypes.SLOTS)), StationTypeTabData::slots,
-            ByteBufCodecs.VAR_INT, StationTypeTabData::open,
-            Job.STREAM_CODEC.apply(ByteBufCodecs.list()), StationTypeTabData::unlocked,
-            Job.STREAM_CODEC.apply(ByteBufCodecs.list()), StationTypeTabData::libraries,
-            UNLOCK_CODEC.apply(ByteBufCodecs.list()), StationTypeTabData::overview,
-            StationTypeTabData::new);
+    public static final StreamCodec<RegistryFriendlyByteBuf, StationTypesTabData> STREAM_CODEC = StreamCodec.composite(
+            ITEM_CODEC.apply(ByteBufCodecs.list(StationTypes.SLOTS)), StationTypesTabData::slots,
+            ByteBufCodecs.VAR_INT, StationTypesTabData::open,
+            Job.STREAM_CODEC.apply(ByteBufCodecs.list()), StationTypesTabData::unlocked,
+            Job.STREAM_CODEC.apply(ByteBufCodecs.list()), StationTypesTabData::libraries,
+            UNLOCK_CODEC.apply(ByteBufCodecs.list()), StationTypesTabData::overview,
+            StationTypesTabData::new);
 
     /**
      * @param slots     the slots
@@ -61,7 +61,7 @@ public record StationTypeTabData(List<Item> slots, int open, List<Job> unlocked,
      * @param libraries the Jobs whose library holds a pattern
      * @param overview  every unlock item with its Jobs
      */
-    public StationTypeTabData {
+    public StationTypesTabData {
         slots = List.copyOf(slots);
         unlocked = List.copyOf(unlocked);
         libraries = List.copyOf(libraries);
@@ -73,7 +73,7 @@ public record StationTypeTabData(List<Item> slots, int open, List<Job> unlocked,
      * @param pos   the JobBlock position
      * @return the current tab of that JobBlock ({@link #EMPTY} if it has no Station Types)
      */
-    public static StationTypeTabData of(ServerLevel level, BlockPos pos) {
+    public static StationTypesTabData of(ServerLevel level, BlockPos pos) {
         Optional<SettlementBlock> found = JobBlockSite.blockAt(level, pos).filter(block -> StationTypes.hasStationTypes(block.jobType()));
         if (found.isEmpty()) {
             return EMPTY;
@@ -81,7 +81,7 @@ public record StationTypeTabData(List<Item> slots, int open, List<Job> unlocked,
         SettlementBlock block = found.get();
         List<Item> slots = new ArrayList<>(block.stationTypes());
         slots.set(0, StationTypes.baseStation(block.jobType()));
-        return new StationTypeTabData(slots, StationTypes.open(block.level()), StationTypes.unlocked(block), block.libraryJobs(),
+        return new StationTypesTabData(slots, StationTypes.open(block.level()), StationTypes.unlocked(block), block.libraryJobs(),
                 StationTypes.overview(block.jobType()));
     }
 
@@ -115,7 +115,7 @@ public record StationTypeTabData(List<Item> slots, int open, List<Job> unlocked,
      * @param containerId the menu's container id
      * @param tab         the tab
      */
-    public record Sync(int containerId, StationTypeTabData tab) implements CustomPacketPayload {
+    public record Sync(int containerId, StationTypesTabData tab) implements CustomPacketPayload {
 
         /** Payload type. */
         public static final Type<Sync> TYPE = new Type<>(CivMod.id("station_type_tab"));
@@ -123,7 +123,7 @@ public record StationTypeTabData(List<Item> slots, int open, List<Job> unlocked,
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Sync> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, Sync::containerId,
-                StationTypeTabData.STREAM_CODEC, Sync::tab,
+                StationTypesTabData.STREAM_CODEC, Sync::tab,
                 Sync::new);
 
         @Override

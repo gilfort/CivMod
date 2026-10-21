@@ -17,10 +17,10 @@ import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.JobBlockTab;
 import com.gilfort.civmod.menu.MissionsTab;
-import com.gilfort.civmod.menu.PatternTabData;
+import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.menu.RequestsTab;
-import com.gilfort.civmod.menu.StationTypeTabData;
+import com.gilfort.civmod.menu.StationTypesTabData;
 import com.gilfort.civmod.menu.StationTypesTab;
 import com.gilfort.civmod.menu.StockTab;
 import com.gilfort.civmod.menu.StorageTab;
@@ -77,22 +77,22 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     /** One view per tab; the Patterns tabs share one (they share the synced library and the open editor). */
     private List<JobBlockTabView> views(List<JobBlockTab> tabs) {
         List<JobBlockTabView> result = new ArrayList<>();
-        @Nullable PatternTabView patterns = null;
+        @Nullable PatternsTabView patterns = null;
         for (JobBlockTab tab : tabs) {
             if (tab instanceof PatternsTab && patterns == null) {
-                patterns = new PatternTabView(this);
+                patterns = new PatternsTabView(this);
             }
-            PatternTabView library = patterns;
+            PatternsTabView library = patterns;
             result.add(switch (tab) {
                 case StorageTab storage -> JobBlockTabView.NONE;
                 case InfoTab info -> new InfoTabView(this, info);
                 case FoundTab found -> new FoundTabView(this, found);
-                case MissionsTab missions -> new MissionTabView(this, missions);
+                case MissionsTab missions -> new MissionsTabView(this, missions);
                 case StockTab stock -> new StockTabView(this, stock);
                 case RequestsTab requests -> new RequestsTabView(this, requests);
                 case DeliveriesTab deliveries -> new DeliveriesTabView(this, deliveries);
-                case StationTypesTab stations -> new StationTypesView(this, stations);
-                case PatternsTab job -> library;
+                case StationTypesTab stations -> new StationTypesTabView(this, stations);
+                case PatternsTab _ -> library;
             });
         }
         return List.copyOf(result);
@@ -290,22 +290,22 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     }
 
     /**
-     * Client handler of {@link PatternTabData.Sync}: updates the open Producing JobBlock menu.
+     * Client handler of {@link PatternsTabData.Sync}: updates the open Producing JobBlock menu.
      *
      * @param payload the payload
      * @param context the payload context
      */
-    public static void handlePatternTab(PatternTabData.Sync payload, IPayloadContext context) {
+    public static void handlePatternTab(PatternsTabData.Sync payload, IPayloadContext context) {
         receive(payload.containerId(), open -> open.tab(PatternsTab.class).map(PatternsTab::data), payload.tab());
     }
 
     /**
-     * Client handler of {@link StationTypeTabData.Sync}: updates the open JobBlock menu and which Patterns tabs it shows.
+     * Client handler of {@link StationTypesTabData.Sync}: updates the open JobBlock menu and which Patterns tabs it shows.
      *
      * @param payload the payload
      * @param context the payload context
      */
-    public static void handleStationTypeTab(StationTypeTabData.Sync payload, IPayloadContext context) {
+    public static void handleStationTypeTab(StationTypesTabData.Sync payload, IPayloadContext context) {
         receive(payload.containerId(), open -> open.tab(StationTypesTab.class).map(StationTypesTab::data), payload.tab());
     }
 

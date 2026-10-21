@@ -30,7 +30,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.capabilities.Capabilities;
 
@@ -184,9 +183,7 @@ final class DeliverymanLoop implements CategoryLoop {
             return true;
         }
         checked = source;
-        Path path = settler.getNavigation().createPath(source, (int) SettlerWork.REACH);
-        // No path at all says nothing (vanilla searches none while the settler is in the air).
-        return path == null || path.canReach();
+        return !shell.pathEndsShort(source, SettlerWork.REACH);
     }
 
     /** How many stacks a task would carry: what a pickup's drop-off holds, a result's count, an input delivery's items. */
@@ -242,7 +239,7 @@ final class DeliverymanLoop implements CategoryLoop {
                 }
             }
         }
-        return JobStep.DONE;
+        return JobStep.DONE_STANDING;
     }
 
     /**

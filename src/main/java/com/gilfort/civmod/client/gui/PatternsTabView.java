@@ -14,7 +14,7 @@ import com.gilfort.civmod.menu.GuiIcons;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.JobBlockTab;
-import com.gilfort.civmod.menu.PatternTabData;
+import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.menu.TabData;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -42,7 +42,7 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
  * with checkmarks) and the editor of one pattern (3×3 grid, output, recipe arrows, Check / Clear / Back). Also the target
  * of recipe viewer transfers. Adds the delivery toggle (Self / Deliveryman) to the Info tab.
  */
-final class PatternTabView implements JobBlockTabView {
+final class PatternsTabView implements JobBlockTabView {
 
     /** The library: 6 rows of 9 pattern slots. */
     private static final int LIBRARY_X = CivGui.PADDING;
@@ -69,7 +69,7 @@ final class PatternTabView implements JobBlockTabView {
     /**
      * @param screen the screen showing the tab
      */
-    PatternTabView(JobBlockScreen screen) {
+    PatternsTabView(JobBlockScreen screen) {
         this.screen = screen;
         this.menu = screen.getMenu();
     }
@@ -82,13 +82,13 @@ final class PatternTabView implements JobBlockTabView {
     }
 
     /** The synced library of {@link #job()}; empty until the server sent it. */
-    private PatternTabData tab() {
-        PatternTabData synced = library().get();
-        return synced.job().filter(job()::equals).isPresent() ? synced : PatternTabData.EMPTY;
+    private PatternsTabData tab() {
+        PatternsTabData synced = library().get();
+        return synced.job().filter(job()::equals).isPresent() ? synced : PatternsTabData.EMPTY;
     }
 
     /** The library the server sent last, shared by the Patterns tabs. */
-    private TabData<PatternTabData> library() {
+    private TabData<PatternsTabData> library() {
         return menu.tab(PatternsTab.class).orElseThrow().data();
     }
 
@@ -129,15 +129,15 @@ final class PatternTabView implements JobBlockTabView {
         int y = screen.top() + PATTERN_BUTTONS_Y;
         int width = (screen.panelWidth() - 2 * CivGui.PADDING - 4) / 3;
         checkButton = screen.addWidget(tabIndex, Button.builder(Component.empty(), button -> sendPattern(
-                PatternTabData.Edit.toggleCheck(menu.containerId, job(), editing))).bounds(left + CivGui.PADDING, y, width, 20).build());
+                PatternsTabData.Edit.toggleCheck(menu.containerId, job(), editing))).bounds(left + CivGui.PADDING, y, width, 20).build());
         screen.addWidget(tabIndex, Button.builder(Component.translatable("civmod.gui.patterns.clear"), button -> sendPattern(
-                PatternTabData.Edit.clear(menu.containerId, job(), editing))).bounds(left + CivGui.PADDING + width + 2, y, width, 20).build());
+                PatternsTabData.Edit.clear(menu.containerId, job(), editing))).bounds(left + CivGui.PADDING + width + 2, y, width, 20).build());
         screen.addWidget(tabIndex, Button.builder(Component.translatable("gui.back"), button -> showLibrary())
                 .bounds(left + CivGui.PADDING + 2 * (width + 2), y, width, 20).build());
         previousButton = screen.addWidget(tabIndex, Button.builder(Component.literal("<"), button -> sendPattern(
-                PatternTabData.Edit.cycle(menu.containerId, job(), editing, -1))).bounds(left + OUTPUT_X - 9, screen.top() + OUTPUT_Y + 20, 16, 16).build());
+                PatternsTabData.Edit.cycle(menu.containerId, job(), editing, -1))).bounds(left + OUTPUT_X - 9, screen.top() + OUTPUT_Y + 20, 16, 16).build());
         nextButton = screen.addWidget(tabIndex, Button.builder(Component.literal(">"), button -> sendPattern(
-                PatternTabData.Edit.cycle(menu.containerId, job(), editing, 1))).bounds(left + OUTPUT_X + 9, screen.top() + OUTPUT_Y + 20, 16, 16).build());
+                PatternsTabData.Edit.cycle(menu.containerId, job(), editing, 1))).bounds(left + OUTPUT_X + 9, screen.top() + OUTPUT_Y + 20, 16, 16).build());
         Tooltip cycle = Tooltip.create(Component.translatable("civmod.gui.patterns.cycle"));
         previousButton.setTooltip(cycle);
         nextButton.setTooltip(cycle);
@@ -155,7 +155,7 @@ final class PatternTabView implements JobBlockTabView {
         if (checkButton == null || previousButton == null || nextButton == null || editing < 0) {
             return;
         }
-        PatternTabData tab = tab();
+        PatternsTabData tab = tab();
         Optional<Pattern> pattern = tab.pattern(editing);
         boolean checked = pattern.map(Pattern::checked).orElse(false);
         checkButton.setMessage(Component.translatable(checked ? "civmod.gui.patterns.uncheck" : "civmod.gui.patterns.check"));
@@ -179,7 +179,7 @@ final class PatternTabView implements JobBlockTabView {
         screen.rebuild();
     }
 
-    private void sendPattern(PatternTabData.Edit edit) {
+    private void sendPattern(PatternsTabData.Edit edit) {
         ClientPacketDistributor.sendToServer(edit);
         screen.clickSound();
     }
@@ -262,11 +262,11 @@ final class PatternTabView implements JobBlockTabView {
             return false;
         }
         if (target < Pattern.SLOTS) {
-            sendPattern(PatternTabData.Edit.setOutput(menu.containerId, job(), target, stack.getItem()));
+            sendPattern(PatternsTabData.Edit.setOutput(menu.containerId, job(), target, stack.getItem()));
         } else if (target == TARGET_OUTPUT) {
-            sendPattern(PatternTabData.Edit.setOutput(menu.containerId, job(), editing, stack.getItem()));
+            sendPattern(PatternsTabData.Edit.setOutput(menu.containerId, job(), editing, stack.getItem()));
         } else {
-            sendPattern(PatternTabData.Edit.setInput(menu.containerId, job(), editing, target - TARGET_CELL, stack.getItem()));
+            sendPattern(PatternsTabData.Edit.setInput(menu.containerId, job(), editing, target - TARGET_CELL, stack.getItem()));
         }
         return true;
     }
@@ -292,7 +292,7 @@ final class PatternTabView implements JobBlockTabView {
         if (target < Pattern.SLOTS) {
             if (right) {
                 if (tab().pattern(target).isPresent()) {
-                    sendPattern(PatternTabData.Edit.toggleCheck(menu.containerId, job(), target));
+                    sendPattern(PatternsTabData.Edit.toggleCheck(menu.containerId, job(), target));
                 }
             } else {
                 screen.clickSound();
@@ -301,7 +301,7 @@ final class PatternTabView implements JobBlockTabView {
             return true;
         }
         if (right && target != TARGET_OUTPUT) {
-            sendPattern(PatternTabData.Edit.setInput(menu.containerId, job(), editing, target - TARGET_CELL, Items.AIR));
+            sendPattern(PatternsTabData.Edit.setInput(menu.containerId, job(), editing, target - TARGET_CELL, Items.AIR));
         }
         return true;
     }
@@ -323,7 +323,7 @@ final class PatternTabView implements JobBlockTabView {
     }
 
     private Optional<Component> transferPattern(RecipeType<?> type, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid, boolean doTransfer) {
-        PatternTabData tab = tab();
+        PatternsTabData tab = tab();
         if (!tab.follows(type)) {
             return Optional.of(Component.translatable(tab.locked() ? "civmod.gui.patterns.locked" : "civmod.gui.patterns.foreign"));
         }
@@ -337,7 +337,7 @@ final class PatternTabView implements JobBlockTabView {
             return Optional.of(Component.translatable("civmod.gui.patterns.full"));
         }
         if (doTransfer) {
-            sendPattern(PatternTabData.Edit.transfer(menu.containerId, job(), slot, recipe, grid));
+            sendPattern(PatternsTabData.Edit.transfer(menu.containerId, job(), slot, recipe, grid));
             PatternsTab.of(menu, job()).ifPresent(shown -> screen.select(shown.index()));
             showEditor(slot);
         }
@@ -363,7 +363,7 @@ final class PatternTabView implements JobBlockTabView {
     @Override
     public void extractLabels(GuiGraphicsExtractor graphics, JobBlockTab shown, int mouseX, int mouseY) {
         Font font = screen.getFont();
-        PatternTabData tab = tab();
+        PatternsTabData tab = tab();
         int hovered = ghostTargetAt(mouseX, mouseY);
         if (editing >= 0) {
             extractEditor(graphics, tab, hovered, mouseX, mouseY);
@@ -403,14 +403,14 @@ final class PatternTabView implements JobBlockTabView {
     }
 
     /** Why the Job cannot use a pattern: a locked library, a foreign recipe type, else its profile's filter line. */
-    private static Component unusableLine(PatternTabData tab, int slot) {
+    private static Component unusableLine(PatternsTabData tab, int slot) {
         if (tab.locked()) {
             return Component.translatable("civmod.gui.patterns.locked");
         }
         return tab.foreign().contains(slot) ? Component.translatable("civmod.gui.patterns.foreign") : tab.filteredLine();
     }
 
-    private static List<Component> tooltip(PatternTabData tab, int slot) {
+    private static List<Component> tooltip(PatternsTabData tab, int slot) {
         List<Component> lines = new ArrayList<>();
         Optional<Pattern> pattern = tab.pattern(slot);
         if (pattern.filter(Pattern::valid).isPresent()) {
@@ -429,7 +429,7 @@ final class PatternTabView implements JobBlockTabView {
         return lines;
     }
 
-    private void extractEditor(GuiGraphicsExtractor graphics, PatternTabData tab, int hovered, int mouseX, int mouseY) {
+    private void extractEditor(GuiGraphicsExtractor graphics, PatternsTabData tab, int hovered, int mouseX, int mouseY) {
         Font font = screen.getFont();
         Optional<Pattern> pattern = tab.pattern(editing);
         graphics.text(font, Component.translatable("civmod.gui.patterns.editing", editing + 1), CivGui.PADDING, 18, CivGui.LABEL_COLOR, false);

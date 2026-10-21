@@ -23,7 +23,7 @@ import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.menu.JobBlockTabs;
-import com.gilfort.civmod.menu.PatternTabData;
+import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -39,6 +39,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.StockRules;
+import com.gilfort.civmod.settlement.TestAssignments;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -309,7 +310,7 @@ public final class ExampleAddonGameTests {
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 7), data, settlement);
         settler.setCustomName(Component.literal("Stella"));
         settler.getFood().setMorningDay(Math.floorDiv(level.getOverworldClockTime(), 24000L));
-        helper.assertTrue(JobAssignments.assign(data, craft, settler.getUUID(), "Stella", settlement.id(), List.of(), stonecutter)
+        helper.assertTrue(TestAssignments.assign(data, craft, settler.getUUID(), "Stella", settlement.id(), List.of(), stonecutter)
                 == JobAssignments.AssignResult.OK, "Stonecutter assigned");
         settler.addJob(new SettlerJob(stonecutter, craft));
 
@@ -321,7 +322,7 @@ public final class ExampleAddonGameTests {
         helper.assertTrue(ClerkStorage.stock(level, clerk, true).count(stack -> stack.is(Items.STONE_BRICKS)) == 4, "Stone bricks delivered");
         helper.assertTrue(ClerkStorage.stock(level, clerk, true).count(stack -> stack.is(Items.STONE)) == 0, "Stone used up");
         helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "Request done: " + Requests.byPriority(settlement));
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         settler.discard();
         helper.succeed();
     }
@@ -360,7 +361,7 @@ public final class ExampleAddonGameTests {
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 7), data, settlement);
         settler.setCustomName(Component.literal("Stella"));
         settler.getFood().setMorningDay(Math.floorDiv(level.getOverworldClockTime(), 24000L));
-        helper.assertTrue(JobAssignments.assign(data, craft, settler.getUUID(), "Stella", settlement.id(), List.of(), stonecutter)
+        helper.assertTrue(TestAssignments.assign(data, craft, settler.getUUID(), "Stella", settlement.id(), List.of(), stonecutter)
                 == JobAssignments.AssignResult.OK, "Stonecutter assigned");
         settler.addJob(new SettlerJob(stonecutter, craft));
         helper.assertTrue(Patterns.setOutput(level, craft, stonecutter, 0, Items.STONE_BRICKS).orElseThrow().checked(), "Bricks checked");
@@ -368,7 +369,7 @@ public final class ExampleAddonGameTests {
 
         helper.assertTrue(ClerkStorage.stock(level, clerk, true).count(stack -> stack.is(Items.STONE_BRICKS)) == 4,
                 "Stone bricks cut at the work point (status " + settler.getWork().status(craft) + ")");
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         settler.discard();
         level.setBlockAndUpdate(cutter, Blocks.AIR.defaultBlockState());
         helper.succeed();
@@ -396,21 +397,21 @@ public final class ExampleAddonGameTests {
                 && Patterns.allRecipeTypes().size() == 2,
                 "Recipe viewers offer the transfer for the recipe types of every Producing Job: " + Patterns.allRecipeTypes());
         Job craftsperson = ModJobs.CRAFTSPERSON.get();
-        PatternTabData tab = PatternTabData.of(level, craft, craftsperson);
+        PatternsTabData tab = PatternsTabData.of(level, craft, craftsperson);
         helper.assertTrue(tab.follows(RecipeType.CRAFTING) && !tab.follows(RecipeType.STONECUTTING), "The Craftsperson's library follows crafting");
         helper.assertTrue(Patterns.transfer(level, craft, craftsperson, 0, Optional.of(bricks), List.of(Items.STONE)).isEmpty(),
                 "The Craftsperson refuses a stonecutting recipe");
-        helper.assertTrue(PatternTabData.of(level, craft, craftsperson).pattern(0).isEmpty(), "Refused: the slot stays empty");
+        helper.assertTrue(PatternsTabData.of(level, craft, craftsperson).pattern(0).isEmpty(), "Refused: the slot stays empty");
 
-        tab = PatternTabData.of(level, craft, stonecutter);
+        tab = PatternsTabData.of(level, craft, stonecutter);
         helper.assertTrue(tab.follows(RecipeType.STONECUTTING) && !tab.follows(RecipeType.CRAFTING), "The Stonecutter's library follows stonecutting");
         Pattern pattern = Patterns.transfer(level, craft, stonecutter, 0, Optional.of(bricks), List.of(Items.STONE)).orElseThrow();
         helper.assertTrue(pattern.output() == Items.STONE_BRICKS && pattern.recipe().equals(Optional.of(bricks)) && !pattern.exact()
                 && pattern.grid().getFirst() == Items.STONE && pattern.checked(), "A stonecutting recipe pattern, checked automatically: " + pattern);
         helper.assertTrue(Patterns.transfer(level, craft, stonecutter, 1, Optional.of(sticks), stickGrid).isEmpty(),
                 "The Stonecutter refuses a crafting recipe");
-        helper.assertTrue(PatternTabData.of(level, craft, stonecutter).pattern(1).isEmpty(), "Refused: the slot stays empty");
-        JobAssignments.unassign(data, clerk);
+        helper.assertTrue(PatternsTabData.of(level, craft, stonecutter).pattern(1).isEmpty(), "Refused: the slot stays empty");
+        TestAssignments.unassign(data, clerk);
         helper.succeed();
     }
 }

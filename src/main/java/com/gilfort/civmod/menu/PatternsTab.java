@@ -16,10 +16,10 @@ import net.minecraft.world.item.Items;
 
 /**
  * A "Patterns" tab of a Producing JobBlock (vault {@code Systems/Producing Jobs.md}): the pattern library of one Job,
- * with the player inventory to pick items from; the client edits a pattern with {@link PatternTabData.Edit}. The Base
+ * with the player inventory to pick items from; the client edits a pattern with {@link PatternsTabData.Edit}. The Base
  * Job's tab sits on top and also handles the Info tab's delivery toggle (Self / Deliveryman); each Specialization's tab
  * sits below the panel, shown while the Job is unlocked or its library holds a pattern. All Patterns tabs of a window
- * share one synced library ({@link PatternTabData}): the one of the tab shown, else the one looked at last.
+ * share one synced library ({@link PatternsTabData}): the one of the tab shown, else the one looked at last.
  */
 public final class PatternsTab extends JobBlockTab {
 
@@ -28,8 +28,8 @@ public final class PatternsTab extends JobBlockTab {
 
     private final Job job;
     private final boolean base;
-    private final TabData<PatternTabData> data;
-    private final TabData<StationTypeTabData> stations;
+    private final TabData<PatternsTabData> data;
+    private final TabData<StationTypesTabData> stations;
 
     /**
      * @param job      the Producing Job of the library
@@ -37,7 +37,7 @@ public final class PatternsTab extends JobBlockTab {
      * @param data     the synced library, shared by the window's Patterns tabs
      * @param stations the window's Station Types, which decide whether a Specialization's tab is shown
      */
-    PatternsTab(Job job, boolean base, TabData<PatternTabData> data, TabData<StationTypeTabData> stations) {
+    PatternsTab(Job job, boolean base, TabData<PatternsTabData> data, TabData<StationTypesTabData> stations) {
         this.job = job;
         this.base = base;
         this.data = data;
@@ -47,15 +47,15 @@ public final class PatternsTab extends JobBlockTab {
     /**
      * @return a new synced library, for the Patterns tabs of one window
      */
-    static TabData<PatternTabData> newData() {
-        return new TabData<>(PatternTabData.EMPTY, (menu, level, pos) -> {
+    static TabData<PatternsTabData> newData() {
+        return new TabData<>(PatternsTabData.EMPTY, (menu, level, pos) -> {
             // The library of the Patterns tab shown, else the one looked at last (the Base Job's before any).
             Job job = menu.activeTab() instanceof PatternsTab shown ? shown.job
                     : menu.tab(PatternsTab.class).flatMap(first -> first.data.get().job()).orElse(menu.getInfo().jobType());
             // A pattern its Job filters out loses its checkmark as soon as the tab shows it; foreign ones keep theirs.
             Patterns.uncheckFiltered(level, pos, job);
-            return PatternTabData.of(level, pos, job);
-        }, PatternTabData.Sync::new);
+            return PatternsTabData.of(level, pos, job);
+        }, PatternsTabData.Sync::new);
     }
 
     /**
@@ -112,7 +112,7 @@ public final class PatternsTab extends JobBlockTab {
     /**
      * @return the library of the Patterns tab last looked at, as last synced
      */
-    public TabData<PatternTabData> data() {
+    public TabData<PatternsTabData> data() {
         return data;
     }
 
@@ -134,7 +134,7 @@ public final class PatternsTab extends JobBlockTab {
      *
      * @param edit the edit (of this tab's Job)
      */
-    public void edit(PatternTabData.Edit edit) {
+    public void edit(PatternsTabData.Edit edit) {
         JobBlockMenu menu = menu();
         Optional<JobBlockMenu.Site> site = menu.site().filter(found -> menu.stillValid(menu.player()));
         if (site.isEmpty() || edit.job() != job) {

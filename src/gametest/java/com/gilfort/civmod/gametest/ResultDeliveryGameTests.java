@@ -17,11 +17,12 @@ import com.gilfort.civmod.settlement.Deliveries;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Requests;
-import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.StockRules;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.gilfort.civmod.settlement.Warehouses;
 
 import net.minecraft.core.BlockPos;
@@ -108,8 +109,8 @@ public final class ResultDeliveryGameTests {
 
         void cleanUp(GameTestHelper helper) {
             SettlementData data = SettlementData.get(helper.getLevel());
-            JobAssignments.unassign(data, home);
-            JobAssignments.unassign(data, requesting);
+            TestAssignments.unassign(data, home);
+            TestAssignments.unassign(data, requesting);
             dora.discard();
             eve.discard();
             forced.forEach(chunk -> helper.getLevel().setChunkForced((int) chunk[0], (int) chunk[1], false));
@@ -188,7 +189,7 @@ public final class ResultDeliveryGameTests {
         helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "Request done: " + Requests.byPriority(settlement));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "In delivery: no second request " + Requests.byPriority(settlement));
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         settler.discard();
         helper.succeed();
     }
@@ -217,7 +218,7 @@ public final class ResultDeliveryGameTests {
     static void deliveryman(GameTestHelper helper, BlockPos clerk, UUID settler) {
         SettlementData data = SettlementData.get(helper.getLevel());
         int settlement = data.settlementAt(clerk).orElseThrow().id();
-        helper.assertTrue(JobAssignments.assign(data, clerk, settler, "Dora", settlement, List.of(), ModJobs.DELIVERYMAN.get())
+        helper.assertTrue(TestAssignments.assign(data, clerk, settler, "Dora", settlement, List.of(), ModJobs.DELIVERYMAN.get())
                 == JobAssignments.AssignResult.OK, "Deliveryman assigned");
     }
 

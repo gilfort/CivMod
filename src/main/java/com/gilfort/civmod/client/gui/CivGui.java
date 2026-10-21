@@ -61,6 +61,8 @@ public final class CivGui {
     private static final int INACTIVE_TINT = 0xA0000000 | (INSET_FILL & 0xFFFFFF);
     /** Vanilla slot highlight under the mouse. */
     private static final int HOVER_TINT = 0x80FFFFFF;
+    /** Red slot fill over an item that is missing (an upgrade cost the player lacks). */
+    static final int MISSING_TINT = 0x80FF2020;
     /** Frame of a selected slot. */
     private static final int SELECTED_COLOR = INSET_LIGHT;
     /** Size of the help icon ({@link #help}). */

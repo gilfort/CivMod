@@ -9,35 +9,36 @@ import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.job.CatchUp;
+import com.gilfort.civmod.job.JobBuffer;
+import com.gilfort.civmod.job.JobStatus;
+import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.CraftPlan;
+import com.gilfort.civmod.logistics.Pattern;
+import com.gilfort.civmod.logistics.Producers;
+import com.gilfort.civmod.logistics.Request;
+import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
-import com.gilfort.civmod.menu.PatternTabData;
+import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.menu.StationTypesTab;
 import com.gilfort.civmod.menu.StorageTab;
-import com.gilfort.civmod.job.JobBuffer;
-import com.gilfort.civmod.api.JobCategory;
-import com.gilfort.civmod.job.JobStatus;
-import com.gilfort.civmod.logistics.ClerkStorage;
-import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
-import com.gilfort.civmod.settlement.JobAssignments;
-import com.gilfort.civmod.settlement.Requests;
-import com.gilfort.civmod.settlement.StockRules;
-import com.gilfort.civmod.logistics.CraftPlan;
-import com.gilfort.civmod.logistics.Pattern;
-import com.gilfort.civmod.logistics.Request;
-import com.gilfort.civmod.logistics.Producers;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Patterns;
+import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.StockRules;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -173,7 +174,7 @@ public final class CraftspersonGameTests {
             helper.assertTrue(checked == slot < 6, "Checkmark " + slot + " within the limit of 6: " + checked);
         }
         helper.assertFalse(Producers.canMake(level, settlement, Items.STICK), "No settler: nobody makes sticks");
-        com.gilfort.civmod.settlement.JobAssignments.assign(data, pos, java.util.UUID.randomUUID(), "Cora", settlement.id(), List.of());
+        com.gilfort.civmod.settlement.TestAssignments.assign(data, pos, java.util.UUID.randomUUID(), "Cora", settlement.id(), List.of());
         helper.assertTrue(Producers.canMake(level, settlement, Items.STICK), "Checked and staffed: sticks can be made");
         helper.assertFalse(Producers.canMake(level, settlement, Items.LADDER), "Not checked: no ladders");
 
@@ -265,7 +266,7 @@ public final class CraftspersonGameTests {
         helper.assertTrue(buffer.count() == 4, "Leftover 2 planks and 2 sticks stay in the buffer: " + buffer.stacks());
         helper.assertTrue(settler.getSkills().get(ModJobs.CRAFTSPERSON.get()).exp() + settler.getSkills().get(ModJobs.CRAFTSPERSON.get()).level() > 1,
                 "EXP gained");
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         settler.discard();
         helper.succeed();
     }
@@ -325,7 +326,7 @@ public final class CraftspersonGameTests {
         helper.assertTrue(Requests.forRule(settlement, clerk, 3).orElseThrow().claims().isEmpty(), "Leaving the JobBlock releases the claim");
         helper.assertTrue(((Container) level.getBlockEntity(craft)).countItem(Items.COBBLESTONE) == 2,
                 "Fetched inputs go to the own drop-off (the JobBlock)");
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         settler.discard();
         helper.succeed();
     }
@@ -349,7 +350,7 @@ public final class CraftspersonGameTests {
         List<Request.Missing> missing = Requests.forRule(settlement, clerk, 0).orElseThrow().missing();
         helper.assertTrue(missing.size() == 2 && missing.contains(new Request.Missing(Items.COBBLESTONE, 6))
                 && missing.contains(new Request.Missing(Items.STICK, 4)), "Missing: 6× Cobblestone, 4× Stick " + missing);
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         settler.discard();
         helper.succeed();
     }
@@ -390,7 +391,7 @@ public final class CraftspersonGameTests {
                 "Cora claims what fits its buffer (5 items each): " + split);
         helper.assertTrue(split.claimOf(cid.getUUID()).map(Request.Claim::amount).equals(Optional.of(49)), "Cid claims the rest: " + split);
         helper.assertTrue(split.amount() == 0, "Nothing open");
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         cora.discard();
         cid.discard();
         helper.assertTrue(Requests.get(settlement, request).orElseThrow().claims().isEmpty(), "Removed settlers release their claims");
@@ -528,7 +529,7 @@ public final class CraftspersonGameTests {
                             + settler.getWork().buffer(craft).stacks() + ", request " + Requests.get(settlement, request.id())
                             + ", at " + helper.relativePos(settler.blockPosition()));
             helper.assertTrue(chest.countItem(Items.OAK_PLANKS) == 0, "Planks taken from the linked chest");
-            JobAssignments.unassign(data, clerk);
+            TestAssignments.unassign(data, clerk);
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });
@@ -589,7 +590,7 @@ public final class CraftspersonGameTests {
                             + ", request " + Requests.get(settlement, request) + ", at " + helper.relativePos(settler.blockPosition()));
             helper.assertTrue(Requests.get(settlement, request).isEmpty(), "Request done");
             if (working) {
-                JobAssignments.unassign(data, clerk);
+                TestAssignments.unassign(data, clerk);
             }
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
@@ -650,7 +651,7 @@ public final class CraftspersonGameTests {
         settler.getWork().decideNow(level);
         helper.assertTrue(settler.getWork().status(craft) == JobStatus.FETCHING_INPUTS, "The counter is still reachable: "
                 + settler.getWork().status(craft) + ", request " + Requests.get(settlement, request));
-        JobAssignments.unassign(data, clerk);
+        TestAssignments.unassign(data, clerk);
         settler.discard();
         helper.succeed();
     }
@@ -662,7 +663,7 @@ public final class CraftspersonGameTests {
         settler.setCustomName(net.minecraft.network.chat.Component.literal(name));
         // Live decisions go straight to work (no morning trip for provisions).
         settler.getFood().setMorningDay(Math.floorDiv(helper.getLevel().getOverworldClockTime(), 24000L));
-        helper.assertTrue(JobAssignments.assign(data, craft, settler.getUUID(), name, settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
+        helper.assertTrue(TestAssignments.assign(data, craft, settler.getUUID(), name, settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
                 "Craftsperson assigned");
         settler.addJob(new SettlerJob(ModJobs.CRAFTSPERSON.get(), craft));
         return settler;
@@ -704,16 +705,16 @@ public final class CraftspersonGameTests {
         entity.clearContent();
         menu.setActiveTab(patterns.index());
 
-        patterns.edit(PatternTabData.Edit.setOutput(1, craftJob(), 3, Items.TORCH));
-        patterns.edit(PatternTabData.Edit.transfer(1, craftJob(), 5, Optional.empty(), List.of(Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.OAK_PLANKS,
+        patterns.edit(PatternsTabData.Edit.setOutput(1, craftJob(), 3, Items.TORCH));
+        patterns.edit(PatternsTabData.Edit.transfer(1, craftJob(), 5, Optional.empty(), List.of(Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.OAK_PLANKS,
                 Items.AIR, Items.AIR, Items.AIR, Items.AIR)));
-        PatternTabData tab = PatternTabData.of(level, pos, craftJob());
+        PatternsTabData tab = PatternsTabData.of(level, pos, craftJob());
         helper.assertTrue(tab.pattern(3).filter(Pattern::checked).map(Pattern::output).equals(Optional.of(Items.TORCH)), "Torch pattern checked: " + tab);
         helper.assertTrue(tab.pattern(5).map(Pattern::output).equals(Optional.of(Items.STICK)) && tab.pattern(5).orElseThrow().exact(),
                 "Transfer without a known recipe: exactly the shown items");
         helper.assertTrue(tab.limit() == Patterns.BASE_CHECKMARKS && tab.notice().isEmpty(), "Limit 6, nothing removed");
-        patterns.edit(PatternTabData.Edit.clear(1, craftJob(), 3));
-        helper.assertTrue(PatternTabData.of(level, pos, craftJob()).pattern(3).isEmpty(), "Cleared through the menu");
+        patterns.edit(PatternsTabData.Edit.clear(1, craftJob(), 3));
+        helper.assertTrue(PatternsTabData.of(level, pos, craftJob()).pattern(3).isEmpty(), "Cleared through the menu");
         helper.assertTrue(data.settlementAt(pos).isPresent(), "Still registered");
         helper.succeed();
     }
@@ -732,14 +733,14 @@ public final class CraftspersonGameTests {
         helper.assertTrue(pickaxe.checked(), "An iron pickaxe pattern is checked");
         SettlementBlock block = settlement.block(pos).orElseThrow();
         helper.assertFalse(Patterns.unusable(level, block, craftJob(), pickaxe), "Usable");
-        helper.assertTrue(PatternTabData.of(level, pos, craftJob()).filtered().isEmpty(), "Nothing filtered");
+        helper.assertTrue(PatternsTabData.of(level, pos, craftJob()).filtered().isEmpty(), "Nothing filtered");
         define(helper, pos, 1, Items.IRON_NUGGET);
-        JobAssignments.assign(data, pos, UUID.randomUUID(), "Cora", settlement.id(), List.of());
+        TestAssignments.assign(data, pos, UUID.randomUUID(), "Cora", settlement.id(), List.of());
         helper.assertTrue(Producers.canMake(level, settlement, Items.IRON_PICKAXE), "The Craftsperson makes iron pickaxes");
         CraftPlan plan = CraftPlan.plan(level, profile(), Patterns.usable(level, block, craftJob()), Items.IRON_PICKAXE, 1, Map.of(),
                 Map.of(Items.IRON_INGOT, 3, Items.STICK, 2));
         helper.assertTrue(plan.missing().isEmpty(), "Metal crafting with the ingots in stock: " + plan.missing());
-        JobAssignments.unassign(data, pos);
+        TestAssignments.unassign(data, pos);
         helper.succeed();
     }
 

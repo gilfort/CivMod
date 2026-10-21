@@ -13,13 +13,14 @@ import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModItems;
 import com.gilfort.civmod.registry.ModJobs;
-import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobAssignments.AssignResult;
+import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementRules;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -88,7 +89,7 @@ public final class MissionBoardGameTests {
     }
 
     private static AssignResult assign(SettlementData data, Settlement settlement, int settler, List<Job> currentJobs) {
-        return JobAssignments.assign(data, BOARD, SETTLERS[settler], "Settler " + settler, settlement.id(), currentJobs);
+        return TestAssignments.assign(data, BOARD, SETTLERS[settler], "Settler " + settler, settlement.id(), currentJobs);
     }
 
     /** A placed Mission Board founds or joins a settlement like any JobBlock and offers the Adventurer. */
@@ -137,10 +138,10 @@ public final class MissionBoardGameTests {
         helper.assertTrue(assign(data, settlement, 0, List.of(ModJobs.LUMBERJACK.get())) == AssignResult.OK, "A Lumberjack may join");
         helper.assertTrue(assign(data, settlement, 0, List.of(ModJobs.LUMBERJACK.get(), ModJobs.ADVENTURER.get())) == AssignResult.SAME_BLOCK,
                 "Already on this board");
-        helper.assertTrue(JobAssignments.assign(data, second, SETTLERS[0], "Settler 0", settlement.id(),
+        helper.assertTrue(TestAssignments.assign(data, second, SETTLERS[0], "Settler 0", settlement.id(),
                 List.of(ModJobs.LUMBERJACK.get(), ModJobs.ADVENTURER.get())) == AssignResult.MISSION_JOB, "An Adventurer cannot join a second board");
         Job specialization = ModJobs.REGISTRY.getValue(CivMod.id("gametest_mission_specialization"));
-        helper.assertTrue(JobAssignments.assign(data, second, SETTLERS[1], "Settler 1", settlement.id(), List.of(specialization))
+        helper.assertTrue(TestAssignments.assign(data, second, SETTLERS[1], "Settler 1", settlement.id(), List.of(specialization))
                 == AssignResult.MISSION_JOB, "Any Mission Job blocks a second board");
         helper.succeed();
     }
@@ -154,7 +155,7 @@ public final class MissionBoardGameTests {
         for (int i = 0; i < 3; i++) {
             assign(data, settlement, i, List.of());
         }
-        helper.assertTrue(JobAssignments.unassign(data, BOARD, SETTLERS[1]), "Settler 1 leaves");
+        helper.assertTrue(TestAssignments.unassign(data, BOARD, SETTLERS[1]), "Settler 1 leaves");
         helper.assertFalse(JobAssignments.isAssignee(data, BOARD, SETTLERS[1]), "Settler 1 is gone");
         helper.assertTrue(JobAssignments.isAssignee(data, BOARD, SETTLERS[0]) && JobAssignments.isAssignee(data, BOARD, SETTLERS[2]),
                 "The others stay");
@@ -242,10 +243,10 @@ public final class MissionBoardGameTests {
         settler.joinSettlement(data, settlement);
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_AXE));
         JobAssignments.cyclePoint(data, lumberjackBlock, helper.absolutePos(new BlockPos(4, 1, 1)), true, false);
-        helper.assertTrue(JobAssignments.assign(data, board, settler.getUUID(), "Tester", settlement.id(), List.of()) == AssignResult.OK,
+        helper.assertTrue(TestAssignments.assign(data, board, settler.getUUID(), "Tester", settlement.id(), List.of()) == AssignResult.OK,
                 "Board assignment failed");
         settler.addJob(new SettlerJob(ModJobs.ADVENTURER.get(), board));
-        helper.assertTrue(JobAssignments.assign(data, lumberjackBlock, settler.getUUID(), "Tester", settlement.id(),
+        helper.assertTrue(TestAssignments.assign(data, lumberjackBlock, settler.getUUID(), "Tester", settlement.id(),
                 List.of(ModJobs.ADVENTURER.get())) == AssignResult.OK, "Lumberjack assignment failed");
         settler.addJob(new SettlerJob(ModJobs.LUMBERJACK.get(), lumberjackBlock));
         helper.assertTrue(settler.getJobs().get(0).jobType() == ModJobs.ADVENTURER.get(), "The Mission Job is the top priority");

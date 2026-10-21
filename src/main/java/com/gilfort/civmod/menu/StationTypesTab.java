@@ -11,13 +11,13 @@ import net.minecraft.world.item.Items;
 
 /**
  * The "Station Types" tab of a Producing JobBlock (vault {@code Systems/JobBlock.md}): its 5 slots for unlock items,
- * with the player inventory to pick them from ({@link StationTypeTabData}, synced while the window is open). Shown when
+ * with the player inventory to pick them from ({@link StationTypesTabData}, synced while the window is open). Shown when
  * the Base Job has Specializations; a menu button per slot puts the carried item into it.
  */
 public final class StationTypesTab extends JobBlockTab {
 
-    private final TabData<StationTypeTabData> data = new TabData<>(StationTypeTabData.EMPTY,
-            (menu, level, pos) -> StationTypeTabData.of(level, pos), StationTypeTabData.Sync::new);
+    private final TabData<StationTypesTabData> data = new TabData<>(StationTypesTabData.EMPTY,
+            (menu, level, pos) -> StationTypesTabData.of(level, pos), StationTypesTabData.Sync::new);
     private final boolean specializations;
 
     /**
@@ -60,7 +60,7 @@ public final class StationTypesTab extends JobBlockTab {
     /**
      * @return the Station Types as last synced
      */
-    public TabData<StationTypeTabData> data() {
+    public TabData<StationTypesTabData> data() {
         return data;
     }
 

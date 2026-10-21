@@ -462,7 +462,7 @@ public class Settler extends PathfinderMob {
                     JobBlockSite.blockAt(level, job.jobBlock())
                             .filter(block -> !StationTypes.isUnlocked(block, job.jobType()) && block.assignee(getUUID())
                                     .filter(assignee -> assignee.job() == block.jobType()).isPresent())
-                            .ifPresent(block -> SettlementWorld.fallBackToBaseJob(level, job.jobBlock(), this));
+                            .ifPresent(block -> SettlementWorld.catchUpFallBack(level, job.jobBlock(), this));
                 }
             }
             return;
@@ -546,6 +546,7 @@ public class Settler extends PathfinderMob {
         SettlementData data = SettlementData.get(level);
         // Lost, not dropped: forgetting the jobs below would drop the buffers or deliver them into a drop-off.
         work.loseBuffers();
+        SettlementWorld.unassignAll(level, this);
         data.settlement(settlementId).ifPresent(settlement -> {
             settlement.bedOf(getUUID()).ifPresent(bed -> {
                 data.releaseBed(settlement, bed);
@@ -554,7 +555,6 @@ public class Settler extends PathfinderMob {
             data.removeMember(settlement, getUUID());
         });
         SettlerBeds.releaseStrawSpot(getUUID());
-        SettlementWorld.unassignAll(level, this);
         settlementId = -1;
         discard();
     }

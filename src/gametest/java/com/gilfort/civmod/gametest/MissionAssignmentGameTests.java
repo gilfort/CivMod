@@ -30,6 +30,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementWorld;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -128,7 +129,7 @@ public final class MissionAssignmentGameTests {
         settler.setCustomName(Component.literal(name));
         level.addFreshEntity(settler);
         settler.joinSettlement(data, settlement);
-        helper.assertTrue(JobAssignments.assign(data, board, settler.getUUID(), name, settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
+        helper.assertTrue(TestAssignments.assign(data, board, settler.getUUID(), name, settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
                 name + " joins the board");
         settler.addJob(new SettlerJob(ModJobs.ADVENTURER.get(), board));
         return settler;
@@ -167,7 +168,7 @@ public final class MissionAssignmentGameTests {
         helper.assertTrue(MissionOffers.assign(data, board, 0, marked, bob.getUUID(), adventurer, pool), "Reassigned to Bob");
         helper.assertTrue(entry(helper, 0).assignee().equals(Optional.of(bob.getUUID())), "Assigned to Bob now: " + entry(helper, 0));
 
-        helper.assertTrue(JobAssignments.unassign(data, board, bob.getUUID()), "Bob leaves the board");
+        helper.assertTrue(TestAssignments.unassign(data, board, bob.getUUID()), "Bob leaves the board");
         helper.assertTrue(entry(helper, 0).assignee().isEmpty() && entry(helper, 0).locked() && entry(helper, 0).marked(),
                 "Assignment removed, the mission stays marked and locked: " + entry(helper, 0));
         helper.assertTrue(MissionOffers.unlock(data, board, 0, marked), "The player unlocks it");
@@ -225,8 +226,8 @@ public final class MissionAssignmentGameTests {
         Settlement settlement = SettlementManager.place(data, board, ModJobs.ADVENTURER.get(), 2, 0L, RandomSource.create(0L),
                 SettlementManager.Listener.NONE).settlement();
         Job adventurer = ModJobs.ADVENTURER.get();
-        JobAssignments.assign(data, board, ALICE, "Alice", settlement.id(), List.of());
-        JobAssignments.assign(data, board, BOB, "Bob", settlement.id(), List.of());
+        TestAssignments.assign(data, board, ALICE, "Alice", settlement.id(), List.of());
+        TestAssignments.assign(data, board, BOB, "Bob", settlement.id(), List.of());
         // Only the Adventurer's missions: the example addon's Scout mission would take a place in the offer.
         Map<Identifier, Mission> pool = Missions.all(helper.getLevel().registryAccess()).entrySet().stream()
                 .filter(entry -> entry.getValue().jobs().contains(ModJobs.ADVENTURER.get())).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
@@ -235,7 +236,7 @@ public final class MissionAssignmentGameTests {
         MissionOffers.setMarked(data, board, 1, offer.get(1).mission(), true);
         MissionOffers.assign(data, board, 0, offer.get(0).mission(), ALICE, adventurer, pool);
         MissionOffers.assign(data, board, 1, offer.get(1).mission(), BOB, adventurer, pool);
-        JobAssignments.unassign(data, board, ALICE);
+        TestAssignments.unassign(data, board, ALICE);
 
         List<MissionOffer.Entry> restored = roundTrip(helper, data, board);
         helper.assertTrue(restored.get(0).assignee().isEmpty() && restored.get(0).locked(), "Lock without assignee kept: " + restored);

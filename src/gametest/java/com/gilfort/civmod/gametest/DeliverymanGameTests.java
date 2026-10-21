@@ -7,8 +7,8 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
-import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.DeliveryTask;
 import com.gilfort.civmod.logistics.Pickups;
@@ -24,8 +24,9 @@ import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementRules;
-import com.gilfort.civmod.settlement.Warehouses;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.gilfort.civmod.settlement.Warehouses.LinkResult;
+import com.gilfort.civmod.settlement.Warehouses;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -89,7 +90,7 @@ public final class DeliverymanGameTests {
     private static void deliveryman(GameTestHelper helper, BlockPos clerk, UUID settler) {
         SettlementData data = SettlementData.get(helper.getLevel());
         int settlement = data.settlementAt(clerk).orElseThrow().id();
-        helper.assertTrue(JobAssignments.assign(data, clerk, settler, "Dora", settlement, List.of(), ModJobs.DELIVERYMAN.get())
+        helper.assertTrue(TestAssignments.assign(data, clerk, settler, "Dora", settlement, List.of(), ModJobs.DELIVERYMAN.get())
                 == JobAssignments.AssignResult.OK, "Deliveryman assigned");
     }
 
@@ -327,7 +328,7 @@ public final class DeliverymanGameTests {
             helper.assertTrue(logs(dropOff) == 0 && Deliveries.get(settlement, chestPos).isEmpty(), "The drop-off is empty, its task done");
             helper.assertTrue(dora.getSkills().get(ModJobs.DELIVERYMAN.get()).exp() > 0 || dora.getSkills().get(ModJobs.DELIVERYMAN.get()).level() > 1,
                     "EXP per delivered stack");
-            JobAssignments.unassign(data, warehouse);
+            TestAssignments.unassign(data, warehouse);
             dora.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });
@@ -382,7 +383,7 @@ public final class DeliverymanGameTests {
                 .anyMatch(i -> jobInventory.getItem(i).is(Items.STONE_AXE)), "The Lumberjack's spare axe stays");
         helper.assertTrue(dora.getSkills().get(ModJobs.DELIVERYMAN.get()).exp() > 0 || dora.getSkills().get(ModJobs.DELIVERYMAN.get()).level() > 1,
                 "EXP in catch-up");
-        JobAssignments.unassign(data, warehouse);
+        TestAssignments.unassign(data, warehouse);
         dora.discard();
         // The level-5 border must not reach JobBlocks of later tests.
         SettlementManager.setLevel(data, warehouse, SettlementRules.MIN_LEVEL, SettlementManager.Listener.NONE);
