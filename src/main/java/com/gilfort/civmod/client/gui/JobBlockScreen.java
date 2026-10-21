@@ -92,7 +92,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
                 case RequestsTab requests -> new RequestsTabView(this, requests);
                 case DeliveriesTab deliveries -> new DeliveriesTabView(this, deliveries);
                 case StationTypesTab stations -> new StationTypesTabView(this, stations);
-                case PatternsTab job -> library;
+                case PatternsTab _ -> library;
             });
         }
         return List.copyOf(result);
