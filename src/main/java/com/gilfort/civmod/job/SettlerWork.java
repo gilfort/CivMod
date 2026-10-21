@@ -902,7 +902,7 @@ public final class SettlerWork {
                     delivery = job;
                     break;
                 }
-                workplace(job.jobBlock()).setStatus(JobStatus.IDLE);
+                setStatus(job.jobBlock(), JobStatus.IDLE);
             }
         } else {
             restPlace = null;
@@ -1036,15 +1036,15 @@ public final class SettlerWork {
                     moveTo(level, Activity.JOB, walk.target(), walk.reach());
                 }
                 targetReach = walk.reach();
-                walk.subject().ifPresentOrElse(subject -> workplace(jobBlock).setStatus(walk.status(), subject),
-                        () -> workplace(jobBlock).setStatus(walk.status()));
+                walk.subject().ifPresentOrElse(subject -> setStatus(jobBlock, walk.status(), subject),
+                        () -> setStatus(jobBlock, walk.status()));
                 yield true;
             }
             case JobStep.Deliver deliver -> startDelivery(level, job);
             case JobStep.Wait wait -> {
                 stop();
                 activeJob = job;
-                workplace(jobBlock).setStatus(wait.status());
+                setStatus(jobBlock, wait.status());
                 yield true;
             }
             case JobStep.Blocked blocked -> {
@@ -1052,16 +1052,16 @@ public final class SettlerWork {
                 yield false;
             }
             case JobStep.Skip skip -> {
-                skip.status().ifPresent(status -> workplace(jobBlock).setStatus(status));
+                skip.status().ifPresent(status -> setStatus(jobBlock, status));
                 yield false;
             }
             case JobStep.Pause pause -> {
-                workplace(jobBlock).setStatus(pause.status());
+                setStatus(jobBlock, pause.status());
                 settler.getNavigation().stop();
                 yield true;
             }
             case JobStep.Hold hold -> {
-                workplace(jobBlock).setStatus(hold.status());
+                setStatus(jobBlock, hold.status());
                 yield true;
             }
             case JobStep.AtTarget at -> {
@@ -1088,6 +1088,28 @@ public final class SettlerWork {
     }
 
     // ---------------------------------------------------------------- shared parts used by the category loops
+
+    /**
+     * Sets a job's status: the one way to do it. Job steps set it through {@link #apply}; a loop calls this only for
+     * what happens outside a decision (a mission reserved or given back, a settler back from its mission, catch-up).
+     *
+     * @param jobBlock the job's JobBlock
+     * @param status   the new status
+     */
+    void setStatus(BlockPos jobBlock, JobStatus status) {
+        workplace(jobBlock).setStatus(status);
+    }
+
+    /**
+     * Sets a job's status naming what it is about ({@link #setStatus(BlockPos, JobStatus)}).
+     *
+     * @param jobBlock the job's JobBlock
+     * @param status   the new status
+     * @param subject  what the status is about
+     */
+    void setStatus(BlockPos jobBlock, JobStatus status, net.minecraft.network.chat.Component subject) {
+        workplace(jobBlock).setStatus(status, subject);
+    }
 
     /**
      * @param jobBlock a JobBlock position
@@ -1148,11 +1170,11 @@ public final class SettlerWork {
         if (loop(job) == deliverymen) {
             // A Deliveryman unloads into its store as staff: at the block, no counter.
             visit = ClerkStorage.blockVisit(deliverymen.unloadTarget(level, job));
-            workplace(job.jobBlock()).setStatus(JobStatus.UNLOADING, deliverymen.unloadName(level, job));
+            setStatus(job.jobBlock(), JobStatus.UNLOADING, deliverymen.unloadName(level, job));
         } else {
             BlockPos dropOff = JobBlockSite.at(level, job.jobBlock()).map(JobBlockSite::dropOff).orElse(job.jobBlock());
             visit = reachableVisit(level, dropOff, ClerkStorage.visit(level, dropOff, DayClock.dayTime(level)));
-            workplace(job.jobBlock()).setStatus(JobStatus.DELIVERING);
+            setStatus(job.jobBlock(), JobStatus.DELIVERING);
         }
         if (activity != Activity.DELIVER || !visit.target().equals(target)) {
             deliveryVisit = visit;
