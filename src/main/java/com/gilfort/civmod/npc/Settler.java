@@ -546,6 +546,7 @@ public class Settler extends PathfinderMob {
         SettlementData data = SettlementData.get(level);
         // Lost, not dropped: forgetting the jobs below would drop the buffers or deliver them into a drop-off.
         work.loseBuffers();
+        SettlementWorld.unassignAll(level, this);
         data.settlement(settlementId).ifPresent(settlement -> {
             settlement.bedOf(getUUID()).ifPresent(bed -> {
                 data.releaseBed(settlement, bed);
@@ -554,7 +555,6 @@ public class Settler extends PathfinderMob {
             data.removeMember(settlement, getUUID());
         });
         SettlerBeds.releaseStrawSpot(getUUID());
-        SettlementWorld.unassignAll(level, this);
         settlementId = -1;
         discard();
     }
