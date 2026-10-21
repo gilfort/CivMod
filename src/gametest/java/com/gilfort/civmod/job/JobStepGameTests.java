@@ -44,6 +44,7 @@ public final class JobStepGameTests {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "job_step_clerk_walks_to_counter", JobStepGameTests::clerkWalksToCounter);
             register(helper, "job_step_lumberjack_blocked_without_tool", JobStepGameTests::lumberjackBlockedWithoutTool);
+            register(helper, "job_step_adventurer_waits_for_departure", JobStepGameTests::adventurerWaitsForDeparture);
         });
     }
 
@@ -101,6 +102,31 @@ public final class JobStepGameTests {
         helper.assertFalse(work.apply(level, job, step), "A blocked job leaves the settler to its next priority");
         helper.assertTrue(work.status(jobBlock) == JobStatus.NO_TOOL, "The shell blocks the job: " + work.status(jobBlock));
         helper.assertTrue(work.workplace(jobBlock).isBlocked(level.getGameTime()), "Retried after a while");
+        settler.discard();
+        helper.succeed();
+    }
+
+    /**
+     * An Adventurer with a reserved mission after the departure time waits at the board: the loop answers "wait", the
+     * shell keeps it busy with the job, standing.
+     */
+    private static void adventurerWaitsForDeparture(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.MISSION_BOARD.get());
+        BlockPos board = helper.absolutePos(new BlockPos(1, 1, 1));
+        Settler settler = settler(helper, board, new BlockPos(3, 1, 3));
+        SettlerJob job = new SettlerJob(ModJobs.ADVENTURER.get(), board);
+        settler.addJob(job);
+        SettlerWork work = settler.getWork();
+        work.missions().reserve(board, CivMod.id("job_step_test"), false);
+        JobBlockSite site = JobBlockSite.at(level, board).orElseThrow();
+
+        JobStep step = Objects.requireNonNull(work.loop(job)).plan(level, job, site, DayClock.day(level), MissionLoop.DEPARTURE_END);
+
+        helper.assertTrue(step instanceof JobStep.Wait wait && wait.status() == JobStatus.WAITING_DEPARTURE, "Waits for the departure: " + step);
+        helper.assertTrue(work.activeJob().isEmpty(), "The loop does not set the active job");
+        helper.assertTrue(work.apply(level, job, step), "Waiting keeps the settler busy with the job");
+        helper.assertTrue(work.activeJob().filter(job::equals).isPresent(), "The shell sets the active job");
         settler.discard();
         helper.succeed();
     }

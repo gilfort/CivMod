@@ -607,7 +607,7 @@ public final class SettlerWork {
             }
             if (activity != Activity.JOB) {
                 // Walking out was interrupted (loaded again, or not started): it goes on before anything else.
-                missions.resumeLeaving(level);
+                missions.resumeLeaving().ifPresent(job -> apply(level, job, missions.leave(level)));
                 return;
             }
         }
