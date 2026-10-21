@@ -318,8 +318,11 @@ public final class BiomeBonusGameTests {
                 })
                 .thenWaitUntil(() -> {
                     BiomeBonus today = CivModApi.biomeBonus(settler, jobBlock);
+                    BlockPos plains = helper.absolutePos(plainsRelative);
                     helper.assertTrue(today.biome().equals(Optional.of(Biomes.PLAINS)) && today.isEmpty(),
-                            "The work place chosen anew reads its own biome: " + today);
+                            "The work place chosen anew reads its own biome: " + today + "; work places " + settler.getWork().snapshot().workPlaces()
+                                    + ", second point " + plains + " in " + level.getBiome(plains).unwrapKey().map(ResourceKey::identifier)
+                                    + ", settler at " + settler.blockPosition());
                 })
                 .thenExecute(() -> {
                     settler.discard();
