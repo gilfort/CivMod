@@ -1,0 +1,12 @@
+{
+  "jobs": [
+    "civmod:fisherman"
+  ],
+  "biomes": "#c:is_cold",
+  "double_drop": [
+    {
+      "items": "minecraft:salmon",
+      "chance": 0.5
+    }
+  ]
+}

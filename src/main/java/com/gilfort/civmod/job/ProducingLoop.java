@@ -455,7 +455,7 @@ final class ProducingLoop implements CategoryLoop {
             level.playSound(null, station, state.getSoundType().getHitSound(), SoundSource.NEUTRAL, 0.5F, 1.0F);
         }
         Workplace workplace = shell.workplace(job.jobBlock());
-        double progress = workplace.production() + speed(job) / 20.0;
+        double progress = workplace.production() + speed(level, job) / 20.0;
         if (progress < workTime(level, job, round)) {
             workplace.setProduction(progress);
             return JobStep.WORK;
@@ -600,9 +600,10 @@ final class ProducingLoop implements CategoryLoop {
         }
     }
 
-    /** Operations per second: the shared speed formula × the job factor. */
-    private double speed(SettlerJob job) {
-        return LumberjackOutput.speed(shell.effectiveLevel(job)) * job.jobType().jobFactor();
+    /** Operations per second: the shared speed formula × the job factor × the biome bonus of the station of the day. */
+    private double speed(ServerLevel level, SettlerJob job) {
+        return LumberjackOutput.speed(shell.effectiveLevel(job)) * job.jobType().jobFactor()
+                * shell.workplace(job.jobBlock()).biomeBonus(level, job.jobType()).speed().value();
     }
 
     private static ProducingProfile profile(SettlerJob job) {
@@ -743,7 +744,7 @@ final class ProducingLoop implements CategoryLoop {
                 }
                 continue;
             }
-            double perTick = speed(job) / 20.0;
+            double perTick = speed(level, job) / 20.0;
             while (round.phase == Round.Phase.CRAFT && ticks > 0.0 && workplace.round() == round) {
                 double need = (workTime(level, job, round) - workplace.production()) / perTick;
                 if (need > ticks) {

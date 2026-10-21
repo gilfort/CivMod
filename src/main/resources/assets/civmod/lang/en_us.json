@@ -207,6 +207,8 @@
   "civmod.gui.found.water_penalty": "−%s %% productivity",
   "civmod.gui.found.treasure": "Treasure: %s %%",
   "civmod.gui.found.treasure_none": "Treasure: —",
+  "civmod.rare_group.ore": "Ore",
+  "civmod.rare_group.treasure": "Treasure",
   "civmod.gui.found.help.toggle": "Right-click: exclude / include",
   "civmod.gui.job_block.level_cap": "Level %s / %s – skill cap %s",
   "civmod.gui.job_block.upgrade.to": "Upgrade to level %s",

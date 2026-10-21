@@ -7,6 +7,7 @@ import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.api.BiomeBonus;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.logistics.Stock;
@@ -26,7 +27,7 @@ import net.minecraft.world.item.ItemStack;
  * The production rules of a Resource Collection Job (vault {@code Systems/Resource Collection Jobs.md},
  * {@code Systems/JobSkill Level.md}, catch-up "same rules as live play" in {@code Systems/Settlement.md}): advances a
  * job by a number of work ticks and reports what came out. Live play calls it every work tick, catch-up per simulated
- * hour; this is the only copy of speed × productivity, tool choice, tool wear and EXP.
+ * hour; this is the only copy of speed × productivity × biome bonus, tool choice, tool wear, double drops and EXP.
  * <p>
  * Production runs one unit at a time: the job's fractional accumulator (kept in its {@link Workplace} between calls)
  * fills at speed × productivity per second; each full unit is one {@link ResourceCollectionProfile#produce} roll with the best tool
@@ -162,6 +163,7 @@ final class WorkRules {
         }
         int cap = site.skillCap();
         int skillLevel = settler.getSkills().effectiveLevel(job.jobType(), cap);
+        BiomeBonus bonus = workplace.biomeBonus(level, job.jobType());
         double accumulated = workplace.production();
         double ticks = workTicks;
         int rolls = 0;
@@ -171,7 +173,7 @@ final class WorkRules {
         boolean levelUp = false;
         End end = End.NONE;
         while (true) {
-            double perTick = profile.speed(skillLevel, tool.get()) * profile.productivity(scan) / 20.0;
+            double perTick = profile.speed(skillLevel, tool.get()) * profile.productivity(scan) * bonus.speed().value() / 20.0;
             if (perTick <= 0.0 || (1.0 - accumulated) / perTick > ticks) {
                 accumulated += Math.max(0.0, perTick) * ticks;
                 ticks = 0.0;
@@ -188,7 +190,8 @@ final class WorkRules {
             ticks -= (1.0 - accumulated) / perTick;
             accumulated = 0.0;
             ResourceCollectionProfile.Context context = new ResourceCollectionProfile.Context(level, settler, scan, poi, rollTool,
-                    site.block().excluded(), skillLevel, atMax, type -> workplace.dropped(level, profile, poi, type, rollTool));
+                    site.block().excluded(), skillLevel, atMax, type -> workplace.dropped(level, profile, poi, type, rollTool),
+                    bonus.rareChance().value());
             Optional<ResourceCollectionProfile.Produced> produced = profile instanceof SecondaryToolProfile withSecondary
                     ? withSecondary.produce(context, withSecondary.secondaryTool(site.block()).flatMap(kind -> SettlerTools.best(settler, kind)))
                     : profile.produce(context);
@@ -196,7 +199,8 @@ final class WorkRules {
             if (produced.isPresent()) {
                 SettlerTools.wear(level, settler, produced.get().worn());
                 wear++;
-                List<ItemStack> stacks = produced.get().stacks();
+                // A lost double drop (negative chance) yields nothing, but counts as work like an empty roll.
+                List<ItemStack> stacks = bonus.applyDoubleDrop(produced.get().stacks(), level.getRandom());
                 // An empty roll (fully excluded group) yields nothing but earns the EXP of the activity.
                 boolean room = true;
                 if (!stacks.isEmpty()) {

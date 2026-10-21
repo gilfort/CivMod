@@ -14,6 +14,7 @@ import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.BiomeBonus;
 import com.gilfort.civmod.api.BlockingReason;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
@@ -451,6 +452,24 @@ public final class SettlerWork {
      */
     public JobStatus status(BlockPos jobBlock) {
         return existingWorkplace(jobBlock).map(Workplace::status).orElse(JobStatus.IDLE);
+    }
+
+    /**
+     * The biome bonuses acting on the settler's job at a JobBlock today (vault {@code Systems/JobBlock.md}): read at
+     * the Job's biome position, for the work place once per day of the work place.
+     *
+     * @param level    the level
+     * @param jobBlock a JobBlock position
+     * @return the bonuses, {@link BiomeBonus#NONE} if the settler holds no job there or has no work place yet
+     */
+    public BiomeBonus biomeBonus(ServerLevel level, BlockPos jobBlock) {
+        Optional<SettlerJob> job = jobs().stream().filter(held -> held.jobBlock().equals(jobBlock)).findFirst();
+        if (job.isEmpty()) {
+            return BiomeBonus.NONE;
+        }
+        Job type = job.get().jobType();
+        return existingWorkplace(jobBlock).map(workplace -> workplace.biomeBonus(level, type))
+                .orElseGet(() -> BiomeBonuses.today(level, type, jobBlock, null));
     }
 
     /**

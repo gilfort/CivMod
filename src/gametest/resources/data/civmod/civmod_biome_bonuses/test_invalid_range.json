@@ -1,0 +1,5 @@
+{
+  "jobs": ["civmod:gametest_dummy"],
+  "biomes": "minecraft:mushroom_fields",
+  "speed": 20.0
+}

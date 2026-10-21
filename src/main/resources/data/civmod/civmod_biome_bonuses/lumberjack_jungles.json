@@ -1,0 +1,12 @@
+{
+  "jobs": [
+    "civmod:lumberjack"
+  ],
+  "biomes": "#minecraft:is_jungle",
+  "double_drop": [
+    {
+      "items": "#minecraft:jungle_logs",
+      "chance": 0.15
+    }
+  ]
+}

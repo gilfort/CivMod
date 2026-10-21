@@ -11,7 +11,10 @@ import java.util.function.Supplier;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.api.BiomeBonus;
+import com.gilfort.civmod.api.BiomePosition;
 import com.gilfort.civmod.api.BlockingReason;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.settlement.JobAssignments;
@@ -29,8 +32,8 @@ import net.minecraft.world.item.enchantment.ItemEnchantments;
 /**
  * What a settler keeps for one job at its JobBlock (vault {@code Systems/Resource Collection Jobs.md},
  * {@code Systems/JobBlock.md}): the buffer, the status shown in the job tab, the time a blocked job waits, the work
- * place of the day and the scan lifecycle (requested, scanning, ready, rescanned per day or when centre or radius
- * change), and for a Producing Job the current {@link Round}, the requests skipped for a while and a pending trip to
+ * place of the day with its biome bonuses and the scan lifecycle (requested, scanning, ready, rescanned per day or when
+ * centre or radius change), and for a Producing Job the current {@link Round}, the requests skipped for a while and a pending trip to
  * the drop-off. The {@link ScanScheduler} is only used from here.
  * <p>
  * The {@link SettlerWork} holds one Workplace per JobBlock; forgetting the job drops the whole Workplace, so nothing of
@@ -47,6 +50,10 @@ final class Workplace {
     private record ScanKey(BlockPos center, int radius, long day) {
     }
 
+    /** The biome bonuses read for a day of the work place and a Job. */
+    private record BonusOfDay(long day, Job job, BiomeBonus bonus) {
+    }
+
     private final BlockPos jobBlock;
     private JobBuffer buffer = new JobBuffer();
     private JobStatus status = JobStatus.IDLE;
@@ -57,6 +64,8 @@ final class Workplace {
     private long blockedUntil;
     private @Nullable BlockPos workPlaceOfDay;
     private long workPlaceDay = -1L;
+    /** The biome bonuses of the day's work place, read once per day of the work place (not saved). */
+    private @Nullable BonusOfDay bonusOfDay;
     private @Nullable ScanResult scan;
     private @Nullable ScanKey scanKey;
     /** The dropped item of each resource type per tool kind, for the Max checks of every roll; cleared with the scan. */
@@ -263,6 +272,32 @@ final class Workplace {
     }
 
     /**
+     * The biome bonuses acting on the job today ({@link BiomeBonuses#today}). With the work place as biome position
+     * they are read once for the day the work place was chosen and kept for that day: a biome change at the place or
+     * a data reload takes effect with the next day's choice.
+     *
+     * @param level the level
+     * @param job   the Job held at the JobBlock
+     * @return the bonuses ({@link BiomeBonus#NONE} while no work place is chosen)
+     */
+    BiomeBonus biomeBonus(ServerLevel level, Job job) {
+        if (BiomeBonuses.position(job) != BiomePosition.WORK_PLACE) {
+            return BiomeBonuses.today(level, job, jobBlock, null);
+        }
+        BonusOfDay cached = bonusOfDay;
+        if (cached != null && cached.day() == workPlaceDay && cached.job() == job) {
+            return cached.bonus();
+        }
+        BlockPos place = workPlaceOfDay;
+        if (place == null) {
+            return BiomeBonus.NONE;
+        }
+        BiomeBonus bonus = BiomeBonuses.today(level, job, jobBlock, place);
+        bonusOfDay = new BonusOfDay(workPlaceDay, job, bonus);
+        return bonus;
+    }
+
+    /**
      * Requests a scan around the work place unless the current or pending one was made for the same centre, radius
      * and (for daily scans) day.
      *
@@ -385,6 +420,7 @@ final class Workplace {
         buffer = new JobBuffer();
         workPlaceOfDay = null;
         workPlaceDay = -1L;
+        bonusOfDay = null;
         scan = null;
         scanKey = null;
         scanning = null;
@@ -405,6 +441,8 @@ final class Workplace {
     void restoreWorkPlace(SettlerWork.WorkPlaceEntry saved) {
         workPlaceOfDay = saved.poi();
         workPlaceDay = saved.day();
+        // Not saved: read again at the restored work place.
+        bonusOfDay = null;
     }
 
     /**

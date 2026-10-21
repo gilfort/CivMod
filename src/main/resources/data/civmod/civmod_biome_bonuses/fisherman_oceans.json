@@ -1,0 +1,7 @@
+{
+  "jobs": [
+    "civmod:fisherman"
+  ],
+  "biomes": "#minecraft:is_ocean",
+  "rare_chance": 1.1
+}

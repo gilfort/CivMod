@@ -1,0 +1,10 @@
+{
+  "jobs": ["civmod:gametest_dummy"],
+  "biomes": "minecraft:mushroom_fields",
+  "speed": 1.1,
+  "rare_chance": 1.1,
+  "double_drop": [
+    { "items": "minecraft:stick", "chance": 0.5 },
+    { "items": "minecraft:dirt", "chance": -0.6 }
+  ]
+}

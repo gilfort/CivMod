@@ -47,7 +47,29 @@ public final class MinerOutput {
      */
     public static Roll roll(MineScan.Result scan, Identifier poi, Predicate<Identifier> harvestable, Set<Identifier> excluded, int skillLevel,
             MinerWeights weights, RandomSource random) {
-        boolean stone = random.nextDouble() < weights.stoneShare(skillLevel);
+        return roll(scan, poi, harvestable, excluded, skillLevel, weights, 1.0, random);
+    }
+
+    /**
+     * Rolls the block type of one resource with a biome bonus on the ore share.
+     *
+     * @param scan        the scan result
+     * @param poi         the work place block type
+     * @param harvestable whether the current pickaxe can harvest a type
+     * @param excluded    the types excluded at the JobBlock
+     * @param skillLevel  the skill level
+     * @param weights     the weights
+     * @param rareChance  the factor on the ore share (1 − stone share), capped at an ore share of 1
+     * @param random      random source
+     * @return the roll
+     */
+    public static Roll roll(MineScan.Result scan, Identifier poi, Predicate<Identifier> harvestable, Set<Identifier> excluded, int skillLevel,
+            MinerWeights weights, double rareChance, RandomSource random) {
+        double stoneShare = weights.stoneShare(skillLevel);
+        if (rareChance != 1.0) {
+            stoneShare = 1.0 - Math.min(1.0, (1.0 - stoneShare) * rareChance);
+        }
+        boolean stone = random.nextDouble() < stoneShare;
         List<Identifier> found = (stone ? scan.stones() : scan.ores()).stream().filter(harvestable).sorted().toList();
         if (found.isEmpty()) {
             return Roll.NOTHING;

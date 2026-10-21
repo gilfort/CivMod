@@ -1,0 +1,5 @@
+{
+  "jobs": ["civmod:miner"],
+  "biomes": "minecraft:mushroom_fields",
+  "rare_chance": 3.0
+}

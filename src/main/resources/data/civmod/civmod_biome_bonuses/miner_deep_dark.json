@@ -1,0 +1,7 @@
+{
+  "jobs": [
+    "civmod:miner"
+  ],
+  "biomes": "minecraft:deep_dark",
+  "rare_chance": 1.2
+}

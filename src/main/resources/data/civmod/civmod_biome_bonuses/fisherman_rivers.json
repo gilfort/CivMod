@@ -1,0 +1,7 @@
+{
+  "jobs": [
+    "civmod:fisherman"
+  ],
+  "biomes": "#minecraft:is_river",
+  "speed": 1.1
+}

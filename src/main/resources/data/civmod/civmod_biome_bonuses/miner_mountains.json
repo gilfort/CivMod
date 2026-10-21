@@ -1,0 +1,7 @@
+{
+  "jobs": [
+    "civmod:miner"
+  ],
+  "biomes": "#c:is_mountain",
+  "rare_chance": 1.1
+}

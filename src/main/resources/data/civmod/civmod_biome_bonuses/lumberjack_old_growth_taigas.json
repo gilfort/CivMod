@@ -1,0 +1,15 @@
+{
+  "jobs": [
+    "civmod:lumberjack"
+  ],
+  "biomes": [
+    "minecraft:old_growth_pine_taiga",
+    "minecraft:old_growth_spruce_taiga"
+  ],
+  "double_drop": [
+    {
+      "items": "#minecraft:spruce_logs",
+      "chance": 0.15
+    }
+  ]
+}

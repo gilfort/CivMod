@@ -1,0 +1,6 @@
+{
+  "jobs": ["civmod:gametest_dummy"],
+  "biomes": "#minecraft:is_badlands",
+  "speed": 2.0,
+  "rare_chance": 3.0
+}
