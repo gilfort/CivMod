@@ -176,7 +176,7 @@ public final class SettlementWorld {
      * @param jobBlock the JobBlock position
      * @param settler  the settler
      */
-    public static void fallBackToBaseJob(ServerLevel level, BlockPos jobBlock, Settler settler) {
+    public static void catchUpFallBack(ServerLevel level, BlockPos jobBlock, Settler settler) {
         fallBackToBaseJob(level, jobBlock, settler.getUUID(), Optional.of(settler));
     }
 

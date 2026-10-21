@@ -462,7 +462,7 @@ public class Settler extends PathfinderMob {
                     JobBlockSite.blockAt(level, job.jobBlock())
                             .filter(block -> !StationTypes.isUnlocked(block, job.jobType()) && block.assignee(getUUID())
                                     .filter(assignee -> assignee.job() == block.jobType()).isPresent())
-                            .ifPresent(block -> SettlementWorld.fallBackToBaseJob(level, job.jobBlock(), this));
+                            .ifPresent(block -> SettlementWorld.catchUpFallBack(level, job.jobBlock(), this));
                 }
             }
             return;
