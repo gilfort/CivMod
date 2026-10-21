@@ -139,7 +139,32 @@ public interface ResourceCollectionProfile extends CategoryProfile {
     }
 
     /**
-     * Produces one resource.
+     * The rare group of the Job's roll (vault {@code Systems/JobBlock.md}, decisions on biome bonuses): a roll that first
+     * picks a group and then a type in it has a rare group (Miner: ores instead of stone; Fisherman: treasure instead
+     * of fish), whose chance a biome bonus's {@code rare_chance} multiplies. A profile with one applies the factor in
+     * {@link #produce} with {@link Context#rareChance(double)}; without one (the default) {@code rare_chance} has no
+     * effect on the Job.
+     *
+     * @return the name of the rare group ("Ore", "Treasure"), empty if the Job has none
+     */
+    default Optional<Component> rareGroup() {
+        return Optional.empty();
+    }
+
+    /**
+     * Whether a found type belongs to the {@link #rareGroup()}, so a {@code rare_chance} bonus acts on it (the Found tab
+     * marks it with a star). None by default.
+     *
+     * @param scan the scan result
+     * @param type a type the Found tab lists ({@link #found})
+     * @return whether it is in the rare group (Miner: an ore)
+     */
+    default boolean inRareGroup(ScanResult scan, Identifier type) {
+        return false;
+    }
+
+    /**
+     * Produces one resource. The loop applies the biome bonus's {@code double_drop} to the returned stacks.
      *
      * @param context the production context
      * @return the produced items and the tool to wear, empty if nothing was produced
@@ -286,9 +311,37 @@ public interface ResourceCollectionProfile extends CategoryProfile {
      * @param skillLevel the skill level
      * @param atMax      the items at their Max at the Home Clerk (left out of the roll)
      * @param dropped    the item a resource type drops with the tool ({@link #dropped}, cached per scan)
+     * @param rareChanceFactor the biome bonuses' factor on the chance of the {@link #rareGroup()} (1 without)
      */
     @ApiStatus.Experimental
-    record Context(ServerLevel level, PathfinderMob settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Set<Identifier> excluded, int skillLevel, Set<Item> atMax, Function<Identifier, Item> dropped) {
+    record Context(ServerLevel level, PathfinderMob settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Set<Identifier> excluded, int skillLevel, Set<Item> atMax, Function<Identifier, Item> dropped,
+            double rareChanceFactor) {
+
+        /**
+         * A context without biome bonuses (rare chance factor 1).
+         *
+         * @param level      the level
+         * @param settler    the settler
+         * @param scan       the scan result
+         * @param poi        the work place
+         * @param tool       the job's tool
+         * @param excluded   the types excluded at the JobBlock
+         * @param skillLevel the skill level
+         * @param atMax      the items at their Max at the Home Clerk
+         * @param dropped    the item a resource type drops with the tool
+         */
+        public Context(ServerLevel level, PathfinderMob settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Set<Identifier> excluded,
+                int skillLevel, Set<Item> atMax, Function<Identifier, Item> dropped) {
+            this(level, settler, scan, poi, tool, excluded, skillLevel, atMax, dropped, 1.0);
+        }
+
+        /**
+         * @param baseChance the chance of the rare group without biome bonuses
+         * @return the chance with the {@link #rareChanceFactor()}, capped at 1.0
+         */
+        public double rareChance(double baseChance) {
+            return BiomeBonus.cappedChance(baseChance, rareChanceFactor);
+        }
     }
 
     /**

@@ -1,0 +1,12 @@
+{
+  "jobs": [
+    "civmod:miner"
+  ],
+  "biomes": "minecraft:dripstone_caves",
+  "double_drop": [
+    {
+      "items": "#c:raw_materials/copper",
+      "chance": 0.5
+    }
+  ]
+}

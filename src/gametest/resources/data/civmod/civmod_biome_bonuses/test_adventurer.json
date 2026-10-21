@@ -1,0 +1,5 @@
+{
+  "jobs": ["civmod:adventurer"],
+  "biomes": "minecraft:mushroom_fields",
+  "speed": 2.0
+}

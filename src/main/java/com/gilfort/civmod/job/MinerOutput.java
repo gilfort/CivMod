@@ -5,6 +5,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
 
+import com.gilfort.civmod.api.BiomeBonus;
+
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
 
@@ -34,7 +36,7 @@ public final class MinerOutput {
     }
 
     /**
-     * Rolls the block type of one resource.
+     * Rolls the block type of one resource, with a biome bonus on the ore share.
      *
      * @param scan        the scan result
      * @param poi         the work place block type
@@ -42,12 +44,17 @@ public final class MinerOutput {
      * @param excluded    the types excluded at the JobBlock
      * @param skillLevel  the skill level
      * @param weights     the weights
+     * @param rareChance  the factor on the ore share (1 − stone share), capped at an ore share of 1 (1 without a bonus)
      * @param random      random source
      * @return the roll
      */
     public static Roll roll(MineScan.Result scan, Identifier poi, Predicate<Identifier> harvestable, Set<Identifier> excluded, int skillLevel,
-            MinerWeights weights, RandomSource random) {
-        boolean stone = random.nextDouble() < weights.stoneShare(skillLevel);
+            MinerWeights weights, double rareChance, RandomSource random) {
+        double stoneShare = weights.stoneShare(skillLevel);
+        if (rareChance != 1.0) {
+            stoneShare = 1.0 - BiomeBonus.cappedChance(1.0 - stoneShare, rareChance);
+        }
+        boolean stone = random.nextDouble() < stoneShare;
         List<Identifier> found = (stone ? scan.stones() : scan.ores()).stream().filter(harvestable).sorted().toList();
         if (found.isEmpty()) {
             return Roll.NOTHING;

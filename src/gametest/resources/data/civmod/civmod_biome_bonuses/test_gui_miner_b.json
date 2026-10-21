@@ -1,0 +1,5 @@
+{
+  "jobs": ["civmod:miner"],
+  "biomes": "minecraft:desert",
+  "double_drop": [ { "items": "minecraft:raw_iron", "chance": 0.25 } ]
+}

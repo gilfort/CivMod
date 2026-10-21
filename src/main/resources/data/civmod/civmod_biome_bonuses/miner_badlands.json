@@ -1,0 +1,12 @@
+{
+  "jobs": [
+    "civmod:miner"
+  ],
+  "biomes": "#minecraft:is_badlands",
+  "double_drop": [
+    {
+      "items": "#c:raw_materials/gold",
+      "chance": 0.5
+    }
+  ]
+}

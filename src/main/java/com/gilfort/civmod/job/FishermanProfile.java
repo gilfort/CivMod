@@ -206,11 +206,17 @@ public final class FishermanProfile implements ResourceCollectionProfile {
         return false;
     }
 
+    /** Treasure instead of fish: {@code rare_chance} multiplies the treasure chance. */
+    @Override
+    public Optional<Component> rareGroup() {
+        return Optional.of(Component.translatable("civmod.rare_group.treasure"));
+    }
+
     @Override
     public Optional<Produced> produce(Context context) {
         ServerLevel level = context.level();
         boolean treasure = level.getRandom().nextDouble()
-                < treasureChance(context.skillLevel(), enchantmentLevel(context.tool(), Enchantments.LUCK_OF_THE_SEA));
+                < context.rareChance(treasureChance(context.skillLevel(), enchantmentLevel(context.tool(), Enchantments.LUCK_OF_THE_SEA)));
         List<ItemStack> items;
         if (treasure) {
             LootParams params = new LootParams.Builder(level)

@@ -1,0 +1,6 @@
+{
+  "jobs": ["civmod:miner"],
+  "biomes": "minecraft:mushroom_fields",
+  "rare_chance": 2.0,
+  "double_drop": [ { "items": ["minecraft:cobblestone", "minecraft:granite"], "chance": 1.0 } ]
+}

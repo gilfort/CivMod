@@ -73,7 +73,7 @@ public final class FishermanGameTests {
     /**
      * Ground of stone (y 0–1) with a 5×5 pool, 2 deep (y 1–2), its surface level with the walkable ground (y 2).
      */
-    private static void pond(GameTestHelper helper) {
+    static void pond(GameTestHelper helper) {
         for (int x = 0; x <= SIZE; x++) {
             for (int z = 0; z <= SIZE; z++) {
                 boolean pool = x >= POOL_MIN && x <= POOL_MAX && z >= POOL_MIN && z <= POOL_MAX;

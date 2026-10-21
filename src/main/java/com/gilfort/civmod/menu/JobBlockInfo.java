@@ -2,14 +2,19 @@ package com.gilfort.civmod.menu;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
+import java.util.stream.Stream;
 
 import com.gilfort.civmod.CivMod;
-import com.gilfort.civmod.block.UpgradeCosts;
+import com.gilfort.civmod.api.BiomeBonus;
+import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
+import com.gilfort.civmod.block.UpgradeCosts;
+import com.gilfort.civmod.job.BiomeBonuses;
 import com.gilfort.civmod.mission.MissionOffer;
 import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.mission.OutcomeRules;
@@ -22,24 +27,20 @@ import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
-import net.minecraft.tags.TagKey;
-import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.item.ItemStack;
-
-import java.util.Optional;
-import java.util.stream.Stream;
-
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.ComponentSerialization;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * Snapshot of a JobBlock's state shown in the info tab; sent to the client when the menu opens.
@@ -57,11 +58,76 @@ import net.minecraft.server.level.ServerLevel;
  * @param byDeliveryman  whether Deliverymen carry a Craftsperson's results ("Delivery: Deliveryman")
  * @param costs          upgrade costs per target level (index 0 = level 2)
  * @param missionTab   the missions and Mission Job settlers (Mission Board only, else empty)
+ * @param biome          today's biome bonus line and the "?" overview of the Job's biome bonuses
  */
 public record JobBlockInfo(Job jobType, int level, Component settlementName, boolean inSettlement, boolean connected,
         int distance, int required, List<SettlementBlock.Assignee> assignees, List<JobPlaces.Line> places, boolean collectLeaves, boolean byDeliveryman,
         List<List<CostEntry>> costs,
-        MissionTab missionTab) {
+        MissionTab missionTab, BiomeInfo biome) {
+
+    /**
+     * The biome bonuses of the JobBlock's Job (vault {@code Systems/JobBlock.md}, decisions on biome bonuses).
+     *
+     * @param biome    today's biome, empty while no biome is known
+     * @param effects  its effects ({@link BiomeBonusText#effects}), empty without an effect
+     * @param overview the "?" overview of every biome with an effect for the Job ({@link BiomeBonusText#overview})
+     */
+    public record BiomeInfo(Optional<Component> biome, List<Component> effects, List<Component> overview) {
+
+        /** No biome known, no overview (before the first sync). */
+        public static final BiomeInfo NONE = new BiomeInfo(Optional.empty(), List.of(), List.of());
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, BiomeInfo> STREAM_CODEC = StreamCodec.composite(
+                ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs::optional), BiomeInfo::biome,
+                ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), BiomeInfo::effects,
+                ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), BiomeInfo::overview,
+                BiomeInfo::new);
+
+        /**
+         * @param biome    today's biome
+         * @param effects  its effects
+         * @param overview the overview lines
+         */
+        public BiomeInfo {
+            effects = List.copyOf(effects);
+            overview = List.copyOf(overview);
+        }
+
+        /** @return today's biome with its effects ("Desert · Ore chance ×1.5"), empty while no biome is known */
+        public Optional<Component> today() {
+            return biome.map(name -> BiomeBonusText.line(name, effects));
+        }
+
+        /**
+         * Today's biome of the first loaded settler working the JobBlock that has one; without such a settler the
+         * biome the Job reads without a work place (a Logistics Job's JobBlock).
+         *
+         * @param level     the level
+         * @param pos       the JobBlock position
+         * @param job       the JobBlock's Job
+         * @param assignees the settlers working it
+         * @return the info
+         */
+        static BiomeInfo of(ServerLevel level, BlockPos pos, Job job, List<SettlementBlock.Assignee> assignees) {
+            Job read = job;
+            BiomeBonus today = BiomeBonus.NONE;
+            for (SettlementBlock.Assignee assignee : assignees) {
+                if (level.getEntity(assignee.id()) instanceof Settler settler) {
+                    today = CivModApi.biomeBonus(settler, pos);
+                    read = assignee.job();
+                    if (today.biome().isPresent()) {
+                        break;
+                    }
+                }
+            }
+            if (today.biome().isEmpty()) {
+                read = job;
+                today = BiomeBonuses.today(level, job, pos, null);
+            }
+            return new BiomeInfo(BiomeBonusText.biome(today), BiomeBonusText.effects(read, today), BiomeBonusText.overview(job));
+        }
+    }
 
     /**
      * Server → client: the info tab changed on the server beyond what the client predicted (an automatic assignment
@@ -257,7 +323,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         // The level's own offers (Mission Jobs) plus the Jobs offered so far (unlocked by Station Types).
         List<Job> offered = Stream.concat(JobPlaces.offered(jobType, newLevel).stream(), offeredJobs().stream()).distinct().toList();
         return new JobBlockInfo(jobType, newLevel, settlementName, inSettlement, connected, distance, required, assignees,
-                JobPlaces.lines(jobType, newLevel, offered, assignees, autoJobs()), collectLeaves, byDeliveryman, costs, missionTab);
+                JobPlaces.lines(jobType, newLevel, offered, assignees, autoJobs()), collectLeaves, byDeliveryman, costs, missionTab, biome);
     }
 
     /**
@@ -283,7 +349,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         List<JobPlaces.Line> changed = places.stream()
                 .map(line -> line.job() == job ? new JobPlaces.Line(line.job(), line.taken(), line.places(), on) : line).toList();
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, changed, collectLeaves,
-                byDeliveryman, costs, missionTab);
+                byDeliveryman, costs, missionTab, biome);
     }
 
     /**
@@ -313,6 +379,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
             ByteBufCodecs.BOOL, JobBlockInfo::byDeliveryman,
             CostEntry.STREAM_CODEC.apply(ByteBufCodecs.list()).apply(ByteBufCodecs.list()), JobBlockInfo::costs,
             MissionTab.STREAM_CODEC, JobBlockInfo::missionTab,
+            BiomeInfo.STREAM_CODEC, JobBlockInfo::biome,
             JobBlockInfo::new);
 
     /**
@@ -346,7 +413,8 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
                         assignees, block.map(SettlementBlock::autoAssign).orElse(Set.of())),
                 block.map(SettlementBlock::collectLeaves).orElse(false), block.map(SettlementBlock::byDeliveryman).orElse(false),
                 costsOf(jobType),
-                new MissionTab(SettlementWorld.missionOffer(level, pos), taken, settlers, OutcomeRules.get()));
+                new MissionTab(SettlementWorld.missionOffer(level, pos), taken, settlers, OutcomeRules.get()),
+                BiomeInfo.of(level, pos, jobType, assignees));
     }
 
     /**
@@ -355,7 +423,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
     public JobBlockInfo withoutAssignees() {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, List.of(),
                 JobPlaces.lines(jobType, level, offeredJobs(), List.of(), autoJobs()), collectLeaves, byDeliveryman, costs,
-                new MissionTab(missionTab.offer(), List.of(), List.of(), missionTab.rules()));
+                new MissionTab(missionTab.offer(), List.of(), List.of(), missionTab.rules()), biome);
     }
 
     /**
@@ -363,7 +431,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withLeavesToggled() {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, places, !collectLeaves,
-                byDeliveryman, costs, missionTab);
+                byDeliveryman, costs, missionTab, biome);
     }
 
     /**
@@ -371,7 +439,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withDeliveryToggled() {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, places, collectLeaves,
-                !byDeliveryman, costs, missionTab);
+                !byDeliveryman, costs, missionTab, biome);
     }
 
     /**
@@ -394,7 +462,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
 
     private JobBlockInfo withMissionTab(MissionTab changed) {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, places, collectLeaves, byDeliveryman, costs,
-                changed);
+                changed, biome);
     }
 
     /**
@@ -418,6 +486,6 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public static JobBlockInfo unknown(Job jobType, int jobLevel) {
         return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, List.of(), JobPlaces.lines(jobType, jobLevel, List.of()), false, false,
-                costsOf(jobType), MissionTab.EMPTY);
+                costsOf(jobType), MissionTab.EMPTY, BiomeInfo.NONE);
     }
 }

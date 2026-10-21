@@ -1,0 +1,11 @@
+{
+  "jobs": ["civmod:gametest_dummy"],
+  "biomes": ["minecraft:mushroom_fields", "minecraft:ice_spikes"],
+  "speed": 1.1,
+  "double_drop": [
+    { "items": ["minecraft:oak_planks"], "chance": 0.8 },
+    { "items": "#minecraft:planks", "chance": 0.5 },
+    { "items": "minecraft:cobblestone", "chance": -0.4 },
+    { "items": "minecraft:dirt", "chance": -0.6 }
+  ]
+}

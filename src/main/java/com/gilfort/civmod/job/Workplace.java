@@ -11,31 +11,39 @@ import java.util.function.Supplier;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.api.BiomeBonus;
+import com.gilfort.civmod.api.BiomePosition;
 import com.gilfort.civmod.api.BlockingReason;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
+import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementData;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
+import net.minecraft.world.level.biome.Biome;
 
 /**
  * What a settler keeps for one job at its JobBlock (vault {@code Systems/Resource Collection Jobs.md},
  * {@code Systems/JobBlock.md}): the buffer, the status shown in the job tab, the time a blocked job waits, the work
- * place of the day and the scan lifecycle (requested, scanning, ready, rescanned per day or when centre or radius
- * change), and for a Producing Job the current {@link Round}, the requests skipped for a while and a pending trip to
+ * place of the day with its biome and biome bonuses and the scan lifecycle (requested, scanning, ready, rescanned per
+ * day or when centre or radius change), and for a Producing Job the current {@link Round}, the requests skipped for a while and a pending trip to
  * the drop-off. The {@link ScanScheduler} is only used from here.
  * <p>
  * The {@link SettlerWork} holds one Workplace per JobBlock; forgetting the job drops the whole Workplace, so nothing of
- * it survives. Buffer, work place of the day and scan are saved with the settler (shape unchanged since before the
- * Workplace: {@link SettlerWork.BuffersSnapshot}); status, blocked time and the fractional production of the
+ * it survives. Buffer, work place of the day (with the biome read there) and scan are saved with the settler
+ * ({@link SettlerWork.BuffersSnapshot}, the biome since #104); status, blocked time and the fractional production of the
  * {@link WorkRules}, the round and the skipped requests are not.
  */
 final class Workplace {
@@ -45,6 +53,14 @@ final class Workplace {
 
     /** What a scan was made for; a different key triggers a rescan. */
     private record ScanKey(BlockPos center, int radius, long day) {
+    }
+
+    /** The biome read at a place (the work place or the JobBlock) for a day. */
+    private record BiomeOfDay(long day, BlockPos place, ResourceKey<Biome> biome) {
+    }
+
+    /** The biome bonuses of a Job resolved at the {@link BiomeOfDay}. */
+    private record BonusOfDay(long day, BlockPos place, Job job, BiomeBonus bonus) {
     }
 
     private final BlockPos jobBlock;
@@ -57,6 +73,10 @@ final class Workplace {
     private long blockedUntil;
     private @Nullable BlockPos workPlaceOfDay;
     private long workPlaceDay = -1L;
+    /** The biome of the day's biome position, read once per day and place (saved with the work place of the day). */
+    private @Nullable BiomeOfDay biomeOfDay;
+    /** The biome bonuses resolved at {@link #biomeOfDay} (not saved: resolved again from the loaded files). */
+    private @Nullable BonusOfDay bonusOfDay;
     private @Nullable ScanResult scan;
     private @Nullable ScanKey scanKey;
     /** The dropped item of each resource type per tool kind, for the Max checks of every roll; cleared with the scan. */
@@ -263,6 +283,50 @@ final class Workplace {
     }
 
     /**
+     * The biome bonuses acting on the job today ({@link BiomeBonuses#today}). The biome of the Job's biome position is
+     * read once per day and place and kept for that day: a biome change at the place or a data reload takes effect with
+     * the next day's choice. A work place chosen anew during the day (the old one is no longer a work place) reads its
+     * own biome.
+     *
+     * @param level the level
+     * @param job   the Job held at the JobBlock
+     * @return the bonuses ({@link BiomeBonus#NONE} while no work place is chosen)
+     */
+    BiomeBonus biomeBonus(ServerLevel level, Job job) {
+        BiomePosition position = BiomeBonuses.position(job);
+        BlockPos place = switch (position) {
+            case NONE -> null;
+            case JOB_BLOCK -> jobBlock;
+            case WORK_PLACE -> workPlaceOfDay;
+        };
+        if (place == null) {
+            return BiomeBonus.NONE;
+        }
+        long day = position == BiomePosition.JOB_BLOCK ? DayClock.day(level) : workPlaceDay;
+        BonusOfDay cached = bonusOfDay;
+        if (cached != null && cached.day() == day && cached.job() == job && cached.place().equals(place)) {
+            return cached.bonus();
+        }
+        BiomeBonus bonus = BiomeBonuses.resolve(job, biome(level, place, day));
+        bonusOfDay = new BonusOfDay(day, place, job, bonus);
+        return bonus;
+    }
+
+    /** The biome of a place for a day: the one read (or restored) for that day and place, else the place's biome now. */
+    private Holder<Biome> biome(ServerLevel level, BlockPos place, long day) {
+        BiomeOfDay known = biomeOfDay;
+        if (known != null && known.day() == day && known.place().equals(place)) {
+            Optional<Holder.Reference<Biome>> restored = level.registryAccess().lookupOrThrow(Registries.BIOME).get(known.biome());
+            if (restored.isPresent()) {
+                return restored.get();
+            }
+        }
+        Holder<Biome> biome = level.getBiome(place);
+        biomeOfDay = biome.unwrapKey().map(key -> new BiomeOfDay(day, place, key)).orElse(null);
+        return biome;
+    }
+
+    /**
      * Requests a scan around the work place unless the current or pending one was made for the same centre, radius
      * and (for daily scans) day.
      *
@@ -361,7 +425,13 @@ final class Workplace {
      */
     Optional<SettlerWork.WorkPlaceEntry> savedWorkPlace() {
         BlockPos current = workPlaceOfDay;
-        return current == null ? Optional.empty() : Optional.of(new SettlerWork.WorkPlaceEntry(jobBlock, current, workPlaceDay));
+        if (current == null) {
+            return Optional.empty();
+        }
+        BiomeOfDay biome = biomeOfDay;
+        Optional<ResourceKey<Biome>> read = biome != null && biome.day() == workPlaceDay && biome.place().equals(current)
+                ? Optional.of(biome.biome()) : Optional.empty();
+        return Optional.of(new SettlerWork.WorkPlaceEntry(jobBlock, current, workPlaceDay, read));
     }
 
     /**
@@ -385,6 +455,8 @@ final class Workplace {
         buffer = new JobBuffer();
         workPlaceOfDay = null;
         workPlaceDay = -1L;
+        biomeOfDay = null;
+        bonusOfDay = null;
         scan = null;
         scanKey = null;
         scanning = null;
@@ -405,6 +477,9 @@ final class Workplace {
     void restoreWorkPlace(SettlerWork.WorkPlaceEntry saved) {
         workPlaceOfDay = saved.poi();
         workPlaceDay = saved.day();
+        // The day's biome stays (a reload on the same day keeps it); the bonuses are resolved again from the loaded files.
+        biomeOfDay = saved.biome().map(biome -> new BiomeOfDay(saved.day(), saved.poi(), biome)).orElse(null);
+        bonusOfDay = null;
     }
 
     /**

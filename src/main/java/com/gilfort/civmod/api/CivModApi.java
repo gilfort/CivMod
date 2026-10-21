@@ -6,10 +6,15 @@ import org.jetbrains.annotations.ApiStatus;
 
 import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.block.StarterTools;
+import com.gilfort.civmod.job.BiomeBonuses;
+import com.gilfort.civmod.npc.Settler;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.ItemLike;
@@ -19,7 +24,8 @@ import net.minecraft.world.level.material.PushReaction;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 /**
- * Entry point of the CivMod addon API (vault {@code Systems/Jobs.md}): the Job registry and the JobBlock factory.
+ * Entry point of the CivMod addon API (vault {@code Systems/Jobs.md}): the Job registry, the JobBlock factory and the
+ * query of the biome bonuses acting on a settler ({@link #biomeBonus}).
  * CivMod registers its own Jobs and JobBlocks through it, exactly like an addon. The getting-started guide is
  * {@code docs/api/getting-started.md} in the CivMod repository.
  * <p>
@@ -91,5 +97,35 @@ public final class CivModApi {
         BlockItem item = jobBlockItem(block, properties);
         StarterTools.register(item, starterTool);
         return item;
+    }
+
+    /**
+     * The biome bonuses acting on a settler's Job at a JobBlock today (vault {@code Systems/JobBlock.md}): resolved
+     * from the {@code civmod_biome_bonuses} files at the Job's biome position ({@link CategoryProfile#biomePosition()}).
+     * The work place's biome is read once per day when the work place of the day is chosen.
+     *
+     * @param entity   a settler (another entity has no bonuses)
+     * @param jobBlock the JobBlock of the Job
+     * @return the bonuses, {@link BiomeBonus#NONE} if the entity is no settler holding a Job there, is on the client
+     *         or has no work place yet
+     */
+    public static BiomeBonus biomeBonus(Entity entity, BlockPos jobBlock) {
+        if (entity instanceof Settler settler && settler.level() instanceof ServerLevel level) {
+            return settler.getWork().biomeBonus(level, jobBlock);
+        }
+        return BiomeBonus.NONE;
+    }
+
+    /**
+     * The biome bonuses a Job would get at a position, whatever its biome position (a preview, e.g. for a work point
+     * about to be set).
+     *
+     * @param level the level
+     * @param job   the Job
+     * @param pos   the position whose biome counts
+     * @return the bonuses, with the biome even without an effect
+     */
+    public static BiomeBonus biomeBonusAt(ServerLevel level, Job job, BlockPos pos) {
+        return BiomeBonuses.at(level, job, pos);
     }
 }

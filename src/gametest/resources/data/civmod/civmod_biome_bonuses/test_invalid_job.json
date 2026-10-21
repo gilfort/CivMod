@@ -1,0 +1,5 @@
+{
+  "jobs": ["civmod:no_such_job"],
+  "biomes": "minecraft:mushroom_fields",
+  "speed": 1.5
+}

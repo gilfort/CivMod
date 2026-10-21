@@ -7,6 +7,8 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.BiomeBonus;
+import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
@@ -14,6 +16,7 @@ import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.job.SavedScan;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.StockRules;
@@ -52,9 +55,14 @@ public record FoundTabData(boolean scanned, List<Entry> entries, List<Component>
      * @param icon      the icon
      * @param needsTool whether the working settler's tool cannot obtain it (never without a settler)
      * @param excluded  whether it is excluded at the JobBlock
-     * @param maxAt     the Home Clerk whose stock rule Max its dropped item has reached, empty if it is produced
+     * @param maxAt       the Home Clerk whose stock rule Max its dropped item has reached, empty if it is produced
+     * @param rareBonus   whether a biome bonus's rare chance acts on it (a star)
+     * @param doubleBonus whether a biome bonus's double drop acts on its dropped item (a star; two offset stars with
+     *                    {@code rareBonus})
+     * @param bonusLines  the tooltip of the stars: each effect with its source
      */
-    public record Entry(Identifier type, ItemStack icon, boolean needsTool, boolean excluded, Optional<Component> maxAt) {
+    public record Entry(Identifier type, ItemStack icon, boolean needsTool, boolean excluded, Optional<Component> maxAt, boolean rareBonus,
+            boolean doubleBonus, List<Component> bonusLines) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Entry> STREAM_CODEC = StreamCodec.composite(
@@ -63,18 +71,37 @@ public record FoundTabData(boolean scanned, List<Entry> entries, List<Component>
                 ByteBufCodecs.BOOL, Entry::needsTool,
                 ByteBufCodecs.BOOL, Entry::excluded,
                 ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs::optional), Entry::maxAt,
+                ByteBufCodecs.BOOL, Entry::rareBonus,
+                ByteBufCodecs.BOOL, Entry::doubleBonus,
+                ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), Entry::bonusLines,
                 Entry::new);
+
+        /**
+         * @param type        the type
+         * @param icon        the icon
+         * @param needsTool   whether the tool cannot obtain it
+         * @param excluded    whether it is excluded
+         * @param maxAt       the Home Clerk at its Max
+         * @param rareBonus   whether the rare chance acts on it
+         * @param doubleBonus whether a double drop acts on it
+         * @param bonusLines  the stars' tooltip
+         */
+        public Entry {
+            bonusLines = List.copyOf(bonusLines);
+        }
 
         @Override
         public boolean equals(Object other) {
             // ItemStack has no value equality.
             return other instanceof Entry entry && type.equals(entry.type) && ItemStack.matches(icon, entry.icon) && needsTool == entry.needsTool
-                    && excluded == entry.excluded && maxAt.equals(entry.maxAt);
+                    && excluded == entry.excluded && maxAt.equals(entry.maxAt) && rareBonus == entry.rareBonus && doubleBonus == entry.doubleBonus
+                    && bonusLines.equals(entry.bonusLines);
         }
 
         @Override
         public int hashCode() {
-            return type.hashCode() * 31 + maxAt.hashCode() * 7 + (needsTool ? 2 : 0) + (excluded ? 1 : 0);
+            return type.hashCode() * 31 + maxAt.hashCode() * 7 + bonusLines.hashCode() * 17 + (rareBonus ? 8 : 0) + (doubleBonus ? 4 : 0)
+                    + (needsTool ? 2 : 0) + (excluded ? 1 : 0);
         }
     }
 
@@ -121,10 +148,8 @@ public record FoundTabData(boolean scanned, List<Entry> entries, List<Component>
         JobBlockSite site = found.get();
         SettlementBlock block = site.block();
         Settler settler = worker(level, block);
-        ScanResult scan = settler == null ? null : settler.getWork().scan(pos).orElse(null);
-        if (scan == null) {
-            scan = block.foundScan().map(SavedScan::result).orElse(null);
-        }
+        ScanResult scan = Optional.ofNullable(settler).flatMap(working -> working.getWork().scan(pos))
+                .or(() -> block.foundScan().map(SavedScan::result)).orElse(null);
         if (scan == null) {
             return EMPTY;
         }
@@ -133,10 +158,19 @@ public record FoundTabData(boolean scanned, List<Entry> entries, List<Component>
         Set<Item> atMax = StockRules.atMax(level, site);
         Optional<Component> clerk = block.homeClerk().flatMap(site.settlement()::block).map(ClerkStorage::name);
         ItemStack tool = worker.map(ResourceCollectionProfile.Worker::tool).orElse(ItemStack.EMPTY);
-        List<Entry> entries = profile.get().found(scan, worker).stream()
-                .map(entry -> new Entry(entry.type(), entry.icon(), !entry.available(), block.excluded().contains(entry.type()),
-                        !atMax.isEmpty() && atMax.contains(profile.get().dropped(level, pos, entry.type(), tool)) ? clerk : Optional.empty()))
-                .toList();
+        // The biome bonus acting on the working settler today: stars at the drops it changes.
+        BiomeBonus bonus = settler == null ? BiomeBonus.NONE : CivModApi.biomeBonus(settler, pos);
+        Job job = Optional.ofNullable(settler).flatMap(working -> working.jobAt(pos)).map(SettlerJob::jobType).orElse(block.jobType());
+        boolean rareActs = !bonus.rareChance().sources().isEmpty();
+        List<Entry> entries = profile.get().found(scan, worker).stream().map(entry -> {
+            // The dropped item only when needed: it rolls the block's loot.
+            Item dropped = atMax.isEmpty() && bonus.doubleDrops().isEmpty() ? null : profile.get().dropped(level, pos, entry.type(), tool);
+            boolean rare = rareActs && profile.get().inRareGroup(scan, entry.type());
+            List<BiomeBonus.DoubleDrop> drops = dropped == null ? List.of() : bonus.doubleDrops(new ItemStack(dropped));
+            return new Entry(entry.type(), entry.icon(), !entry.available(), block.excluded().contains(entry.type()),
+                    !atMax.isEmpty() && atMax.contains(dropped) ? clerk : Optional.empty(), rare, !drops.isEmpty(),
+                    BiomeBonusText.sourceLines(job, bonus, rare, drops));
+        }).toList();
         return new FoundTabData(true, entries, profile.get().foundLines(scan, worker));
     }
 

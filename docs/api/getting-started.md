@@ -166,3 +166,27 @@ Packs can override a Job's balancing values per job id in `data/<namespace>/civm
 ```
 
 `unlock_item` overrides the builder's `unlockItem`. All values are optional; later packs override earlier ones per value. Upgrade costs merge per level the same way; a later `settlers` list replaces an earlier one.
+
+## Biome bonuses
+
+Biomes give Jobs bonuses, one datapack file per bonus at `data/<namespace>/civmod_biome_bonuses/<name>.json`:
+
+```json
+{
+  "jobs": ["civmod:fisherman"],
+  "biomes": "#c:is_cold",
+  "speed": 1.0,
+  "rare_chance": 1.0,
+  "double_drop": [ { "items": "minecraft:salmon", "chance": 0.5 } ]
+}
+```
+
+- `jobs` is an exact list: a bonus for a Base Job does not reach its Specializations unless they are listed.
+- `biomes` is a biome id, a list or a `#tag`; `items` an item id, a list or an `#item tag`.
+- `speed` and `rare_chance` are factors 0.1–10, `chance` is −1 … 10. Every effect is optional.
+- The factors of all matching files multiply (1.1 × 1.1 = 1.21); the `double_drop` chances matching a produced item add up to S. S ≥ 0 gives ⌊S⌋ extra copies of the stack plus one more with probability S − ⌊S⌋; S < 0 loses the drop with probability |S| (the roll still counts as work).
+- Add bonuses with your own files; change or remove one by shipping a file with the same id. An invalid file is logged and ignored.
+
+The biome is read at the Job's biome position: `CategoryProfile.biomePosition()` defaults to the work place of the day for Resource Collection and Producing Jobs (the station of the day), the JobBlock for other categories and none for Mission Jobs. It is read once per day when the work place is chosen.
+
+`CivModApi.biomeBonus(settler, jobBlock)` returns the `BiomeBonus` acting on a settler's Job today (factors, double drop entries, the source file of each); `CivModApi.biomeBonusAt(level, job, pos)` previews a position.

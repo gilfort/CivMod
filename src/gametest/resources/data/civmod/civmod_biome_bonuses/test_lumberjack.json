@@ -1,0 +1,5 @@
+{
+  "jobs": ["civmod:lumberjack"],
+  "biomes": "minecraft:mushroom_fields",
+  "double_drop": [ { "items": "#minecraft:logs", "chance": 1.0 } ]
+}

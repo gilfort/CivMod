@@ -83,7 +83,7 @@ public final class MinerGameTests {
         RandomSource random = RandomSource.create(11L);
         Map<Identifier, Integer> counts = new HashMap<>();
         for (int i = 0; i < SAMPLES; i++) {
-            MinerOutput.Roll roll = MinerOutput.roll(scan, poi, harvestable, excluded, level, weights, random);
+            MinerOutput.Roll roll = MinerOutput.roll(scan, poi, harvestable, excluded, level, weights, 1.0, random);
             Identifier type = roll.type().orElse(roll.emptyRoll() ? EMPTY_ROLL : Identifier.withDefaultNamespace("air"));
             counts.merge(type, 1, Integer::sum);
         }

@@ -1,0 +1,12 @@
+{
+  "jobs": [
+    "civmod:lumberjack"
+  ],
+  "biomes": "minecraft:dark_forest",
+  "double_drop": [
+    {
+      "items": "#minecraft:dark_oak_logs",
+      "chance": 0.15
+    }
+  ]
+}

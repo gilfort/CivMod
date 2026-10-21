@@ -20,7 +20,8 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
  * The "Found" tab of a Resource Collection JobBlock in the {@link JobBlockScreen} (vault
  * {@code Systems/Resource Collection Jobs.md}); the client side of {@link FoundTab}: scan info lines, then the found
  * resources as a slot grid. Excluded entries are grey and struck through, entries at their Max at the Home Clerk grey
- * ("Maximum reached at &lt;Clerk&gt;"); a right click excludes or includes one. A list that does not fit the panel
+ * ("Maximum reached at &lt;Clerk&gt;"); a star marks each biome bonus effect acting on an entry (its tooltip names the
+ * effects and their files); a right click excludes or includes one. A list that does not fit the panel
  * scrolls by rows (mouse wheel, or the scrollbar right of the grid, which then has 8 columns).
  */
 final class FoundTabView implements JobBlockTabView {
@@ -147,6 +148,8 @@ final class FoundTabView implements JobBlockTabView {
                 // Struck through: the job does not produce it.
                 graphics.fill(x, y + 7, x + 16, y + 9, CivGui.LABEL_COLOR);
             }
+            // A star per biome bonus effect acting on the drop.
+            CivGui.bonusStars(graphics, font, x, y, (entry.rareBonus() ? 1 : 0) + (entry.doubleBonus() ? 1 : 0));
             if (i == hovered) {
                 CivGui.slotHover(graphics, x, y);
                 List<Component> lines = new ArrayList<>(List.of(entry.icon().getHoverName()));
@@ -157,6 +160,7 @@ final class FoundTabView implements JobBlockTabView {
                     lines.add(Component.translatable("civmod.gui.found.excluded").withStyle(ChatFormatting.GRAY));
                 }
                 entry.maxAt().ifPresent(clerk -> lines.add(Component.translatable("civmod.gui.found.max_reached", clerk).withStyle(ChatFormatting.GOLD)));
+                entry.bonusLines().forEach(line -> lines.add(Component.empty().append(CivGui.STAR).append(" ").append(line).withColor(CivGui.STAR_COLOR)));
                 graphics.setComponentTooltipForNextFrame(font, lines, mouseX, mouseY);
             }
         }

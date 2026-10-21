@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:biome_bonus_gui_overview",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 4
+}

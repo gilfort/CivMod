@@ -63,6 +63,10 @@ public final class CivGui {
     private static final int HOVER_TINT = 0x80FFFFFF;
     /** Red slot fill over an item that is missing (an upgrade cost the player lacks). */
     static final int MISSING_TINT = 0x80FF2020;
+    /** Colour of a bonus star (vanilla gold). */
+    static final int STAR_COLOR = 0xFFFFAA00;
+    /** The bonus star glyph. */
+    static final Component STAR = Component.literal("★");
     /** Frame of a selected slot. */
     private static final int SELECTED_COLOR = INSET_LIGHT;
     /** Size of the help icon ({@link #help}). */
@@ -95,6 +99,26 @@ public final class CivGui {
      */
     public static void slotHover(GuiGraphicsExtractor graphics, int itemX, int itemY) {
         graphics.fill(itemX, itemY, itemX + 16, itemY + 16, HOVER_TINT);
+    }
+
+    /**
+     * Marks a slot with bonus stars in its top right corner (vault {@code Systems/JobBlock.md}, decisions on biome
+     * bonuses): one star for one acting effect, two slightly offset stars for two.
+     *
+     * @param graphics the graphics extractor
+     * @param font     the font
+     * @param itemX    the x position of the item (slot position)
+     * @param itemY    the y position of the item (slot position)
+     * @param stars    how many effects act (0–2)
+     */
+    static void bonusStars(GuiGraphicsExtractor graphics, Font font, int itemX, int itemY, int stars) {
+        int x = itemX + 16 - font.width(STAR);
+        if (stars >= 2) {
+            graphics.text(font, STAR, x - 3, itemY - 2, STAR_COLOR, true);
+            graphics.text(font, STAR, x, itemY + 1, STAR_COLOR, true);
+        } else if (stars == 1) {
+            graphics.text(font, STAR, x, itemY - 1, STAR_COLOR, true);
+        }
     }
 
     /**

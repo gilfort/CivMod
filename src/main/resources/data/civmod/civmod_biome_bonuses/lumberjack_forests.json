@@ -1,0 +1,7 @@
+{
+  "jobs": [
+    "civmod:lumberjack"
+  ],
+  "biomes": "#minecraft:is_forest",
+  "speed": 1.1
+}

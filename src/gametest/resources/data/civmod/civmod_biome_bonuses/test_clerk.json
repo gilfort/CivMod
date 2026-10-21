@@ -1,0 +1,5 @@
+{
+  "jobs": ["civmod:clerk"],
+  "biomes": "minecraft:mushroom_fields",
+  "speed": 1.3
+}
