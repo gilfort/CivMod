@@ -35,7 +35,6 @@ final class InfoTabView implements JobBlockTabView {
 
     private static final int COST_SLOTS = 7;
     private static final int COST_X = CivGui.PADDING + 9;
-    private static final int MISSING_TINT = 0x80FF2020;
     private static final int LINE_HEIGHT = 11;
     /** Top of the first Job line (below job, level and settlement). */
     private static final int JOB_LINES_Y = 22 + 3 * LINE_HEIGHT;
@@ -261,7 +260,7 @@ final class InfoTabView implements JobBlockTabView {
             graphics.itemDecorations(font, cost.icon(), x, rowY, Integer.toString(cost.count()));
             int have = cost.count(player().getInventory());
             if (!creative && have < cost.count()) {
-                graphics.fill(x, rowY, x + 16, rowY + 16, MISSING_TINT);
+                graphics.fill(x, rowY, x + 16, rowY + 16, CivGui.MISSING_TINT);
             }
             if (mouseX >= screen.left() + x && mouseX < screen.left() + x + 16 && mouseY >= screen.top() + rowY && mouseY < screen.top() + rowY + 16) {
                 graphics.setComponentTooltipForNextFrame(font, List.of(cost.icon().getHoverName(),
