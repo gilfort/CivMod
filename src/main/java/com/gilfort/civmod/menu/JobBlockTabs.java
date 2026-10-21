@@ -1,61 +1,58 @@
 package com.gilfort.civmod.menu;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.StationTypes;
 
 /**
- * The tab set of a JobBlock window, chosen by the Job Category of the JobBlock's Job (vault
- * {@code Systems/Job Categories.md}), so an addon Job gets the same window as a built-in one. Every set starts with the
- * Storage and Info tabs. Only the Clerk keeps tabs keyed to its Job.
+ * The tabs of a JobBlock window, chosen by the Job Category of the JobBlock's Job (vault
+ * {@code Systems/Job Categories.md}), so an addon Job gets the same window as a built-in one. Every window starts with
+ * the Storage and Info tabs; only the Clerk keeps tabs keyed to its Job. This is the one place that knows which
+ * category shows which tabs.
  */
-public enum JobBlockTabs {
+public final class JobBlockTabs {
 
-    /** Storage and Info only (categories without a tab of their own). */
-    STANDARD(2, false),
-    /** Resource Collection: plus the Found tab ({@link FoundTab}). */
-    FOUND(3, false),
-    /** Producing: plus the Patterns tab ({@link PatternTab}), in a tall panel with the player inventory. */
-    PATTERNS(3, true),
-    /** Mission: plus the Missions tab of the Mission Board. */
-    MISSIONS(3, false),
-    /** Clerk: plus the Stock, Requests and Deliveries tabs ({@link ClerkTab}), in a tall panel. */
-    CLERK(5, true);
-
-    private final int count;
-    private final boolean tall;
-
-    JobBlockTabs(int count, boolean tall) {
-        this.count = count;
-        this.tall = tall;
+    private JobBlockTabs() {
     }
 
     /**
      * @param jobType the Job of a JobBlock
-     * @return the tab set of its window
+     * @return new tabs for its window, in tab order (the tabs below the panel last)
      */
-    public static JobBlockTabs of(Job jobType) {
+    public static List<JobBlockTab> of(Job jobType) {
+        List<JobBlockTab> tabs = new ArrayList<>(List.of(new StorageTab(), new InfoTab()));
         if (jobType == ModJobs.CLERK.get()) {
-            return CLERK;
+            TabData<ClerkTabData> clerk = StockTab.newData();
+            tabs.addAll(List.of(new StockTab(clerk), new RequestsTab(clerk), new DeliveriesTab(clerk)));
+            return tabs;
         }
-        return switch (jobType.category()) {
-            case RESOURCE_COLLECTION -> FOUND;
-            case PRODUCING -> PATTERNS;
-            case MISSION -> MISSIONS;
-            case GUARD, LOGISTICS, SERVICE -> STANDARD;
-        };
+        switch (jobType.category()) {
+            case RESOURCE_COLLECTION -> tabs.add(new FoundTab());
+            case PRODUCING -> tabs.addAll(producing(jobType));
+            case MISSION -> tabs.add(new MissionsTab());
+            case GUARD, LOGISTICS, SERVICE -> {
+                // Storage and Info only.
+            }
+        }
+        return tabs;
     }
 
     /**
-     * @return the number of tabs
+     * The Base Job's Patterns tab and the Station Types tab on top, one Patterns tab per Producing Specialization (in
+     * registry order) below the panel.
      */
-    public int count() {
-        return count;
-    }
-
-    /**
-     * @return whether the window uses the tall panel
-     */
-    public boolean tall() {
-        return tall;
+    private static List<JobBlockTab> producing(Job jobType) {
+        List<Job> specializations = StationTypes.hasStationTypes(jobType)
+                ? StationTypes.specializations(jobType).stream().filter(job -> job.category() == JobCategory.PRODUCING).toList()
+                : List.of();
+        TabData<PatternTabData> library = PatternsTab.newData();
+        StationTypesTab stations = new StationTypesTab(!specializations.isEmpty());
+        List<JobBlockTab> tabs = new ArrayList<>(List.of(new PatternsTab(jobType, true, library, stations.data()), stations));
+        specializations.forEach(job -> tabs.add(new PatternsTab(job, false, library, stations.data())));
+        return tabs;
     }
 }

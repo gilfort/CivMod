@@ -11,7 +11,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.job.FishTable;
 import com.gilfort.civmod.job.FishermanProfile;
 import com.gilfort.civmod.job.WaterScan;
-import com.gilfort.civmod.menu.FoundTab;
+import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
@@ -206,8 +206,8 @@ public final class FishermanGameTests {
             helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0,
                     "Nothing caught yet (status " + settler.getWork().status(jobBlock) + ")");
             helper.assertFalse(settler.isInWater(), "The Fisherman stands on the shore");
-            FoundTab tab = FoundTab.of(level, jobBlock);
-            helper.assertTrue(tab.entries().stream().map(FoundTab.Entry::type).toList().equals(FishTable.get().ids()),
+            FoundTabData tab = FoundTabData.of(level, jobBlock);
+            helper.assertTrue(tab.entries().stream().map(FoundTabData.Entry::type).toList().equals(FishTable.get().ids()),
                     "The Found tab lists the fish of the loot table: " + tab);
             helper.assertTrue(tab.lines().size() >= 2, "Water and treasure lines: " + tab.lines());
             settler.discard();

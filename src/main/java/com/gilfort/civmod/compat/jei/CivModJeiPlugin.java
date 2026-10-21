@@ -11,6 +11,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.client.gui.JobBlockScreen;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.menu.JobBlockMenu;
+import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.registry.ModMenuTypes;
 import com.gilfort.civmod.settlement.Patterns;
 
@@ -139,7 +140,7 @@ public final class CivModJeiPlugin implements IModPlugin {
         @Override
         public @Nullable IRecipeTransferError transferRecipe(JobBlockMenu container, RecipeHolder<R> recipe, IRecipeSlotsView slots,
                 Player player, boolean maxTransfer, boolean doTransfer) {
-            if (!JobBlockMenu.hasPatternsTab(container.getInfo()) || !(Minecraft.getInstance().gui.screen() instanceof JobBlockScreen screen)) {
+            if (container.tab(PatternsTab.class).isEmpty() || !(Minecraft.getInstance().gui.screen() instanceof JobBlockScreen screen)) {
                 // Other JobBlocks have no patterns: no button.
                 return helper.createInternalError();
             }

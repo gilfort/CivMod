@@ -10,6 +10,7 @@ import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
+import com.gilfort.civmod.menu.StockTab;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.Stock;
@@ -277,7 +278,7 @@ public final class StockRuleGameTests {
         JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), entity,
                 JobBlockInfo.of(level, clerk, ModJobs.CLERK.get(), entity.getJobLevel()));
         helper.assertTrue(menu.getTabCount() == 5, "Storage, Info, Stock, Requests, Deliveries");
-        menu.setActiveTab(JobBlockMenu.TAB_STOCK);
+        menu.setActiveTab(menu.tab(StockTab.class).orElseThrow().index());
         helper.assertTrue(menu.slots.get(JobBlockEntity.SLOTS).isActive() && !menu.slots.get(0).isActive(),
                 "Stock tab: player inventory, no storage slots");
         menu.slots.get(JobBlockEntity.SLOTS).set(new ItemStack(Items.TORCH, 3));
@@ -285,11 +286,11 @@ public final class StockRuleGameTests {
                 && menu.slots.get(JobBlockEntity.SLOTS).getItem().getCount() == 3, "Shift-click on the Stock tab moves nothing");
         menu.slots.get(JobBlockEntity.SLOTS).set(ItemStack.EMPTY);
 
-        menu.editStockRule(9, Optional.of(StockRule.minimum(9, Items.TORCH, 8, 0)));
+        menu.tab(StockTab.class).orElseThrow().editRule(9, Optional.of(StockRule.minimum(9, Items.TORCH, 8, 0)));
         helper.assertTrue(settlement.block(clerk).orElseThrow().stockRule(9).isEmpty(), "Level 1: slot 9 is inactive");
-        menu.editStockRule(0, Optional.of(StockRule.minimum(0, Items.TORCH, 8, 0)));
+        menu.tab(StockTab.class).orElseThrow().editRule(0, Optional.of(StockRule.minimum(0, Items.TORCH, 8, 0)));
         helper.assertTrue(Requests.forRule(settlement, clerk, 0).map(Request::amount).orElse(0) == 8, "Set and checked at once");
-        menu.editStockRule(0, Optional.empty());
+        menu.tab(StockTab.class).orElseThrow().editRule(0, Optional.empty());
         helper.assertTrue(settlement.block(clerk).orElseThrow().stockRules().isEmpty() && Requests.byPriority(settlement).isEmpty(),
                 "Deleted through the menu");
         JobAssignments.unassign(data, clerk);

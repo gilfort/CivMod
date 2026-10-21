@@ -10,6 +10,7 @@ import java.util.stream.Stream;
 import com.gilfort.civmod.client.gui.JobBlockScreen;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.menu.JobBlockMenu;
+import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.settlement.Patterns;
 
 import me.shedaniel.rei.api.client.gui.drag.DraggableStack;
@@ -118,7 +119,7 @@ public final class CivModReiPlugin implements REIClientPlugin {
         @Override
         public Result handle(Context context) {
             RecipeType<?> type = categories.get(context.getDisplay().getCategoryIdentifier());
-            if (type == null || !(context.getMenu() instanceof JobBlockMenu menu) || !JobBlockMenu.hasPatternsTab(menu.getInfo())
+            if (type == null || !(context.getMenu() instanceof JobBlockMenu menu) || menu.tab(PatternsTab.class).isEmpty()
                     || !(context.getContainerScreen() instanceof JobBlockScreen screen)) {
                 return Result.createNotApplicable();
             }
