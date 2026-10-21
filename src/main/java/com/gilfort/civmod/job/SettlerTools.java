@@ -9,7 +9,6 @@ import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -42,19 +41,6 @@ final class SettlerTools {
             }
         }
         return best.isEmpty() ? Optional.empty() : Optional.of(best);
-    }
-
-    /**
-     * Holds the best tool of a kind in the main hand (or nothing).
-     *
-     * @param settler the settler
-     * @param kind    the kind of tool
-     */
-    static void show(Settler settler, Predicate<ItemStack> kind) {
-        ItemStack tool = best(settler, kind).map(ItemStack::copy).orElse(ItemStack.EMPTY);
-        if (!ItemStack.matches(tool, settler.getItemBySlot(EquipmentSlot.MAINHAND))) {
-            settler.setItemSlot(EquipmentSlot.MAINHAND, tool);
-        }
     }
 
     /**

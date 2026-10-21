@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import com.gilfort.civmod.CivMod;
@@ -109,6 +110,94 @@ public final class SettlementWorld {
                 entity.removeJob(jobBlock);
             }
         });
+    }
+
+    /**
+     * Removes one settler from one JobBlock: the block's assignee list, the settler's job list and its Workplace there
+     * change together; on a Mission Board its mission assignments are removed (the missions stay locked).
+     *
+     * @param level    the dimension
+     * @param jobBlock the JobBlock position
+     * @param settler  the settler
+     * @return whether the settler worked the JobBlock
+     */
+    public static boolean unassign(ServerLevel level, BlockPos jobBlock, Settler settler) {
+        boolean removed = JobAssignments.unassign(SettlementData.get(level), jobBlock, settler.getUUID());
+        settler.removeJob(jobBlock);
+        return removed;
+    }
+
+    /**
+     * Frees all jobs of a settler (e.g. it died on a mission): every JobBlock forgets it and its job list is emptied.
+     *
+     * @param level   the dimension
+     * @param settler the settler
+     */
+    public static void unassignAll(ServerLevel level, Settler settler) {
+        SettlementData data = SettlementData.get(level);
+        settler.getJobs().forEach(job -> JobAssignments.unassign(data, job.jobBlock(), settler.getUUID()));
+        settler.setJobs(List.of());
+    }
+
+    /**
+     * Replaces a settler's job list (the job list buttons of the settler window): the JobBlocks of removed jobs are
+     * freed.
+     *
+     * @param level   the dimension
+     * @param settler the settler
+     * @param jobs    the new job list in priority order, a reordered subset of the current one
+     */
+    public static void setJobs(ServerLevel level, Settler settler, List<SettlerJob> jobs) {
+        List<SettlerJob> before = settler.getJobs();
+        settler.setJobs(jobs);
+        SettlementData data = SettlementData.get(level);
+        before.stream().filter(job -> !jobs.contains(job))
+                .forEach(job -> JobAssignments.unassign(data, job.jobBlock(), settler.getUUID()));
+    }
+
+    /**
+     * Falls a settler at a JobBlock back to the block's Base Job (its Job is no longer unlocked there, e.g. a replaced
+     * Station Type). A settler holds each Job once: with the Base Job held at another JobBlock it leaves this one
+     * instead. An unloaded settler catches up on its next membership check.
+     *
+     * @param level    the dimension
+     * @param jobBlock the JobBlock position
+     * @param settler  the settler UUID
+     */
+    static void fallBackToBaseJob(ServerLevel level, BlockPos jobBlock, UUID settler) {
+        fallBackToBaseJob(level, jobBlock, settler, level.getEntity(settler) instanceof Settler loaded ? Optional.of(loaded) : Optional.empty());
+    }
+
+    /**
+     * The membership check's catch-up of {@link #fallBackToBaseJob(ServerLevel, BlockPos, UUID)} for a settler that was
+     * unloaded when its Job fell back.
+     *
+     * @param level    the dimension
+     * @param jobBlock the JobBlock position
+     * @param settler  the settler
+     */
+    public static void fallBackToBaseJob(ServerLevel level, BlockPos jobBlock, Settler settler) {
+        fallBackToBaseJob(level, jobBlock, settler.getUUID(), Optional.of(settler));
+    }
+
+    private static void fallBackToBaseJob(ServerLevel level, BlockPos jobBlock, UUID id, Optional<Settler> settler) {
+        SettlementData data = SettlementData.get(level);
+        Optional<SettlementBlock> found = JobBlockSite.blockAt(data, jobBlock);
+        if (found.isEmpty()) {
+            return;
+        }
+        SettlementBlock block = found.get();
+        Job base = block.jobType();
+        if (JobAssignments.holdsElsewhere(data, jobBlock, id, base)) {
+            JobAssignments.unassign(data, jobBlock, id);
+            settler.ifPresent(loaded -> loaded.removeJob(jobBlock));
+            return;
+        }
+        if (block.assignee(id).filter(assignee -> assignee.job() != base).isPresent()) {
+            block.setAssigneeJob(id, base);
+            data.changed();
+        }
+        settler.ifPresent(loaded -> loaded.replaceJob(jobBlock, base));
     }
 
     /**

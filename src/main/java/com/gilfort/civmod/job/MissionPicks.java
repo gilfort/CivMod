@@ -111,7 +111,7 @@ final class MissionPicks {
         int cap = site.get().skillCap();
         List<Candidate> candidates = settlers.stream()
                 .filter(settler -> !settler.isRemoved() && !settler.getWork().missions().hasTrip())
-                .flatMap(settler -> MissionLoop.missionJob(settler, board)
+                .flatMap(settler -> MissionLoop.missionJob(settler.getJobs(), board)
                         .map(job -> new Candidate(settler, job, settler.getSkills().effectiveLevel(job.jobType(), cap))).stream())
                 .toList();
         for (Candidate candidate : MissionRules.order(candidates, Candidate::skill, level.getRandom())) {

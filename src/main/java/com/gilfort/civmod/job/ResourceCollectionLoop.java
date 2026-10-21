@@ -76,69 +76,55 @@ final class ResourceCollectionLoop implements CategoryLoop {
     // ---------------------------------------------------------------- decisions
 
     @Override
-    public boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
-        BlockPos jobBlock = job.jobBlock();
-        Workplace workplace = shell.workplace(jobBlock);
+    public JobStep plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
+        Workplace workplace = shell.workplace(job.jobBlock());
 
         if (workplace.buffer().shouldDeliver()) {
-            return shell.startDelivery(level, job);
+            return JobStep.DELIVER;
         }
         Optional<ResourceCollectionProfile> found = job.jobType().profile(ResourceCollectionProfile.class);
         if (found.isEmpty()) {
-            return false;
+            return JobStep.skip();
         }
         ResourceCollectionProfile profile = found.get();
         Optional<WorkRules.MissingTool> missing = WorkRules.missingTool(settler, profile, site,
                 ClerkStorage.stock(level, site.collect(), dayTime, !shell.counterUnreachable(level, site.collect())));
         if (missing.isPresent()) {
-            return fetchTool(level, job, site, missing.get(), dayTime);
+            return fetchTool(level, site, missing.get(), dayTime);
         }
         BlockPos poi = workplace.workPlaceOfDay(level, profile, site, day);
         if (poi == null) {
-            profile.blockingReason(null).ifPresentOrElse(reason -> shell.block(level, jobBlock, reason),
-                    () -> shell.block(level, jobBlock, JobStatus.NO_WORK_PLACE));
-            return false;
+            return profile.blockingReason(null).map(JobStep::blocked).orElseGet(() -> JobStep.blocked(JobStatus.NO_WORK_PLACE));
         }
         workplace.ensureScan(level, profile, site, poi, day, dayTime);
         Optional<BlockingReason> reason = workplace.scan() == null ? Optional.empty() : profile.blockingReason(workplace.scan());
         if (reason.isPresent()) {
-            shell.block(level, jobBlock, reason.get());
-            return false;
+            return JobStep.blocked(reason.get());
         }
         if (profile.needsResources() && workplace.foundNothing()) {
-            shell.block(level, jobBlock, JobStatus.NO_RESOURCES);
-            return false;
+            return JobStep.blocked(JobStatus.NO_RESOURCES);
         }
         ItemStack tool = SettlerTools.best(settler, profile::isTool).orElse(ItemStack.EMPTY);
         Optional<JobStatus> paused = WorkRules.pause(level, profile, workplace, site, tool, StockRules.atMax(level, site)).pauseStatus();
         if (paused.isPresent()) {
-            shell.block(level, jobBlock, paused.get());
-            return false;
+            return JobStep.blocked(paused.get());
         }
-        shell.setActiveJob(job);
-        if (step != Step.WORK || !shell.walkingTo(poi)) {
-            step = Step.WORK;
-            shell.moveToJob(level, poi);
-        }
-        shell.setStatus(jobBlock, JobStatus.WORKING);
-        SettlerTools.show(settler, profile::isTool);
-        return true;
+        step = Step.WORK;
+        showTool(profile);
+        return JobStep.walk(poi, profile.reach(), JobStatus.WORKING);
     }
 
-    private boolean fetchTool(ServerLevel level, SettlerJob job, JobBlockSite site, WorkRules.MissingTool tool, long dayTime) {
+    private JobStep fetchTool(ServerLevel level, JobBlockSite site, WorkRules.MissingTool tool, long dayTime) {
         if (!tool.inCollect()) {
-            shell.block(level, job.jobBlock(), JobStatus.NO_TOOL);
-            return false;
+            return JobStep.blocked(JobStatus.NO_TOOL);
         }
         ClerkStorage.Visit visit = shell.reachableVisit(level, site.collect(), ClerkStorage.visit(level, site.collect(), dayTime));
-        shell.setActiveJob(job);
-        shell.setStatus(job.jobBlock(), JobStatus.FETCHING_TOOL);
-        if (step != Step.FETCH_TOOL || !shell.walkingTo(visit.target())) {
+        // Walking on to the same place keeps how it is reached.
+        if (step != Step.FETCH_TOOL || toolVisit == null || !toolVisit.target().equals(visit.target())) {
             step = Step.FETCH_TOOL;
             toolVisit = visit;
-            shell.moveToJob(level, visit.target());
         }
-        return true;
+        return JobStep.walk(toolVisit.target(), toolVisit.reach(), JobStatus.FETCHING_TOOL);
     }
 
     /** End-of-work sweep: a drop-off with anything left gets a pickup for the Deliverymen. */
@@ -148,60 +134,56 @@ final class ResourceCollectionLoop implements CategoryLoop {
     }
 
     @Override
-    public boolean holdsDecision(ServerLevel level, SettlerJob job) {
+    public JobStep holdsDecision(ServerLevel level, SettlerJob job) {
         if (step == Step.WORK && fatigue.advance(SettlerWork.DECISION_INTERVAL, level.getRandom())) {
-            shell.setStatus(job.jobBlock(), JobStatus.PAUSING);
-            settler.getNavigation().stop();
-            return true;
+            return new JobStep.Pause(JobStatus.PAUSING);
         }
-        return false;
-    }
-
-    @Override
-    public double reach(SettlerJob job) {
-        if (step == Step.WORK) {
-            return job.jobType().profile(ResourceCollectionProfile.class).map(ResourceCollectionProfile::reach).orElse(SettlerWork.REACH);
-        }
-        return toolVisit == null ? SettlerWork.REACH : toolVisit.reach();
+        return JobStep.skip();
     }
 
     // ---------------------------------------------------------------- per-tick work
 
     @Override
-    public void tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
-        BlockPos jobBlock = job.jobBlock();
-        switch (step) {
-            case FETCH_TOOL -> {
-                Optional<ResourceCollectionProfile> profile = job.jobType().profile(ResourceCollectionProfile.class);
-                Optional<JobBlockSite> site = JobBlockSite.at(level, jobBlock);
-                if (profile.isPresent() && site.isPresent()) {
-                    BlockPos collect = site.get().collect();
-                    boolean counter = toolVisit != null && toolVisit.counter();
-                    if (counter && !shell.waitAtCounter(level, collect)) {
-                        // Waiting for the Clerk.
-                        return;
-                    }
-                    Stock stock = ClerkStorage.stock(level, collect, DayClock.dayTime(level), counter);
-                    if (WorkRules.refill(settler, profile.get(), site.get(), stock) && stock.counter()) {
-                        ClerkCounter.handOut(level, collect, true);
-                    }
-                }
-                toolVisit = null;
-                shell.stepDone(level);
-            }
+    public JobStep tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
+        return switch (step) {
+            case FETCH_TOOL -> fetchToolAt(level, job);
             case WORK -> {
                 if (fatigue.onBreak()) {
-                    return;
+                    yield JobStep.STAY;
                 }
-                shell.countWorkTick(job);
                 produce(level, job, target);
+                yield JobStep.WORK;
+            }
+        };
+    }
+
+    /** At the collect inventory: takes the tool (at a working Clerk's counter after waiting for its turn). */
+    private JobStep fetchToolAt(ServerLevel level, SettlerJob job) {
+        Optional<ResourceCollectionProfile> profile = job.jobType().profile(ResourceCollectionProfile.class);
+        Optional<JobBlockSite> site = JobBlockSite.at(level, job.jobBlock());
+        if (profile.isPresent() && site.isPresent()) {
+            BlockPos collect = site.get().collect();
+            boolean counter = toolVisit != null && toolVisit.counter();
+            if (counter && !shell.waitAtCounter(level, collect)) {
+                // Waiting for the Clerk.
+                return JobStep.STAY;
+            }
+            Stock stock = ClerkStorage.stock(level, collect, DayClock.dayTime(level), counter);
+            if (WorkRules.refill(settler, profile.get(), site.get(), stock) && stock.counter()) {
+                ClerkCounter.handOut(level, collect, true);
             }
         }
+        toolVisit = null;
+        return JobStep.DONE;
+    }
+
+    /** Shows the best tool of the job in the hand. */
+    private void showTool(ResourceCollectionProfile profile) {
+        shell.hold(SettlerTools.best(settler, profile::isTool).map(ItemStack::copy).orElse(ItemStack.EMPTY));
     }
 
     private void produce(ServerLevel level, SettlerJob job, BlockPos poi) {
         BlockPos jobBlock = job.jobBlock();
-        settler.getNavigation().stop();
         settler.getLookControl().setLookAt(Vec3.atCenterOf(poi));
         if (++swingTimer >= SWING_INTERVAL && job.jobType().profile(ResourceCollectionProfile.class).map(ResourceCollectionProfile::swings).orElse(true)) {
             swingTimer = 0;
@@ -224,7 +206,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
             shell.showLevelUp(level, job);
         }
         // A job that ended (no tool, buffer full, no resources) is re-planned at the next decision.
-        SettlerTools.show(settler, profile.get()::isTool);
+        showTool(profile.get());
     }
 
     // ---------------------------------------------------------------- catch-up

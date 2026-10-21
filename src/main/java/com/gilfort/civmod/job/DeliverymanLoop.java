@@ -100,7 +100,7 @@ final class DeliverymanLoop implements CategoryLoop {
     // ---------------------------------------------------------------- decisions
 
     @Override
-    public boolean plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
+    public JobStep plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
         warehouse = job.jobBlock();
         if (unreachableDay != day) {
             unreachable.clear();
@@ -112,25 +112,20 @@ final class DeliverymanLoop implements CategoryLoop {
         route.removeIf(id -> !mine(settlement, id, day));
         if (!load.isEmpty() && (route.isEmpty() || load.stacks().size() >= capacity)) {
             releaseRoute(level, settlement);
-            return shell.startDelivery(level, job);
+            return JobStep.DELIVER;
         }
         while (true) {
             if (route.isEmpty() && !startTrip(level, settlement, site.block(), capacity, day)) {
-                shell.setStatus(job.jobBlock(), JobStatus.NO_PICKUPS);
-                return false;
+                return JobStep.skip(JobStatus.NO_PICKUPS);
             }
             DeliveryTask task = Deliveries.get(settlement, route.get(0)).orElseThrow();
             BlockPos source = task.source();
             if (reachable(source)) {
-                shell.setActiveJob(job);
                 visiting = source;
-                visit = staff(settlement, job, source) ? new ClerkStorage.Visit(source, SettlerWork.REACH, false)
+                ClerkStorage.Visit next = staff(settlement, job, source) ? new ClerkStorage.Visit(source, SettlerWork.REACH, false)
                         : shell.reachableVisit(level, source, ClerkStorage.visit(level, source, dayTime));
-                if (!shell.walkingTo(visit.target())) {
-                    shell.moveToJob(level, visit.target());
-                }
-                shell.setStatus(job.jobBlock(), JobStatus.COLLECTING, sourceName(settlement, task));
-                return true;
+                visit = next;
+                return JobStep.walk(next.target(), next.reach(), JobStatus.COLLECTING, sourceName(settlement, task));
             }
             // Unreachable: its tasks are free again, this Deliveryman leaves the source out for the rest of the day.
             unreachable.add(source);
@@ -215,27 +210,21 @@ final class DeliverymanLoop implements CategoryLoop {
     }
 
     @Override
-    public boolean holdsDecision(ServerLevel level, SettlerJob job) {
-        return false;
-    }
-
-    @Override
-    public double reach(SettlerJob job) {
-        return visit == null ? SettlerWork.REACH : visit.reach();
+    public JobStep holdsDecision(ServerLevel level, SettlerJob job) {
+        return JobStep.skip();
     }
 
     // ---------------------------------------------------------------- per-tick work
 
     /** At a source: takes what fits of every task there; at a foreign Clerk's counter it waits for its turn first. */
     @Override
-    public void tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
+    public JobStep tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
         BlockPos source = visiting != null ? visiting : target;
         boolean counter = visit != null && visit.counter();
         if (counter && !shell.waitAtCounter(level, source)) {
             // Waiting for the Clerk.
-            return;
+            return JobStep.STAY;
         }
-        settler.getNavigation().stop();
         checked = null;
         visiting = null;
         visit = null;
@@ -253,7 +242,7 @@ final class DeliverymanLoop implements CategoryLoop {
                 }
             }
         }
-        shell.stepDone(level);
+        return JobStep.DONE;
     }
 
     /**
@@ -370,20 +359,21 @@ final class DeliverymanLoop implements CategoryLoop {
     }
 
     /**
-     * Unloads the carry inventory into the whole store as staff; EXP per delivered stack. What does not fit stays
-     * ("Storage full", retried after 30 s).
+     * Unloads the carry inventory into the whole store as staff; EXP per delivered stack. What does not fit stays (the
+     * shell blocks the job with "Storage full", retried after 30 s).
      *
      * @param level the level
      * @param job   the Deliveryman job
+     * @return whether everything was delivered
      */
-    void unload(ServerLevel level, SettlerJob job) {
+    boolean unload(ServerLevel level, SettlerJob job) {
         BlockPos target = unloadTarget(level, job);
-        if (unload(level, job, target, shell.workplace(job.jobBlock()).buffer())) {
+        boolean all = unload(level, job, target, shell.workplace(job.jobBlock()).buffer());
+        if (all) {
             store = null;
-        } else {
-            shell.block(level, job.jobBlock(), JobStatus.STORAGE_FULL);
         }
         StockRules.check(level, target, DayClock.dayTime(level));
+        return all;
     }
 
     /**

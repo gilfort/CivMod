@@ -16,6 +16,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementRules;
+import com.gilfort.civmod.settlement.SettlementWorld;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -461,14 +462,7 @@ public class Settler extends PathfinderMob {
                     JobBlockSite.blockAt(level, job.jobBlock())
                             .filter(block -> !StationTypes.isUnlocked(block, job.jobType()) && block.assignee(getUUID())
                                     .filter(assignee -> assignee.job() == block.jobType()).isPresent())
-                            .ifPresent(block -> {
-                                if (JobAssignments.holdsElsewhere(data, job.jobBlock(), getUUID(), block.jobType())) {
-                                    JobAssignments.unassign(data, job.jobBlock(), getUUID());
-                                    removeJob(job.jobBlock());
-                                } else {
-                                    replaceJob(job.jobBlock(), block.jobType());
-                                }
-                            });
+                            .ifPresent(block -> SettlementWorld.fallBackToBaseJob(level, job.jobBlock(), this));
                 }
             }
             return;
@@ -552,7 +546,6 @@ public class Settler extends PathfinderMob {
         SettlementData data = SettlementData.get(level);
         // Lost, not dropped: forgetting the jobs below would drop the buffers or deliver them into a drop-off.
         work.loseBuffers();
-        jobs.forEach(job -> JobAssignments.unassign(data, job.jobBlock(), getUUID()));
         data.settlement(settlementId).ifPresent(settlement -> {
             settlement.bedOf(getUUID()).ifPresent(bed -> {
                 data.releaseBed(settlement, bed);
@@ -561,7 +554,7 @@ public class Settler extends PathfinderMob {
             data.removeMember(settlement, getUUID());
         });
         SettlerBeds.releaseStrawSpot(getUUID());
-        setJobs(List.of());
+        SettlementWorld.unassignAll(level, this);
         settlementId = -1;
         discard();
     }
