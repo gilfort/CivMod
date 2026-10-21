@@ -70,3 +70,7 @@ Optional hooks (`default` methods): `scanCenter` (first work point, else the Job
 Inside `produce`, call `leftOut(context, types)` for the types of the rolled group: it returns the types excluded at the JobBlock and those whose dropped item is at its Max. Keep the group roll as it is and spread the weights over the remaining types; a fully left-out group gives an empty roll (`new Produced(List.of(), context.tool())`), never a roll into another group.
 
 Scan results of your own `ScanResult` types are kept in memory only: after a restart the Found tab waits for the next scan.
+
+## Biome bonuses
+
+The loop applies a biome bonus's `speed` to `speed × productivity` and its `double_drop` to the stacks `produce` returns. `rare_chance` needs the profile: a roll with a rare group (the Miner's ores, the Fisherman's treasure) overrides `rareGroup()` with the group's name and multiplies the group's chance with `context.rareChance(baseChance)` (capped at 1.0). Profiles without a rare group ignore `rare_chance`. See the getting-started guide for the file format.

@@ -51,6 +51,10 @@ _Avoid_: A second production loop for catch-up; a "quiet" flag in the rules
 The block a Resource Collection settler works at today (a tree, a stone face, water), chosen each day among the JobBlock's work points or by the job's auto search; part of the Workplace, not the same thing. Code: `Workplace.workPlaceOfDay`, saved as `SettlerWork.WorkPlaceEntry` (`poi`).
 _Avoid_: Workplace (the whole per-job state), POI in prose
 
+**Biome bonus**:
+An effect a biome gives the Jobs a datapack file names: `speed`, `rare_chance` (the chance of a roll's **rare group**: the Miner's ores, the Fisherman's treasure) and `double_drop`. Read at the Job's **biome position** (work place / station of the day, JobBlock, or none for Mission Jobs) once per day. Code: files and combining rules in `BiomeBonuses` (`civmod_biome_bonuses/<name>.json`), the resolved effects `BiomeBonus` (addon API, with the source file of each effect), position `BiomePosition` / `CategoryProfile.biomePosition()`, rare group `ResourceCollectionProfile.rareGroup()`, cached per day in the `Workplace`, query `CivModApi.biomeBonus`.
+_Avoid_: Building bonus, biome boost
+
 **Found tab**:
 The JobBlock tab of a Resource Collection Job listing what its scan found (Lumberjack wood types, Miner stone and ore types, Fisherman the fish of the fishing fish loot table), with "Needs a better tool" and the treasure chance computed for the settler working there, the water info, and "Not scanned yet" before the first scan. It shows the working settler's scan, else the last scan the JobBlock kept. The settler's job tab shows none of it. Code: tab `FoundTab`, data `FoundTabData` (payloads `Sync` / `Toggle`), `FoundTabView`; entries from `ResourceCollectionProfile.found` / `foundLines`, the kept scan in `SettlementBlock.foundScan()` (set through `JobAssignments.rememberScan`); fish list `FishTable`.
 _Avoid_: Scan tab, resource list in the settler window
