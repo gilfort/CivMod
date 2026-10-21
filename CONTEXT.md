@@ -228,3 +228,14 @@ One claimed part of one request: claim what fits the buffer, fetch inputs (colle
 **Station**:
 The work place of a Producing Job, named per recipe type by a block tag (`ProducingProfile.station`, by convention `<namespace>:stations/<job>`): the main recipe type's station is set with the scroll (up to 8, one per day) or the nearest one within 16 blocks of the JobBlock inside the border; other recipe types use their nearest station.
 _Avoid_: Workbench (the JobBlock is none)
+
+**Station Extra**:
+A block near a Job's station of the day that raises its base job factor (the Smith's anvil: 0.3 → 1.2); named per Job in `station_extras` of `civmod_jobs/<job>.json`, the highest matching factor counts. Not a bonus multiplier. Planned (module 2).
+_Avoid_: Work aid, workshop tool (collides with tools)
+
+**Occupied**:
+A work place a settler has chosen for the day: no other settler uses it that day; while the settler actually works there, players cannot open its GUI ("In use by <name>"). Breaking it stays allowed; the settler then picks a new free one. Planned (module 2).
+_Avoid_: Claim (a claim is part of a request, see Round), reserved (stock reservations)
+
+**Remaining Heat**:
+The burn time a furnace of the Smelter keeps from fuel already burning, used by the next charge so no fuel is wasted. Planned (module 2).
