@@ -159,6 +159,7 @@ public final class BiomeBonusGuiGameTests {
      */
     private static void fillBiome(GameTestHelper helper, BlockPos from, BlockPos to, ResourceKey<Biome> key) {
         var result = FillBiomeCommand.fill(helper.getLevel(), helper.absolutePos(from), helper.absolutePos(to), BiomeBonusGameTests.biome(helper, key));
+        BiomeBonusGameTests.logFill(helper, from, to, key);
         BlockPos center = helper.absolutePos(new BlockPos((from.getX() + to.getX()) / 2, 1, (from.getZ() + to.getZ()) / 2));
         helper.assertTrue(result.left().isPresent() || helper.getLevel().getBiome(center).is(key),
                 "Biome not set: " + result.right().map(Exception::getMessage).orElse(""));

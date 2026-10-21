@@ -89,7 +89,17 @@ public final class BiomeBonusGameTests {
      */
     static void fillBiome(GameTestHelper helper, BlockPos from, BlockPos to, ResourceKey<Biome> key) {
         var result = FillBiomeCommand.fill(helper.getLevel(), helper.absolutePos(from), helper.absolutePos(to), biome(helper, key));
+        logFill(helper, from, to, key);
         helper.assertTrue(result.left().isPresent(), "Biome not set (unloaded chunks?): " + result.right().map(Exception::getMessage).orElse(""));
+    }
+
+    /**
+     * Logs a biome fill with its absolute box, so a test that finds a foreign biome in its area can be matched with the
+     * fill that put it there (CI runs the biome tests side by side).
+     */
+    static void logFill(GameTestHelper helper, BlockPos from, BlockPos to, ResourceKey<Biome> key) {
+        CivMod.LOGGER.info("[biome fill] test at {}: {} .. {} -> {}", helper.absolutePos(BlockPos.ZERO), helper.absolutePos(from),
+                helper.absolutePos(to), key.identifier());
     }
 
     /**
@@ -230,7 +240,8 @@ public final class BiomeBonusGameTests {
                 .thenWaitUntil(() -> helper.assertTrue(settler.getWork().buffer(jobBlock).count() >= 6,
                         "Not enough mined yet (status " + settler.getWork().status(jobBlock) + ", buffer " + settler.getWork().buffer(jobBlock).stacks() + ")"))
                 .thenExecute(() -> {
-                    helper.assertTrue(BiomeBonuses.at(level, ModJobs.MINER.get(), jobBlock).isEmpty(), "The JobBlock stands in plains");
+                    BiomeBonus atJobBlock = BiomeBonuses.at(level, ModJobs.MINER.get(), jobBlock);
+                    helper.assertTrue(atJobBlock.isEmpty(), "The JobBlock " + jobBlock + " stands in plains: " + atJobBlock);
                     Map<Item, Integer> counts = settler.getWork().buffer(jobBlock).counts();
                     helper.assertTrue(counts.values().stream().allMatch(count -> count % 2 == 0), "Every stone drop comes twice: " + counts);
                     BiomeBonus today = CivModApi.biomeBonus(settler, jobBlock);
