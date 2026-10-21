@@ -3,8 +3,12 @@ package com.gilfort.civmod.item;
 import java.util.Optional;
 
 import com.gilfort.civmod.block.JobBlock;
+import com.gilfort.civmod.api.BiomePosition;
+import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.job.BiomeBonuses;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.menu.BiomeBonusText;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.registry.ModDataComponents;
@@ -213,7 +217,7 @@ public class ScrollOfAssignmentItem extends Item {
         boolean container = isContainer(level, target);
         JobAssignments.PointResult result = JobAssignments.cyclePoint(SettlementData.get(level), jobBlock, target, workJob.isPresent(), container);
         Component message = switch (result) {
-            case WORK -> Component.translatable("civmod.scroll.point.work", workJob.orElse(jobType).displayName());
+            case WORK -> workPointMessage(level, workJob.orElse(jobType), target);
             case COLLECT -> Component.translatable("civmod.scroll.point.collect");
             case DROP_OFF -> Component.translatable("civmod.scroll.point.drop_off");
             case REMOVED -> Component.translatable("civmod.scroll.point.removed");
@@ -225,6 +229,25 @@ public class ScrollOfAssignmentItem extends Item {
             case STORAGE, STAND_SPOT, STORAGE_FULL, TOO_MANY_SPOTS, TAKEN -> throw new IllegalStateException("Clerk result for " + jobType);
         };
         player.sendOverlayMessage(message);
+    }
+
+    /**
+     * The action bar text of a new work point (vault {@code Systems/JobBlock.md}, decisions on biome bonuses): the Job,
+     * then the point's biome and the effects its biome bonuses give the Job ("Work place for Miner added · Desert · Ore
+     * chance ×1.5"); a Job whose biome is not read at its work place gets no biome.
+     *
+     * @param level  the level
+     * @param job    the Job working at the point
+     * @param target the work point
+     * @return the text
+     */
+    public static Component workPointMessage(ServerLevel level, Job job, BlockPos target) {
+        Component added = Component.translatable("civmod.scroll.point.work", job.displayName());
+        if (BiomeBonuses.position(job) != BiomePosition.WORK_PLACE) {
+            return added;
+        }
+        return BiomeBonusText.line(job, CivModApi.biomeBonusAt(level, job, target))
+                .<Component>map(line -> Component.empty().append(added).append(" · ").append(line)).orElse(added);
     }
 
     /** Bound to a Clerk JobBlock (a Warehouse), right-click another Clerk JobBlock: links or unlinks it as Served Clerk. */

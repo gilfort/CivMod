@@ -152,6 +152,18 @@ public interface ResourceCollectionProfile extends CategoryProfile {
     }
 
     /**
+     * Whether a found type belongs to the {@link #rareGroup()}, so a {@code rare_chance} bonus acts on it (the Found tab
+     * marks it with a star). None by default.
+     *
+     * @param scan the scan result
+     * @param type a type the Found tab lists ({@link #found})
+     * @return whether it is in the rare group (Miner: an ore)
+     */
+    default boolean inRareGroup(ScanResult scan, Identifier type) {
+        return false;
+    }
+
+    /**
      * Produces one resource. The loop applies the biome bonus's {@code double_drop} to the returned stacks.
      *
      * @param context the production context

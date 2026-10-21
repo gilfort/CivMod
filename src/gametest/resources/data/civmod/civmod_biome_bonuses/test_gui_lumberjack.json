@@ -1,0 +1,5 @@
+{
+  "jobs": ["civmod:lumberjack"],
+  "biomes": "minecraft:desert",
+  "rare_chance": 2.0
+}

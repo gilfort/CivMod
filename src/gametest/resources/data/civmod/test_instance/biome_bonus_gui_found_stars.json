@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:biome_bonus_gui_found_stars",
+  "max_ticks": 2400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

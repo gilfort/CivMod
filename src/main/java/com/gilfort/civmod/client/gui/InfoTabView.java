@@ -25,7 +25,8 @@ import net.minecraft.network.chat.Component;
 
 /**
  * The "Info" tab of the {@link JobBlockScreen}; the client side of {@link InfoTab}: Job, level and skill cap, settlement
- * status, one line per offered Job with its automatic assignment checkbox, upgrade costs (a row of slots that scrolls
+ * status, one line per offered Job with its automatic assignment checkbox, today's biome with its bonus effects (the "?"
+ * lists every biome with an effect for the Job), upgrade costs (a row of slots that scrolls
  * with the mouse wheel) and the Upgrade, leaf collection and Free buttons. Other tabs' views add their own lines,
  * buttons and help lines ({@link JobBlockTabView#extractInfo}, {@link JobBlockTabView#initInfo}).
  * <p>
@@ -120,6 +121,8 @@ final class InfoTabView implements JobBlockTabView {
             screen.views().forEach(view -> lines.addAll(view.infoHelpLines()));
             lines.add(Component.translatable("civmod.gui.job_block.help.auto_assign"));
         }
+        // The biomes that change something for the Job, and that all others do not.
+        lines.addAll(info.biome().overview());
         return lines;
     }
 
@@ -178,6 +181,16 @@ final class InfoTabView implements JobBlockTabView {
             if (!holders.isEmpty() && mouseX >= left + CivGui.PADDING && mouseX < left + CivGui.PADDING + Math.min(textWidth, font.width(text))
                     && mouseY >= top + y && mouseY < top + y + font.lineHeight) {
                 graphics.setComponentTooltipForNextFrame(font, settlerLines(info, holders), mouseX, mouseY);
+            }
+            y += LINE_HEIGHT;
+        }
+        // Today's biome of the work place with its effects (vault Systems/JobBlock.md, biome bonuses).
+        if (info.biome().today().isPresent()) {
+            Component biome = info.biome().today().get();
+            graphics.text(font, CivGui.fit(font, biome, width), CivGui.PADDING, y, color, false);
+            if (font.width(biome) > width && mouseX >= left + CivGui.PADDING && mouseX < left + CivGui.PADDING + width && mouseY >= top + y
+                    && mouseY < top + y + font.lineHeight) {
+                graphics.setComponentTooltipForNextFrame(font, List.of(biome), mouseX, mouseY);
             }
             y += LINE_HEIGHT;
         }

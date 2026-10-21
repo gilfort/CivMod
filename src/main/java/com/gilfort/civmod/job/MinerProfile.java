@@ -118,6 +118,11 @@ public final class MinerProfile implements ResourceCollectionProfile {
     }
 
     @Override
+    public boolean inRareGroup(ScanResult scan, Identifier type) {
+        return scan instanceof MineScan.Result result && result.ores().contains(type);
+    }
+
+    @Override
     public Optional<Produced> produce(Context context) {
         if (!(context.scan() instanceof MineScan.Result scan)) {
             return Optional.empty();
