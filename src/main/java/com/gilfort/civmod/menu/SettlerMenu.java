@@ -7,13 +7,9 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.npc.Settler;
-import java.util.List;
 
-import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.SettlerJobs;
-import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.MissionOffers;
-import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.registry.ModMenuTypes;
 
@@ -131,13 +127,10 @@ public class SettlerMenu extends CivMenu {
     @Override
     public boolean clickMenuButton(Player player, int buttonId) {
         if (buttonId >= SettlerJobs.MOVE_UP && buttonId < SettlerJobs.END) {
-            List<SettlerJob> before = info.jobs();
-            info = info.withJobs(SettlerJobs.apply(before, buttonId));
+            info = info.withJobs(SettlerJobs.apply(info.jobs(), buttonId));
             if (settler != null && settler.level() instanceof ServerLevel level) {
-                settler.setJobs(info.jobs());
-                // Free JobBlocks of removed jobs.
-                before.stream().filter(job -> !info.jobs().contains(job))
-                        .forEach(job -> JobAssignments.unassign(SettlementData.get(level), job.jobBlock(), settler.getUUID()));
+                // Frees the JobBlocks of removed jobs.
+                SettlementWorld.setJobs(level, settler, info.jobs());
             }
             return true;
         }

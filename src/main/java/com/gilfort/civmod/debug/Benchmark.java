@@ -11,7 +11,6 @@ import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.npc.Settler;
-import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.SettlerSkins;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModEntityTypes;
@@ -223,8 +222,7 @@ public final class Benchmark {
         level.addFreshEntity(settler);
         settler.joinSettlement(data, settlement);
         settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.BREAD, 8));
-        JobAssignments.assign(data, jobBlock, settler.getUUID(), name, settlement.id(), List.of(), job);
-        settler.addJob(new SettlerJob(job, jobBlock));
+        SettlementWorld.assign(level, jobBlock, settler, job);
         return settler;
     }
 
