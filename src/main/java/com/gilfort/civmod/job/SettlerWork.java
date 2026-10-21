@@ -1048,11 +1048,7 @@ public final class SettlerWork {
                 yield true;
             }
             case JobStep.Blocked blocked -> {
-                if (blocked.reason() != null) {
-                    block(level, jobBlock, blocked.reason());
-                } else {
-                    block(level, jobBlock, blocked.status());
-                }
+                blocked.reason().ifPresentOrElse(reason -> block(level, jobBlock, reason), () -> block(level, jobBlock, blocked.status()));
                 yield false;
             }
             case JobStep.Skip skip -> {

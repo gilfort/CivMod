@@ -99,7 +99,7 @@ public final class JobStepGameTests {
 
         JobStep step = Objects.requireNonNull(work.loop(job)).plan(level, job, site, DayClock.day(level), MORNING);
 
-        helper.assertTrue(step instanceof JobStep.Blocked blocked && blocked.status() == JobStatus.NO_TOOL && blocked.reason() == null,
+        helper.assertTrue(step instanceof JobStep.Blocked blocked && blocked.status() == JobStatus.NO_TOOL && blocked.reason().isEmpty(),
                 "Blocked without a tool: " + step);
         helper.assertTrue(work.status(jobBlock) == JobStatus.IDLE, "The loop does not set the status: " + work.status(jobBlock));
         helper.assertFalse(work.apply(level, job, step), "A blocked job leaves the settler to its next priority");

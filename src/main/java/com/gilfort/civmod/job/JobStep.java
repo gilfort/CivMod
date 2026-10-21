@@ -2,8 +2,6 @@ package com.gilfort.civmod.job;
 
 import java.util.Optional;
 
-import org.jspecify.annotations.Nullable;
-
 import com.gilfort.civmod.api.BlockingReason;
 
 import net.minecraft.core.BlockPos;
@@ -57,7 +55,7 @@ sealed interface JobStep {
      * @return the job is blocked for a while; the next priority works
      */
     static JobStep blocked(JobStatus status) {
-        return new Blocked(status, null);
+        return new Blocked(status, Optional.empty());
     }
 
     /**
@@ -65,7 +63,7 @@ sealed interface JobStep {
      * @return the job is blocked for a while with status {@link JobStatus#BLOCKED}; the next priority works
      */
     static JobStep blocked(BlockingReason reason) {
-        return new Blocked(JobStatus.BLOCKED, reason);
+        return new Blocked(JobStatus.BLOCKED, Optional.of(reason));
     }
 
     /**
@@ -117,9 +115,9 @@ sealed interface JobStep {
      * The job cannot work for a while ({@link Workplace#BLOCKED_RETRY} ticks); the next priority works.
      *
      * @param status the status explaining why ({@link JobStatus#BLOCKED} with a reason)
-     * @param reason the profile's reason, null for a status of CivMod's own
+     * @param reason the profile's reason, empty for a status of CivMod's own
      */
-    record Blocked(JobStatus status, @Nullable BlockingReason reason) implements JobStep {
+    record Blocked(JobStatus status, Optional<BlockingReason> reason) implements JobStep {
     }
 
     /**
