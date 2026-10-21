@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:job_step_deliveryman_skips_without_tasks",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
