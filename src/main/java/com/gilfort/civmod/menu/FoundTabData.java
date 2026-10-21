@@ -148,10 +148,8 @@ public record FoundTabData(boolean scanned, List<Entry> entries, List<Component>
         JobBlockSite site = found.get();
         SettlementBlock block = site.block();
         Settler settler = worker(level, block);
-        ScanResult scan = settler == null ? null : settler.getWork().scan(pos).orElse(null);
-        if (scan == null) {
-            scan = block.foundScan().map(SavedScan::result).orElse(null);
-        }
+        ScanResult scan = Optional.ofNullable(settler).flatMap(working -> working.getWork().scan(pos))
+                .or(() -> block.foundScan().map(SavedScan::result)).orElse(null);
         if (scan == null) {
             return EMPTY;
         }
@@ -162,14 +160,12 @@ public record FoundTabData(boolean scanned, List<Entry> entries, List<Component>
         ItemStack tool = worker.map(ResourceCollectionProfile.Worker::tool).orElse(ItemStack.EMPTY);
         // The biome bonus acting on the working settler today: stars at the drops it changes.
         BiomeBonus bonus = settler == null ? BiomeBonus.NONE : CivModApi.biomeBonus(settler, pos);
-        Job job = settler == null ? block.jobType()
-                : settler.getJobs().stream().filter(held -> held.jobBlock().equals(pos)).findFirst().map(SettlerJob::jobType).orElse(block.jobType());
+        Job job = Optional.ofNullable(settler).flatMap(working -> working.jobAt(pos)).map(SettlerJob::jobType).orElse(block.jobType());
         boolean rareActs = !bonus.rareChance().sources().isEmpty();
-        ScanResult result = scan;
         List<Entry> entries = profile.get().found(scan, worker).stream().map(entry -> {
             // The dropped item only when needed: it rolls the block's loot.
             Item dropped = atMax.isEmpty() && bonus.doubleDrops().isEmpty() ? null : profile.get().dropped(level, pos, entry.type(), tool);
-            boolean rare = rareActs && profile.get().inRareGroup(result, entry.type());
+            boolean rare = rareActs && profile.get().inRareGroup(scan, entry.type());
             List<BiomeBonus.DoubleDrop> drops = dropped == null ? List.of() : bonus.doubleDrops(new ItemStack(dropped));
             return new Entry(entry.type(), entry.icon(), !entry.available(), block.excluded().contains(entry.type()),
                     !atMax.isEmpty() && atMax.contains(dropped) ? clerk : Optional.empty(), rare, !drops.isEmpty(),

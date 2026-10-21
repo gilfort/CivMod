@@ -104,14 +104,14 @@ public final class CivModApi {
      * from the {@code civmod_biome_bonuses} files at the Job's biome position ({@link CategoryProfile#biomePosition()}).
      * The work place's biome is read once per day when the work place of the day is chosen.
      *
-     * @param settler  a settler (another entity has no bonuses)
+     * @param entity   a settler (another entity has no bonuses)
      * @param jobBlock the JobBlock of the Job
      * @return the bonuses, {@link BiomeBonus#NONE} if the entity is no settler holding a Job there, is on the client
      *         or has no work place yet
      */
-    public static BiomeBonus biomeBonus(Entity settler, BlockPos jobBlock) {
-        if (settler instanceof Settler found && settler.level() instanceof ServerLevel level) {
-            return found.getWork().biomeBonus(level, jobBlock);
+    public static BiomeBonus biomeBonus(Entity entity, BlockPos jobBlock) {
+        if (entity instanceof Settler settler && settler.level() instanceof ServerLevel level) {
+            return settler.getWork().biomeBonus(level, jobBlock);
         }
         return BiomeBonus.NONE;
     }

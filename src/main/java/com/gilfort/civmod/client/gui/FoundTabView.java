@@ -160,7 +160,7 @@ final class FoundTabView implements JobBlockTabView {
                     lines.add(Component.translatable("civmod.gui.found.excluded").withStyle(ChatFormatting.GRAY));
                 }
                 entry.maxAt().ifPresent(clerk -> lines.add(Component.translatable("civmod.gui.found.max_reached", clerk).withStyle(ChatFormatting.GOLD)));
-                entry.bonusLines().forEach(line -> lines.add(Component.literal("★ ").append(line).withStyle(ChatFormatting.YELLOW)));
+                entry.bonusLines().forEach(line -> lines.add(Component.empty().append(CivGui.STAR).append(" ").append(line).withColor(CivGui.STAR_COLOR)));
                 graphics.setComponentTooltipForNextFrame(font, lines, mouseX, mouseY);
             }
         }

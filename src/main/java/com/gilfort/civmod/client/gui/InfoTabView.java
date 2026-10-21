@@ -149,8 +149,7 @@ final class InfoTabView implements JobBlockTabView {
             Component settlement = Component.translatable("civmod.gui.job_block.settlement", info.settlementName());
             Component unconnected = Component.translatable("civmod.gui.job_block.unconnected", info.required(), info.distance());
             graphics.text(font, CivGui.fit(font, unconnected, width), CivGui.PADDING, y, CivGui.ERROR_COLOR, false);
-            if (mouseX >= left + CivGui.PADDING && mouseX < left + CivGui.PADDING + width && mouseY >= top + y
-                    && mouseY < top + y + font.lineHeight) {
+            if (overLine(y, width, mouseX, mouseY)) {
                 graphics.setComponentTooltipForNextFrame(font, List.of(settlement, unconnected), mouseX, mouseY);
             }
         } else {
@@ -188,8 +187,8 @@ final class InfoTabView implements JobBlockTabView {
         if (info.biome().today().isPresent()) {
             Component biome = info.biome().today().get();
             graphics.text(font, CivGui.fit(font, biome, width), CivGui.PADDING, y, color, false);
-            if (font.width(biome) > width && mouseX >= left + CivGui.PADDING && mouseX < left + CivGui.PADDING + width && mouseY >= top + y
-                    && mouseY < top + y + font.lineHeight) {
+            // Shortened to fit: the whole line on hover.
+            if (font.width(biome) > width && overLine(y, width, mouseX, mouseY)) {
                 graphics.setComponentTooltipForNextFrame(font, List.of(biome), mouseX, mouseY);
             }
             y += LINE_HEIGHT;
@@ -210,6 +209,13 @@ final class InfoTabView implements JobBlockTabView {
         int x = screen.left() + autoBoxX();
         int y = screen.top() + JOB_LINES_Y + line * LINE_HEIGHT - 1;
         return mouseX >= x && mouseX < x + AUTO_BOX && mouseY >= y && mouseY < y + AUTO_BOX;
+    }
+
+    /** Whether the mouse is over a text line at panel height {@code y} that is {@code width} wide. */
+    private boolean overLine(int y, int width, int mouseX, int mouseY) {
+        int x = screen.left() + CivGui.PADDING;
+        int top = screen.top() + y;
+        return mouseX >= x && mouseX < x + width && mouseY >= top && mouseY < top + screen.getFont().lineHeight;
     }
 
     /** A left click on an automatic assignment checkbox sets the wanted state on client and server. */

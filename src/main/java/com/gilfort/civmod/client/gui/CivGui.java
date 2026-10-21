@@ -64,9 +64,9 @@ public final class CivGui {
     /** Red slot fill over an item that is missing (an upgrade cost the player lacks). */
     static final int MISSING_TINT = 0x80FF2020;
     /** Colour of a bonus star (vanilla gold). */
-    private static final int STAR_COLOR = 0xFFFFAA00;
+    static final int STAR_COLOR = 0xFFFFAA00;
     /** The bonus star glyph. */
-    private static final Component STAR = Component.literal("★");
+    static final Component STAR = Component.literal("★");
     /** Frame of a selected slot. */
     private static final int SELECTED_COLOR = INSET_LIGHT;
     /** Size of the help icon ({@link #help}). */
@@ -111,7 +111,7 @@ public final class CivGui {
      * @param itemY    the y position of the item (slot position)
      * @param stars    how many effects act (0–2)
      */
-    public static void bonusStars(GuiGraphicsExtractor graphics, Font font, int itemX, int itemY, int stars) {
+    static void bonusStars(GuiGraphicsExtractor graphics, Font font, int itemX, int itemY, int stars) {
         int x = itemX + 16 - font.width(STAR);
         if (stars >= 2) {
             graphics.text(font, STAR, x - 3, itemY - 2, STAR_COLOR, true);

@@ -2,10 +2,10 @@ package com.gilfort.civmod.item;
 
 import java.util.Optional;
 
-import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.api.BiomePosition;
 import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.job.BiomeBonuses;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.menu.BiomeBonusText;
