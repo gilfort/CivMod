@@ -1807,16 +1807,26 @@ public final class SettlerWork {
         if (counterUnreachable(level, pos)) {
             return ClerkStorage.blockVisit(pos);
         }
-        if (settler.position().distanceTo(Vec3.atCenterOf(visit.target())) <= COUNTER_PATH_CHECK) {
-            net.minecraft.world.level.pathfinder.Path path = settler.getNavigation().createPath(visit.target(), (int) visit.reach());
-            // No path at all says nothing: vanilla searches none while the settler is in the air (a jump on its walk).
-            // Only a searched path that ends short of the counter makes it unreachable for the day.
-            if (path != null && !path.canReach()) {
-                unreachableCounters.put(pos.immutable(), DayClock.day(level));
-                return ClerkStorage.blockVisit(pos);
-            }
+        // Only a searched path that ends short of the counter makes it unreachable for the day.
+        if (settler.position().distanceTo(Vec3.atCenterOf(visit.target())) <= COUNTER_PATH_CHECK
+                && pathEndsShort(visit.target(), visit.reach())) {
+            unreachableCounters.put(pos.immutable(), DayClock.day(level));
+            return ClerkStorage.blockVisit(pos);
         }
         return visit;
+    }
+
+    /**
+     * One path search from the settler to a target. A path search is costly: call it once per walk, not per tick.
+     *
+     * @param target the target
+     * @param reach  how close the settler has to come
+     * @return whether a searched path ends short of the target; false when none was searched, which says nothing
+     *         (vanilla searches none while the settler is in the air, e.g. a jump on its walk)
+     */
+    boolean pathEndsShort(BlockPos target, double reach) {
+        net.minecraft.world.level.pathfinder.Path path = settler.getNavigation().createPath(target, (int) reach);
+        return path != null && !path.canReach();
     }
 
     /**
