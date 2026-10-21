@@ -1,29 +1,34 @@
 package com.gilfort.civmod.client.gui;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 
-import com.gilfort.civmod.job.LumberjackProfile;
-import com.gilfort.civmod.menu.ClerkTab;
+import org.jspecify.annotations.Nullable;
+
+import com.gilfort.civmod.menu.ClerkTabData;
+import com.gilfort.civmod.menu.DeliveriesTab;
 import com.gilfort.civmod.menu.FoundTab;
+import com.gilfort.civmod.menu.FoundTabData;
+import com.gilfort.civmod.menu.InfoTab;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
-import com.gilfort.civmod.menu.PatternTab;
-import com.gilfort.civmod.menu.StationTypeTab;
-import com.gilfort.civmod.settlement.JobPlaces;
-import com.gilfort.civmod.settlement.SettlementBlock;
-import com.gilfort.civmod.settlement.SettlementRules;
+import com.gilfort.civmod.menu.JobBlockTab;
+import com.gilfort.civmod.menu.MissionsTab;
+import com.gilfort.civmod.menu.PatternTabData;
+import com.gilfort.civmod.menu.PatternsTab;
+import com.gilfort.civmod.menu.RequestsTab;
+import com.gilfort.civmod.menu.StationTypeTabData;
+import com.gilfort.civmod.menu.StationTypesTab;
+import com.gilfort.civmod.menu.StockTab;
+import com.gilfort.civmod.menu.StorageTab;
+import com.gilfort.civmod.menu.TabData;
 
-import com.mojang.blaze3d.platform.InputConstants;
-
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.Rect2i;
@@ -34,19 +39,13 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Screen of a JobBlock: storage tab and info tab (job, level, skill cap, settlement status, upgrade button). Job tabs
- * are drawn by their views: the Mission Board's missions tab ({@link MissionTabView}), the Clerk's Stock and Requests
- * tabs ({@link ClerkTabView}), the Patterns tabs of a Producing JobBlock ({@link PatternTabView}; the Base Job's on top,
- * one per Specialization below the panel), its Station Types tab ({@link StationTypesView}) and the Found tab of Resource
- * Collection JobBlocks ({@link FoundTabView}).
- * <p>
- * Unconnected JobBlocks show the info greyed out with a red hint; storage keeps working.
+ * Screen of a JobBlock: the tab bar of the menu's tabs ({@link JobBlockMenu#tabs()}), each drawn by its view
+ * ({@link JobBlockTabView}). The screen only iterates over the tabs: draw and input go to the view of the selected tab.
  */
 public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
 
@@ -55,22 +54,10 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     /** Width of the scroll arrow column of a list. */
     static final int SCROLL_COLUMN = 8;
 
-    private static final int COST_SLOTS = 7;
-    private static final int COST_X = CivGui.PADDING + 9;
-    private static final int MISSING_TINT = 0x80FF2020;
-    private static final int LINE_HEIGHT = 11;
-    /** Top of the first Job line in the info tab (below job, level and settlement). */
-    private static final int JOB_LINES_Y = 22 + 3 * LINE_HEIGHT;
-    /** Size of the automatic assignment checkbox at the end of a Job line. */
-    private static final int AUTO_BOX = 9;
-
-    private final MissionTabView missions;
-    private final ClerkTabView clerk;
-    private final PatternTabView patterns;
-    private final StationTypesView stationTypes;
-    private final FoundTabView found;
-    private int costOffset;
-    private int costRowY = -1;
+    /** The view of each tab, by tab index (the Patterns tabs share one). */
+    private final List<JobBlockTabView> views;
+    /** Every view once, in tab order. */
+    private final List<JobBlockTabView> distinct;
 
     /**
      * @param menu      the menu
@@ -78,394 +65,118 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      * @param title     the title
      */
     public JobBlockScreen(JobBlockMenu menu, Inventory inventory, Component title) {
-        super(menu, inventory, title, 176, menu.isTall() ? JobBlockMenu.CLERK_HEIGHT : 166, tabs(menu));
-        missions = new MissionTabView(this);
-        clerk = new ClerkTabView(this);
-        patterns = new PatternTabView(this);
-        stationTypes = new StationTypesView(this);
-        found = new FoundTabView(this);
+        super(menu, inventory, title, 176, menu.isTall() ? JobBlockMenu.CLERK_HEIGHT : 166, barTabs(menu, false));
+        this.views = views(menu.tabs());
+        this.distinct = views.stream().distinct().toList();
     }
 
-    private static List<TabBar.Tab> tabs(JobBlockMenu menu) {
-        List<TabBar.Tab> tabs = new ArrayList<>(List.of(
-                new TabBar.Tab(Component.translatable("civmod.gui.job_block.tab.storage"), new ItemStack(Items.CHEST)),
-                new TabBar.Tab(Component.translatable("civmod.gui.job_block.tab.info"), new ItemStack(Items.BOOK))));
-        if (JobBlockMenu.isMissionBoard(menu.getInfo())) {
-            tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.job_block.tab.missions"), new ItemStack(Items.MAP)));
-        }
-        if (JobBlockMenu.isClerk(menu.getInfo())) {
-            tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.clerk.tab.stock"), new ItemStack(Items.WRITABLE_BOOK)));
-            tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.clerk.tab.requests"), new ItemStack(Items.PAPER)));
-            tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.clerk.tab.deliveries"), new ItemStack(Items.BUNDLE)));
-        }
-        if (JobBlockMenu.hasPatternsTab(menu.getInfo())) {
-            tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.patterns.tab_job", menu.getInfo().jobType().displayName()),
-                    new ItemStack(Items.CRAFTING_TABLE)));
-            tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.station_types.tab"), new ItemStack(Items.SMITHING_TABLE)));
-        }
-        if (JobBlockMenu.hasFoundTab(menu.getInfo())) {
-            tabs.add(new TabBar.Tab(Component.translatable("civmod.gui.job_block.tab.found"), new ItemStack(Items.SPYGLASS)));
-        }
-        return tabs;
+    private static List<TabBar.Tab> barTabs(JobBlockMenu menu, boolean below) {
+        return menu.tabs().stream().filter(tab -> tab.below() == below).map(tab -> new TabBar.Tab(tab.label(), tab.icon())).toList();
     }
 
-    /** One Patterns tab per Specialization below the panel (hidden until it is unlocked or its library holds a pattern). */
+    /** One view per tab; the Patterns tabs share one (they share the synced library and the open editor). */
+    private List<JobBlockTabView> views(List<JobBlockTab> tabs) {
+        List<JobBlockTabView> result = new ArrayList<>();
+        @Nullable PatternTabView patterns = null;
+        for (JobBlockTab tab : tabs) {
+            if (tab instanceof PatternsTab && patterns == null) {
+                patterns = new PatternTabView(this);
+            }
+            PatternTabView library = patterns;
+            result.add(switch (tab) {
+                case StorageTab storage -> JobBlockTabView.NONE;
+                case InfoTab info -> new InfoTabView(this, info);
+                case FoundTab found -> new FoundTabView(this, found);
+                case MissionsTab missions -> new MissionTabView(this, missions);
+                case StockTab stock -> new StockTabView(this, stock);
+                case RequestsTab requests -> new RequestsTabView(this, requests);
+                case DeliveriesTab deliveries -> new DeliveriesTabView(this, deliveries);
+                case StationTypesTab stations -> new StationTypesView(this, stations);
+                case PatternsTab job -> library;
+            });
+        }
+        return List.copyOf(result);
+    }
+
+    /** The tabs below the panel (a Producing JobBlock's Specializations). */
     @Override
     protected List<TabBar.Tab> bottomTabs() {
-        return menu.patternJobs().stream().skip(1)
-                .map(job -> new TabBar.Tab(Component.translatable("civmod.gui.patterns.tab_job", job.displayName()), job.icon())).toList();
+        return barTabs(menu, true);
     }
 
     @Override
     protected boolean isTabShown(int tab) {
-        if (!JobBlockMenu.hasPatternsTab(menu.getInfo())) {
-            return true;
-        }
-        if (tab == JobBlockMenu.TAB_STATION_TYPES) {
-            return menu.patternJobs().size() > 1;
-        }
-        return menu.patternJob(tab).filter(job -> job == menu.getInfo().jobType() || menu.getStationTypeTab().unlocked().contains(job)
-                || menu.getStationTypeTab().libraries().contains(job)).isPresent() || menu.patternJob(tab).isEmpty();
+        return menu.tabs().get(tab).shown();
     }
 
     @Override
     protected void initContent() {
-        JobBlockInfo current = menu.getInfo();
-        if (JobBlockMenu.isClerk(current)) {
-            clerk.init();
-        }
-        if (JobBlockMenu.hasPatternsTab(current)) {
-            patterns.init();
-        }
-        boolean max = current.level() >= SettlementRules.MAX_LEVEL;
-        Component upgradeLabel = max ? Component.translatable("civmod.gui.job_block.upgrade.max")
-                : Component.translatable("civmod.gui.job_block.upgrade.to", current.level() + 1);
-        Button upgrade = addTabWidget(JobBlockMenu.TAB_INFO, Button.builder(upgradeLabel, button -> {
-            clickMenuButton(JobBlockMenu.BUTTON_UPGRADE);
-            rebuildWidgets();
-        }).bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 28, imageWidth - 2 * CivGui.PADDING, 20).build());
-        upgrade.active = !max && (minecraft.player.isCreative() || current.canAffordNext(minecraft.player.getInventory()));
-        if (menu.getInfo().jobType().profile(LumberjackProfile.class).isPresent() && menu.getInfo().inSettlement()) {
-            Component label = Component.translatable(menu.getInfo().collectLeaves() ? "civmod.gui.job_block.leaves.on" : "civmod.gui.job_block.leaves.off");
-            addTabWidget(JobBlockMenu.TAB_INFO, Button.builder(label, button -> {
-                clickMenuButton(JobBlockMenu.BUTTON_TOGGLE_LEAVES);
-                rebuildWidgets();
-            }).bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 72, imageWidth - 2 * CivGui.PADDING, 20).build());
-        }
-        if (JobBlockMenu.hasPatternsTab(current) && current.inSettlement()) {
-            Component label = Component.translatable(current.byDeliveryman() ? "civmod.gui.job_block.delivery.deliveryman"
-                    : "civmod.gui.job_block.delivery.self");
-            addTabWidget(JobBlockMenu.TAB_INFO, Button.builder(label, button -> {
-                clickMenuButton(JobBlockMenu.BUTTON_TOGGLE_DELIVERY);
-                rebuildWidgets();
-            }).bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 72, imageWidth - 2 * CivGui.PADDING, 20).build());
-        }
-        if (JobBlockMenu.isMissionBoard(current)) {
-            missions.init();
-        }
-        // Frees the block's only place; blocks with several places are left with ✕ in the settler window.
-        if (!JobBlockMenu.isMissionBoard(current) && current.places().stream().mapToInt(JobPlaces.Line::places).sum() == 1
-                && !current.assignees().isEmpty()) {
-            addTabWidget(JobBlockMenu.TAB_INFO, Button.builder(Component.translatable("civmod.gui.job_block.unassign"), button -> {
-                clickMenuButton(JobBlockMenu.BUTTON_UNASSIGN);
-                rebuildWidgets();
-            }).bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 50, imageWidth - 2 * CivGui.PADDING, 20).build());
-        }
+        distinct.forEach(JobBlockTabView::init);
     }
 
     @Override
     protected void extractTabBackground(GuiGraphicsExtractor graphics, int tab, int mouseX, int mouseY) {
-        if (JobBlockMenu.isClerk(menu.getInfo())) {
-            clerk.extractBackground(graphics, tab);
-            return;
-        }
-        if (tab == JobBlockMenu.TAB_MISSIONS && JobBlockMenu.isMissionBoard(menu.getInfo())) {
-            missions.extractBackground(graphics);
-        }
+        views.get(tab).extractBackground(graphics, menu.tabs().get(tab));
     }
 
     @Override
     protected void onTabChanged(int tab) {
-        if (JobBlockMenu.isMissionBoard(menu.getInfo())) {
-            missions.onTabChanged();
-        }
-        if (JobBlockMenu.hasPatternsTab(menu.getInfo())) {
-            patterns.onTabChanged();
-        }
+        distinct.forEach(JobBlockTabView::onTabChanged);
     }
 
     @Override
     protected void extractTabLabels(GuiGraphicsExtractor graphics, int tab, int mouseX, int mouseY) {
-        if (JobBlockMenu.isClerk(menu.getInfo()) && clerk.extractLabels(graphics, tab, mouseX, mouseY)) {
-            return;
-        }
-        if (JobBlockMenu.hasPatternsTab(menu.getInfo()) && menu.patternJob(tab).isPresent()) {
-            patterns.extractLabels(graphics, mouseX, mouseY);
-            return;
-        }
-        if (JobBlockMenu.hasPatternsTab(menu.getInfo()) && tab == JobBlockMenu.TAB_STATION_TYPES) {
-            stationTypes.extractLabels(graphics, mouseX, mouseY);
-            return;
-        }
-        if (tab == JobBlockMenu.TAB_MISSIONS && JobBlockMenu.isMissionBoard(menu.getInfo())) {
-            missions.extractLabels(graphics, mouseX, mouseY);
-            return;
-        }
-        if (tab == JobBlockMenu.TAB_FOUND && JobBlockMenu.hasFoundTab(menu.getInfo())) {
-            found.extractLabels(graphics, mouseX, mouseY);
-            return;
-        }
-        if (tab == JobBlockMenu.TAB_INFO) {
-            extractInfo(graphics, mouseX, mouseY);
-        }
+        views.get(tab).extractLabels(graphics, menu.tabs().get(tab), mouseX, mouseY);
     }
 
     @Override
     protected List<Component> helpLines(int tab) {
-        JobBlockInfo info = menu.getInfo();
-        if (JobBlockMenu.isClerk(info) && (tab == JobBlockMenu.TAB_STOCK || tab == JobBlockMenu.TAB_REQUESTS || tab == JobBlockMenu.TAB_DELIVERIES)) {
-            return clerk.helpLines(tab);
-        }
-        if (JobBlockMenu.hasPatternsTab(info) && menu.patternJob(tab).isPresent()) {
-            return patterns.helpLines();
-        }
-        if (JobBlockMenu.hasPatternsTab(info) && tab == JobBlockMenu.TAB_STATION_TYPES) {
-            return stationTypes.helpLines();
-        }
-        if (JobBlockMenu.isMissionBoard(info) && tab == JobBlockMenu.TAB_MISSIONS) {
-            return missions.helpLines();
-        }
-        if (JobBlockMenu.hasFoundTab(info) && tab == JobBlockMenu.TAB_FOUND) {
-            return found.helpLines();
-        }
-        List<Component> lines = new ArrayList<>();
-        if (tab == JobBlockMenu.TAB_INFO && info.inSettlement() && !info.connected()) {
-            lines.add(Component.translatable("civmod.gui.job_block.help.connect"));
-        }
-        if (tab == JobBlockMenu.TAB_INFO && info.jobType().profile(LumberjackProfile.class).isPresent() && info.inSettlement()) {
-            lines.add(Component.translatable("civmod.gui.job_block.help.leaves"));
-        }
-        if (tab == JobBlockMenu.TAB_INFO && JobBlockMenu.hasPatternsTab(info) && info.inSettlement()) {
-            lines.add(Component.translatable("civmod.gui.job_block.help.delivery"));
-        }
-        if (tab == JobBlockMenu.TAB_INFO && info.inSettlement()) {
-            lines.add(Component.translatable("civmod.gui.job_block.help.auto_assign"));
-        }
-        return lines;
-    }
-
-    // ---------------------------------------------------------------- info tab
-
-    private void extractInfo(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-        JobBlockInfo info = menu.getInfo();
-        boolean active = info.inSettlement() && info.connected();
-        int color = active ? CivGui.LABEL_COLOR : CivGui.HINT_COLOR;
-        int y = 22;
-        graphics.text(font, Component.translatable("civmod.gui.job_block.job", info.jobType().displayName()), CivGui.PADDING, y, color, false);
-        y += LINE_HEIGHT;
-        graphics.text(font, Component.translatable("civmod.gui.job_block.level_cap", info.level(), SettlementRules.MAX_LEVEL,
-                SettlementRules.skillCap(info.level())), CivGui.PADDING, y, color, false);
-        y += LINE_HEIGHT;
-        // The settlement line also carries the connection state (one line: the buttons below leave no room for more).
-        int width = imageWidth - 2 * CivGui.PADDING;
-        if (!info.inSettlement()) {
-            graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.job_block.not_registered"), width), CivGui.PADDING, y,
-                    CivGui.ERROR_COLOR, false);
-        } else if (!info.connected()) {
-            Component settlement = Component.translatable("civmod.gui.job_block.settlement", info.settlementName());
-            Component unconnected = Component.translatable("civmod.gui.job_block.unconnected", info.required(), info.distance());
-            graphics.text(font, CivGui.fit(font, unconnected, width), CivGui.PADDING, y, CivGui.ERROR_COLOR, false);
-            if (mouseX >= leftPos + CivGui.PADDING && mouseX < leftPos + CivGui.PADDING + width && mouseY >= topPos + y
-                    && mouseY < topPos + y + font.lineHeight) {
-                graphics.setComponentTooltipForNextFrame(font, List.of(settlement, unconnected), mouseX, mouseY);
-            }
-        } else {
-            graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.job_block.settlement", info.settlementName()), width),
-                    CivGui.PADDING, y, color, false);
-        }
-        y += LINE_HEIGHT;
-        // One line per offered Job with taken / places; a single place names its holder, several list them on hover.
-        // In a settlement each line ends with its automatic assignment checkbox.
-        int textWidth = info.inSettlement() ? width - AUTO_BOX - 2 : width;
-        int lineIndex = 0;
-        for (JobPlaces.Line line : info.places()) {
-            List<SettlementBlock.Assignee> holders = info.assignees().stream().filter(assignee -> assignee.job() == line.job()).toList();
-            Component places = JobPickerScreen.label(line);
-            Component text = line.places() == 1 && !holders.isEmpty()
-                    ? Component.translatable("civmod.gui.job_block.job_holder", places, holders.get(0).name()) : places;
-            graphics.text(font, CivGui.fit(font, text, textWidth), CivGui.PADDING, y, color, false);
-            if (info.inSettlement()) {
-                boolean hovered = overAutoBox(lineIndex, mouseX, mouseY);
-                CivGui.checkbox(graphics, line.auto(), hovered, autoBoxX(), y - 1, AUTO_BOX);
-                if (hovered) {
-                    graphics.setComponentTooltipForNextFrame(font, List.of(Component.translatable(line.auto()
-                            ? "civmod.gui.job_block.auto_assign.on" : "civmod.gui.job_block.auto_assign.off")),
-                            mouseX, mouseY);
-                }
-            }
-            lineIndex++;
-            if (!holders.isEmpty() && mouseX >= leftPos + CivGui.PADDING && mouseX < leftPos + CivGui.PADDING + Math.min(textWidth, font.width(text))
-                    && mouseY >= topPos + y && mouseY < topPos + y + font.lineHeight) {
-                graphics.setComponentTooltipForNextFrame(font, settlerLines(info, holders), mouseX, mouseY);
-            }
-            y += LINE_HEIGHT;
-        }
-        if (JobBlockMenu.isClerk(info)) {
-            y = clerk.extractWarehouse(graphics, y, width, color, mouseX, mouseY);
-        }
-        extractCosts(graphics, info, y, mouseX, mouseY);
-    }
-
-    /** Left edge of the automatic assignment checkboxes (panel coordinates). */
-    private int autoBoxX() {
-        return imageWidth - CivGui.PADDING - AUTO_BOX;
-    }
-
-    /** Whether the mouse is over the automatic assignment checkbox of a Job line. */
-    private boolean overAutoBox(int line, double mouseX, double mouseY) {
-        int x = leftPos + autoBoxX();
-        int y = topPos + JOB_LINES_Y + line * LINE_HEIGHT - 1;
-        return mouseX >= x && mouseX < x + AUTO_BOX && mouseY >= y && mouseY < y + AUTO_BOX;
-    }
-
-    /** A left click on an automatic assignment checkbox of the info tab sets the wanted state on client and server. */
-    private boolean infoClicked(MouseButtonEvent event) {
-        JobBlockInfo info = menu.getInfo();
-        if (menu.getActiveTab() != JobBlockMenu.TAB_INFO || !info.inSettlement() || event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
-            return false;
-        }
-        for (int line = 0; line < info.places().size(); line++) {
-            if (overAutoBox(line, event.x(), event.y())) {
-                clickMenuButton(JobBlockMenu.autoButtonId(line, !info.places().get(line).auto()));
-                clickSound();
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * @return one tooltip line per settler: its name and, if any, the mission it took
-     */
-    private static List<Component> settlerLines(JobBlockInfo info, List<SettlementBlock.Assignee> holders) {
-        List<Component> lines = new ArrayList<>();
-        for (SettlementBlock.Assignee holder : holders) {
-            String name = holder.name();
-            Optional<JobBlockInfo.TakenMission> taken = info.taken().stream().filter(entry -> entry.settler().equals(name)).findFirst();
-            lines.add(taken.<Component>map(entry -> Component.translatable("civmod.gui.job_block.settler_mission", name,
-                    Component.translatable(entry.departed() ? "civmod.settler.status.on_mission" : "civmod.settler.status.mission_reserved",
-                            MissionTabView.title(entry.mission(), MissionTabView.mission(entry.mission()))))).orElseGet(() -> Component.literal(name)));
-        }
-        return lines;
-    }
-
-    /**
-     * Draws the costs of the next level as a row of slots (icon, needed count, red tint when missing); more than
-     * {@value #COST_SLOTS} entries scroll with the mouse wheel.
-     */
-    private int extractCosts(GuiGraphicsExtractor graphics, JobBlockInfo info, int y, int mouseX, int mouseY) {
-        List<JobBlockInfo.CostEntry> costs = info.nextCosts();
-        if (costs.isEmpty() || info.level() >= SettlementRules.MAX_LEVEL) {
-            return y;
-        }
-        graphics.text(font, Component.translatable("civmod.gui.job_block.upgrade.costs"), CivGui.PADDING, y, CivGui.LABEL_COLOR, false);
-        int rowY = y + 10;
-        costRowY = rowY;
-        costOffset = Math.clamp(costOffset, 0, Math.max(0, costs.size() - COST_SLOTS));
-        boolean creative = minecraft.player.isCreative();
-        if (costOffset > 0) {
-            graphics.text(font, Component.literal("«"), CivGui.PADDING, rowY + 4, CivGui.LABEL_COLOR, false);
-        }
-        if (costOffset + COST_SLOTS < costs.size()) {
-            graphics.text(font, Component.literal("»"), COST_X + COST_SLOTS * 18 + 2, rowY + 4, CivGui.LABEL_COLOR, false);
-        }
-        for (int i = 0; i < Math.min(COST_SLOTS, costs.size() - costOffset); i++) {
-            JobBlockInfo.CostEntry cost = costs.get(costOffset + i);
-            int x = COST_X + i * 18;
-            CivGui.slot(graphics, x, rowY);
-            graphics.item(cost.icon(), x, rowY);
-            graphics.itemDecorations(font, cost.icon(), x, rowY, Integer.toString(cost.count()));
-            int have = cost.count(minecraft.player.getInventory());
-            if (!creative && have < cost.count()) {
-                graphics.fill(x, rowY, x + 16, rowY + 16, MISSING_TINT);
-            }
-            if (mouseX >= leftPos + x && mouseX < leftPos + x + 16 && mouseY >= topPos + rowY && mouseY < topPos + rowY + 16) {
-                graphics.setComponentTooltipForNextFrame(font, List.of(cost.icon().getHoverName(),
-                        Component.translatable("civmod.gui.job_block.upgrade.have", have, cost.count())
-                                .withStyle(creative || have >= cost.count() ? ChatFormatting.GREEN : ChatFormatting.RED)),
-                        mouseX, mouseY);
-            }
-        }
-        return rowY + 20;
+        return views.get(tab).helpLines(menu.tabs().get(tab));
     }
 
     // ---------------------------------------------------------------- input
 
+    private JobBlockTabView activeView() {
+        return views.get(menu.getActiveTab());
+    }
+
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (JobBlockMenu.isClerk(menu.getInfo()) && clerk.mouseClicked(event)) {
-            return true;
-        }
-        if (JobBlockMenu.hasPatternsTab(menu.getInfo()) && (patterns.mouseClicked(event) || stationTypes.mouseClicked(event))) {
-            return true;
-        }
-        if (JobBlockMenu.isMissionBoard(menu.getInfo()) && missions.mouseClicked(event)) {
-            return true;
-        }
-        if (JobBlockMenu.hasFoundTab(menu.getInfo()) && found.mouseClicked(event)) {
-            return true;
-        }
-        if (infoClicked(event)) {
-            return true;
-        }
-        return super.mouseClicked(event, doubleClick);
+        return activeView().mouseClicked(event) || super.mouseClicked(event, doubleClick);
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (JobBlockMenu.isClerk(menu.getInfo()) && clerk.mouseScrolled(scrollY)) {
-            return true;
-        }
-        if (JobBlockMenu.isMissionBoard(menu.getInfo()) && missions.mouseScrolled(scrollY)) {
-            return true;
-        }
-        if (JobBlockMenu.hasFoundTab(menu.getInfo()) && found.mouseScrolled(scrollY)) {
-            return true;
-        }
-        int size = menu.getInfo().nextCosts().size();
-        if (menu.getActiveTab() == JobBlockMenu.TAB_INFO && size > COST_SLOTS && costRowY >= 0
-                && mouseY >= topPos + costRowY - 2 && mouseY < topPos + costRowY + 18) {
-            costOffset = Math.clamp(costOffset - (int) Math.signum(scrollY), 0, size - COST_SLOTS);
-            return true;
-        }
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        return activeView().mouseScrolled(mouseX, mouseY, scrollY) || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
-        if (JobBlockMenu.hasFoundTab(menu.getInfo()) && found.mouseDragged(event.y())) {
-            return true;
-        }
-        return super.mouseDragged(event, dx, dy);
+        return activeView().mouseDragged(event) || super.mouseDragged(event, dx, dy);
     }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        if (JobBlockMenu.hasFoundTab(menu.getInfo()) && found.mouseReleased()) {
-            return true;
+        boolean taken = false;
+        for (JobBlockTabView view : distinct) {
+            taken |= view.mouseReleased();
         }
-        return super.mouseReleased(event);
+        return taken || super.mouseReleased(event);
     }
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        if (JobBlockMenu.isClerk(menu.getInfo()) && clerk.keyPressed(event)) {
-            return true;
-        }
-        return super.keyPressed(event);
+        return activeView().keyPressed(event) || super.keyPressed(event);
     }
 
     // ---------------------------------------------------------------- shared with the tab views
+
+    /**
+     * @return every view of the window once, in tab order
+     */
+    List<JobBlockTabView> views() {
+        return distinct;
+    }
 
     /**
      * @return the left edge of the panel
@@ -534,35 +245,68 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         minecraft.gameMode.handleInventoryButtonClick(menu.containerId, button);
     }
 
-    // ---------------------------------------------------------------- Clerk and Producing JobBlocks: sync and recipe viewers
+    // ---------------------------------------------------------------- sync
 
     /**
-     * Client handler of {@link ClerkTab.Sync}: updates the open Clerk menu.
+     * Puts data the server sent into the open menu's tab and tells the views of the tabs showing it.
      *
-     * @param payload the payload
-     * @param context the payload context
+     * @param containerId the container id of the payload
+     * @param data        the tab data of the open menu, if it has the tab
+     * @param value       the data
+     * @param <T>         the data type
      */
-    public static void handleClerkTab(ClerkTab.Sync payload, IPayloadContext context) {
+    private static <T> void receive(int containerId, Function<JobBlockMenu, Optional<TabData<T>>> data, T value) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player != null && minecraft.player.containerMenu instanceof JobBlockMenu open && open.containerId == payload.containerId()) {
-            open.setClerkTab(payload.tab());
-            if (minecraft.gui.screen() instanceof JobBlockScreen screen) {
-                screen.clerk.update();
-            }
+        if (minecraft.player == null || !(minecraft.player.containerMenu instanceof JobBlockMenu open) || open.containerId != containerId) {
+            return;
         }
+        data.apply(open).ifPresent(found -> {
+            found.set(value);
+            if (minecraft.gui.screen() instanceof JobBlockScreen screen) {
+                open.tabs().stream().filter(tab -> tab.synced().filter(found::equals).isPresent()).map(tab -> screen.views.get(tab.index()))
+                        .distinct().forEach(JobBlockTabView::dataChanged);
+            }
+        });
     }
 
     /**
-     * Client handler of {@link FoundTab.Sync}: updates the open Resource Collection JobBlock menu.
+     * Client handler of {@link ClerkTabData.Sync}: updates the open Clerk menu.
      *
      * @param payload the payload
      * @param context the payload context
      */
-    public static void handleFoundTab(FoundTab.Sync payload, IPayloadContext context) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player != null && minecraft.player.containerMenu instanceof JobBlockMenu open && open.containerId == payload.containerId()) {
-            open.setFoundTab(payload.tab());
-        }
+    public static void handleClerkTab(ClerkTabData.Sync payload, IPayloadContext context) {
+        receive(payload.containerId(), open -> open.tab(StockTab.class).map(StockTab::data), payload.tab());
+    }
+
+    /**
+     * Client handler of {@link FoundTabData.Sync}: updates the open Resource Collection JobBlock menu.
+     *
+     * @param payload the payload
+     * @param context the payload context
+     */
+    public static void handleFoundTab(FoundTabData.Sync payload, IPayloadContext context) {
+        receive(payload.containerId(), open -> open.tab(FoundTab.class).map(FoundTab::data), payload.tab());
+    }
+
+    /**
+     * Client handler of {@link PatternTabData.Sync}: updates the open Producing JobBlock menu.
+     *
+     * @param payload the payload
+     * @param context the payload context
+     */
+    public static void handlePatternTab(PatternTabData.Sync payload, IPayloadContext context) {
+        receive(payload.containerId(), open -> open.tab(PatternsTab.class).map(PatternsTab::data), payload.tab());
+    }
+
+    /**
+     * Client handler of {@link StationTypeTabData.Sync}: updates the open JobBlock menu and which Patterns tabs it shows.
+     *
+     * @param payload the payload
+     * @param context the payload context
+     */
+    public static void handleStationTypeTab(StationTypeTabData.Sync payload, IPayloadContext context) {
+        receive(payload.containerId(), open -> open.tab(StationTypesTab.class).map(StationTypesTab::data), payload.tab());
     }
 
     /**
@@ -581,49 +325,16 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         }
     }
 
-    /**
-     * Client handler of {@link PatternTab.Sync}: updates the open Craftsperson menu.
-     *
-     * @param payload the payload
-     * @param context the payload context
-     */
-    public static void handlePatternTab(PatternTab.Sync payload, IPayloadContext context) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player != null && minecraft.player.containerMenu instanceof JobBlockMenu open && open.containerId == payload.containerId()) {
-            open.setPatternTab(payload.tab());
-            if (minecraft.gui.screen() instanceof JobBlockScreen screen) {
-                screen.patterns.update();
-            }
-        }
-    }
+    // ---------------------------------------------------------------- recipe viewers
 
     /**
-     * Client handler of {@link StationTypeTab.Sync}: updates the open JobBlock menu and which Patterns tabs it shows.
-     *
-     * @param payload the payload
-     * @param context the payload context
-     */
-    public static void handleStationTypeTab(StationTypeTab.Sync payload, IPayloadContext context) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player != null && minecraft.player.containerMenu instanceof JobBlockMenu open && open.containerId == payload.containerId()) {
-            open.setStationTypeTab(payload.tab());
-            if (minecraft.gui.screen() instanceof JobBlockScreen screen) {
-                screen.rebuildWidgets();
-            }
-        }
-    }
-
-    /**
-     * The screen areas that take a dragged item (for JEI / REI ghost drag): the Clerk's active stock slots on the Stock
-     * tab, or the Craftsperson's pattern slots on the Patterns tab.
+     * The screen areas of the selected tab that take a dragged item (for JEI / REI ghost drag): the Clerk's active stock
+     * slots on the Stock tab, or the pattern slots on a Patterns tab.
      *
      * @return target id → absolute area
      */
     public Map<Integer, Rect2i> ghostTargets() {
-        if (JobBlockMenu.isClerk(menu.getInfo())) {
-            return clerk.stockTargets();
-        }
-        return JobBlockMenu.hasPatternsTab(menu.getInfo()) ? patterns.targets() : new LinkedHashMap<>();
+        return activeView().ghostTargets();
     }
 
     /**
@@ -632,10 +343,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      * @return the ghost target under the mouse, {@code -1} if none
      */
     public int ghostTargetAt(double x, double y) {
-        if (JobBlockMenu.isClerk(menu.getInfo())) {
-            return clerk.stockSlotAt(x, y);
-        }
-        return JobBlockMenu.hasPatternsTab(menu.getInfo()) ? patterns.targetAt(x, y) : -1;
+        return activeView().ghostTargetAt(x, y);
     }
 
     /**
@@ -646,10 +354,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      * @return whether the target took it
      */
     public boolean acceptGhost(int target, ItemStack stack) {
-        if (JobBlockMenu.isClerk(menu.getInfo())) {
-            return clerk.setStockItem(target, stack);
-        }
-        return JobBlockMenu.hasPatternsTab(menu.getInfo()) && patterns.setItem(target, stack);
+        return activeView().acceptGhost(target, stack);
     }
 
     /**
@@ -663,9 +368,12 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      * @return the reason it cannot, empty if it can
      */
     public Optional<Component> transferPattern(RecipeType<?> type, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid, boolean doTransfer) {
-        if (!JobBlockMenu.hasPatternsTab(menu.getInfo())) {
-            return Optional.of(Component.translatable("civmod.gui.patterns.not_here"));
+        for (JobBlockTabView view : distinct) {
+            Optional<Optional<Component>> result = view.transfer(type, recipe, grid, doTransfer);
+            if (result.isPresent()) {
+                return result.get();
+            }
         }
-        return patterns.transfer(type, recipe, grid, doTransfer);
+        return Optional.of(Component.translatable("civmod.gui.patterns.not_here"));
     }
 }

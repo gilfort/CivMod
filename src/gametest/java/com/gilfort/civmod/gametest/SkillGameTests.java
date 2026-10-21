@@ -8,6 +8,7 @@ import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.block.UpgradeCosts;
 import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.job.SkillRules;
+import com.gilfort.civmod.menu.InfoTab;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.registry.ModBlocks;
@@ -115,13 +116,13 @@ public final class SkillGameTests {
         helper.runAfterDelay(1, () -> {
             JobBlockEntity entity = (JobBlockEntity) level.getBlockEntity(pos);
             JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(level, pos, ModJobs.MINER.get(), entity.getJobLevel()));
-            helper.assertTrue(menu.clickMenuButton(player, JobBlockMenu.BUTTON_UPGRADE), "Upgrade should succeed");
+            helper.assertTrue(menu.clickMenuButton(player, menu.tab(InfoTab.class).orElseThrow().buttonId(InfoTab.UPGRADE)), "Upgrade should succeed");
             helper.assertTrue(entity.getJobLevel() == 2 && menu.getInfo().level() == 2, "JobBlock level 2");
             int settlementLevel = SettlementData.get(level).settlementAt(pos).flatMap(s -> s.block(pos)).orElseThrow().level();
             helper.assertTrue(settlementLevel == 2 && SettlementRules.joinRadius(settlementLevel) == 20, "Settlement entry level 2 (radius 20)");
             helper.assertTrue(player.getInventory().countItem(Items.COBBLESTONE) == 0 && player.getInventory().countItem(Items.IRON_INGOT) == 0,
                     "Costs paid");
-            helper.assertFalse(menu.clickMenuButton(player, JobBlockMenu.BUTTON_UPGRADE), "Level 3 is not affordable");
+            helper.assertFalse(menu.clickMenuButton(player, menu.tab(InfoTab.class).orElseThrow().buttonId(InfoTab.UPGRADE)), "Level 3 is not affordable");
             ItemStack drop = new ItemStack(ModBlocks.MINER_BLOCK.get());
             drop.applyComponents(entity.collectComponents());
             helper.assertTrue(drop.getOrDefault(com.gilfort.civmod.registry.ModDataComponents.JOB_LEVEL.get(), 1) == 2, "Item keeps the level");

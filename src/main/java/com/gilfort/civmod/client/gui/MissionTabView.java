@@ -7,6 +7,8 @@ import java.util.OptionalInt;
 
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
+import com.gilfort.civmod.menu.JobBlockTab;
+import com.gilfort.civmod.menu.MissionsTab;
 import com.gilfort.civmod.mission.Mission;
 import com.gilfort.civmod.mission.MissionOffer;
 import com.gilfort.civmod.mission.MissionRules;
@@ -29,9 +31,10 @@ import net.minecraft.world.item.ItemStack;
 
 /**
  * The Mission Board's "Missions" tab of the {@link JobBlockScreen}: the daily mission offer (a click on a row marks or
- * unmarks it) and the assignment view of a marked entry (a right click opens it, a click on a settler assigns).
+ * unmarks it) and the assignment view of a marked entry (a right click opens it, a click on a settler assigns); the
+ * client side of {@link MissionsTab}.
  */
-final class MissionTabView {
+final class MissionTabView implements JobBlockTabView {
 
     private static final int MISSION_LIST_Y = 34;
     private static final int MISSION_ROWS = 5;
@@ -41,6 +44,7 @@ final class MissionTabView {
 
     private final JobBlockScreen screen;
     private final JobBlockMenu menu;
+    private final MissionsTab missions;
     private int missionOffset;
     /** The offer entry whose assignment view is open, {@code -1} while the offer is shown. */
     private int assigning = -1;
@@ -48,10 +52,12 @@ final class MissionTabView {
 
     /**
      * @param screen the screen showing the tab
+     * @param tab    the tab
      */
-    MissionTabView(JobBlockScreen screen) {
+    MissionTabView(JobBlockScreen screen, MissionsTab tab) {
         this.screen = screen;
         this.menu = screen.getMenu();
+        this.missions = tab;
     }
 
     private Font font() {
@@ -63,37 +69,47 @@ final class MissionTabView {
     }
 
     /** Adds the buttons of the assignment view while it is open (called on every widget rebuild). */
-    void init() {
+    @Override
+    public void init() {
         if (assigning < 0) {
             return;
         }
         int buttonWidth = (screen.panelWidth() - 2 * CivGui.PADDING - 4) / 2;
         int y = screen.top() + screen.panelHeight() - 28;
         int left = screen.left();
-        Button unlock = screen.addWidget(JobBlockMenu.TAB_MISSIONS, Button.builder(Component.translatable("civmod.gui.mission.assign.unlock"),
+        Button unlock = screen.addWidget(missions.index(), Button.builder(Component.translatable("civmod.gui.mission.assign.unlock"),
                 button -> assign(-1)).bounds(left + CivGui.PADDING, y, buttonWidth, 20).build());
         unlock.active = assigning < menu.getInfo().missions().size() && menu.getInfo().missions().get(assigning).locked();
         unlock.setTooltip(Tooltip.create(Component.translatable("civmod.gui.mission.assign.unlock.tooltip")));
-        screen.addWidget(JobBlockMenu.TAB_MISSIONS, Button.builder(Component.translatable("gui.back"), button -> showOffer())
+        screen.addWidget(missions.index(), Button.builder(Component.translatable("gui.back"), button -> showOffer())
                 .bounds(left + CivGui.PADDING + buttonWidth + 4, y, buttonWidth, 20).build());
     }
 
+    /** The Mission Board's Info tab has no Free button. */
+    @Override
+    public boolean offersUnassign() {
+        return false;
+    }
+
     /** Another tab was selected: the assignment view closes. */
-    void onTabChanged() {
+    @Override
+    public void onTabChanged() {
         if (assigning >= 0) {
             showOffer();
         }
     }
 
     /** Draws the list inset (absolute coordinates). */
-    void extractBackground(GuiGraphicsExtractor graphics) {
+    @Override
+    public void extractBackground(GuiGraphicsExtractor graphics, JobBlockTab shown) {
         int height = assigning >= 0 ? ASSIGN_ROWS * JobBlockScreen.ROW_HEIGHT + 2 * CivGui.INSET_PADDING
                 : screen.panelHeight() - MISSION_LIST_Y - CivGui.PADDING;
         CivGui.inset(graphics, screen.left() + CivGui.PADDING, screen.top() + MISSION_LIST_Y, screen.panelWidth() - 2 * CivGui.PADDING, height);
     }
 
     /** Draws the offer or the assignment view (coordinates relative to the panel). */
-    void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+    @Override
+    public void extractLabels(GuiGraphicsExtractor graphics, JobBlockTab shown, int mouseX, int mouseY) {
         if (assigning >= 0) {
             extractAssignment(graphics, mouseX, mouseY);
         } else {
@@ -223,7 +239,8 @@ final class MissionTabView {
     /**
      * @return the help lines of the Missions tab: the offer's or the assignment's usage
      */
-    List<Component> helpLines() {
+    @Override
+    public List<Component> helpLines(JobBlockTab shown) {
         if (assigning >= 0) {
             return List.of(Component.translatable("civmod.gui.mission.help.assign"));
         }
@@ -323,7 +340,7 @@ final class MissionTabView {
 
     /** Assigns the mission being assigned to a settler (index in the board's settler list) or unlocks it ({@code -1}). */
     private void assign(int settler) {
-        int button = JobBlockMenu.assignButtonId(assigning, settler);
+        int button = missions.assignButtonId(assigning, settler);
         screen.clickMenuButton(button);
         showOffer();
     }
@@ -391,7 +408,7 @@ final class MissionTabView {
      * @return the index (in the eligible settlers) of the settler row under the mouse, {@code -1} if none
      */
     private int settlerRowAt(double mouseX, double mouseY) {
-        if (menu.getActiveTab() != JobBlockMenu.TAB_MISSIONS || assigning < 0) {
+        if (assigning < 0) {
             return -1;
         }
         int rows = eligible().size();
@@ -416,7 +433,7 @@ final class MissionTabView {
      * @return the index of the mission row under the mouse (offer entries first, then taken missions), {@code -1} if none
      */
     private int rowAt(double mouseX, double mouseY) {
-        if (menu.getActiveTab() != JobBlockMenu.TAB_MISSIONS || assigning >= 0) {
+        if (assigning >= 0) {
             return -1;
         }
         int rows = menu.getInfo().missions().size() + menu.getInfo().taken().size();
@@ -437,7 +454,8 @@ final class MissionTabView {
      *
      * @return whether the click was taken
      */
-    boolean mouseClicked(MouseButtonEvent event) {
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event) {
         int settler = event.button() == InputConstants.MOUSE_BUTTON_LEFT ? settlerRowAt(event.x(), event.y()) : -1;
         if (settler >= 0) {
             screen.clickSound();
@@ -453,7 +471,7 @@ final class MissionTabView {
         }
         int index = event.button() == InputConstants.MOUSE_BUTTON_LEFT ? row : -1;
         if (index >= 0 && index < menu.getInfo().missions().size()) {
-            screen.clickMenuButton(JobBlockMenu.markButtonId(index, !menu.getInfo().missions().get(index).marked()));
+            screen.clickMenuButton(missions.markButtonId(index, !menu.getInfo().missions().get(index).marked()));
             screen.clickSound();
             return true;
         }
@@ -462,16 +480,15 @@ final class MissionTabView {
 
     /**
      * Scrolls the assignment view or the offer.
-     *
-     * @return whether the wheel was taken
      */
-    boolean mouseScrolled(double scrollY) {
-        if (menu.getActiveTab() == JobBlockMenu.TAB_MISSIONS && assigning >= 0) {
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
+        if (assigning >= 0) {
             settlerOffset = Math.clamp(settlerOffset - (int) Math.signum(scrollY), 0, Math.max(0, eligible().size() - ASSIGN_ROWS));
             return true;
         }
         int offered = menu.getInfo().missions().size() + menu.getInfo().taken().size();
-        if (menu.getActiveTab() == JobBlockMenu.TAB_MISSIONS && offered > MISSION_ROWS) {
+        if (offered > MISSION_ROWS) {
             missionOffset = Math.clamp(missionOffset - (int) Math.signum(scrollY), 0, offered - MISSION_ROWS);
             return true;
         }

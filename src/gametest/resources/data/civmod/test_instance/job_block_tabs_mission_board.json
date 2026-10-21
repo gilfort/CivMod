@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:job_block_tabs_mission_board",
+  "max_ticks": 20,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

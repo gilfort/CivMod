@@ -10,7 +10,7 @@ import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
-import com.gilfort.civmod.menu.PatternTab;
+import com.gilfort.civmod.menu.PatternTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobAssignments;
@@ -92,7 +92,7 @@ public final class MechanicGameTests {
         Pattern sticks = Patterns.setOutput(level, pos, mechanic, 2, Items.STICK).orElseThrow();
         helper.assertFalse(sticks.checked(), "Sticks are outside the domain: unchecked");
         helper.assertFalse(Patterns.toggleCheck(level, pos, mechanic, 2), "And cannot be checked");
-        PatternTab tab = PatternTab.of(level, pos, mechanic);
+        PatternTabData tab = PatternTabData.of(level, pos, mechanic);
         helper.assertTrue(tab.filtered().contains(2) && !tab.filtered().contains(0) && tab.unusable(2),
                 "Greyed out: " + tab.filtered());
         helper.assertTrue(tab.filteredLine().equals(Component.translatable("civmod.gui.patterns.outside_domain")),

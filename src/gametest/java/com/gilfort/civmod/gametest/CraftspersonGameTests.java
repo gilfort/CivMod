@@ -14,7 +14,10 @@ import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
-import com.gilfort.civmod.menu.PatternTab;
+import com.gilfort.civmod.menu.PatternTabData;
+import com.gilfort.civmod.menu.PatternsTab;
+import com.gilfort.civmod.menu.StationTypesTab;
+import com.gilfort.civmod.menu.StorageTab;
 import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.JobStatus;
@@ -684,8 +687,10 @@ public final class CraftspersonGameTests {
         player.snapTo(pos.getX() + 0.5, pos.getY() + 1, pos.getZ() + 0.5);
         JobBlockEntity entity = (JobBlockEntity) level.getBlockEntity(pos);
         JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(level, pos, ModJobs.CRAFTSPERSON.get(), 1));
-        helper.assertTrue(menu.getTabCount() > JobBlockMenu.TAB_STATION_TYPES, "Storage, Info, Patterns, Station Types and the Specializations' Patterns");
-        menu.setActiveTab(JobBlockMenu.TAB_PATTERNS);
+        PatternsTab patterns = menu.tab(PatternsTab.class).orElseThrow();
+        helper.assertTrue(menu.getTabCount() > menu.tab(StationTypesTab.class).orElseThrow().index(),
+                "Storage, Info, Patterns, Station Types and the Specializations' Patterns");
+        menu.setActiveTab(patterns.index());
         helper.assertTrue(menu.slots.get(JobBlockEntity.SLOTS).isActive() && !menu.slots.get(0).isActive(),
                 "Patterns tab: player inventory, no storage slots");
         int inventorySlot = JobBlockEntity.SLOTS;
@@ -693,22 +698,22 @@ public final class CraftspersonGameTests {
         helper.assertTrue(menu.quickMoveStack(player, inventorySlot).isEmpty(), "Shift-click on the Patterns tab moves nothing");
         helper.assertTrue(menu.slots.get(inventorySlot).getItem().getCount() == 5 && entity.isEmpty(),
                 "Patterns tab: the item stays in the player inventory, the JobBlock storage stays empty");
-        menu.setActiveTab(JobBlockMenu.TAB_STORAGE);
+        menu.setActiveTab(menu.tab(StorageTab.class).orElseThrow().index());
         menu.quickMoveStack(player, inventorySlot);
         helper.assertTrue(entity.countItem(Items.OAK_LOG) == 5, "Storage tab: shift-click moves into the JobBlock storage");
         entity.clearContent();
-        menu.setActiveTab(JobBlockMenu.TAB_PATTERNS);
+        menu.setActiveTab(patterns.index());
 
-        menu.editPattern(PatternTab.Edit.setOutput(1, craftJob(), 3, Items.TORCH));
-        menu.editPattern(PatternTab.Edit.transfer(1, craftJob(), 5, Optional.empty(), List.of(Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.OAK_PLANKS,
+        patterns.edit(PatternTabData.Edit.setOutput(1, craftJob(), 3, Items.TORCH));
+        patterns.edit(PatternTabData.Edit.transfer(1, craftJob(), 5, Optional.empty(), List.of(Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.OAK_PLANKS,
                 Items.AIR, Items.AIR, Items.AIR, Items.AIR)));
-        PatternTab tab = PatternTab.of(level, pos, craftJob());
+        PatternTabData tab = PatternTabData.of(level, pos, craftJob());
         helper.assertTrue(tab.pattern(3).filter(Pattern::checked).map(Pattern::output).equals(Optional.of(Items.TORCH)), "Torch pattern checked: " + tab);
         helper.assertTrue(tab.pattern(5).map(Pattern::output).equals(Optional.of(Items.STICK)) && tab.pattern(5).orElseThrow().exact(),
                 "Transfer without a known recipe: exactly the shown items");
         helper.assertTrue(tab.limit() == Patterns.BASE_CHECKMARKS && tab.notice().isEmpty(), "Limit 6, nothing removed");
-        menu.editPattern(PatternTab.Edit.clear(1, craftJob(), 3));
-        helper.assertTrue(PatternTab.of(level, pos, craftJob()).pattern(3).isEmpty(), "Cleared through the menu");
+        patterns.edit(PatternTabData.Edit.clear(1, craftJob(), 3));
+        helper.assertTrue(PatternTabData.of(level, pos, craftJob()).pattern(3).isEmpty(), "Cleared through the menu");
         helper.assertTrue(data.settlementAt(pos).isPresent(), "Still registered");
         helper.succeed();
     }
@@ -727,7 +732,7 @@ public final class CraftspersonGameTests {
         helper.assertTrue(pickaxe.checked(), "An iron pickaxe pattern is checked");
         SettlementBlock block = settlement.block(pos).orElseThrow();
         helper.assertFalse(Patterns.unusable(level, block, craftJob(), pickaxe), "Usable");
-        helper.assertTrue(PatternTab.of(level, pos, craftJob()).filtered().isEmpty(), "Nothing filtered");
+        helper.assertTrue(PatternTabData.of(level, pos, craftJob()).filtered().isEmpty(), "Nothing filtered");
         define(helper, pos, 1, Items.IRON_NUGGET);
         JobAssignments.assign(data, pos, UUID.randomUUID(), "Cora", settlement.id(), List.of());
         helper.assertTrue(Producers.canMake(level, settlement, Items.IRON_PICKAXE), "The Craftsperson makes iron pickaxes");

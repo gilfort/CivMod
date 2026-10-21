@@ -12,7 +12,7 @@ import com.gilfort.civmod.job.MineScan;
 import com.gilfort.civmod.job.MinerOutput;
 import com.gilfort.civmod.job.MinerProfile;
 import com.gilfort.civmod.job.MinerWeights;
-import com.gilfort.civmod.menu.FoundTab;
+import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
@@ -212,7 +212,7 @@ public final class MinerGameTests {
             helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0,
                     "Nothing mined yet (status " + settler.getWork().status(jobBlock) + ")");
             helper.assertTrue(level.getBlockState(poi).is(Blocks.GRANITE), "The work place is never destroyed");
-            helper.assertTrue(FoundTab.of(level, jobBlock).entry(GRANITE).isPresent(), "Found tab lists granite");
+            helper.assertTrue(FoundTabData.of(level, jobBlock).entry(GRANITE).isPresent(), "Found tab lists granite");
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });

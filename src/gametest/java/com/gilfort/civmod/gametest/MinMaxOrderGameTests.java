@@ -10,8 +10,8 @@ import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
-import com.gilfort.civmod.menu.ClerkTab;
-import com.gilfort.civmod.menu.FoundTab;
+import com.gilfort.civmod.menu.ClerkTabData;
+import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
@@ -108,8 +108,8 @@ public final class MinMaxOrderGameTests {
                 .thenWaitUntil(() -> helper.assertTrue(settler.getWork().status(jobBlock) == JobStatus.MAX_REACHED,
                         "Not paused at Max: " + settler.getWork().status(jobBlock)))
                 .thenExecute(() -> {
-                    FoundTab tab = FoundTab.of(level, jobBlock);
-                    helper.assertTrue(tab.entry(OAK_LOG).flatMap(FoundTab.Entry::maxAt).isPresent()
+                    FoundTabData tab = FoundTabData.of(level, jobBlock);
+                    helper.assertTrue(tab.entry(OAK_LOG).flatMap(FoundTabData.Entry::maxAt).isPresent()
                             && !tab.entry(OAK_LOG).orElseThrow().excluded(), "Oak marked as at Max, not excluded: " + tab);
                     before[0] = settler.getWork().buffer(jobBlock).count() + count((Container) level.getBlockEntity(jobBlock), Items.OAK_LOG);
                     store.setItem(0, new ItemStack(Items.OAK_LOG, 3));
@@ -118,7 +118,7 @@ public final class MinMaxOrderGameTests {
                         + count((Container) level.getBlockEntity(jobBlock), Items.OAK_LOG) > before[0],
                         "No oak below Max (status " + settler.getWork().status(jobBlock) + ")"))
                 .thenExecute(() -> {
-                    helper.assertTrue(FoundTab.of(level, jobBlock).entry(OAK_LOG).flatMap(FoundTab.Entry::maxAt).isEmpty(), "Mark gone below Max");
+                    helper.assertTrue(FoundTabData.of(level, jobBlock).entry(OAK_LOG).flatMap(FoundTabData.Entry::maxAt).isEmpty(), "Mark gone below Max");
                     settler.discard();
                     forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
                 })
@@ -158,13 +158,13 @@ public final class MinMaxOrderGameTests {
         settler.setNoAi(false);
         boolean[] done = new boolean[1];
         helper.onEachTick(() -> {
-            if (done[0] || !FoundTab.of(level, jobBlock).scanned()) {
+            if (done[0] || !FoundTabData.of(level, jobBlock).scanned()) {
                 return;
             }
             done[0] = true;
-            FoundTab tab = FoundTab.of(level, jobBlock);
-            helper.assertTrue(tab.entry(STONE).flatMap(FoundTab.Entry::maxAt).isPresent(), "Stone drops cobblestone, at Max: " + tab);
-            helper.assertTrue(tab.entry(GRANITE).flatMap(FoundTab.Entry::maxAt).isEmpty(), "Granite is not at Max: " + tab);
+            FoundTabData tab = FoundTabData.of(level, jobBlock);
+            helper.assertTrue(tab.entry(STONE).flatMap(FoundTabData.Entry::maxAt).isPresent(), "Stone drops cobblestone, at Max: " + tab);
+            helper.assertTrue(tab.entry(GRANITE).flatMap(FoundTabData.Entry::maxAt).isEmpty(), "Granite is not at Max: " + tab);
             Container container = (Container) level.getBlockEntity(jobBlock);
             int cobbleBefore = count(container, Items.COBBLESTONE);
             long clock = level.getOverworldClockTime();
@@ -228,7 +228,7 @@ public final class MinMaxOrderGameTests {
                     StockRules.check(level, served, ClerkGameTests.MORNING);
                     helper.assertTrue(settlement.deliveries().stream().noneMatch(task -> task.surplus()), "No task into a Warehouse at Max");
                     helper.assertTrue(StockRules.surplusNowhere(level, served).equals(List.of(0)), "Surplus: nowhere to go");
-                    helper.assertTrue(ClerkTab.of(level, served).nowhere().equals(List.of(0)), "Shown in the Clerk's tab");
+                    helper.assertTrue(ClerkTabData.of(level, served).nowhere().equals(List.of(0)), "Shown in the Clerk's tab");
                     // The Warehouse keeps its own surplus.
                     warehouseStore.setItem(5, new ItemStack(Items.TORCH, 3));
                     StockRules.check(level, warehouse, ClerkGameTests.MORNING);
