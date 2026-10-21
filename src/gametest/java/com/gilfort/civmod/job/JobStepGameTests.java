@@ -47,6 +47,7 @@ public final class JobStepGameTests {
             register(helper, "job_step_adventurer_waits_for_departure", JobStepGameTests::adventurerWaitsForDeparture);
             register(helper, "job_step_deliveryman_skips_without_tasks", JobStepGameTests::deliverymanSkipsWithoutTasks);
             register(helper, "job_step_craftsperson_blocked_without_station", JobStepGameTests::craftspersonBlockedWithoutStation);
+            register(helper, "job_step_only_standing_steps_stop_the_walk", JobStepGameTests::onlyStandingStepsStopTheWalk);
         });
     }
 
@@ -173,6 +174,36 @@ public final class JobStepGameTests {
         helper.assertTrue(work.status(jobBlock) == JobStatus.IDLE, "The loop does not set the status: " + work.status(jobBlock));
         helper.assertFalse(work.apply(level, job, step), "The next priority works");
         helper.assertTrue(work.status(jobBlock) == JobStatus.NO_WORK_PLACE, "The shell blocks the job: " + work.status(jobBlock));
+        settler.discard();
+        helper.succeed();
+    }
+
+    /**
+     * At the target, only a step that stands stops the settler's walk (working, a Clerk at its counter, a Deliveryman
+     * taking its load); waiting for a Clerk, a break or an Adventurer at the board leave the walk going on.
+     */
+    private static void onlyStandingStepsStopTheWalk(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        for (int x = 0; x < 9; x++) {
+            for (int z = 0; z < 9; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
+        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
+        BlockPos jobBlock = helper.absolutePos(new BlockPos(1, 1, 1));
+        Settler settler = settler(helper, jobBlock, new BlockPos(1, 1, 3));
+        SettlerJob job = new SettlerJob(ModJobs.LUMBERJACK.get(), jobBlock);
+        settler.addJob(job);
+        SettlerWork work = settler.getWork();
+        // Spawned right on the floor; vanilla searches no path while a mob is in the air.
+        settler.setOnGround(true);
+        work.apply(level, job, JobStep.walk(helper.absolutePos(new BlockPos(7, 1, 7)), SettlerWork.REACH, JobStatus.WORKING));
+        helper.assertTrue(settler.getNavigation().isInProgress(), "Walking to the target");
+
+        work.apply(level, job, JobStep.STAY);
+        helper.assertTrue(settler.getNavigation().isInProgress(), "Staying does not stop the walk");
+        work.apply(level, job, JobStep.WORK);
+        helper.assertFalse(settler.getNavigation().isInProgress(), "Working stops the walk");
         settler.discard();
         helper.succeed();
     }

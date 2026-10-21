@@ -77,7 +77,7 @@ final class ClerkLoop implements CategoryLoop {
             settler.getLookControl().setLookAt(eye.add(Vec3.atLowerCornerOf(spot.facing().getUnitVec3i())));
             settler.setYBodyRot(spot.facing().toYRot());
         }
-        return fatigue.onBreak() ? JobStep.STAY : JobStep.WORK;
+        return fatigue.onBreak() ? JobStep.STAND : JobStep.WORK;
     }
 
     /**

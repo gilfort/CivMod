@@ -18,20 +18,24 @@ import net.minecraft.network.chat.Component;
  * Answers of {@link CategoryLoop#plan}: {@link Walk}, {@link #DELIVER}, {@link Wait}, {@link Blocked}, {@link Skip}.
  * Answers of {@link CategoryLoop#holdsDecision}: {@link Pause}, {@link Hold}, {@link Wait} (all hold the decision) or
  * {@link Skip} (decide as usual). Answers of {@link CategoryLoop#tickAtTarget}: {@link #WORK}, {@link #STAY},
- * {@link Done}, {@link Wait}.
+ * {@link #STAND}, {@link Done}, {@link Wait}. At the target the settler's walk goes on unless the step stands.
  */
 sealed interface JobStep {
 
     /** Deliver the job's buffer to its drop-off (a Deliveryman: unload into its store). */
     JobStep DELIVER = new Deliver();
-    /** At the target: worked this tick (counts for hunger), the step goes on. */
-    JobStep WORK = new AtTarget(true);
-    /** At the target: did not work this tick (a break, waiting for a Clerk), the step goes on. */
-    JobStep STAY = new AtTarget(false);
+    /** At the target: worked this tick (counts for hunger) standing still, the step goes on. */
+    JobStep WORK = new AtTarget(true, true);
+    /** At the target: did not work this tick (a break, waiting for a Clerk), the walk goes on, so does the step. */
+    JobStep STAY = new AtTarget(false, false);
+    /** At the target: did not work this tick but stands still (a Clerk's break at its counter), the step goes on. */
+    JobStep STAND = new AtTarget(false, true);
     /** The step is over: the shell decides again. */
-    JobStep DONE = new Done(false);
-    /** Worked this tick and the step is over: the shell decides again. */
-    JobStep WORKED_AND_DONE = new Done(true);
+    JobStep DONE = new Done(false, false);
+    /** The step is over after a task done standing still (a Deliveryman took its load): the shell decides again. */
+    JobStep DONE_STANDING = new Done(false, true);
+    /** Worked this tick standing still and the step is over: the shell decides again. */
+    JobStep WORKED_AND_DONE = new Done(true, true);
 
     /**
      * @return the job does not work now and leaves its status as it is; the next priority works
@@ -147,15 +151,17 @@ sealed interface JobStep {
      * At the target, the step goes on.
      *
      * @param worked whether the settler worked this tick (counts for hunger)
+     * @param stands whether the settler stands still (its walk stops), else the walk goes on
      */
-    record AtTarget(boolean worked) implements JobStep {
+    record AtTarget(boolean worked, boolean stands) implements JobStep {
     }
 
     /**
      * The step is over: the shell decides again after the loop returned.
      *
      * @param worked whether the settler worked this tick (counts for hunger)
+     * @param stands whether the settler's walk stops before the shell decides again
      */
-    record Done(boolean worked) implements JobStep {
+    record Done(boolean worked, boolean stands) implements JobStep {
     }
 }

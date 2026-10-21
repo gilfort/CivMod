@@ -239,7 +239,7 @@ final class DeliverymanLoop implements CategoryLoop {
                 }
             }
         }
-        return JobStep.DONE;
+        return JobStep.DONE_STANDING;
     }
 
     /**

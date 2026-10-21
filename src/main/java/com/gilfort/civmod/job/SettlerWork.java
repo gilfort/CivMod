@@ -1069,12 +1069,18 @@ public final class SettlerWork {
                 yield true;
             }
             case JobStep.AtTarget at -> {
+                if (at.stands()) {
+                    settler.getNavigation().stop();
+                }
                 if (at.worked()) {
                     countWorkTick(job);
                 }
                 yield true;
             }
             case JobStep.Done done -> {
+                if (done.stands()) {
+                    settler.getNavigation().stop();
+                }
                 if (done.worked()) {
                     countWorkTick(job);
                 }
@@ -2303,8 +2309,7 @@ public final class SettlerWork {
             SettlerJob job = activeJob;
             CategoryLoop loop = loop(job);
             if (loop != null) {
-                // At the target of a job step the settler stands; the loop works there.
-                settler.getNavigation().stop();
+                // At the target of a job step the loop works there; the step says whether the settler stands still.
                 apply(level, job, loop.tickAtTarget(level, job, target));
             }
         }
