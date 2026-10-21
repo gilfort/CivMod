@@ -158,12 +158,4 @@ sealed interface JobStep {
      */
     record Done(boolean worked) implements JobStep {
     }
-
-    /**
-     * Temporary while the loops move to job steps: the loop already steered the shell itself; nothing is applied.
-     *
-     * @param busy whether the job keeps the settler busy (or holds the decision)
-     */
-    record Steered(boolean busy) implements JobStep {
-    }
 }

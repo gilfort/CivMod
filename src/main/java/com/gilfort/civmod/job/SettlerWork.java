@@ -158,7 +158,7 @@ public final class SettlerWork {
     private ClerkStorage.@Nullable Visit deliveryVisit;
     /** Clerk JobBlocks whose counter this settler found unreachable, with the day (only their block slots that day). */
     private final Map<BlockPos, Long> unreachableCounters = new HashMap<>();
-    /** Reach of the current walking target outside job steps. */
+    /** Reach of the current walking target (for a job step: the reach of its {@link JobStep.Walk}). */
     private double targetReach = REACH;
     /** Thought bubbles: sent when what the settler does changes. */
     private final SettlerThoughts thoughts;
@@ -1082,7 +1082,6 @@ public final class SettlerWork {
                 decide(level);
                 yield false;
             }
-            case JobStep.Steered steered -> steered.busy();
         };
     }
 
@@ -1102,68 +1101,6 @@ public final class SettlerWork {
      */
     Optional<Workplace> existingWorkplace(BlockPos jobBlock) {
         return Optional.ofNullable(jobWorkplaces.get(jobBlock));
-    }
-
-    /**
-     * @param job the job the settler works on from now on
-     */
-    void setActiveJob(SettlerJob job) {
-        activeJob = job;
-    }
-
-    /**
-     * @param jobBlock a JobBlock position
-     * @param status   the new status of that job
-     */
-    void setStatus(BlockPos jobBlock, JobStatus status) {
-        workplace(jobBlock).setStatus(status);
-    }
-
-    /**
-     * @param jobBlock a JobBlock position
-     * @param status   the new status of that job
-     * @param subject  what the status is about
-     */
-    void setStatus(BlockPos jobBlock, JobStatus status, net.minecraft.network.chat.Component subject) {
-        workplace(jobBlock).setStatus(status, subject);
-    }
-
-    /**
-     * @param pos a position
-     * @return whether the settler is already walking to (or at) that position for a step of a category loop
-     */
-    boolean walkingTo(BlockPos pos) {
-        return activity == Activity.JOB && pos.equals(target);
-    }
-
-    /**
-     * Starts walking to the target of a step of a category loop.
-     *
-     * @param level the level
-     * @param pos   the target
-     */
-    void moveToJob(ServerLevel level, BlockPos pos) {
-        moveTo(level, Activity.JOB, pos);
-    }
-
-    /**
-     * Ends the current step of a category loop and decides again.
-     *
-     * @param level the level
-     */
-    void stepDone(ServerLevel level) {
-        activity = Activity.IDLE;
-        decide(level);
-    }
-
-    /**
-     * Stops the current step and stays idle while working on a job (e.g. waiting for a departure).
-     *
-     * @param job the job
-     */
-    void idleWith(SettlerJob job) {
-        stop();
-        activeJob = job;
     }
 
     /**
@@ -1191,12 +1128,8 @@ public final class SettlerWork {
         settler.setInvisible(away);
     }
 
-    /**
-     * Counts one tick of work of a job for hunger.
-     *
-     * @param job the job
-     */
-    void countWorkTick(SettlerJob job) {
+    /** Counts one tick of work of a job for hunger. */
+    private void countWorkTick(SettlerJob job) {
         weightedWorkTicks += job.jobType().hungerFactor();
     }
 
@@ -1207,7 +1140,7 @@ public final class SettlerWork {
      * @param job   the job
      * @return true (the settler is busy with it)
      */
-    boolean startDelivery(ServerLevel level, SettlerJob job) {
+    private boolean startDelivery(ServerLevel level, SettlerJob job) {
         ClerkStorage.Visit visit;
         activeJob = job;
         if (loop(job) == deliverymen) {
@@ -1233,7 +1166,7 @@ public final class SettlerWork {
      * @param jobBlock the JobBlock position
      * @param status   the status explaining why
      */
-    void block(ServerLevel level, BlockPos jobBlock, JobStatus status) {
+    private void block(ServerLevel level, BlockPos jobBlock, JobStatus status) {
         workplace(jobBlock).block(status, level.getGameTime());
         if (activeJob != null && activeJob.jobBlock().equals(jobBlock)) {
             stop();
@@ -1247,7 +1180,7 @@ public final class SettlerWork {
      * @param jobBlock the JobBlock position
      * @param reason   the reason
      */
-    void block(ServerLevel level, BlockPos jobBlock, BlockingReason reason) {
+    private void block(ServerLevel level, BlockPos jobBlock, BlockingReason reason) {
         workplace(jobBlock).block(reason, level.getGameTime());
         if (activeJob != null && activeJob.jobBlock().equals(jobBlock)) {
             stop();
@@ -1464,14 +1397,9 @@ public final class SettlerWork {
     }
 
     /**
-     * @return the reach for the current target (the category loop's reach in a job step, otherwise the reach the walk
-     *         was started with)
+     * @return the reach for the current target (a job step's walk brings its own)
      */
     private double reach() {
-        CategoryLoop loop = activeJob == null ? null : loop(activeJob);
-        if (activity == Activity.JOB && loop != null && !Double.isNaN(loop.reach(activeJob))) {
-            return loop.reach(activeJob);
-        }
         return targetReach;
     }
 
