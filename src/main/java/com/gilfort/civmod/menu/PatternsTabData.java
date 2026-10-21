@@ -48,11 +48,11 @@ import net.minecraft.world.item.crafting.RecipeType;
  *                     pattern stayed unchecked at the limit, or the checkmarks removed by a dropped limit
  * @param recipeTypes  the recipe types the Job follows (what a recipe viewer's transfer button may fill)
  */
-public record PatternTabData(Optional<Job> job, boolean locked, int limit, List<Pattern> patterns, Set<Integer> filtered, Set<Integer> foreign,
+public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List<Pattern> patterns, Set<Integer> filtered, Set<Integer> foreign,
         Component filteredLine, Optional<Component> notice, List<RecipeType<?>> recipeTypes) {
 
     /** Nothing (any other JobBlock, or before the first sync). */
-    public static final PatternTabData EMPTY = new PatternTabData(Optional.empty(), false, Patterns.BASE_CHECKMARKS, List.of(), Set.of(), Set.of(),
+    public static final PatternsTabData EMPTY = new PatternsTabData(Optional.empty(), false, Patterns.BASE_CHECKMARKS, List.of(), Set.of(), Set.of(),
             Component.empty(), Optional.empty(), List.of());
 
     /** Network codec of a set of library slots. */
@@ -60,17 +60,17 @@ public record PatternTabData(Optional<Job> job, boolean locked, int limit, List<
             .apply(ByteBufCodecs.collection(HashSet::new, Pattern.SLOTS)).map(slots -> slots, HashSet::new);
 
     /** Network codec. */
-    public static final StreamCodec<RegistryFriendlyByteBuf, PatternTabData> STREAM_CODEC = StreamCodec.composite(
-            ByteBufCodecs.optional(Job.STREAM_CODEC), PatternTabData::job,
-            ByteBufCodecs.BOOL, PatternTabData::locked,
-            ByteBufCodecs.VAR_INT, PatternTabData::limit,
-            Pattern.STREAM_CODEC.apply(ByteBufCodecs.list(Pattern.SLOTS)), PatternTabData::patterns,
-            SLOTS_CODEC, PatternTabData::filtered,
-            SLOTS_CODEC, PatternTabData::foreign,
-            ComponentSerialization.STREAM_CODEC, PatternTabData::filteredLine,
-            ByteBufCodecs.optional(ComponentSerialization.STREAM_CODEC), PatternTabData::notice,
-            ByteBufCodecs.registry(Registries.RECIPE_TYPE).apply(ByteBufCodecs.list()), PatternTabData::recipeTypes,
-            PatternTabData::new);
+    public static final StreamCodec<RegistryFriendlyByteBuf, PatternsTabData> STREAM_CODEC = StreamCodec.composite(
+            ByteBufCodecs.optional(Job.STREAM_CODEC), PatternsTabData::job,
+            ByteBufCodecs.BOOL, PatternsTabData::locked,
+            ByteBufCodecs.VAR_INT, PatternsTabData::limit,
+            Pattern.STREAM_CODEC.apply(ByteBufCodecs.list(Pattern.SLOTS)), PatternsTabData::patterns,
+            SLOTS_CODEC, PatternsTabData::filtered,
+            SLOTS_CODEC, PatternsTabData::foreign,
+            ComponentSerialization.STREAM_CODEC, PatternsTabData::filteredLine,
+            ByteBufCodecs.optional(ComponentSerialization.STREAM_CODEC), PatternsTabData::notice,
+            ByteBufCodecs.registry(Registries.RECIPE_TYPE).apply(ByteBufCodecs.list()), PatternsTabData::recipeTypes,
+            PatternsTabData::new);
 
     /**
      * @param job          the Job whose library it is
@@ -83,7 +83,7 @@ public record PatternTabData(Optional<Job> job, boolean locked, int limit, List<
      * @param notice       the state line
      * @param recipeTypes  the recipe types the producer follows
      */
-    public PatternTabData {
+    public PatternsTabData {
         patterns = List.copyOf(patterns);
         filtered = Set.copyOf(filtered);
         foreign = Set.copyOf(foreign);
@@ -96,12 +96,12 @@ public record PatternTabData(Optional<Job> job, boolean locked, int limit, List<
      * @param job   a Producing Job of it
      * @return the current tab of the Job's library at that JobBlock ({@link #EMPTY} if it keeps none for the Job)
      */
-    public static PatternTabData of(ServerLevel level, BlockPos pos, Job job) {
+    public static PatternsTabData of(ServerLevel level, BlockPos pos, Job job) {
         return SettlementData.get(level).settlementAt(pos).flatMap(settlement -> settlement.block(pos)).filter(block -> Patterns.hasLibrary(block, job))
                 .map(block -> of(level, block, job)).orElse(EMPTY);
     }
 
-    private static PatternTabData of(ServerLevel level, SettlementBlock block, Job job) {
+    private static PatternsTabData of(ServerLevel level, SettlementBlock block, Job job) {
         ProducingProfile profile = Patterns.profile(job);
         List<Pattern> patterns = block.patterns(job);
         Set<Integer> foreign = slots(patterns, pattern -> Patterns.foreign(level, profile, pattern));
@@ -110,7 +110,7 @@ public record PatternTabData(Optional<Job> job, boolean locked, int limit, List<
             case SettlementBlock.Notice.AtLimit atLimit -> Component.translatable("civmod.gui.patterns.at_limit", job.displayName(), atLimit.limit());
             case SettlementBlock.Notice.Trimmed trimmed -> Component.translatable("civmod.gui.patterns.trimmed", trimmed.removed(), trimmed.limit());
         });
-        return new PatternTabData(Optional.of(job), Patterns.locked(block, job), block.checkLimit(job), patterns, filtered, foreign, profile.filteredLine(),
+        return new PatternsTabData(Optional.of(job), Patterns.locked(block, job), block.checkLimit(job), patterns, filtered, foreign, profile.filteredLine(),
                 notice, profile.recipeTypes());
     }
 
@@ -177,7 +177,7 @@ public record PatternTabData(Optional<Job> job, boolean locked, int limit, List<
      * @param containerId the menu's container id
      * @param tab         the tab
      */
-    public record Sync(int containerId, PatternTabData tab) implements CustomPacketPayload {
+    public record Sync(int containerId, PatternsTabData tab) implements CustomPacketPayload {
 
         /** Payload type. */
         public static final Type<Sync> TYPE = new Type<>(CivMod.id("pattern_tab"));
@@ -185,7 +185,7 @@ public record PatternTabData(Optional<Job> job, boolean locked, int limit, List<
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Sync> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, Sync::containerId,
-                PatternTabData.STREAM_CODEC, Sync::tab,
+                PatternsTabData.STREAM_CODEC, Sync::tab,
                 Sync::new);
 
         @Override

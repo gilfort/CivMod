@@ -34,7 +34,7 @@ import net.minecraft.world.item.ItemStack;
  * unmarks it) and the assignment view of a marked entry (a right click opens it, a click on a settler assigns); the
  * client side of {@link MissionsTab}.
  */
-final class MissionTabView implements JobBlockTabView {
+final class MissionsTabView implements JobBlockTabView {
 
     private static final int MISSION_LIST_Y = 34;
     private static final int MISSION_ROWS = 5;
@@ -54,7 +54,7 @@ final class MissionTabView implements JobBlockTabView {
      * @param screen the screen showing the tab
      * @param tab    the tab
      */
-    MissionTabView(JobBlockScreen screen, MissionsTab tab) {
+    MissionsTabView(JobBlockScreen screen, MissionsTab tab) {
         this.screen = screen;
         this.menu = screen.getMenu();
         this.missions = tab;

@@ -23,7 +23,7 @@ import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.menu.JobBlockTabs;
-import com.gilfort.civmod.menu.PatternTabData;
+import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -397,20 +397,20 @@ public final class ExampleAddonGameTests {
                 && Patterns.allRecipeTypes().size() == 2,
                 "Recipe viewers offer the transfer for the recipe types of every Producing Job: " + Patterns.allRecipeTypes());
         Job craftsperson = ModJobs.CRAFTSPERSON.get();
-        PatternTabData tab = PatternTabData.of(level, craft, craftsperson);
+        PatternsTabData tab = PatternsTabData.of(level, craft, craftsperson);
         helper.assertTrue(tab.follows(RecipeType.CRAFTING) && !tab.follows(RecipeType.STONECUTTING), "The Craftsperson's library follows crafting");
         helper.assertTrue(Patterns.transfer(level, craft, craftsperson, 0, Optional.of(bricks), List.of(Items.STONE)).isEmpty(),
                 "The Craftsperson refuses a stonecutting recipe");
-        helper.assertTrue(PatternTabData.of(level, craft, craftsperson).pattern(0).isEmpty(), "Refused: the slot stays empty");
+        helper.assertTrue(PatternsTabData.of(level, craft, craftsperson).pattern(0).isEmpty(), "Refused: the slot stays empty");
 
-        tab = PatternTabData.of(level, craft, stonecutter);
+        tab = PatternsTabData.of(level, craft, stonecutter);
         helper.assertTrue(tab.follows(RecipeType.STONECUTTING) && !tab.follows(RecipeType.CRAFTING), "The Stonecutter's library follows stonecutting");
         Pattern pattern = Patterns.transfer(level, craft, stonecutter, 0, Optional.of(bricks), List.of(Items.STONE)).orElseThrow();
         helper.assertTrue(pattern.output() == Items.STONE_BRICKS && pattern.recipe().equals(Optional.of(bricks)) && !pattern.exact()
                 && pattern.grid().getFirst() == Items.STONE && pattern.checked(), "A stonecutting recipe pattern, checked automatically: " + pattern);
         helper.assertTrue(Patterns.transfer(level, craft, stonecutter, 1, Optional.of(sticks), stickGrid).isEmpty(),
                 "The Stonecutter refuses a crafting recipe");
-        helper.assertTrue(PatternTabData.of(level, craft, stonecutter).pattern(1).isEmpty(), "Refused: the slot stays empty");
+        helper.assertTrue(PatternsTabData.of(level, craft, stonecutter).pattern(1).isEmpty(), "Refused: the slot stays empty");
         TestAssignments.unassign(data, clerk);
         helper.succeed();
     }

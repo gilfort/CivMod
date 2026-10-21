@@ -8,10 +8,10 @@ import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
-import com.gilfort.civmod.menu.PatternTabData;
+import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.menu.SettlerMenu;
-import com.gilfort.civmod.menu.StationTypeTabData;
+import com.gilfort.civmod.menu.StationTypesTabData;
 import com.gilfort.civmod.menu.StockTab;
 import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.settlement.JobPointsDisplay;
@@ -81,7 +81,7 @@ public final class CivNetwork {
                 menu.tab(StockTab.class).ifPresent(tab -> tab.editRule(payload.slot(), payload.rule()));
             }
         });
-        registrar.playToServer(PatternTabData.Edit.TYPE, PatternTabData.Edit.STREAM_CODEC, (payload, context) -> {
+        registrar.playToServer(PatternsTabData.Edit.TYPE, PatternsTabData.Edit.STREAM_CODEC, (payload, context) -> {
             if (context.player().containerMenu instanceof JobBlockMenu menu && menu.containerId == payload.containerId()) {
                 PatternsTab.of(menu, payload.job()).ifPresent(tab -> tab.edit(payload));
             }
@@ -104,8 +104,8 @@ public final class CivNetwork {
                 });
         // Client handler is registered in CivModClient (RegisterClientPayloadHandlersEvent).
         registrar.playToClient(JobPicker.Open.TYPE, JobPicker.Open.STREAM_CODEC);
-        registrar.playToClient(PatternTabData.Sync.TYPE, PatternTabData.Sync.STREAM_CODEC);
-        registrar.playToClient(StationTypeTabData.Sync.TYPE, StationTypeTabData.Sync.STREAM_CODEC);
+        registrar.playToClient(PatternsTabData.Sync.TYPE, PatternsTabData.Sync.STREAM_CODEC);
+        registrar.playToClient(StationTypesTabData.Sync.TYPE, StationTypesTabData.Sync.STREAM_CODEC);
         registrar.playToClient(SettlementOutline.Sync.TYPE, SettlementOutline.Sync.STREAM_CODEC);
         registrar.playToClient(JobPointsDisplay.Sync.TYPE, JobPointsDisplay.Sync.STREAM_CODEC);
         registrar.playToClient(ClerkTabData.Sync.TYPE, ClerkTabData.Sync.STREAM_CODEC);

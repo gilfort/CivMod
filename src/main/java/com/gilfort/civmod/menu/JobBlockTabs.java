@@ -49,7 +49,7 @@ public final class JobBlockTabs {
         List<Job> specializations = StationTypes.hasStationTypes(jobType)
                 ? StationTypes.specializations(jobType).stream().filter(job -> job.category() == JobCategory.PRODUCING).toList()
                 : List.of();
-        TabData<PatternTabData> library = PatternsTab.newData();
+        TabData<PatternsTabData> library = PatternsTab.newData();
         StationTypesTab stations = new StationTypesTab(!specializations.isEmpty());
         List<JobBlockTab> tabs = new ArrayList<>(List.of(new PatternsTab(jobType, true, library, stations.data()), stations));
         specializations.forEach(job -> tabs.add(new PatternsTab(job, false, library, stations.data())));

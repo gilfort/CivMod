@@ -227,7 +227,7 @@ final class InfoTabView implements JobBlockTabView {
             Optional<JobBlockInfo.TakenMission> taken = info.taken().stream().filter(entry -> entry.settler().equals(name)).findFirst();
             lines.add(taken.<Component>map(entry -> Component.translatable("civmod.gui.job_block.settler_mission", name,
                     Component.translatable(entry.departed() ? "civmod.settler.status.on_mission" : "civmod.settler.status.mission_reserved",
-                            MissionTabView.title(entry.mission(), MissionTabView.mission(entry.mission()))))).orElseGet(() -> Component.literal(name)));
+                            MissionsTabView.title(entry.mission(), MissionsTabView.mission(entry.mission()))))).orElseGet(() -> Component.literal(name)));
         }
         return lines;
     }

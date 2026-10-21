@@ -23,7 +23,7 @@ import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
-import com.gilfort.civmod.menu.PatternTabData;
+import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.menu.StationTypesTab;
 import com.gilfort.civmod.menu.StorageTab;
@@ -705,16 +705,16 @@ public final class CraftspersonGameTests {
         entity.clearContent();
         menu.setActiveTab(patterns.index());
 
-        patterns.edit(PatternTabData.Edit.setOutput(1, craftJob(), 3, Items.TORCH));
-        patterns.edit(PatternTabData.Edit.transfer(1, craftJob(), 5, Optional.empty(), List.of(Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.OAK_PLANKS,
+        patterns.edit(PatternsTabData.Edit.setOutput(1, craftJob(), 3, Items.TORCH));
+        patterns.edit(PatternsTabData.Edit.transfer(1, craftJob(), 5, Optional.empty(), List.of(Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.OAK_PLANKS,
                 Items.AIR, Items.AIR, Items.AIR, Items.AIR)));
-        PatternTabData tab = PatternTabData.of(level, pos, craftJob());
+        PatternsTabData tab = PatternsTabData.of(level, pos, craftJob());
         helper.assertTrue(tab.pattern(3).filter(Pattern::checked).map(Pattern::output).equals(Optional.of(Items.TORCH)), "Torch pattern checked: " + tab);
         helper.assertTrue(tab.pattern(5).map(Pattern::output).equals(Optional.of(Items.STICK)) && tab.pattern(5).orElseThrow().exact(),
                 "Transfer without a known recipe: exactly the shown items");
         helper.assertTrue(tab.limit() == Patterns.BASE_CHECKMARKS && tab.notice().isEmpty(), "Limit 6, nothing removed");
-        patterns.edit(PatternTabData.Edit.clear(1, craftJob(), 3));
-        helper.assertTrue(PatternTabData.of(level, pos, craftJob()).pattern(3).isEmpty(), "Cleared through the menu");
+        patterns.edit(PatternsTabData.Edit.clear(1, craftJob(), 3));
+        helper.assertTrue(PatternsTabData.of(level, pos, craftJob()).pattern(3).isEmpty(), "Cleared through the menu");
         helper.assertTrue(data.settlementAt(pos).isPresent(), "Still registered");
         helper.succeed();
     }
@@ -733,7 +733,7 @@ public final class CraftspersonGameTests {
         helper.assertTrue(pickaxe.checked(), "An iron pickaxe pattern is checked");
         SettlementBlock block = settlement.block(pos).orElseThrow();
         helper.assertFalse(Patterns.unusable(level, block, craftJob(), pickaxe), "Usable");
-        helper.assertTrue(PatternTabData.of(level, pos, craftJob()).filtered().isEmpty(), "Nothing filtered");
+        helper.assertTrue(PatternsTabData.of(level, pos, craftJob()).filtered().isEmpty(), "Nothing filtered");
         define(helper, pos, 1, Items.IRON_NUGGET);
         TestAssignments.assign(data, pos, UUID.randomUUID(), "Cora", settlement.id(), List.of());
         helper.assertTrue(Producers.canMake(level, settlement, Items.IRON_PICKAXE), "The Craftsperson makes iron pickaxes");

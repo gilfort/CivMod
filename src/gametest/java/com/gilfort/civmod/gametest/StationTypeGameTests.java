@@ -16,8 +16,8 @@ import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.Producers;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
-import com.gilfort.civmod.menu.PatternTabData;
-import com.gilfort.civmod.menu.StationTypeTabData;
+import com.gilfort.civmod.menu.PatternsTabData;
+import com.gilfort.civmod.menu.StationTypesTabData;
 import com.gilfort.civmod.menu.StationTypesTab;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -153,7 +153,7 @@ public final class StationTypeGameTests {
         JobBlockMenu menu = menu(helper, player, pos);
         helper.assertTrue(menu.getTabCount() > menu.tab(StationTypesTab.class).orElseThrow().index() && menu.patternJobs().contains(stonecutter),
                 "A Station Types tab and a Patterns tab for the Stonecutter: " + menu.patternJobs());
-        helper.assertTrue(StationTypeTabData.of(level, pos).item(0) == Items.CRAFTING_TABLE && StationTypeTabData.of(level, pos).open() == 1,
+        helper.assertTrue(StationTypesTabData.of(level, pos).item(0) == Items.CRAFTING_TABLE && StationTypesTabData.of(level, pos).open() == 1,
                 "Level 1: only the crafting table slot");
 
         menu.setCarried(new ItemStack(Items.STONECUTTER, 2));
@@ -176,8 +176,8 @@ public final class StationTypeGameTests {
         helper.assertTrue(block(level, pos).stationTypes().get(1) == Items.STONECUTTER, "Slot 2 holds the stonecutter");
         helper.assertTrue(offered(level, pos).contains(stonecutter) && offered(level, pos).getFirst() == craftsperson,
                 "The job picker offers the Stonecutter: " + offered(level, pos));
-        helper.assertTrue(StationTypeTabData.of(level, pos).unlocked().contains(stonecutter) && StationTypeTabData.of(level, pos).open() == 2,
-                "The tab shows it: " + StationTypeTabData.of(level, pos));
+        helper.assertTrue(StationTypesTabData.of(level, pos).unlocked().contains(stonecutter) && StationTypesTabData.of(level, pos).open() == 2,
+                "The tab shows it: " + StationTypesTabData.of(level, pos));
         helper.assertTrue(ScrollOfAssignmentItem.workPlaceJob(level, block(level, pos), cutter).filter(stonecutter::equals).isPresent(),
                 "The unlock item is no work place: the stonecutter in the world is the Stonecutter's work point");
         helper.assertFalse(menu.clickMenuButton(player, menu.tab(StationTypesTab.class).orElseThrow().slotButtonId(1)), "Unlocked already: refused");
@@ -236,15 +236,15 @@ public final class StationTypeGameTests {
         helper.assertTrue(settler.getJobs().size() == 1 && settler.getJobs().getFirst().jobType() == craftsperson, "And in its job list: "
                 + settler.getJobs());
         helper.assertTrue(Patterns.pattern(block, stonecutter, 0).filter(Pattern::checked).isPresent(), "The Stonecutter's library is kept");
-        PatternTabData tab = PatternTabData.of(level, pos, stonecutter);
+        PatternsTabData tab = PatternsTabData.of(level, pos, stonecutter);
         helper.assertTrue(tab.locked() && tab.unusable(0) && !tab.follows(RecipeType.STONECUTTING), "Greyed out: " + tab);
         helper.assertTrue(Patterns.usable(level, block, stonecutter).isEmpty(), "Not usable");
         helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 1, Items.STONE_SLAB).isEmpty(), "Not editable");
-        helper.assertTrue(StationTypeTabData.of(level, pos).libraries().contains(stonecutter), "Its Patterns tab stays");
+        helper.assertTrue(StationTypesTabData.of(level, pos).libraries().contains(stonecutter), "Its Patterns tab stays");
 
         // Level 2 only: a bigger JobBlock would reach into the neighbouring tests' settlements.
         helper.assertTrue(unlock(helper, pos, 1, Items.STONECUTTER), "The stonecutter again replaces the smithing table");
-        helper.assertTrue(Patterns.usable(level, block(level, pos), stonecutter).size() == 1 && !PatternTabData.of(level, pos, stonecutter).locked(),
+        helper.assertTrue(Patterns.usable(level, block(level, pos), stonecutter).size() == 1 && !PatternsTabData.of(level, pos, stonecutter).locked(),
                 "The library works again with its checkmark");
         settler.discard();
         helper.succeed();
@@ -271,8 +271,8 @@ public final class StationTypeGameTests {
         helper.assertTrue(block.patterns(craftsperson).size() == 1 && block.patterns(craftsperson).getFirst().output() == Items.STICK
                 && block.patterns(stonecutter).size() == 1 && block.patterns(stonecutter).getFirst().output() == Items.STONE_BRICKS,
                 "Two libraries: " + block.patterns(craftsperson) + " / " + block.patterns(stonecutter));
-        helper.assertTrue(PatternTabData.of(level, pos, stonecutter).follows(RecipeType.STONECUTTING)
-                && PatternTabData.of(level, pos, craftsperson).follows(RecipeType.CRAFTING), "Each tab follows its Job's recipe types");
+        helper.assertTrue(PatternsTabData.of(level, pos, stonecutter).follows(RecipeType.STONECUTTING)
+                && PatternsTabData.of(level, pos, craftsperson).follows(RecipeType.CRAFTING), "Each tab follows its Job's recipe types");
 
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(pos).orElseThrow();
