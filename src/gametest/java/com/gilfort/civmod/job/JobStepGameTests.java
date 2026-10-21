@@ -46,6 +46,7 @@ public final class JobStepGameTests {
             register(helper, "job_step_lumberjack_blocked_without_tool", JobStepGameTests::lumberjackBlockedWithoutTool);
             register(helper, "job_step_adventurer_waits_for_departure", JobStepGameTests::adventurerWaitsForDeparture);
             register(helper, "job_step_deliveryman_skips_without_tasks", JobStepGameTests::deliverymanSkipsWithoutTasks);
+            register(helper, "job_step_craftsperson_blocked_without_station", JobStepGameTests::craftspersonBlockedWithoutStation);
         });
     }
 
@@ -150,6 +151,28 @@ public final class JobStepGameTests {
         helper.assertTrue(work.status(warehouse) == JobStatus.IDLE, "The loop does not set the status: " + work.status(warehouse));
         helper.assertFalse(work.apply(level, job, step), "The next priority works");
         helper.assertTrue(work.status(warehouse) == JobStatus.NO_PICKUPS, "The shell sets the status: " + work.status(warehouse));
+        settler.discard();
+        helper.succeed();
+    }
+
+    /** A Craftsperson without a crafting table nearby answers "blocked: no work place". */
+    private static void craftspersonBlockedWithoutStation(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.CRAFTSPERSON_BLOCK.get());
+        BlockPos jobBlock = helper.absolutePos(new BlockPos(1, 1, 1));
+        Settler settler = settler(helper, jobBlock, new BlockPos(3, 1, 3));
+        SettlerJob job = new SettlerJob(ModJobs.CRAFTSPERSON.get(), jobBlock);
+        settler.addJob(job);
+        SettlerWork work = settler.getWork();
+        JobBlockSite site = JobBlockSite.at(level, jobBlock).orElseThrow();
+
+        JobStep step = Objects.requireNonNull(work.loop(job)).plan(level, job, site, DayClock.day(level), MORNING);
+
+        helper.assertTrue(step instanceof JobStep.Blocked blocked && blocked.status() == JobStatus.NO_WORK_PLACE,
+                "Blocked without a station: " + step);
+        helper.assertTrue(work.status(jobBlock) == JobStatus.IDLE, "The loop does not set the status: " + work.status(jobBlock));
+        helper.assertFalse(work.apply(level, job, step), "The next priority works");
+        helper.assertTrue(work.status(jobBlock) == JobStatus.NO_WORK_PLACE, "The shell blocks the job: " + work.status(jobBlock));
         settler.discard();
         helper.succeed();
     }
