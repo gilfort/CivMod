@@ -2352,7 +2352,9 @@ public final class SettlerWork {
         }
         if (activity == Activity.DELIVER) {
             if (loop(activeJob) == deliverymen) {
-                deliverymen.unload(level, activeJob);
+                if (!deliverymen.unload(level, activeJob)) {
+                    block(level, activeJob.jobBlock(), JobStatus.STORAGE_FULL);
+                }
             } else {
                 deliver(level, activeJob.jobBlock(), deliveryVisit != null && deliveryVisit.counter());
             }

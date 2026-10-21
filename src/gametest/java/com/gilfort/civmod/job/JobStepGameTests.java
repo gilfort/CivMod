@@ -45,6 +45,7 @@ public final class JobStepGameTests {
             register(helper, "job_step_clerk_walks_to_counter", JobStepGameTests::clerkWalksToCounter);
             register(helper, "job_step_lumberjack_blocked_without_tool", JobStepGameTests::lumberjackBlockedWithoutTool);
             register(helper, "job_step_adventurer_waits_for_departure", JobStepGameTests::adventurerWaitsForDeparture);
+            register(helper, "job_step_deliveryman_skips_without_tasks", JobStepGameTests::deliverymanSkipsWithoutTasks);
         });
     }
 
@@ -127,6 +128,28 @@ public final class JobStepGameTests {
         helper.assertTrue(work.activeJob().isEmpty(), "The loop does not set the active job");
         helper.assertTrue(work.apply(level, job, step), "Waiting keeps the settler busy with the job");
         helper.assertTrue(work.activeJob().filter(job::equals).isPresent(), "The shell sets the active job");
+        settler.discard();
+        helper.succeed();
+    }
+
+    /** A Deliveryman without delivery tasks answers "skip: no pickups"; the shell sets the status. */
+    private static void deliverymanSkipsWithoutTasks(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.CLERK_BLOCK.get());
+        BlockPos warehouse = helper.absolutePos(new BlockPos(1, 1, 1));
+        Settler settler = settler(helper, warehouse, new BlockPos(3, 1, 3));
+        SettlerJob job = new SettlerJob(ModJobs.DELIVERYMAN.get(), warehouse);
+        settler.addJob(job);
+        SettlerWork work = settler.getWork();
+        JobBlockSite site = JobBlockSite.at(level, warehouse).orElseThrow();
+
+        JobStep step = Objects.requireNonNull(work.loop(job)).plan(level, job, site, DayClock.day(level), MORNING);
+
+        helper.assertTrue(step instanceof JobStep.Skip skip && skip.status().filter(JobStatus.NO_PICKUPS::equals).isPresent(),
+                "Nothing to carry: " + step);
+        helper.assertTrue(work.status(warehouse) == JobStatus.IDLE, "The loop does not set the status: " + work.status(warehouse));
+        helper.assertFalse(work.apply(level, job, step), "The next priority works");
+        helper.assertTrue(work.status(warehouse) == JobStatus.NO_PICKUPS, "The shell sets the status: " + work.status(warehouse));
         settler.discard();
         helper.succeed();
     }
