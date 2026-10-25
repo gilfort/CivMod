@@ -74,6 +74,8 @@ and the lang keys `job.<namespace>.<job>`, `job.<namespace>.<job>.indefinite` an
 
 `ItemFilter.allow(tag)`, `ItemFilter.deny(tag)` and `ItemFilter.ANY` build filters. The Craftsperson is a profile with `crafting` and its crafting-table station, without filters: it crafts everything, slowly (job factor 0.3).
 
+**Occupied stations:** the station of the day and every station of another type a settler crafts at are occupied by it for the day; other settlers of the same or another JobBlock take the next free one ("No free work place" if none). While the settler crafts at a station, players cannot open its GUI (action bar "In use by <name>"). Your Job needs no code for this.
+
 ## Domains
 
 A crafting Specialization trades the Craftsperson's "everything, slowly" for "its domain, fast": its profile names a domain item tag, and its Job uses job factor **1.2** (four times the Craftsperson's 0.3; set it with `.jobFactor(1.2)` and let datapacks override it through `job_factor` in `civmod_jobs/<job>.json`).

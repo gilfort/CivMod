@@ -246,6 +246,12 @@ final class StockTabView implements JobBlockTabView {
         return true;
     }
 
+    /** Shift + right-click: the first rule slot without a rule. */
+    @Override
+    public int nextEmptyGhost() {
+        return clerk().nextEmptyGhostSlot();
+    }
+
     /**
      * The screen areas that take a dragged item as a rule item (for JEI / REI ghost drag): the active rule slots.
      *

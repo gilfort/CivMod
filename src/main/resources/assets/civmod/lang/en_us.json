@@ -151,6 +151,8 @@
   "civmod.job.status.pausing": "Pausing",
   "civmod.job.status.no_tool": "No tool",
   "civmod.job.status.no_work_place": "No work place",
+  "civmod.job.status.no_free_work_place": "No free work place",
+  "civmod.work_place.in_use": "In use by %s",
   "civmod.job.status.drop_off_full": "Drop-off full",
   "civmod.gui.job_block.leaves.on": "Collect leaves: ON",
   "civmod.gui.job_block.leaves.off": "Collect leaves: OFF",

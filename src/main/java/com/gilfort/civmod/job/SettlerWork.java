@@ -37,6 +37,7 @@ import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.OccupiedPlaces;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
@@ -561,6 +562,17 @@ public final class SettlerWork {
     }
 
     /**
+     * @param pos a block
+     * @return whether the settler works the block now and players must not open it (it stands at the block and its job
+     *         uses it, see {@link CategoryLoop#usesTarget})
+     */
+    public boolean worksAt(BlockPos pos) {
+        SettlerJob job = activeJob;
+        CategoryLoop loop = job == null ? null : loop(job);
+        return activity == Activity.JOB && loop != null && pos.equals(target) && isAtTarget() && loop.usesTarget(job);
+    }
+
+    /**
      * Forgets everything about a removed job: its whole Workplace goes (the buffer is dropped at the settler's position).
      *
      * @param jobBlock the JobBlock position
@@ -569,8 +581,12 @@ public final class SettlerWork {
         // The loops first: they still see the Workplace (a Producing Job empties its buffer into the drop-off).
         allLoops().forEach(loop -> loop.forget(jobBlock));
         Workplace workplace = jobWorkplaces.remove(jobBlock);
-        if (workplace != null && settler.level() instanceof ServerLevel level) {
-            workplace.buffer().stacks().forEach(stack -> settler.spawnAtLocation(level, stack.copy()));
+        if (settler.level() instanceof ServerLevel level) {
+            // Its work places are free for the other settlers again.
+            OccupiedPlaces.releaseJob(SettlementData.get(level), settler.getUUID(), jobBlock);
+            if (workplace != null) {
+                workplace.buffer().stacks().forEach(stack -> settler.spawnAtLocation(level, stack.copy()));
+            }
         }
         if (activeJob != null && activeJob.jobBlock().equals(jobBlock)) {
             stop();
@@ -862,7 +878,7 @@ public final class SettlerWork {
                         type.profile(ResourceCollectionProfile.class).map(ResourceCollectionProfile::toolIcon).orElseGet(() -> type.bubbleIcon().getItem()));
                 case DROP_OFF_FULL, STORAGE_FULL -> on.putIfAbsent(ThoughtBubble.DROP_OFF_FULL,
                         SettlerThoughts.problemIcon(ThoughtBubble.DROP_OFF_FULL));
-                case NO_WORK_PLACE -> on.putIfAbsent(ThoughtBubble.NO_WORK_PLACE, type.icon().getItem());
+                case NO_WORK_PLACE, NO_FREE_WORK_PLACE -> on.putIfAbsent(ThoughtBubble.NO_WORK_PLACE, type.icon().getItem());
                 case MISSING_INPUTS -> on.putIfAbsent(ThoughtBubble.MISSING_INPUTS,
                         SettlerThoughts.problemIcon(ThoughtBubble.MISSING_INPUTS));
                 case BLOCKED -> on.putIfAbsent(ThoughtBubble.BLOCKED,

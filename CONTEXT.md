@@ -238,7 +238,7 @@ A block near a Job's station of the day that raises its base job factor (the Smi
 _Avoid_: Work aid, workshop tool (collides with tools)
 
 **Occupied**:
-A work place a settler has chosen for the day: no other settler uses it that day; while the settler actually works there, players cannot open its GUI ("In use by <name>"). Breaking it stays allowed; the settler then picks a new free one. Planned (module 2).
+A work place a settler has chosen for the day: no other settler uses it that day; while the settler actually works there, players cannot open its GUI ("In use by <name>"). Breaking it stays allowed; the settler then picks a new free one. Code: `OccupiedPlaces` (kept in the `Settlement`, not saved), chosen in `Workplace.workPlaceOfDay`, status `JobStatus.NO_FREE_WORK_PLACE`, player side `WorkPlaceLock` with `CategoryLoop.usesTarget` / `SettlerWork.worksAt`, addon hook `ResourceCollectionProfile.autoSearch(level, jobBlock, free)`.
 _Avoid_: Claim (a claim is part of a request, see Round), reserved (stock reservations)
 
 **Remaining Heat**:

@@ -28,6 +28,8 @@ public enum JobStatus {
     NO_TOOL("no_tool"),
     /** No (reachable) work place. */
     NO_WORK_PLACE("no_work_place"),
+    /** Every work place of the job is occupied by another settler today. */
+    NO_FREE_WORK_PLACE("no_free_work_place"),
     /** The drop-off inventory is full. */
     DROP_OFF_FULL("drop_off_full"),
     /** The scan found nothing this job can produce. */
@@ -82,7 +84,7 @@ public enum JobStatus {
      */
     public boolean isBlocked() {
         // NO_REQUEST and MISSING_INPUTS do not block: the next decision tries again (vault Jobs/Craftsperson.md).
-        return this == NO_TOOL || this == NO_WORK_PLACE || this == DROP_OFF_FULL || this == NO_RESOURCES || this == ALL_EXCLUDED || this == MAX_REACHED
+        return this == NO_TOOL || this == NO_WORK_PLACE || this == NO_FREE_WORK_PLACE || this == DROP_OFF_FULL || this == NO_RESOURCES || this == ALL_EXCLUDED || this == MAX_REACHED
                 || this == NOTHING_TO_PRODUCE || this == NO_MISSION || this == STORAGE_FULL || this == BLOCKED;
     }
 

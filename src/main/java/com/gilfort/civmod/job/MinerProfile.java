@@ -3,6 +3,7 @@ package com.gilfort.civmod.job;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import org.jspecify.annotations.Nullable;
@@ -69,9 +70,14 @@ public final class MinerProfile implements ResourceCollectionProfile {
      */
     @Override
     public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock) {
+        return autoSearch(level, jobBlock, pos -> true);
+    }
+
+    @Override
+    public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock, Predicate<BlockPos> free) {
         // Ordered by Manhattan distance: the first match is (nearly) the nearest; stops early in typical terrain.
         for (BlockPos pos : BlockPos.withinBoxByManhattanDistance(jobBlock, AUTO_SEARCH_HORIZONTAL, AUTO_SEARCH_VERTICAL, AUTO_SEARCH_HORIZONTAL)) {
-            if (level.isLoaded(pos) && isMinable(level.getBlockState(pos)) && isExposed(level, pos)) {
+            if (level.isLoaded(pos) && isMinable(level.getBlockState(pos)) && isExposed(level, pos) && free.test(pos)) {
                 return pos.immutable();
             }
         }

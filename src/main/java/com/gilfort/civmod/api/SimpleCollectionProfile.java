@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.DoubleUnaryOperator;
 import java.util.function.IntUnaryOperator;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import org.jetbrains.annotations.ApiStatus;
@@ -112,8 +113,13 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
 
     @Override
     public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock) {
+        return autoSearch(level, jobBlock, pos -> true);
+    }
+
+    @Override
+    public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock, Predicate<BlockPos> free) {
         return BlockSearch.nearest(level, jobBlock, AUTO_SEARCH_HORIZONTAL, HALF_HEIGHT, state -> state.is(blocks),
-                pos -> MinerProfile.isExposed(level, pos));
+                pos -> free.test(pos) && MinerProfile.isExposed(level, pos));
     }
 
     @Override

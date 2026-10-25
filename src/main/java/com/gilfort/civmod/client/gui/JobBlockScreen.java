@@ -26,6 +26,8 @@ import com.gilfort.civmod.menu.StockTab;
 import com.gilfort.civmod.menu.StorageTab;
 import com.gilfort.civmod.menu.TabData;
 
+import com.mojang.blaze3d.platform.InputConstants;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -37,6 +39,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Recipe;
@@ -142,7 +145,26 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        return activeView().mouseClicked(event) || super.mouseClicked(event, doubleClick);
+        return ghostInput(event) || activeView().mouseClicked(event) || super.mouseClicked(event, doubleClick);
+    }
+
+    /**
+     * Shift + right-click on an item in the player inventory puts a copy into the next empty ghost slot of the open tab
+     * (every tab with ghost slots); with every ghost slot set nothing happens.
+     *
+     * @return whether the click was taken (on a tab with ghost slots)
+     */
+    private boolean ghostInput(MouseButtonEvent event) {
+        Slot slot = getHoveredSlot();
+        if (event.button() != InputConstants.MOUSE_BUTTON_RIGHT || !event.hasShiftDown() || slot == null
+                || !(slot.container instanceof Inventory) || !slot.hasItem() || activeView().ghostTargets().isEmpty()) {
+            return false;
+        }
+        int target = activeView().nextEmptyGhost();
+        if (target >= 0) {
+            activeView().acceptGhost(target, slot.getItem().copy());
+        }
+        return true;
     }
 
     @Override

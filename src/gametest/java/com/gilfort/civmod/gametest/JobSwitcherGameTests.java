@@ -264,6 +264,8 @@ public final class JobSwitcherGameTests {
         BlockPos relative = new BlockPos(1, 1, 1);
         BlockPos craft = CraftspersonGameTests.craftsperson(helper, relative);
         CraftspersonGameTests.placeTable(helper, new BlockPos(3, 1, 1));
+        // One table each: a table is occupied by the settler that chose it (#109).
+        CraftspersonGameTests.placeTable(helper, new BlockPos(3, 1, 0));
         StationTypeGameTests.setLevel(helper, relative, 3);
         Settler novice = CraftspersonGameTests.craftsperson(helper, craft, new BlockPos(2, 1, 3), "Nora");
         Settler master = CraftspersonGameTests.craftsperson(helper, craft, new BlockPos(4, 1, 3), "Mats");

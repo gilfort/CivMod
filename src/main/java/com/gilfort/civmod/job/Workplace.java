@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 
 import org.jspecify.annotations.Nullable;
 
@@ -17,9 +17,12 @@ import com.gilfort.civmod.api.BlockingReason;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
+import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.OccupiedPlaces;
+import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 
 import net.minecraft.core.BlockPos;
@@ -73,6 +76,8 @@ final class Workplace {
     private long blockedUntil;
     private @Nullable BlockPos workPlaceOfDay;
     private long workPlaceDay = -1L;
+    /** Whether the last choice of the work place of the day found only places occupied by others (not saved). */
+    private boolean noFreeWorkPlace;
     /** The biome of the day's biome position, read once per day and place (saved with the work place of the day). */
     private @Nullable BiomeOfDay biomeOfDay;
     /** The biome bonuses resolved at {@link #biomeOfDay} (not saved: resolved again from the loaded files). */
@@ -244,42 +249,89 @@ final class Workplace {
 
     /**
      * The work place of the day: kept for the day while it is still a work place, otherwise chosen anew among the
-     * JobBlock's work points (or by the job's own search).
+     * JobBlock's work points (or by the job's own search); places occupied by other settlers are skipped
+     * ({@link OccupiedPlaces}).
      *
      * @param level   the level
+     * @param settler the settler
      * @param profile the job's profile
      * @param site    the JobBlock site
      * @param day     the day
-     * @return the work place, null if there is none
+     * @return the work place, null if there is none ({@link #noFreeWorkPlace} tells why)
      */
-    @Nullable BlockPos workPlaceOfDay(ServerLevel level, ResourceCollectionProfile profile, JobBlockSite site, long day) {
-        return workPlaceOfDay(level, pos -> profile.isWorkPlace(level, pos), () -> profile.autoSearch(level, site.pos()), site, day);
+    @Nullable BlockPos workPlaceOfDay(ServerLevel level, Settler settler, ResourceCollectionProfile profile, JobBlockSite site, long day) {
+        return workPlaceOfDay(level, settler, pos -> profile.isWorkPlace(level, pos), free -> profile.autoSearch(level, site.pos(), free), site, day);
     }
 
     /**
-     * The work place of the day for any work place rule (a Producing Job's station).
+     * The work place of the day for any work place rule (a Producing Job's station). The place is occupied by the
+     * settler for the day; a new place (the old one is no longer a work place, or another settler occupies it) moves
+     * the occupation. Valid scroll work points that are all occupied leave the settler without a work place (no
+     * auto-search then): the player chose where the job works.
      *
      * @param level       the level
+     * @param settler     the settler
      * @param isWorkPlace whether a position is a work place of the job
-     * @param autoSearch  the job's own search, used without a valid scroll work point (may return null)
+     * @param autoSearch  the job's own search for a place that passes the given "free" test, used without a valid
+     *                    scroll work point (may return null)
      * @param site        the JobBlock site
      * @param day         the day
-     * @return the work place, null if there is none
+     * @return the work place, null if there is none ({@link #noFreeWorkPlace} tells why)
      */
-    @Nullable BlockPos workPlaceOfDay(ServerLevel level, Predicate<BlockPos> isWorkPlace, Supplier<@Nullable BlockPos> autoSearch,
-            JobBlockSite site, long day) {
+    @Nullable BlockPos workPlaceOfDay(ServerLevel level, Settler settler, Predicate<BlockPos> isWorkPlace,
+            Function<Predicate<BlockPos>, @Nullable BlockPos> autoSearch, JobBlockSite site, long day) {
+        Settlement settlement = site.settlement();
+        UUID self = settler.getUUID();
+        boolean[] occupiedSeen = new boolean[1];
+        Predicate<BlockPos> free = pos -> {
+            boolean isFree = OccupiedPlaces.isFreeFor(settlement, pos, self, day);
+            occupiedSeen[0] |= !isFree;
+            return isFree;
+        };
         BlockPos current = workPlaceOfDay;
-        if (current != null && workPlaceDay == day && isWorkPlace.test(current)) {
+        if (current != null && workPlaceDay == day && isWorkPlace.test(current) && free.test(current)) {
+            occupy(settlement, settler, current, day);
+            noFreeWorkPlace = false;
             return current;
         }
-        List<BlockPos> candidates = new ArrayList<>(site.block().workPoints().stream().filter(isWorkPlace).toList());
-        BlockPos chosen = candidates.isEmpty() ? autoSearch.get()
-                : candidates.get(level.getRandom().nextInt(candidates.size()));
+        List<BlockPos> points = site.block().workPoints().stream().filter(isWorkPlace).toList();
+        List<BlockPos> candidates = new ArrayList<>(points.stream().filter(free).toList());
+        BlockPos chosen = points.isEmpty() ? autoSearch.apply(free)
+                : candidates.isEmpty() ? null : candidates.get(level.getRandom().nextInt(candidates.size()));
+        if (current != null && !current.equals(chosen)) {
+            // The occupation moves with the work place (or ends without one).
+            OccupiedPlaces.release(settlement, current, self);
+        }
+        noFreeWorkPlace = chosen == null && occupiedSeen[0];
         if (chosen != null) {
             workPlaceOfDay = chosen;
             workPlaceDay = day;
+            occupy(settlement, settler, chosen, day);
+        } else {
+            workPlaceOfDay = null;
+            workPlaceDay = -1L;
         }
         return chosen;
+    }
+
+    /**
+     * Occupies a further place of the job for the day (a Producing Job's station of another recipe type).
+     *
+     * @param settlement the settlement of the JobBlock
+     * @param settler    the settler
+     * @param pos        the place
+     * @param day        the day
+     */
+    void occupy(Settlement settlement, Settler settler, BlockPos pos, long day) {
+        OccupiedPlaces.occupy(settlement, pos, settler.getUUID(), settler.getName().getString(), jobBlock, day);
+    }
+
+    /**
+     * @return whether the last choice of the work place of the day found work places, but every one occupied by
+     *         another settler ("No free work place" instead of "No work place")
+     */
+    boolean noFreeWorkPlace() {
+        return noFreeWorkPlace;
     }
 
     /**

@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
@@ -26,6 +27,7 @@ import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.Deliveries;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.OccupiedPlaces;
 import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.Settlement;
@@ -125,7 +127,7 @@ final class ProducingLoop implements CategoryLoop {
                 return JobStep.DELIVER;
             }
             if (station(level, job, site, day) == null) {
-                return JobStep.blocked(JobStatus.NO_WORK_PLACE);
+                return JobStep.blocked(noStation(workplace));
             }
             Pick pick = start(level, job, site, level.getGameTime(), dayTime, false);
             if (pick.round().isEmpty()) {
@@ -150,7 +152,7 @@ final class ProducingLoop implements CategoryLoop {
                 BlockPos station = stepStation(level, job, site, round, day);
                 if (station == null) {
                     release(level, jobBlock);
-                    yield JobStep.blocked(JobStatus.NO_WORK_PLACE);
+                    yield JobStep.blocked(noStation(workplace));
                 }
                 yield walk(new ClerkStorage.Visit(station, SettlerWork.REACH, false), fatigue.onBreak() ? JobStatus.PAUSING : JobStatus.CRAFTING);
             }
@@ -363,6 +365,13 @@ final class ProducingLoop implements CategoryLoop {
         }
     }
 
+    /** Crafting at the station: players cannot open it meanwhile. */
+    @Override
+    public boolean usesTarget(SettlerJob job) {
+        Round round = shell.workplace(job.jobBlock()).round();
+        return round != null && round.phase == Round.Phase.CRAFT;
+    }
+
     @Override
     public JobStep holdsDecision(ServerLevel level, SettlerJob job) {
         Round round = shell.workplace(job.jobBlock()).round();
@@ -443,6 +452,10 @@ final class ProducingLoop implements CategoryLoop {
         if (handTimer > 0 && --handTimer == 0) {
             // Back to the hammer after showing the result just made.
             shell.hold(job.jobType().displayItem().map(ItemStack::new).orElse(ItemStack.EMPTY));
+        }
+        if (!isStation(level, job, station)) {
+            // Broken: the next decision picks a new free station at once; the inputs stay in the buffer.
+            return JobStep.DONE;
         }
         if (fatigue.onBreak()) {
             return JobStep.STAY;
@@ -627,10 +640,20 @@ final class ProducingLoop implements CategoryLoop {
      */
     private @Nullable BlockPos station(ServerLevel level, SettlerJob job, JobBlockSite site, long day) {
         ProducingProfile profile = profile(job);
-        List<TagKey<Block>> tags = profile.recipeTypes().stream().<TagKey<Block>>map(profile::station).distinct().toList();
-        TagKey<Block> main = tags.getFirst();
-        return shell.workplace(job.jobBlock()).workPlaceOfDay(level,
-                pos -> level.isLoaded(pos) && tags.stream().anyMatch(level.getBlockState(pos)::is), () -> nearestStation(level, site, main), site, day);
+        TagKey<Block> main = profile.station(profile.recipeTypes().getFirst());
+        return shell.workplace(job.jobBlock()).workPlaceOfDay(level, settler, pos -> isStation(level, job, pos),
+                free -> nearestStation(level, site, main, free), site, day);
+    }
+
+    /** Whether a position is a station of any of the job's recipe types. */
+    private static boolean isStation(ServerLevel level, SettlerJob job, BlockPos pos) {
+        ProducingProfile profile = profile(job);
+        return level.isLoaded(pos) && profile.recipeTypes().stream().map(profile::station).anyMatch(level.getBlockState(pos)::is);
+    }
+
+    /** The status without a station of the day: every station occupied by another settler, or none at all. */
+    private static JobStatus noStation(Workplace workplace) {
+        return workplace.noFreeWorkPlace() ? JobStatus.NO_FREE_WORK_PLACE : JobStatus.NO_WORK_PLACE;
     }
 
     /**
@@ -648,11 +671,18 @@ final class ProducingLoop implements CategoryLoop {
         if (level.getBlockState(ofDay).is(tag)) {
             return ofDay;
         }
-        BlockPos found = round.stations.computeIfAbsent(tag, key -> Optional.ofNullable(nearestStation(level, site, key))).orElse(null);
-        return found != null && level.isLoaded(found) && level.getBlockState(found).is(tag) ? found : null;
+        // A station of another type is occupied for the day too; one occupied by another settler meanwhile is not used.
+        Settlement settlement = site.settlement();
+        Predicate<BlockPos> free = pos -> OccupiedPlaces.isFreeFor(settlement, pos, settler.getUUID(), day);
+        BlockPos found = round.stations.computeIfAbsent(tag, key -> Optional.ofNullable(nearestStation(level, site, key, free))).orElse(null);
+        if (found == null || !level.isLoaded(found) || !level.getBlockState(found).is(tag) || !free.test(found)) {
+            return null;
+        }
+        shell.workplace(job.jobBlock()).occupy(settlement, settler, found, day);
+        return found;
     }
 
-    private static @Nullable BlockPos nearestStation(ServerLevel level, JobBlockSite site, TagKey<Block> tag) {
+    private static @Nullable BlockPos nearestStation(ServerLevel level, JobBlockSite site, TagKey<Block> tag, Predicate<BlockPos> free) {
         BlockPos center = site.pos();
         BlockPos best = null;
         double bestDistance = STATION_RADIUS * STATION_RADIUS + 1.0;
@@ -660,7 +690,7 @@ final class ProducingLoop implements CategoryLoop {
                 center.offset(STATION_RADIUS, STATION_HEIGHT, STATION_RADIUS))) {
             double distance = pos.distSqr(center);
             if (distance < bestDistance && level.isLoaded(pos) && level.getBlockState(pos).is(tag)
-                    && JobAssignments.insideBorder(site.settlement(), pos)) {
+                    && JobAssignments.insideBorder(site.settlement(), pos) && free.test(pos)) {
                 best = pos.immutable();
                 bestDistance = distance;
             }
@@ -693,7 +723,7 @@ final class ProducingLoop implements CategoryLoop {
         Patterns.uncheckFiltered(level, jobBlock, job.jobType());
         Patterns.enforceLimit(level, jobBlock, job.jobType(), settler.getUUID(), profile(job).checkLimit(shell.effectiveLevel(job)));
         if (station(level, job, site, day) == null) {
-            shell.setStatus(jobBlock, JobStatus.NO_WORK_PLACE);
+            shell.setStatus(jobBlock, noStation(shell.workplace(jobBlock)));
             return new SimulatedWork(0, workTicks);
         }
         // The time of day follows the simulated clock: a round crossing 18:30 no longer reaches the linked storage.
