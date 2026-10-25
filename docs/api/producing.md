@@ -70,7 +70,7 @@ and the lang keys `job.<namespace>.<job>`, `job.<namespace>.<job>.indefinite` an
 | `filteredLine()` | state line of a pattern the filters or the domain block, in the Patterns tab | "Outside this Job's domain" with a domain, else "Not allowed for this Job" |
 | `checkLimit(skill)` | how many patterns can be checked at the settler's effective skill | 6 + 1 per 5 levels |
 | `workTime(recipe)` | operations one execution of a recipe takes (an operation lasts as long as the shared speed formula × job factor says) | 1 |
-| `execute(level, recipe, result, consumed)` | what one execution puts into the settler's buffer; the inputs are already taken out | the result plus the inputs' remainders (empty buckets, …) |
+| `execute(level, recipe, result, consumed)` | what one execution puts into the settler's buffer; the inputs are already taken out | the result plus the inputs' remainders (empty buckets, …); a `smithing_transform` result keeps the base item's components |
 
 `ItemFilter.allow(tag)`, `ItemFilter.deny(tag)` and `ItemFilter.ANY` build filters. The Craftsperson is a profile with `crafting` and its crafting-table station, without filters: it crafts everything, slowly (job factor 0.3).
 
@@ -90,7 +90,31 @@ public Optional<TagKey<Item>> domain() {
 - A recipe belongs to the domain if **any input** has an alternative in the tag, so a mixed recipe fits several domains (a piston – planks, cobblestone, iron, redstone – is in a wood, a stone, a metal and a redstone domain).
 - A pattern outside the domain is greyed out with "Outside this Job's domain" and cannot be checked (like a filtered pattern; it loses a checkmark it had, e.g. after the tag changed).
 - Intermediates follow the same rule: the specialist crafts only intermediates inside its domain. One outside it must be in stock, otherwise the request shows "Missing: …" (a Mechanic making repeaters needs sticks from a Craftsperson or the Clerk's storage).
-- Domains are item tags, so datapacks change them. CivMod's built-in Mechanic (unlocked by and working at a Crafter, `crafting`) uses `civmod:domains/redstone`.
+- Domains are item tags, so datapacks change them. CivMod's built-in Mechanic (unlocked by and working at a Crafter, `crafting`) uses `civmod:domains/redstone`, its Smith (unlocked by and working at a smithing table, `crafting` and `smithing`) uses `civmod:metals`.
+
+## Station extras
+
+Blocks near a Job's station of the day can **replace** its base job factor: the Smith works at 0.3 without and at 1.2 with an anvil near its smithing table. Station extras are datapack data in the Job's `civmod_jobs/<job>.json`, so they work for every Job, CivMod's and yours, without code:
+
+```json
+{
+  "station_extras": [
+    { "blocks": "#minecraft:anvil", "radius": 4, "job_factor": 1.2 },
+    { "blocks": ["create:mechanical_press", "minecraft:grindstone"], "radius": 2, "job_factor": 1.5 }
+  ]
+}
+```
+
+- `blocks`: a block id, a `#tag` or a list of both. `radius`: 1–8 blocks around the station in every direction (a cube). `job_factor`: the base job factor while a matching block stands there.
+- Several entries match: the **highest** `job_factor` counts (no adding). None matches: the Job's own `job_factor`.
+- Read once when the station of the day is chosen and kept for that day; a block placed or removed later counts from the next day (or when the settler has to choose a new station, e.g. its station was broken). After loading a world it is read again.
+- Not a bonus multiplier: biome bonuses (and later other speed multipliers) act on the result.
+- A later pack's file replaces the whole list. Station extras take effect where the job factor counts: the station of the day of a Producing Job (Resource Collection and Mission Jobs have no job factor in their speed).
+- Ask for the factor acting on a settler today with `SettlerWork.jobFactor(level, jobBlock)`.
+
+## Smithing recipes
+
+A profile with `smithing` works `smithing_transform` recipes (netherite upgrades): the result keeps the base item's components like at a vanilla smithing table (enchantments, damage, name). Armor trims (`smithing_trim`) keep their base item and are no patterns.
 
 ## Parallel stations and fuel
 
