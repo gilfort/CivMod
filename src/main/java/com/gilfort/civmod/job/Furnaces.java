@@ -10,6 +10,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ItemStackTemplate;
 import net.minecraft.world.item.component.CookingFuel;
 import net.minecraft.world.item.crafting.AbstractCookingRecipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
@@ -109,6 +110,11 @@ final class Furnaces {
                 return false;
             }
             heat += burn;
+            // A lava bucket leaves its bucket, like in a furnace.
+            ItemStackTemplate remainder = fuel.get().getCraftingRemainder();
+            if (remainder != null) {
+                buffer.add(remainder.create());
+            }
         }
         setHeat(level, pos, heat - cost);
         return true;

@@ -13,7 +13,7 @@ import net.minecraft.world.item.ItemStack;
  * them. The view of a tab is client code ({@code client.gui.JobBlockTabView}), never loaded on a dedicated server.
  */
 public abstract sealed class JobBlockTab permits StorageTab, InfoTab, FoundTab, MissionsTab, StockTab, ClerkListTab, PatternsTab,
-        StationTypesTab {
+        StationTypesTab, FuelTab {
 
     private JobBlockMenu menu;
     private int index = -1;

@@ -6,6 +6,7 @@ import java.util.List;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.Fuels;
 import com.gilfort.civmod.settlement.StationTypes;
 
 /**
@@ -42,8 +43,8 @@ public final class JobBlockTabs {
     }
 
     /**
-     * The Base Job's Patterns tab and the Station Types tab on top, one Patterns tab per Producing Specialization (in
-     * registry order) below the panel.
+     * The Base Job's Patterns tab, the Station Types tab and (for a Job burning fuel) the Fuel tab on top, one Patterns
+     * tab per Producing Specialization (in registry order) below the panel.
      */
     private static List<JobBlockTab> producing(Job jobType) {
         List<Job> specializations = StationTypes.hasStationTypes(jobType)
@@ -52,6 +53,10 @@ public final class JobBlockTabs {
         TabData<PatternsTabData> library = PatternsTab.newData();
         StationTypesTab stations = new StationTypesTab(!specializations.isEmpty());
         List<JobBlockTab> tabs = new ArrayList<>(List.of(new PatternsTab(jobType, true, library, stations.data()), stations));
+        if (Fuels.burnsFuel(jobType)) {
+            // On top, after Station Types.
+            tabs.add(2, new FuelTab());
+        }
         specializations.forEach(job -> tabs.add(new PatternsTab(job, false, library, stations.data())));
         return tabs;
     }

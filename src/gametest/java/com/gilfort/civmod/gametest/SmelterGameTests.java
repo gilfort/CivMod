@@ -6,6 +6,7 @@ import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.job.Fatigue;
@@ -16,6 +17,11 @@ import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
+import com.gilfort.civmod.menu.FuelTab;
+import com.gilfort.civmod.menu.FuelTabData;
+import com.gilfort.civmod.menu.JobBlockInfo;
+import com.gilfort.civmod.menu.JobBlockMenu;
+import com.gilfort.civmod.menu.StationTypesTab;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
@@ -39,9 +45,11 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -77,6 +85,7 @@ public final class SmelterGameTests {
             register(helper, "smelter_speed_and_exp", SmelterGameTests::speedAndExp);
             register(helper, "smelter_two_smelters", SmelterGameTests::twoSmelters);
             register(helper, "smelter_live_lit_furnaces", SmelterGameTests::liveLitFurnaces);
+            register(helper, "smelter_fuel_tab", SmelterGameTests::fuelTab);
         });
     }
 
@@ -343,6 +352,49 @@ public final class SmelterGameTests {
             cleanUp(setup, settler);
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });
+    }
+
+    /**
+     * The Fuel tab of the Smelter JobBlock (GUI data): coal and charcoal by default; an item set into the next empty
+     * slot (Shift + right-click target); ◀ swaps it with its left neighbour; emptying a slot moves the following ones
+     * up; only fuel items are taken. The Craftsperson's window has no Fuel tab.
+     */
+    private static void fuelTab(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos pos = smelterBlock(helper, new BlockPos(1, 1, 1));
+        Player player = helper.makeMockPlayer(GameType.CREATIVE);
+        player.snapTo(pos.getX() + 0.5, pos.getY() + 1, pos.getZ() + 0.5);
+        JobBlockEntity entity = (JobBlockEntity) level.getBlockEntity(pos);
+        JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(level, pos, smelter(), 1));
+        FuelTab tab = menu.tab(FuelTab.class).orElseThrow();
+        helper.assertTrue(tab.shown() && menu.tab(StationTypesTab.class).map(StationTypesTab::shown).equals(Optional.of(false)),
+                "Fuel tab shown, no Station Types tab yet");
+        FuelTabData data = FuelTabData.of(level, pos);
+        helper.assertTrue(data.fuel().equals(List.of(Items.COAL, Items.CHARCOAL)) && data.nextEmptyGhostSlot() == 2, "Default list: " + data);
+
+        tab.edit(FuelTabData.Op.SET, data.nextEmptyGhostSlot(), Items.BLAZE_ROD);
+        tab.edit(FuelTabData.Op.SET, 3, Items.DIRT);
+        helper.assertTrue(FuelTabData.of(level, pos).fuel().equals(List.of(Items.COAL, Items.CHARCOAL, Items.BLAZE_ROD)),
+                "Blaze rod added, dirt is no fuel: " + FuelTabData.of(level, pos));
+        tab.edit(FuelTabData.Op.LEFT, 2, Items.AIR);
+        helper.assertTrue(FuelTabData.of(level, pos).fuel().equals(List.of(Items.COAL, Items.BLAZE_ROD, Items.CHARCOAL)),
+                "◀ swaps with the left neighbour: " + FuelTabData.of(level, pos));
+        tab.edit(FuelTabData.Op.RIGHT, 2, Items.AIR);
+        helper.assertTrue(FuelTabData.of(level, pos).fuel().equals(List.of(Items.COAL, Items.BLAZE_ROD, Items.CHARCOAL)), "Nothing right of the last");
+        tab.edit(FuelTabData.Op.CLEAR, 0, Items.AIR);
+        helper.assertTrue(FuelTabData.of(level, pos).fuel().equals(List.of(Items.BLAZE_ROD, Items.CHARCOAL)),
+                "Emptied: the following move up " + FuelTabData.of(level, pos));
+        for (Item fuel : List.of(Items.COAL, Items.STICK, Items.OAK_PLANKS, Items.COAL_BLOCK, Items.BLAZE_ROD)) {
+            tab.edit(FuelTabData.Op.SET, FuelTabData.of(level, pos).nextEmptyGhostSlot(), fuel);
+        }
+        helper.assertTrue(FuelTabData.of(level, pos).fuel().size() == Fuels.SLOTS && FuelTabData.of(level, pos).nextEmptyGhostSlot() == -1,
+                "6 slots at most: " + FuelTabData.of(level, pos));
+
+        BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(5, 1, 1));
+        JobBlockMenu craftMenu = new JobBlockMenu(2, player.getInventory(), (JobBlockEntity) level.getBlockEntity(craft),
+                JobBlockInfo.of(level, craft, CraftspersonGameTests.craftJob(), 1));
+        helper.assertTrue(craftMenu.tab(FuelTab.class).isEmpty(), "The Craftsperson burns no fuel: no Fuel tab");
+        helper.succeed();
     }
 
     // ---------------------------------------------------------------- setup
