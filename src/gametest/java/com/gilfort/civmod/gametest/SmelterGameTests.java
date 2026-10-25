@@ -11,6 +11,7 @@ import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.job.Fatigue;
 import com.gilfort.civmod.job.JobBalancing;
 import com.gilfort.civmod.job.JobStatus;
+import com.gilfort.civmod.job.WorkPlaceLock;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.Request;
@@ -42,6 +43,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.registries.RegisterEvent;
@@ -73,6 +75,8 @@ public final class SmelterGameTests {
             register(helper, "smelter_player_furnace", SmelterGameTests::playerFurnace);
             register(helper, "smelter_broken_furnace", SmelterGameTests::brokenFurnace);
             register(helper, "smelter_speed_and_exp", SmelterGameTests::speedAndExp);
+            register(helper, "smelter_two_smelters", SmelterGameTests::twoSmelters);
+            register(helper, "smelter_live_lit_furnaces", SmelterGameTests::liveLitFurnaces);
         });
     }
 
@@ -264,6 +268,81 @@ public final class SmelterGameTests {
         helper.assertTrue(exp == 2, "EXP 1 per item: " + exp);
         cleanUp(setup, settler);
         helper.succeed();
+    }
+
+    /**
+     * Two Smelters at one level-3 JobBlock (3 furnaces each wanted, 4 furnaces there) never share a furnace: each
+     * furnace is occupied by one of them, both get furnaces and both smelt.
+     */
+    private static void twoSmelters(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 12), new ItemStack(Items.COAL, 8)));
+        StationTypeGameTests.setLevel(helper, BLOCK, 3);
+        List<BlockPos> furnaces = List.of(FURNACE, new BlockPos(3, 1, 7), new BlockPos(3, 1, 3), new BlockPos(5, 1, 5));
+        furnaces.forEach(furnace -> helper.setBlock(furnace, Blocks.FURNACE));
+        for (int i = 0; i < 4; i++) {
+            Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 3, Optional.of(setup.clerk()), Optional.empty());
+        }
+        Settler first = worker(helper, setup);
+        Settler second = ClerkGameTests.settler(helper, new BlockPos(2, 1, 8), setup.data(), setup.settlement());
+        second.setCustomName(Component.literal("Ole"));
+        second.getFood().setMorningDay(Math.floorDiv(level.getOverworldClockTime(), 24000L));
+        helper.assertTrue(TestAssignments.assign(setup.data(), setup.block(), second.getUUID(), "Ole", setup.settlement().id(), List.of(), smelter())
+                == JobAssignments.AssignResult.OK, "Second Smelter assigned");
+        second.addJob(new SettlerJob(smelter(), setup.block()));
+        long dayStart = (Math.floorDiv(level.getOverworldClockTime(), 24000L) - 1) * 24000L;
+        first.getWork().setCatchUp(dayStart + 2000L, dayStart + 4000L);
+        second.getWork().setCatchUp(dayStart + 2000L, dayStart + 4000L);
+        CatchUp.runNow(level, List.of(first, second));
+
+        long day = DayClock.day(level) - 1;
+        List<java.util.UUID> occupants = furnaces.stream().map(furnace -> OccupiedPlaces.occupant(setup.data(), helper.absolutePos(furnace), day)
+                .map(OccupiedPlaces.Occupation::settler).orElse(null)).toList();
+        helper.assertTrue(occupants.contains(first.getUUID()) && occupants.contains(second.getUUID()), "Each Smelter has its own furnaces: " + occupants);
+        helper.assertTrue(first.getSkills().get(smelter()).exp() > 0 && second.getSkills().get(smelter()).exp() > 0, "Both smelted");
+        helper.assertTrue(count(level, setup.clerk(), Items.IRON_INGOT) == 12, "12 ingots: " + count(level, setup.clerk(), Items.IRON_INGOT));
+        TestAssignments.unassign(setup.data(), setup.block());
+        second.discard();
+        cleanUp(setup, first);
+        helper.succeed();
+    }
+
+    /**
+     * Live play at a level-2 JobBlock with two furnaces: while the charges run both furnaces show their lit state and a
+     * player cannot open either ("In use by Ida"), also the one the Smelter does not stand at.
+     */
+    private static void liveLitFurnaces(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        for (int x = 0; x < 9; x++) {
+            for (int z = 0; z < 9; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+                for (int y = 1; y < 4; y++) {
+                    helper.setBlock(new BlockPos(x, y, z), Blocks.AIR);
+                }
+            }
+        }
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        Setup setup = setup(helper, List.of());
+        // No Clerk at work: the inputs lie in the Clerk block's own slots, open to everybody (like the Craftsperson's live round).
+        TestAssignments.unassign(setup.data(), setup.clerk());
+        Container slots = (Container) level.getBlockEntity(setup.clerk());
+        slots.setItem(0, new ItemStack(Items.RAW_IRON, 4));
+        slots.setItem(1, new ItemStack(Items.COAL, 2));
+        StationTypeGameTests.setLevel(helper, BLOCK, 2);
+        BlockPos second = new BlockPos(3, 1, 3);
+        helper.setBlock(second, Blocks.FURNACE);
+        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 4, Optional.of(setup.clerk()), Optional.empty());
+        Settler settler = worker(helper, setup);
+        settler.setNoAi(false);
+        helper.succeedWhen(() -> {
+            for (BlockPos furnace : List.of(FURNACE, second)) {
+                helper.assertTrue(level.getBlockState(helper.absolutePos(furnace)).getValue(BlockStateProperties.LIT), "Lit: " + furnace
+                        + ", status " + settler.getWork().status(setup.block()) + ", at " + helper.relativePos(settler.blockPosition()));
+                helper.assertTrue(WorkPlaceLock.refusal(level, helper.absolutePos(furnace)).isPresent(), "In use: " + furnace);
+            }
+            cleanUp(setup, settler);
+            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+        });
     }
 
     // ---------------------------------------------------------------- setup
