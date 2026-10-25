@@ -92,6 +92,47 @@ public Optional<TagKey<Item>> domain() {
 - Intermediates follow the same rule: the specialist crafts only intermediates inside its domain. One outside it must be in stock, otherwise the request shows "Missing: …" (a Mechanic making repeaters needs sticks from a Craftsperson or the Clerk's storage).
 - Domains are item tags, so datapacks change them. CivMod's built-in Mechanic (unlocked by and working at a Crafter, `crafting`) uses `civmod:domains/redstone`.
 
+## Parallel stations and fuel
+
+A furnace Job (CivMod's Smelter, later its Cook or a modded smeltery) works several stations at once and burns fuel. Two optional hooks turn this on; the loop does the rest.
+
+| Method | Meaning | Default |
+|---|---|---|
+| `parallelStations(jobBlockLevel)` | how many stations of the main recipe type a settler works at once, each with its own charge | 1 |
+| `fuel()` | the default fuel list in priority order (at most 6 items); present = the Job burns fuel | empty: no fuel |
+
+```java
+@Override
+public int parallelStations(int jobBlockLevel) {
+    return jobBlockLevel; // 1 furnace at level 1 … 5 at level 5
+}
+
+@Override
+public Optional<List<Item>> fuel() {
+    return Optional.of(List.of(Items.COAL, Items.CHARCOAL));
+}
+```
+
+**Parallel stations.** Datapacks override the number per JobBlock level with `parallel_stations` in `civmod_jobs/<job>.json` (a list from level 1; levels beyond the list use its last value; at most 8):
+
+```json
+{ "parallel_stations": [1, 2, 3, 4, 5] }
+```
+
+- The station of the day comes first; the further ones come from the JobBlock's scroll work points if it has valid ones, else from the stations of the main type nearest to the JobBlock (within 16 blocks, inside the border). Each one is occupied for the day, so several settlers of one JobBlock never share a station. While a settler is short of stations it looks for more at most every 30 s.
+- Every station smelts its own charge (one execution at a time) at the full speed of the speed formula; the biome bonus of the station of the day applies to all of them. Steps of another recipe type run only at their own station.
+- A station that holds items or burns on its own (a furnace a player uses) is never chosen: it is free only while its inventory is empty and it is not lit by vanilla. Hoppers are not blocked.
+- While a charge runs, the station shows its lit state (if its block has one) and players cannot open it.
+- A station broken during a charge loses that charge: the inputs never left the buffer and are worked at the next station.
+
+**Fuel.** With `fuel()` present the JobBlock gets a Fuel tab: up to 6 ghost slots shared by all settlers of the block, the order is the priority, the profile's list is the default until the player changes it. Only items with a vanilla burn time (`minecraft:cooking_fuel` component) are taken.
+
+- Every execution needs heat: the recipe's cooking time for a cooking recipe (`AbstractCookingRecipe.cookingTime()`), 200 ticks otherwise. Fuel per item therefore stays vanilla, whatever the settler's speed.
+- Each station keeps the *Remaining Heat* of the fuel it burnt, on its block entity, for its next charge: one coal (1600 ticks) smelts 8 items, also over 8 single-item rounds. A broken station loses it.
+- A round fetches its fuel with its inputs (from the collect inventory and the requesting Clerk, or as input deliveries on "Delivery: Deliveryman"): the heat its charges need minus the stations' Remaining Heat, burning the highest-priority listed fuel in the buffer or in stock first. It claims only as much as the fuel covers.
+- No listed fuel in stock: the job status is "Missing: Fuel" and the request names the first listed fuel ("Missing: 1× Coal").
+- Fuel rests stay in the settler's buffer for the next rounds; they never go to the drop-off. A burnt lava bucket leaves its bucket.
+
 ## Checkmarks
 
 Only checked patterns are worked. Each library has its own checkmark limit; only checked patterns the Job can use count against it. A new pattern is checked automatically if it makes something, the profile can use it and a checkmark is free. At the limit it stays unchecked, and the Patterns tab shows "A Stonecutter masters only 6 recipes at once – choose which to check." until the player's next edit of the library. A pattern the filters reject stays unchecked without that line, and loses a checkmark it had. Replacing a pattern keeps its checkmark. Several settlers working the same Job at one JobBlock share its library; its limit is the one of the highest effective skill among them (`checkLimit` of the best settler). When the limit drops (the best settler leaves or switches Job), the last checked patterns the Job can use lose theirs.
@@ -99,4 +140,4 @@ Only checked patterns are worked. Each library has its own checkmark limit; only
 
 ## Not part of the profile
 
-Request picking, chain resolution, reservations, input and result deliveries, catch-up and the Patterns tab are CivMod's loop and work the same for every Producing Job. Production modes (always / on demand) and fuel are not supported yet.
+Request picking, chain resolution, reservations, input and result deliveries, catch-up, the Patterns tab and the Fuel tab are CivMod's loop and work the same for every Producing Job. Production modes (always / on demand) are not supported yet.
