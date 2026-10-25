@@ -597,7 +597,7 @@ final class ProducingLoop implements CategoryLoop {
                 yield JobStep.WORKED_AND_DONE;
             }
             case NO_FUEL -> {
-                failFuel(level, job, site, round, level.getGameTime());
+                refuel(level, job);
                 yield JobStep.DONE;
             }
             case FAILED -> JobStep.DONE;
@@ -716,11 +716,13 @@ final class ProducingLoop implements CategoryLoop {
         return noFuel;
     }
 
-    /** A round whose stations lack fuel: it fails with "Missing: Fuel" (the first listed fuel on the request). */
-    private void failFuel(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, long now) {
-        List<Item> fuels = Fuels.of(site.block());
-        fail(level, job.jobBlock(), round, fuels.isEmpty() ? List.of() : List.of(new Request.Missing(fuels.getFirst(), 1)), now);
-        shell.workplace(job.jobBlock()).setMissingFuel(true);
+    /**
+     * A round whose stations lack fuel (a furnace broke and took its Remaining Heat, the fuel list changed): the claim
+     * is released and the next start plans the round again with the fuel to fetch; its inputs stay in the buffer. With
+     * no fuel in stock that start reports "Missing: Fuel".
+     */
+    private void refuel(ServerLevel level, SettlerJob job) {
+        release(level, job.jobBlock());
     }
 
     /**
@@ -1137,7 +1139,10 @@ final class ProducingLoop implements CategoryLoop {
                 if (worked.outcome() == Outcome.CRAFTED) {
                     round.phase = Round.Phase.DELIVER;
                 } else if (worked.outcome() == Outcome.NO_FUEL) {
-                    failFuel(level, job, site, round, (long) clock);
+                    refuel(level, job);
+                    // The next decision plans the fuel.
+                    ticks -= SettlerWork.DECISION_INTERVAL;
+                    clock += SettlerWork.DECISION_INTERVAL;
                 } else if (worked.outcome() == Outcome.WORKING && round.charges.isEmpty()) {
                     // No station of the step can work (all broken): the next job takes the rest of the time.
                     release(level, jobBlock);
