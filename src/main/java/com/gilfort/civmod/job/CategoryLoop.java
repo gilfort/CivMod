@@ -106,6 +106,18 @@ interface CategoryLoop {
     SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks);
 
     /**
+     * Whether the settler, standing at the target of its current step, works the block there in a way players must
+     * not disturb (vault {@code Systems/Jobs.md}: a Producing Job crafting at its station). Players cannot open the
+     * block's GUI then.
+     *
+     * @param job the job
+     * @return whether the step's target is in use; by default it is not (trees, stone, water have no player lock)
+     */
+    default boolean usesTarget(SettlerJob job) {
+        return false;
+    }
+
+    /**
      * Forgets the loop's own state of a removed job (the shell drops the job's {@link Workplace}).
      *
      * @param jobBlock the JobBlock position

@@ -109,6 +109,12 @@ public final class LumberjackProfile implements SecondaryToolProfile {
      */
     @Override
     public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos center) {
-        return BlockSearch.nearest(level, center, AUTO_SEARCH_HORIZONTAL, AUTO_SEARCH_VERTICAL, WoodScan::isLog);
+        return autoSearch(level, center, pos -> true);
+    }
+
+    /** {@link #autoSearch(ServerLevel, BlockPos)}, skipping logs occupied by another settler. */
+    @Override
+    public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos center, Predicate<BlockPos> free) {
+        return BlockSearch.nearest(level, center, AUTO_SEARCH_HORIZONTAL, AUTO_SEARCH_VERTICAL, WoodScan::isLog, free);
     }
 }

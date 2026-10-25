@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import org.jetbrains.annotations.ApiStatus;
 import org.jspecify.annotations.Nullable;
@@ -78,6 +79,21 @@ public interface ResourceCollectionProfile extends CategoryProfile {
      * @return the work place, if any
      */
     @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock);
+
+    /**
+     * Finds a work place that is not occupied by another settler (vault {@code Systems/Jobs.md}). The loop calls this
+     * one; by default it takes {@link #autoSearch(ServerLevel, BlockPos)} and gives up when that place is occupied.
+     * Override it to find the next free place instead (CivMod's Jobs and {@link SimpleCollectionProfile} do).
+     *
+     * @param level    the level
+     * @param jobBlock the JobBlock position
+     * @param free     whether a position is free for the settler (not occupied by another settler today)
+     * @return the free work place, if any
+     */
+    default @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock, Predicate<BlockPos> free) {
+        BlockPos found = autoSearch(level, jobBlock);
+        return found != null && free.test(found) ? found : null;
+    }
 
     /**
      * @param jobBlock   the JobBlock position
