@@ -57,16 +57,16 @@ import net.neoforged.neoforge.registries.RegisterEvent;
  * GameTests for Station Types (#92, vault {@code Systems/JobBlock.md}): unlock items in the Station Types tab of a
  * Craftsperson JobBlock unlock its Specializations there, each with its own pattern library.
  * <p>
- * On the GameTest server it registers two more Producing Specializations of the Craftsperson (crafting recipes):
- * {@code civmod:gametest_mason}, unlocked by a stonecutter like the example addon's Stonecutter, and
- * {@code civmod:gametest_smith}, unlocked by a smithing table.
+ * On the GameTest server it registers one more Producing Specialization of the Craftsperson (crafting recipes):
+ * {@code civmod:gametest_mason}, unlocked by a stonecutter like the example addon's Stonecutter. The smithing table
+ * unlocks CivMod's Smith.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class StationTypeGameTests {
 
     private static final Identifier STONECUTTER = Identifier.fromNamespaceAndPath("civmod_example", "stonecutter");
     private static final Identifier MASON = CivMod.id("gametest_mason");
-    private static final Identifier SMITH = CivMod.id("gametest_smith");
+    private static final Identifier SMITH = CivMod.id("smith");
 
     private StationTypeGameTests() {
     }
@@ -78,8 +78,6 @@ public final class StationTypeGameTests {
             event.register(ModJobs.KEY, helper -> {
                 helper.register(MASON, Job.builder(JobCategory.PRODUCING).parent(ModJobs.CRAFTSPERSON).unlockItem(() -> Items.STONECUTTER)
                         .icon(() -> Items.STONE_BRICKS).profile(CraftspersonProfile::new).build());
-                helper.register(SMITH, Job.builder(JobCategory.PRODUCING).parent(ModJobs.CRAFTSPERSON).unlockItem(() -> Items.SMITHING_TABLE)
-                        .icon(() -> Items.ANVIL).profile(CraftspersonProfile::new).build());
             });
         }
         event.register(Registries.TEST_FUNCTION, helper -> {

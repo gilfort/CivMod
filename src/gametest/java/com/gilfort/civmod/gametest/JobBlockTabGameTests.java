@@ -129,7 +129,7 @@ public final class JobBlockTabGameTests {
         helper.assertValueEqual(icons(top), List.of(Items.CHEST, Items.BOOK, Items.CRAFTING_TABLE, Items.SMITHING_TABLE), "Top tab icons");
         List<JobBlockTab> below = menu.tabs().stream().filter(JobBlockTab::below).toList();
         helper.assertValueEqual(menu.tabs().subList(0, top.size()), top, "The tabs below the panel come last");
-        List<Job> specializations = List.of(StationTypeGameTests.job(CivMod.id("gametest_mason")), StationTypeGameTests.job(CivMod.id("gametest_smith")));
+        List<Job> specializations = List.of(StationTypeGameTests.job(CivMod.id("gametest_mason")), StationTypeGameTests.job(CivMod.id("smith")));
         helper.assertTrue(menu.patternJobs().containsAll(specializations) && menu.patternJobs().getFirst() == craftsperson,
                 "The Craftsperson first, then its Specializations: " + menu.patternJobs());
         helper.assertValueEqual(below.size(), menu.patternJobs().size() - 1, "One tab below per Specialization");
