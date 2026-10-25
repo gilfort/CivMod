@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:smelter_live_lit_furnaces",
+  "max_ticks": 3000,
+  "structure": "minecraft:empty",
+  "padding": 120
+}

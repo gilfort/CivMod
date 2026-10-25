@@ -6,6 +6,8 @@ import com.gilfort.civmod.item.JobPicker;
 import com.gilfort.civmod.menu.ClerkTabData;
 import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.menu.FoundTabData;
+import com.gilfort.civmod.menu.FuelTab;
+import com.gilfort.civmod.menu.FuelTabData;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.PatternsTabData;
@@ -86,6 +88,11 @@ public final class CivNetwork {
                 PatternsTab.of(menu, payload.job()).ifPresent(tab -> tab.edit(payload));
             }
         });
+        registrar.playToServer(FuelTabData.Edit.TYPE, FuelTabData.Edit.STREAM_CODEC, (payload, context) -> {
+            if (context.player().containerMenu instanceof JobBlockMenu menu && menu.containerId == payload.containerId()) {
+                menu.tab(FuelTab.class).ifPresent(tab -> tab.edit(payload.op(), payload.slot(), payload.item()));
+            }
+        });
         registrar.playToServer(FoundTabData.Toggle.TYPE, FoundTabData.Toggle.STREAM_CODEC, (payload, context) -> {
             if (context.player().containerMenu instanceof JobBlockMenu menu && menu.containerId == payload.containerId()) {
                 menu.tab(FoundTab.class).ifPresent(tab -> tab.toggleExcluded(payload.resource()));
@@ -106,6 +113,7 @@ public final class CivNetwork {
         registrar.playToClient(JobPicker.Open.TYPE, JobPicker.Open.STREAM_CODEC);
         registrar.playToClient(PatternsTabData.Sync.TYPE, PatternsTabData.Sync.STREAM_CODEC);
         registrar.playToClient(StationTypesTabData.Sync.TYPE, StationTypesTabData.Sync.STREAM_CODEC);
+        registrar.playToClient(FuelTabData.Sync.TYPE, FuelTabData.Sync.STREAM_CODEC);
         registrar.playToClient(SettlementOutline.Sync.TYPE, SettlementOutline.Sync.STREAM_CODEC);
         registrar.playToClient(JobPointsDisplay.Sync.TYPE, JobPointsDisplay.Sync.STREAM_CODEC);
         registrar.playToClient(ClerkTabData.Sync.TYPE, ClerkTabData.Sync.STREAM_CODEC);

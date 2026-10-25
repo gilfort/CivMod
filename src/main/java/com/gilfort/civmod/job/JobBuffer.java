@@ -160,11 +160,23 @@ public final class JobBuffer {
      * @return whether everything was delivered
      */
     public boolean deliver(ToIntFunction<ItemStack> inserter) {
+        return deliver(inserter, stack -> false);
+    }
+
+    /**
+     * Delivers as much as possible, except what stays.
+     *
+     * @param inserter inserts a stack somewhere and returns how many items were accepted
+     * @param kept     which items stay in the buffer (a Smelter's fuel rests)
+     * @return whether everything but the kept items was delivered
+     */
+    public boolean deliver(ToIntFunction<ItemStack> inserter, Predicate<ItemStack> kept) {
         for (ItemStack stack : stacks) {
-            int accepted = inserter.applyAsInt(stack.copy());
-            stack.shrink(accepted);
+            if (!kept.test(stack)) {
+                stack.shrink(inserter.applyAsInt(stack.copy()));
+            }
         }
         stacks.removeIf(ItemStack::isEmpty);
-        return stacks.isEmpty();
+        return stacks.stream().allMatch(kept);
     }
 }

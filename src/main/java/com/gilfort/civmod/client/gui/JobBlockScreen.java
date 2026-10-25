@@ -12,6 +12,8 @@ import com.gilfort.civmod.menu.ClerkTabData;
 import com.gilfort.civmod.menu.DeliveriesTab;
 import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.menu.FoundTabData;
+import com.gilfort.civmod.menu.FuelTab;
+import com.gilfort.civmod.menu.FuelTabData;
 import com.gilfort.civmod.menu.InfoTab;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
@@ -95,6 +97,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
                 case RequestsTab requests -> new RequestsTabView(this, requests);
                 case DeliveriesTab deliveries -> new DeliveriesTabView(this, deliveries);
                 case StationTypesTab stations -> new StationTypesTabView(this, stations);
+                case FuelTab fuel -> new FuelTabView(this, fuel);
                 case PatternsTab _ -> library;
             });
         }
@@ -329,6 +332,16 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      */
     public static void handleStationTypeTab(StationTypesTabData.Sync payload, IPayloadContext context) {
         receive(payload.containerId(), open -> open.tab(StationTypesTab.class).map(StationTypesTab::data), payload.tab());
+    }
+
+    /**
+     * Client handler of {@link FuelTabData.Sync}: updates the fuel list of the open JobBlock menu.
+     *
+     * @param payload the payload
+     * @param context the payload context
+     */
+    public static void handleFuelTab(FuelTabData.Sync payload, IPayloadContext context) {
+        receive(payload.containerId(), open -> open.tab(FuelTab.class).map(FuelTab::data), payload.tab());
     }
 
     /**

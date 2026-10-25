@@ -43,6 +43,9 @@ public final class ModBlocks {
     /** JobBlock offering the Craftsperson: the pattern library of the first Producing Job. */
     public static final DeferredBlock<JobBlock> CRAFTSPERSON_BLOCK = jobBlock("craftsperson_block", ModJobs.CRAFTSPERSON);
 
+    /** JobBlock offering the Smelter: smelts at furnaces around it. */
+    public static final DeferredBlock<JobBlock> SMELTER_BLOCK = jobBlock("smelter_block", ModJobs.SMELTER);
+
     private ModBlocks() {
     }
 
