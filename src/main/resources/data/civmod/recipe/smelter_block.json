@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "B": "minecraft:barrel",
+    "F": "minecraft:furnace"
+  },
+  "pattern": [
+    "F",
+    "B"
+  ],
+  "result": {
+    "id": "civmod:smelter_block"
+  }
+}

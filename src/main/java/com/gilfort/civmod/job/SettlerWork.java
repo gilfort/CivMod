@@ -563,13 +563,15 @@ public final class SettlerWork {
 
     /**
      * @param pos a block
-     * @return whether the settler works the block now and players must not open it (it stands at the block and its job
-     *         uses it, see {@link CategoryLoop#usesTarget})
+     * @return whether the settler works the block now and players must not open it (it stands at its target and its job
+     *         uses the block: the target, see {@link CategoryLoop#usesTarget}, or a further one, see
+     *         {@link CategoryLoop#usesPlace})
      */
     public boolean worksAt(BlockPos pos) {
         SettlerJob job = activeJob;
         CategoryLoop loop = job == null ? null : loop(job);
-        return activity == Activity.JOB && loop != null && pos.equals(target) && isAtTarget() && loop.usesTarget(job);
+        return activity == Activity.JOB && loop != null && target != null && isAtTarget() && loop.usesTarget(job)
+                && (pos.equals(target) || loop.usesPlace(job, pos));
     }
 
     /**
@@ -879,7 +881,7 @@ public final class SettlerWork {
                 case DROP_OFF_FULL, STORAGE_FULL -> on.putIfAbsent(ThoughtBubble.DROP_OFF_FULL,
                         SettlerThoughts.problemIcon(ThoughtBubble.DROP_OFF_FULL));
                 case NO_WORK_PLACE, NO_FREE_WORK_PLACE -> on.putIfAbsent(ThoughtBubble.NO_WORK_PLACE, type.icon().getItem());
-                case MISSING_INPUTS -> on.putIfAbsent(ThoughtBubble.MISSING_INPUTS,
+                case MISSING_INPUTS, MISSING_FUEL -> on.putIfAbsent(ThoughtBubble.MISSING_INPUTS,
                         SettlerThoughts.problemIcon(ThoughtBubble.MISSING_INPUTS));
                 case BLOCKED -> on.putIfAbsent(ThoughtBubble.BLOCKED,
                         existingWorkplace(job.jobBlock()).flatMap(Workplace::statusIcon).orElse(Items.BARRIER));
@@ -2368,7 +2370,7 @@ public final class SettlerWork {
                     block(level, activeJob.jobBlock(), JobStatus.STORAGE_FULL);
                 }
             } else {
-                deliver(level, activeJob.jobBlock(), deliveryVisit != null && deliveryVisit.counter());
+                deliver(level, activeJob, deliveryVisit != null && deliveryVisit.counter());
             }
             activity = Activity.IDLE;
             deliveryVisit = null;
@@ -2386,14 +2388,18 @@ public final class SettlerWork {
     /**
      * Delivers the buffer of a job into its drop-off, under the access rule if the drop-off is a Clerk.
      *
+     * @param job       the job (what its loop keeps stays in the buffer)
      * @param atCounter whether the settler stands at the counter of a working Clerk
      */
-    private void deliver(ServerLevel level, BlockPos jobBlock, boolean atCounter) {
+    private void deliver(ServerLevel level, SettlerJob job, boolean atCounter) {
+        BlockPos jobBlock = job.jobBlock();
+        CategoryLoop loop = loop(job);
         JobBuffer buffer = buffer(jobBlock);
         Optional<JobBlockSite> site = JobBlockSite.at(level, jobBlock);
         BlockPos dropOff = site.map(JobBlockSite::dropOff).orElse(jobBlock);
         Stock stock = ClerkStorage.stock(level, dropOff, DayClock.dayTime(level), atCounter);
-        boolean all = !stock.isEmpty() && buffer.deliver(stack -> stack.getCount() - stock.insert(stack).getCount());
+        boolean all = !stock.isEmpty() && buffer.deliver(stack -> stack.getCount() - stock.insert(stack).getCount(),
+                stack -> loop != null && loop.keeps(job, stack));
         if (!all) {
             block(level, jobBlock, JobStatus.DROP_OFF_FULL);
         }

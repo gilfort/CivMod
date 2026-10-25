@@ -111,6 +111,33 @@ public interface ProducingProfile extends CategoryProfile {
     }
 
     /**
+     * How many stations of the main recipe type a settler works at once, each with its own charge (vault
+     * {@code Systems/Producing Jobs.md}): the Smelter's parallel furnaces. The stations come from the Scroll of
+     * Assignment's work points, else from the search around the JobBlock; every one is occupied for the day. The list
+     * {@code parallel_stations} in the Job's datapack job file overrides this value per JobBlock level.
+     *
+     * @param jobBlockLevel the level of the JobBlock (1–5)
+     * @return the number of stations worked in parallel (1 by default)
+     */
+    default int parallelStations(int jobBlockLevel) {
+        return 1;
+    }
+
+    /**
+     * The fuel the Job burns at its stations (vault {@code Jobs/Smelter.md}). With fuel, every execution needs heat:
+     * the recipe's cooking time ({@link net.minecraft.world.item.crafting.AbstractCookingRecipe#cookingTime()}, 200
+     * ticks for other recipes), paid from the station's <i>Remaining Heat</i>; a station without enough burns the next
+     * fuel item by its vanilla burn time and keeps the rest for its next charge. The settler fetches fuel like inputs
+     * (the highest-priority listed fuel in stock) and keeps fuel rests in its buffer; the JobBlock gets a Fuel tab
+     * where the player orders the list.
+     *
+     * @return the default fuel list in priority order (at most 6 items), empty if the Job burns no fuel (by default)
+     */
+    default Optional<List<Item>> fuel() {
+        return Optional.empty();
+    }
+
+    /**
      * Executes a recipe once in the settler's buffer: the consumed inputs are already taken out, the returned items go in.
      *
      * @param level    the level

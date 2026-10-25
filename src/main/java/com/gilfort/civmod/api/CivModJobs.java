@@ -28,6 +28,8 @@ public final class CivModJobs {
     public static final DeferredHolder<Job, Job> CRAFTSPERSON = job("craftsperson");
     /** Producing: Specialization of the Craftsperson, crafts redstone recipes fast; unlocked by a Crafter. */
     public static final DeferredHolder<Job, Job> MECHANIC = job("mechanic");
+    /** Producing: smelts requested items at furnaces, several in parallel, burning fuel. */
+    public static final DeferredHolder<Job, Job> SMELTER = job("smelter");
 
     private CivModJobs() {
     }

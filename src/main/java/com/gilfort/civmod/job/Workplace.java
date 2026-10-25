@@ -99,6 +99,16 @@ final class Workplace {
     private final Map<UUID, Long> skips = new HashMap<>();
     /** A Producing Job takes its buffer to the drop-off before the next round (not saved). */
     private boolean dropOffPending;
+    /** Whether the last request a Producing Job failed to start lacked fuel, not inputs (not saved). */
+    private boolean missingFuel;
+    /**
+     * The further stations of the day a Producing Job works at in parallel to the work place of the day, each occupied
+     * (not saved: chosen again after loading).
+     */
+    private final List<BlockPos> parallelStations = new ArrayList<>();
+    private long parallelDay = -1L;
+    /** While short of parallel stations, no new search before this game time (not saved). */
+    private long parallelSearchAt;
 
     /**
      * @param jobBlock the JobBlock position
@@ -158,6 +168,51 @@ final class Workplace {
      */
     void setDropOffPending(boolean pending) {
         dropOffPending = pending;
+    }
+
+    /**
+     * @return whether the last request the Producing Job failed to start lacked fuel ("Missing: Fuel")
+     */
+    boolean missingFuel() {
+        return missingFuel;
+    }
+
+    /**
+     * @param missing whether the last request the Producing Job failed to start lacked fuel
+     */
+    void setMissingFuel(boolean missing) {
+        missingFuel = missing;
+    }
+
+    /**
+     * The further stations a Producing Job works at in parallel today (vault {@code Systems/Producing Jobs.md}); the
+     * list starts empty on a new day.
+     *
+     * @param day the day
+     * @return the stations (mutable; the caller keeps their occupation)
+     */
+    List<BlockPos> parallelStations(long day) {
+        if (parallelDay != day) {
+            parallelStations.clear();
+            parallelDay = day;
+            parallelSearchAt = 0L;
+        }
+        return parallelStations;
+    }
+
+    /**
+     * @param gameTime the game time now
+     * @return whether further parallel stations may be searched now
+     */
+    boolean parallelSearchDue(long gameTime) {
+        return gameTime >= parallelSearchAt;
+    }
+
+    /**
+     * @param gameTime the game time from which further parallel stations may be searched again
+     */
+    void setParallelSearchAt(long gameTime) {
+        parallelSearchAt = gameTime;
     }
 
     // ---------------------------------------------------------------- buffer and status
@@ -504,6 +559,10 @@ final class Workplace {
         round = null;
         skips.clear();
         dropOffPending = false;
+        missingFuel = false;
+        parallelStations.clear();
+        parallelDay = -1L;
+        parallelSearchAt = 0L;
         buffer = new JobBuffer();
         workPlaceOfDay = null;
         workPlaceDay = -1L;

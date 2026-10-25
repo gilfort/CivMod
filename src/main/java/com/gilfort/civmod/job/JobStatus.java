@@ -54,6 +54,8 @@ public enum JobStatus {
     NO_REQUEST("no_request"),
     /** A producer lacks inputs for every request it tried. */
     MISSING_INPUTS("missing_inputs"),
+    /** A producer burning fuel finds none of its listed fuels in stock ("Missing: Fuel"). */
+    MISSING_FUEL("missing_fuel"),
     /** A Producing Job on "Delivery: Deliveryman" whose inputs are on their way; it works its next priority meanwhile. */
     WAITING_FOR_INPUTS("waiting_for_inputs"),
     /** A Deliveryman walking to or emptying a drop-off ("Collecting – <block>"). */

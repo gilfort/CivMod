@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "condition": {
+        "type": "minecraft:survives_explosion"
+      },
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:copy_components",
+            "include": [
+              "civmod:job_level"
+            ],
+            "source": "block_entity"
+          },
+          "name": "civmod:smelter_block"
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "civmod:blocks/smelter_block"
+}
