@@ -213,7 +213,7 @@ public final class JobSwitcherGameTests {
         helper.assertTrue(menu.getInfo().jobStates().get(1).switchTo().equals(List.of(mason, stonecutter)),
                 "The Craftsperson can switch to the Jobs the stonecutter unlocks: " + menu.getInfo().jobStates().get(1).switchTo());
         helper.assertTrue(menu.getInfo().jobStates().getFirst().switchTo().isEmpty(), "The Lumberjack block offers nothing else");
-        helper.assertFalse(menu.switchJob(player, 1, StationTypeGameTests.job(CivMod.id("gametest_smith"))), "Not unlocked there: refused");
+        helper.assertFalse(menu.switchJob(player, 1, StationTypeGameTests.job(CivMod.id("smith"))), "Not unlocked there: refused");
         helper.assertFalse(menu.switchJob(player, 0, stonecutter), "Not offered at the Lumberjack block: refused");
 
         helper.assertTrue(StationTypeGameTests.block(level, craft).workers(craftsperson).contains(settler.getUUID()),

@@ -860,10 +860,14 @@ final class ProducingLoop implements CategoryLoop {
         }
     }
 
-    /** Operations per second: the shared speed formula × the job factor × the biome bonus of the station of the day. */
+    /**
+     * Operations per second: the shared speed formula × the base job factor (replaced by a station extra at the station
+     * of the day) × the biome bonus of the station of the day.
+     */
     private double speed(ServerLevel level, SettlerJob job) {
-        return LumberjackOutput.speed(shell.effectiveLevel(job)) * job.jobType().jobFactor()
-                * shell.workplace(job.jobBlock()).biomeBonus(level, job.jobType()).speed().value();
+        Workplace workplace = shell.workplace(job.jobBlock());
+        return LumberjackOutput.speed(shell.effectiveLevel(job)) * workplace.jobFactor(level, job.jobType())
+                * workplace.biomeBonus(level, job.jobType()).speed().value();
     }
 
     private static ProducingProfile profile(SettlerJob job) {
@@ -888,8 +892,14 @@ final class ProducingLoop implements CategoryLoop {
      */
     private @Nullable BlockPos station(ServerLevel level, SettlerJob job, JobBlockSite site, long day) {
         TagKey<Block> main = mainStation(job);
-        return shell.workplace(job.jobBlock()).workPlaceOfDay(level, settler, pos -> isStation(level, job, pos) && Furnaces.isIdle(level, pos),
+        Workplace workplace = shell.workplace(job.jobBlock());
+        BlockPos station = workplace.workPlaceOfDay(level, settler, pos -> isStation(level, job, pos) && Furnaces.isIdle(level, pos),
                 free -> nearestStation(level, site, main, pos -> free.test(pos) && Furnaces.isIdle(level, pos)), site, day);
+        if (station != null) {
+            // The station extras are read when the station of the day is chosen and kept for the day.
+            workplace.jobFactor(level, job.jobType());
+        }
+        return station;
     }
 
     /** The station tag of the main recipe type. */

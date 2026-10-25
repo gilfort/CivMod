@@ -16,6 +16,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.item.crafting.SmithingRecipeInput;
+import net.minecraft.world.item.crafting.SmithingTransformRecipe;
 import net.minecraft.world.level.block.Block;
 
 /**
@@ -144,12 +146,21 @@ public interface ProducingProfile extends CategoryProfile {
      * @param recipe   the recipe
      * @param result   what the pattern makes per execution
      * @param consumed the inputs taken out
-     * @return what goes into the buffer (by default the result plus the inputs' remainders, e.g. empty buckets)
+     * @return what goes into the buffer (by default the result plus the inputs' remainders, e.g. empty buckets; a
+     *         {@code smithing_transform} result keeps the base item's components, as at a smithing table: a netherite
+     *         upgrade keeps enchantments and damage)
      */
     default List<ItemStack> execute(ServerLevel level, RecipeHolder<?> recipe, ItemStack result, List<ItemStack> consumed) {
         List<ItemStack> produced = new ArrayList<>();
-        produced.add(result);
+        produced.add(recipe.value() instanceof SmithingTransformRecipe transform ? transformed(transform, result, consumed) : result);
         produced.addAll(PatternRecipes.remainders(consumed));
         return produced;
+    }
+
+    /** A smithing transform's result with the consumed base item's components, the pattern's result without one. */
+    private static ItemStack transformed(SmithingTransformRecipe recipe, ItemStack result, List<ItemStack> consumed) {
+        return consumed.stream().filter(recipe.baseIngredient()).findFirst()
+                .map(base -> recipe.assemble(new SmithingRecipeInput(ItemStack.EMPTY, base, ItemStack.EMPTY)))
+                .filter(made -> !made.isEmpty()).orElse(result);
     }
 }

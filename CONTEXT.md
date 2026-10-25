@@ -211,6 +211,9 @@ The first Producing Job: crafts requested items from its patterns at a crafting 
 **Mechanic**:
 The first built-in crafting Specialization of the Craftsperson: unlocked by a Crafter in a Station Types slot, works at a Crafter (`civmod:stations/mechanic`), `crafting` recipes in the domain `civmod:domains/redstone`, job factor 1.2 (four times the Craftsperson). Code: `ModJobs.MECHANIC`, profile `MechanicProfile`, `civmod_jobs/mechanic.json`.
 
+**Smith**:
+The crafting Specialization of the Craftsperson for metal: unlocked by a smithing table in a Station Types slot, works at a smithing table (`civmod:stations/smith`, the station of both its recipe types), `crafting` and `smithing` recipes in the domain `civmod:metals`; of `smithing` only `smithing_transform` (netherite upgrades keep the base item's components, `ProducingProfile.execute`), armor trims are no patterns (`PatternRecipes`). Job factor 0.3, raised to 1.2 by its Station Extra (`#minecraft:anvil` within 4 blocks; anvils do not wear); base EXP 2. Missing ingots stay "Missing: …" (no request to the Smelter). Code: `ModJobs.SMITH`, profile `SmithProfile`, `civmod_jobs/smith.json`.
+
 **Smelter**:
 The Producing Base Job of all furnace work: smelts requested items (`smelting`) at furnaces (`civmod:stations/smelter`), simulated in its buffer while the furnace shows its lit state. Works several furnaces in parallel, each with its own charge (`parallel_stations` [1, 2, 3, 4, 5] per JobBlock level in `civmod_jobs/smelter.json`, `ProducingProfile.parallelStations`), each one occupied; a furnace holding items or burning on its own is never used (`Furnaces.isIdle`). Burns fuel from the JobBlock's fuel list (Fuel tab, default coal then charcoal; `ProducingProfile.fuel`, `Fuels`, `SettlementBlock.fuel`) with Remaining Heat; fuel is fetched like inputs, rests stay in the buffer (`CategoryLoop.keeps`); none in stock: "Missing: Fuel" (`JobStatus.MISSING_FUEL`). Code: `ModJobs.SMELTER` on `ModBlocks.SMELTER_BLOCK`, profile `SmelterProfile` (work time = cooking time ÷ 80 operations: level 20 = vanilla speed), base EXP 1, job factor 1.0.
 
@@ -230,7 +233,7 @@ _Avoid_: Recipe (a pattern follows one), blueprint
 A pattern the producer works; 6 + 1 per 5 levels of the settler's effective skill by default (`ProducingProfile.checkLimit`, `Patterns.checkLimit`), per library; with several settlers in the Job at the JobBlock the highest one counts (each reports its own, `Patterns.enforceLimit(…, settler, limit)`, kept per library and saved as `workers`). Only usable checked patterns count against the limit (`Patterns.usable`); foreign ones keep their checkmark outside it. A new pattern is checked automatically while one is free and the profile can use it; at the limit it stays unchecked with the state line "A <Job> masters only <n> recipes at once – choose which to check.". When the limit drops, the last usable checked patterns in list order lose theirs (`Patterns.enforceLimit`) with the state line "<n> checkmarks removed". The state line is one transient notice (`SettlementBlock.Notice`, `PatternsTabData.notice`), ended by the next edit of the library (put, toggle, clear).
 
 **Metal**:
-Item tag `civmod:metals` (ingots, nuggets, raw materials, metal blocks), kept for the future Smith's domain; the Craftsperson crafts metal too. Code: `Patterns.METALS`, `Patterns.isMetal`. Filters of a profile in general: `Patterns.filtered`, `Patterns.uncheckFiltered` (a filtered pattern loses its checkmark at every decision and tab sync), `PatternsTabData.filtered()`.
+Item tag `civmod:metals` (ingots, nuggets, raw materials, metal blocks), the Smith's domain; the Craftsperson crafts metal too. Code: `Patterns.METALS`, `Patterns.isMetal`. Filters of a profile in general: `Patterns.filtered`, `Patterns.uncheckFiltered` (a filtered pattern loses its checkmark at every decision and tab sync), `PatternsTabData.filtered()`.
 
 
 **Round**:
@@ -241,7 +244,7 @@ The work place of a Producing Job, named per recipe type by a block tag (`Produc
 _Avoid_: Workbench (the JobBlock is none)
 
 **Station Extra**:
-A block near a Job's station of the day that raises its base job factor (the Smith's anvil: 0.3 → 1.2); named per Job in `station_extras` of `civmod_jobs/<job>.json`, the highest matching factor counts. Not a bonus multiplier. Planned (module 2).
+A block near a Job's station of the day that replaces its base job factor (the Smith's anvil: 0.3 → 1.2); named per Job in `station_extras` of `civmod_jobs/<job>.json` (`{ blocks (id, list or #tag), radius (cube, 1–8), job_factor }`), the highest matching factor counts, none: the Job's own `job_factor`. Read once when the station of the day is chosen and kept for that day (not saved: read again after loading). Not a bonus multiplier: the biome bonuses act on top. Any Job may name them; they take effect where the job factor counts (Producing Jobs). Code: `StationExtra` (entry and codec, in `JobBalancing.stationExtras`), `StationExtras.jobFactor`, kept per day in `Workplace.jobFactor`, read by `SettlerWork.jobFactor`.
 _Avoid_: Work aid, workshop tool (collides with tools)
 
 **Occupied**:

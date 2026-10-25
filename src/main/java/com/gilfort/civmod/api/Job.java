@@ -40,7 +40,9 @@ import net.minecraft.world.level.block.Block;
  * Datapacks may override the balancing values per job id {@code <namespace>:<job>}: hunger factor, base EXP, job factor
  * and unlock item in {@code data/<namespace>/civmod_jobs/<job>.json} ({@code hunger_factor}, {@code base_exp},
  * {@code job_factor}, {@code unlock_item}, all optional; a Producing Job also {@code parallel_stations}, a list of the
- * stations worked at once per JobBlock level, see {@link ProducingProfile#parallelStations}), the JobBlock upgrade costs in
+ * stations worked at once per JobBlock level, see {@link ProducingProfile#parallelStations}; any Job
+ * {@code station_extras}, blocks near the station of the day that replace the job factor, a list of
+ * {@code { blocks (id, list or #tag), radius, job_factor }} where the highest match counts), the JobBlock upgrade costs in
  * {@code data/<namespace>/civmod_upgrades/<job>.json}. The job's names come from the lang keys
  * {@code job.<namespace>.<job>} and {@code job.<namespace>.<job>.indefinite} ("an Adventurer"), its one-line description
  * in the Station Types overview from {@code job.<namespace>.<job>.description}.
