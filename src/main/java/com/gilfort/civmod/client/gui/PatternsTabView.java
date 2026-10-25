@@ -246,6 +246,19 @@ final class PatternsTabView implements JobBlockTabView {
         return -1;
     }
 
+    /** Shift + right-click: the library's next empty slot, in the editor the output first, then the next empty cell. */
+    @Override
+    public int nextEmptyGhost() {
+        if (!(menu.activeTab() instanceof PatternsTab)) {
+            return -1;
+        }
+        if (editing < 0) {
+            return tab().nextEmptyGhostSlot();
+        }
+        int next = tab().nextEmptyInEditor(editing);
+        return next == Pattern.GRID ? TARGET_OUTPUT : next < 0 ? -1 : TARGET_CELL + next;
+    }
+
     /**
      * Puts an item into a pattern target as a ghost (the item is not taken).
      *

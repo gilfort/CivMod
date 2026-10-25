@@ -141,6 +141,15 @@ interface JobBlockTabView {
     }
 
     /**
+     * The ghost target Shift + right-click on a player inventory item fills (vault {@code Systems/GUI.md}).
+     *
+     * @return the next empty ghost target of the tab, {@code -1} if every one is set or the tab has none
+     */
+    default int nextEmptyGhost() {
+        return -1;
+    }
+
+    /**
      * Takes a recipe from a recipe viewer's transfer button, from any tab of the window.
      *
      * @param type       the recipe type of the recipe the viewer shows

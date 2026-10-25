@@ -142,6 +142,20 @@ public record ClerkTabData(int level, List<StockRule> rules, List<RequestRow> re
     }
 
     /**
+     * The rule slot Shift + right-click on an inventory item fills (vault {@code Systems/GUI.md}).
+     *
+     * @return the first active rule slot without a rule, {@code -1} if every one holds a rule
+     */
+    public int nextEmptyGhostSlot() {
+        for (int slot = 0; slot < StockRule.slots(level); slot++) {
+            if (rule(slot).isEmpty()) {
+                return slot;
+            }
+        }
+        return -1;
+    }
+
+    /**
      * @param level the level
      * @param clerk the Clerk JobBlock position
      * @return the current tab of that Clerk ({@link #EMPTY} if it is none)
