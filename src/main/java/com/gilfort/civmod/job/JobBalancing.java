@@ -41,22 +41,26 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
  * @param unlockItem   the item that unlocks the Job in a Station Types slot ({@code unlock_item})
  * @param parallelStations how many stations a Producing Job works at once, per JobBlock level from 1
  *                     ({@code parallel_stations}; levels beyond the list use its last value)
+ * @param stationExtras blocks near the station of the day that replace the job factor ({@code station_extras}; a later
+ *                     file replaces the whole list)
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> baseExp, Optional<Double> jobFactor, Optional<Item> unlockItem,
-        Optional<List<Integer>> parallelStations) {
+        Optional<List<Integer>> parallelStations, Optional<List<StationExtra>> stationExtras) {
 
     /** Reload listener id. */
     public static final Identifier ID = CivMod.id("job_balancing");
     /** No override. */
-    public static final JobBalancing NONE = new JobBalancing(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+    public static final JobBalancing NONE = new JobBalancing(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+            Optional.empty());
 
     private static final Codec<JobBalancing> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.doubleRange(0.0, 10.0).optionalFieldOf("hunger_factor").forGetter(JobBalancing::hungerFactor),
             Codec.intRange(0, 10000).optionalFieldOf("base_exp").forGetter(JobBalancing::baseExp),
             Codec.doubleRange(0.0, 100.0).optionalFieldOf("job_factor").forGetter(JobBalancing::jobFactor),
             BuiltInRegistries.ITEM.byNameCodec().optionalFieldOf("unlock_item").forGetter(JobBalancing::unlockItem),
-            Codec.intRange(1, SettlementBlock.MAX_WORK_POINTS).listOf(1, 5).optionalFieldOf("parallel_stations").forGetter(JobBalancing::parallelStations)
+            Codec.intRange(1, SettlementBlock.MAX_WORK_POINTS).listOf(1, 5).optionalFieldOf("parallel_stations").forGetter(JobBalancing::parallelStations),
+            StationExtra.CODEC.listOf().optionalFieldOf("station_extras").forGetter(JobBalancing::stationExtras)
     ).apply(instance, JobBalancing::new));
 
     private static final FileToIdConverter FILES = FileToIdConverter.json("civmod_jobs");
@@ -82,7 +86,7 @@ public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> base
             JobBalancing part = CODEC.parse(JsonOps.INSTANCE, file).getOrThrow();
             merged = new JobBalancing(part.hungerFactor().or(merged::hungerFactor), part.baseExp().or(merged::baseExp),
                     part.jobFactor().or(merged::jobFactor), part.unlockItem().or(merged::unlockItem),
-                    part.parallelStations().or(merged::parallelStations));
+                    part.parallelStations().or(merged::parallelStations), part.stationExtras().or(merged::stationExtras));
         }
         return merged;
     }

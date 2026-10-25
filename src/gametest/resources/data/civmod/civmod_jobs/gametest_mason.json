@@ -1,0 +1,14 @@
+{
+  "station_extras": [
+    {
+      "blocks": "minecraft:anvil",
+      "radius": 2,
+      "job_factor": 0.8
+    },
+    {
+      "blocks": ["minecraft:grindstone", "#minecraft:logs"],
+      "radius": 3,
+      "job_factor": 2.5
+    }
+  ]
+}

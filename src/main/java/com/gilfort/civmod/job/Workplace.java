@@ -66,6 +66,10 @@ final class Workplace {
     private record BonusOfDay(long day, BlockPos place, Job job, BiomeBonus bonus) {
     }
 
+    /** The base job factor of a Job read at its work place of a day ({@link StationExtras}). */
+    private record FactorOfDay(long day, BlockPos place, Job job, double factor) {
+    }
+
     private final BlockPos jobBlock;
     private JobBuffer buffer = new JobBuffer();
     private JobStatus status = JobStatus.IDLE;
@@ -82,6 +86,8 @@ final class Workplace {
     private @Nullable BiomeOfDay biomeOfDay;
     /** The biome bonuses resolved at {@link #biomeOfDay} (not saved: resolved again from the loaded files). */
     private @Nullable BonusOfDay bonusOfDay;
+    /** The base job factor with the station extras at the work place of the day (not saved: read again after loading). */
+    private @Nullable FactorOfDay factorOfDay;
     private @Nullable ScanResult scan;
     private @Nullable ScanKey scanKey;
     /** The dropped item of each resource type per tool kind, for the Max checks of every roll; cleared with the scan. */
@@ -419,6 +425,29 @@ final class Workplace {
         return bonus;
     }
 
+    /**
+     * The base job factor acting on the job today ({@link StationExtras}): read at the work place of the day once per
+     * day and place and kept for that day, so a station extra placed or removed during the day takes effect with the
+     * next day's choice. A work place chosen anew during the day reads its own surroundings.
+     *
+     * @param level the level
+     * @param job   the Job held at the JobBlock
+     * @return the base job factor (the Job's own while no work place is chosen)
+     */
+    double jobFactor(ServerLevel level, Job job) {
+        BlockPos place = workPlaceOfDay;
+        if (place == null) {
+            return job.jobFactor();
+        }
+        FactorOfDay cached = factorOfDay;
+        if (cached != null && cached.day() == workPlaceDay && cached.job() == job && cached.place().equals(place)) {
+            return cached.factor();
+        }
+        double factor = StationExtras.jobFactor(level, job, place);
+        factorOfDay = new FactorOfDay(workPlaceDay, place, job, factor);
+        return factor;
+    }
+
     /** The biome of a place for a day: the one read (or restored) for that day and place, else the place's biome now. */
     private Holder<Biome> biome(ServerLevel level, BlockPos place, long day) {
         BiomeOfDay known = biomeOfDay;
@@ -568,6 +597,7 @@ final class Workplace {
         workPlaceDay = -1L;
         biomeOfDay = null;
         bonusOfDay = null;
+        factorOfDay = null;
         scan = null;
         scanKey = null;
         scanning = null;
@@ -591,6 +621,7 @@ final class Workplace {
         // The day's biome stays (a reload on the same day keeps it); the bonuses are resolved again from the loaded files.
         biomeOfDay = saved.biome().map(biome -> new BiomeOfDay(saved.day(), saved.poi(), biome)).orElse(null);
         bonusOfDay = null;
+        factorOfDay = null;
     }
 
     /**

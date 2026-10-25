@@ -7,6 +7,8 @@ import java.util.function.Consumer;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ProducingProfile;
+import com.gilfort.civmod.job.JobBalancing;
+import com.gilfort.civmod.job.StationExtras;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.PatternRecipes;
 import com.gilfort.civmod.logistics.Request;
@@ -22,6 +24,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.google.gson.JsonParser;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -53,6 +56,8 @@ public final class SmithGameTests {
 
     /** Work time of the previous workday the request tests catch up: plenty for one execution at job factor 0.3. */
     private static final long WORK_TICKS = 4000L;
+    /** The work time the trapdoor tests catch up: enough for 4 executions at job factor 1.2, not at 0.3. */
+    private static final long SPEED_TICKS = 1200L;
 
     private SmithGameTests() {
     }
@@ -66,6 +71,11 @@ public final class SmithGameTests {
             register(helper, "smith_missing_ingots", SmithGameTests::missingIngots);
             register(helper, "smith_netherite_upgrade", SmithGameTests::netheriteUpgrade);
             register(helper, "smith_no_trims", SmithGameTests::noTrims);
+            register(helper, "smith_anvil_faster", SmithGameTests::anvilFaster);
+            register(helper, "smith_without_anvil_slower", SmithGameTests::withoutAnvilSlower);
+            register(helper, "smith_chipped_anvil", SmithGameTests::chippedAnvil);
+            register(helper, "smith_extra_fixed_for_day", SmithGameTests::extraFixedForDay);
+            register(helper, "station_extras_highest", SmithGameTests::highestExtra);
         });
     }
 
@@ -210,6 +220,124 @@ public final class SmithGameTests {
         helper.succeed();
     }
 
+    /**
+     * With an anvil within 4 blocks of the smithing table the Smith works at job factor 1.2 (instead of 0.3) and fills
+     * a request for 4 iron trapdoors (4 executions) within {@link #SPEED_TICKS}; the anvil does not wear.
+     */
+    private static void anvilFaster(GameTestHelper helper) {
+        BlockPos anvil = new BlockPos(3, 1, 9);
+        helper.setBlock(anvil, Blocks.ANVIL);
+        int delivered = trapdoors(helper, 1.2);
+        helper.assertTrue(delivered == 4, "With an anvil the Smith delivered 4 trapdoors: " + delivered);
+        helper.assertBlockPresent(Blocks.ANVIL, anvil);
+        helper.succeed();
+    }
+
+    /** The same request in the same work time without an anvil: job factor 0.3, not done yet. */
+    private static void withoutAnvilSlower(GameTestHelper helper) {
+        int delivered = trapdoors(helper, 0.3);
+        helper.assertTrue(delivered < 4, "Without an anvil the Smith is slower: " + delivered);
+        helper.succeed();
+    }
+
+    /**
+     * Requests 4 iron trapdoors (16 iron ingots in stock), lets a Smith work {@link #SPEED_TICKS} at a smithing table at
+     * (3, 1, 5), checks its job factor of the day and returns how many trapdoors arrived.
+     */
+    private static int trapdoors(GameTestHelper helper, double factor) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = setup(helper, List.of(new ItemStack(Items.IRON_INGOT, 16)), Items.IRON_TRAPDOOR, 4);
+        BlockPos craft = smithy(helper, new BlockPos(1, 1, 5));
+        helper.setBlock(new BlockPos(3, 1, 5), Blocks.SMITHING_TABLE);
+        Settler settler = worker(helper, setup, craft);
+        helper.assertTrue(Patterns.setOutput(level, craft, smith(), 0, Items.IRON_TRAPDOOR).orElseThrow().checked(), "Trapdoors checked");
+        CraftspersonGameTests.catchUp(level, settler, SPEED_TICKS);
+        helper.assertTrue(settler.getWork().jobFactor(level, craft) == factor, "Job factor of the day " + factor + ": "
+                + settler.getWork().jobFactor(level, craft));
+        int delivered = count(level, setup.clerk(), Items.IRON_TRAPDOOR);
+        cleanUp(setup, settler);
+        return delivered;
+    }
+
+    /**
+     * Chipped and damaged anvils count ({@code #minecraft:anvil}); the radius is 4 blocks around the smithing table in
+     * every direction, an anvil 5 blocks away does not count.
+     */
+    private static void chippedAnvil(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos table = new BlockPos(5, 2, 5);
+        helper.setBlock(table, Blocks.SMITHING_TABLE);
+        BlockPos station = helper.absolutePos(table);
+        helper.assertTrue(StationExtras.jobFactor(level, smith(), station) == 0.3, "No anvil: 0.3");
+        helper.setBlock(table.offset(5, 0, 0), Blocks.ANVIL);
+        helper.assertTrue(StationExtras.jobFactor(level, smith(), station) == 0.3, "5 blocks away: 0.3");
+        helper.setBlock(table.offset(4, 0, 0), Blocks.CHIPPED_ANVIL);
+        helper.assertTrue(StationExtras.jobFactor(level, smith(), station) == 1.2, "Chipped anvil 4 blocks away: 1.2");
+        helper.setBlock(table.offset(4, 0, 0), Blocks.AIR);
+        helper.setBlock(table.offset(-3, 3, 4), Blocks.DAMAGED_ANVIL);
+        helper.assertTrue(StationExtras.jobFactor(level, smith(), station) == 1.2, "Damaged anvil diagonally above: 1.2");
+        helper.assertTrue(StationExtras.jobFactor(level, CraftspersonGameTests.craftJob(), station) == 0.3,
+                "The Craftsperson names no station extras: its job factor");
+        helper.succeed();
+    }
+
+    /**
+     * The station extra is checked once when the station of the day is chosen and kept for that day: an anvil removed
+     * later the same day does not change the day's job factor.
+     */
+    private static void extraFixedForDay(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = setup(helper, List.of(new ItemStack(Items.IRON_INGOT, 16)), Items.IRON_TRAPDOOR, 4);
+        BlockPos craft = smithy(helper, new BlockPos(1, 1, 5));
+        helper.setBlock(new BlockPos(3, 1, 5), Blocks.SMITHING_TABLE);
+        helper.setBlock(new BlockPos(3, 1, 7), Blocks.ANVIL);
+        Settler settler = worker(helper, setup, craft);
+        helper.assertTrue(Patterns.setOutput(level, craft, smith(), 0, Items.IRON_TRAPDOOR).orElseThrow().checked(), "Trapdoors checked");
+        long end = SmelterGameTests.catchUpWork(level, settler, 2000L, 600);
+        helper.assertTrue(settler.getWork().jobFactor(level, craft) == 1.2, "An anvil when the station was chosen: 1.2");
+        helper.setBlock(new BlockPos(3, 1, 7), Blocks.AIR);
+        SmelterGameTests.catchUpWork(level, settler, end, 600);
+        helper.assertTrue(settler.getWork().jobFactor(level, craft) == 1.2, "The same day keeps 1.2: "
+                + settler.getWork().jobFactor(level, craft));
+        helper.assertTrue(StationExtras.jobFactor(level, smith(), helper.absolutePos(new BlockPos(3, 1, 5))) == 0.3,
+                "Tomorrow's choice reads 0.3 there");
+        cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /**
+     * Station extras of any Job come from its job file (GameTest datapack for {@code civmod:gametest_mason}: an anvil
+     * within 2 blocks → 0.8; a grindstone or a log within 3 → 2.5): several matches → the highest job factor, none → the
+     * Job's own. A later file replaces the list.
+     */
+    private static void highestExtra(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Job mason = StationTypeGameTests.job(CivMod.id("gametest_mason"));
+        BlockPos table = new BlockPos(5, 2, 5);
+        CraftspersonGameTests.placeTable(helper, table);
+        BlockPos station = helper.absolutePos(table);
+        helper.assertTrue(StationExtras.jobFactor(level, mason, station) == mason.jobFactor(), "No extra: the Job's factor");
+        helper.setBlock(table.offset(0, 0, 2), Blocks.ANVIL);
+        helper.assertTrue(StationExtras.jobFactor(level, mason, station) == 0.8, "An anvil replaces it, even downwards: 0.8");
+        helper.setBlock(table.offset(3, 0, 0), Blocks.GRINDSTONE);
+        helper.assertTrue(StationExtras.jobFactor(level, mason, station) == 2.5, "Anvil and grindstone: the highest, 2.5");
+        helper.setBlock(table.offset(3, 0, 0), Blocks.AIR);
+        helper.setBlock(table.offset(0, 0, -3), Blocks.OAK_LOG);
+        helper.assertTrue(StationExtras.jobFactor(level, mason, station) == 2.5, "A tag entry matches too: 2.5");
+        helper.setBlock(table.offset(0, 0, -3), Blocks.AIR);
+        helper.setBlock(table.offset(0, 0, 2), Blocks.AIR);
+        helper.setBlock(table.offset(0, 0, 3), Blocks.ANVIL);
+        helper.assertTrue(StationExtras.jobFactor(level, mason, station) == mason.jobFactor(), "The anvil outside its radius 2");
+
+        JobBalancing merged = JobBalancing.merge(List.of(
+                JsonParser.parseString("{\"station_extras\": [{\"blocks\": \"minecraft:anvil\", \"radius\": 1, \"job_factor\": 3.0}]}"),
+                JsonParser.parseString("{\"base_exp\": 3}"),
+                JsonParser.parseString("{\"station_extras\": [{\"blocks\": [\"minecraft:loom\", \"#minecraft:anvil\"], \"radius\": 2, \"job_factor\": 1.5}]}")));
+        helper.assertTrue(merged.stationExtras().map(List::size).equals(Optional.of(1))
+                && merged.stationExtras().orElseThrow().getFirst().jobFactor() == 1.5, "A later file replaces the list: " + merged.stationExtras());
+        helper.succeed();
+    }
+
     /** Three items in order in the 3×3 grid, the rest empty. */
     private static List<Item> grid(Item first, Item second, Item third) {
         return List.of(first, second, third, Items.AIR, Items.AIR, Items.AIR, Items.AIR, Items.AIR, Items.AIR);
@@ -220,6 +348,11 @@ public final class SmithGameTests {
 
     /** A working Clerk whose storage holds the items, with a rule for one of the wanted item. */
     private static Setup setup(GameTestHelper helper, List<ItemStack> stock, Item wanted) {
+        return setup(helper, stock, wanted, 1);
+    }
+
+    /** A working Clerk whose storage holds the items, with a Min rule for the wanted item. */
+    private static Setup setup(GameTestHelper helper, List<ItemStack> stock, Item wanted, int amount) {
         ServerLevel level = helper.getLevel();
         BlockPos clerk = StockRuleGameTests.workingClerk(helper);
         SettlementData data = SettlementData.get(level);
@@ -228,7 +361,7 @@ public final class SmithGameTests {
         for (int i = 0; i < stock.size(); i++) {
             chest.setItem(i, stock.get(i).copy());
         }
-        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, wanted, 1, 0)), "Rule set");
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, wanted, amount, 0)), "Rule set");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         return new Setup(clerk, data, settlement);
     }

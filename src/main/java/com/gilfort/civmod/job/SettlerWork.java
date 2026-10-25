@@ -489,6 +489,19 @@ public final class SettlerWork {
     }
 
     /**
+     * The base job factor acting on the settler's job at a JobBlock today ({@link StationExtras}): the highest matching
+     * station extra at the station of the day, read once per day and station, else the Job's job factor.
+     *
+     * @param level    the level
+     * @param jobBlock a JobBlock position
+     * @return the base job factor (the Job's own if the settler has no work place there yet; 1 without a job there)
+     */
+    public double jobFactor(ServerLevel level, BlockPos jobBlock) {
+        return settler.jobAt(jobBlock).map(job -> existingWorkplace(jobBlock).map(workplace -> workplace.jobFactor(level, job.jobType()))
+                .orElseGet(() -> job.jobType().jobFactor())).orElse(1.0);
+    }
+
+    /**
      * @param jobBlock a JobBlock position
      * @return the status of that job as text, naming what it is about (e.g. "Collecting – Lumberjack")
      */

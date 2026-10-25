@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:smith_extra_fixed_for_day",
+  "max_ticks": 400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
