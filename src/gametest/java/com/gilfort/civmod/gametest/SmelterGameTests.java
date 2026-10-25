@@ -6,14 +6,23 @@ import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.job.CatchUp;
+import com.gilfort.civmod.job.Fatigue;
+import com.gilfort.civmod.job.JobBalancing;
+import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Pattern;
+import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.DayClock;
+import com.gilfort.civmod.settlement.Fuels;
 import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.settlement.OccupiedPlaces;
 import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.Settlement;
@@ -58,6 +67,12 @@ public final class SmelterGameTests {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "smelter_fills_request", SmelterGameTests::fillsRequest);
             register(helper, "smelter_remaining_heat", SmelterGameTests::remainingHeat);
+            register(helper, "smelter_missing_fuel", SmelterGameTests::missingFuel);
+            register(helper, "smelter_fuel_priority", SmelterGameTests::fuelPriority);
+            register(helper, "smelter_parallel_furnaces", SmelterGameTests::parallelFurnaces);
+            register(helper, "smelter_player_furnace", SmelterGameTests::playerFurnace);
+            register(helper, "smelter_broken_furnace", SmelterGameTests::brokenFurnace);
+            register(helper, "smelter_speed_and_exp", SmelterGameTests::speedAndExp);
         });
     }
 
@@ -112,6 +127,145 @@ public final class SmelterGameTests {
         helper.succeed();
     }
 
+    /** No listed fuel in stock: nothing is smelted, the job says "Missing: Fuel", the request names the first fuel. */
+    private static void missingFuel(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 4), new ItemStack(Items.OAK_LOG, 4)));
+        Request request = Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 2, Optional.of(setup.clerk()), Optional.empty());
+        Settler settler = worker(helper, setup);
+        CraftspersonGameTests.catchUp(level, settler, 3000L);
+
+        helper.assertTrue(count(level, setup.clerk(), Items.IRON_INGOT) == 0 && count(level, setup.clerk(), Items.RAW_IRON) == 4,
+                "Nothing smelted without fuel (oak logs are not listed)");
+        helper.assertTrue(settler.getWork().status(setup.block()) == JobStatus.MISSING_FUEL, "Missing: Fuel " + settler.getWork().status(setup.block()));
+        List<Item> missing = Requests.get(setup.settlement(), request.id()).orElseThrow().missing().stream().map(Request.Missing::item).toList();
+        helper.assertTrue(missing.equals(List.of(Items.COAL)), "The request names the first listed fuel: " + missing);
+        cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /**
+     * The fuel list's order is the priority: with charcoal moved before coal (◀ on charcoal), charcoal is burnt and the
+     * coal stays in stock.
+     */
+    private static void fuelPriority(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 4), new ItemStack(Items.COAL, 1), new ItemStack(Items.CHARCOAL, 1)));
+        helper.assertTrue(Fuels.of(level, setup.block()).equals(List.of(Items.COAL, Items.CHARCOAL)), "Default: coal, then charcoal");
+        helper.assertTrue(Fuels.move(level, setup.block(), 1, -1), "Charcoal moved left");
+        helper.assertTrue(Fuels.of(level, setup.block()).equals(List.of(Items.CHARCOAL, Items.COAL)), "Charcoal first: " + Fuels.of(level, setup.block()));
+        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 4, Optional.of(setup.clerk()), Optional.empty());
+        Settler settler = worker(helper, setup);
+        CraftspersonGameTests.catchUp(level, settler, 3000L);
+
+        helper.assertTrue(count(level, setup.clerk(), Items.IRON_INGOT) == 4, "4 ingots: " + count(level, setup.clerk(), Items.IRON_INGOT));
+        helper.assertTrue(count(level, setup.clerk(), Items.CHARCOAL) == 0 && count(level, setup.clerk(), Items.COAL) == 1,
+                "Charcoal burnt, coal kept: charcoal " + count(level, setup.clerk(), Items.CHARCOAL) + ", coal " + count(level, setup.clerk(), Items.COAL));
+        cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /**
+     * A level-3 JobBlock smelts at 3 furnaces in parallel ({@code parallel_stations} [1, 2, 3, 4, 5]): 6 ingots take the
+     * time of 2 per furnace (one alone would make 3 in that time); each furnace burns its own coal, all three are
+     * occupied by the Smelter.
+     */
+    private static void parallelFurnaces(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.assertTrue(JobBalancing.of(smelter()).parallelStations().equals(Optional.of(List.of(1, 2, 3, 4, 5))),
+                "parallel_stations from the job file: " + JobBalancing.of(smelter()).parallelStations());
+        helper.assertTrue(JobBalancing.of(CraftspersonGameTests.craftJob()).parallelStations().isEmpty()
+                && CraftspersonGameTests.profile().parallelStations(5) == 1, "Other Producing Jobs: 1 station per level");
+        Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 6), new ItemStack(Items.COAL, 4)));
+        StationTypeGameTests.setLevel(helper, BLOCK, 3);
+        helper.setBlock(new BlockPos(3, 1, 7), Blocks.FURNACE);
+        helper.setBlock(new BlockPos(3, 1, 3), Blocks.FURNACE);
+        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 6, Optional.of(setup.clerk()), Optional.empty());
+        Settler settler = worker(helper, setup);
+        // Level 1: 314 ticks per item and furnace; 2 rounds of charges fit, 6 single charges would not.
+        catchUpWork(level, settler, 0L, 800.0);
+
+        helper.assertTrue(count(level, setup.clerk(), Items.IRON_INGOT) == 6, "6 ingots from 3 furnaces: " + count(level, setup.clerk(), Items.IRON_INGOT)
+                + ", status " + settler.getWork().status(setup.block()));
+        helper.assertTrue(count(level, setup.clerk(), Items.COAL) == 1, "One coal per furnace: " + count(level, setup.clerk(), Items.COAL));
+        // The catch-up worked the previous day.
+        long day = DayClock.day(level) - 1;
+        for (BlockPos furnace : List.of(FURNACE, new BlockPos(3, 1, 7), new BlockPos(3, 1, 3))) {
+            helper.assertTrue(OccupiedPlaces.occupant(setup.data(), helper.absolutePos(furnace), day).map(OccupiedPlaces.Occupation::settler)
+                    .equals(Optional.of(settler.getUUID())), "Occupied by the Smelter: " + furnace);
+        }
+        cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /**
+     * A furnace holding a player's items is never used: with only that furnace the Smelter has no work place; an empty
+     * furnace placed next is used and the player's items stay untouched.
+     */
+    private static void playerFurnace(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 1), new ItemStack(Items.COAL, 1)));
+        Container own = (Container) level.getBlockEntity(helper.absolutePos(FURNACE));
+        own.setItem(0, new ItemStack(Items.COBBLESTONE, 5));
+        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 1, Optional.of(setup.clerk()), Optional.empty());
+        Settler settler = worker(helper, setup);
+        CraftspersonGameTests.catchUp(level, settler, 1000L);
+        helper.assertTrue(settler.getWork().status(setup.block()) == JobStatus.NO_WORK_PLACE && count(level, setup.clerk(), Items.IRON_INGOT) == 0,
+                "The player's furnace is no work place: " + settler.getWork().status(setup.block()));
+
+        helper.setBlock(new BlockPos(3, 1, 3), Blocks.FURNACE);
+        CraftspersonGameTests.catchUp(level, settler, 1000L);
+        helper.assertTrue(count(level, setup.clerk(), Items.IRON_INGOT) == 1, "Smelted at the empty furnace: " + settler.getWork().status(setup.block()));
+        helper.assertTrue(own.getItem(0).is(Items.COBBLESTONE) && own.getItem(0).getCount() == 5 && own.getItem(2).isEmpty(),
+                "The player's furnace is untouched");
+        cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /**
+     * A furnace broken during a charge: the charge's inputs are back in the buffer, its Remaining Heat is lost; at a
+     * new furnace the item needs a second coal.
+     */
+    private static void brokenFurnace(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 1), new ItemStack(Items.COAL, 2)));
+        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 1, Optional.of(setup.clerk()), Optional.empty());
+        Settler settler = worker(helper, setup);
+        long time = catchUpWork(level, settler, 0L, 150.0);
+        helper.assertTrue(count(level, setup.clerk(), Items.COAL) == 1 && count(level, setup.clerk(), Items.RAW_IRON) == 0,
+                "Charge running: one coal and the raw iron fetched");
+
+        helper.setBlock(FURNACE, Blocks.AIR);
+        helper.assertTrue(settler.getWork().buffer(setup.block()).counts().getOrDefault(Items.RAW_IRON, 0) == 1,
+                "The charge's input is in the buffer: " + settler.getWork().buffer(setup.block()).stacks());
+        helper.setBlock(new BlockPos(3, 1, 3), Blocks.FURNACE);
+        catchUpWork(level, settler, time, 1000.0);
+        helper.assertTrue(count(level, setup.clerk(), Items.IRON_INGOT) == 1, "The raw iron was still in the buffer and smelted at the new furnace: "
+                + settler.getWork().status(setup.block()) + ", buffer " + settler.getWork().buffer(setup.block()).stacks());
+        helper.assertTrue(count(level, setup.clerk(), Items.COAL) == 0, "The heat was lost with the furnace: a second coal");
+        cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /**
+     * Speed per furnace: level 1 needs 200 ÷ (2^(2.75 × (1 − 20) / 80) × 1.0) ≈ 314 ticks per iron ingot, so 2 are done
+     * after 700 ticks; EXP 1 per item × JobBlock level 1.
+     */
+    private static void speedAndExp(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 10), new ItemStack(Items.COAL, 2)));
+        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 10, Optional.of(setup.clerk()), Optional.empty());
+        Settler settler = worker(helper, setup);
+        catchUpWork(level, settler, 0L, 700.0);
+
+        int made = settler.getWork().buffer(setup.block()).counts().getOrDefault(Items.IRON_INGOT, 0);
+        helper.assertTrue(made == 2, "2 ingots after 700 ticks at level 1: " + made);
+        int exp = settler.getSkills().get(smelter()).exp();
+        helper.assertTrue(exp == 2, "EXP 1 per item: " + exp);
+        cleanUp(setup, settler);
+        helper.succeed();
+    }
+
     // ---------------------------------------------------------------- setup
 
     record Setup(BlockPos clerk, BlockPos block, SettlementData data, Settlement settlement) {
@@ -157,6 +311,22 @@ public final class SmelterGameTests {
                 == JobAssignments.AssignResult.OK, "Smelter assigned");
         settler.addJob(new SettlerJob(smelter(), setup.block()));
         return settler;
+    }
+
+    /**
+     * Catches up the previous workday from a time of day for a span whose work time (the span × the average work share
+     * × the catch-up multiplier) is the given ticks.
+     *
+     * @param from the time of day to start at, from 08:00 (every settler is up then)
+     * @return the time of day the span ended at, for a following catch-up
+     */
+    static long catchUpWork(ServerLevel level, Settler settler, long from, double workTicks) {
+        long dayStart = (Math.floorDiv(level.getOverworldClockTime(), 24000L) - 1) * 24000L;
+        long start = Math.max(from, 2000L);
+        long span = (long) Math.ceil(workTicks / (Fatigue.expectedWorkShare() * CivModConfig.CATCH_UP_MULTIPLIER.get()));
+        settler.getWork().setCatchUp(dayStart + start, dayStart + start + span);
+        CatchUp.runNow(level, List.of(settler));
+        return start + span;
     }
 
     /** How many of an item the Clerk's storage holds. */
