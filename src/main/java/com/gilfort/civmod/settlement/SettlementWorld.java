@@ -158,7 +158,8 @@ public final class SettlementWorld {
     /**
      * Falls a settler at a JobBlock back to the block's Base Job (its Job is no longer unlocked there, e.g. a replaced
      * Station Type). A settler holds each Job once: with the Base Job held at another JobBlock it leaves this one
-     * instead. An unloaded settler catches up on its next membership check.
+     * instead. On a Mission Board its mission assignments are removed, like on a job switch. An unloaded settler catches
+     * up on its next membership check.
      *
      * @param level    the dimension
      * @param jobBlock the JobBlock position
@@ -195,6 +196,7 @@ public final class SettlementWorld {
         }
         if (block.assignee(id).filter(assignee -> assignee.job() != base).isPresent()) {
             block.setAssigneeJob(id, base);
+            MissionOffers.removeAssignee(data, jobBlock, id);
             data.changed();
         }
         settler.ifPresent(loaded -> loaded.replaceJob(jobBlock, base));

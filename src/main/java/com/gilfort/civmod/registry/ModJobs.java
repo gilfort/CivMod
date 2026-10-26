@@ -48,6 +48,10 @@ public final class ModJobs {
     /** See vault {@code Jobs/Adventurer.md}; the Base Job of the Mission Board. */
     public static final DeferredHolder<Job, Job> ADVENTURER = JOBS.register("adventurer", () -> Job.builder(JobCategory.MISSION)
             .icon(ModItems.MISSION_BOARD).bubbleIcon(() -> Items.MAP).hungerFactor(1.0).baseExp(10).build());
+    /** See vault {@code Jobs/Bard.md}; a Mission Specialization of the Adventurer, unlocked by a note block on the Mission Board. */
+    public static final DeferredHolder<Job, Job> BARD = JOBS.register("bard", () -> Job.builder(JobCategory.MISSION)
+            .parent(ADVENTURER).icon(() -> Items.NOTE_BLOCK).bubbleIcon(() -> Items.NOTE_BLOCK).hungerFactor(1.0).baseExp(10)
+            .unlockItem(() -> Items.NOTE_BLOCK).build());
     /** See vault {@code Jobs/Clerk.md}; the store and food point of the settlement, the first Logistics Job. */
     public static final DeferredHolder<Job, Job> CLERK = JOBS.register("clerk", () -> Job.builder(JobCategory.LOGISTICS)
             .icon(ModItems.CLERK_BLOCK).bubbleIcon(() -> Items.EMERALD).hungerFactor(0.5).baseExp(1).build());

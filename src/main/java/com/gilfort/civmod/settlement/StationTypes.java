@@ -8,7 +8,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.gilfort.civmod.api.Job;
-import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.registry.ModJobs;
 
 import net.minecraft.core.BlockPos;
@@ -26,8 +25,8 @@ import net.minecraft.world.item.Items;
  * a settler already holding the Base Job at another JobBlock leaves this one instead.
  * The unlock item is not the work place: a Specialization still needs its station in the world.
  * <p>
- * Every JobBlock whose Base Job has Specializations has Station Types, except the Mission Board: it still offers its
- * Mission Jobs from level 2 ({@link Job#offeredAt}).
+ * Every JobBlock whose Base Job has Specializations has Station Types, the Mission Board included: its first slot is the
+ * Adventurer, the others unlock Mission Specializations (the Bard: note block).
  */
 public final class StationTypes {
 
@@ -82,10 +81,10 @@ public final class StationTypes {
 
     /**
      * @param blockJob the Job of a JobBlock
-     * @return whether its JobBlock has Station Types: its Base Job has Specializations and is no Mission Job
+     * @return whether its JobBlock has Station Types: its Base Job has Specializations
      */
     public static boolean hasStationTypes(Job blockJob) {
-        return blockJob.category() != JobCategory.MISSION && !specializations(blockJob).isEmpty();
+        return !specializations(blockJob).isEmpty();
     }
 
     /**
@@ -135,33 +134,24 @@ public final class StationTypes {
     }
 
     /**
-     * @param blockJob     the Job of a JobBlock
-     * @param level        its level
-     * @param stationTypes its Station Types slots ({@link SettlementBlock#stationTypes()}, empty for none)
+     * @param block a JobBlock
      * @return the Jobs of its Base Job it offers: the Base Job, then the Specializations unlocked by its slots in registry
-     *         order (the Mission Board: {@link Job#offeredAt})
+     *         order
      */
-    public static List<Job> unlocked(Job blockJob, int level, List<Item> stationTypes) {
+    public static List<Job> unlocked(SettlementBlock block) {
+        Job blockJob = block.jobType();
         if (!hasStationTypes(blockJob)) {
-            return blockJob.offeredAt(level);
+            return List.of(blockJob);
         }
         List<Job> unlocked = new ArrayList<>();
         unlocked.add(blockJob);
-        List<Item> filled = stationTypes.stream().skip(1).filter(item -> item != Items.AIR).toList();
+        List<Item> filled = block.stationTypes().stream().skip(1).filter(item -> item != Items.AIR).toList();
         for (Job job : specializations(blockJob)) {
             if (job.unlockItem().filter(filled::contains).isPresent()) {
                 unlocked.add(job);
             }
         }
         return List.copyOf(unlocked);
-    }
-
-    /**
-     * @param block a JobBlock
-     * @return the Jobs of its Base Job it offers (see {@link #unlocked(Job, int, List)})
-     */
-    public static List<Job> unlocked(SettlementBlock block) {
-        return unlocked(block.jobType(), block.level(), block.stationTypes());
     }
 
     /**

@@ -34,7 +34,7 @@ public final class JobBlockTabs {
         switch (jobType.category()) {
             case RESOURCE_COLLECTION -> tabs.add(new FoundTab());
             case PRODUCING -> tabs.addAll(producing(jobType));
-            case MISSION -> tabs.add(new MissionsTab());
+            case MISSION -> tabs.addAll(List.of(new MissionsTab(), new StationTypesTab(StationTypes.hasStationTypes(jobType))));
             case GUARD, LOGISTICS, SERVICE -> {
                 // Storage and Info only.
             }

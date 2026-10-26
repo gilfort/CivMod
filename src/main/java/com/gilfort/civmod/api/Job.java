@@ -1,7 +1,5 @@
 package com.gilfort.civmod.api;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -12,7 +10,6 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.job.JobBalancing;
 import com.gilfort.civmod.registry.ModJobs;
-import com.gilfort.civmod.settlement.SettlementRules;
 import com.google.common.base.Suppliers;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
@@ -34,8 +31,8 @@ import net.minecraft.world.level.block.Block;
  * A kind of work a settler can hold (vault {@code Systems/Jobs.md}), registered in the {@code civmod:job} registry
  * ({@link CivModApi#JOB_REGISTRY}) and identified by its namespaced id. A Job declares its {@link JobCategory}, the
  * {@link CategoryProfile} that fills in the category's work loop, an optional parent Base Job (which makes it a
- * Specialization, unlocked at the parent's JobBlock by its unlock item in a Station Types slot; a Mission Job is offered by
- * the Mission Board from level 2), its unlock item, its icon and default balancing values.
+ * Specialization, unlocked at the parent's JobBlock by its unlock item in a Station Types slot; a Mission Job at the
+ * Mission Board), its unlock item, its icon and default balancing values.
  * <p>
  * Datapacks may override the balancing values per job id {@code <namespace>:<job>}: hunger factor, base EXP, job factor
  * and unlock item in {@code data/<namespace>/civmod_jobs/<job>.json} ({@code hunger_factor}, {@code base_exp},
@@ -52,7 +49,7 @@ import net.minecraft.world.level.block.Block;
  * <pre>{@code
  * public static final DeferredRegister<Job> JOBS = CivModApi.jobs("examplemod");
  * public static final DeferredHolder<Job, Job> SCOUT = JOBS.register("scout", () -> Job.builder(JobCategory.MISSION)
- *         .parent(CivModJobs.ADVENTURER).icon(() -> Items.SPYGLASS).baseExp(8).build());
+ *         .parent(CivModJobs.ADVENTURER).icon(() -> Items.SPYGLASS).unlockItem(() -> Items.SPYGLASS).baseExp(8).build());
  * }</pre>
  */
 @ApiStatus.Experimental
@@ -136,23 +133,6 @@ public final class Job {
      */
     public Optional<Job> parent() {
         return parent == null ? Optional.empty() : Optional.of(parent.get());
-    }
-
-    /**
-     * The Jobs this Base Job's JobBlock offers at a level without any Station Type (vault {@code Systems/JobBlock.md}):
-     * the Base Job itself; a Mission Job (the Mission Board) also its Specializations from level 2, in registry order.
-     * Other Specializations are unlocked per JobBlock by their {@link #unlockItem()} in a Station Types slot.
-     *
-     * @param level the JobBlock level
-     * @return the offered Jobs, this Job first
-     */
-    public List<Job> offeredAt(int level) {
-        List<Job> offered = new ArrayList<>();
-        offered.add(this);
-        if (category == JobCategory.MISSION && level > SettlementRules.MIN_LEVEL) {
-            ModJobs.REGISTRY.stream().filter(job -> job.parent().filter(this::equals).isPresent()).forEach(offered::add);
-        }
-        return List.copyOf(offered);
     }
 
     /**

@@ -320,8 +320,8 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      * @return a copy with another level
      */
     public JobBlockInfo withLevel(int newLevel) {
-        // The level's own offers (Mission Jobs) plus the Jobs offered so far (unlocked by Station Types).
-        List<Job> offered = Stream.concat(JobPlaces.offered(jobType, newLevel).stream(), offeredJobs().stream()).distinct().toList();
+        // The Base Jobs plus the Jobs offered so far (unlocked by Station Types); the level opens no Job by itself.
+        List<Job> offered = Stream.concat(JobPlaces.offered(jobType).stream(), offeredJobs().stream()).distinct().toList();
         return new JobBlockInfo(jobType, newLevel, settlementName, inSettlement, connected, distance, required, assignees,
                 JobPlaces.lines(jobType, newLevel, offered, assignees, autoJobs()), collectLeaves, byDeliveryman, costs, missionTab, biome);
     }
@@ -409,7 +409,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         return new JobBlockInfo(jobType, jobLevel,
                 settlement.map(Settlement::displayName).orElse(Component.empty()),
                 settlement.isPresent(), status.connected(), status.distance(), status.required(),
-                List.copyOf(assignees), JobPlaces.lines(jobType, jobLevel, block.map(JobPlaces::offered).orElseGet(() -> JobPlaces.offered(jobType, jobLevel)),
+                List.copyOf(assignees), JobPlaces.lines(jobType, jobLevel, block.map(JobPlaces::offered).orElseGet(() -> JobPlaces.offered(jobType)),
                         assignees, block.map(SettlementBlock::autoAssign).orElse(Set.of())),
                 block.map(SettlementBlock::collectLeaves).orElse(false), block.map(SettlementBlock::byDeliveryman).orElse(false),
                 costsOf(jobType),

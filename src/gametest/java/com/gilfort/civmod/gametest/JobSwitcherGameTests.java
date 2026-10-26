@@ -238,6 +238,7 @@ public final class JobSwitcherGameTests {
         Job adventurer = ModJobs.ADVENTURER.get();
         SettlementManager.place(boardData, board, adventurer, 2, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
         Settlement boardSettlement = boardData.settlementAt(board).orElseThrow();
+        TestAssignments.setStationType(boardData, board, 1, Items.BELL);
         UUID scout = UUID.randomUUID();
         helper.assertTrue(TestAssignments.assign(boardData, board, scout, "Sam", boardSettlement.id(), List.of(), adventurer) == AssignResult.OK,
                 "Adventurer on the Mission Board");

@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.registry.ModJobs;
@@ -16,7 +17,7 @@ import net.minecraft.network.codec.StreamCodec;
 /**
  * Which Jobs a JobBlock offers and how many places each has (vault {@code Systems/JobBlock.md}). A JobBlock offers
  * its own Base Job and, on a Clerk JobBlock, the Deliveryman; its Base Job brings the Specializations its Station Types
- * unlock ({@link StationTypes}), the Mission Board its Mission Jobs from level 2.
+ * unlock ({@link StationTypes}), on the Mission Board its Mission Specializations.
  * A Base Job and its Specializations share the Base Job's places (the Mission Board's settlers, whatever Mission Job
  * they have). A downgrade keeps every assignee; a Job with more assignees than places stays full until enough leave.
  */
@@ -72,11 +73,10 @@ public final class JobPlaces {
 
     /**
      * @param blockJob the Job the JobBlock was made for
-     * @param level    the JobBlock level
-     * @return the Jobs such a JobBlock offers at that level without any Station Type, in picker order
+     * @return the Jobs such a JobBlock offers without any Station Type, in picker order: its Base Jobs
      */
-    public static List<Job> offered(Job blockJob, int level) {
-        return baseJobs(blockJob).stream().flatMap(base -> base.offeredAt(level).stream()).toList();
+    public static List<Job> offered(Job blockJob) {
+        return baseJobs(blockJob);
     }
 
     /**
@@ -86,7 +86,7 @@ public final class JobPlaces {
      */
     public static List<Job> offered(SettlementBlock block) {
         return baseJobs(block.jobType()).stream()
-                .flatMap(base -> (base == block.jobType() ? StationTypes.unlocked(block) : base.offeredAt(block.level())).stream()).toList();
+                .flatMap(base -> base == block.jobType() ? StationTypes.unlocked(block).stream() : Stream.of(base)).toList();
     }
 
     /**
@@ -138,7 +138,7 @@ public final class JobPlaces {
      *         assignment off
      */
     public static List<Line> lines(Job blockJob, int level, List<SettlementBlock.Assignee> assignees) {
-        return lines(blockJob, level, offered(blockJob, level), assignees, Set.of());
+        return lines(blockJob, level, offered(blockJob), assignees, Set.of());
     }
 
     /**

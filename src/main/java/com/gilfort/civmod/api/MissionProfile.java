@@ -4,7 +4,8 @@ import org.jetbrains.annotations.ApiStatus;
 
 /**
  * The specifics of a Mission Job (vault {@code Systems/Mission Jobs.md}). Mission Jobs have no JobBlock of their own:
- * they are Specializations of the Adventurer ({@link CivModJobs#ADVENTURER}), offered by the Mission Board from level 2.
+ * they are Specializations of the Adventurer ({@link CivModJobs#ADVENTURER}), unlocked on the Mission Board by
+ * their unlock item in a Station Types slot.
  * Which missions a Mission Job may take is not part of the profile: a mission names its Jobs in the datapack
  * ({@code data/<namespace>/civmod/mission/<name>.json}, field {@code jobs}).
  * <p>

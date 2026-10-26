@@ -47,7 +47,7 @@ public final class MissionOffers {
         SettlementBlock entry = block.get();
         if (entry.missionOffer().day() != day) {
             List<MissionOffer.Entry> entries = MissionRules.refill(entry.missionOffer().entries(), pool,
-                    entry.jobType().offeredAt(entry.level()), MissionRules.offerSize(entry.level()), random);
+                    StationTypes.unlocked(entry), MissionRules.offerSize(entry.level()), random);
             entry.setMissionOffer(new MissionOffer(entries, day));
             data.setDirty();
         }

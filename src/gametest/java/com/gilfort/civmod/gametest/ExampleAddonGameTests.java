@@ -101,7 +101,7 @@ public final class ExampleAddonGameTests {
 
     /**
      * The Scout is a Mission Specialization of the Adventurer with its own profile; it takes its datapack mission from a
-     * level-2 board, leaves, returns with loot and delivers it to the board.
+     * board with a spyglass in its Station Types, leaves, returns with loot and delivers it to the board.
      */
     private static void scoutMission(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -109,8 +109,7 @@ public final class ExampleAddonGameTests {
         helper.assertTrue(scout != null && scout.category() == JobCategory.MISSION && scout.parent().orElseThrow() == ModJobs.ADVENTURER.get(),
                 "The Scout is a Mission Specialization of the Adventurer: " + scout);
         helper.assertTrue(scout.profile(MissionProfile.class).filter(profile -> profile != MissionProfile.NEUTRAL).isPresent(), "Own profile");
-        helper.assertTrue(ModJobs.ADVENTURER.get().offeredAt(2).contains(scout) && !ModJobs.ADVENTURER.get().offeredAt(1).contains(scout),
-                "Offered by the Mission Board from level 2");
+        helper.assertTrue(scout.unlockItem().equals(Optional.of(Items.SPYGLASS)), "Unlocked on the Mission Board by a spyglass");
         helper.assertTrue(scout.displayName().getString().equals("Scout"), "Lang key: " + scout.displayName().getString());
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         Settler settler = MissionRunGameTests.missionSettler(helper, scout, "Scout");
@@ -288,7 +287,6 @@ public final class ExampleAddonGameTests {
         Job stonecutter = ModJobs.REGISTRY.getValue(STONECUTTER);
         helper.assertTrue(stonecutter != null && stonecutter.category() == JobCategory.PRODUCING
                 && stonecutter.parent().orElseThrow() == ModJobs.CRAFTSPERSON.get(), "A Producing Specialization of the Craftsperson: " + stonecutter);
-        helper.assertFalse(ModJobs.CRAFTSPERSON.get().offeredAt(2).contains(stonecutter), "Not offered by level alone");
         helper.assertTrue(stonecutter.unlockItem().equals(Optional.of(Items.STONECUTTER)) && stonecutter.jobFactor() == 1.2,
                 "Unlocked by a stonecutter, job factor 1.2: " + stonecutter.jobFactor());
         helper.assertTrue(stonecutter.profile(ProducingProfile.class).orElseThrow().recipeTypes().equals(List.of(RecipeType.STONECUTTING)),

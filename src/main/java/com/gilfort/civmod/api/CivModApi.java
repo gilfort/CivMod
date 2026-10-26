@@ -52,7 +52,7 @@ public final class CivModApi {
     }
 
     /**
-     * Creates a JobBlock (vault {@code Systems/JobBlock.md}): it offers the Job (and its Specializations from level 2)
+     * Creates a JobBlock (vault {@code Systems/JobBlock.md}): it offers the Job (and the Specializations its Station Types unlock)
      * to settlers, registers itself in a settlement when placed, opens the JobBlock window with the tabs of the Job's
      * category, keeps a level from 1 to 5 and a 27-slot inventory that hoppers and pipes reach. JobBlocks cannot be
      * pushed by pistons (the factory sets it).
