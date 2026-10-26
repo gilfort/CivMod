@@ -21,7 +21,10 @@ run_once() {
     local log
     log=$(cd "$1" && ./gradlew runGameTestServer --console=plain 2>&1)
     if ! grep -qE "All [0-9]+ required tests passed" <<<"$log"; then
-        echo "GameTests failed in $1, see ./gradlew runGameTestServer there" >&2
+        # The base worktree is removed on exit: keep its log in this checkout.
+        mkdir -p "$root/build"
+        printf '%s\n' "$log" > "$root/build/bench-failed.log"
+        echo "GameTests failed in $1, log: build/bench-failed.log" >&2
         return 1
     fi
     local civ tick
