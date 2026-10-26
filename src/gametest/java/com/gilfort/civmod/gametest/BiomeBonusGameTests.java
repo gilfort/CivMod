@@ -61,6 +61,11 @@ public final class BiomeBonusGameTests {
 
     private static final double EPSILON = 1.0E-9;
     private static final int SAMPLES = 20000;
+    /**
+     * A relative x one biome cell before the test area: the {@link #cellStart} boundary of 4 puts the JobBlock at x 1,
+     * which reads the cell at x -4..-1 when the area starts on a cell boundary.
+     */
+    static final int BEFORE_AREA = -4;
 
     private BiomeBonusGameTests() {
     }
@@ -84,8 +89,9 @@ public final class BiomeBonusGameTests {
     }
 
     /**
-     * Sets the biome of a box (relative corners). {@code Level#getBiome} blends neighbouring 4×4×4 cells, so a position
-     * only reads the biome reliably about 4 blocks inside the box.
+     * Sets the biome of a box (relative corners). {@code Level#getBiome} reads the 4×4×4 cell a position lies in or the
+     * neighbour cell on its nearer side, so a position 1 block inside the box can read the cell before it: the world's
+     * own biome. A box whose edge is closer than 2 blocks to a checked position starts at {@link #BEFORE_AREA}.
      */
     static void fillBiome(GameTestHelper helper, BlockPos from, BlockPos to, ResourceKey<Biome> key) {
         var result = FillBiomeCommand.fill(helper.getLevel(), helper.absolutePos(from), helper.absolutePos(to), biome(helper, key));
@@ -95,7 +101,7 @@ public final class BiomeBonusGameTests {
 
     /**
      * Logs a biome fill with its absolute box, so a test that finds a foreign biome in its area can be matched with the
-     * fill that put it there (CI runs the biome tests side by side).
+     * fill that put it there, or shown to read an unfilled cell (CI runs the biome tests side by side).
      */
     static void logFill(GameTestHelper helper, BlockPos from, BlockPos to, ResourceKey<Biome> key) {
         CivMod.LOGGER.info("[biome fill] test at {}: {} .. {} -> {}", helper.absolutePos(BlockPos.ZERO), helper.absolutePos(from),
@@ -215,7 +221,7 @@ public final class BiomeBonusGameTests {
         }
         // Plains up to the cell boundary after the JobBlock, mushroom fields beyond: the work point reads mushroom fields.
         int boundary = cellStart(helper, 4);
-        fillBiome(helper, new BlockPos(0, -4, 0), new BlockPos(boundary - 1, 8, 24), Biomes.PLAINS);
+        fillBiome(helper, new BlockPos(BEFORE_AREA, -4, 0), new BlockPos(boundary - 1, 8, 24), Biomes.PLAINS);
         fillBiome(helper, new BlockPos(boundary, -4, 0), new BlockPos(24, 8, 24), Biomes.MUSHROOM_FIELDS);
         // 3 before the boundary the JobBlock reads plains, 5 after it the work point mushroom fields (8 apart: inside the border).
         BlockPos jobBlockRelative = new BlockPos(boundary - 3, 1, 3);
@@ -298,7 +304,7 @@ public final class BiomeBonusGameTests {
             }
         }
         int boundary = cellStart(helper, 4);
-        fillBiome(helper, new BlockPos(0, -4, 0), new BlockPos(boundary - 1, 8, 24), Biomes.PLAINS);
+        fillBiome(helper, new BlockPos(BEFORE_AREA, -4, 0), new BlockPos(boundary - 1, 8, 24), Biomes.PLAINS);
         fillBiome(helper, new BlockPos(boundary, -4, 0), new BlockPos(24, 8, 24), Biomes.MUSHROOM_FIELDS);
         BlockPos jobBlockRelative = new BlockPos(boundary - 3, 1, 3);
         BlockPos mushroomRelative = new BlockPos(boundary + 5, 1, 3);
@@ -398,7 +404,8 @@ public final class BiomeBonusGameTests {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(28, 0, 16));
         int boundary = cellStart(helper, 4);
-        fillBiome(helper, new BlockPos(0, -4, 0), new BlockPos(boundary - 1, 8, 16), Biomes.PLAINS);
+        // The JobBlock stands at x 1.
+        fillBiome(helper, new BlockPos(BEFORE_AREA, -4, 0), new BlockPos(boundary - 1, 8, 16), Biomes.PLAINS);
         fillBiome(helper, new BlockPos(boundary, -4, 0), new BlockPos(28, 8, 16), Biomes.MUSHROOM_FIELDS);
         BlockPos clerk = StockRuleGameTests.workingClerk(helper);
         // A second JobBlock widens the settlement border to the far station.
