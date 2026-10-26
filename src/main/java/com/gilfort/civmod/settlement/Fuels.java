@@ -45,6 +45,15 @@ public final class Fuels {
     }
 
     /**
+     * @param job   the Job a settler works at the JobBlock
+     * @param block the JobBlock
+     * @return the block's fuel list in priority order if the Job burns fuel, else empty
+     */
+    public static Optional<List<Item>> forJob(Job job, SettlementBlock block) {
+        return burnsFuel(job) ? Optional.of(of(block)) : Optional.empty();
+    }
+
+    /**
      * @param level the level
      * @param pos   a JobBlock
      * @return its fuel list in priority order, empty if there is no JobBlock burning fuel

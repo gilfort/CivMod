@@ -17,6 +17,7 @@ import com.gilfort.civmod.api.BlockingReason;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
+import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobAssignments;
@@ -70,6 +71,24 @@ final class Workplace {
     private record FactorOfDay(long day, BlockPos place, Job job, double factor) {
     }
 
+    /**
+     * What the job decided or found for the day, not saved: replaced as a whole by {@link #clearSaved}, so no field is
+     * forgotten.
+     */
+    private static final class Transient {
+        /** Whether the last choice of the work place of the day found only places occupied by others. */
+        private boolean noFreeWorkPlace;
+        /** What the last request a Producing Job failed to start lacked of fuel, empty if it lacked inputs. */
+        private Optional<Request.Missing> missingFuel = Optional.empty();
+        /** The further stations of the day a Producing Job works at in parallel to the work place of the day, each occupied. */
+        private final List<BlockPos> parallelStations = new ArrayList<>();
+        private long parallelDay = -1L;
+        /** While short of parallel stations, no new search before this game time. */
+        private long parallelSearchAt;
+        /** The base job factor with the station extras at the work place of the day (read again after loading). */
+        private @Nullable FactorOfDay factorOfDay;
+    }
+
     private final BlockPos jobBlock;
     private JobBuffer buffer = new JobBuffer();
     private JobStatus status = JobStatus.IDLE;
@@ -80,14 +99,11 @@ final class Workplace {
     private long blockedUntil;
     private @Nullable BlockPos workPlaceOfDay;
     private long workPlaceDay = -1L;
-    /** Whether the last choice of the work place of the day found only places occupied by others (not saved). */
-    private boolean noFreeWorkPlace;
     /** The biome of the day's biome position, read once per day and place (saved with the work place of the day). */
     private @Nullable BiomeOfDay biomeOfDay;
     /** The biome bonuses resolved at {@link #biomeOfDay} (not saved: resolved again from the loaded files). */
     private @Nullable BonusOfDay bonusOfDay;
-    /** The base job factor with the station extras at the work place of the day (not saved: read again after loading). */
-    private @Nullable FactorOfDay factorOfDay;
+    private Transient dayState = new Transient();
     private @Nullable ScanResult scan;
     private @Nullable ScanKey scanKey;
     /** The dropped item of each resource type per tool kind, for the Max checks of every roll; cleared with the scan. */
@@ -105,16 +121,6 @@ final class Workplace {
     private final Map<UUID, Long> skips = new HashMap<>();
     /** A Producing Job takes its buffer to the drop-off before the next round (not saved). */
     private boolean dropOffPending;
-    /** Whether the last request a Producing Job failed to start lacked fuel, not inputs (not saved). */
-    private boolean missingFuel;
-    /**
-     * The further stations of the day a Producing Job works at in parallel to the work place of the day, each occupied
-     * (not saved: chosen again after loading).
-     */
-    private final List<BlockPos> parallelStations = new ArrayList<>();
-    private long parallelDay = -1L;
-    /** While short of parallel stations, no new search before this game time (not saved). */
-    private long parallelSearchAt;
 
     /**
      * @param jobBlock the JobBlock position
@@ -177,17 +183,18 @@ final class Workplace {
     }
 
     /**
-     * @return whether the last request the Producing Job failed to start lacked fuel ("Missing: Fuel")
+     * @return what the last request the Producing Job failed to start lacked of fuel ("Missing: 1× Coal",
+     *         {@link Request.Missing#ANY_FUEL}), empty if it lacked inputs
      */
-    boolean missingFuel() {
-        return missingFuel;
+    Optional<Request.Missing> missingFuel() {
+        return dayState.missingFuel;
     }
 
     /**
-     * @param missing whether the last request the Producing Job failed to start lacked fuel
+     * @param missing what the last request the Producing Job failed to start lacked of fuel, empty if not fuel
      */
-    void setMissingFuel(boolean missing) {
-        missingFuel = missing;
+    void setMissingFuel(Optional<Request.Missing> missing) {
+        dayState.missingFuel = missing;
     }
 
     /**
@@ -198,12 +205,12 @@ final class Workplace {
      * @return the stations (mutable; the caller keeps their occupation)
      */
     List<BlockPos> parallelStations(long day) {
-        if (parallelDay != day) {
-            parallelStations.clear();
-            parallelDay = day;
-            parallelSearchAt = 0L;
+        if (dayState.parallelDay != day) {
+            dayState.parallelStations.clear();
+            dayState.parallelDay = day;
+            dayState.parallelSearchAt = 0L;
         }
-        return parallelStations;
+        return dayState.parallelStations;
     }
 
     /**
@@ -211,14 +218,14 @@ final class Workplace {
      * @return whether further parallel stations may be searched now
      */
     boolean parallelSearchDue(long gameTime) {
-        return gameTime >= parallelSearchAt;
+        return gameTime >= dayState.parallelSearchAt;
     }
 
     /**
      * @param gameTime the game time from which further parallel stations may be searched again
      */
     void setParallelSearchAt(long gameTime) {
-        parallelSearchAt = gameTime;
+        dayState.parallelSearchAt = gameTime;
     }
 
     // ---------------------------------------------------------------- buffer and status
@@ -352,7 +359,7 @@ final class Workplace {
         BlockPos current = workPlaceOfDay;
         if (current != null && workPlaceDay == day && isWorkPlace.test(current) && free.test(current)) {
             occupy(settlement, settler, current, day);
-            noFreeWorkPlace = false;
+            dayState.noFreeWorkPlace = false;
             return current;
         }
         List<BlockPos> points = site.block().workPoints().stream().filter(isWorkPlace).toList();
@@ -363,7 +370,7 @@ final class Workplace {
             // The occupation moves with the work place (or ends without one).
             OccupiedPlaces.release(settlement, current, self);
         }
-        noFreeWorkPlace = chosen == null && occupiedSeen[0];
+        dayState.noFreeWorkPlace = chosen == null && occupiedSeen[0];
         if (chosen != null) {
             workPlaceOfDay = chosen;
             workPlaceDay = day;
@@ -392,7 +399,7 @@ final class Workplace {
      *         another settler ("No free work place" instead of "No work place")
      */
     boolean noFreeWorkPlace() {
-        return noFreeWorkPlace;
+        return dayState.noFreeWorkPlace;
     }
 
     /**
@@ -435,17 +442,24 @@ final class Workplace {
      * @return the base job factor (the Job's own while no work place is chosen)
      */
     double jobFactor(ServerLevel level, Job job) {
+        fixJobFactorOfDay(level, job);
+        FactorOfDay fixed = dayState.factorOfDay;
+        return workPlaceOfDay == null || fixed == null ? job.jobFactor() : fixed.factor();
+    }
+
+    /**
+     * Reads the station extras around the work place of the day now and keeps the base job factor for the rest of the
+     * day ({@link #jobFactor}); called when the work place of the day is chosen. Nothing happens without one.
+     *
+     * @param level the level
+     * @param job   the Job held at the JobBlock
+     */
+    void fixJobFactorOfDay(ServerLevel level, Job job) {
         BlockPos place = workPlaceOfDay;
-        if (place == null) {
-            return job.jobFactor();
+        FactorOfDay cached = dayState.factorOfDay;
+        if (place != null && (cached == null || cached.day() != workPlaceDay || cached.job() != job || !cached.place().equals(place))) {
+            dayState.factorOfDay = new FactorOfDay(workPlaceDay, place, job, StationExtras.jobFactor(level, job, place));
         }
-        FactorOfDay cached = factorOfDay;
-        if (cached != null && cached.day() == workPlaceDay && cached.job() == job && cached.place().equals(place)) {
-            return cached.factor();
-        }
-        double factor = StationExtras.jobFactor(level, job, place);
-        factorOfDay = new FactorOfDay(workPlaceDay, place, job, factor);
-        return factor;
     }
 
     /** The biome of a place for a day: the one read (or restored) for that day and place, else the place's biome now. */
@@ -588,16 +602,13 @@ final class Workplace {
         round = null;
         skips.clear();
         dropOffPending = false;
-        missingFuel = false;
-        parallelStations.clear();
-        parallelDay = -1L;
-        parallelSearchAt = 0L;
+        // Its occupations were released by the Settler Shell.
+        dayState = new Transient();
         buffer = new JobBuffer();
         workPlaceOfDay = null;
         workPlaceDay = -1L;
         biomeOfDay = null;
         bonusOfDay = null;
-        factorOfDay = null;
         scan = null;
         scanKey = null;
         scanning = null;
@@ -621,7 +632,7 @@ final class Workplace {
         // The day's biome stays (a reload on the same day keeps it); the bonuses are resolved again from the loaded files.
         biomeOfDay = saved.biome().map(biome -> new BiomeOfDay(saved.day(), saved.poi(), biome)).orElse(null);
         bonusOfDay = null;
-        factorOfDay = null;
+        dayState.factorOfDay = null;
     }
 
     /**

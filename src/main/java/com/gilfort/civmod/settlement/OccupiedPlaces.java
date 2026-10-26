@@ -11,7 +11,8 @@ import net.minecraft.core.BlockPos;
  * place of the day (a Resource Collection work place, a Producing station) is occupied towards every other settler for
  * the rest of that day. The choice of the work place of the day skips places occupied by others.
  * <p>
- * An occupation ends when its day is over (it no longer counts and is replaced on the next choice), when the
+ * An occupation ends when its day is over (it no longer counts and is replaced on the next choice; occupations of days
+ * before yesterday are dropped with every new occupation), when the
  * settler's work place moves (a broken one), when it leaves the job ({@link #releaseJob}), when it dies or is removed
  * ({@link #releaseAll}) and when its JobBlock leaves the settlement. Kept in the {@link Settlement}, not saved: after a
  * reload every settler occupies its saved work place of the day again at its next decision.
@@ -59,6 +60,8 @@ public final class OccupiedPlaces {
         if (!isFreeFor(settlement, pos, settler, day)) {
             return false;
         }
+        // Occupations of days before yesterday count for nobody any more (yesterday's still serve a catch-up of it).
+        settlement.mutableOccupied().values().removeIf(occupation -> occupation.day() < day - 1);
         settlement.mutableOccupied().put(pos.immutable(), new Occupation(settler, name, jobBlock.immutable(), day));
         return true;
     }

@@ -450,6 +450,11 @@ public final class SettlerWork {
      * @param snapshot the saved work state
      */
     public void restore(BuffersSnapshot snapshot) {
+        if (settler.level() instanceof ServerLevel level) {
+            // The dropped work places of the day are free again until the next decision occupies the restored ones.
+            SettlementData data = SettlementData.get(level);
+            jobWorkplaces.keySet().forEach(jobBlock -> OccupiedPlaces.releaseJob(data, settler.getUUID(), jobBlock));
+        }
         jobWorkplaces.values().forEach(Workplace::clearSaved);
         snapshot.entries().forEach(entry -> workplace(entry.jobBlock()).restoreBuffer(entry.buffer()));
         snapshot.workPlaces().forEach(entry -> workplace(entry.jobBlock()).restoreWorkPlace(entry));
@@ -1117,7 +1122,7 @@ public final class SettlerWork {
                 yield false;
             }
             case JobStep.Skip skip -> {
-                skip.status().ifPresent(status -> setStatus(jobBlock, status));
+                skip.status().ifPresent(status -> setStatus(jobBlock, status, skip.subject()));
                 yield false;
             }
             case JobStep.Pause pause -> {
@@ -1174,6 +1179,17 @@ public final class SettlerWork {
      */
     void setStatus(BlockPos jobBlock, JobStatus status, net.minecraft.network.chat.Component subject) {
         workplace(jobBlock).setStatus(status, subject);
+    }
+
+    /**
+     * Sets a job's status, naming what it is about if there is a subject.
+     *
+     * @param jobBlock the job's JobBlock
+     * @param status   the new status
+     * @param subject  what the status is about, if it names something
+     */
+    void setStatus(BlockPos jobBlock, JobStatus status, Optional<net.minecraft.network.chat.Component> subject) {
+        subject.ifPresentOrElse(found -> setStatus(jobBlock, status, found), () -> setStatus(jobBlock, status));
     }
 
     /**

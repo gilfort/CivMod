@@ -78,6 +78,10 @@ public final class SmelterGameTests {
             register(helper, "smelter_fills_request", SmelterGameTests::fillsRequest);
             register(helper, "smelter_remaining_heat", SmelterGameTests::remainingHeat);
             register(helper, "smelter_missing_fuel", SmelterGameTests::missingFuel);
+            register(helper, "smelter_missing_single_fuel", SmelterGameTests::missingSingleFuel);
+            register(helper, "smelter_missing_fuel_empty_list", SmelterGameTests::missingFuelEmptyList);
+            register(helper, "smelter_restore_releases_occupation", SmelterGameTests::restoreReleasesOccupation);
+            register(helper, "smelter_occupied_places_pruned", SmelterGameTests::occupiedPlacesPruned);
             register(helper, "smelter_fuel_priority", SmelterGameTests::fuelPriority);
             register(helper, "smelter_parallel_furnaces", SmelterGameTests::parallelFurnaces);
             register(helper, "smelter_player_furnace", SmelterGameTests::playerFurnace);
@@ -140,20 +144,85 @@ public final class SmelterGameTests {
         helper.succeed();
     }
 
-    /** No listed fuel in stock: nothing is smelted, the job says "Missing: Fuel", the request names the first fuel. */
+    /**
+     * No listed fuel in stock with several fuels listed (coal, charcoal): nothing is smelted, job status and request
+     * say "Missing: Fuel" (any of them will do).
+     */
     private static void missingFuel(GameTestHelper helper) {
+        assertMissingFuel(helper, setup -> { }, "Missing: Fuel", List.of(Request.Missing.ANY_FUEL));
+    }
+
+    /** Only coal listed and none in stock: job status and request name it ("Missing: 1× Coal"). */
+    private static void missingSingleFuel(GameTestHelper helper) {
+        assertMissingFuel(helper, setup -> helper.assertTrue(Fuels.clear(helper.getLevel(), setup.block(), 1), "Charcoal removed"),
+                "Missing: 1× Coal", List.of(new Request.Missing(Items.COAL, 1)));
+    }
+
+    /** An empty fuel list: nothing can burn, job status and request say "Missing: Fuel" (the player lists a fuel). */
+    private static void missingFuelEmptyList(GameTestHelper helper) {
+        assertMissingFuel(helper, setup -> {
+            helper.assertTrue(Fuels.clear(helper.getLevel(), setup.block(), 1), "Charcoal removed");
+            helper.assertTrue(Fuels.clear(helper.getLevel(), setup.block(), 0), "Coal removed");
+            helper.assertTrue(Fuels.of(helper.getLevel(), setup.block()).isEmpty(), "Empty list: " + Fuels.of(helper.getLevel(), setup.block()));
+        }, "Missing: Fuel", List.of(Request.Missing.ANY_FUEL));
+    }
+
+    private static void assertMissingFuel(GameTestHelper helper, Consumer<Setup> fuelList, String status, List<Request.Missing> requestLine) {
         ServerLevel level = helper.getLevel();
         Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 4), new ItemStack(Items.OAK_LOG, 4)));
+        fuelList.accept(setup);
         Request request = Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 2, Optional.of(setup.clerk()), Optional.empty());
         Settler settler = worker(helper, setup);
         CraftspersonGameTests.catchUp(level, settler, 3000L);
 
         helper.assertTrue(count(level, setup.clerk(), Items.IRON_INGOT) == 0 && count(level, setup.clerk(), Items.RAW_IRON) == 4,
                 "Nothing smelted without fuel (oak logs are not listed)");
-        helper.assertTrue(settler.getWork().status(setup.block()) == JobStatus.MISSING_FUEL, "Missing: Fuel " + settler.getWork().status(setup.block()));
-        List<Item> missing = Requests.get(setup.settlement(), request.id()).orElseThrow().missing().stream().map(Request.Missing::item).toList();
-        helper.assertTrue(missing.equals(List.of(Items.COAL)), "The request names the first listed fuel: " + missing);
+        String text = settler.getWork().statusText(setup.block()).getString();
+        helper.assertTrue(settler.getWork().status(setup.block()) == JobStatus.MISSING_FUEL && text.equals(status), "Job status '" + status + "': " + text);
+        List<Request.Missing> missing = Requests.get(setup.settlement(), request.id()).orElseThrow().missing();
+        helper.assertTrue(missing.equals(requestLine), "Request line " + requestLine + ": " + missing);
         cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /**
+     * Restoring the saved work state (e.g. a reload of the settler) drops the work place of the day until the next
+     * decision: its furnace is no longer occupied by the settler meanwhile.
+     */
+    private static void restoreReleasesOccupation(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 1), new ItemStack(Items.COAL, 1)));
+        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 1, Optional.of(setup.clerk()), Optional.empty());
+        Settler settler = worker(helper, setup);
+        catchUpWork(level, settler, 0L, 150.0);
+        long day = DayClock.day(level) - 1;
+        BlockPos furnace = helper.absolutePos(FURNACE);
+        helper.assertTrue(OccupiedPlaces.occupant(setup.data(), furnace, day).isPresent(), "The furnace is occupied while smelting");
+
+        settler.getWork().restore(settler.getWork().snapshot());
+        helper.assertTrue(OccupiedPlaces.occupant(setup.data(), furnace, day).isEmpty(),
+                "Restored: the occupation is released " + OccupiedPlaces.occupant(setup.data(), furnace, day));
+        cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /** Occupations of days before yesterday are dropped with the next occupation: the map does not grow day by day. */
+    private static void occupiedPlacesPruned(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = setup(helper, List.of());
+        long day = DayClock.day(level);
+        BlockPos old = helper.absolutePos(new BlockPos(3, 1, 7));
+        BlockPos yesterday = helper.absolutePos(new BlockPos(3, 1, 3));
+        java.util.UUID settler = java.util.UUID.randomUUID();
+        helper.assertTrue(OccupiedPlaces.occupy(setup.settlement(), old, settler, "Old", setup.block(), day - 5), "Occupied 5 days ago");
+        helper.assertTrue(OccupiedPlaces.occupy(setup.settlement(), yesterday, settler, "Old", setup.block(), day - 1), "Occupied yesterday");
+        helper.assertTrue(OccupiedPlaces.occupy(setup.settlement(), helper.absolutePos(FURNACE), java.util.UUID.randomUUID(), "New", setup.block(), day),
+                "Occupied today");
+
+        helper.assertTrue(OccupiedPlaces.occupant(setup.data(), old, day - 5).isEmpty(), "The occupation of 5 days ago is gone");
+        helper.assertTrue(OccupiedPlaces.occupant(setup.data(), yesterday, day - 1).isPresent(), "Yesterday's stays (catch-up of the previous day)");
+        OccupiedPlaces.releaseAll(setup.data(), settler);
+        TestAssignments.unassign(setup.data(), setup.clerk());
         helper.succeed();
     }
 
