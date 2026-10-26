@@ -718,6 +718,14 @@ public final class SettlerWork {
             // Died on the mission.
             return;
         }
+        if (activity != Activity.JOB) {
+            // Back from a Villager mission (its return ended the work day): leading the Villagers to the board goes
+            // first; from then on the job step holds the decision.
+            Optional<SettlerJob> leading = missions.leadingJob(level);
+            if (leading.isPresent() && apply(level, leading.get(), missions.lead(level))) {
+                return;
+            }
+        }
         if (activity == Activity.SLEEP && !settler.isSleeping()) {
             // Woken by something else than the Schedule (vanilla wakes sleepers on its own): up as after the night,
             // so the Schedule can send it to bed again and nothing holds it in place.

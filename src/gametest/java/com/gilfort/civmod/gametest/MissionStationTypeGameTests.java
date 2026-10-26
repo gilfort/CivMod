@@ -3,6 +3,7 @@ package com.gilfort.civmod.gametest;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -115,8 +116,8 @@ public final class MissionStationTypeGameTests {
 
     /**
      * Without a note block a level-2 board offers only the Adventurer; a note block unlocks the Bard: the job picker
-     * offers it and the job switcher switches between Adventurer and Bard. No sample mission allows the Bard yet, so it
-     * finds no fitting mission.
+     * offers it and the job switcher switches between Adventurer and Bard. The Bard takes the sample Villager
+     * missions.
      */
     private static void noteBlockUnlocksBard(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -145,8 +146,9 @@ public final class MissionStationTypeGameTests {
 
         Map<Identifier, Mission> pool = Missions.all(level.registryAccess());
         List<MissionOffer.Entry> marked = pool.keySet().stream().map(id -> new MissionOffer.Entry(id, true)).toList();
-        helper.assertTrue(MissionRules.pick(marked, pool, bard, 100, first, RandomSource.create(0L)).isEmpty(),
-                "No sample mission fits the Bard yet");
+        OptionalInt pick = MissionRules.pick(marked, pool, bard, 100, first, RandomSource.create(0L));
+        helper.assertTrue(pick.isPresent() && pool.get(marked.get(pick.getAsInt()).mission()).villagers().isPresent(),
+                "The Bard takes a sample Villager mission: " + pick);
         helper.succeed();
     }
 

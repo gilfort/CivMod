@@ -1,0 +1,20 @@
+{
+  "title": {
+    "translate": "mission.civmod.village_migration_plains"
+  },
+  "description": {
+    "translate": "mission.civmod.village_migration_plains.description"
+  },
+  "icon": "minecraft:hay_block",
+  "villagers": {
+    "count": 3,
+    "type": "minecraft:plains"
+  },
+  "days": 3,
+  "recommended_level": 40,
+  "jobs": [
+    "civmod:bard"
+  ],
+  "weight": 2,
+  "max_per_offer": 1
+}

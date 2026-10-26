@@ -1,0 +1,20 @@
+{
+  "title": {
+    "translate": "mission.civmod.invite_villagers_desert"
+  },
+  "description": {
+    "translate": "mission.civmod.invite_villagers_desert.description"
+  },
+  "icon": "minecraft:sandstone",
+  "villagers": {
+    "count": 1,
+    "type": "minecraft:desert"
+  },
+  "days": 2,
+  "recommended_level": 5,
+  "jobs": [
+    "civmod:bard"
+  ],
+  "weight": 2,
+  "max_per_offer": 2
+}

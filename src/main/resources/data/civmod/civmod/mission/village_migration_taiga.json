@@ -1,0 +1,20 @@
+{
+  "title": {
+    "translate": "mission.civmod.village_migration_taiga"
+  },
+  "description": {
+    "translate": "mission.civmod.village_migration_taiga.description"
+  },
+  "icon": "minecraft:spruce_log",
+  "villagers": {
+    "count": 3,
+    "type": "minecraft:taiga"
+  },
+  "days": 3,
+  "recommended_level": 40,
+  "jobs": [
+    "civmod:bard"
+  ],
+  "weight": 2,
+  "max_per_offer": 1
+}

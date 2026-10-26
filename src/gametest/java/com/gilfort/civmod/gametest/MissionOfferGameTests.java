@@ -233,6 +233,22 @@ public final class MissionOfferGameTests {
             helper.assertTrue(mission.lootTables().stream().allMatch(table -> table.identifier().getNamespace().equals("minecraft")),
                     name + " uses vanilla loot tables");
         }
+        for (String type : List.of("plains", "desert", "savanna", "snow", "taiga", "jungle", "swamp")) {
+            Mission invite = missions.get(CivMod.id("invite_villagers_" + type));
+            Mission migration = missions.get(CivMod.id("village_migration_" + type));
+            helper.assertTrue(invite != null && migration != null, "Villager missions for " + type + " missing: " + missions.keySet());
+            boolean rare = type.equals("jungle") || type.equals("swamp");
+            for (Mission mission : List.of(invite, migration)) {
+                helper.assertTrue(mission.jobs().equals(List.of(ModJobs.BARD.get())), type + ": Bard only");
+                helper.assertTrue(mission.villagers().orElseThrow().type().is(Identifier.withDefaultNamespace(type)), type + ": biome type");
+                helper.assertTrue(rare ? mission.weight() < missions.get(CivMod.id("invite_villagers_plains")).weight()
+                        : mission.weight() == missions.get(CivMod.id("invite_villagers_plains")).weight(), type + ": weight " + mission.weight());
+            }
+            helper.assertTrue(invite.recommendedLevel() == 5 && invite.days() == 2 && invite.villagers().orElseThrow().count() == 1,
+                    "Invite Villagers: Lv 5, 2 days, 1 Villager");
+            helper.assertTrue(migration.recommendedLevel() == 40 && migration.days() == 3 && migration.villagers().orElseThrow().count() == 3,
+                    "Village Migration: Lv 40, 3 days, 3 Villagers");
+        }
         Mission dungeon = missions.get(CivMod.id("dungeon_raid"));
         helper.assertTrue(dungeon.lootTables().equals(List.of(BuiltInLootTables.SIMPLE_DUNGEON)), "Dungeon Raid loot: " + dungeon.lootTables());
         SettlementData data = new SettlementData();

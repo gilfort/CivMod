@@ -1,0 +1,20 @@
+{
+  "title": {
+    "translate": "mission.civmod.invite_villagers_taiga"
+  },
+  "description": {
+    "translate": "mission.civmod.invite_villagers_taiga.description"
+  },
+  "icon": "minecraft:spruce_log",
+  "villagers": {
+    "count": 1,
+    "type": "minecraft:taiga"
+  },
+  "days": 2,
+  "recommended_level": 5,
+  "jobs": [
+    "civmod:bard"
+  ],
+  "weight": 2,
+  "max_per_offer": 2
+}

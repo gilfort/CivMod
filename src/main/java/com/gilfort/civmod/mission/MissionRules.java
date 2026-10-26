@@ -303,6 +303,20 @@ public final class MissionRules {
     }
 
     /**
+     * The nitwit chance of each Villager a Villager mission brings: {@code clamp(base − perLevel · (skill −
+     * recommended), min, max)} with the mission's own values. The skill never changes how many Villagers come.
+     *
+     * @param villagers   the mission's Villagers
+     * @param recommended the mission's recommended level
+     * @param skill       the settler's (effective) Mission Job skill
+     * @return the chance that one Villager is a nitwit
+     */
+    public static double nitwitChance(Mission.Villagers villagers, int recommended, int skill) {
+        double chance = villagers.nitwitBase() - villagers.nitwitPerLevel() * (skill - recommended);
+        return Math.clamp(chance, villagers.nitwitMin(), villagers.nitwitMax());
+    }
+
+    /**
      * Mission EXP: {@code baseExp × board level × mission level}, times the success or failure multiplier; none on death.
      *
      * @param outcome     the outcome

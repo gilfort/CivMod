@@ -1,0 +1,20 @@
+{
+  "title": {
+    "translate": "mission.civmod.invite_villagers_snow"
+  },
+  "description": {
+    "translate": "mission.civmod.invite_villagers_snow.description"
+  },
+  "icon": "minecraft:snow_block",
+  "villagers": {
+    "count": 1,
+    "type": "minecraft:snow"
+  },
+  "days": 2,
+  "recommended_level": 5,
+  "jobs": [
+    "civmod:bard"
+  ],
+  "weight": 2,
+  "max_per_offer": 2
+}

@@ -1,0 +1,20 @@
+{
+  "title": {
+    "translate": "mission.civmod.invite_villagers_jungle"
+  },
+  "description": {
+    "translate": "mission.civmod.invite_villagers_jungle.description"
+  },
+  "icon": "minecraft:jungle_log",
+  "villagers": {
+    "count": 1,
+    "type": "minecraft:jungle"
+  },
+  "days": 2,
+  "recommended_level": 5,
+  "jobs": [
+    "civmod:bard"
+  ],
+  "weight": 1,
+  "max_per_offer": 2
+}
