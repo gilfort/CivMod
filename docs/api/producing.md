@@ -154,7 +154,7 @@ public Optional<List<Item>> fuel() {
 - Every execution needs heat: the recipe's cooking time for a cooking recipe (`AbstractCookingRecipe.cookingTime()`), 200 ticks otherwise. Fuel per item therefore stays vanilla, whatever the settler's speed.
 - Each station keeps the *Remaining Heat* of the fuel it burnt, on its block entity, for its next charge: one coal (1600 ticks) smelts 8 items, also over 8 single-item rounds. A broken station loses it.
 - A round fetches its fuel with its inputs (from the collect inventory and the requesting Clerk, or as input deliveries on "Delivery: Deliveryman"): the heat its charges need minus the stations' Remaining Heat, burning the highest-priority listed fuel in the buffer or in stock first. It claims only as much as the fuel covers.
-- No listed fuel in stock: the job status is "Missing: Fuel" and the request names the first listed fuel ("Missing: 1× Coal").
+- No listed fuel in stock: with exactly one fuel listed, job status and request name it ("Missing: 1× Coal"); with several (any will do) or none listed, both say "Missing: Fuel" (`Request.Missing.ANY_FUEL`). A listed item that does not burn is skipped for the next listed fuel.
 - Fuel rests stay in the settler's buffer for the next rounds; they never go to the drop-off. A burnt lava bucket leaves its bucket.
 
 ## Checkmarks
