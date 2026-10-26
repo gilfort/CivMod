@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:sitting_hook_pose_and_hitbox",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

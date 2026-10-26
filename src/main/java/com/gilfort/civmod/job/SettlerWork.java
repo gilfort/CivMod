@@ -143,6 +143,10 @@ public final class SettlerWork {
     private final DeliverymanLoop deliverymen;
 
     private Activity activity = Activity.IDLE;
+    /** Whether the last applied job step is a work break (the settler sits at the end of the decision). */
+    private boolean breakApplied;
+    /** Whether the settler is in a work break whose sitting was already decided (not saved: it sits again after loading). */
+    private boolean breakStarted;
     private @Nullable SettlerJob activeJob;
     private @Nullable BlockPos target;
     private double bestDistance = Double.MAX_VALUE;
@@ -657,9 +661,33 @@ public final class SettlerWork {
         return Optional.ofNullable(restPlace);
     }
 
-    /** Decides the next step, then shows what changed (thought bubble, held item). */
+    /** Decides the next step, then shows what changed (pose, thought bubble, held item). */
     private void decide(ServerLevel level) {
+        startDecision();
         decideStep(level);
+        endDecision();
+    }
+
+    /** Starts a decision: no work break applied yet. */
+    void startDecision() {
+        breakApplied = false;
+    }
+
+    /**
+     * Ends a decision: the settler sits exactly while its job step is a work break (vault {@code Systems/Sitting.md}),
+     * then shows what changed. Whether it sits is decided once at the start of the break, only on the ground and out of
+     * fluids; a settler stood up during the break (damage) stays standing until the next one.
+     */
+    void endDecision() {
+        if (!breakApplied) {
+            breakStarted = false;
+            settler.standUp();
+        } else if (!breakStarted) {
+            breakStarted = true;
+            if (settler.onGround() && !settler.isInLiquid()) {
+                settler.sitDown(settler.position(), settler.getYRot());
+            }
+        }
         observe();
     }
 
@@ -1099,6 +1127,7 @@ public final class SettlerWork {
      */
     boolean apply(ServerLevel level, SettlerJob job, JobStep step) {
         BlockPos jobBlock = job.jobBlock();
+        breakApplied = step instanceof JobStep.Pause pause && pause.status() == JobStatus.PAUSING;
         return switch (step) {
             case JobStep.Walk walk -> {
                 activeJob = job;
@@ -1363,6 +1392,9 @@ public final class SettlerWork {
     }
 
     private void stop() {
+        // A job step ended outside a decision (job removed, JobBlock broken): up at once.
+        breakStarted = false;
+        settler.standUp();
         activity = Activity.IDLE;
         activeJob = null;
         target = null;

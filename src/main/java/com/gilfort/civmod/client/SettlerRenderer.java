@@ -33,11 +33,12 @@ import net.neoforged.neoforge.client.event.RenderNameTagEvent;
  * Renders settlers with the player model and their vanilla default skin (wide or slim arms).
  * <p>
  * The name tag is shown within {@value #NAME_DISTANCE} blocks and only with line of sight. Sleeping settlers lie on their
- * left side, right side or back ({@link SleepingPose}).
+ * left side, right side or back ({@link SleepingPose}). Sitting settlers take the vanilla passenger pose, lowered to the
+ * ground ({@link #SIT_DROP}).
  * <p>
  * The render state is an {@link AvatarRenderState}, so vanilla submits it with its own player renderer (picked by the
  * skin's arm width): only extracting the state runs here. The side pose is therefore applied around that renderer, in
- * {@link #onRenderPre} / {@link #onRenderPost}, and taken back out for the name tag.
+ * {@link #onRenderPre} / {@link #onRenderPost}, and taken back out for the name tag; so is the drop of the sitting pose.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID, value = Dist.CLIENT)
 public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderState, PlayerModel> {
@@ -50,6 +51,11 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
     private static final float ARM_REACH_SLIM = 7.0F / 16.0F;
     /** How deep the lower arm sinks into the mattress on a side: resting on top of it looks stiff. */
     private static final float ARM_SINK = 5.0F / 16.0F;
+    /**
+     * How far the passenger pose is lowered to sit on the ground: the hip (12 px up, scaled by the player model's 0.9375)
+     * down to the back of the forward legs (2 px).
+     */
+    private static final float SIT_DROP = (12.0F - 2.0F) / 16.0F * 0.9375F;
     private static final PlayerSkin[] SKINS = new PlayerSkin[SettlerSkins.COUNT];
 
     static {
@@ -78,6 +84,8 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
         state.showCape = false;
         SettlerRenderState settlerState = (SettlerRenderState) state;
         settlerState.roll = null;
+        settlerState.drop = settler.isSitting() ? SIT_DROP : 0.0F;
+        state.isPassenger |= settler.isSitting();
         Direction bed = state.bedOrientation;
         if (!settler.hasPose(Pose.SLEEPING) || bed == null) {
             return;
@@ -113,32 +121,47 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
     /** Last listener, so the pose is only pushed when the render goes ahead (and {@link #onRenderPost} pops it). */
     @SubscribeEvent(priority = EventPriority.LOWEST)
     static void onRenderPre(RenderLivingEvent.Pre<?, ?, ?> event) {
-        if (event.getRenderState() instanceof SettlerRenderState state && state.roll != null) {
+        if (event.getRenderState() instanceof SettlerRenderState state && state.posed()) {
             event.getPoseStack().pushPose();
-            event.getPoseStack().translate(0.0F, state.lift, 0.0F);
-            event.getPoseStack().rotate(state.roll);
+            event.getPoseStack().translate(0.0F, -state.drop, 0.0F);
+            if (state.roll != null) {
+                event.getPoseStack().translate(0.0F, state.lift, 0.0F);
+                event.getPoseStack().rotate(state.roll);
+            }
         }
     }
 
     @SubscribeEvent
     static void onRenderPost(RenderLivingEvent.Post<?, ?, ?> event) {
-        if (event.getRenderState() instanceof SettlerRenderState state && state.roll != null) {
+        if (event.getRenderState() instanceof SettlerRenderState state && state.posed()) {
             event.getPoseStack().popPose();
         }
     }
 
-    /** The name tag is drawn inside the rolled pose: take the roll back out so it stays upright above the settler. */
+    /**
+     * The name tag is drawn inside the rolled or lowered pose: take the roll back out so it stays upright above the
+     * settler, and the drop, since the tag already sits on the lower sitting hitbox.
+     */
     @SubscribeEvent
     static void onNameTag(RenderNameTagEvent.DoRender event) {
-        if (event.getEntityRenderState() instanceof SettlerRenderState state && state.roll != null) {
-            event.getPoseStack().rotate(new Quaternionf(state.roll).conjugate());
-            event.getPoseStack().translate(0.0F, -state.lift, 0.0F);
+        if (event.getEntityRenderState() instanceof SettlerRenderState state && state.posed()) {
+            if (state.roll != null) {
+                event.getPoseStack().rotate(new Quaternionf(state.roll).conjugate());
+                event.getPoseStack().translate(0.0F, -state.lift, 0.0F);
+            }
+            event.getPoseStack().translate(0.0F, state.drop, 0.0F);
         }
     }
 
-    /** The player render state plus tonight's side pose (none when awake or lying on the back). */
+    /** The player render state plus tonight's side pose (none when awake or lying on the back) and the sitting drop. */
     private static final class SettlerRenderState extends AvatarRenderState {
         private @Nullable Quaternionf roll;
         private float lift;
+        private float drop;
+
+        /** @return whether the model is drawn in a pose of its own around the vanilla renderer */
+        boolean posed() {
+            return roll != null || drop != 0.0F;
+        }
     }
 }

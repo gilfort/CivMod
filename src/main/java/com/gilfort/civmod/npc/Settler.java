@@ -35,6 +35,8 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.PathfinderMob;
@@ -42,10 +44,12 @@ import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
+import net.minecraft.world.entity.ai.goal.GoalSelector;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
+import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -92,6 +96,8 @@ public class Settler extends PathfinderMob {
     private static final EntityDataAccessor<Integer> STRAW = SynchedEntityData.defineId(Settler.class, EntityDataSerializers.INT);
     /** Height of the vanilla straw bed base (4 px). */
     private static final double STRAW_BED_HEIGHT = 4.0 / 16.0;
+    /** Hitbox while sitting: the head of the lowered passenger pose ends about 1.3 blocks up. */
+    private static final EntityDimensions SITTING_DIMENSIONS = EntityDimensions.scalable(0.6F, 1.3F).withEyeHeight(1.04F);
 
     private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE);
     private Identifier race = Races.HUMAN;
@@ -100,6 +106,8 @@ public class Settler extends PathfinderMob {
     private final SettlerWork work = new SettlerWork(this);
     private final SettlerFood food = new SettlerFood();
     private final com.gilfort.civmod.job.SettlerSkills skills = new com.gilfort.civmod.job.SettlerSkills();
+    /** Looking around while sitting: the work goal holds the look of the main goals during a break. */
+    private final GoalSelector sittingLook = new GoalSelector();
 
     /**
      * @param type  the entity type
@@ -111,6 +119,8 @@ public class Settler extends PathfinderMob {
         getNavigation().setCanOpenDoors(true);
         // Registered here, not in registerGoals(): that runs in the super constructor before fields exist.
         goalSelector.addGoal(2, work.goal());
+        sittingLook.addGoal(0, new LookAtPlayerGoal(this, Player.class, 8.0F));
+        sittingLook.addGoal(1, new RandomLookAroundGoal(this));
         setDropChance(EquipmentSlot.MAINHAND, 0.0F);
     }
 
@@ -367,6 +377,65 @@ public class Settler extends PathfinderMob {
     }
 
     /**
+     * Sits down (vault {@code Systems/Sitting.md}): the vanilla passenger pose, drawn lowered to the seat, with a lower
+     * hitbox. The body keeps the facing, the head keeps looking around. A work break sits on the ground at the settler's
+     * own position.
+     *
+     * @param seat   where the settler sits (the bottom of its hitbox)
+     * @param facing the body direction (yaw in degrees)
+     */
+    public void sitDown(Vec3 seat, float facing) {
+        getNavigation().stop();
+        setPos(seat);
+        setDeltaMovement(Vec3.ZERO);
+        setYRot(facing);
+        setYBodyRot(facing);
+        setYHeadRot(facing);
+        setPose(Pose.SITTING);
+    }
+
+    /**
+     * Stands up where the settler sat; nothing happens if it does not sit.
+     */
+    public void standUp() {
+        if (!isSitting()) {
+            return;
+        }
+        setPose(Pose.STANDING);
+        sittingLook.getAvailableGoals().stream().filter(WrappedGoal::isRunning).forEach(WrappedGoal::stop);
+    }
+
+    /**
+     * @return whether the settler sits
+     */
+    public boolean isSitting() {
+        return hasPose(Pose.SITTING);
+    }
+
+    @Override
+    protected EntityDimensions getDefaultDimensions(Pose pose) {
+        return pose == Pose.SITTING ? SITTING_DIMENSIONS : super.getDefaultDimensions(pose);
+    }
+
+    /** Sitting keeps the body in the direction it sat down in; the head turns within its usual range. */
+    @Override
+    protected void tickHeadTurn(float yBodyRotT) {
+        if (!isSitting()) {
+            super.tickHeadTurn(yBodyRotT);
+            return;
+        }
+        yBodyRot = getYRot();
+        yHeadRot = Mth.rotateIfNecessary(yHeadRot, yBodyRot, getMaxHeadYRot());
+    }
+
+    /** Any damage stands a sitting settler up. */
+    @Override
+    public boolean hurtServer(ServerLevel level, DamageSource source, float damage) {
+        standUp();
+        return super.hurtServer(level, source, damage);
+    }
+
+    /**
      * @return whether the settler is away (foraging out of sight or on a mission): invisible and not interactable
      */
     public boolean isAway() {
@@ -391,7 +460,7 @@ public class Settler extends PathfinderMob {
 
     @Override
     public boolean isPushable() {
-        return !isSleeping() && !isInvisible() && super.isPushable();
+        return !isSleeping() && !isSitting() && !isInvisible() && super.isPushable();
     }
 
     @Override
@@ -441,6 +510,10 @@ public class Settler extends PathfinderMob {
     protected void customServerAiStep(ServerLevel level) {
         super.customServerAiStep(level);
         work.aiStep(level);
+        if (isSitting()) {
+            // After the work goal: its look at the work target does not hold the head still.
+            sittingLook.tick();
+        }
         if ((tickCount + getId()) % CHECK_INTERVAL == 0) {
             long profile = com.gilfort.civmod.debug.CivProfiler.start();
             checkMembership(level);
