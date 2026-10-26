@@ -54,6 +54,8 @@ public final class SittingGameTests {
     /** Sitting down lowers the hitbox and eye height, keeps the facing and cannot be pushed; standing up undoes it. */
     private static void hookPoseAndHitbox(GameTestHelper helper) {
         Settler settler = lumberjack(helper).settler();
+        // Vanilla has reasons of its own not to push (e.g. on a climbable block): only sitting must change it.
+        boolean pushableStanding = settler.isPushable();
 
         settler.sitDown(settler.position(), 90.0F);
 
@@ -67,7 +69,8 @@ public final class SittingGameTests {
 
         helper.assertTrue(settler.hasPose(Pose.STANDING), "Stands: " + settler.getPose());
         helper.assertTrue(settler.getBbHeight() == 1.8F, "Full height again: " + settler.getBbHeight());
-        helper.assertTrue(settler.isPushable(), "Pushable again");
+        helper.assertTrue(settler.isPushable() == pushableStanding, "Pushable as before: " + settler.isPushable()
+                + ", on a climbable block: " + settler.onClimbable());
         settler.discard();
         helper.succeed();
     }
@@ -123,15 +126,16 @@ public final class SittingGameTests {
         Working working = lumberjack(helper);
         Settler settler = working.settler();
         helper.setBlock(new BlockPos(4, 1, 4), Blocks.WATER);
-        // The fluid state is updated by the entity's own tick.
-        helper.runAfterDelay(3, () -> {
-            settler.setOnGround(true);
-            decide(settler.getWork(), level, working.job(), new JobStep.Pause(JobStatus.PAUSING));
-            helper.assertTrue(settler.isInLiquid(), "Stands in water");
-            helper.assertFalse(settler.isSitting(), "In water: stands");
-            settler.discard();
-            helper.succeed();
-        });
+        // The fluid state is updated by the entity's base tick; the test place may not tick entities, so it runs here.
+        settler.baseTick();
+        settler.setOnGround(true);
+        helper.assertTrue(settler.isInLiquid(), "Stands in water");
+
+        decide(settler.getWork(), level, working.job(), new JobStep.Pause(JobStatus.PAUSING));
+
+        helper.assertFalse(settler.isSitting(), "In water: stands");
+        settler.discard();
+        helper.succeed();
     }
 
     /** Paused for another reason than a work break ("Drop-off full", "No tool"): stands. */
