@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:occupied_two_at_one_job_block",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 120
+}

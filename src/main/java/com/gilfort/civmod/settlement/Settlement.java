@@ -57,6 +57,8 @@ public final class Settlement {
     private final List<DeliveryTask> deliveries = new ArrayList<>();
     /** Clerk JobBlock → its reservations (not saved, see {@link Reservations}). */
     private final Map<BlockPos, List<Reservations.Reservation>> reservations = new HashMap<>();
+    /** Occupied work place → who occupies it (not saved, see {@link OccupiedPlaces}). */
+    private final Map<BlockPos, OccupiedPlaces.Occupation> occupied = new HashMap<>();
 
     /**
      * @param id          the settlement id (unique per dimension)
@@ -230,6 +232,10 @@ public final class Settlement {
         return reservations;
     }
 
+    Map<BlockPos, OccupiedPlaces.Occupation> mutableOccupied() {
+        return occupied;
+    }
+
     void setName(Optional<String> name) {
         this.name = name;
     }
@@ -262,6 +268,8 @@ public final class Settlement {
         blocks.values().forEach(block -> block.mutableServed().remove(pos));
         // A removed Clerk's reservations go with it; those of removed tasks elsewhere expire on the next read.
         reservations.remove(pos);
+        // The work places its settlers occupied are free again.
+        occupied.values().removeIf(occupation -> occupation.jobBlock().equals(pos));
         return blocks.remove(pos);
     }
 }

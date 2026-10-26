@@ -23,12 +23,14 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeInput;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.item.crafting.ShapedRecipe;
+import net.minecraft.world.item.crafting.SmithingTrimRecipe;
 import net.minecraft.world.item.crafting.display.RecipeDisplay;
 import net.minecraft.world.item.crafting.display.SlotDisplayContext;
 
 /**
  * The recipes a Producing Job's pattern can follow (vault {@code Systems/Producing Jobs.md}): every recipe of the
- * profile's recipe types, vanilla or modded. Crafting recipes keep their shape in the 3×3 grid; recipes of other types
+ * profile's recipe types, vanilla or modded, except special recipes and armor trims ({@code smithing_trim}, which keep
+ * their base item). Crafting recipes keep their shape in the 3×3 grid; recipes of other types
  * fill the cells in order with their ingredients ({@link Recipe#placementInfo()}) and name their result through their
  * recipe book display. Recipes live on the server only; patterns are resolved here and the client sees the result in the
  * pattern's grid.
@@ -166,7 +168,8 @@ public final class PatternRecipes {
 
     private static Optional<Shape> shape(ServerLevel level, RecipeHolder<?> holder) {
         Recipe<?> recipe = holder.value();
-        if (recipe.isSpecial()) {
+        // An armor trim keeps its base item and changes only its components: no pattern (vault Jobs/Smith.md).
+        if (recipe.isSpecial() || recipe instanceof SmithingTrimRecipe) {
             return Optional.empty();
         }
         return recipe instanceof CraftingRecipe crafting ? craftingShape(level, holder.id(), crafting) : inOrderShape(level, holder.id(), recipe);

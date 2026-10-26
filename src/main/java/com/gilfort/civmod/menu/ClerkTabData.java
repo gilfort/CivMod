@@ -142,6 +142,20 @@ public record ClerkTabData(int level, List<StockRule> rules, List<RequestRow> re
     }
 
     /**
+     * The rule slot Shift + right-click on an inventory item fills (vault {@code Systems/GUI.md}).
+     *
+     * @return the first active rule slot without a rule, {@code -1} if every one holds a rule
+     */
+    public int nextEmptyGhostSlot() {
+        for (int slot = 0; slot < StockRule.slots(level); slot++) {
+            if (rule(slot).isEmpty()) {
+                return slot;
+            }
+        }
+        return -1;
+    }
+
+    /**
      * @param level the level
      * @param clerk the Clerk JobBlock position
      * @return the current tab of that Clerk ({@link #EMPTY} if it is none)
@@ -226,8 +240,7 @@ public record ClerkTabData(int level, List<StockRule> rules, List<RequestRow> re
                 if (!inputs.getSiblings().isEmpty()) {
                     inputs.append(", ");
                 }
-                inputs.append(Component.translatable("civmod.gui.clerk.request.missing_input", missing.count(),
-                        new ItemStack(missing.item()).getHoverName()));
+                inputs.append(missing.text());
             }
             return Component.translatable("civmod.gui.clerk.request.missing", inputs);
         }

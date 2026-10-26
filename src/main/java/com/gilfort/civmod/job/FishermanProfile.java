@@ -3,6 +3,7 @@ package com.gilfort.civmod.job;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
@@ -174,8 +175,13 @@ public final class FishermanProfile implements ResourceCollectionProfile {
 
     @Override
     public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock) {
+        return autoSearch(level, jobBlock, pos -> true);
+    }
+
+    @Override
+    public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock, Predicate<BlockPos> free) {
         for (BlockPos pos : BlockPos.withinBoxByManhattanDistance(jobBlock, AUTO_SEARCH_HORIZONTAL, AUTO_SEARCH_VERTICAL, AUTO_SEARCH_HORIZONTAL)) {
-            if (isWorkPlace(level, pos)) {
+            if (isWorkPlace(level, pos) && free.test(pos)) {
                 return pos.immutable();
             }
         }

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:ghost_slot_patterns",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

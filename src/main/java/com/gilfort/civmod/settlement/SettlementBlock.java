@@ -242,15 +242,18 @@ public final class SettlementBlock {
      *
      * @param libraries     the pattern library per Job
      * @param byDeliveryman whether Deliverymen carry the results ("Delivery: Deliveryman"), else the producer itself
+     * @param fuel          the fuel list of the Fuel tab in priority order, empty while the player never changed it
+     *                      (the Job's default list then)
      */
-    private record ProducingFields(List<SavedLibrary> libraries, boolean byDeliveryman) {
+    private record ProducingFields(List<SavedLibrary> libraries, boolean byDeliveryman, Optional<List<Item>> fuel) {
 
         static final MapCodec<ProducingFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 SavedLibrary.CODEC.listOf().lenientOptionalFieldOf("libraries", List.of()).forGetter(ProducingFields::libraries),
-                Codec.BOOL.optionalFieldOf("by_deliveryman", false).forGetter(ProducingFields::byDeliveryman)
+                Codec.BOOL.optionalFieldOf("by_deliveryman", false).forGetter(ProducingFields::byDeliveryman),
+                BuiltInRegistries.ITEM.byNameCodec().listOf().lenientOptionalFieldOf("fuel").forGetter(ProducingFields::fuel)
         ).apply(instance, ProducingFields::new));
 
-        static final ProducingFields NONE = new ProducingFields(List.of(), false);
+        static final ProducingFields NONE = new ProducingFields(List.of(), false, Optional.empty());
     }
 
     /**
@@ -318,6 +321,7 @@ public final class SettlementBlock {
     private Optional<BlockPos> homeClerk;
     private final Map<Job, Library> libraries = new LinkedHashMap<>();
     private boolean byDeliveryman;
+    private Optional<List<Item>> fuel;
     private final Set<Identifier> excluded = new HashSet<>();
     private Optional<SavedScan> foundScan;
     private final Set<Job> autoAssign = new LinkedHashSet<>();
@@ -365,6 +369,7 @@ public final class SettlementBlock {
             library.workerLimits().putAll(saved.workers());
         });
         this.byDeliveryman = producing.byDeliveryman();
+        this.fuel = producing.fuel().map(List::copyOf);
         this.autoAssign.addAll(place.autoAssign());
         this.excluded.addAll(place.excluded());
         this.foundScan = place.scan();
@@ -445,7 +450,19 @@ public final class SettlementBlock {
         List<SavedLibrary> saved = libraries.entrySet().stream().filter(entry -> !entry.getValue().patterns().isEmpty())
                 .map(entry -> new SavedLibrary(entry.getKey(), List.copyOf(entry.getValue().patterns()), entry.getValue().checkLimit(),
                         Map.copyOf(entry.getValue().workerLimits()))).toList();
-        return new ProducingFields(saved, byDeliveryman);
+        return new ProducingFields(saved, byDeliveryman, fuel);
+    }
+
+    /**
+     * @return the fuel list set in the Fuel tab in priority order, empty while the player never changed it (the Job's
+     *         default list applies then, see {@link Fuels})
+     */
+    public Optional<List<Item>> fuel() {
+        return fuel;
+    }
+
+    void setFuel(List<Item> fuel) {
+        this.fuel = Optional.of(List.copyOf(fuel));
     }
 
     /**

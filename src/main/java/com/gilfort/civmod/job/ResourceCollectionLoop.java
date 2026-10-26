@@ -45,6 +45,8 @@ final class ResourceCollectionLoop implements CategoryLoop {
 
     private Step step = Step.WORK;
     private int swingTimer;
+    /** Counts work ticks to the next check that the work place still stands. */
+    private int placeTimer;
     /** Where the settler fetches its tool (a Clerk serves at its counter). */
     private ClerkStorage.@Nullable Visit toolVisit;
 
@@ -92,8 +94,11 @@ final class ResourceCollectionLoop implements CategoryLoop {
         if (missing.isPresent()) {
             return fetchTool(level, site, missing.get(), dayTime);
         }
-        BlockPos poi = workplace.workPlaceOfDay(level, profile, site, day);
+        BlockPos poi = workplace.workPlaceOfDay(level, settler, profile, site, day);
         if (poi == null) {
+            if (workplace.noFreeWorkPlace()) {
+                return JobStep.blocked(JobStatus.NO_FREE_WORK_PLACE);
+            }
             return profile.blockingReason(null).map(JobStep::blocked).orElseGet(() -> JobStep.blocked(JobStatus.NO_WORK_PLACE));
         }
         workplace.ensureScan(level, profile, site, poi, day, dayTime);
@@ -148,6 +153,13 @@ final class ResourceCollectionLoop implements CategoryLoop {
         return switch (step) {
             case FETCH_TOOL -> fetchToolAt(level, job);
             case WORK -> {
+                if (++placeTimer >= SWING_INTERVAL) {
+                    placeTimer = 0;
+                    if (!stillWorkPlace(level, job, target)) {
+                        // Broken: the next decision picks a new free work place at once; the buffer stays.
+                        yield JobStep.DONE;
+                    }
+                }
                 if (fatigue.onBreak()) {
                     yield JobStep.STAY;
                 }
@@ -155,6 +167,10 @@ final class ResourceCollectionLoop implements CategoryLoop {
                 yield JobStep.WORK;
             }
         };
+    }
+
+    private static boolean stillWorkPlace(ServerLevel level, SettlerJob job, BlockPos target) {
+        return job.jobType().profile(ResourceCollectionProfile.class).map(profile -> profile.isWorkPlace(level, target)).orElse(true);
     }
 
     /** At the collect inventory: takes the tool (at a working Clerk's counter after waiting for its turn). */
@@ -222,7 +238,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
         }
         Workplace workplace = shell.workplace(job.jobBlock());
         if (workplace.scan() == null) {
-            BlockPos poi = workplace.workPlaceOfDay(level, profile.get(), site, day);
+            BlockPos poi = workplace.workPlaceOfDay(level, settler, profile.get(), site, day);
             if (poi == null) {
                 return true;
             }
@@ -242,7 +258,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
         Optional<ResourceCollectionProfile> profile = job.jobType().profile(ResourceCollectionProfile.class);
         Workplace workplace = shell.workplace(job.jobBlock());
         BlockPos poi = found.isEmpty() || profile.isEmpty() || workplace.scan() == null ? null
-                : workplace.workPlaceOfDay(level, profile.get(), found.get(), day);
+                : workplace.workPlaceOfDay(level, settler, profile.get(), found.get(), day);
         if (poi == null) {
             shell.endCatchUpJob(job.jobBlock());
             return new SimulatedWork(0, workTicks);

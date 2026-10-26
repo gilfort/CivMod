@@ -65,7 +65,9 @@ Implement `ResourceCollectionProfile` for a Job with its own scan or roll. Requi
 | `createScan(center, radius)` | a new `SectionScan`: one chunk section per `step`, loaded chunks only |
 | `produce(context)` | one roll: the items and the tool to wear, empty for nothing |
 
-Optional hooks (`default` methods): `scanCenter` (first work point, else the JobBlock), `scanRadius`, `needsResources`, `blockingReason`, `productivity`, `speed`, `canObtain`, `swings`, `reach`, `mainResources`, `dropped`, `leftOut`, `found`, `foundLines`.
+Optional hooks (`default` methods): `autoSearch(level, jobBlock, free)` (the search the loop calls: it must skip places that fail `free`, i.e. places occupied by another settler today; the default takes `autoSearch(level, jobBlock)` and gives up when that place is occupied, so override it to find the next free one), `scanCenter` (first work point, else the JobBlock), `scanRadius`, `needsResources`, `blockingReason`, `productivity`, `speed`, `canObtain`, `swings`, `reach`, `mainResources`, `dropped`, `leftOut`, `found`, `foundLines`.
+
+**Occupied work places:** the work place of the day is occupied by its settler for the day; no other settler uses it. The loop skips occupied scroll work points and passes `free` to the auto-search; none free → "No free work place". Your Job needs no code for this. Players are never kept from a Resource Collection work place.
 
 Inside `produce`, call `leftOut(context, types)` for the types of the rolled group: it returns the types excluded at the JobBlock and those whose dropped item is at its Max. Keep the group roll as it is and spread the weights over the remaining types; a fully left-out group gives an empty roll (`new Produced(List.of(), context.tool())`), never a roll into another group.
 

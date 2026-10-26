@@ -144,6 +144,41 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
     }
 
     /**
+     * The library slot Shift + right-click on an inventory item fills (vault {@code Systems/GUI.md}).
+     *
+     * @return the first library slot without a pattern, {@code -1} if every slot holds one
+     */
+    public int nextEmptyGhostSlot() {
+        for (int slot = 0; slot < Pattern.SLOTS; slot++) {
+            if (pattern(slot).isEmpty()) {
+                return slot;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * The ghost slot of an open pattern Shift + right-click on an inventory item fills: the output first (it fills the
+     * grid from the recipe), then the next empty grid cell.
+     *
+     * @param slot the library slot of the open pattern
+     * @return {@link Pattern#GRID} for the output, a grid cell (0–8), {@code -1} if the output and every cell are set
+     */
+    public int nextEmptyInEditor(int slot) {
+        Optional<Pattern> open = pattern(slot);
+        if (open.filter(Pattern::valid).isEmpty()) {
+            return Pattern.GRID;
+        }
+        List<Item> grid = open.get().grid();
+        for (int cell = 0; cell < Pattern.GRID; cell++) {
+            if (grid.get(cell) == Items.AIR) {
+                return cell;
+            }
+        }
+        return -1;
+    }
+
+    /**
      * @return how many patterns are checked and usable by the producer (what counts against the limit; foreign patterns
      *         keep their checkmark without counting)
      */

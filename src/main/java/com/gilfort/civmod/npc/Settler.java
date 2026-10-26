@@ -11,6 +11,7 @@ import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.OccupiedPlaces;
 import com.gilfort.civmod.settlement.StationTypes;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
@@ -247,8 +248,8 @@ public class Settler extends PathfinderMob {
     }
 
     /**
-     * A settler that dies or is removed for good releases its claims on requests (vault {@code Jobs/Clerk.md}) and its
-     * Delivery tasks.
+     * A settler that dies or is removed for good releases its claims on requests (vault {@code Jobs/Clerk.md}), its
+     * Delivery tasks and its occupied work places.
      */
     @Override
     public void remove(RemovalReason reason) {
@@ -257,6 +258,8 @@ public class Settler extends PathfinderMob {
             com.gilfort.civmod.settlement.Deliveries.releaseAll(SettlementData.get(server), getUUID());
             // Its load drops with it: the results it carried are lost.
             com.gilfort.civmod.settlement.Deliveries.dropCarried(SettlementData.get(server), getUUID());
+            // Its work places are free for the other settlers again.
+            OccupiedPlaces.releaseAll(SettlementData.get(server), getUUID());
         }
         super.remove(reason);
     }

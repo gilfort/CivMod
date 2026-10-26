@@ -37,6 +37,7 @@ import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.OccupiedPlaces;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
@@ -449,6 +450,11 @@ public final class SettlerWork {
      * @param snapshot the saved work state
      */
     public void restore(BuffersSnapshot snapshot) {
+        if (settler.level() instanceof ServerLevel level) {
+            // The dropped work places of the day are free again until the next decision occupies the restored ones.
+            SettlementData data = SettlementData.get(level);
+            jobWorkplaces.keySet().forEach(jobBlock -> OccupiedPlaces.releaseJob(data, settler.getUUID(), jobBlock));
+        }
         jobWorkplaces.values().forEach(Workplace::clearSaved);
         snapshot.entries().forEach(entry -> workplace(entry.jobBlock()).restoreBuffer(entry.buffer()));
         snapshot.workPlaces().forEach(entry -> workplace(entry.jobBlock()).restoreWorkPlace(entry));
@@ -485,6 +491,19 @@ public final class SettlerWork {
         Job type = job.get().jobType();
         return existingWorkplace(jobBlock).map(workplace -> workplace.biomeBonus(level, type))
                 .orElseGet(() -> BiomeBonuses.today(level, type, jobBlock, null));
+    }
+
+    /**
+     * The base job factor acting on the settler's job at a JobBlock today ({@link StationExtras}): the highest matching
+     * station extra at the station of the day, read once per day and station, else the Job's job factor.
+     *
+     * @param level    the level
+     * @param jobBlock a JobBlock position
+     * @return the base job factor (the Job's own if the settler has no work place there yet; 1 without a job there)
+     */
+    public double jobFactor(ServerLevel level, BlockPos jobBlock) {
+        return settler.jobAt(jobBlock).map(job -> existingWorkplace(jobBlock).map(workplace -> workplace.jobFactor(level, job.jobType()))
+                .orElseGet(() -> job.jobType().jobFactor())).orElse(1.0);
     }
 
     /**
@@ -561,6 +580,19 @@ public final class SettlerWork {
     }
 
     /**
+     * @param pos a block
+     * @return whether the settler works the block now and players must not open it (it stands at its target and its job
+     *         uses the block: the target, see {@link CategoryLoop#usesTarget}, or a further one, see
+     *         {@link CategoryLoop#usesPlace})
+     */
+    public boolean worksAt(BlockPos pos) {
+        SettlerJob job = activeJob;
+        CategoryLoop loop = job == null ? null : loop(job);
+        return activity == Activity.JOB && loop != null && target != null && isAtTarget() && loop.usesTarget(job)
+                && (pos.equals(target) || loop.usesPlace(job, pos));
+    }
+
+    /**
      * Forgets everything about a removed job: its whole Workplace goes (the buffer is dropped at the settler's position).
      *
      * @param jobBlock the JobBlock position
@@ -569,8 +601,12 @@ public final class SettlerWork {
         // The loops first: they still see the Workplace (a Producing Job empties its buffer into the drop-off).
         allLoops().forEach(loop -> loop.forget(jobBlock));
         Workplace workplace = jobWorkplaces.remove(jobBlock);
-        if (workplace != null && settler.level() instanceof ServerLevel level) {
-            workplace.buffer().stacks().forEach(stack -> settler.spawnAtLocation(level, stack.copy()));
+        if (settler.level() instanceof ServerLevel level) {
+            // Its work places are free for the other settlers again.
+            OccupiedPlaces.releaseJob(SettlementData.get(level), settler.getUUID(), jobBlock);
+            if (workplace != null) {
+                workplace.buffer().stacks().forEach(stack -> settler.spawnAtLocation(level, stack.copy()));
+            }
         }
         if (activeJob != null && activeJob.jobBlock().equals(jobBlock)) {
             stop();
@@ -862,8 +898,8 @@ public final class SettlerWork {
                         type.profile(ResourceCollectionProfile.class).map(ResourceCollectionProfile::toolIcon).orElseGet(() -> type.bubbleIcon().getItem()));
                 case DROP_OFF_FULL, STORAGE_FULL -> on.putIfAbsent(ThoughtBubble.DROP_OFF_FULL,
                         SettlerThoughts.problemIcon(ThoughtBubble.DROP_OFF_FULL));
-                case NO_WORK_PLACE -> on.putIfAbsent(ThoughtBubble.NO_WORK_PLACE, type.icon().getItem());
-                case MISSING_INPUTS -> on.putIfAbsent(ThoughtBubble.MISSING_INPUTS,
+                case NO_WORK_PLACE, NO_FREE_WORK_PLACE -> on.putIfAbsent(ThoughtBubble.NO_WORK_PLACE, type.icon().getItem());
+                case MISSING_INPUTS, MISSING_FUEL -> on.putIfAbsent(ThoughtBubble.MISSING_INPUTS,
                         SettlerThoughts.problemIcon(ThoughtBubble.MISSING_INPUTS));
                 case BLOCKED -> on.putIfAbsent(ThoughtBubble.BLOCKED,
                         existingWorkplace(job.jobBlock()).flatMap(Workplace::statusIcon).orElse(Items.BARRIER));
@@ -1086,7 +1122,7 @@ public final class SettlerWork {
                 yield false;
             }
             case JobStep.Skip skip -> {
-                skip.status().ifPresent(status -> setStatus(jobBlock, status));
+                skip.status().ifPresent(status -> setStatus(jobBlock, status, skip.subject()));
                 yield false;
             }
             case JobStep.Pause pause -> {
@@ -1143,6 +1179,17 @@ public final class SettlerWork {
      */
     void setStatus(BlockPos jobBlock, JobStatus status, net.minecraft.network.chat.Component subject) {
         workplace(jobBlock).setStatus(status, subject);
+    }
+
+    /**
+     * Sets a job's status, naming what it is about if there is a subject.
+     *
+     * @param jobBlock the job's JobBlock
+     * @param status   the new status
+     * @param subject  what the status is about, if it names something
+     */
+    void setStatus(BlockPos jobBlock, JobStatus status, Optional<net.minecraft.network.chat.Component> subject) {
+        subject.ifPresentOrElse(found -> setStatus(jobBlock, status, found), () -> setStatus(jobBlock, status));
     }
 
     /**
@@ -2352,7 +2399,7 @@ public final class SettlerWork {
                     block(level, activeJob.jobBlock(), JobStatus.STORAGE_FULL);
                 }
             } else {
-                deliver(level, activeJob.jobBlock(), deliveryVisit != null && deliveryVisit.counter());
+                deliver(level, activeJob, deliveryVisit != null && deliveryVisit.counter());
             }
             activity = Activity.IDLE;
             deliveryVisit = null;
@@ -2370,14 +2417,18 @@ public final class SettlerWork {
     /**
      * Delivers the buffer of a job into its drop-off, under the access rule if the drop-off is a Clerk.
      *
+     * @param job       the job (what its loop keeps stays in the buffer)
      * @param atCounter whether the settler stands at the counter of a working Clerk
      */
-    private void deliver(ServerLevel level, BlockPos jobBlock, boolean atCounter) {
+    private void deliver(ServerLevel level, SettlerJob job, boolean atCounter) {
+        BlockPos jobBlock = job.jobBlock();
+        CategoryLoop loop = loop(job);
         JobBuffer buffer = buffer(jobBlock);
         Optional<JobBlockSite> site = JobBlockSite.at(level, jobBlock);
         BlockPos dropOff = site.map(JobBlockSite::dropOff).orElse(jobBlock);
         Stock stock = ClerkStorage.stock(level, dropOff, DayClock.dayTime(level), atCounter);
-        boolean all = !stock.isEmpty() && buffer.deliver(stack -> stack.getCount() - stock.insert(stack).getCount());
+        boolean all = !stock.isEmpty() && buffer.deliver(stack -> stack.getCount() - stock.insert(stack).getCount(),
+                stack -> loop != null && loop.keeps(job, stack));
         if (!all) {
             block(level, jobBlock, JobStatus.DROP_OFF_FULL);
         }

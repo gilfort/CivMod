@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:occupied_no_free_work_place",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 120
+}

@@ -7,6 +7,7 @@ import com.gilfort.civmod.settlement.JobBlockSite;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * The work loop of one {@link JobCategory}, driven by the Settler Shell ({@link SettlerWork}; vault
@@ -104,6 +105,41 @@ interface CategoryLoop {
      * @return the rolls made and the work ticks left over for the next job
      */
     SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks);
+
+    /**
+     * Whether the settler, standing at the target of its current step, works the block there in a way players must
+     * not disturb (vault {@code Systems/Jobs.md}: a Producing Job crafting at its station). Players cannot open the
+     * block's GUI then.
+     *
+     * @param job the job
+     * @return whether the step's target is in use; by default it is not (trees, stone, water have no player lock)
+     */
+    default boolean usesTarget(SettlerJob job) {
+        return false;
+    }
+
+    /**
+     * Whether the job, while it uses its target ({@link #usesTarget}), also works another block players must not open
+     * (the Smelter's further parallel furnaces with a charge running).
+     *
+     * @param job the job
+     * @param pos a block other than the target
+     * @return whether it is in use; by default no other block is
+     */
+    default boolean usesPlace(SettlerJob job, BlockPos pos) {
+        return false;
+    }
+
+    /**
+     * Whether an item stays in the job's buffer when it is delivered to the drop-off (the Smelter's fuel rests).
+     *
+     * @param job   the job
+     * @param stack an item in the buffer
+     * @return whether it stays; by default everything is delivered
+     */
+    default boolean keeps(SettlerJob job, ItemStack stack) {
+        return false;
+    }
 
     /**
      * Forgets the loop's own state of a removed job (the shell drops the job's {@link Workplace}).

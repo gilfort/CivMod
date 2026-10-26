@@ -5,6 +5,7 @@
     "civmod:fisherman_block",
     "civmod:mission_board",
     "civmod:clerk_block",
-    "civmod:craftsperson_block"
+    "civmod:craftsperson_block",
+    "civmod:smelter_block"
   ]
 }

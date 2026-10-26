@@ -211,6 +211,16 @@ The first Producing Job: crafts requested items from its patterns at a crafting 
 **Mechanic**:
 The first built-in crafting Specialization of the Craftsperson: unlocked by a Crafter in a Station Types slot, works at a Crafter (`civmod:stations/mechanic`), `crafting` recipes in the domain `civmod:domains/redstone`, job factor 1.2 (four times the Craftsperson). Code: `ModJobs.MECHANIC`, profile `MechanicProfile`, `civmod_jobs/mechanic.json`.
 
+**Smith**:
+The crafting Specialization of the Craftsperson for metal: unlocked by a smithing table in a Station Types slot, works at a smithing table (`civmod:stations/smith`, the station of both its recipe types), `crafting` and `smithing` recipes in the domain `civmod:metals`; of `smithing` only `smithing_transform` (netherite upgrades keep the base item's components, `ProducingProfile.execute`), armor trims are no patterns (`PatternRecipes`). Job factor 0.3, raised to 1.2 by its Station Extra (`#minecraft:anvil` within 4 blocks; anvils do not wear); base EXP 2. Missing ingots stay "Missing: …" (no request to the Smelter). Code: `ModJobs.SMITH`, profile `SmithProfile`, `civmod_jobs/smith.json`.
+
+**Smelter**:
+The Producing Base Job of all furnace work: smelts requested items (`smelting`) at furnaces (`civmod:stations/smelter`), simulated in its buffer while the furnace shows its lit state. Works several furnaces in parallel, each with its own charge (`parallel_stations` [1, 2, 3, 4, 5] per JobBlock level in `civmod_jobs/smelter.json`, `ProducingProfile.parallelStations`), each one occupied; a furnace holding items or burning on its own is never used (`Furnaces.isIdle`). Burns fuel from the JobBlock's fuel list (Fuel tab, default coal then charcoal; `ProducingProfile.fuel`, `Fuels`, `SettlementBlock.fuel`) with Remaining Heat; fuel is fetched like inputs, rests stay in the buffer (`CategoryLoop.keeps`); none in stock: job status and request name the one listed fuel ("Missing: 1× Coal"), with several or no listed fuels "Missing: Fuel" (`JobStatus.MISSING_FUEL`, `Request.Missing.ANY_FUEL`). Code: `ModJobs.SMELTER` on `ModBlocks.SMELTER_BLOCK`, profile `SmelterProfile` (work time = cooking time ÷ 80 operations: level 20 = vanilla speed), base EXP 1, job factor 1.0.
+
+**Charge**:
+One execution a station of a Producing Job works at a time in the CRAFT phase; a Job with parallel stations runs one charge per station (`Round.charges`, `ProducingLoop.work`). Its inputs leave the buffer when it is done, so a station broken during a charge leaves them in the buffer.
+_Avoid_: Batch
+
 **Domain**:
 The item tag a crafting Specialization is limited to (`ProducingProfile.domain`): a recipe belongs to it if any input has an alternative in the tag, so mixed recipes (a piston) fit several domains. Patterns outside it are filtered ("Outside this Job's domain", not checkable), and the chain resolution makes no intermediates outside it: they are taken from stock or reported "Missing". Code: `Patterns.filtered`.
 _Avoid_: Material set, category
@@ -223,23 +233,24 @@ _Avoid_: Recipe (a pattern follows one), blueprint
 A pattern the producer works; 6 + 1 per 5 levels of the settler's effective skill by default (`ProducingProfile.checkLimit`, `Patterns.checkLimit`), per library; with several settlers in the Job at the JobBlock the highest one counts (each reports its own, `Patterns.enforceLimit(…, settler, limit)`, kept per library and saved as `workers`). Only usable checked patterns count against the limit (`Patterns.usable`); foreign ones keep their checkmark outside it. A new pattern is checked automatically while one is free and the profile can use it; at the limit it stays unchecked with the state line "A <Job> masters only <n> recipes at once – choose which to check.". When the limit drops, the last usable checked patterns in list order lose theirs (`Patterns.enforceLimit`) with the state line "<n> checkmarks removed". The state line is one transient notice (`SettlementBlock.Notice`, `PatternsTabData.notice`), ended by the next edit of the library (put, toggle, clear).
 
 **Metal**:
-Item tag `civmod:metals` (ingots, nuggets, raw materials, metal blocks), kept for the future Smith's domain; the Craftsperson crafts metal too. Code: `Patterns.METALS`, `Patterns.isMetal`. Filters of a profile in general: `Patterns.filtered`, `Patterns.uncheckFiltered` (a filtered pattern loses its checkmark at every decision and tab sync), `PatternsTabData.filtered()`.
+Item tag `civmod:metals` (ingots, nuggets, raw materials, metal blocks), the Smith's domain; the Craftsperson crafts metal too. Code: `Patterns.METALS`, `Patterns.isMetal`. Filters of a profile in general: `Patterns.filtered`, `Patterns.uncheckFiltered` (a filtered pattern loses its checkmark at every decision and tab sync), `PatternsTabData.filtered()`.
 
 
 **Round**:
 One claimed part of one request: claim what fits the buffer, fetch inputs (collect inventory, then the posting Clerk; on "Delivery: Deliveryman" wait for input deliveries into the collect inventory first), craft intermediates and the item, deliver (on "Delivery: Deliveryman" into its own drop-off with a Result delivery). Code: `Round`, kept in the job's Workplace (`Workplace.round`), run by `ProducingLoop`, planned by `CraftPlan` (chain resolution with own patterns; `CraftPlan.most` sizes the claim).
 
 **Station**:
-The work place of a Producing Job, named per recipe type by a block tag (`ProducingProfile.station`, by convention `<namespace>:stations/<job>`): the main recipe type's station is set with the scroll (up to 8, one per day) or the nearest one within 16 blocks of the JobBlock inside the border; other recipe types use their nearest station.
+The work place of a Producing Job, named per recipe type by a block tag (`ProducingProfile.station`, by convention `<namespace>:stations/<job>`): the main recipe type's station is set with the scroll (up to 8, one per day) or the nearest one within 16 blocks of the JobBlock inside the border; other recipe types use their nearest station. A Job with parallel stations (`parallel_stations`) also works further stations of the main type, from the scroll points or the nearest ones (`ProducingLoop.stations`).
 _Avoid_: Workbench (the JobBlock is none)
 
 **Station Extra**:
-A block near a Job's station of the day that raises its base job factor (the Smith's anvil: 0.3 → 1.2); named per Job in `station_extras` of `civmod_jobs/<job>.json`, the highest matching factor counts. Not a bonus multiplier. Planned (module 2).
+A block near a Job's station of the day that replaces its base job factor (the Smith's anvil: 0.3 → 1.2); named per Job in `station_extras` of `civmod_jobs/<job>.json` (`{ blocks (id, list or #tag), radius (cube, 1–8), job_factor }`), the highest matching factor counts, none: the Job's own `job_factor`. Read once when the station of the day is chosen and kept for that day (not saved: read again after loading). Not a bonus multiplier: the biome bonuses act on top. Any Job may name them; they take effect where the job factor counts (Producing Jobs). Code: `StationExtra` (entry and codec, in `JobBalancing.stationExtras`), `StationExtras.jobFactor`, kept per day in `Workplace.jobFactor`, read by `SettlerWork.jobFactor`.
 _Avoid_: Work aid, workshop tool (collides with tools)
 
 **Occupied**:
-A work place a settler has chosen for the day: no other settler uses it that day; while the settler actually works there, players cannot open its GUI ("In use by <name>"). Breaking it stays allowed; the settler then picks a new free one. Planned (module 2).
+A work place a settler has chosen for the day: no other settler uses it that day; while the settler actually works there, players cannot open its GUI ("In use by <name>"). Breaking it stays allowed; the settler then picks a new free one. Code: `OccupiedPlaces` (kept in the `Settlement`, not saved), chosen in `Workplace.workPlaceOfDay`, status `JobStatus.NO_FREE_WORK_PLACE`, player side `WorkPlaceLock` with `CategoryLoop.usesTarget` / `CategoryLoop.usesPlace` (further parallel stations with a running charge) / `SettlerWork.worksAt`, addon hook `ResourceCollectionProfile.autoSearch(level, jobBlock, free)`.
 _Avoid_: Claim (a claim is part of a request, see Round), reserved (stock reservations)
 
 **Remaining Heat**:
-The burn time a furnace of the Smelter keeps from fuel already burning, used by the next charge so no fuel is wasted. Planned (module 2).
+The burn time a furnace of the Smelter keeps from fuel already burnt, used by its next charge so no fuel is wasted (one coal = 8 items, also over 8 single-item charges). Kept on the furnace's block entity (lost when the furnace is broken), in ticks of vanilla burn time. Code: attachment `ModAttachments.REMAINING_HEAT`, paid in `Furnaces.pay` (heat per execution: the recipe's cooking time, `Furnaces.heatOf`), planned in `ProducingLoop.fuelNeed`.
+_Avoid_: Batch, leftover fuel

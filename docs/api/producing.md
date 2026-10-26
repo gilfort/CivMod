@@ -70,9 +70,11 @@ and the lang keys `job.<namespace>.<job>`, `job.<namespace>.<job>.indefinite` an
 | `filteredLine()` | state line of a pattern the filters or the domain block, in the Patterns tab | "Outside this Job's domain" with a domain, else "Not allowed for this Job" |
 | `checkLimit(skill)` | how many patterns can be checked at the settler's effective skill | 6 + 1 per 5 levels |
 | `workTime(recipe)` | operations one execution of a recipe takes (an operation lasts as long as the shared speed formula × job factor says) | 1 |
-| `execute(level, recipe, result, consumed)` | what one execution puts into the settler's buffer; the inputs are already taken out | the result plus the inputs' remainders (empty buckets, …) |
+| `execute(level, recipe, result, consumed)` | what one execution puts into the settler's buffer; the inputs are already taken out | the result plus the inputs' remainders (empty buckets, …); a `smithing_transform` result keeps the base item's components |
 
 `ItemFilter.allow(tag)`, `ItemFilter.deny(tag)` and `ItemFilter.ANY` build filters. The Craftsperson is a profile with `crafting` and its crafting-table station, without filters: it crafts everything, slowly (job factor 0.3).
+
+**Occupied stations:** the station of the day and every station of another type a settler crafts at are occupied by it for the day; other settlers of the same or another JobBlock take the next free one ("No free work place" if none). While the settler crafts at a station, players cannot open its GUI (action bar "In use by <name>"). Your Job needs no code for this.
 
 ## Domains
 
@@ -88,7 +90,72 @@ public Optional<TagKey<Item>> domain() {
 - A recipe belongs to the domain if **any input** has an alternative in the tag, so a mixed recipe fits several domains (a piston – planks, cobblestone, iron, redstone – is in a wood, a stone, a metal and a redstone domain).
 - A pattern outside the domain is greyed out with "Outside this Job's domain" and cannot be checked (like a filtered pattern; it loses a checkmark it had, e.g. after the tag changed).
 - Intermediates follow the same rule: the specialist crafts only intermediates inside its domain. One outside it must be in stock, otherwise the request shows "Missing: …" (a Mechanic making repeaters needs sticks from a Craftsperson or the Clerk's storage).
-- Domains are item tags, so datapacks change them. CivMod's built-in Mechanic (unlocked by and working at a Crafter, `crafting`) uses `civmod:domains/redstone`.
+- Domains are item tags, so datapacks change them. CivMod's built-in Mechanic (unlocked by and working at a Crafter, `crafting`) uses `civmod:domains/redstone`, its Smith (unlocked by and working at a smithing table, `crafting` and `smithing`) uses `civmod:metals`.
+
+## Station extras
+
+Blocks near a Job's station of the day can **replace** its base job factor: the Smith works at 0.3 without and at 1.2 with an anvil near its smithing table. Station extras are datapack data in the Job's `civmod_jobs/<job>.json`, so they work for every Job, CivMod's and yours, without code:
+
+```json
+{
+  "station_extras": [
+    { "blocks": "#minecraft:anvil", "radius": 4, "job_factor": 1.2 },
+    { "blocks": ["create:mechanical_press", "minecraft:grindstone"], "radius": 2, "job_factor": 1.5 }
+  ]
+}
+```
+
+- `blocks`: a block id, a `#tag` or a list of both. `radius`: 1–8 blocks around the station in every direction (a cube). `job_factor`: the base job factor while a matching block stands there.
+- Several entries match: the **highest** `job_factor` counts (no adding). None matches: the Job's own `job_factor`.
+- Read once when the station of the day is chosen and kept for that day; a block placed or removed later counts from the next day (or when the settler has to choose a new station, e.g. its station was broken). After loading a world it is read again.
+- Not a bonus multiplier: biome bonuses (and later other speed multipliers) act on the result.
+- A later pack's file replaces the whole list. Station extras take effect where the job factor counts: the station of the day of a Producing Job (Resource Collection and Mission Jobs have no job factor in their speed).
+- Ask for the factor acting on a settler today with `SettlerWork.jobFactor(level, jobBlock)`.
+
+## Smithing recipes
+
+A profile with `smithing` works `smithing_transform` recipes (netherite upgrades): the result keeps the base item's components like at a vanilla smithing table (enchantments, damage, name). Armor trims (`smithing_trim`) keep their base item and are no patterns.
+
+## Parallel stations and fuel
+
+A furnace Job (CivMod's Smelter, later its Cook or a modded smeltery) works several stations at once and burns fuel. Two optional hooks turn this on; the loop does the rest.
+
+| Method | Meaning | Default |
+|---|---|---|
+| `parallelStations(jobBlockLevel)` | how many stations of the main recipe type a settler works at once, each with its own charge | 1 |
+| `fuel()` | the default fuel list in priority order (at most 6 items); present = the Job burns fuel | empty: no fuel |
+
+```java
+@Override
+public int parallelStations(int jobBlockLevel) {
+    return jobBlockLevel; // 1 furnace at level 1 … 5 at level 5
+}
+
+@Override
+public Optional<List<Item>> fuel() {
+    return Optional.of(List.of(Items.COAL, Items.CHARCOAL));
+}
+```
+
+**Parallel stations.** Datapacks override the number per JobBlock level with `parallel_stations` in `civmod_jobs/<job>.json` (a list from level 1; levels beyond the list use its last value; at most 8):
+
+```json
+{ "parallel_stations": [1, 2, 3, 4, 5] }
+```
+
+- The station of the day comes first; the further ones come from the JobBlock's scroll work points if it has valid ones, else from the stations of the main type nearest to the JobBlock (within 16 blocks, inside the border). Each one is occupied for the day, so several settlers of one JobBlock never share a station. While a settler is short of stations it looks for more at most every 30 s.
+- Every station smelts its own charge (one execution at a time) at the full speed of the speed formula; the biome bonus of the station of the day applies to all of them. Steps of another recipe type run only at their own station.
+- A station that holds items or burns on its own (a furnace a player uses) is never chosen: it is free only while its inventory is empty and it is not lit by vanilla. Hoppers are not blocked.
+- While a charge runs, the station shows its lit state (if its block has one) and players cannot open it.
+- A station broken during a charge loses that charge: the inputs never left the buffer and are worked at the next station.
+
+**Fuel.** With `fuel()` present the JobBlock gets a Fuel tab: up to 6 ghost slots shared by all settlers of the block, the order is the priority, the profile's list is the default until the player changes it. Only items with a vanilla burn time (`minecraft:cooking_fuel` component) are taken.
+
+- Every execution needs heat: the recipe's cooking time for a cooking recipe (`AbstractCookingRecipe.cookingTime()`), 200 ticks otherwise. Fuel per item therefore stays vanilla, whatever the settler's speed.
+- Each station keeps the *Remaining Heat* of the fuel it burnt, on its block entity, for its next charge: one coal (1600 ticks) smelts 8 items, also over 8 single-item rounds. A broken station loses it.
+- A round fetches its fuel with its inputs (from the collect inventory and the requesting Clerk, or as input deliveries on "Delivery: Deliveryman"): the heat its charges need minus the stations' Remaining Heat, burning the highest-priority listed fuel in the buffer or in stock first. It claims only as much as the fuel covers.
+- No listed fuel in stock: with exactly one fuel listed, job status and request name it ("Missing: 1× Coal"); with several (any will do) or none listed, both say "Missing: Fuel" (`Request.Missing.ANY_FUEL`). A listed item that does not burn is skipped for the next listed fuel.
+- Fuel rests stay in the settler's buffer for the next rounds; they never go to the drop-off. A burnt lava bucket leaves its bucket.
 
 ## Checkmarks
 
@@ -97,4 +164,4 @@ Only checked patterns are worked. Each library has its own checkmark limit; only
 
 ## Not part of the profile
 
-Request picking, chain resolution, reservations, input and result deliveries, catch-up and the Patterns tab are CivMod's loop and work the same for every Producing Job. Production modes (always / on demand) and fuel are not supported yet.
+Request picking, chain resolution, reservations, input and result deliveries, catch-up, the Patterns tab and the Fuel tab are CivMod's loop and work the same for every Producing Job. Production modes (always / on demand) are not supported yet.

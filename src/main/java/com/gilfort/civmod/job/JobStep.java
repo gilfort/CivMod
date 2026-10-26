@@ -39,7 +39,7 @@ sealed interface JobStep {
      * @return the job does not work now and leaves its status as it is; the next priority works
      */
     static JobStep skip() {
-        return new Skip(Optional.empty());
+        return new Skip(Optional.empty(), Optional.empty());
     }
 
     /**
@@ -47,7 +47,16 @@ sealed interface JobStep {
      * @return the job does not work now; the next priority works
      */
     static JobStep skip(JobStatus status) {
-        return new Skip(Optional.of(status));
+        return new Skip(Optional.of(status), Optional.empty());
+    }
+
+    /**
+     * @param status  the job's status
+     * @param subject what the status is about, if it names something
+     * @return the job does not work now; the next priority works
+     */
+    static JobStep skip(JobStatus status, Optional<Component> subject) {
+        return new Skip(Optional.of(status), subject);
     }
 
     /**
@@ -124,9 +133,10 @@ sealed interface JobStep {
      * The job does not work now; the next priority works. As an answer to {@link CategoryLoop#holdsDecision}: the
      * decision goes on as usual.
      *
-     * @param status the job's new status, empty to leave it
+     * @param status  the job's new status, empty to leave it
+     * @param subject what the new status is about, if it names something
      */
-    record Skip(Optional<JobStatus> status) implements JobStep {
+    record Skip(Optional<JobStatus> status, Optional<Component> subject) implements JobStep {
     }
 
     /**

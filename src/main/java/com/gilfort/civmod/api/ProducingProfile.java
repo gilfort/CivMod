@@ -16,6 +16,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.item.crafting.SmithingRecipeInput;
+import net.minecraft.world.item.crafting.SmithingTransformRecipe;
 import net.minecraft.world.level.block.Block;
 
 /**
@@ -111,18 +113,54 @@ public interface ProducingProfile extends CategoryProfile {
     }
 
     /**
+     * How many stations of the main recipe type a settler works at once, each with its own charge (vault
+     * {@code Systems/Producing Jobs.md}): the Smelter's parallel furnaces. The stations come from the Scroll of
+     * Assignment's work points, else from the search around the JobBlock; every one is occupied for the day. The list
+     * {@code parallel_stations} in the Job's datapack job file overrides this value per JobBlock level.
+     *
+     * @param jobBlockLevel the level of the JobBlock (1–5)
+     * @return the number of stations worked in parallel (1 by default)
+     */
+    default int parallelStations(int jobBlockLevel) {
+        return 1;
+    }
+
+    /**
+     * The fuel the Job burns at its stations (vault {@code Jobs/Smelter.md}). With fuel, every execution needs heat:
+     * the recipe's cooking time ({@link net.minecraft.world.item.crafting.AbstractCookingRecipe#cookingTime()}, 200
+     * ticks for other recipes), paid from the station's <i>Remaining Heat</i>; a station without enough burns the next
+     * fuel item by its vanilla burn time and keeps the rest for its next charge. The settler fetches fuel like inputs
+     * (the highest-priority listed fuel in stock) and keeps fuel rests in its buffer; the JobBlock gets a Fuel tab
+     * where the player orders the list.
+     *
+     * @return the default fuel list in priority order (at most 6 items), empty if the Job burns no fuel (by default)
+     */
+    default Optional<List<Item>> fuel() {
+        return Optional.empty();
+    }
+
+    /**
      * Executes a recipe once in the settler's buffer: the consumed inputs are already taken out, the returned items go in.
      *
      * @param level    the level
      * @param recipe   the recipe
      * @param result   what the pattern makes per execution
      * @param consumed the inputs taken out
-     * @return what goes into the buffer (by default the result plus the inputs' remainders, e.g. empty buckets)
+     * @return what goes into the buffer (by default the result plus the inputs' remainders, e.g. empty buckets; a
+     *         {@code smithing_transform} result keeps the base item's components, as at a smithing table: a netherite
+     *         upgrade keeps enchantments and damage)
      */
     default List<ItemStack> execute(ServerLevel level, RecipeHolder<?> recipe, ItemStack result, List<ItemStack> consumed) {
         List<ItemStack> produced = new ArrayList<>();
-        produced.add(result);
+        produced.add(recipe.value() instanceof SmithingTransformRecipe transform ? transformed(transform, result, consumed) : result);
         produced.addAll(PatternRecipes.remainders(consumed));
         return produced;
+    }
+
+    /** A smithing transform's result with the consumed base item's components, the pattern's result without one. */
+    private static ItemStack transformed(SmithingTransformRecipe recipe, ItemStack result, List<ItemStack> consumed) {
+        return consumed.stream().filter(recipe.baseIngredient()).findFirst()
+                .map(base -> recipe.assemble(new SmithingRecipeInput(ItemStack.EMPTY, base, ItemStack.EMPTY)))
+                .filter(made -> !made.isEmpty()).orElse(result);
     }
 }
