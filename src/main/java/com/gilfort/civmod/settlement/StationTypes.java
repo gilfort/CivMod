@@ -25,7 +25,7 @@ import net.minecraft.world.item.Items;
  * a settler already holding the Base Job at another JobBlock leaves this one instead.
  * The unlock item is not the work place: a Specialization still needs its station in the world.
  * <p>
- * Every JobBlock whose Base Job has Specializations has Station Types, the Mission Board included: its slot 0 is the
+ * Every JobBlock whose Base Job has Specializations has Station Types, the Mission Board included: its first slot is the
  * Adventurer, the others unlock Mission Specializations (the Bard: note block).
  */
 public final class StationTypes {

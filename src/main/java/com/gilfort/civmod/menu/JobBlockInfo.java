@@ -320,7 +320,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      * @return a copy with another level
      */
     public JobBlockInfo withLevel(int newLevel) {
-        // The level's own offers (Mission Jobs) plus the Jobs offered so far (unlocked by Station Types).
+        // The Base Jobs plus the Jobs offered so far (unlocked by Station Types); the level opens no Job by itself.
         List<Job> offered = Stream.concat(JobPlaces.offered(jobType).stream(), offeredJobs().stream()).distinct().toList();
         return new JobBlockInfo(jobType, newLevel, settlementName, inSettlement, connected, distance, required, assignees,
                 JobPlaces.lines(jobType, newLevel, offered, assignees, autoJobs()), collectLeaves, byDeliveryman, costs, missionTab, biome);

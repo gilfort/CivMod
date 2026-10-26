@@ -7,7 +7,8 @@ import net.neoforged.neoforge.registries.DeferredHolder;
 
 /**
  * CivMod's built-in Jobs, for addons that attach Specializations to them ({@link Job.Builder#parent}) or name them in
- * data. Mission Jobs are Specializations of the {@link #ADVENTURER}, so the Mission Board offers them from level 2.
+ * data. Mission Jobs are Specializations of the {@link #ADVENTURER}, unlocked on the Mission Board by
+ * their unlock item ({@link Job.Builder#unlockItem}) in a Station Types slot.
  */
 @ApiStatus.Experimental
 public final class CivModJobs {
