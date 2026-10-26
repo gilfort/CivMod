@@ -680,8 +680,7 @@ public final class SettlerWork {
      */
     void endDecision() {
         if (!breakApplied) {
-            breakStarted = false;
-            settler.standUp();
+            endBreak();
         } else if (!breakStarted) {
             breakStarted = true;
             if (settler.onGround() && !settler.isInLiquid()) {
@@ -689,6 +688,12 @@ public final class SettlerWork {
             }
         }
         observe();
+    }
+
+    /** The work break is over (or never was): the settler stands up. */
+    private void endBreak() {
+        breakStarted = false;
+        settler.standUp();
     }
 
     private void decideStep(ServerLevel level) {
@@ -1393,8 +1398,7 @@ public final class SettlerWork {
 
     private void stop() {
         // A job step ended outside a decision (job removed, JobBlock broken): up at once.
-        breakStarted = false;
-        settler.standUp();
+        endBreak();
         activity = Activity.IDLE;
         activeJob = null;
         target = null;

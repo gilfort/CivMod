@@ -28,6 +28,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.DamageTypeTags;
+import net.minecraft.util.Mth;
 import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
@@ -35,7 +36,6 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -511,8 +511,13 @@ public class Settler extends PathfinderMob {
         super.customServerAiStep(level);
         work.aiStep(level);
         if (isSitting()) {
-            // After the work goal: its look at the work target does not hold the head still.
-            sittingLook.tick();
+            // After the work goal: its look at the work target does not hold the head still. Full ticks every other
+            // tick, like vanilla's goal selectors.
+            if ((tickCount + getId()) % 2 == 0) {
+                sittingLook.tick();
+            } else {
+                sittingLook.tickRunningGoals(false);
+            }
         }
         if ((tickCount + getId()) % CHECK_INTERVAL == 0) {
             long profile = com.gilfort.civmod.debug.CivProfiler.start();
