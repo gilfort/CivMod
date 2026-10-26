@@ -29,7 +29,8 @@ public final class MissionOffers {
 
     /**
      * Refills the board's offer once per day ({@link MissionRules#refill}): marked entries stay, unmarked ones are
-     * replaced; the size follows the board level at the time of the refill.
+     * replaced; each Mission Job's share follows the board level and Station Types at the time of the refill
+     * ({@link MissionRules#quotas}).
      *
      * @param data   the dimension's settlement data
      * @param board  the Mission Board position
@@ -47,7 +48,7 @@ public final class MissionOffers {
         SettlementBlock entry = block.get();
         if (entry.missionOffer().day() != day) {
             List<MissionOffer.Entry> entries = MissionRules.refill(entry.missionOffer().entries(), pool,
-                    StationTypes.unlocked(entry), MissionRules.offerSize(entry.level()), random);
+                    MissionRules.quotas(StationTypes.unlocked(entry), entry.level(), StationTypes.emptySlots(entry)), random);
             entry.setMissionOffer(new MissionOffer(entries, day));
             data.setDirty();
         }

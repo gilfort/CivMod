@@ -120,7 +120,7 @@ A Mission whose result is vanilla Villagers instead of loot: its `villagers` blo
 _Avoid_: Settler (a Villager is always a vanilla Villager entity), recruits
 
 **Mission Offer**:
-The missions a Mission Board offers today; the player marks the ones to be done. Code: `MissionOffer` (entries + refill day) in `SettlementBlock.missionOffer()`, refilled and marked through `MissionOffers`.
+The missions a Mission Board offers today; the player marks the ones to be done. Each Mission Job of the board has its own share: the Adventurer board level + 1, plus 1 per open Station Types slot without a Specialization; every unlocked Specialization as many as the board level (at most 26 on a level-5 board). Code: `MissionOffer` (entries + refill day) in `SettlementBlock.missionOffer()`, refilled and marked through `MissionOffers`; shares `MissionRules.quotas` (empty slots `StationTypes.emptySlots`), drawn by `MissionRules.refill`.
 _Avoid_: Quest list, mission pool (the pool is all missions)
 
 **Mission Assignment**:

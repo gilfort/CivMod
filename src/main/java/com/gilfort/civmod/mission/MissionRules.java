@@ -1,11 +1,12 @@
 package com.gilfort.civmod.mission;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.function.ToIntFunction;
@@ -15,6 +16,7 @@ import com.gilfort.civmod.api.MissionProfile;
 import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.SettlementRules;
+import com.gilfort.civmod.settlement.StationTypes;
 
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
@@ -25,10 +27,10 @@ import net.minecraft.util.Util;
  */
 public final class MissionRules {
 
-    /** Missions offered per board level (index 0 = level 1). */
-    private static final int[] OFFER_SIZE = {2, 4, 10, 14, 20};
-    /** The largest offer size of any board level. */
-    public static final int MAX_OFFER_SIZE = OFFER_SIZE[OFFER_SIZE.length - 1];
+    /** Specialization slots of a Mission Board (Station Types slots besides the Base Job's). */
+    private static final int SPECIALIZATION_SLOTS = StationTypes.SLOTS - 1;
+    /** The largest offer of any board: the Base Job's missions plus every Specialization slot filled, at the top level. */
+    public static final int MAX_OFFER_SIZE = SettlementRules.MAX_LEVEL + 1 + SPECIALIZATION_SLOTS * SettlementRules.MAX_LEVEL;
     /** Skill levels above the recommendation per extra loot roll. */
     private static final int LEVELS_PER_EXTRA_ROLL = 20;
 
@@ -36,58 +38,86 @@ public final class MissionRules {
     }
 
     /**
+     * How many missions each Mission Job of a board gets in the daily offer: the Base Job (the Adventurer) board level + 1,
+     * plus 1 per open Station Types slot without a Specialization; every unlocked Specialization as many as the board
+     * level.
+     *
+     * @param unlocked   the Mission Jobs the board offers, its Base Job first ({@code StationTypes.unlocked})
      * @param boardLevel the Mission Board level
-     * @return how many missions the board offers each day
+     * @param emptySlots the open Station Types slots without an unlock item
+     * @return the number of missions per Mission Job, in the order of {@code unlocked}
      */
-    public static int offerSize(int boardLevel) {
-        return OFFER_SIZE[SettlementRules.clampLevel(boardLevel) - SettlementRules.MIN_LEVEL];
+    public static Map<Job, Integer> quotas(List<Job> unlocked, int boardLevel, int emptySlots) {
+        int level = SettlementRules.clampLevel(boardLevel);
+        Map<Job, Integer> quotas = new LinkedHashMap<>();
+        for (int i = 0; i < unlocked.size(); i++) {
+            quotas.put(unlocked.get(i), i == 0 ? level + 1 + emptySlots : level);
+        }
+        return quotas;
     }
 
     /**
      * The daily refill: keeps marked entries whose mission still exists (in order), drops unmarked ones and draws new
-     * unmarked entries up to {@code size}. Only missions one of the {@code unlocked} Mission Jobs can take are drawn,
-     * weighted by {@link Mission#weight()}; a mission appears at most {@link Mission#maxPerOffer()} times, kept entries
-     * included. The offer stays shorter when every drawable mission is at its maximum.
+     * unmarked entries for every Mission Job up to its quota ({@link #quotas}); a kept entry counts towards the quota of
+     * the first Mission Job (in quota order) that may take it and still has room. Each job draws among the missions it
+     * may take, weighted by {@link Mission#weight()}; a mission appears at most {@link Mission#maxPerOffer()} times,
+     * kept entries included. A job's share stays shorter when every mission it may take is at its maximum; the whole
+     * offer never exceeds {@link #MAX_OFFER_SIZE}.
      *
-     * @param offer    the current entries
-     * @param pool     all missions by id, in a stable order
-     * @param unlocked the Mission Jobs the board level unlocks
-     * @param size     the offer size
-     * @param random   the random source
+     * @param offer  the current entries
+     * @param pool   all missions by id, in a stable order
+     * @param quotas the number of missions per Mission Job, in drawing order
+     * @param random the random source
      * @return the new entries, marked ones first
      */
-    public static List<MissionOffer.Entry> refill(List<MissionOffer.Entry> offer, Map<Identifier, Mission> pool, Collection<Job> unlocked,
-            int size, RandomSource random) {
+    public static List<MissionOffer.Entry> refill(List<MissionOffer.Entry> offer, Map<Identifier, Mission> pool, Map<Job, Integer> quotas,
+            RandomSource random) {
         List<MissionOffer.Entry> result = new ArrayList<>();
         Map<Identifier, Integer> copies = new HashMap<>();
+        Map<Job, Integer> left = new LinkedHashMap<>(quotas);
         for (MissionOffer.Entry entry : offer) {
-            if (entry.marked() && pool.containsKey(entry.mission())) {
+            Mission mission = pool.get(entry.mission());
+            if (entry.marked() && mission != null) {
                 result.add(entry);
                 copies.merge(entry.mission(), 1, Integer::sum);
+                left.entrySet().stream().filter(quota -> quota.getValue() > 0 && mission.jobs().contains(quota.getKey())).findFirst()
+                        .ifPresent(quota -> quota.setValue(quota.getValue() - 1));
             }
         }
-        List<Identifier> drawable = pool.entrySet().stream()
-                .filter(mission -> mission.getValue().jobs().stream().anyMatch(unlocked::contains))
-                .map(Map.Entry::getKey).toList();
-        while (result.size() < size) {
-            int total = 0;
-            for (Identifier id : drawable) {
-                total += available(pool.get(id), copies.getOrDefault(id, 0));
-            }
-            if (total == 0) {
-                break;
-            }
-            int roll = random.nextInt(total);
-            for (Identifier id : drawable) {
-                roll -= available(pool.get(id), copies.getOrDefault(id, 0));
-                if (roll < 0) {
-                    result.add(new MissionOffer.Entry(id, false));
-                    copies.merge(id, 1, Integer::sum);
+        for (Map.Entry<Job, Integer> quota : left.entrySet()) {
+            List<Identifier> drawable = pool.entrySet().stream()
+                    .filter(mission -> mission.getValue().jobs().contains(quota.getKey()))
+                    .map(Map.Entry::getKey).toList();
+            for (int i = 0; i < quota.getValue() && result.size() < MAX_OFFER_SIZE; i++) {
+                Optional<Identifier> drawn = draw(drawable, pool, copies, random);
+                if (drawn.isEmpty()) {
                     break;
                 }
+                result.add(new MissionOffer.Entry(drawn.get(), false));
+                copies.merge(drawn.get(), 1, Integer::sum);
             }
         }
         return List.copyOf(result);
+    }
+
+    /** One weighted draw among the missions below their maximum; empty if every one is at it. */
+    private static Optional<Identifier> draw(List<Identifier> drawable, Map<Identifier, Mission> pool, Map<Identifier, Integer> copies,
+            RandomSource random) {
+        int total = 0;
+        for (Identifier id : drawable) {
+            total += available(pool.get(id), copies.getOrDefault(id, 0));
+        }
+        if (total == 0) {
+            return Optional.empty();
+        }
+        int roll = random.nextInt(total);
+        for (Identifier id : drawable) {
+            roll -= available(pool.get(id), copies.getOrDefault(id, 0));
+            if (roll < 0) {
+                return Optional.of(id);
+            }
+        }
+        return Optional.empty();
     }
 
     /** The draw weight of a mission, 0 once it reached its maximum. */
