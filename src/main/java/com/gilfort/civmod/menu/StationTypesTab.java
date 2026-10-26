@@ -10,7 +10,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 /**
- * The "Station Types" tab of a Producing JobBlock (vault {@code Systems/JobBlock.md}): its 5 slots for unlock items,
+ * The "Station Types" tab of a Producing JobBlock or the Mission Board (vault {@code Systems/JobBlock.md}): its 5 slots for unlock items,
  * with the player inventory to pick them from ({@link StationTypesTabData}, synced while the window is open). Shown when
  * the Base Job has Specializations; a menu button per slot puts the carried item into it.
  */
@@ -21,7 +21,7 @@ public final class StationTypesTab extends JobBlockTab {
     private final boolean specializations;
 
     /**
-     * @param specializations whether the Base Job has Producing Specializations (else the tab is hidden)
+     * @param specializations whether the Base Job has Specializations the tab unlocks (else the tab is hidden)
      */
     StationTypesTab(boolean specializations) {
         this.specializations = specializations;

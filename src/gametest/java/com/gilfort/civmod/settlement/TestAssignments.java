@@ -7,6 +7,7 @@ import java.util.UUID;
 import com.gilfort.civmod.api.Job;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.Item;
 
 /**
  * GameTest access to the JobBlock side of {@link JobAssignments}, for tests that build settlement data without settler
@@ -32,6 +33,11 @@ public final class TestAssignments {
     /** {@link JobAssignments#switchJob(SettlementData, BlockPos, UUID, Collection, Job)} */
     public static boolean switchJob(SettlementData data, BlockPos jobBlock, UUID settler, Collection<Job> otherJobs, Job job) {
         return JobAssignments.switchJob(data, jobBlock, settler, otherJobs, job);
+    }
+
+    /** Fills a Station Types slot directly, without the GUI ({@link StationTypes#put} needs a JobBlock in the world). */
+    public static void setStationType(SettlementData data, BlockPos jobBlock, int slot, Item item) {
+        JobBlockSite.blockAt(data, jobBlock).orElseThrow().setStationType(slot, item);
     }
 
     /** {@link JobAssignments#unassign(SettlementData, BlockPos)} */

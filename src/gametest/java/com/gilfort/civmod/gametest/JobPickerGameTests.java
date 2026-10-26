@@ -27,6 +27,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.item.Items;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.registries.RegisterEvent;
@@ -153,8 +154,9 @@ public final class JobPickerGameTests {
         Job adventurer = ModJobs.ADVENTURER.get();
         Job specialization = specialization();
         Settlement settlement = place(data, BOARD, adventurer, 1);
-        helper.assertTrue(assign(data, settlement, BOARD, 0, specialization) == AssignResult.NOT_OFFERED, "Specializations from level 2");
         SettlementManager.setLevel(data, BOARD, 2, SettlementManager.Listener.NONE);
+        helper.assertTrue(assign(data, settlement, BOARD, 0, specialization) == AssignResult.NOT_OFFERED, "Specializations only by Station Types");
+        TestAssignments.setStationType(data, BOARD, 1, Items.BELL);
         helper.assertTrue(assign(data, settlement, BOARD, 0, specialization) == AssignResult.OK, "Joins as the Specialization");
         helper.assertTrue(block(data, BOARD).assignees().get(0).job() == specialization, "The assignee records its Mission Job");
         // Other Mission Jobs (the example addon's Scout) share the places too; only the two used here are compared.

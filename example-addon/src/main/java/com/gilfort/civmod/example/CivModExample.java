@@ -28,8 +28,8 @@ import net.neoforged.neoforge.registries.DeferredRegister;
  * Example addon for CivMod's addon API: every Job here uses {@code com.gilfort.civmod.api} only (the build fails on any
  * other CivMod class).
  * <p>
- * The Scout is a Mission Job. Like every Mission Job it has no JobBlock: it is a Specialization of the Adventurer, so the
- * Mission Board offers it from level 2. Its mission {@code civmod_example:scouting_trip} names it in the datapack
+ * The Scout is a Mission Job. Like every Mission Job it has no JobBlock: it is a Specialization of the Adventurer, so a
+ * spyglass put into a Station Types slot of a Mission Board unlocks it there. Its mission {@code civmod_example:scouting_trip} names it in the datapack
  * ({@code data/civmod_example/civmod/mission/scouting_trip.json}); its names are the lang keys
  * {@code job.civmod_example.scout} and {@code job.civmod_example.scout.indefinite}.
  * <p>
@@ -57,7 +57,8 @@ public final class CivModExample {
 
     /** A careful Mission Job: half the death chance of the outcome formula. */
     public static final DeferredHolder<Job, Job> SCOUT = JOBS.register("scout", () -> Job.builder(JobCategory.MISSION)
-            .parent(CivModJobs.ADVENTURER).icon(() -> Items.SPYGLASS).hungerFactor(1.0).baseExp(8).profile(ScoutProfile::new).build());
+            .parent(CivModJobs.ADVENTURER).icon(() -> Items.SPYGLASS).unlockItem(() -> Items.SPYGLASS).hungerFactor(1.0).baseExp(8)
+            .profile(ScoutProfile::new).build());
 
     /** The Sand Digger's JobBlock. */
     public static final DeferredBlock<Block> SAND_DIGGER_BLOCK = BLOCKS.registerBlock("sand_digger_block",

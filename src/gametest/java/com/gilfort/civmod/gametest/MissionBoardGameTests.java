@@ -15,11 +15,13 @@ import com.gilfort.civmod.registry.ModItems;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments.AssignResult;
 import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementRules;
+import com.gilfort.civmod.settlement.StationTypes;
 import com.gilfort.civmod.settlement.TestAssignments;
 import com.mojang.serialization.JsonOps;
 
@@ -42,8 +44,8 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 /**
  * GameTests for the Mission Board and the Adventurer assignment (vault {@code Systems/Mission Jobs.md}).
  * <p>
- * Registers {@code civmod:gametest_mission_specialization}, a Mission Specialization of the Adventurer, to test which
- * Mission Jobs a board level unlocks.
+ * Registers {@code civmod:gametest_mission_specialization}, a Mission Specialization of the Adventurer unlocked by a bell
+ * in a Station Types slot of the board.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class MissionBoardGameTests {
@@ -63,7 +65,7 @@ public final class MissionBoardGameTests {
     @SubscribeEvent
     static void onRegister(RegisterEvent event) {
         event.register(ModJobs.KEY, helper -> helper.register(CivMod.id("gametest_mission_specialization"), Job.builder(JobCategory.MISSION)
-                .parent(ModJobs.ADVENTURER).icon(ModItems.MISSION_BOARD).build()));
+                .parent(ModJobs.ADVENTURER).icon(ModItems.MISSION_BOARD).unlockItem(() -> Items.BELL).build()));
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "mission_board_joins_settlement", MissionBoardGameTests::joinsSettlement);
             register(helper, "mission_board_capacity", MissionBoardGameTests::capacity);
@@ -199,15 +201,17 @@ public final class MissionBoardGameTests {
         helper.succeed();
     }
 
-    /** Level 1 offers only the Adventurer; Specializations from level 2. */
+    /** The board level alone unlocks no Specialization; its Station Types do (the bell: the test Specialization). */
     private static void unlockedJobs(GameTestHelper helper) {
         Job adventurer = ModJobs.ADVENTURER.get();
         Job specialization = ModJobs.REGISTRY.getValue(CivMod.id("gametest_mission_specialization"));
-        helper.assertTrue(adventurer.offeredAt(1).equals(List.of(adventurer)), "Level 1: " + adventurer.offeredAt(1));
-        List<Job> level2 = adventurer.offeredAt(2);
-        helper.assertTrue(level2.get(0) == adventurer && level2.contains(specialization)
-                && level2.stream().skip(1).allMatch(job -> job.parent().orElse(null) == adventurer), "Level 2: " + level2);
-        helper.assertTrue(ModJobs.LUMBERJACK.get().offeredAt(5).equals(List.of(ModJobs.LUMBERJACK.get())), "No Lumberjack Specializations");
+        SettlementData data = new SettlementData();
+        placeBoard(data, 5);
+        helper.assertTrue(JobPlaces.offered(block(data, BOARD)).equals(List.of(adventurer)), "Level 5: " + JobPlaces.offered(block(data, BOARD)));
+        TestAssignments.setStationType(data, BOARD, 1, Items.BELL);
+        helper.assertTrue(JobPlaces.offered(block(data, BOARD)).equals(List.of(adventurer, specialization)),
+                "With a bell: " + JobPlaces.offered(block(data, BOARD)));
+        helper.assertTrue(StationTypes.specializations(ModJobs.LUMBERJACK.get()).isEmpty(), "No Lumberjack Specializations");
 
         helper.assertTrue(SettlementRules.skillCap(1) == 20 && SettlementRules.skillCap(5) == 100, "Skill cap 20 / 100");
         helper.succeed();

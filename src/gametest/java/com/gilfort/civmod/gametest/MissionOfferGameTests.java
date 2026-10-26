@@ -17,6 +17,7 @@ import com.gilfort.civmod.settlement.MissionOffers;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -26,6 +27,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.storage.loot.BuiltInLootTables;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -118,15 +120,19 @@ public final class MissionOfferGameTests {
         helper.succeed();
     }
 
-    /** Only missions a Mission Job unlocked at the board level can take are drawn. */
+    /** Only missions a Mission Job unlocked at the board (by its Station Types) can take are drawn. */
     private static void drawLevelFilter(GameTestHelper helper) {
         Map<Identifier, Mission> pool = new LinkedHashMap<>();
         pool.put(SPECIAL, mission(specialization(), 1, 20));
         pool.put(COMMON, mission(ModJobs.ADVENTURER.get(), 1, 20));
-        List<MissionOffer.Entry> level1 = MissionRules.refill(List.of(), pool, ModJobs.ADVENTURER.get().offeredAt(1), 20, RandomSource.create(2L));
-        helper.assertTrue(count(level1, SPECIAL) == 0 && count(level1, COMMON) == 20, "Level 1 draws only Adventurer missions: " + level1);
-        List<MissionOffer.Entry> level2 = MissionRules.refill(List.of(), pool, ModJobs.ADVENTURER.get().offeredAt(2), 20, RandomSource.create(2L));
-        helper.assertTrue(count(level2, SPECIAL) > 0, "Level 2 also draws Specialization missions: " + level2);
+        SettlementData data = new SettlementData();
+        BlockPos board = new BlockPos(0, 64, 0);
+        placeBoard(data, board, 5);
+        List<MissionOffer.Entry> locked = MissionOffers.refresh(data, board, 1L, pool, RandomSource.create(2L));
+        helper.assertTrue(count(locked, SPECIAL) == 0 && count(locked, COMMON) == 20, "Without Station Types only Adventurer missions: " + locked);
+        TestAssignments.setStationType(data, board, 1, Items.BELL);
+        List<MissionOffer.Entry> unlocked = MissionOffers.refresh(data, board, 2L, pool, RandomSource.create(2L));
+        helper.assertTrue(count(unlocked, SPECIAL) > 0, "The bell adds Specialization missions: " + unlocked);
         helper.succeed();
     }
 

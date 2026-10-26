@@ -252,6 +252,8 @@ public final class MissionRunGameTests {
         level.addFreshEntity(settler);
         settler.joinSettlement(data, settlement);
         settler.getSkills().set(missionJob, new SettlerSkills.Skill(SKILL, 0));
+        // A Mission Specialization is unlocked by its item in a Station Types slot.
+        missionJob.parent().flatMap(base -> missionJob.unlockItem()).ifPresent(item -> TestAssignments.setStationType(data, board, 1, item));
         TestAssignments.assign(data, board, settler.getUUID(), name, settlement.id(), List.of(), missionJob);
         settler.addJob(new SettlerJob(missionJob, board));
         // Seeds from 1 until the daily offer holds a mission the Job may take (seed 1 for the Adventurer); each try is an

@@ -161,9 +161,10 @@ public final class JobBlockTabGameTests {
         helper.succeed();
     }
 
-    /** Mission Board: Storage, Info, Missions. */
+    /** Mission Board: Storage, Info, Missions, Station Types (tall, with the player inventory). */
     private static void missionBoard(GameTestHelper helper) {
-        assertTabs(helper, ModJobs.ADVENTURER.get(), List.of(STORAGE, INFO, MISSIONS), List.of(Items.CHEST, Items.BOOK, Items.MAP), false, List.of(0));
+        assertTabs(helper, ModJobs.ADVENTURER.get(), List.of(STORAGE, INFO, MISSIONS, STATION_TYPES),
+                List.of(Items.CHEST, Items.BOOK, Items.MAP, Items.SMITHING_TABLE), true, List.of(0, 3));
         helper.succeed();
     }
 

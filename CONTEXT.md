@@ -71,11 +71,11 @@ _Avoid_: Blacklist, filter
 A Job a Level 1 JobBlock offers; root of a specialization tree.
 
 **Specialization**:
-A Job with a parent Base Job, unlocked per JobBlock by its unlock item in a Station Types slot of the parent's JobBlock (Mission Jobs: offered by the Mission Board from level 2); it may belong to a different Job Category than its parent. Code: `Job.parent`, `Job.unlockItem` (`unlock_item` in `civmod_jobs/<job>.json`), `StationTypes.specializations`.
+A Job with a parent Base Job, unlocked per JobBlock by its unlock item in a Station Types slot of the parent's JobBlock (Mission Jobs: in a Station Types slot of the Mission Board); it may belong to a different Job Category than its parent. Code: `Job.parent`, `Job.unlockItem` (`unlock_item` in `civmod_jobs/<job>.json`), `StationTypes.specializations`.
 _Avoid_: Advanced job, sub-job
 
 **Station Types**:
-The 5 slots of a JobBlock whose Base Job has Specializations (not the Mission Board): slot 1 the Base Job's station (locked), one more open slot per level. An unlock item put into an open slot is consumed and unlocks every Specialization naming it at this JobBlock; put into a filled slot it replaces the old one, settlers of a Job no longer unlocked fall back to the Base Job (its library is kept, locked). Not the work place: the Job still needs its station in the world. Code: `StationTypes` (`put`, `unlocked`, `overview`), saved in `SettlementBlock.stationTypes()`; tab `StationTypesTab` (button `StationTypesTab.slotButtonId`, data `StationTypesTabData`), `StationTypesTabView`; offered Jobs `JobPlaces.offered(SettlementBlock)`.
+The 5 slots of a JobBlock whose Base Job has Specializations (the Mission Board too: slot 1 the Adventurer): slot 1 the Base Job's station (locked), one more open slot per level. An unlock item put into an open slot is consumed and unlocks every Specialization naming it at this JobBlock; put into a filled slot it replaces the old one, settlers of a Job no longer unlocked fall back to the Base Job (its library is kept, locked). Not the work place: the Job still needs its station in the world. Code: `StationTypes` (`put`, `unlocked`, `overview`), saved in `SettlementBlock.stationTypes()`; tab `StationTypesTab` (button `StationTypesTab.slotButtonId`, data `StationTypesTabData`), `StationTypesTabView`; offered Jobs `JobPlaces.offered(SettlementBlock)`.
 _Avoid_: Upgrade slot, unlock slot
 
 **Laborer**:
@@ -106,7 +106,10 @@ A JobBlock as a settler sees it: its settlement, settlement block, level, skill 
 _Avoid_: Looking up `SettlementData.settlementAt(pos)` then `Settlement.block(pos)` by hand
 
 **Mission Board**:
-The JobBlock of all Mission Jobs; holds several settlers and the list of selected Missions. Code: `ModBlocks.MISSION_BOARD` (a `JobBlock` offering the Adventurer), capacity in `SettlementRules.capacity` (the `settlers` list of `civmod_upgrades/adventurer.json`, shared by all Mission Jobs, `JobPlaces`), settlers in `SettlementBlock.assignees()`; a settler's Mission Job is chosen in the Job picker when it joins and changed with the Job switcher.
+The JobBlock of all Mission Jobs; holds several settlers and the list of selected Missions. Code: `ModBlocks.MISSION_BOARD` (a `JobBlock` offering the Adventurer), capacity in `SettlementRules.capacity` (the `settlers` list of `civmod_upgrades/adventurer.json`, shared by all Mission Jobs, `JobPlaces`), settlers in `SettlementBlock.assignees()`; a settler's Mission Job is chosen in the Job picker when it joins and changed with the Job switcher. Its Mission Specializations are unlocked by Station Types (tabs: Storage, Info, Missions, Station Types; the Station Types tab makes the window tall).
+
+**Bard**:
+A Mission Specialization of the Adventurer, unlocked by a note block in a Station Types slot of the Mission Board; does the Villager missions (later). Until a mission allows it, it finds no fitting mission and works its next priority. Code: `ModJobs.BARD` (base EXP 10, hunger factor 1.0, overridable in `civmod_jobs/bard.json`).
 
 **Mission**:
 A datapack-defined task a Mission Job settler leaves the settlement for (duration, difficulty, loot). Code: `Mission` in the `civmod:mission` datapack registry (`Missions`, files in `data/<namespace>/civmod/mission/`); arithmetic in `MissionRules`, outcome constants in `OutcomeRules` (`civmod_mission/outcome.json`). The mission a settler reserved or is away on: `MissionTrip`; who takes which mission: `MissionPicks`.
