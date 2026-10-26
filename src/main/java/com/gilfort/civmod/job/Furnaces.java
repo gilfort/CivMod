@@ -1,6 +1,8 @@
 package com.gilfort.civmod.job;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.gilfort.civmod.registry.ModAttachments;
@@ -54,7 +56,7 @@ final class Furnaces {
         if (!(level.getBlockEntity(pos) instanceof AbstractFurnaceBlockEntity furnace)) {
             return true;
         }
-        return furnace.isEmpty() && furnace.saveCustomOnly(level.registryAccess()).getIntOr("lit_time_remaining", 0) <= 0;
+        return furnace.isEmpty() && furnace.litTimeRemaining <= 0;
     }
 
     /**
@@ -85,7 +87,8 @@ final class Furnaces {
 
     /**
      * Pays the heat of one execution at a station: its Remaining Heat first, then fuel from the buffer in the list's
-     * order, each burnt for its vanilla burn time; what is left over stays with the station.
+     * order, each burnt for its vanilla burn time; what is left over stays with the station. A listed item that does
+     * not burn here stays in the buffer, the next listed fuel is burnt instead.
      *
      * @param level  the level
      * @param pos    the station
@@ -96,20 +99,15 @@ final class Furnaces {
      */
     static boolean pay(ServerLevel level, BlockPos pos, int cost, List<Item> fuels, JobBuffer buffer) {
         int heat = heat(level, pos);
+        BurnTimes burnTimes = new BurnTimes(level, pos);
         while (heat < cost) {
-            Optional<ItemStack> fuel = fuels.stream().map(item -> buffer.takeOne(stack -> stack.is(item))).filter(stack -> !stack.isEmpty()).findFirst();
+            Optional<ItemStack> fuel = fuels.stream().filter(item -> burnTimes.of(item) > 0).map(item -> buffer.takeOne(stack -> stack.is(item)))
+                    .filter(stack -> !stack.isEmpty()).findFirst();
             if (fuel.isEmpty()) {
                 setHeat(level, pos, heat);
                 return false;
             }
-            int burn = burnTime(level, pos, fuel.get());
-            if (burn <= 0) {
-                // Not burnable here after all: back into the buffer, it is no fuel.
-                buffer.add(fuel.get());
-                setHeat(level, pos, heat);
-                return false;
-            }
-            heat += burn;
+            heat += burnTimes.of(fuel.get().getItem());
             // A lava bucket leaves its bucket, like in a furnace.
             ItemStackTemplate remainder = fuel.get().getCraftingRemainder();
             if (remainder != null) {
@@ -118,6 +116,34 @@ final class Furnaces {
         }
         setHeat(level, pos, heat - cost);
         return true;
+    }
+
+    /**
+     * The burn times of fuel items at a station, each computed once ({@link #burnTime} builds a loot context): kept for
+     * one start of a round or one payment.
+     */
+    static final class BurnTimes {
+
+        private final ServerLevel level;
+        private final BlockPos pos;
+        private final Map<Item, Integer> known = new HashMap<>();
+
+        /**
+         * @param level the level
+         * @param pos   the station
+         */
+        BurnTimes(ServerLevel level, BlockPos pos) {
+            this.level = level;
+            this.pos = pos;
+        }
+
+        /**
+         * @param fuel a fuel item
+         * @return its burn time in ticks at the station, 0 if it does not burn
+         */
+        int of(Item fuel) {
+            return known.computeIfAbsent(fuel, item -> burnTime(level, pos, new ItemStack(item)));
+        }
     }
 
     /**

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:furnaces_pay_skips_unburnable_fuel",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
