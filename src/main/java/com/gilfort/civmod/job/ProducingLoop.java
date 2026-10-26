@@ -39,6 +39,7 @@ import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.Warehouses;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.TagKey;
@@ -90,9 +91,10 @@ final class ProducingLoop implements CategoryLoop {
      *
      * @param round  the round started, empty if none
      * @param more   whether more requests are left to try at the next decision
-     * @param status the job's status without a round ("Missing inputs", "No request"), empty with one
+     * @param status  the job's status without a round ("Missing inputs", "No request"), empty with one
+     * @param subject what the status names ("Missing: 1× Coal"), if anything
      */
-    private record Pick(Optional<Round> round, boolean more, Optional<JobStatus> status) {
+    private record Pick(Optional<Round> round, boolean more, Optional<JobStatus> status, Optional<Component> subject) {
     }
 
     private final SettlerWork shell;
@@ -133,7 +135,7 @@ final class ProducingLoop implements CategoryLoop {
             }
             Pick pick = start(level, job, site, stations(level, job, site, day, ofDay), level.getGameTime(), dayTime, false);
             if (pick.round().isEmpty()) {
-                return pick.status().map(JobStep::skip).orElseGet(JobStep::skip);
+                return pick.status().map(status -> JobStep.skip(status, pick.subject())).orElseGet(JobStep::skip);
             }
             workplace.setRound(pick.round().get());
         }
@@ -181,7 +183,8 @@ final class ProducingLoop implements CategoryLoop {
      * and claims what can be made of it in one round.
      *
      * A Job burning fuel claims only what the listed fuel in its buffer and in stock covers at its stations (their
-     * Remaining Heat first) and fetches that fuel with the inputs; without any it reports "Missing: Fuel".
+     * Remaining Heat first) and fetches that fuel with the inputs; without any, job status and request name the one
+     * listed fuel ("Missing: 1× Coal"), or say "Missing: Fuel" with several or no listed fuels.
      *
      * @param stations the stations of the main recipe type worked in parallel (the station of the day first)
      * @param now      the time for skipping (live: game time, catch-up: the simulated clock)
@@ -203,8 +206,9 @@ final class ProducingLoop implements CategoryLoop {
         boolean more = false;
         // A request it can make that waits out its skip still counts: "Missing inputs", not "No request".
         boolean skipped = false;
-        boolean fuelLacking = false;
-        Optional<List<Item>> fuels = profile.fuel().map(defaults -> Fuels.of(site.block()));
+        Optional<Request.Missing> fuelLacking = Optional.empty();
+        Optional<FuelSupply> fuel = Fuels.forJob(job.jobType(), site.block())
+                .map(list -> new FuelSupply(list, new Furnaces.BurnTimes(level, stations.getFirst()), stations));
         boolean byDeliveryman = site.block().byDeliveryman();
         // On "Deliveryman": every store, read once at the first try.
         Map<BlockPos, Map<Item, Integer>> stores = null;
@@ -240,19 +244,17 @@ final class ProducingLoop implements CategoryLoop {
                 CraftPlan failed = CraftPlan.plan(level, profile, checked, request.item(), request.amount(), held, available);
                 Requests.setMissing(data, settlement, request.id(), failed.missing());
                 skips.put(request.id(), now + SKIP_TICKS);
-                fuelLacking = false;
+                fuelLacking = Optional.empty();
                 continue;
             }
-            if (fuels.isPresent()) {
-                amount = fuelCovered(level, job, fuels.get(), stations, checked, request.item(), amount, held, available);
+            if (fuel.isPresent()) {
+                amount = fuelCovered(level, job, fuel.get(), checked, request.item(), amount, held, available);
                 if (amount <= 0) {
-                    // "Missing: Fuel": the request names the first listed fuel.
-                    FuelNeed need = fuelNeed(level, job, fuels.get(), stations, CraftPlan.plan(level, profile, checked, request.item(), 1, held, available),
+                    Request.Missing lacking = fuelMissing(level, job, fuel.get(), CraftPlan.plan(level, profile, checked, request.item(), 1, held, available),
                             held, available);
-                    Requests.setMissing(data, settlement, request.id(), fuels.get().isEmpty() ? List.of()
-                            : List.of(new Request.Missing(fuels.get().getFirst(), Math.clamp(need.missing(), 1, 64))));
+                    Requests.setMissing(data, settlement, request.id(), List.of(lacking));
                     skips.put(request.id(), now + SKIP_TICKS);
-                    fuelLacking = true;
+                    fuelLacking = Optional.of(lacking);
                     continue;
                 }
             }
@@ -262,9 +264,9 @@ final class ProducingLoop implements CategoryLoop {
             }
             CraftPlan plan = CraftPlan.plan(level, profile, checked, request.item(), claimed, held, available);
             Map<Item, Integer> takes = new LinkedHashMap<>(plan.takes());
-            fuels.ifPresent(list -> fuelNeed(level, job, list, stations, plan, held, available).takes()
+            fuel.ifPresent(supply -> fuelNeed(level, job, supply, plan, held, available).takes()
                     .forEach((item, count) -> ItemCounts.add(takes, item, count)));
-            workplace.setMissingFuel(false);
+            workplace.setMissingFuel(Optional.empty());
             List<BlockPos> sources = new ArrayList<>();
             Map<Item, Integer> rest = new HashMap<>(takes);
             if (!allot(rest, collect).isEmpty()) {
@@ -286,17 +288,44 @@ final class ProducingLoop implements CategoryLoop {
                     sources = List.of(site.collect());
                 }
             }
-            return new Pick(Optional.of(new Round(request.id(), request.item(), plan, takes, sources, inputs)), true, Optional.empty());
+            return new Pick(Optional.of(new Round(request.id(), request.item(), plan, takes, sources, inputs)), true, Optional.empty(),
+                    Optional.empty());
         }
         if (tries > 0) {
             workplace.setMissingFuel(fuelLacking);
         }
-        JobStatus missing = workplace.missingFuel() ? JobStatus.MISSING_FUEL : JobStatus.MISSING_INPUTS;
-        return new Pick(Optional.empty(), more, Optional.of(tries > 0 || skipped ? missing : JobStatus.NO_REQUEST));
+        if (tries == 0 && !skipped) {
+            return new Pick(Optional.empty(), more, Optional.of(JobStatus.NO_REQUEST), Optional.empty());
+        }
+        Optional<Request.Missing> missingFuel = workplace.missingFuel();
+        return new Pick(Optional.empty(), more, Optional.of(missingFuel.isPresent() ? JobStatus.MISSING_FUEL : JobStatus.MISSING_INPUTS),
+                missingFuel.filter(missing -> !missing.anyFuel()).map(Request.Missing::text));
+    }
+
+    /**
+     * The fuel a Job burns at the stations of a round being planned.
+     *
+     * @param fuels     the fuel list in priority order
+     * @param burnTimes their burn times, computed once for the planning
+     * @param stations  the stations of the main recipe type worked in parallel (the station of the day first)
+     */
+    private record FuelSupply(List<Item> fuels, Furnaces.BurnTimes burnTimes, List<BlockPos> stations) {
     }
 
     /** The fuel a plan needs: what to fetch by item, and how many of the first listed fuel are missing. */
     private record FuelNeed(Map<Item, Integer> takes, int missing) {
+    }
+
+    /**
+     * What a request lacks of fuel when not even one item is covered: the one listed fuel by count ("Missing: 1×
+     * Coal"), else fuel of any kind ("Missing: Fuel": any of several will do, or none is listed).
+     */
+    private Request.Missing fuelMissing(ServerLevel level, SettlerJob job, FuelSupply fuel, CraftPlan one, Map<Item, Integer> held,
+            Map<Item, Integer> available) {
+        if (fuel.fuels().size() != 1 || fuel.burnTimes().of(fuel.fuels().getFirst()) <= 0) {
+            return Request.Missing.ANY_FUEL;
+        }
+        return new Request.Missing(fuel.fuels().getFirst(), Math.clamp(fuelNeed(level, job, fuel, one, held, available).missing(), 1, 64));
     }
 
     /**
@@ -305,15 +334,15 @@ final class ProducingLoop implements CategoryLoop {
      *
      * @return the amount to claim, 0 if not even one item is covered
      */
-    private int fuelCovered(ServerLevel level, SettlerJob job, List<Item> fuels, List<BlockPos> stations, List<Pattern> checked, Item item,
-            int amount, Map<Item, Integer> held, Map<Item, Integer> available) {
+    private int fuelCovered(ServerLevel level, SettlerJob job, FuelSupply fuel, List<Pattern> checked, Item item, int amount,
+            Map<Item, Integer> held, Map<Item, Integer> available) {
         ProducingProfile profile = profile(job);
         int low = 0;
         int high = amount;
         while (low < high) {
             int middle = (low + high + 1) / 2;
             CraftPlan plan = CraftPlan.plan(level, profile, checked, item, middle, held, available);
-            if (fuelNeed(level, job, fuels, stations, plan, held, available).missing() == 0) {
+            if (fuelNeed(level, job, fuel, plan, held, available).missing() == 0) {
                 low = middle;
             } else {
                 high = middle - 1;
@@ -327,15 +356,15 @@ final class ProducingLoop implements CategoryLoop {
      * main recipe type go round the stations in order, other steps run at the first; a station short of heat burns the
      * next fuel unit, the listed fuels in priority order (the buffer's units of a fuel before the stock's).
      */
-    private FuelNeed fuelNeed(ServerLevel level, SettlerJob job, List<Item> fuels, List<BlockPos> stations, CraftPlan plan,
-            Map<Item, Integer> held, Map<Item, Integer> available) {
-        int[] heat = stations.stream().mapToInt(pos -> Furnaces.heat(level, pos)).toArray();
-        BlockPos first = stations.getFirst();
+    private FuelNeed fuelNeed(ServerLevel level, SettlerJob job, FuelSupply supply, CraftPlan plan, Map<Item, Integer> held,
+            Map<Item, Integer> available) {
+        List<Item> fuels = supply.fuels();
+        int[] heat = supply.stations().stream().mapToInt(pos -> Furnaces.heat(level, pos)).toArray();
         Map<Item, Integer> inBuffer = new HashMap<>();
         Map<Item, Integer> inStock = new HashMap<>();
         Map<Item, Integer> burn = new HashMap<>();
         for (Item fuel : fuels) {
-            int burnTime = Furnaces.burnTime(level, first, new ItemStack(fuel));
+            int burnTime = supply.burnTimes().of(fuel);
             burn.put(fuel, burnTime);
             if (burnTime > 0) {
                 inBuffer.put(fuel, held.getOrDefault(fuel, 0));
@@ -693,7 +722,7 @@ final class ProducingLoop implements CategoryLoop {
             return false;
         }
         CraftPlan.Step step = round.steps.get(round.step);
-        Optional<List<Item>> fuels = profile(job).fuel().map(defaults -> Fuels.of(site.block()));
+        Optional<List<Item>> fuels = Fuels.forJob(job.jobType(), site.block());
         int cost = recipe(level, step.pattern()).map(Furnaces::heatOf).orElse(Furnaces.STANDARD_HEAT);
         JobBuffer buffer = shell.workplace(job.jobBlock()).buffer();
         boolean noFuel = false;
@@ -897,7 +926,7 @@ final class ProducingLoop implements CategoryLoop {
                 free -> nearestStation(level, site, main, pos -> free.test(pos) && Furnaces.isIdle(level, pos)), site, day);
         if (station != null) {
             // The station extras are read when the station of the day is chosen and kept for the day.
-            workplace.jobFactor(level, job.jobType());
+            workplace.fixJobFactorOfDay(level, job.jobType());
         }
         return station;
     }
@@ -1017,20 +1046,9 @@ final class ProducingLoop implements CategoryLoop {
         return found;
     }
 
+    /** The nearest station of a tag ({@link #stationsAround}) that passes the "free" test, null if none does. */
     private static @Nullable BlockPos nearestStation(ServerLevel level, JobBlockSite site, TagKey<Block> tag, Predicate<BlockPos> free) {
-        BlockPos center = site.pos();
-        BlockPos best = null;
-        double bestDistance = STATION_RADIUS * STATION_RADIUS + 1.0;
-        for (BlockPos pos : BlockPos.betweenClosed(center.offset(-STATION_RADIUS, -STATION_HEIGHT, -STATION_RADIUS),
-                center.offset(STATION_RADIUS, STATION_HEIGHT, STATION_RADIUS))) {
-            double distance = pos.distSqr(center);
-            if (distance < bestDistance && level.isLoaded(pos) && level.getBlockState(pos).is(tag)
-                    && JobAssignments.insideBorder(site.settlement(), pos) && free.test(pos)) {
-                best = pos.immutable();
-                bestDistance = distance;
-            }
-        }
-        return best;
+        return stationsAround(level, site, tag).stream().filter(free).findFirst().orElse(null);
     }
 
     /** Every station of a tag within {@value #STATION_RADIUS} blocks of the JobBlock inside the border, nearest first. */
@@ -1097,7 +1115,7 @@ final class ProducingLoop implements CategoryLoop {
                     return new SimulatedWork(operations, ticks);
                 }
                 Pick pick = start(level, job, site, stations(level, job, site, day, ofDay), (long) clock, DayClock.dayTime((long) clock), true);
-                pick.status().ifPresent(status -> shell.setStatus(jobBlock, status));
+                pick.status().ifPresent(status -> shell.setStatus(jobBlock, status, pick.subject()));
                 if (pick.round().isEmpty()) {
                     if (!pick.more()) {
                         // Nothing doable: the next job takes the rest of the time.

@@ -240,8 +240,7 @@ public record ClerkTabData(int level, List<StockRule> rules, List<RequestRow> re
                 if (!inputs.getSiblings().isEmpty()) {
                     inputs.append(", ");
                 }
-                inputs.append(Component.translatable("civmod.gui.clerk.request.missing_input", missing.count(),
-                        new ItemStack(missing.item()).getHoverName()));
+                inputs.append(missing.text());
             }
             return Component.translatable("civmod.gui.clerk.request.missing", inputs);
         }

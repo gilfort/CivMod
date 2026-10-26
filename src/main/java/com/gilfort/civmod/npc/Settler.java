@@ -11,6 +11,7 @@ import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.OccupiedPlaces;
 import com.gilfort.civmod.settlement.StationTypes;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
@@ -258,7 +259,7 @@ public class Settler extends PathfinderMob {
             // Its load drops with it: the results it carried are lost.
             com.gilfort.civmod.settlement.Deliveries.dropCarried(SettlementData.get(server), getUUID());
             // Its work places are free for the other settlers again.
-            com.gilfort.civmod.settlement.OccupiedPlaces.releaseAll(SettlementData.get(server), getUUID());
+            OccupiedPlaces.releaseAll(SettlementData.get(server), getUUID());
         }
         super.remove(reason);
     }

@@ -11,7 +11,10 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 /**
  * A request of the settlement (vault {@code Jobs/Clerk.md}, {@code Systems/Producing Jobs.md}): "produce
@@ -57,6 +60,27 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
      * @param count how many are missing
      */
     public record Missing(Item item, int count) {
+
+        /**
+         * Fuel of any kind (vault {@code Jobs/Smelter.md}): a producer burning fuel with several or no fuels listed
+         * misses fuel, not one item ("Missing: Fuel").
+         */
+        public static final Missing ANY_FUEL = new Missing(Items.AIR, 0);
+
+        /**
+         * @return whether this is {@link #ANY_FUEL}
+         */
+        public boolean anyFuel() {
+            return equals(ANY_FUEL);
+        }
+
+        /**
+         * @return the text of the request line and the job status ("6× Cobblestone", "Fuel")
+         */
+        public Component text() {
+            return anyFuel() ? Component.translatable("civmod.gui.clerk.request.missing_fuel")
+                    : Component.translatable("civmod.gui.clerk.request.missing_input", count, new ItemStack(item).getHoverName());
+        }
 
         /** Save codec. */
         public static final Codec<Missing> CODEC = RecordCodecBuilder.create(instance -> instance.group(
