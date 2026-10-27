@@ -42,7 +42,9 @@ public final class Settlement {
             // Saves from before the Clerk may hold "pantries"; they are ignored (vault Systems/Settlement.md, 2026-10-16).
             Codec.unboundedMap(Codec.STRING, UUIDUtil.CODEC).optionalFieldOf("beds", Map.of()).forGetter(Settlement::bedsForCodec),
             Request.CODEC.listOf().optionalFieldOf("requests", List.of()).forGetter(Settlement::requests),
-            DeliveryTask.CODEC.listOf().optionalFieldOf("deliveries", List.of()).forGetter(Settlement::deliveries)
+            DeliveryTask.CODEC.listOf().optionalFieldOf("deliveries", List.of()).forGetter(Settlement::deliveries),
+            Codec.unboundedMap(UUIDUtil.STRING_CODEC, BlockPos.CODEC).optionalFieldOf("bed_reservations", Map.of())
+                    .forGetter(Settlement::bedReservations)
     ).apply(instance, Settlement::new));
 
     private final int id;
@@ -55,6 +57,8 @@ public final class Settlement {
     private final Map<BlockPos, UUID> beds = new LinkedHashMap<>();
     private final List<Request> requests = new ArrayList<>();
     private final List<DeliveryTask> deliveries = new ArrayList<>();
+    /** Converting Villager → the bed reserved for it (vault {@code Systems/NPC Population.md}). */
+    private final Map<UUID, BlockPos> bedReservations = new LinkedHashMap<>();
     /** Clerk JobBlock → its reservations (not saved, see {@link Reservations}). */
     private final Map<BlockPos, List<Reservations.Reservation>> reservations = new HashMap<>();
     /** Occupied work place → who occupies it (not saved, see {@link OccupiedPlaces}). */
@@ -71,11 +75,13 @@ public final class Settlement {
      */
     public Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
             List<SettlementBlock> blocks) {
-        this(id, name, foundedAt, color, settlersDue, members, blocks, Map.of(), List.of(), List.of());
+        this(id, name, foundedAt, color, settlersDue, members, blocks, Map.of(), List.of(), List.of(), Map.of());
     }
 
     private Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
-            List<SettlementBlock> blocks, Map<String, UUID> beds, List<Request> requests, List<DeliveryTask> deliveries) {
+            List<SettlementBlock> blocks, Map<String, UUID> beds, List<Request> requests, List<DeliveryTask> deliveries,
+            Map<UUID, BlockPos> bedReservations) {
+        this.bedReservations.putAll(bedReservations);
         this.requests.addAll(requests);
         this.deliveries.addAll(deliveries);
         beds.forEach((key, owner) -> this.beds.put(BlockPos.of(Long.parseLong(key)), owner));
@@ -204,6 +210,21 @@ public final class Settlement {
 
     Optional<UUID> removeBed(BlockPos head) {
         return Optional.ofNullable(beds.remove(head));
+    }
+
+    /**
+     * @return converting Villager → the bed (head position) reserved for it (read-only; see {@link SettlementData#reserveBed})
+     */
+    public Map<UUID, BlockPos> bedReservations() {
+        return Collections.unmodifiableMap(bedReservations);
+    }
+
+    void putBedReservation(UUID villager, BlockPos head) {
+        bedReservations.put(villager, head.immutable());
+    }
+
+    Optional<BlockPos> removeBedReservation(UUID villager) {
+        return Optional.ofNullable(bedReservations.remove(villager));
     }
 
     /**

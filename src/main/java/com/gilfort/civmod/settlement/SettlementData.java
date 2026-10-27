@@ -172,6 +172,33 @@ public final class SettlementData extends SavedData {
     }
 
     /**
+     * Reserves a free bed for a converting Villager, so no other conversion or Settler counts it.
+     *
+     * @param settlement the settlement the Villager converts into
+     * @param villager   the Villager UUID
+     * @param head       the bed head position
+     */
+    public void reserveBed(Settlement settlement, UUID villager, BlockPos head) {
+        settlement.putBedReservation(villager, head);
+        changed();
+    }
+
+    /**
+     * Frees the bed reserved for a converting Villager.
+     *
+     * @param settlement the settlement
+     * @param villager   the Villager UUID
+     * @return the bed that was reserved
+     */
+    public Optional<BlockPos> releaseBedReservation(Settlement settlement, UUID villager) {
+        Optional<BlockPos> previous = settlement.removeBedReservation(villager);
+        if (previous.isPresent()) {
+            changed();
+        }
+        return previous;
+    }
+
+    /**
      * @param pos a position
      * @return the settlement whose border contains it (nearest JobBlock wins)
      */

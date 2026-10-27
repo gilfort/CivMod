@@ -20,6 +20,12 @@ public final class CivModConfig {
                     "Homeless settlers that already joined count towards this number.")
             .defineInRange("startingSettlers", 4, 0, 32);
 
+    /** Most Settlers a settlement can have; 0 = unlimited. */
+    public static final ModConfigSpec.IntValue MAX_SETTLERS_PER_SETTLEMENT = BUILDER
+            .comment("Most Settlers a settlement can have (running Villager conversions count); 0 = unlimited.",
+                    "Every Settler costs server tick time.")
+            .defineInRange("maxSettlersPerSettlement", 0, 0, 1024);
+
     /** Limits founding to one settlement per player per in-game day. */
     public static final ModConfigSpec.BooleanValue LIMIT_FOUNDING_PER_DAY = BUILDER
             .comment("If true, each player can found at most one settlement per in-game day.",

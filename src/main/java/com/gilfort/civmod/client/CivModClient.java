@@ -9,6 +9,7 @@ import com.gilfort.civmod.client.gui.SettlerScreen;
 import com.gilfort.civmod.item.JobPicker;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 import com.gilfort.civmod.menu.StationTypesTabData;
+import com.gilfort.civmod.npc.VillagerConversion;
 import com.gilfort.civmod.registry.ModBlockEntityTypes;
 import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.registry.ModEntityTypes;
@@ -20,8 +21,12 @@ import com.gilfort.civmod.settlement.SettlementRules;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
+import net.minecraft.client.renderer.entity.VillagerRenderer;
+import net.minecraft.client.renderer.entity.state.VillagerRenderState;
+import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.neoforged.neoforge.client.renderstate.RegisterRenderStateModifiersEvent;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -89,6 +94,20 @@ public final class CivModClient {
     static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(ModBlockEntityTypes.JOB_BLOCK.get(), JobBlockRenderer::new);
         event.registerEntityRenderer(ModEntityTypes.SETTLER.get(), SettlerRenderer::new);
+    }
+
+    /**
+     * A converting Villager shakes like a zombie villager being cured (vault {@code Systems/NPC Population.md}).
+     *
+     * @param event the render state modifier registration event
+     */
+    @SubscribeEvent
+    static void onRegisterRenderStateModifiers(RegisterRenderStateModifiersEvent event) {
+        event.<Villager, VillagerRenderState>registerEntityModifier(VillagerRenderer.class, (villager, state) -> {
+            if (VillagerConversion.isConverting(villager)) {
+                state.isFullyFrozen = true;
+            }
+        });
     }
 
     /**

@@ -44,7 +44,8 @@ public final class SettlerSpawner {
     private static final int CHECK_INTERVAL = 20;
     private static final int SPAWN_RADIUS = 5;
     private static final int SPAWN_ATTEMPTS = 16;
-    private static final double ANNOUNCE_DISTANCE = 64.0;
+    /** How far players hear about new Settlers and settlement names. */
+    static final double ANNOUNCE_DISTANCE = 64.0;
 
     private SettlerSpawner() {
     }
@@ -131,9 +132,34 @@ public final class SettlerSpawner {
         // Provisions for the first days, before a Clerk has food.
         settler.getInventory().setItem(Settler.POCKETS_START, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.BREAD, 2));
         level.addFreshEntity(settler);
+        puff(level, pos);
+        return settler;
+    }
+
+    /**
+     * The cloud puff and sound of a Settler appearing.
+     *
+     * @param level the level
+     * @param pos   where the Settler appears
+     */
+    static void puff(ServerLevel level, Vec3 pos) {
         level.sendParticles(ParticleTypes.CLOUD, pos.x, pos.y + 1.0, pos.z, 12, 0.3, 0.5, 0.3, 0.02);
         level.playSound(null, pos.x, pos.y, pos.z, SoundEvents.ITEM_PICKUP, SoundSource.NEUTRAL, 0.4F, 0.8F);
-        return settler;
+    }
+
+    /**
+     * @param level      the level
+     * @param settlement a settlement
+     * @return the names of its loaded Settlers (a new Settler avoids them)
+     */
+    static Set<String> usedNames(ServerLevel level, Settlement settlement) {
+        Set<String> names = new HashSet<>();
+        for (UUID member : settlement.members()) {
+            if (level.getEntity(member) instanceof Settler settler) {
+                names.add(settler.getName().getString());
+            }
+        }
+        return names;
     }
 
     /**

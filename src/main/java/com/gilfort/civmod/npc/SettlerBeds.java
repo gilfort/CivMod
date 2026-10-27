@@ -2,6 +2,7 @@ package com.gilfort.civmod.npc;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -19,8 +20,12 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.village.poi.PoiManager;
 import net.minecraft.world.entity.ai.village.poi.PoiTypes;
+import net.minecraft.world.entity.npc.villager.Villager;
+import net.minecraft.world.phys.AABB;
+import com.mojang.datafixers.util.Pair;
 import net.minecraft.world.level.block.AbstractBedBlock;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -112,22 +117,64 @@ public final class SettlerBeds {
             data.releaseBed(settlement, current.get());
             releasePoi(level, current.get());
         }
-        Set<BlockPos> owned = settlement.beds().keySet();
-        Optional<BlockPos> claimed = level.getPoiManager().findAllClosestFirstWithType(
-                type -> type.is(PoiTypes.HOME),
-                pos -> !owned.contains(pos) && !spawnBeds.contains(pos) && JobAssignments.insideBorder(settlement, pos),
-                from, POI_RADIUS, PoiManager.Occupancy.HAS_SPACE)
-                .map(pair -> pair.getSecond())
-                .findFirst();
+        Optional<BlockPos> claimed = freeBeds(level, settlement, from).stream().findFirst();
         claimed.ifPresent(bed -> claim(level, data, settlement, settler, bed));
         return claimed;
     }
 
-    private static void claim(ServerLevel level, SettlementData data, Settlement settlement, UUID settler, BlockPos bed) {
+    /**
+     * Free beds of a settlement, closest first: inside the border, not owned by a Settler, not reserved for a Villager
+     * conversion, no player's respawn bed. A bed a Villager holds counts as free (Settlers before Villagers).
+     *
+     * @param level      the level
+     * @param settlement the settlement
+     * @param from       the position to search from
+     * @return the head positions of the free beds
+     */
+    public static List<BlockPos> freeBeds(ServerLevel level, Settlement settlement, BlockPos from) {
+        Set<BlockPos> owned = settlement.beds().keySet();
+        Collection<BlockPos> reserved = settlement.bedReservations().values();
+        Set<BlockPos> spawnBeds = spawnBeds(level);
+        return level.getPoiManager().findAllClosestFirstWithType(
+                type -> type.is(PoiTypes.HOME),
+                pos -> !owned.contains(pos) && !reserved.contains(pos) && !spawnBeds.contains(pos) && JobAssignments.insideBorder(settlement, pos),
+                from, POI_RADIUS, PoiManager.Occupancy.ANY)
+                .map(Pair::getSecond)
+                .toList();
+    }
+
+    /**
+     * Gives a bed to a settler and takes its POI ticket so Villagers do not claim it; a Villager holding the bed loses it.
+     *
+     * @param level      the level
+     * @param data       the dimension's settlement data
+     * @param settlement the settler's settlement
+     * @param settler    the settler UUID
+     * @param bed        the bed head position
+     */
+    public static void claim(ServerLevel level, SettlementData data, Settlement settlement, UUID settler, BlockPos bed) {
         settlement.bedOf(settler).ifPresent(previous -> releasePoi(level, previous));
         data.assignBed(settlement, bed, settler);
-        // Also take the POI ticket so villagers do not claim the bed.
-        level.getPoiManager().take(type -> type.is(PoiTypes.HOME), (type, pos) -> pos.equals(bed), bed, 1);
+        PoiManager poi = level.getPoiManager();
+        if (take(poi, bed).isEmpty() && poi.existsAtPosition(PoiTypes.HOME, bed)) {
+            evictVillagers(level, bed);
+            poi.release(bed);
+            take(poi, bed);
+        }
+    }
+
+    private static Optional<BlockPos> take(PoiManager poi, BlockPos bed) {
+        return poi.take(type -> type.is(PoiTypes.HOME), (type, pos) -> pos.equals(bed), bed, 1);
+    }
+
+    /** Villagers whose home is the bed forget it (their POI ticket is released by the caller). */
+    private static void evictVillagers(ServerLevel level, BlockPos bed) {
+        GlobalPos home = GlobalPos.of(level.dimension(), bed);
+        for (Villager villager : level.getEntitiesOfClass(Villager.class, new AABB(bed).inflate(POI_RADIUS))) {
+            if (villager.getBrain().getMemory(MemoryModuleType.HOME).filter(home::equals).isPresent()) {
+                villager.getBrain().eraseMemory(MemoryModuleType.HOME);
+            }
+        }
     }
 
     /**
