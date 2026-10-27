@@ -62,8 +62,9 @@ public final class BiomeBonusGameTests {
     private static final double EPSILON = 1.0E-9;
     private static final int SAMPLES = 20000;
     /**
-     * A relative x one biome cell before the test area: the {@link #cellStart} boundary of 4 puts the JobBlock at x 1,
-     * which reads the cell at x -4..-1 when the area starts on a cell boundary.
+     * A relative x or z one biome cell before the test area: the {@link #cellStart} boundary of 4 puts the JobBlock at
+     * x 1, which reads the cell at x -4..-1 when the area starts on a cell boundary; the same holds for a work place at
+     * z 0 or 1.
      */
     static final int BEFORE_AREA = -4;
 
@@ -353,15 +354,18 @@ public final class BiomeBonusGameTests {
     private static void lumberjackDoubleDrop(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(14, 0, 14));
-        fillBiome(helper, new BlockPos(0, -4, 0), new BlockPos(12, 8, 12), Biomes.MUSHROOM_FIELDS);
+        // The work point and the trees stand at z 0–3.
+        fillBiome(helper, new BlockPos(0, -4, BEFORE_AREA), new BlockPos(12, 8, 12), Biomes.MUSHROOM_FIELDS);
         Settler settler = CatchUpGameTests.lumberjack(helper, forced);
         BlockPos jobBlock = settler.getJobs().get(0).jobBlock();
         helper.succeedWhen(() -> {
             Map<Item, Integer> counts = settler.getWork().buffer(jobBlock).counts();
-            helper.assertTrue(counts.getOrDefault(Items.OAK_LOG, 0) >= 4, "Not enough wood yet: " + counts);
-            helper.assertTrue(counts.get(Items.OAK_LOG) % 2 == 0, "Every log comes twice: " + counts);
+            helper.assertTrue(counts.getOrDefault(Items.OAK_LOG, 0) >= 4,
+                    "Not enough wood yet (status " + settler.getWork().status(jobBlock) + "): " + counts);
+            helper.assertTrue(counts.get(Items.OAK_LOG) % 2 == 0,
+                    "Every log comes twice: " + counts + " (" + CivModApi.biomeBonus(settler, jobBlock) + ")");
             settler.discard();
-            fillBiome(helper, new BlockPos(0, -4, 0), new BlockPos(12, 8, 12), Biomes.PLAINS);
+            fillBiome(helper, new BlockPos(0, -4, BEFORE_AREA), new BlockPos(12, 8, 12), Biomes.PLAINS);
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });
     }
@@ -372,24 +376,27 @@ public final class BiomeBonusGameTests {
         List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(14, 0, 14));
         FishermanGameTests.pond(helper);
         fillBiome(helper, new BlockPos(0, -4, 0), new BlockPos(14, 8, 14), Biomes.MUSHROOM_FIELDS);
-        BlockPos jobBlockRelative = new BlockPos(1, 2, 1);
+        BlockPos jobBlockRelative = new BlockPos(1, 3, 1);
         helper.setBlock(jobBlockRelative, ModBlocks.FISHERMAN_BLOCK.get());
         BlockPos jobBlock = helper.absolutePos(jobBlockRelative);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
-        Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 2, 2), data, settlement);
+        Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 3, 2), data, settlement);
         settler.setNoAi(false);
         settler.setCustomName(Component.literal("Angler"));
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.FISHING_ROD));
         settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
-        JobAssignments.cyclePoint(data, jobBlock, helper.absolutePos(new BlockPos(6, 2, 6)), true, false);
+        helper.assertTrue(JobAssignments.cyclePoint(data, jobBlock, helper.absolutePos(new BlockPos(6, 2, 6)), true, false)
+                == JobAssignments.PointResult.WORK, "Work point set");
         helper.assertTrue(TestAssignments.assign(data, jobBlock, settler.getUUID(), "Angler", settlement.id(),
                 List.of()) == JobAssignments.AssignResult.OK, "Assignment failed");
         settler.addJob(new SettlerJob(ModJobs.FISHERMAN.get(), jobBlock));
         helper.succeedWhen(() -> {
             Map<Item, Integer> counts = settler.getWork().buffer(jobBlock).counts();
-            helper.assertTrue(counts.values().stream().mapToInt(Integer::intValue).sum() >= 4, "Not enough fish yet: " + counts);
-            helper.assertTrue(counts.values().stream().allMatch(count -> count % 2 == 0), "Every fish comes twice: " + counts);
+            helper.assertTrue(counts.values().stream().mapToInt(Integer::intValue).sum() >= 4,
+                    "Not enough fish yet (status " + settler.getWork().status(jobBlock) + "): " + counts);
+            helper.assertTrue(counts.values().stream().allMatch(count -> count % 2 == 0),
+                    "Every fish comes twice: " + counts + " (" + CivModApi.biomeBonus(settler, jobBlock) + ")");
             settler.discard();
             fillBiome(helper, new BlockPos(0, -4, 0), new BlockPos(14, 8, 14), Biomes.PLAINS);
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));

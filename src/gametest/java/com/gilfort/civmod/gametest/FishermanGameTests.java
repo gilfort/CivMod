@@ -71,7 +71,10 @@ public final class FishermanGameTests {
     }
 
     /**
-     * Ground of stone (y 0–1) with a 5×5 pool, 2 deep (y 1–2), its surface level with the walkable ground (y 2).
+     * Ground of stone (y 0–2) with a 5×5 pool, 2 deep (y 1–2), its surface level with the ground: settlers stand at
+     * y 3. A rim at the water's height keeps the pool in place; with the ground one block lower the water flowed out
+     * over the whole shore, shaped by the world's blocks around the test, and at some test positions left no dry
+     * spot within the fishing reach.
      */
     static void pond(GameTestHelper helper) {
         for (int x = 0; x <= SIZE; x++) {
@@ -79,8 +82,9 @@ public final class FishermanGameTests {
                 boolean pool = x >= POOL_MIN && x <= POOL_MAX && z >= POOL_MIN && z <= POOL_MAX;
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
                 helper.setBlock(new BlockPos(x, 1, z), pool ? Blocks.WATER : Blocks.STONE);
-                helper.setBlock(new BlockPos(x, 2, z), pool ? Blocks.WATER : Blocks.AIR);
+                helper.setBlock(new BlockPos(x, 2, z), pool ? Blocks.WATER : Blocks.STONE);
                 helper.setBlock(new BlockPos(x, 3, z), Blocks.AIR);
+                helper.setBlock(new BlockPos(x, 4, z), Blocks.AIR);
             }
         }
     }
@@ -187,19 +191,20 @@ public final class FishermanGameTests {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         pond(helper);
-        BlockPos jobBlockRelative = new BlockPos(1, 2, 1);
+        BlockPos jobBlockRelative = new BlockPos(1, 3, 1);
         helper.setBlock(jobBlockRelative, ModBlocks.FISHERMAN_BLOCK.get());
         BlockPos jobBlock = helper.absolutePos(jobBlockRelative);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
-        Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(2, 2, 2)));
+        Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(2, 3, 2)));
         settler.snapTo(spawn.x, spawn.y, spawn.z, 0.0F, 0.0F);
         settler.setCustomName(net.minecraft.network.chat.Component.literal("Angler"));
         level.addFreshEntity(settler);
         settler.joinSettlement(data, settlement);
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.FISHING_ROD));
-        JobAssignments.cyclePoint(data, jobBlock, helper.absolutePos(new BlockPos(6, 2, 6)), true, false);
+        helper.assertTrue(JobAssignments.cyclePoint(data, jobBlock, helper.absolutePos(new BlockPos(6, 2, 6)), true, false)
+                == JobAssignments.PointResult.WORK, "Work point set");
         helper.assertTrue(TestAssignments.assign(data, jobBlock, settler.getUUID(), "Angler", settlement.id(), List.of())
                 == JobAssignments.AssignResult.OK, "Assignment failed");
         settler.addJob(new SettlerJob(ModJobs.FISHERMAN.get(), jobBlock));
