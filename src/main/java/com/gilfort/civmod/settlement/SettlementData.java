@@ -143,7 +143,8 @@ public final class SettlementData extends SavedData {
     }
 
     /**
-     * Gives a bed to a settler (it loses any other bed; a previous owner of this bed loses it).
+     * Gives a bed to a settler (it loses any other bed; a previous owner of this bed loses it, and a Villager conversion
+     * that reserved it looks for another free bed at its end).
      *
      * @param settlement the settlement
      * @param head       the bed head position
@@ -152,6 +153,7 @@ public final class SettlementData extends SavedData {
      */
     public Optional<UUID> assignBed(Settlement settlement, BlockPos head, UUID owner) {
         Optional<UUID> previous = settlement.putBed(head, owner).filter(uuid -> !uuid.equals(owner));
+        settlement.removeBedReservationsOf(head);
         changed();
         return previous;
     }

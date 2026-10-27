@@ -44,8 +44,7 @@ public final class SettlerSpawner {
     private static final int CHECK_INTERVAL = 20;
     private static final int SPAWN_RADIUS = 5;
     private static final int SPAWN_ATTEMPTS = 16;
-    /** How far players hear about new Settlers and settlement names. */
-    static final double ANNOUNCE_DISTANCE = 64.0;
+    private static final double ANNOUNCE_DISTANCE = 64.0;
 
     private SettlerSpawner() {
     }
@@ -194,9 +193,19 @@ public final class SettlerSpawner {
     }
 
     private static void announce(ServerLevel level, Settlement settlement, BlockPos anchor) {
-        Component message = Component.translatable("civmod.settlement.named", settlement.displayName());
+        announce(level, Vec3.atCenterOf(anchor), Component.translatable("civmod.settlement.named", settlement.displayName()));
+    }
+
+    /**
+     * Tells all players within {@value #ANNOUNCE_DISTANCE} blocks.
+     *
+     * @param level   the level
+     * @param pos     where it happened
+     * @param message the chat message
+     */
+    static void announce(ServerLevel level, Vec3 pos, Component message) {
         for (ServerPlayer player : level.players()) {
-            if (player.distanceToSqr(Vec3.atCenterOf(anchor)) <= ANNOUNCE_DISTANCE * ANNOUNCE_DISTANCE) {
+            if (player.distanceToSqr(pos) <= ANNOUNCE_DISTANCE * ANNOUNCE_DISTANCE) {
                 player.sendSystemMessage(message);
             }
         }

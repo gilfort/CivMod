@@ -227,6 +227,10 @@ public final class Settlement {
         return Optional.ofNullable(bedReservations.remove(villager));
     }
 
+    void removeBedReservationsOf(BlockPos head) {
+        bedReservations.values().removeIf(head::equals);
+    }
+
     /**
      * @return the settlement's requests, in posting order (read-only; see {@link Requests})
      */

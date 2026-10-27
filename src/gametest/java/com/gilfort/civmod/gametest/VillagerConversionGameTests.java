@@ -404,6 +404,8 @@ public final class VillagerConversionGameTests {
         BlockPos other = bed(helper, SECOND_BED);
         convert(helper, second);
         helper.assertTrue(reserved(settlement, second).filter(other::equals).isPresent(), "The second Villager reserves the new bed");
+        SettlementData.get(helper.getLevel()).assignBed(settlement, other, UUID.randomUUID());
+        helper.assertTrue(reserved(settlement, second).isEmpty(), "A bed given to a Settler is no longer reserved");
         first.discard();
         second.discard();
         helper.succeed();

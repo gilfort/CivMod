@@ -13,6 +13,7 @@ import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.mojang.datafixers.util.Either;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
@@ -27,10 +28,10 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
@@ -66,13 +67,13 @@ import net.neoforged.neoforge.event.tick.EntityTickEvent;
 public final class VillagerConversion {
 
     /** Items that make a Villager Receptive (default: water bottle). */
-    public static final TagKey<Item> PRIMER = TagKey.create(Registries.ITEM, CivMod.id("conversion_primer"));
+    static final TagKey<Item> PRIMER = TagKey.create(Registries.ITEM, CivMod.id("conversion_primer"));
     /** Items that start the conversion of a Receptive Villager (default: bread). */
-    public static final TagKey<Item> FOOD = TagKey.create(Registries.ITEM, CivMod.id("conversion_food"));
+    static final TagKey<Item> FOOD = TagKey.create(Registries.ITEM, CivMod.id("conversion_food"));
     /** How long a Villager stays Receptive (60 s). */
     public static final int RECEPTIVE_TICKS = 1200;
     /** How long the conversion takes (5 minutes). */
-    public static final int DURATION_TICKS = 6000;
+    private static final int DURATION_TICKS = 6000;
     /** Number of dice averaged for each starting skill. */
     private static final int SKILL_DICE = 4;
     /** Ticks between two particle bursts of a Receptive or converting Villager. */
@@ -183,20 +184,27 @@ public final class VillagerConversion {
      * @return why it refuses the food, empty if it accepts it
      */
     public static Optional<Refusal> refusal(ServerLevel level, Villager villager) {
+        return check(level, villager).left();
+    }
+
+    /** Where a fed Villager converts into: the settlement and the bed it reserves. */
+    private record Target(Settlement settlement, BlockPos bed) {
+    }
+
+    /** The checks of {@link #refusal}; on success the settlement and bed the conversion takes. */
+    private static Either<Refusal, Target> check(ServerLevel level, Villager villager) {
         if (villager.isBaby()) {
-            return Optional.of(Refusal.BABY);
+            return Either.left(Refusal.BABY);
         }
         Optional<Settlement> settlement = SettlementData.get(level).settlementContaining(villager.blockPosition());
         if (settlement.isEmpty()) {
-            return Optional.of(Refusal.OUTSIDE);
+            return Either.left(Refusal.OUTSIDE);
         }
         if (isFull(settlement.get())) {
-            return Optional.of(Refusal.FULL);
+            return Either.left(Refusal.FULL);
         }
-        if (bedFor(level, settlement.get(), villager).isEmpty()) {
-            return Optional.of(Refusal.NO_BED);
-        }
-        return Optional.empty();
+        return bedFor(level, settlement.get(), villager).<Either<Refusal, Target>>map(bed -> Either.right(new Target(settlement.get(), bed)))
+                .orElseGet(() -> Either.left(Refusal.NO_BED));
     }
 
     /** Settlers and running conversions count towards {@code maxSettlersPerSettlement} (0 = unlimited). */
@@ -226,12 +234,19 @@ public final class VillagerConversion {
 
     @SubscribeEvent
     static void onEntityInteract(PlayerInteractEvent.EntityInteract event) {
-        if (!(event.getTarget() instanceof Villager villager) || !(villager.level() instanceof ServerLevel level) || !villager.isAlive()) {
+        if (!(event.getTarget() instanceof Villager villager) || !villager.isAlive()) {
             return;
         }
-        Player player = event.getEntity();
         ItemStack stack = event.getItemStack();
         boolean primer = isPrimer(stack);
+        if (!(villager.level() instanceof ServerLevel level)) {
+            // The client cannot see the Receptive state, but it must never use (drink) the primer itself.
+            if (primer) {
+                event.setCanceled(true);
+                event.setCancellationResult(InteractionResult.SUCCESS);
+            }
+            return;
+        }
         boolean food = stack.is(FOOD) && (isReceptive(villager) || isConverting(villager));
         if (!primer && !food) {
             return;
@@ -242,36 +257,30 @@ public final class VillagerConversion {
         if (isConverting(villager)) {
             return;
         }
+        Player player = event.getEntity();
         if (primer) {
             if (villager.isBaby()) {
                 refuse(villager, player, Refusal.BABY);
                 return;
             }
             makeReceptive(level, villager);
-            ItemStack rest = remainder(stack);
-            player.setItemInHand(event.getHand(), rest.isEmpty() ? consumed(stack, player) : ItemUtils.createFilledResult(stack, player, rest));
+            usePrimer(player, event.getHand(), stack);
             return;
         }
-        Optional<Refusal> refusal = refusal(level, villager);
-        if (refusal.isPresent()) {
-            refuse(villager, player, refusal.get());
-            return;
-        }
-        SettlementData data = SettlementData.get(level);
-        Settlement settlement = data.settlementContaining(villager.blockPosition()).orElseThrow();
-        BlockPos bed = bedFor(level, settlement, villager).orElseThrow();
-        stack.consume(1, player);
-        start(level, data, settlement, villager, bed);
+        check(level, villager).ifLeft(refusal -> refuse(villager, player, refusal)).ifRight(target -> {
+            stack.consume(1, player);
+            start(level, SettlementData.get(level), target.settlement(), villager, target.bed());
+        });
     }
 
-    private static ItemStack remainder(ItemStack stack) {
+    /** Uses up the primer; a water bottle leaves its glass bottle (the item's use remainder). */
+    private static void usePrimer(Player player, InteractionHand hand, ItemStack stack) {
         UseRemainder remainder = stack.get(DataComponents.USE_REMAINDER);
-        return remainder == null ? ItemStack.EMPTY : remainder.convertInto().create();
-    }
-
-    private static ItemStack consumed(ItemStack stack, Player player) {
-        stack.consume(1, player);
-        return stack;
+        if (remainder == null) {
+            stack.consume(1, player);
+        } else {
+            player.setItemInHand(hand, ItemUtils.createFilledResult(stack, player, remainder.convertInto().create()));
+        }
     }
 
     /**
@@ -294,13 +303,14 @@ public final class VillagerConversion {
                 1.0F + random.nextFloat(), random.nextFloat() * 0.7F + 0.3F);
     }
 
-    /** The Villager shakes its head (as vanilla Villagers without trades do) and the action bar names the reason. */
+    /** The Villager shakes its head and the action bar names the reason. */
     private static void refuse(Villager villager, Player player, Refusal refusal) {
-        refuse(villager);
+        shakeHead(villager);
         player.sendOverlayMessage(refusal.message());
     }
 
-    private static void refuse(Villager villager) {
+    /** As vanilla Villagers without trades do. */
+    private static void shakeHead(Villager villager) {
         villager.setUnhappyCounter(40);
         villager.makeSound(SoundEvents.VILLAGER_NO);
     }
@@ -325,13 +335,16 @@ public final class VillagerConversion {
             return;
         }
         Optional<Conversion> conversion = villager.getExistingData(ModAttachments.CONVERSION);
+        if (conversion.isPresent() && level.getGameTime() >= conversion.get().due()) {
+            finish(level, villager, conversion.get());
+            return;
+        }
+        if ((villager.tickCount + villager.getId()) % PARTICLE_INTERVAL != 0) {
+            return;
+        }
         if (conversion.isPresent()) {
-            if (level.getGameTime() >= conversion.get().due()) {
-                finish(level, villager, conversion.get());
-            } else if ((villager.tickCount + villager.getId()) % PARTICLE_INTERVAL == 0) {
-                level.sendParticles(ParticleTypes.HAPPY_VILLAGER, villager.getX(), villager.getY(0.7), villager.getZ(), 3, 0.3, 0.4, 0.3, 0.0);
-            }
-        } else if ((villager.tickCount + villager.getId()) % PARTICLE_INTERVAL == 0 && isReceptive(villager)) {
+            level.sendParticles(ParticleTypes.HAPPY_VILLAGER, villager.getX(), villager.getY(0.7), villager.getZ(), 3, 0.3, 0.4, 0.3, 0.0);
+        } else if (isReceptive(villager)) {
             level.sendParticles(ParticleTypes.DRIPPING_WATER, villager.getX(), villager.getY(1.0), villager.getZ(), 2, 0.25, 0.3, 0.25, 0.0);
         }
     }
@@ -369,11 +382,12 @@ public final class VillagerConversion {
         // Freed first, so the reserved bed counts as free again if it still is one.
         Optional<BlockPos> reserved = settlement.flatMap(found -> data.releaseBedReservation(found, villager.getUUID()));
         Optional<BlockPos> bed = settlement.flatMap(found -> {
-            List<BlockPos> free = SettlerBeds.freeBeds(level, found, villager.blockPosition());
+            // Searched from the reserved bed: the Villager may have wandered off.
+            List<BlockPos> free = SettlerBeds.freeBeds(level, found, reserved.orElse(villager.blockPosition()));
             return reserved.filter(free::contains).or(() -> free.stream().findFirst());
         });
         if (settlement.isEmpty() || bed.isEmpty()) {
-            refuse(villager);
+            shakeHead(villager);
             return;
         }
         becomeSettler(level, data, settlement.get(), villager, bed.get());
@@ -382,7 +396,7 @@ public final class VillagerConversion {
     private static void becomeSettler(ServerLevel level, SettlementData data, Settlement settlement, Villager villager, BlockPos bed) {
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.CONVERSION);
         if (settler == null) {
-            refuse(villager);
+            shakeHead(villager);
             return;
         }
         RandomSource random = level.getRandom();
@@ -404,12 +418,7 @@ public final class VillagerConversion {
         level.addFreshEntity(settler);
         SettlerBeds.claim(level, data, settlement, settler.getUUID(), bed);
         SettlerSpawner.puff(level, pos);
-        Component message = Component.translatable("civmod.conversion.joined", settler.getName(), settlement.displayName());
-        for (ServerPlayer player : level.players()) {
-            if (player.distanceToSqr(pos) <= SettlerSpawner.ANNOUNCE_DISTANCE * SettlerSpawner.ANNOUNCE_DISTANCE) {
-                player.sendSystemMessage(message);
-            }
-        }
+        SettlerSpawner.announce(level, pos, Component.translatable("civmod.conversion.joined", settler.getName(), settlement.displayName()));
     }
 
     /**
