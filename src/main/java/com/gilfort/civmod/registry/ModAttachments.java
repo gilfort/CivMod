@@ -3,6 +3,7 @@ package com.gilfort.civmod.registry;
 import java.util.function.Supplier;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.npc.VillagerConversion;
 import com.mojang.serialization.Codec;
 
 import net.neoforged.bus.api.IEventBus;
@@ -32,6 +33,23 @@ public final class ModAttachments {
      */
     public static final Supplier<AttachmentType<Integer>> MISSION_LEVEL = ATTACHMENT_TYPES.register("mission_level",
             () -> AttachmentType.builder(() -> 0).serialize(Codec.INT.fieldOf("level"), level -> level > 0).build());
+
+    /**
+     * Game time until which a Villager is Receptive for the conversion food (vault {@code Systems/NPC Population.md}); not
+     * saved, the window is only 60 s.
+     */
+    public static final Supplier<AttachmentType<Long>> RECEPTIVE_UNTIL = ATTACHMENT_TYPES.register("receptive_until",
+            () -> AttachmentType.builder(() -> 0L).build());
+
+    /**
+     * The running conversion of a Villager into a Settler (vault {@code Systems/NPC Population.md}); synced so clients
+     * show the Villager shaking. Its bed reservation is kept by the settlement.
+     */
+    public static final Supplier<AttachmentType<VillagerConversion.Conversion>> CONVERSION = ATTACHMENT_TYPES.register("conversion",
+            () -> AttachmentType.builder(() -> VillagerConversion.Conversion.NONE)
+                    .serialize(VillagerConversion.Conversion.CODEC.fieldOf("conversion"))
+                    .sync(VillagerConversion.Conversion.STREAM_CODEC)
+                    .build());
 
     private ModAttachments() {
     }
