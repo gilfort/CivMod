@@ -109,14 +109,18 @@ _Avoid_: Looking up `SettlementData.settlementAt(pos)` then `Settlement.block(po
 The JobBlock of all Mission Jobs; holds several settlers and the list of selected Missions. Code: `ModBlocks.MISSION_BOARD` (a `JobBlock` offering the Adventurer), capacity in `SettlementRules.capacity` (the `settlers` list of `civmod_upgrades/adventurer.json`, shared by all Mission Jobs, `JobPlaces`), settlers in `SettlementBlock.assignees()`; a settler's Mission Job is chosen in the Job picker when it joins and changed with the Job switcher. Its Mission Specializations are unlocked by Station Types (tabs: Storage, Info, Missions, Station Types; the Station Types tab makes the window tall).
 
 **Bard**:
-A Mission Specialization of the Adventurer, unlocked by a note block in a Station Types slot of the Mission Board; does the Villager missions (later). Until a mission allows it, it finds no fitting mission and works its next priority. Code: `ModJobs.BARD` (base EXP 10, hunger factor 1.0, overridable in `civmod_jobs/bard.json`).
+A Mission Specialization of the Adventurer, unlocked by a note block in a Station Types slot of the Mission Board; does the Villager missions (sample missions "Invite Villagers (<type>)" and "Village Migration (<type>)" per Villager biome type). Code: `ModJobs.BARD` (base EXP 10, hunger factor 1.0, overridable in `civmod_jobs/bard.json`).
 
 **Mission**:
-A datapack-defined task a Mission Job settler leaves the settlement for (duration, difficulty, loot). Code: `Mission` in the `civmod:mission` datapack registry (`Missions`, files in `data/<namespace>/civmod/mission/`); arithmetic in `MissionRules`, outcome constants in `OutcomeRules` (`civmod_mission/outcome.json`). The mission a settler reserved or is away on: `MissionTrip`; who takes which mission: `MissionPicks`.
+A datapack-defined task a Mission Job settler leaves the settlement for (duration, difficulty, result: loot or Villagers). Code: `Mission` in the `civmod:mission` datapack registry (`Missions`, files in `data/<namespace>/civmod/mission/`); arithmetic in `MissionRules`, outcome constants in `OutcomeRules` (`civmod_mission/outcome.json`). The mission a settler reserved or is away on: `MissionTrip`; who takes which mission: `MissionPicks`.
 _Avoid_: Quest, expedition
 
+**Villager mission**:
+A Mission whose result is vanilla Villagers instead of loot: its `villagers` block (`Mission.Villagers`: count, Villager biome type, nitwit chance values) replaces `loot_tables` / `rolls` (a mission with both or neither fails to load). Each Villager is a nitwit with `MissionRules.nitwitChance` (the skill never changes the count). On success they arrive as unemployed adults where the Bard reappears and follow it to the Mission Board (status "Bringing villagers", `JobStatus.BRINGING_VILLAGERS`; the Settler Shell starts the lead right after the return through `MissionLoop.leadingJob`, then it holds the evening; at most `MissionLoop.LEAD_TICKS`; not saved, after loading they stay vanilla Villagers where they are); during catch-up they arrive at the board. Every one keeps the mission's recommended level (`ModAttachments.MISSION_LEVEL`, read with `MissionVillagers.missionLevel`) for its conversion into a Settler. Code: `MissionVillagers` (`arrive`, `follow`, `release`), called from `MissionLoop`.
+_Avoid_: Settler (a Villager is always a vanilla Villager entity), recruits
+
 **Mission Offer**:
-The missions a Mission Board offers today; the player marks the ones to be done. Code: `MissionOffer` (entries + refill day) in `SettlementBlock.missionOffer()`, refilled and marked through `MissionOffers`.
+The missions a Mission Board offers today; the player marks the ones to be done. Each Mission Job of the board has its own share: the Adventurer board level + 1, plus 1 per open Station Types slot without a Specialization; every unlocked Specialization as many as the board level (at most 26 on a level-5 board). Code: `MissionOffer` (entries + refill day) in `SettlementBlock.missionOffer()`, refilled and marked through `MissionOffers`; shares `MissionRules.quotas` (empty slots `StationTypes.emptySlots`), drawn by `MissionRules.refill`.
 _Avoid_: Quest list, mission pool (the pool is all missions)
 
 **Mission Assignment**:

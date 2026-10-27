@@ -156,6 +156,21 @@ public final class StationTypes {
 
     /**
      * @param block a JobBlock
+     * @return how many of its open slots hold no unlock item
+     */
+    public static int emptySlots(SettlementBlock block) {
+        int open = open(block.level());
+        int empty = 0;
+        for (int slot = 1; slot < open; slot++) {
+            if (slot >= block.stationTypes().size() || block.stationTypes().get(slot) == Items.AIR) {
+                empty++;
+            }
+        }
+        return empty;
+    }
+
+    /**
+     * @param block a JobBlock
      * @param job   a Job
      * @return whether the JobBlock offers it now (its Base Job, or a Specialization unlocked there)
      */

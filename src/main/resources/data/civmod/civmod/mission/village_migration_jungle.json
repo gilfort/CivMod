@@ -1,0 +1,20 @@
+{
+  "title": {
+    "translate": "mission.civmod.village_migration_jungle"
+  },
+  "description": {
+    "translate": "mission.civmod.village_migration_jungle.description"
+  },
+  "icon": "minecraft:jungle_log",
+  "villagers": {
+    "count": 3,
+    "type": "minecraft:jungle"
+  },
+  "days": 3,
+  "recommended_level": 40,
+  "jobs": [
+    "civmod:bard"
+  ],
+  "weight": 1,
+  "max_per_offer": 1
+}

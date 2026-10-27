@@ -46,6 +46,8 @@ public enum JobStatus {
     WAITING_DEPARTURE("waiting_departure"),
     /** Away on a mission. */
     ON_MISSION("on_mission"),
+    /** Back from a Villager mission, leading the Villagers to the Mission Board. */
+    BRINGING_VILLAGERS("bringing_villagers"),
     /** A producer walking to or crafting at its station. */
     CRAFTING("crafting"),
     /** A producer fetching the inputs of a request. */

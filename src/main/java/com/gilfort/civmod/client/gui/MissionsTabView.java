@@ -170,8 +170,8 @@ final class MissionsTabView implements JobBlockTabView {
                 // An assigned or locked mission shows who takes it instead of the details (still in the tooltip).
                 graphics.text(font, CivGui.fit(font, lockText(entry), textWidth), left + 20, y + 11, CivGui.HINT_COLOR, false);
             } else {
-                mission.ifPresent(found -> graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.mission.details",
-                        found.recommendedLevel(), found.days(), found.rolls()), textWidth), left + 20, y + 11, CivGui.HINT_COLOR, false));
+                mission.ifPresent(found -> graphics.text(font, CivGui.fit(font, details(found), textWidth), left + 20, y + 11,
+                        CivGui.HINT_COLOR, false));
             }
             checkbox(graphics, entry.marked(), index == hovered, left + width - box, y);
         }
@@ -219,9 +219,17 @@ final class MissionsTabView implements JobBlockTabView {
             }
             lines.add(Component.translatable("civmod.gui.mission.recommended_level", found.recommendedLevel()).getVisualOrderText());
             lines.add(Component.translatable("civmod.gui.mission.duration", found.days()).getVisualOrderText());
-            lines.add(Component.translatable("civmod.gui.mission.rolls", found.rolls()).getVisualOrderText());
+            lines.add(found.villagers().map(villagers -> Component.translatable("civmod.gui.mission.villagers", villagers.count()))
+                    .orElseGet(() -> Component.translatable("civmod.gui.mission.rolls", found.rolls())).getVisualOrderText());
         });
         return lines;
+    }
+
+    /** The details line of a mission: level, days and its result (loot rolls or Villagers). */
+    private static Component details(Mission mission) {
+        return mission.villagers().map(villagers -> Component.translatable("civmod.gui.mission.details.villagers", mission.recommendedLevel(),
+                mission.days(), villagers.count()))
+                .orElseGet(() -> Component.translatable("civmod.gui.mission.details", mission.recommendedLevel(), mission.days(), mission.rolls()));
     }
 
     private List<FormattedCharSequence> missionTooltip(int index) {

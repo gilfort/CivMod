@@ -1,0 +1,20 @@
+{
+  "title": {
+    "translate": "mission.civmod.village_migration_savanna"
+  },
+  "description": {
+    "translate": "mission.civmod.village_migration_savanna.description"
+  },
+  "icon": "minecraft:acacia_log",
+  "villagers": {
+    "count": 3,
+    "type": "minecraft:savanna"
+  },
+  "days": 3,
+  "recommended_level": 40,
+  "jobs": [
+    "civmod:bard"
+  ],
+  "weight": 2,
+  "max_per_offer": 1
+}

@@ -6,12 +6,15 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.UUID;
+import java.util.function.Consumer;
 
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.mission.Mission;
 import com.gilfort.civmod.mission.MissionRules;
+import com.gilfort.civmod.mission.MissionVillagers;
 import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.mission.OutcomeRules;
 import com.gilfort.civmod.npc.Settler;
@@ -29,6 +32,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.LootTable;
@@ -41,7 +45,9 @@ import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
  * leaves at the start of the workday: it walks out of the settlement (like a foraging settler) and vanishes at the
  * border or after {@value #LEAVE_WALK_TICKS} ticks, is away (invisible, no AI, no hunger) until the mission's return
  * time and reappears where it vanished in the evening, with loot in the job's buffer and EXP – also during catch-up.
- * A settler that dies on the mission does not reappear: it is removed with everything it carried.
+ * A Bard back from a Villager mission brings vanilla Villagers instead of loot and leads them to the board (during
+ * catch-up they appear there). A settler that dies on the mission does not reappear: it is removed with everything it
+ * carried.
  */
 final class MissionLoop implements CategoryLoop {
 
@@ -51,6 +57,8 @@ final class MissionLoop implements CategoryLoop {
     private static final double RETURN_RANGE = 32.0;
     /** Ticks a departing settler walks out before it vanishes. */
     static final int LEAVE_WALK_TICKS = 600;
+    /** Ticks a Bard leads its Villagers before they walk on to the board alone. */
+    static final int LEAD_TICKS = 1200;
 
     private final SettlerWork shell;
     private final Settler settler;
@@ -65,6 +73,21 @@ final class MissionLoop implements CategoryLoop {
     private long returnedAt = -1L;
     /** Outcome used instead of the roll (tests only, not saved). */
     private MissionRules.@Nullable Outcome forcedOutcome;
+    /**
+     * The Villagers a Bard back from a Villager mission leads to its board, null when it leads none (not saved: after
+     * loading they stay where they are as vanilla Villagers).
+     */
+    private @Nullable Lead lead;
+
+    /**
+     * Villagers led to a Mission Board.
+     *
+     * @param board     the Mission Board
+     * @param villagers the Villagers' UUIDs
+     * @param start     the game time the lead began
+     */
+    private record Lead(BlockPos board, List<UUID> villagers, long start) {
+    }
 
     /**
      * @param shell the Settler Shell driving this loop
@@ -131,6 +154,9 @@ final class MissionLoop implements CategoryLoop {
         BlockPos board = job.jobBlock();
         if (departed()) {
             return leave(level);
+        }
+        if (lead != null) {
+            return lead(level);
         }
         if (!shell.buffer(board).isEmpty()) {
             return JobStep.DELIVER;
@@ -287,7 +313,12 @@ final class MissionLoop implements CategoryLoop {
         if (outcome == MissionRules.Outcome.DEATH) {
             return outcome;
         }
-        if (outcome == MissionRules.Outcome.SUCCESS) {
+        Component message = Component.translatable("civmod.settler.mission.returned." + outcome.name().toLowerCase(Locale.ROOT),
+                settler.getName(), mission.title());
+        if (outcome == MissionRules.Outcome.SUCCESS && mission.villagers().isPresent()) {
+            int arrived = bringVillagers(level, site.pos(), mission, skill, catchUp);
+            message = Component.translatable("civmod.settler.mission.returned.villagers", settler.getName(), arrived);
+        } else if (outcome == MissionRules.Outcome.SUCCESS) {
             List<ItemStack> loot = loot(level, mission, MissionRules.rolls(mission, skill));
             if (catchUp) {
                 shell.deliverDirect(level, site, loot);
@@ -296,8 +327,7 @@ final class MissionLoop implements CategoryLoop {
                 loot.forEach(buffer::add);
             }
         }
-        shell.announce(level, Component.translatable("civmod.settler.mission.returned." + outcome.name().toLowerCase(Locale.ROOT),
-                settler.getName(), mission.title()), RETURN_RANGE);
+        shell.announce(level, message, RETURN_RANGE);
         shell.gainExp(level, job, MissionRules.exp(outcome, rules, job.jobType().baseExp(), site.level(), mission.recommendedLevel()), cap);
         return outcome;
     }
@@ -316,6 +346,74 @@ final class MissionLoop implements CategoryLoop {
             }
         }
         settler.perish(level);
+    }
+
+    /**
+     * The Villagers of a successful Villager mission arrive with the Bard and follow it to the board; during catch-up
+     * they arrive at the board.
+     *
+     * @return how many Villagers arrived
+     */
+    private int bringVillagers(ServerLevel level, BlockPos board, Mission mission, int skill, boolean catchUp) {
+        List<Villager> arrived = MissionVillagers.arrive(level, catchUp ? board : settler.blockPosition(), mission, skill, level.getRandom());
+        if (!catchUp && !arrived.isEmpty()) {
+            arrived.forEach(villager -> MissionVillagers.follow(villager, settler));
+            lead = new Lead(board, arrived.stream().map(Villager::getUUID).toList(), level.getGameTime());
+        }
+        return arrived.size();
+    }
+
+    /**
+     * The Mission Job of a Bard that leads Villagers, so the shell can start the lead outside a job step: the return
+     * ends the work day, and the Schedule only asks a job step to hold the evening ({@link #holdsDecision}).
+     *
+     * @param level the level
+     * @return the Mission Job, empty if the settler leads no Villagers (or no longer has the job: the lead ends)
+     */
+    Optional<SettlerJob> leadingJob(ServerLevel level) {
+        Lead current = lead;
+        if (current == null) {
+            return Optional.empty();
+        }
+        Optional<SettlerJob> job = missionJob(shell.jobs(), current.board());
+        if (job.isEmpty()) {
+            endLead(level);
+        }
+        return job;
+    }
+
+    /**
+     * Leads the Villagers to the board: the Bard walks there and the Villagers follow it (renewed at every decision, so
+     * their own strolling does not take over); after {@value #LEAD_TICKS} ticks they walk on alone.
+     *
+     * @param level the level
+     * @return the walk to the board, or a skip once the lead is over
+     */
+    JobStep lead(ServerLevel level) {
+        Lead current = Objects.requireNonNull(lead);
+        if (level.getGameTime() - current.start() >= LEAD_TICKS) {
+            endLead(level);
+            return JobStep.skip(JobStatus.IDLE);
+        }
+        forEachFollower(level, current, villager -> MissionVillagers.follow(villager, settler));
+        return JobStep.walk(current.board(), SettlerWork.REACH, JobStatus.BRINGING_VILLAGERS);
+    }
+
+    /** The Villagers walk the last steps to the board on their own; the Bard leads no more. */
+    private void endLead(ServerLevel level) {
+        Lead current = lead;
+        if (current != null) {
+            forEachFollower(level, current, villager -> MissionVillagers.release(villager, current.board()));
+        }
+        lead = null;
+    }
+
+    private static void forEachFollower(ServerLevel level, Lead current, Consumer<Villager> action) {
+        for (UUID id : current.villagers()) {
+            if (level.getEntity(id) instanceof Villager villager && villager.isAlive()) {
+                action.accept(villager);
+            }
+        }
     }
 
     /** Rolls the loot: each roll uses one of the mission's loot tables at random. */
@@ -357,10 +455,14 @@ final class MissionLoop implements CategoryLoop {
     }
 
     /**
-     * Walking out holds every decision (also the evening) until the settler vanishes.
+     * Walking out holds every decision (also the evening) until the settler vanishes; so does leading Villagers back to
+     * the board (a Bard returns at the end of its work day).
      */
     @Override
     public JobStep holdsDecision(ServerLevel level, SettlerJob job) {
+        if (lead != null) {
+            return lead(level);
+        }
         if (!departed() || isAway()) {
             return JobStep.skip();
         }
@@ -372,6 +474,11 @@ final class MissionLoop implements CategoryLoop {
 
     @Override
     public JobStep tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
+        if (lead != null && target.equals(lead.board())) {
+            // At the board: the Villagers are home, from now on they are vanilla Villagers.
+            endLead(level);
+            return JobStep.DONE_STANDING;
+        }
         return departed() && !isAway() ? vanish() : JobStep.STAY;
     }
 
@@ -396,6 +503,9 @@ final class MissionLoop implements CategoryLoop {
 
     @Override
     public void forget(BlockPos jobBlock) {
+        if (lead != null && jobBlock.equals(lead.board()) && settler.level() instanceof ServerLevel level) {
+            endLead(level);
+        }
         MissionTrip current = trip;
         if (current == null || !current.board().equals(jobBlock)) {
             return;

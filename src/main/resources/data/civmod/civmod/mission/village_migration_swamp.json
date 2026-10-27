@@ -1,0 +1,20 @@
+{
+  "title": {
+    "translate": "mission.civmod.village_migration_swamp"
+  },
+  "description": {
+    "translate": "mission.civmod.village_migration_swamp.description"
+  },
+  "icon": "minecraft:lily_pad",
+  "villagers": {
+    "count": 3,
+    "type": "minecraft:swamp"
+  },
+  "days": 3,
+  "recommended_level": 40,
+  "jobs": [
+    "civmod:bard"
+  ],
+  "weight": 1,
+  "max_per_offer": 1
+}

@@ -51,6 +51,7 @@ public final class MissionOfferGameTests {
     static void onRegister(RegisterEvent event) {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "mission_offer_size", MissionOfferGameTests::offerSize);
+            register(helper, "mission_draw_per_job", MissionOfferGameTests::drawPerJob);
             register(helper, "mission_draw_weights", MissionOfferGameTests::drawWeights);
             register(helper, "mission_draw_maximum", MissionOfferGameTests::drawMaximum);
             register(helper, "mission_draw_level_filter", MissionOfferGameTests::drawLevelFilter);
@@ -79,12 +80,40 @@ public final class MissionOfferGameTests {
         return offer.stream().filter(entry -> entry.mission().equals(mission)).count();
     }
 
-    /** The offer holds 2 / 4 / 10 / 14 / 20 missions by board level. */
+    /**
+     * Each Mission Job of the board has its own number of missions: the Adventurer level + 1, plus 1 per open Station
+     * Types slot without a Specialization; every unlocked Specialization as many as the board level.
+     */
     private static void offerSize(GameTestHelper helper) {
-        int[] expected = {2, 4, 10, 14, 20};
-        for (int level = 1; level <= 5; level++) {
-            helper.assertTrue(MissionRules.offerSize(level) == expected[level - 1], "Offer size at level " + level + ": " + MissionRules.offerSize(level));
-        }
+        Job adventurer = ModJobs.ADVENTURER.get();
+        Job bard = ModJobs.BARD.get();
+        Job other = specialization();
+        helper.assertTrue(MissionRules.quotas(List.of(adventurer), 1, 0).equals(Map.of(adventurer, 2)), "Level 1: 2 Adventurer missions");
+        helper.assertTrue(MissionRules.quotas(List.of(adventurer, bard), 2, 0).equals(Map.of(adventurer, 3, bard, 2)),
+                "Level 2 with the Bard: 3 + 2");
+        helper.assertTrue(MissionRules.quotas(List.of(adventurer), 2, 1).equals(Map.of(adventurer, 4)), "Level 2, empty slot: 4 Adventurer missions");
+        helper.assertTrue(MissionRules.quotas(List.of(adventurer, bard, other), 4, 1).equals(Map.of(adventurer, 6, bard, 4, other, 4)),
+                "Level 4, one slot empty: 5 + 1, 4 per Specialization");
+        helper.assertTrue(MissionRules.quotas(List.of(adventurer), 5, 4).equals(Map.of(adventurer, 10)), "Level 5 without Specializations: 10");
+        helper.assertTrue(MissionRules.quotas(List.of(adventurer, bard, other), 5, 2).values().stream().mapToInt(Integer::intValue).sum() == 18,
+                "Level 5, two Specializations: 6 + 2 + 5 + 5");
+        helper.assertTrue(MissionRules.MAX_OFFER_SIZE == 26, "Largest offer: 6 + 4 × 5");
+        helper.succeed();
+    }
+
+    /** Every Mission Job's missions are drawn for its own quota; a kept marked entry counts towards its job's quota. */
+    private static void drawPerJob(GameTestHelper helper) {
+        Map<Identifier, Mission> pool = new LinkedHashMap<>();
+        pool.put(COMMON, mission(ModJobs.ADVENTURER.get(), 50, 100));
+        pool.put(SPECIAL, mission(specialization(), 1, 100));
+        Map<Job, Integer> quotas = new LinkedHashMap<>();
+        quotas.put(ModJobs.ADVENTURER.get(), 3);
+        quotas.put(specialization(), 2);
+        List<MissionOffer.Entry> offer = MissionRules.refill(List.of(), pool, quotas, RandomSource.create(8L));
+        helper.assertTrue(count(offer, COMMON) == 3 && count(offer, SPECIAL) == 2, "3 Adventurer and 2 Specialization missions: " + offer);
+        List<MissionOffer.Entry> kept = MissionRules.refill(List.of(new MissionOffer.Entry(SPECIAL, true)), pool, quotas, RandomSource.create(8L));
+        helper.assertTrue(count(kept, COMMON) == 3 && count(kept, SPECIAL) == 2 && kept.getFirst().marked(),
+                "The marked Specialization mission uses one of its 2: " + kept);
         helper.succeed();
     }
 
@@ -97,7 +126,7 @@ public final class MissionOfferGameTests {
         long common = 0;
         long total = 0;
         for (int i = 0; i < 100; i++) {
-            List<MissionOffer.Entry> offer = MissionRules.refill(List.of(), pool, List.of(ModJobs.ADVENTURER.get()), 20, random);
+            List<MissionOffer.Entry> offer = MissionRules.refill(List.of(), pool, Map.of(ModJobs.ADVENTURER.get(), 20), random);
             helper.assertTrue(offer.size() == 20, "Full offer: " + offer.size());
             common += count(offer, COMMON);
             total += offer.size();
@@ -112,7 +141,7 @@ public final class MissionOfferGameTests {
         Map<Identifier, Mission> pool = new LinkedHashMap<>();
         pool.put(RARE, mission(ModJobs.ADVENTURER.get(), 1000, 1));
         pool.put(COMMON, mission(ModJobs.ADVENTURER.get(), 1, 3));
-        List<MissionOffer.Entry> offer = MissionRules.refill(List.of(), pool, List.of(ModJobs.ADVENTURER.get()), 10, RandomSource.create(1L));
+        List<MissionOffer.Entry> offer = MissionRules.refill(List.of(), pool, Map.of(ModJobs.ADVENTURER.get(), 10), RandomSource.create(1L));
         helper.assertTrue(count(offer, RARE) == 1, "Rare at most once: " + offer);
         helper.assertTrue(count(offer, COMMON) == 3, "Common at most three times: " + offer);
         helper.assertTrue(offer.size() == 4, "The pool is exhausted after 4 entries: " + offer);
@@ -129,7 +158,7 @@ public final class MissionOfferGameTests {
         BlockPos board = new BlockPos(0, 64, 0);
         placeBoard(data, board, 5);
         List<MissionOffer.Entry> locked = MissionOffers.refresh(data, board, 1L, pool, RandomSource.create(2L));
-        helper.assertTrue(count(locked, SPECIAL) == 0 && count(locked, COMMON) == 20, "Without Station Types only Adventurer missions: " + locked);
+        helper.assertTrue(count(locked, SPECIAL) == 0 && count(locked, COMMON) == 10, "Without Station Types only Adventurer missions (6 + 4 empty slots): " + locked);
         TestAssignments.setStationType(data, board, 1, Items.BELL);
         List<MissionOffer.Entry> unlocked = MissionOffers.refresh(data, board, 2L, pool, RandomSource.create(2L));
         helper.assertTrue(count(unlocked, SPECIAL) > 0, "The bell adds Specialization missions: " + unlocked);
@@ -146,7 +175,7 @@ public final class MissionOfferGameTests {
         pool.put(COMMON, mission(ModJobs.ADVENTURER.get(), 1, 20));
         List<MissionOffer.Entry> before = List.of(new MissionOffer.Entry(COMMON, true), new MissionOffer.Entry(COMMON, false),
                 new MissionOffer.Entry(RARE, true), new MissionOffer.Entry(CivMod.id("removed"), true));
-        List<MissionOffer.Entry> after = MissionRules.refill(before, pool, List.of(ModJobs.ADVENTURER.get()), 4, RandomSource.create(3L));
+        List<MissionOffer.Entry> after = MissionRules.refill(before, pool, Map.of(ModJobs.ADVENTURER.get(), 4), RandomSource.create(3L));
         helper.assertTrue(after.size() == 4, "Refilled to 4: " + after);
         helper.assertTrue(after.subList(0, 2).equals(List.of(new MissionOffer.Entry(COMMON, true), new MissionOffer.Entry(RARE, true))),
                 "Marked entries stay first, in order: " + after);
@@ -216,7 +245,7 @@ public final class MissionOfferGameTests {
         RandomSource random = RandomSource.create(6L);
         List<MissionOffer.Entry> offer = MissionOffers.refresh(data, BOARD, 0L, pool, random);
         helper.assertTrue(offer.size() == 2, "Level 1: 2 missions");
-        helper.assertTrue(MissionOffers.refresh(data, second, 0L, pool, random).size() == 10, "Level 3: 10 missions");
+        helper.assertTrue(MissionOffers.refresh(data, second, 0L, pool, random).size() == 6, "Level 3 without Specializations: 4 + 2 empty slots");
         MissionOffers.setMarked(data, BOARD, 0, offer.get(0).mission(), true);
         helper.assertTrue(entries(data, BOARD).get(0).marked(), "Marked on the first board");
         helper.assertTrue(entries(data, second).stream().noneMatch(MissionOffer.Entry::marked), "Nothing marked on the second board");
@@ -232,6 +261,22 @@ public final class MissionOfferGameTests {
             helper.assertTrue(mission.jobs().contains(ModJobs.ADVENTURER.get()), name + " is an Adventurer mission");
             helper.assertTrue(mission.lootTables().stream().allMatch(table -> table.identifier().getNamespace().equals("minecraft")),
                     name + " uses vanilla loot tables");
+        }
+        for (String type : List.of("plains", "desert", "savanna", "snow", "taiga", "jungle", "swamp")) {
+            Mission invite = missions.get(CivMod.id("invite_villagers_" + type));
+            Mission migration = missions.get(CivMod.id("village_migration_" + type));
+            helper.assertTrue(invite != null && migration != null, "Villager missions for " + type + " missing: " + missions.keySet());
+            boolean rare = type.equals("jungle") || type.equals("swamp");
+            for (Mission mission : List.of(invite, migration)) {
+                helper.assertTrue(mission.jobs().equals(List.of(ModJobs.BARD.get())), type + ": Bard only");
+                helper.assertTrue(mission.villagers().orElseThrow().type().is(Identifier.withDefaultNamespace(type)), type + ": biome type");
+                helper.assertTrue(rare ? mission.weight() < missions.get(CivMod.id("invite_villagers_plains")).weight()
+                        : mission.weight() == missions.get(CivMod.id("invite_villagers_plains")).weight(), type + ": weight " + mission.weight());
+            }
+            helper.assertTrue(invite.recommendedLevel() == 5 && invite.days() == 2 && invite.villagers().orElseThrow().count() == 1,
+                    "Invite Villagers: Lv 5, 2 days, 1 Villager");
+            helper.assertTrue(migration.recommendedLevel() == 40 && migration.days() == 3 && migration.villagers().orElseThrow().count() == 3,
+                    "Village Migration: Lv 40, 3 days, 3 Villagers");
         }
         Mission dungeon = missions.get(CivMod.id("dungeon_raid"));
         helper.assertTrue(dungeon.lootTables().equals(List.of(BuiltInLootTables.SIMPLE_DUNGEON)), "Dungeon Raid loot: " + dungeon.lootTables());

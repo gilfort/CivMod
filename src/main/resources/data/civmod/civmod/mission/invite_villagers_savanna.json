@@ -1,0 +1,20 @@
+{
+  "title": {
+    "translate": "mission.civmod.invite_villagers_savanna"
+  },
+  "description": {
+    "translate": "mission.civmod.invite_villagers_savanna.description"
+  },
+  "icon": "minecraft:acacia_log",
+  "villagers": {
+    "count": 1,
+    "type": "minecraft:savanna"
+  },
+  "days": 2,
+  "recommended_level": 5,
+  "jobs": [
+    "civmod:bard"
+  ],
+  "weight": 2,
+  "max_per_offer": 2
+}
