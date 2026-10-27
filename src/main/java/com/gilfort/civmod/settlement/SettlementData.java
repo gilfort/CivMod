@@ -143,7 +143,8 @@ public final class SettlementData extends SavedData {
     }
 
     /**
-     * Gives a bed to a settler (it loses any other bed; a previous owner of this bed loses it).
+     * Gives a bed to a settler (it loses any other bed; a previous owner of this bed loses it, and a Villager conversion
+     * that reserved it looks for another free bed at its end).
      *
      * @param settlement the settlement
      * @param head       the bed head position
@@ -152,6 +153,7 @@ public final class SettlementData extends SavedData {
      */
     public Optional<UUID> assignBed(Settlement settlement, BlockPos head, UUID owner) {
         Optional<UUID> previous = settlement.putBed(head, owner).filter(uuid -> !uuid.equals(owner));
+        settlement.removeBedReservationsOf(head);
         changed();
         return previous;
     }
@@ -165,6 +167,33 @@ public final class SettlementData extends SavedData {
      */
     public Optional<UUID> releaseBed(Settlement settlement, BlockPos head) {
         Optional<UUID> previous = settlement.removeBed(head);
+        if (previous.isPresent()) {
+            changed();
+        }
+        return previous;
+    }
+
+    /**
+     * Reserves a free bed for a converting Villager, so no other conversion or Settler counts it.
+     *
+     * @param settlement the settlement the Villager converts into
+     * @param villager   the Villager UUID
+     * @param head       the bed head position
+     */
+    public void reserveBed(Settlement settlement, UUID villager, BlockPos head) {
+        settlement.putBedReservation(villager, head);
+        changed();
+    }
+
+    /**
+     * Frees the bed reserved for a converting Villager.
+     *
+     * @param settlement the settlement
+     * @param villager   the Villager UUID
+     * @return the bed that was reserved
+     */
+    public Optional<BlockPos> releaseBedReservation(Settlement settlement, UUID villager) {
+        Optional<BlockPos> previous = settlement.removeBedReservation(villager);
         if (previous.isPresent()) {
             changed();
         }

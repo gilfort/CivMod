@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:villager_conversion_skill_roll",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

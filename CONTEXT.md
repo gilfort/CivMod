@@ -265,3 +265,15 @@ _Avoid_: Claim (a claim is part of a request, see Round), reserved (stock reserv
 **Remaining Heat**:
 The burn time a furnace of the Smelter keeps from fuel already burnt, used by its next charge so no fuel is wasted (one coal = 8 items, also over 8 single-item charges). Kept on the furnace's block entity (lost when the furnace is broken), in ticks of vanilla burn time. Code: attachment `ModAttachments.REMAINING_HEAT`, paid in `Furnaces.pay` (heat per execution: the recipe's cooking time, `Furnaces.heatOf`), planned in `ProducingLoop.fuelNeed`.
 _Avoid_: Batch, leftover fuel
+
+## Population
+
+**Villager conversion**:
+Turning a vanilla Villager inside a settlement border into a Settler of that settlement: an item of `civmod:conversion_primer` (default water bottle, which becomes a glass bottle) or a splash water bottle makes it Receptive; an item of `civmod:conversion_food` (default bread) then starts the conversion if the feeding checks pass (in order: baby, outside every border, `maxSettlersPerSettlement` reached counting Settlers and running conversions, no Free bed; a refusal shakes the head, names the reason in the action bar and uses up nothing). Feeding reserves a Free bed (`Settlement.bedReservations()`, through `SettlementData.reserveBed`); the Villager shakes for 5 minutes of world time (`ModAttachments.CONVERSION`, synced; completes on its first tick after loading). At the end the reserved bed (else another Free bed) goes to the new Settler: random skin, empty inventory, name tag or race name, every Job rolled from the mission level (`VillagerConversion.rollLevel`; nitwits and Villagers without one start at level 1). Without a bed or with the settlement dissolved it fails (stays a Villager, items used up); a Villager that dies frees its reservation. Code: `VillagerConversion`.
+_Avoid_: Curing (that is the zombie villager), recruiting
+
+**Receptive**:
+The 60 s window after the conversion primer in which a Villager takes the conversion food; without it the food is vanilla (trading). Code: `ModAttachments.RECEPTIVE_UNTIL` (not saved), `VillagerConversion.isReceptive`.
+
+**Free bed**:
+A bed inside the settlement border that no Settler owns, no Villager conversion has reserved and is no player's respawn bed; a bed a Villager holds counts as free (Settlers before Villagers: the Settler takes it and the Villager forgets its home). Used by Settlers claiming a bed and by the Villager conversion. Code: `SettlerBeds.freeBeds`, claimed with `SettlerBeds.claim`.

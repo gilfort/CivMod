@@ -131,9 +131,34 @@ public final class SettlerSpawner {
         // Provisions for the first days, before a Clerk has food.
         settler.getInventory().setItem(Settler.POCKETS_START, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.BREAD, 2));
         level.addFreshEntity(settler);
+        puff(level, pos);
+        return settler;
+    }
+
+    /**
+     * The cloud puff and sound of a Settler appearing.
+     *
+     * @param level the level
+     * @param pos   where the Settler appears
+     */
+    static void puff(ServerLevel level, Vec3 pos) {
         level.sendParticles(ParticleTypes.CLOUD, pos.x, pos.y + 1.0, pos.z, 12, 0.3, 0.5, 0.3, 0.02);
         level.playSound(null, pos.x, pos.y, pos.z, SoundEvents.ITEM_PICKUP, SoundSource.NEUTRAL, 0.4F, 0.8F);
-        return settler;
+    }
+
+    /**
+     * @param level      the level
+     * @param settlement a settlement
+     * @return the names of its loaded Settlers (a new Settler avoids them)
+     */
+    static Set<String> usedNames(ServerLevel level, Settlement settlement) {
+        Set<String> names = new HashSet<>();
+        for (UUID member : settlement.members()) {
+            if (level.getEntity(member) instanceof Settler settler) {
+                names.add(settler.getName().getString());
+            }
+        }
+        return names;
     }
 
     /**
@@ -168,9 +193,19 @@ public final class SettlerSpawner {
     }
 
     private static void announce(ServerLevel level, Settlement settlement, BlockPos anchor) {
-        Component message = Component.translatable("civmod.settlement.named", settlement.displayName());
+        announce(level, Vec3.atCenterOf(anchor), Component.translatable("civmod.settlement.named", settlement.displayName()));
+    }
+
+    /**
+     * Tells all players within {@value #ANNOUNCE_DISTANCE} blocks.
+     *
+     * @param level   the level
+     * @param pos     where it happened
+     * @param message the chat message
+     */
+    static void announce(ServerLevel level, Vec3 pos, Component message) {
         for (ServerPlayer player : level.players()) {
-            if (player.distanceToSqr(Vec3.atCenterOf(anchor)) <= ANNOUNCE_DISTANCE * ANNOUNCE_DISTANCE) {
+            if (player.distanceToSqr(pos) <= ANNOUNCE_DISTANCE * ANNOUNCE_DISTANCE) {
                 player.sendSystemMessage(message);
             }
         }
