@@ -6,6 +6,7 @@ import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.CraftspersonProfile;
+import com.gilfort.civmod.job.DyerProfile;
 import com.gilfort.civmod.job.FishermanProfile;
 import com.gilfort.civmod.job.FletcherProfile;
 import com.gilfort.civmod.job.LumberjackProfile;
@@ -13,6 +14,7 @@ import com.gilfort.civmod.job.MechanicProfile;
 import com.gilfort.civmod.job.MinerProfile;
 import com.gilfort.civmod.job.SmelterProfile;
 import com.gilfort.civmod.job.SmithProfile;
+import com.gilfort.civmod.job.StonemasonProfile;
 
 import net.minecraft.core.Registry;
 import net.minecraft.world.item.Items;
@@ -75,6 +77,14 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> FLETCHER = JOBS.register("fletcher", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.FLETCHING_TABLE).bubbleIcon(() -> Items.ARROW).displayItem(() -> Items.ARROW).hungerFactor(0.5)
             .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.FLETCHING_TABLE).profile(FletcherProfile::new).build());
+    /** See vault {@code Jobs/Stonemason.md}; crafts stone recipes and cuts stone at a stonecutter, fast with a grindstone near it. */
+    public static final DeferredHolder<Job, Job> STONEMASON = JOBS.register("stonemason", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.STONECUTTER).bubbleIcon(() -> Items.STONE_BRICKS).displayItem(() -> Items.STONE_BRICKS).hungerFactor(0.5)
+            .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.STONECUTTER).profile(StonemasonProfile::new).build());
+    /** See vault {@code Jobs/Dyer.md}; makes dyes and dyes blocks at a loom, fast with a water cauldron near it. */
+    public static final DeferredHolder<Job, Job> DYER = JOBS.register("dyer", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.LOOM).bubbleIcon(() -> Items.DYE.red()).displayItem(() -> Items.DYE.red()).hungerFactor(0.5)
+            .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.LOOM).profile(DyerProfile::new).build());
     /** See vault {@code Jobs/Smelter.md}; smelts requested items at furnaces, several in parallel, burning fuel. */
     public static final DeferredHolder<Job, Job> SMELTER = JOBS.register("smelter", () -> Job.builder(JobCategory.PRODUCING)
             .icon(ModItems.SMELTER_BLOCK).bubbleIcon(() -> Items.IRON_INGOT).displayItem(() -> Items.COAL).hungerFactor(0.5).baseExp(1)
