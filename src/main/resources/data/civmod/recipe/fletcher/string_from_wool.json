@@ -1,0 +1,7 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:fletcher"],
+  "ingredients": ["#minecraft:wool"],
+  "result": { "id": "minecraft:string", "count": 2 },
+  "tool": "#c:tools/shear"
+}

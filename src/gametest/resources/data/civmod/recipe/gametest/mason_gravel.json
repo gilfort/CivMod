@@ -1,0 +1,7 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:gametest_mason", "civmod:clerk", "civmod:no_such_job"],
+  "ingredients": ["minecraft:cobblestone"],
+  "result": { "id": "minecraft:gravel" },
+  "station": "#minecraft:anvil"
+}

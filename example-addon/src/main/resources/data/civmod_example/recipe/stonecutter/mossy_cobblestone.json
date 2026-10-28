@@ -1,0 +1,6 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod_example:stonecutter"],
+  "ingredients": ["minecraft:cobblestone"],
+  "result": { "id": "minecraft:mossy_cobblestone" }
+}

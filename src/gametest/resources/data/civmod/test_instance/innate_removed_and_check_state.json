@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:innate_removed_and_check_state",
+  "max_ticks": 400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

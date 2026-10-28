@@ -12,6 +12,7 @@ import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModItems;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.registry.ModMenuTypes;
+import com.gilfort.civmod.registry.ModRecipes;
 import com.mojang.logging.LogUtils;
 
 import net.minecraft.resources.Identifier;
@@ -52,6 +53,7 @@ public final class CivMod {
         ModAttachments.register(modEventBus);
         ModEntityTypes.register(modEventBus);
         ModJobs.register(modEventBus);
+        ModRecipes.register(modEventBus);
 
         modContainer.registerConfig(ModConfig.Type.SERVER, CivModConfig.SPEC);
 

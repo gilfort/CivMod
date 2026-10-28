@@ -7,6 +7,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.CraftspersonProfile;
 import com.gilfort.civmod.job.FishermanProfile;
+import com.gilfort.civmod.job.FletcherProfile;
 import com.gilfort.civmod.job.LumberjackProfile;
 import com.gilfort.civmod.job.MechanicProfile;
 import com.gilfort.civmod.job.MinerProfile;
@@ -70,6 +71,10 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> SMITH = JOBS.register("smith", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.SMITHING_TABLE).bubbleIcon(() -> Items.ANVIL).displayItem(() -> Items.IRON_INGOT).hungerFactor(0.5)
             .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.SMITHING_TABLE).profile(SmithProfile::new).build());
+    /** See vault {@code Jobs/Fletcher.md}; crafts bows, arrows and string goods at a fletching table, fast with a target near it. */
+    public static final DeferredHolder<Job, Job> FLETCHER = JOBS.register("fletcher", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.FLETCHING_TABLE).bubbleIcon(() -> Items.ARROW).displayItem(() -> Items.ARROW).hungerFactor(0.5)
+            .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.FLETCHING_TABLE).profile(FletcherProfile::new).build());
     /** See vault {@code Jobs/Smelter.md}; smelts requested items at furnaces, several in parallel, burning fuel. */
     public static final DeferredHolder<Job, Job> SMELTER = JOBS.register("smelter", () -> Job.builder(JobCategory.PRODUCING)
             .icon(ModItems.SMELTER_BLOCK).bubbleIcon(() -> Items.IRON_INGOT).displayItem(() -> Items.COAL).hungerFactor(0.5).baseExp(1)

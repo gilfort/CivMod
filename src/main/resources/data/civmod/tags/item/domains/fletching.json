@@ -1,0 +1,8 @@
+{
+  "values": [
+    { "id": "#c:strings", "required": false },
+    "minecraft:feather",
+    "minecraft:flint",
+    "#minecraft:arrows"
+  ]
+}
