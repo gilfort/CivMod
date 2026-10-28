@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -33,10 +34,12 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.Block;
 
 /**
  * What a settler keeps for one job at its JobBlock (vault {@code Systems/Resource Collection Jobs.md},
@@ -87,6 +90,12 @@ final class Workplace {
         private long parallelSearchAt;
         /** The base job factor with the station extras at the work place of the day (read again after loading). */
         private @Nullable FactorOfDay factorOfDay;
+        /** Whether a station of an innate recipe's own tag stands near the JobBlock, until the next search. */
+        private final Map<TagKey<Block>, StationSeen> recipeStations = new HashMap<>();
+    }
+
+    /** The last search for an innate recipe's station: whether one was found, and until when that counts. */
+    private record StationSeen(boolean found, long until) {
     }
 
     private final BlockPos jobBlock;
@@ -226,6 +235,24 @@ final class Workplace {
      */
     void setParallelSearchAt(long gameTime) {
         dayState.parallelSearchAt = gameTime;
+    }
+
+    /**
+     * Whether a station of an innate recipe's own tag stands near the JobBlock (vault {@code Systems/Producing Jobs.md});
+     * the search runs at most every {@value #BLOCKED_RETRY} ticks per tag.
+     *
+     * @param tag      the station tag
+     * @param gameTime the time now (catch-up: the simulated clock)
+     * @param search   the search around the JobBlock
+     * @return whether one was found at the last search
+     */
+    boolean recipeStationNear(TagKey<Block> tag, long gameTime, BooleanSupplier search) {
+        StationSeen seen = dayState.recipeStations.get(tag);
+        if (seen == null || gameTime >= seen.until() || gameTime < seen.until() - BLOCKED_RETRY) {
+            seen = new StationSeen(search.getAsBoolean(), gameTime + BLOCKED_RETRY);
+            dayState.recipeStations.put(tag, seen);
+        }
+        return seen.found();
     }
 
     // ---------------------------------------------------------------- buffer and status

@@ -12,11 +12,9 @@ import java.util.Set;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.settlement.Patterns;
 
-import net.minecraft.core.Holder;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 
 /**
@@ -158,7 +156,7 @@ public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integ
                 rest = use(pool, input, rest, null);
             }
             if (rest > 0) {
-                missing.merge(representative(input), rest, Integer::sum);
+                missing.merge(PatternRecipes.representative(input), rest, Integer::sum);
             }
         }
 
@@ -180,10 +178,6 @@ public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integ
                 rest -= used;
             }
             return rest;
-        }
-
-        private static Item representative(Ingredient input) {
-            return input.items().findFirst().map(Holder::value).orElse(Items.AIR);
         }
     }
 }

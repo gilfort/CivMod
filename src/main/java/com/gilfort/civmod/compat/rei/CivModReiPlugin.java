@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import com.gilfort.civmod.client.ClientInnateRecipes;
 import com.gilfort.civmod.client.gui.JobBlockScreen;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.menu.JobBlockMenu;
@@ -18,11 +19,14 @@ import me.shedaniel.rei.api.client.gui.drag.DraggableStackVisitor;
 import me.shedaniel.rei.api.client.gui.drag.DraggedAcceptorResult;
 import me.shedaniel.rei.api.client.gui.drag.DraggingContext;
 import me.shedaniel.rei.api.client.plugins.REIClientPlugin;
+import me.shedaniel.rei.api.client.registry.category.CategoryRegistry;
+import me.shedaniel.rei.api.client.registry.display.DisplayRegistry;
 import me.shedaniel.rei.api.client.registry.screen.ScreenRegistry;
 import me.shedaniel.rei.api.client.registry.transfer.TransferHandler;
 import me.shedaniel.rei.api.client.registry.transfer.TransferHandlerRegistry;
 import me.shedaniel.rei.api.common.category.CategoryIdentifier;
 import me.shedaniel.rei.api.common.entry.EntryIngredient;
+import me.shedaniel.rei.api.common.util.EntryStacks;
 import me.shedaniel.rei.forge.REIPluginClient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -46,6 +50,9 @@ import net.minecraft.world.phys.shapes.Shapes;
  * REI displays name their category and recipe id, not the recipe type: a category counts as a recipe type's if its id
  * is the type's id, {@code <namespace>:plugins/<path>} (REI's vanilla convention) or one of REI's vanilla names that
  * differ ({@code plugins/stone_cutting}, {@code plugins/campfire}).
+ * <p>
+ * The innate recipes ({@code civmod:job_crafting}) get the display-only "Job Recipes" category
+ * ({@link InnateRecipeCategory}) with the Jobs that know them as workstations.
  */
 @REIPluginClient
 public final class CivModReiPlugin implements REIClientPlugin {
@@ -54,6 +61,17 @@ public final class CivModReiPlugin implements REIClientPlugin {
     private static final Map<RecipeType<?>, String> VANILLA_PATHS = Map.of(
             RecipeType.STONECUTTING, "plugins/stone_cutting",
             RecipeType.CAMPFIRE_COOKING, "plugins/campfire");
+
+    @Override
+    public void registerCategories(CategoryRegistry registry) {
+        registry.add(new InnateRecipeCategory());
+        ClientInnateRecipes.allJobs().forEach(job -> registry.addWorkstations(InnateRecipeDisplay.CATEGORY, EntryStacks.of(job.icon())));
+    }
+
+    @Override
+    public void registerDisplays(DisplayRegistry registry) {
+        ClientInnateRecipes.recipes().forEach(holder -> registry.add(new InnateRecipeDisplay(holder)));
+    }
 
     @Override
     public void registerScreens(ScreenRegistry registry) {

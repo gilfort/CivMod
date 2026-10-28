@@ -8,6 +8,7 @@ import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.AnimalFarmerProfile;
 import com.gilfort.civmod.job.BeekeeperProfile;
 import com.gilfort.civmod.job.CraftspersonProfile;
+import com.gilfort.civmod.job.DomainProfile;
 import com.gilfort.civmod.job.FarmingProfiles;
 import com.gilfort.civmod.job.FishermanProfile;
 import com.gilfort.civmod.job.LumberjackProfile;
@@ -86,10 +87,22 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> SMITH = JOBS.register("smith", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.SMITHING_TABLE).bubbleIcon(() -> Items.ANVIL).displayItem(() -> Items.IRON_INGOT).hungerFactor(0.5)
             .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.SMITHING_TABLE).profile(SmithProfile::new).build());
+    /** See vault {@code Jobs/Fletcher.md}; crafts bows, arrows and string goods at a fletching table, fast with a target near it. */
+    public static final DeferredHolder<Job, Job> FLETCHER = JOBS.register("fletcher", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.FLETCHING_TABLE).bubbleIcon(() -> Items.ARROW).displayItem(() -> Items.ARROW).hungerFactor(0.5)
+            .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.FLETCHING_TABLE).profile(DomainProfile::fletcher).build());
+    /** See vault {@code Jobs/Stonemason.md}; crafts stone recipes and cuts stone at a stonecutter, fast with a grindstone near it. */
+    public static final DeferredHolder<Job, Job> STONEMASON = JOBS.register("stonemason", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.STONECUTTER).bubbleIcon(() -> Items.STONE_BRICKS).displayItem(() -> Items.STONE_BRICKS).hungerFactor(0.5)
+            .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.STONECUTTER).profile(DomainProfile::stonemason).build());
+    /** See vault {@code Jobs/Dyer.md}; makes dyes and dyes blocks at a loom, fast with a water cauldron near it. */
+    public static final DeferredHolder<Job, Job> DYER = JOBS.register("dyer", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.LOOM).bubbleIcon(() -> Items.DYE.red()).displayItem(() -> Items.DYE.red()).hungerFactor(0.5)
+            .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.LOOM).profile(DomainProfile::dyer).build());
     /** See vault {@code Jobs/Smelter.md}; smelts requested items at furnaces, several in parallel, burning fuel. */
     public static final DeferredHolder<Job, Job> SMELTER = JOBS.register("smelter", () -> Job.builder(JobCategory.PRODUCING)
             .icon(ModItems.SMELTER_BLOCK).bubbleIcon(() -> Items.IRON_INGOT).displayItem(() -> Items.COAL).hungerFactor(0.5).baseExp(1)
-            .jobFactor(1.0).unlockItem(() -> Items.FURNACE).profile(SmelterProfile::new).build());
+            .jobFactor(1.0).unlockItem(() -> Items.FURNACE).profile(SmelterProfile::smelter).build());
     /** See vault {@code Jobs/Animal Farmer.md}; a Specialization of the Gatherer, unlocked by a hay bale. */
     public static final DeferredHolder<Job, Job> ANIMAL_FARMER = JOBS.register("animal_farmer", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
             .parent(GATHERER).icon(() -> Items.HAY_BLOCK).bubbleIcon(() -> Items.LEATHER).hungerFactor(1.0).baseExp(1).jobFactor(1.0)
@@ -98,6 +111,14 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> BEEKEEPER = JOBS.register("beekeeper", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
             .parent(GATHERER).icon(() -> Items.BEEHIVE).bubbleIcon(() -> Items.HONEYCOMB).hungerFactor(1.0).baseExp(1)
             .unlockItem(() -> Items.BEEHIVE).farmCurve(FarmingProfiles.HIVE_CURVE).profile(BeekeeperProfile::new).build());
+    /** See vault {@code Jobs/Cook.md}; cooks food at smokers, several in parallel, burning fuel; a Specialization of the Smelter. */
+    public static final DeferredHolder<Job, Job> COOK = JOBS.register("cook", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(SMELTER).icon(() -> Items.SMOKER).bubbleIcon(() -> Items.COOKED_BEEF).displayItem(() -> Items.COOKED_BEEF).hungerFactor(0.5)
+            .baseExp(1).jobFactor(1.0).unlockItem(() -> Items.SMOKER).profile(SmelterProfile::cook).build());
+    /** See vault {@code Jobs/Founder.md}; smelts ores and metal at blast furnaces, several in parallel, burning fuel; a Specialization of the Smelter. */
+    public static final DeferredHolder<Job, Job> FOUNDER = JOBS.register("founder", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(SMELTER).icon(() -> Items.BLAST_FURNACE).bubbleIcon(() -> Items.IRON_INGOT).displayItem(() -> Items.RAW_IRON).hungerFactor(0.5)
+            .baseExp(1).jobFactor(1.0).unlockItem(() -> Items.BLAST_FURNACE).profile(SmelterProfile::founder).build());
 
     private ModJobs() {
     }

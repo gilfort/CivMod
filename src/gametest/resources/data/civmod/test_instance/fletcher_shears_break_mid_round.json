@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:fletcher_shears_break_mid_round",
+  "max_ticks": 400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

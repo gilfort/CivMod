@@ -92,6 +92,7 @@ public final class ExampleAddonGameTests {
             register(helper, "example_stonecutter_request", ExampleAddonGameTests::stonecutterRequest);
             register(helper, "example_stonecutter_work_point", ExampleAddonGameTests::stonecutterWorkPoint);
             register(helper, "example_recipe_viewer_transfer", ExampleAddonGameTests::recipeViewerTransfer);
+            register(helper, "example_stonecutter_innate", ExampleAddonGameTests::stonecutterInnate);
         });
     }
 
@@ -312,7 +313,8 @@ public final class ExampleAddonGameTests {
                 == JobAssignments.AssignResult.OK, "Stonecutter assigned");
         settler.addJob(new SettlerJob(stonecutter, craft));
 
-        Pattern bricks = Patterns.setOutput(level, craft, stonecutter, 0, Items.STONE_BRICKS).orElseThrow();
+        // Slot 0 holds the Stonecutter's innate recipe (cobblestone → mossy cobblestone).
+        Pattern bricks = Patterns.setOutput(level, craft, stonecutter, 1, Items.STONE_BRICKS).orElseThrow();
         helper.assertTrue(bricks.checked() && bricks.grid().getFirst() == Items.STONE && bricks.count() == 1,
                 "A stonecutting pattern, checked automatically: " + bricks);
         CraftspersonGameTests.catchUp(level, settler, 4000L);
@@ -351,7 +353,8 @@ public final class ExampleAddonGameTests {
         StationTypeGameTests.setLevel(helper, new BlockPos(1, 1, 5), 2);
         helper.assertTrue(StationTypeGameTests.unlock(helper, craft, 1, Items.STONECUTTER), "Stonecutter unlocked");
         block = data.settlementAt(craft).flatMap(found -> found.block(craft)).orElseThrow();
-        helper.assertTrue(ScrollOfAssignmentItem.workPlaceJob(level, block, cutter).filter(stonecutter::equals).isPresent(),
+        // The stonecutter also unlocks CivMod's Stonemason, which works at stonecutters too: the point serves both.
+        helper.assertTrue(ScrollOfAssignmentItem.workPlaceJob(level, block, cutter).isPresent() && stonecutter.isValidWorkPlace(level, cutter),
                 "Unlocked: a work point for the Stonecutter: " + ScrollOfAssignmentItem.workPlaceJob(level, block, cutter));
         helper.assertFalse(ModJobs.CRAFTSPERSON.get().isValidWorkPlace(level, cutter), "Not a Craftsperson station");
         helper.assertTrue(JobAssignments.cyclePoint(data, craft, cutter, true, false) == JobAssignments.PointResult.WORK, "Work point set");
@@ -362,7 +365,7 @@ public final class ExampleAddonGameTests {
         helper.assertTrue(TestAssignments.assign(data, craft, settler.getUUID(), "Stella", settlement.id(), List.of(), stonecutter)
                 == JobAssignments.AssignResult.OK, "Stonecutter assigned");
         settler.addJob(new SettlerJob(stonecutter, craft));
-        helper.assertTrue(Patterns.setOutput(level, craft, stonecutter, 0, Items.STONE_BRICKS).orElseThrow().checked(), "Bricks checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, stonecutter, 1, Items.STONE_BRICKS).orElseThrow().checked(), "Bricks checked");
         CraftspersonGameTests.catchUp(level, settler, 4000L);
 
         helper.assertTrue(ClerkStorage.stock(level, clerk, true).count(stack -> stack.is(Items.STONE_BRICKS)) == 4,
@@ -370,6 +373,33 @@ public final class ExampleAddonGameTests {
         TestAssignments.unassign(data, clerk);
         settler.discard();
         level.setBlockAndUpdate(cutter, Blocks.AIR.defaultBlockState());
+        helper.succeed();
+    }
+
+    /**
+     * The example addon gives its Stonecutter one innate recipe by JSON only
+     * ({@code data/civmod_example/recipe/stonecutter/mossy_cobblestone.json}): it sits locked in slot 0 of the
+     * Stonecutter's library, checked, and fills a Clerk request for mossy cobblestone at the stonecutter.
+     */
+    private static void stonecutterInnate(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Job stonecutter = ModJobs.REGISTRY.getValue(STONECUTTER);
+        FletcherGameTests.Setup setup = FletcherGameTests.setup(helper, List.of(new ItemStack(Items.COBBLESTONE, 2)),
+                List.of(new ItemStack(Items.MOSSY_COBBLESTONE, 2)));
+        BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
+        StationTypeGameTests.setLevel(helper, new BlockPos(1, 1, 5), 2);
+        helper.assertTrue(StationTypeGameTests.unlock(helper, craft, 1, Items.STONECUTTER), "Stonecutter unlocked");
+        helper.setBlock(new BlockPos(3, 1, 5), Blocks.STONECUTTER);
+        Patterns.syncInnate(level, craft, stonecutter);
+        Pattern innate = PatternsTabData.of(level, craft, stonecutter).pattern(0).orElseThrow();
+        helper.assertTrue(innate.innate() && innate.output() == Items.MOSSY_COBBLESTONE && innate.checked()
+                && innate.recipe().equals(Optional.of(ResourceKey.create(Registries.RECIPE, Identifier.fromNamespaceAndPath("civmod_example",
+                        "stonecutter/mossy_cobblestone")))), "The innate recipe in slot 0, locked and checked: " + innate);
+        Settler settler = FletcherGameTests.worker(helper, setup, craft, stonecutter);
+        CraftspersonGameTests.catchUp(level, settler, 4000L);
+        helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.MOSSY_COBBLESTONE) == 2,
+                "Mossy cobblestone delivered (status " + settler.getWork().status(craft) + ")");
+        FletcherGameTests.cleanUp(setup, settler);
         helper.succeed();
     }
 
@@ -391,9 +421,10 @@ public final class ExampleAddonGameTests {
         ResourceKey<Recipe<?>> sticks = ResourceKey.create(Registries.RECIPE, Identifier.withDefaultNamespace("stick"));
         List<Item> stickGrid = List.of(Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.AIR, Items.AIR);
 
-        // The Smelter adds smelting (#110), the Smith smithing (#111): their Patterns tabs get the JEI / REI transfer like the Craftsperson's.
-        helper.assertTrue(Set.copyOf(Patterns.allRecipeTypes()).equals(Set.of(RecipeType.CRAFTING, RecipeType.SMELTING, RecipeType.SMITHING, RecipeType.STONECUTTING))
-                && Patterns.allRecipeTypes().size() == 4,
+        // The Smelter adds smelting (#110), the Smith smithing (#111), the Cook smoking and the Founder blasting (#129): their Patterns
+        // tabs get the JEI / REI transfer like the Craftsperson's.
+        helper.assertTrue(Set.copyOf(Patterns.allRecipeTypes()).equals(Set.of(RecipeType.CRAFTING, RecipeType.SMELTING, RecipeType.SMITHING,
+                RecipeType.SMOKING, RecipeType.BLASTING, RecipeType.STONECUTTING)) && Patterns.allRecipeTypes().size() == 6,
                 "Recipe viewers offer the transfer for the recipe types of every Producing Job: " + Patterns.allRecipeTypes());
         Job craftsperson = ModJobs.CRAFTSPERSON.get();
         PatternsTabData tab = PatternsTabData.of(level, craft, craftsperson);
@@ -404,12 +435,14 @@ public final class ExampleAddonGameTests {
 
         tab = PatternsTabData.of(level, craft, stonecutter);
         helper.assertTrue(tab.follows(RecipeType.STONECUTTING) && !tab.follows(RecipeType.CRAFTING), "The Stonecutter's library follows stonecutting");
-        Pattern pattern = Patterns.transfer(level, craft, stonecutter, 0, Optional.of(bricks), List.of(Items.STONE)).orElseThrow();
+        helper.assertTrue(Patterns.transfer(level, craft, stonecutter, 0, Optional.of(bricks), List.of(Items.STONE)).isEmpty(),
+                "The innate recipe in slot 0 refuses a transfer");
+        Pattern pattern = Patterns.transfer(level, craft, stonecutter, 1, Optional.of(bricks), List.of(Items.STONE)).orElseThrow();
         helper.assertTrue(pattern.output() == Items.STONE_BRICKS && pattern.recipe().equals(Optional.of(bricks)) && !pattern.exact()
                 && pattern.grid().getFirst() == Items.STONE && pattern.checked(), "A stonecutting recipe pattern, checked automatically: " + pattern);
-        helper.assertTrue(Patterns.transfer(level, craft, stonecutter, 1, Optional.of(sticks), stickGrid).isEmpty(),
+        helper.assertTrue(Patterns.transfer(level, craft, stonecutter, 2, Optional.of(sticks), stickGrid).isEmpty(),
                 "The Stonecutter refuses a crafting recipe");
-        helper.assertTrue(PatternsTabData.of(level, craft, stonecutter).pattern(1).isEmpty(), "Refused: the slot stays empty");
+        helper.assertTrue(PatternsTabData.of(level, craft, stonecutter).pattern(2).isEmpty(), "Refused: the slot stays empty");
         TestAssignments.unassign(data, clerk);
         helper.succeed();
     }

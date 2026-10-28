@@ -90,7 +90,7 @@ public Optional<TagKey<Item>> domain() {
 - A recipe belongs to the domain if **any input** has an alternative in the tag, so a mixed recipe fits several domains (a piston – planks, cobblestone, iron, redstone – is in a wood, a stone, a metal and a redstone domain).
 - A pattern outside the domain is greyed out with "Outside this Job's domain" and cannot be checked (like a filtered pattern; it loses a checkmark it had, e.g. after the tag changed).
 - Intermediates follow the same rule: the specialist crafts only intermediates inside its domain. One outside it must be in stock, otherwise the request shows "Missing: …" (a Mechanic making repeaters needs sticks from a Craftsperson or the Clerk's storage).
-- Domains are item tags, so datapacks change them. CivMod's built-in Mechanic (unlocked by and working at a Crafter, `crafting`) uses `civmod:domains/redstone`, its Smith (unlocked by and working at a smithing table, `crafting` and `smithing`) uses `civmod:metals`.
+- Domains are item tags, so datapacks change them. CivMod's built-in Mechanic (unlocked by and working at a Crafter, `crafting`) uses `civmod:domains/redstone`, its Smith (unlocked by and working at a smithing table, `crafting` and `smithing`) uses `civmod:metals`, its Fletcher (fletching table, `crafting`) `civmod:domains/fletching`, its Stonemason (stonecutter; `stonecutting` at the stonecutter, `crafting` at a crafting table nearby) `civmod:domains/stone` and its Dyer (loom, `crafting`) `civmod:domains/dye`.
 
 ## Station extras
 
@@ -118,7 +118,7 @@ A profile with `smithing` works `smithing_transform` recipes (netherite upgrades
 
 ## Parallel stations and fuel
 
-A furnace Job (CivMod's Smelter, later its Cook or a modded smeltery) works several stations at once and burns fuel. Two optional hooks turn this on; the loop does the rest.
+A furnace Job (CivMod's Smelter, its Cook and Founder, or a modded smeltery) works several stations at once and burns fuel. Two optional hooks turn this on; the loop does the rest.
 
 | Method | Meaning | Default |
 |---|---|---|
@@ -151,11 +151,35 @@ public Optional<List<Item>> fuel() {
 
 **Fuel.** With `fuel()` present the JobBlock gets a Fuel tab: up to 6 ghost slots shared by all settlers of the block, the order is the priority, the profile's list is the default until the player changes it. Only items with a vanilla burn time (`minecraft:cooking_fuel` component) are taken.
 
-- Every execution needs heat: the recipe's cooking time for a cooking recipe (`AbstractCookingRecipe.cookingTime()`), 200 ticks otherwise. Fuel per item therefore stays vanilla, whatever the settler's speed.
+- Every execution needs heat: the recipe's cooking time for a cooking recipe (`AbstractCookingRecipe.cookingTime()`) divided by the station's vanilla cooking speed (2 for a smoker or blast furnace, any block of the `minecraft:block/fast_cooking` predicate), 200 ticks otherwise. Fuel per item therefore stays vanilla, whatever the settler's speed.
+- A cooking recipe's work time (`workTime`) is divided by the same cooking speed: CivMod's Cook and Founder are twice as fast as the Smelter on the same 200-tick recipes.
 - Each station keeps the *Remaining Heat* of the fuel it burnt, on its block entity, for its next charge: one coal (1600 ticks) smelts 8 items, also over 8 single-item rounds. A broken station loses it.
 - A round fetches its fuel with its inputs (from the collect inventory and the requesting Clerk, or as input deliveries on "Delivery: Deliveryman"): the heat its charges need minus the stations' Remaining Heat, burning the highest-priority listed fuel in the buffer or in stock first. It claims only as much as the fuel covers.
 - No listed fuel in stock: with exactly one fuel listed, job status and request name it ("Missing: 1× Coal"); with several (any will do) or none listed, both say "Missing: Fuel" (`Request.Missing.ANY_FUEL`). A listed item that does not burn is skipped for the next listed fuel.
 - Fuel rests stay in the settler's buffer for the next rounds; they never go to the drop-off. A burnt lava bucket leaves its bucket.
+
+## Innate recipes
+
+Job-only recipes the player cannot craft anywhere: CivMod's recipe type `civmod:job_crafting` (`JobCraftingRecipe`). Every Producing Job named in `jobs` knows them, CivMod's and yours, without code: a profile does not list the type in `recipeTypes()`. Put them in `data/<namespace>/recipe/` like any recipe:
+
+```json
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:fletcher"],
+  "ingredients": ["#minecraft:wool"],
+  "result": { "id": "minecraft:string", "count": 2 },
+  "tool": "#c:tools/shear",
+  "station": "#civmod:stations/fletcher"
+}
+```
+
+- `jobs`: Job ids. A Job that is not Producing (or not registered) is ignored with a log warning.
+- `ingredients`: 1–9 ingredients, shapeless (item ids, `#tags` or lists, like vanilla recipes).
+- `result`: the item stack one execution makes.
+- `tool` (optional): an item id or `#tag`. The settler takes the tool from its collect inventory onto its belt at the start of a round (like a Resource Collection tool) and wears it by 1 durability per execution; Unbreaking works. Without the tool on the belt or in the collect inventory only this recipe is skipped, and the Patterns tab marks it ("Needs Shears"); the Job keeps working its other recipes.
+- `station` (optional): a block `#tag`. The settler works the recipe at the nearest such station within 16 blocks of the JobBlock (like a step of another recipe type); without `station` the station of the Job's main recipe type counts. A missing station skips and marks the recipe ("Needs a Water Cauldron nearby"); the search runs at most every 30 s per settler and tag.
+
+In the library innate recipes sit in the first slots, ordered by recipe id, with a lock (tooltip "Innate recipe of the Fletcher"). They count towards the checkmark limit and are checked automatically like every new pattern while the limit has room; the player can only check and uncheck them (no edit, clear, overwrite or recipe viewer transfer). Your profile's `domain()` and filters do not apply to them: naming the Job in `jobs` is the opt-in. When a datapack adds an innate recipe later, a player pattern on a slot it needs moves to the next free slot (lost if all 54 are used: patterns are ghost items); a removed innate recipe frees its slot; the check state is kept per recipe id. JEI and REI show innate recipes in a display-only "Job Recipes" category (inputs, result, tool, station, the Jobs' icons as catalysts). The example addon's Stonecutter has one (`data/civmod_example/recipe/stonecutter/mossy_cobblestone.json`).
 
 ## Checkmarks
 
