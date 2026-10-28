@@ -823,7 +823,7 @@ final class ProducingLoop implements CategoryLoop {
      * One execution of the round's current step in the buffer: inputs out, the profile's "execute recipe" result in
      * (by default the output and the remainders), EXP.
      *
-     * @return whether it was executed (false: inputs gone, the round failed)
+     * @return whether it was executed (false: inputs gone, the round failed; or the tool gone, the round released)
      */
     private boolean craftOne(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, boolean effects) {
         CraftPlan.Step step = round.steps.get(round.step);
@@ -831,9 +831,10 @@ final class ProducingLoop implements CategoryLoop {
         Optional<Ingredient> tool = InnateRecipes.recipe(level, step.pattern()).flatMap(JobCraftingRecipe::tool);
         Optional<ItemStack> worn = tool.flatMap(kind -> SettlerTools.best(settler, kind));
         if (tool.isPresent() && worn.isEmpty()) {
-            // The tool broke or was never fetched: the round fails like on missing inputs.
-            fail(level, job.jobBlock(), round, List.of(new Request.Missing(tool.get().items().findFirst().map(holder -> holder.value())
-                    .orElse(net.minecraft.world.item.Items.AIR), 1)), level.getGameTime());
+            // The tool broke or was never fetched: only this recipe is skipped (vault Systems/Producing Jobs.md). The claim
+            // is released without marking the request missing; the next pick skips the recipe with "Needs Shears" and
+            // the Job keeps working its other recipes.
+            release(level, job.jobBlock());
             return false;
         }
         List<ItemStack> consumed = new ArrayList<>();
