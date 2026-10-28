@@ -157,6 +157,29 @@ public Optional<List<Item>> fuel() {
 - No listed fuel in stock: with exactly one fuel listed, job status and request name it ("Missing: 1× Coal"); with several (any will do) or none listed, both say "Missing: Fuel" (`Request.Missing.ANY_FUEL`). A listed item that does not burn is skipped for the next listed fuel.
 - Fuel rests stay in the settler's buffer for the next rounds; they never go to the drop-off. A burnt lava bucket leaves its bucket.
 
+## Innate recipes
+
+Job-only recipes the player cannot craft anywhere: CivMod's recipe type `civmod:job_crafting` (`JobCraftingRecipe`). Every Producing Job named in `jobs` knows them, CivMod's and yours, without code: a profile does not list the type in `recipeTypes()`. Put them in `data/<namespace>/recipe/` like any recipe:
+
+```json
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:fletcher"],
+  "ingredients": ["#minecraft:wool"],
+  "result": { "id": "minecraft:string", "count": 2 },
+  "tool": "#c:tools/shear",
+  "station": "#civmod:stations/fletcher"
+}
+```
+
+- `jobs`: Job ids. A Job that is not Producing (or not registered) is ignored with a log warning.
+- `ingredients`: 1–9 ingredients, shapeless (item ids, `#tags` or lists, like vanilla recipes).
+- `result`: the item stack one execution makes.
+- `tool` (optional): an item id or `#tag`. The settler takes the tool from its collect inventory onto its belt at the start of a round (like a Resource Collection tool) and wears it by 1 durability per execution; Unbreaking works. Without the tool on the belt or in the collect inventory only this recipe is skipped, and the Patterns tab marks it ("Needs Shears"); the Job keeps working its other recipes.
+- `station` (optional): a block `#tag`. The settler works the recipe at the nearest such station within 16 blocks of the JobBlock (like a step of another recipe type); without `station` the station of the Job's main recipe type counts. A missing station skips and marks the recipe ("Needs a Water Cauldron nearby"); the search runs at most every 30 s per settler and tag.
+
+In the library innate recipes sit in the first slots, ordered by recipe id, with a lock (tooltip "Innate recipe of the Fletcher"). They count towards the checkmark limit and are checked automatically like every new pattern while the limit has room; the player can only check and uncheck them (no edit, clear, overwrite or recipe viewer transfer). Your profile's `domain()` and filters do not apply to them: naming the Job in `jobs` is the opt-in. When a datapack adds an innate recipe later, a player pattern on a slot it needs moves to the next free slot (lost if all 54 are used: patterns are ghost items); a removed innate recipe frees its slot; the check state is kept per recipe id. JEI and REI show innate recipes in a display-only "Job Recipes" category (inputs, result, tool, station, the Jobs' icons as catalysts). The example addon's Stonecutter has one (`data/civmod_example/recipe/stonecutter/mossy_cobblestone.json`).
+
 ## Checkmarks
 
 Only checked patterns are worked. Each library has its own checkmark limit; only checked patterns the Job can use count against it. A new pattern is checked automatically if it makes something, the profile can use it and a checkmark is free. At the limit it stays unchecked, and the Patterns tab shows "A Stonecutter masters only 6 recipes at once – choose which to check." until the player's next edit of the library. A pattern the filters reject stays unchecked without that line, and loses a checkmark it had. Replacing a pattern keeps its checkmark. Several settlers working the same Job at one JobBlock share its library; its limit is the one of the highest effective skill among them (`checkLimit` of the best settler). When the limit drops (the best settler leaves or switches Job), the last checked patterns the Job can use lose theirs.

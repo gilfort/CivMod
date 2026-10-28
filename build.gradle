@@ -110,6 +110,7 @@ repositories {
         url = 'https://maven.shedaniel.me/'
         content {
             includeGroup 'me.shedaniel'
+            includeGroup 'me.shedaniel.cloth'
             includeGroup 'dev.architectury'
         }
     }
@@ -123,6 +124,8 @@ dependencies {
     compileOnly 'mezz.jei:jei-26.3-neoforge-api:31.14.0.72'
     compileOnly('me.shedaniel:RoughlyEnoughItems-api-neoforge:26.3.824') { transitive = false }
     compileOnly('dev.architectury:architectury-neoforge:22.0.3') { transitive = false }
+    // REI's display widgets take its Point / Rectangle (the "Job Recipes" category).
+    compileOnly('me.shedaniel.cloth:basic-math:0.6.1') { transitive = false }
 
     // JEI in dev runs only (runClient etc.); not published as a dependency.
     localRuntime 'mezz.jei:jei-26.3-neoforge:31.14.0.72'
