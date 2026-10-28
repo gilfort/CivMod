@@ -8,6 +8,7 @@ import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.api.BiomeBonus;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.logistics.Stock;
@@ -148,7 +149,8 @@ final class WorkRules {
         if (profile.needsResources() && scan != null && scan.isEmpty()) {
             return new Result(0, 0, 0, 0, false, End.NO_RESOURCES, workTicks);
         }
-        if (allExcluded(profile, scan, site.block())) {
+        Set<Identifier> excluded = site.block().excluded(job.jobType());
+        if (allExcluded(profile, scan, excluded)) {
             return new Result(0, 0, 0, 0, false, End.ALL_EXCLUDED, workTicks);
         }
         if (scan != null && profile.blockingReason(scan).isPresent()) {
@@ -173,7 +175,7 @@ final class WorkRules {
         boolean levelUp = false;
         End end = End.NONE;
         while (true) {
-            double perTick = profile.speed(skillLevel, tool.get()) * profile.productivity(scan) * bonus.speed().value() / 20.0;
+            double perTick = profile.speed(skillLevel, tool.get()) * job.jobType().productivity(scan, site.level()) * bonus.speed().value() / 20.0;
             if (perTick <= 0.0 || (1.0 - accumulated) / perTick > ticks) {
                 accumulated += Math.max(0.0, perTick) * ticks;
                 ticks = 0.0;
@@ -182,7 +184,7 @@ final class WorkRules {
             // The Max check per roll: the Home Clerk's stock may have changed (catch-up delivers straight into it).
             Set<Item> atMax = StockRules.atMax(level, site);
             ItemStack rollTool = tool.get();
-            End pause = pause(level, profile, workplace, site, rollTool, atMax);
+            End pause = pause(level, job.jobType(), profile, workplace, site, rollTool, atMax);
             if (pause != End.NONE) {
                 end = pause;
                 break;
@@ -190,7 +192,7 @@ final class WorkRules {
             ticks -= (1.0 - accumulated) / perTick;
             accumulated = 0.0;
             ResourceCollectionProfile.Context context = new ResourceCollectionProfile.Context(level, settler, scan, poi, rollTool,
-                    site.block().excluded(), skillLevel, atMax, type -> workplace.dropped(level, profile, poi, type, rollTool),
+                    excluded, skillLevel, atMax, type -> workplace.dropped(level, profile, poi, type, rollTool),
                     bonus.rareChance().value());
             Optional<ResourceCollectionProfile.Produced> produced = profile instanceof SecondaryToolProfile withSecondary
                     ? withSecondary.produce(context, withSecondary.secondaryTool(site.block()).flatMap(kind -> SettlerTools.best(settler, kind)))
@@ -229,17 +231,17 @@ final class WorkRules {
     }
 
     /**
-     * @param profile the job's profile
-     * @param scan    the job's scan (null while the first scan runs)
-     * @param block   the JobBlock
+     * @param profile  the job's profile
+     * @param scan     the job's scan (null while the first scan runs)
+     * @param excluded the types excluded for the job at its JobBlock
      * @return whether the scan found main resources and every one of them is excluded at the JobBlock (the job pauses)
      */
-    static boolean allExcluded(ResourceCollectionProfile profile, @Nullable ScanResult scan, SettlementBlock block) {
-        if (scan == null || block.excluded().isEmpty()) {
+    static boolean allExcluded(ResourceCollectionProfile profile, @Nullable ScanResult scan, Set<Identifier> excluded) {
+        if (scan == null || excluded.isEmpty()) {
             return false;
         }
         List<Identifier> main = profile.mainResources(scan);
-        return !main.isEmpty() && block.excluded().containsAll(main);
+        return !main.isEmpty() && excluded.containsAll(main);
     }
 
     /**
@@ -247,6 +249,7 @@ final class WorkRules {
      * every main resource is excluded at the JobBlock or its dropped item is at Max at the Home Clerk.
      *
      * @param level     the level
+     * @param job       the Job (its exclusions at the JobBlock)
      * @param profile   the job's profile
      * @param workplace the job's Workplace (its scan, null while the first scan runs, and the dropped items)
      * @param site      the JobBlock
@@ -255,9 +258,11 @@ final class WorkRules {
      * @return {@link End#ALL_EXCLUDED}, {@link End#MAX_REACHED} or {@link End#NOTHING_TO_PRODUCE} for a pause, else
      *         {@link End#NONE}
      */
-    static End pause(ServerLevel level, ResourceCollectionProfile profile, Workplace workplace, JobBlockSite site, ItemStack tool, Set<Item> atMax) {
+    static End pause(ServerLevel level, Job job, ResourceCollectionProfile profile, Workplace workplace, JobBlockSite site, ItemStack tool,
+            Set<Item> atMax) {
         ScanResult scan = workplace.scan();
-        if (scan == null || (atMax.isEmpty() && site.block().excluded().isEmpty())) {
+        Set<Identifier> excludedTypes = site.block().excluded(job);
+        if (scan == null || (atMax.isEmpty() && excludedTypes.isEmpty())) {
             return End.NONE;
         }
         List<Identifier> main = profile.mainResources(scan);
@@ -266,7 +271,7 @@ final class WorkRules {
         }
         int excluded = 0;
         for (Identifier type : main) {
-            if (site.block().excluded().contains(type)) {
+            if (excludedTypes.contains(type)) {
                 excluded++;
             } else if (!atMax.contains(workplace.dropped(level, profile, site.pos(), type, tool))) {
                 return End.NONE;
@@ -277,9 +282,12 @@ final class WorkRules {
 
     /**
      * The best tool of the job on the belt; with {@link ToolSupply#beltAnd} missing tools are taken from the collect
-     * inventory first.
+     * inventory first. A bare-handed job ({@link ResourceCollectionProfile#needsTool()}) works with an empty hand.
      */
     private static Optional<ItemStack> tool(ServerLevel level, Settler settler, ResourceCollectionProfile profile, JobBlockSite site, ToolSupply supply) {
+        if (!profile.needsTool()) {
+            return Optional.of(ItemStack.EMPTY);
+        }
         Optional<ItemStack> tool = SettlerTools.best(settler, profile::isTool);
         if (tool.isEmpty() && supply.collect().isPresent()) {
             if (refill(settler, profile, site, supply.collect().get()) && supply.collect().get().counter()) {
@@ -302,7 +310,7 @@ final class WorkRules {
      * @return the missing tool, empty if the belt is ready
      */
     static Optional<MissingTool> missingTool(Settler settler, ResourceCollectionProfile profile, JobBlockSite site, Stock collect) {
-        if (SettlerTools.best(settler, profile::isTool).isEmpty()) {
+        if (profile.needsTool() && SettlerTools.best(settler, profile::isTool).isEmpty()) {
             Predicate<ItemStack> kind = profile::isTool;
             return Optional.of(new MissingTool(kind, SettlerTools.find(collect, kind).isPresent()));
         }
@@ -341,7 +349,7 @@ final class WorkRules {
      */
     static boolean refill(Settler settler, ResourceCollectionProfile profile, JobBlockSite site, Stock collect) {
         boolean taken = false;
-        if (SettlerTools.best(settler, profile::isTool).isEmpty()) {
+        if (profile.needsTool() && SettlerTools.best(settler, profile::isTool).isEmpty()) {
             taken |= SettlerTools.take(settler, collect, profile::isTool);
         }
         Optional<Predicate<ItemStack>> secondary = secondaryTool(profile, site.block());

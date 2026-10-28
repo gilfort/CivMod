@@ -101,7 +101,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
             }
             return profile.blockingReason(null).map(JobStep::blocked).orElseGet(() -> JobStep.blocked(JobStatus.NO_WORK_PLACE));
         }
-        workplace.ensureScan(level, profile, site, poi, day, dayTime);
+        workplace.ensureScan(level, job.jobType(), profile, site, poi, day, dayTime);
         Optional<BlockingReason> reason = workplace.scan() == null ? Optional.empty() : profile.blockingReason(workplace.scan());
         if (reason.isPresent()) {
             return JobStep.blocked(reason.get());
@@ -110,7 +110,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
             return JobStep.blocked(JobStatus.NO_RESOURCES);
         }
         ItemStack tool = SettlerTools.best(settler, profile::isTool).orElse(ItemStack.EMPTY);
-        Optional<JobStatus> paused = WorkRules.pause(level, profile, workplace, site, tool, StockRules.atMax(level, site)).pauseStatus();
+        Optional<JobStatus> paused = WorkRules.pause(level, job.jobType(), profile, workplace, site, tool, StockRules.atMax(level, site)).pauseStatus();
         if (paused.isPresent()) {
             return JobStep.blocked(paused.get());
         }
@@ -242,7 +242,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
             if (poi == null) {
                 return true;
             }
-            workplace.ensureScan(level, profile.get(), site, poi, day, dayTime);
+            workplace.ensureScan(level, job.jobType(), profile.get(), site, poi, day, dayTime);
             return false;
         }
         return true;

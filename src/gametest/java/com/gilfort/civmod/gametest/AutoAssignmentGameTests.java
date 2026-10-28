@@ -238,7 +238,7 @@ public final class AutoAssignmentGameTests {
                 continue;
             }
             String text = render(lang, AutoAssignment.assignedMessage(Component.literal("Cy"), job));
-            helper.assertTrue(text.matches("Cy is now an? \\p{Lu}\\S*"), "Every Job has its article: " + text);
+            helper.assertTrue(text.matches("Cy is now an? \\p{Lu}\\S*( \\p{Lu}\\S*)*"), "Every Job has its article: " + text);
         }
         helper.succeed();
     }

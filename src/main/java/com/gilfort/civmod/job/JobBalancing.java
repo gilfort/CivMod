@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.FarmCurve;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.SettlementBlock;
@@ -43,16 +44,17 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
  *                     ({@code parallel_stations}; levels beyond the list use its last value)
  * @param stationExtras blocks near the station of the day that replace the job factor ({@code station_extras}; a later
  *                     file replaces the whole list)
+ * @param farmCurve    the farm curve of a farming Resource Collection Job ({@code farm_curve}, see {@link FarmCurve})
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> baseExp, Optional<Double> jobFactor, Optional<Item> unlockItem,
-        Optional<List<Integer>> parallelStations, Optional<List<StationExtra>> stationExtras) {
+        Optional<List<Integer>> parallelStations, Optional<List<StationExtra>> stationExtras, Optional<FarmCurve> farmCurve) {
 
     /** Reload listener id. */
     public static final Identifier ID = CivMod.id("job_balancing");
     /** No override. */
     public static final JobBalancing NONE = new JobBalancing(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-            Optional.empty());
+            Optional.empty(), Optional.empty());
 
     private static final Codec<JobBalancing> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.doubleRange(0.0, 10.0).optionalFieldOf("hunger_factor").forGetter(JobBalancing::hungerFactor),
@@ -60,7 +62,8 @@ public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> base
             Codec.doubleRange(0.0, 100.0).optionalFieldOf("job_factor").forGetter(JobBalancing::jobFactor),
             BuiltInRegistries.ITEM.byNameCodec().optionalFieldOf("unlock_item").forGetter(JobBalancing::unlockItem),
             Codec.intRange(1, SettlementBlock.MAX_WORK_POINTS).listOf(1, 5).optionalFieldOf("parallel_stations").forGetter(JobBalancing::parallelStations),
-            StationExtra.CODEC.listOf().optionalFieldOf("station_extras").forGetter(JobBalancing::stationExtras)
+            StationExtra.CODEC.listOf().optionalFieldOf("station_extras").forGetter(JobBalancing::stationExtras),
+            FarmCurve.CODEC.optionalFieldOf("farm_curve").forGetter(JobBalancing::farmCurve)
     ).apply(instance, JobBalancing::new));
 
     private static final FileToIdConverter FILES = FileToIdConverter.json("civmod_jobs");
@@ -86,7 +89,8 @@ public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> base
             JobBalancing part = CODEC.parse(JsonOps.INSTANCE, file).getOrThrow();
             merged = new JobBalancing(part.hungerFactor().or(merged::hungerFactor), part.baseExp().or(merged::baseExp),
                     part.jobFactor().or(merged::jobFactor), part.unlockItem().or(merged::unlockItem),
-                    part.parallelStations().or(merged::parallelStations), part.stationExtras().or(merged::stationExtras));
+                    part.parallelStations().or(merged::parallelStations), part.stationExtras().or(merged::stationExtras),
+                    part.farmCurve().or(merged::farmCurve));
         }
         return merged;
     }

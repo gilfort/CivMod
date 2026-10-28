@@ -208,12 +208,13 @@ public final class SettlementWorld {
      *
      * @param level    the dimension
      * @param jobBlock the JobBlock position
+     * @param job      the Job whose exclusion it is (one Found tab section)
      * @param type     the found resource type
      * @return whether the type is excluded now
      */
-    public static boolean toggleExcluded(ServerLevel level, BlockPos jobBlock, net.minecraft.resources.Identifier type) {
+    public static boolean toggleExcluded(ServerLevel level, BlockPos jobBlock, Job job, net.minecraft.resources.Identifier type) {
         SettlementData data = SettlementData.get(level);
-        boolean excluded = JobAssignments.toggleExcluded(data, jobBlock, type);
+        boolean excluded = JobAssignments.toggleExcluded(data, jobBlock, job, type);
         if (!excluded) {
             JobBlockSite.blockAt(data, jobBlock).ifPresent(block -> block.assignees().forEach(assignee -> {
                 if (level.getEntity(assignee.id()) instanceof Settler entity) {

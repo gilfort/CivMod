@@ -19,6 +19,10 @@ public final class CivModJobs {
     public static final DeferredHolder<Job, Job> MINER = job("miner");
     /** Resource Collection: fishes. */
     public static final DeferredHolder<Job, Job> FISHERMAN = job("fisherman");
+    /** Resource Collection: collects what wild plants drop, bare-handed; Base Job of the farming Specializations. */
+    public static final DeferredHolder<Job, Job> GATHERER = job("gatherer");
+    /** Resource Collection: collects plantation plants with an axe; a Specialization of the Gatherer. */
+    public static final DeferredHolder<Job, Job> PLANTATION_FARMER = job("plantation_farmer");
     /** Mission: the Base Job of the Mission Board and parent of every Mission Job. */
     public static final DeferredHolder<Job, Job> ADVENTURER = job("adventurer");
     /** Logistics (internal): the store and food point of a settlement. */

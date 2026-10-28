@@ -155,6 +155,25 @@ public interface ResourceCollectionProfile extends CategoryProfile {
     }
 
     /**
+     * The size of the farm in the scan that the Job's farm curve ({@link Job#farmCurve()}) runs on: more counted plants,
+     * animals or hives make it faster, up to a cap per JobBlock level. Only read for a Job with a farm curve.
+     *
+     * @param scan the scan result (null while the first scan runs)
+     * @return the counted size, 0 by default
+     */
+    default int farmCount(@Nullable ScanResult scan) {
+        return 0;
+    }
+
+    /**
+     * @return whether the Job needs a tool on the belt (status "No tool" without one); a Job without works bare-handed
+     *         with {@link ItemStack#EMPTY} as its tool and wears nothing
+     */
+    default boolean needsTool() {
+        return true;
+    }
+
+    /**
      * The rare group of the Job's roll (vault {@code Systems/JobBlock.md}, decisions on biome bonuses): a roll that first
      * picks a group and then a type in it has a rare group (Miner: ores instead of stone; Fisherman: treasure instead
      * of fish), whose chance a biome bonus's {@code rare_chance} multiplies. A profile with one applies the factor in
