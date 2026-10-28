@@ -1,30 +1,48 @@
 package com.gilfort.civmod.gametest;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.FarmCurve;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.block.ScarecrowBlock;
 import com.gilfort.civmod.job.BlockCountScan;
 import com.gilfort.civmod.job.JobStatus;
+import com.gilfort.civmod.menu.FoundTab;
+import com.gilfort.civmod.menu.FoundTabData;
+import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
+import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.TestAssignments;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
@@ -44,6 +62,9 @@ public final class VeggyFarmerGameTests {
 
     private static final Identifier CARROTS = Identifier.withDefaultNamespace("carrots");
     private static final Identifier NETHER_WART = Identifier.withDefaultNamespace("nether_wart");
+    private static final Identifier WHEAT = Identifier.withDefaultNamespace("wheat");
+    private static final int SAMPLES = 2000;
+    private static final double EPSILON = 1.0E-6;
 
     private VeggyFarmerGameTests() {
     }
@@ -52,6 +73,11 @@ public final class VeggyFarmerGameTests {
     static void onRegister(RegisterEvent event) {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "veggy_farmer_only_mature_crops", VeggyFarmerGameTests::onlyMatureCrops);
+            register(helper, "veggy_farmer_crop_curve", VeggyFarmerGameTests::cropCurve);
+            register(helper, "veggy_farmer_no_scarecrow", VeggyFarmerGameTests::noScarecrow);
+            register(helper, "veggy_farmer_works_scroll_scarecrow", VeggyFarmerGameTests::worksScrollScarecrow);
+            register(helper, "veggy_farmer_fortune_hoe", VeggyFarmerGameTests::fortuneHoe);
+            register(helper, "scarecrow_block", VeggyFarmerGameTests::scarecrowBlock);
         });
     }
 
@@ -136,5 +162,174 @@ public final class VeggyFarmerGameTests {
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });
+    }
+
+    /**
+     * The plant farm curve on real scans: one mature wheat is slow (0.2 × 1.005), 300 count only 100 at JobBlock level 1
+     * (0.3) but all at level 2 (0.5); young wheat does not count. The values come from the Job's data.
+     */
+    private static void cropCurve(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(24, 0, 24));
+        Job job = ModJobs.VEGGY_FARMER.get();
+        helper.assertValueEqual(job.farmCurve(), Optional.of(new FarmCurve(0.005, List.of(100, 350, 750, 1350, 2000))), "Veggy Farmer curve");
+        ResourceCollectionProfile profile = job.profile(ResourceCollectionProfile.class).orElseThrow();
+        for (int x = 0; x < 20; x++) {
+            for (int z = 0; z < 15; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.FARMLAND);
+                helper.setBlock(new BlockPos(x, 1, z), crop(Blocks.WHEAT, 3));
+            }
+        }
+        helper.setBlock(new BlockPos(10, 1, 10), crop(Blocks.WHEAT, 7));
+        BlockPos center = helper.absolutePos(new BlockPos(10, 1, 10));
+        assertNear(helper, job.productivity(profile.createScan(center, 30).runAll(level), 1), 0.201, "One mature wheat");
+        for (int x = 0; x < 20; x++) {
+            for (int z = 0; z < 15; z++) {
+                helper.setBlock(new BlockPos(x, 1, z), crop(Blocks.WHEAT, 7));
+            }
+        }
+        ScanResult field = profile.createScan(center, 30).runAll(level);
+        assertNear(helper, job.productivity(field, 1), 0.3, "300 mature wheat at level 1 (cap 100)");
+        assertNear(helper, job.productivity(field, 2), 0.5, "300 mature wheat at level 2");
+        forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+        helper.succeed();
+    }
+
+    /** A field of mature wheat but no scarecrow: the Veggy Farmer is blocked with "No scarecrow" and collects nothing. */
+    private static void noScarecrow(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        BlockPos jobBlock = farm(helper);
+        for (int x = 4; x < 9; x++) {
+            helper.setBlock(new BlockPos(x, 1, 6), crop(Blocks.WHEAT, 7));
+        }
+        Settler settler = veggyFarmer(helper, jobBlock);
+        helper.succeedWhen(() -> {
+            helper.assertTrue(settler.getWork().status(jobBlock) == JobStatus.BLOCKED, "Status " + settler.getWork().status(jobBlock));
+            helper.assertValueEqual(settler.getWork().statusText(jobBlock).getString(), "No scarecrow", "Reason");
+            helper.assertTrue(settler.getWork().buffer(jobBlock).count() == 0, "Nothing collected");
+            settler.discard();
+            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+        });
+    }
+
+    /**
+     * Two scarecrows: one near the JobBlock without crops, one set with the Scroll of Assignment in a mature wheat field.
+     * The Veggy Farmer works the scroll's field: it delivers wheat, the Found tab lists wheat in its section, the crops
+     * stay mature; excluding wheat pauses it.
+     */
+    private static void worksScrollScarecrow(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(24, 0, 24));
+        for (int x = 0; x < 25; x++) {
+            for (int z = 0; z < 25; z++) {
+                boolean field = x >= 17 && x <= 23 && z >= 17 && z <= 23;
+                helper.setBlock(new BlockPos(x, 0, z), field ? Blocks.FARMLAND : Blocks.GRASS_BLOCK);
+                if (field && !(x == 20 && z == 20)) {
+                    helper.setBlock(new BlockPos(x, 1, z), crop(Blocks.WHEAT, 7));
+                }
+            }
+        }
+        BlockPos relative = new BlockPos(1, 1, 1);
+        helper.setBlock(relative, ModBlocks.GATHERER_BLOCK.get());
+        StationTypeGameTests.setLevel(helper, relative, 2);
+        BlockPos jobBlock = helper.absolutePos(relative);
+        SettlementData data = SettlementData.get(level);
+        TestAssignments.setStationType(data, jobBlock, 1, Items.COMPOSTER);
+        scarecrow(helper, new BlockPos(4, 1, 4));
+        scarecrow(helper, new BlockPos(20, 1, 20));
+        Job job = ModJobs.VEGGY_FARMER.get();
+        BlockPos fieldScarecrow = helper.absolutePos(new BlockPos(20, 1, 20));
+        helper.assertTrue(job.isValidWorkPlace(level, fieldScarecrow), "A scarecrow is a work place");
+        helper.assertFalse(job.isValidWorkPlace(level, fieldScarecrow.above()), "Only its lower half");
+        JobAssignments.cyclePoint(data, jobBlock, fieldScarecrow, true, false);
+        Settler settler = veggyFarmer(helper, jobBlock);
+        JobBlockMenu menu = StationTypeGameTests.menu(helper, helper.makeMockPlayer(GameType.CREATIVE), jobBlock);
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(settler.getWork().buffer(jobBlock).counts().getOrDefault(Items.WHEAT, 0) > 0,
+                        "No wheat yet (status " + settler.getWork().status(jobBlock) + ")"))
+                .thenExecute(() -> {
+                    helper.assertTrue(helper.getBlockState(new BlockPos(18, 1, 18)).equals(crop(Blocks.WHEAT, 7)), "The wheat is never harvested");
+                    List<Identifier> found = FoundTabData.of(level, jobBlock).section(job).orElseThrow().entries().stream()
+                            .map(FoundTabData.Entry::type).toList();
+                    helper.assertValueEqual(found, List.of(WHEAT), "Found tab");
+                    helper.assertTrue(menu.tab(FoundTab.class).orElseThrow().toggleExcluded(job, WHEAT), "Wheat excluded");
+                })
+                .thenWaitUntil(() -> helper.assertTrue(settler.getWork().status(jobBlock) == JobStatus.ALL_EXCLUDED,
+                        "Not paused: " + settler.getWork().status(jobBlock)))
+                .thenExecute(() -> {
+                    settler.discard();
+                    forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * Fortune on the hoe raises the carrot yield like for a player (vanilla: 2 + binomial(3 + level, 0.57)); an excluded
+     * crop type leaves the roll.
+     */
+    private static void fortuneHoe(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        ResourceCollectionProfile profile = ModJobs.VEGGY_FARMER.get().profile(ResourceCollectionProfile.class).orElseThrow();
+        Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
+        BlockPos poi = helper.absolutePos(new BlockPos(1, 1, 1));
+        ScanResult scan = new BlockCountScan.Result(Map.of(CARROTS, 5, WHEAT, 5));
+        ItemStack fortune = new ItemStack(Items.DIAMOND_HOE);
+        Holder<Enchantment> enchantment = level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.FORTUNE);
+        fortune.enchant(enchantment, 3);
+        Map<Item, Integer> plain = roll(profile, settler, level, poi, scan, new ItemStack(Items.STONE_HOE));
+        Map<Item, Integer> lucky = roll(profile, settler, level, poi, scan, fortune);
+        helper.assertFalse(plain.containsKey(Items.WHEAT) || lucky.containsKey(Items.WHEAT), "Excluded wheat is never rolled: " + plain);
+        double plainMean = plain.getOrDefault(Items.CARROT, 0) / (double) SAMPLES;
+        double luckyMean = lucky.getOrDefault(Items.CARROT, 0) / (double) SAMPLES;
+        helper.assertTrue(Math.abs(plainMean - 3.71) < 0.15, "About 3.7 carrots without Fortune: " + plainMean);
+        helper.assertTrue(Math.abs(luckyMean - 5.43) < 0.2, "About 5.4 carrots with Fortune III: " + luckyMean);
+        settler.discard();
+        helper.succeed();
+    }
+
+    /** Rolls {@value #SAMPLES} times with wheat excluded; counts the items produced. */
+    private static Map<Item, Integer> roll(ResourceCollectionProfile profile, Settler settler, ServerLevel level, BlockPos poi, ScanResult scan,
+            ItemStack tool) {
+        Map<Item, Integer> counts = new HashMap<>();
+        for (int i = 0; i < SAMPLES; i++) {
+            Optional<ResourceCollectionProfile.Produced> produced = profile.produce(new ResourceCollectionProfile.Context(level, settler, scan, poi,
+                    tool, Set.of(WHEAT), 1, Set.of(), type -> profile.dropped(level, poi, type, tool)));
+            produced.ifPresent(found -> found.stacks().forEach(stack -> counts.merge(stack.getItem(), stack.getCount(), Integer::sum)));
+        }
+        return counts;
+    }
+
+    /**
+     * The scarecrow stands on farmland and keeps it farmland; a half without its partner vanishes; it is crafted from a
+     * carved pumpkin over a hay bale over a stick; a composter in the Gatherer JobBlock offers the Veggy Farmer.
+     */
+    private static void scarecrowBlock(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(2, 0, 2), Blocks.FARMLAND);
+        scarecrow(helper, new BlockPos(2, 1, 2));
+        helper.setBlock(new BlockPos(5, 0, 2), Blocks.STONE);
+        scarecrow(helper, new BlockPos(5, 1, 2));
+        helper.setBlock(new BlockPos(5, 2, 2), Blocks.AIR);
+        helper.assertBlockPresent(Blocks.AIR, new BlockPos(5, 1, 2));
+        Optional<RecipeHolder<?>> recipe = level.getServer().getRecipeManager().byKey(ResourceKey.create(Registries.RECIPE, CivMod.id("scarecrow")));
+        helper.assertTrue(recipe.isPresent(), "Scarecrow recipe");
+        BlockPos relative = new BlockPos(1, 1, 6);
+        helper.setBlock(new BlockPos(1, 0, 6), Blocks.STONE);
+        helper.setBlock(relative, ModBlocks.GATHERER_BLOCK.get());
+        StationTypeGameTests.setLevel(helper, relative, 2);
+        BlockPos pos = helper.absolutePos(relative);
+        helper.assertTrue(StationTypeGameTests.unlock(helper, pos, 1, Items.COMPOSTER), "Composter taken");
+        List<Job> offered = JobPlaces.lines(StationTypeGameTests.block(level, pos)).stream().map(JobPlaces.Line::job).toList();
+        helper.assertTrue(offered.contains(ModJobs.VEGGY_FARMER.get()), "Veggy Farmer offered: " + offered);
+        helper.runAfterDelay(10, () -> {
+            helper.assertBlockPresent(Blocks.FARMLAND, new BlockPos(2, 0, 2));
+            helper.assertBlockPresent(ModBlocks.SCARECROW.get(), new BlockPos(2, 2, 2));
+            helper.succeed();
+        });
+    }
+
+    private static void assertNear(GameTestHelper helper, double actual, double expected, String what) {
+        helper.assertTrue(Math.abs(actual - expected) < EPSILON, what + ": " + actual + " (expected " + expected + ")");
     }
 }
