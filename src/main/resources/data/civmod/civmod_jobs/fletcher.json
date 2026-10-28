@@ -1,0 +1,11 @@
+{
+  "job_factor": 0.3,
+  "base_exp": 2,
+  "station_extras": [
+    {
+      "blocks": "minecraft:target",
+      "radius": 4,
+      "job_factor": 1.2
+    }
+  ]
+}

@@ -158,7 +158,7 @@ public final class JobSwitcherGameTests {
                 "A third settler finds the block full");
 
         helper.assertTrue(Patterns.setOutput(level, pos, craftsperson, 0, Items.STICK).orElseThrow().checked(), "Craftsperson: sticks");
-        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 0, Items.STONE_BRICKS).orElseThrow().checked(), "Stonecutter: bricks");
+        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 1, Items.STONE_BRICKS).orElseThrow().checked(), "Stonecutter: bricks (slot 0 is innate)");
         helper.assertTrue(Producers.canMake(level, settlement, Items.STICK) && Producers.canMake(level, settlement, Items.STONE_BRICKS),
                 "Workshop and Stonecutter at once");
         TestAssignments.unassign(data, pos);

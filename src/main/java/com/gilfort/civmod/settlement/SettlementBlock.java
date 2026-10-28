@@ -27,8 +27,11 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 
@@ -174,6 +177,8 @@ public final class SettlementBlock {
         private Optional<Notice> notice = Optional.empty();
         /** The checkmark limit each settler working this library last reported (the best one counts). */
         private final Map<UUID, Integer> workerLimits = new HashMap<>();
+        /** What the innate recipes a settler last skipped need, by recipe id (not saved). */
+        private Map<ResourceKey<Recipe<?>>, Component> needs = Map.of();
 
         /**
          * @return the checkmark limit each settler working this library last reported, by settler
@@ -214,6 +219,18 @@ public final class SettlementBlock {
 
         void setNotice(Optional<Notice> notice) {
             this.notice = notice;
+        }
+
+        /**
+         * @return the innate recipes a settler last had to skip, with what they need ("Needs Shears", "Needs a Water
+         *         Cauldron nearby"), by recipe id (read-only; not saved)
+         */
+        public Map<ResourceKey<Recipe<?>>, Component> needs() {
+            return Collections.unmodifiableMap(needs);
+        }
+
+        void setNeeds(Map<ResourceKey<Recipe<?>>, Component> needs) {
+            this.needs = Map.copyOf(needs);
         }
     }
 
@@ -505,10 +522,21 @@ public final class SettlementBlock {
     }
 
     /**
-     * @return the Jobs whose library holds a pattern, in the order their libraries were made
+     * @param job a Producing Job of this JobBlock
+     * @return what the innate recipes a settler last skipped need, by recipe id (not saved)
+     */
+    public Map<ResourceKey<Recipe<?>>, Component> needs(Job job) {
+        Library library = libraries.get(job);
+        return library == null ? Map.of() : library.needs();
+    }
+
+    /**
+     * @return the Jobs whose library holds a pattern of the player (innate ones do not count), in the order their
+     *         libraries were made
      */
     public List<Job> libraryJobs() {
-        return libraries.entrySet().stream().filter(entry -> !entry.getValue().patterns().isEmpty()).map(Map.Entry::getKey).toList();
+        return libraries.entrySet().stream().filter(entry -> entry.getValue().patterns().stream().anyMatch(pattern -> !pattern.innate()))
+                .map(Map.Entry::getKey).toList();
     }
 
     /**
