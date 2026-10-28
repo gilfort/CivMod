@@ -173,7 +173,7 @@ final class WorkRules {
         boolean levelUp = false;
         End end = End.NONE;
         while (true) {
-            double perTick = profile.speed(skillLevel, tool.get()) * profile.productivity(scan) * bonus.speed().value() / 20.0;
+            double perTick = profile.speed(skillLevel, tool.get()) * job.jobType().productivity(scan, site.level()) * bonus.speed().value() / 20.0;
             if (perTick <= 0.0 || (1.0 - accumulated) / perTick > ticks) {
                 accumulated += Math.max(0.0, perTick) * ticks;
                 ticks = 0.0;
@@ -277,9 +277,12 @@ final class WorkRules {
 
     /**
      * The best tool of the job on the belt; with {@link ToolSupply#beltAnd} missing tools are taken from the collect
-     * inventory first.
+     * inventory first. A bare-handed job ({@link ResourceCollectionProfile#needsTool()}) works with an empty hand.
      */
     private static Optional<ItemStack> tool(ServerLevel level, Settler settler, ResourceCollectionProfile profile, JobBlockSite site, ToolSupply supply) {
+        if (!profile.needsTool()) {
+            return Optional.of(ItemStack.EMPTY);
+        }
         Optional<ItemStack> tool = SettlerTools.best(settler, profile::isTool);
         if (tool.isEmpty() && supply.collect().isPresent()) {
             if (refill(settler, profile, site, supply.collect().get()) && supply.collect().get().counter()) {
@@ -302,7 +305,7 @@ final class WorkRules {
      * @return the missing tool, empty if the belt is ready
      */
     static Optional<MissingTool> missingTool(Settler settler, ResourceCollectionProfile profile, JobBlockSite site, Stock collect) {
-        if (SettlerTools.best(settler, profile::isTool).isEmpty()) {
+        if (profile.needsTool() && SettlerTools.best(settler, profile::isTool).isEmpty()) {
             Predicate<ItemStack> kind = profile::isTool;
             return Optional.of(new MissingTool(kind, SettlerTools.find(collect, kind).isPresent()));
         }
@@ -341,7 +344,7 @@ final class WorkRules {
      */
     static boolean refill(Settler settler, ResourceCollectionProfile profile, JobBlockSite site, Stock collect) {
         boolean taken = false;
-        if (SettlerTools.best(settler, profile::isTool).isEmpty()) {
+        if (profile.needsTool() && SettlerTools.best(settler, profile::isTool).isEmpty()) {
             taken |= SettlerTools.take(settler, collect, profile::isTool);
         }
         Optional<Predicate<ItemStack>> secondary = secondaryTool(profile, site.block());

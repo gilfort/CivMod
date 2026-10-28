@@ -39,7 +39,8 @@ import net.minecraft.world.level.block.Block;
  * {@code job_factor}, {@code unlock_item}, all optional; a Producing Job also {@code parallel_stations}, a list of the
  * stations worked at once per JobBlock level, see {@link ProducingProfile#parallelStations}; any Job
  * {@code station_extras}, blocks near the station of the day that replace the job factor, a list of
- * {@code { blocks (id, list or #tag), radius, job_factor }} where the highest match counts), the JobBlock upgrade costs in
+ * {@code { blocks (id, list or #tag), radius, job_factor }} where the highest match counts; a farming Resource Collection
+ * Job {@code farm_curve}, see {@link FarmCurve}), the JobBlock upgrade costs in
  * {@code data/<namespace>/civmod_upgrades/<job>.json}. The job's names come from the lang keys
  * {@code job.<namespace>.<job>} and {@code job.<namespace>.<job>.indefinite} ("an Adventurer"), its one-line description
  * in the Station Types overview from {@code job.<namespace>.<job>.description}.
@@ -74,6 +75,7 @@ public final class Job {
     private final @Nullable TagKey<Block> station;
     private final @Nullable Supplier<? extends ItemLike> unlockItem;
     private final @Nullable Supplier<CategoryProfile> profile;
+    private final @Nullable FarmCurve farmCurve;
 
     private Job(Builder builder) {
         this.category = builder.category;
@@ -86,6 +88,7 @@ public final class Job {
         this.jobFactor = builder.jobFactor;
         this.station = builder.station;
         this.unlockItem = builder.unlockItem;
+        this.farmCurve = builder.farmCurve;
         Supplier<? extends CategoryProfile> declared = builder.profile;
         this.profile = declared == null ? null : Suppliers.memoize(() -> requireOwnCategory(declared.get()));
     }
@@ -235,6 +238,29 @@ public final class Job {
     }
 
     /**
+     * @return the farm curve of a farming Resource Collection Job (datapack override {@code farm_curve} or default),
+     *         empty for other Jobs
+     */
+    public Optional<FarmCurve> farmCurve() {
+        Optional<FarmCurve> override = JobBalancing.of(this).farmCurve();
+        return override.isPresent() ? override : Optional.ofNullable(farmCurve);
+    }
+
+    /**
+     * The speed factor a Resource Collection Job gets from its area: its profile's
+     * {@link ResourceCollectionProfile#productivity productivity} × its {@link #farmCurve() farm curve} at the farm size
+     * of the scan ({@link ResourceCollectionProfile#farmCount}).
+     *
+     * @param scan          the Job's scan (null while the first scan runs)
+     * @param jobBlockLevel the level of its JobBlock (caps the farm size)
+     * @return the factor on the shared speed formula, 1 for other Jobs
+     */
+    public double productivity(@Nullable ScanResult scan, int jobBlockLevel) {
+        return profile(ResourceCollectionProfile.class).map(found -> found.productivity(scan)
+                * farmCurve().map(curve -> curve.productivity(found.farmCount(scan), jobBlockLevel)).orElse(1.0)).orElse(1.0);
+    }
+
+    /**
      * @return the factor on the shared speed formula (datapack override or default)
      */
     public double jobFactor() {
@@ -292,6 +318,7 @@ public final class Job {
         private @Nullable TagKey<Block> station;
         private @Nullable Supplier<? extends ItemLike> unlockItem;
         private @Nullable Supplier<? extends CategoryProfile> profile;
+        private @Nullable FarmCurve farmCurve;
 
         private Builder(JobCategory category) {
             this.category = category;
@@ -391,6 +418,17 @@ public final class Job {
          */
         public Builder profile(Supplier<? extends CategoryProfile> profile) {
             this.profile = profile;
+            return this;
+        }
+
+        /**
+         * @param farmCurve the default farm curve of a farming Resource Collection Job: its speed grows with the farm
+         *                  size ({@link ResourceCollectionProfile#farmCount}) up to a cap per JobBlock level; datapacks
+         *                  override it with {@code farm_curve}
+         * @return this builder
+         */
+        public Builder farmCurve(FarmCurve farmCurve) {
+            this.farmCurve = farmCurve;
             return this;
         }
 
