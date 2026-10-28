@@ -1,0 +1,6 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:fletcher"],
+  "ingredients": ["minecraft:gravel"],
+  "result": { "id": "minecraft:flint" }
+}

@@ -8,6 +8,7 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.client.ClientInnateRecipes;
 import com.gilfort.civmod.client.gui.JobBlockScreen;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.menu.JobBlockMenu;
@@ -28,6 +29,9 @@ import mezz.jei.api.recipe.transfer.IRecipeTransferHandlerHelper;
 import mezz.jei.api.recipe.types.IRecipeHolderType;
 import mezz.jei.api.recipe.types.IRecipeType;
 import mezz.jei.api.registration.IGuiHandlerRegistration;
+import mezz.jei.api.registration.IRecipeCatalystRegistration;
+import mezz.jei.api.registration.IRecipeCategoryRegistration;
+import mezz.jei.api.registration.IRecipeRegistration;
 import mezz.jei.api.registration.IRecipeTransferRegistration;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.Rect2i;
@@ -46,7 +50,9 @@ import net.minecraft.world.item.crafting.RecipeType;
  * JEI soft compat: items dragged from JEI onto the Clerk's rule slots become the rule's item, onto the Producing
  * JobBlocks' pattern slots a pattern's output or input; the recipe transfer button fills a pattern from a recipe of
  * every recipe type a registered Producing Job follows ({@link Patterns#allRecipeTypes()}: crafting, stonecutting, an
- * addon's modded type, …). JEI finds this class by its annotation; without JEI it is never loaded.
+ * addon's modded type, …). The innate recipes ({@code civmod:job_crafting}) get the display-only "Job Recipes"
+ * category ({@link InnateRecipeCategory}) with the Jobs that know them as catalysts. JEI finds this class by its
+ * annotation; without JEI it is never loaded.
  */
 @JeiPlugin
 public final class CivModJeiPlugin implements IModPlugin {
@@ -54,6 +60,21 @@ public final class CivModJeiPlugin implements IModPlugin {
     @Override
     public Identifier getPluginUid() {
         return CivMod.id("jei");
+    }
+
+    @Override
+    public void registerCategories(IRecipeCategoryRegistration registration) {
+        registration.addRecipeCategories(new InnateRecipeCategory(registration.getJeiHelpers().getGuiHelper()));
+    }
+
+    @Override
+    public void registerRecipes(IRecipeRegistration registration) {
+        registration.addRecipes(InnateRecipeCategory.TYPE, ClientInnateRecipes.recipes());
+    }
+
+    @Override
+    public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
+        ClientInnateRecipes.allJobs().forEach(job -> registration.addCraftingStation(InnateRecipeCategory.TYPE, job.icon()));
     }
 
     @Override

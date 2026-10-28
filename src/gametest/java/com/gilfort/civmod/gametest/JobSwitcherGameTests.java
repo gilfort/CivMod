@@ -158,7 +158,7 @@ public final class JobSwitcherGameTests {
                 "A third settler finds the block full");
 
         helper.assertTrue(Patterns.setOutput(level, pos, craftsperson, 0, Items.STICK).orElseThrow().checked(), "Craftsperson: sticks");
-        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 0, Items.STONE_BRICKS).orElseThrow().checked(), "Stonecutter: bricks");
+        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 1, Items.STONE_BRICKS).orElseThrow().checked(), "Stonecutter: bricks (slot 0 is innate)");
         helper.assertTrue(Producers.canMake(level, settlement, Items.STICK) && Producers.canMake(level, settlement, Items.STONE_BRICKS),
                 "Workshop and Stonecutter at once");
         TestAssignments.unassign(data, pos);
@@ -208,9 +208,10 @@ public final class JobSwitcherGameTests {
         Player player = helper.makeMockPlayer(GameType.SURVIVAL);
         player.snapTo(settler.getX(), settler.getY(), settler.getZ());
         SettlerMenu menu = new SettlerMenu(1, player.getInventory(), settler, SettlerInfo.of(settler));
-        // The stonecutter unlocks the example addon's Stonecutter and the GameTest Mason.
+        // The stonecutter unlocks CivMod's Stonemason, the example addon's Stonecutter and the GameTest Mason.
         Job mason = StationTypeGameTests.job(CivMod.id("gametest_mason"));
-        helper.assertTrue(menu.getInfo().jobStates().get(1).switchTo().equals(List.of(mason, stonecutter)),
+        Job stonemason = StationTypeGameTests.job(CivMod.id("stonemason"));
+        helper.assertTrue(menu.getInfo().jobStates().get(1).switchTo().equals(List.of(stonemason, mason, stonecutter)),
                 "The Craftsperson can switch to the Jobs the stonecutter unlocks: " + menu.getInfo().jobStates().get(1).switchTo());
         helper.assertTrue(menu.getInfo().jobStates().getFirst().switchTo().isEmpty(), "The Lumberjack block offers nothing else");
         helper.assertFalse(menu.switchJob(player, 1, StationTypeGameTests.job(CivMod.id("smith"))), "Not unlocked there: refused");
@@ -231,7 +232,7 @@ public final class JobSwitcherGameTests {
                 "Fetched inputs go to the own drop-off (the JobBlock)");
         helper.assertTrue(settler.getWork().effectiveLevel(settler.getJobs().get(1)) == 3 && settler.getSkills().get(craftsperson).level() == 15,
                 "Skill stays per Job: the Stonecutter works at its own level 3, the Craftsperson level is kept");
-        helper.assertTrue(SettlerInfo.of(settler).jobStates().get(1).switchTo().equals(List.of(craftsperson, mason)), "And back to the Craftsperson");
+        helper.assertTrue(SettlerInfo.of(settler).jobStates().get(1).switchTo().equals(List.of(craftsperson, stonemason, mason)), "And back to the Craftsperson");
 
         SettlementData boardData = new SettlementData();
         BlockPos board = new BlockPos(0, 64, 0);

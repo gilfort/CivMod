@@ -22,7 +22,9 @@ import net.minecraft.world.item.crafting.Recipe;
  * A Craftsperson pattern (vault {@code Jobs/Craftsperson.md}), AE2 style: a 3×3 grid and an output, kept in one of the
  * 54 slots of the Craftsperson JobBlock's library. A pattern made from the output alone follows a crafting recipe
  * ({@link #recipe()}; tag ingredients stay flexible, the grid shows one item per ingredient); a pattern made from inputs
- * ({@link #exact()}) uses exactly the items in its grid. Only checked patterns are crafted.
+ * ({@link #exact()}) uses exactly the items in its grid. Only checked patterns are crafted. An innate pattern
+ * ({@link #innate()}) follows an innate recipe of its Job ({@code civmod:job_crafting}): it sits locked in the first
+ * library slots, only its checkmark changes.
  *
  * @param slot    the library slot (0–53)
  * @param output  the crafted item, {@link Items#AIR} while the inputs match no recipe
@@ -31,9 +33,10 @@ import net.minecraft.world.item.crafting.Recipe;
  * @param recipe  the crafting recipe the pattern follows (or that its exact inputs match)
  * @param exact   whether exactly the grid items are used (substitutions off)
  * @param checked whether the Craftsperson crafts it
+ * @param innate  whether it follows an innate recipe of the Job (locked)
  */
 public record Pattern(int slot, Item output, int count, List<Item> grid, Optional<ResourceKey<Recipe<?>>> recipe, boolean exact,
-        boolean checked) {
+        boolean checked, boolean innate) {
 
     /** Library slots per Craftsperson JobBlock (a double chest), the same at every level. */
     public static final int SLOTS = 54;
@@ -48,7 +51,8 @@ public record Pattern(int slot, Item output, int count, List<Item> grid, Optiona
             BuiltInRegistries.ITEM.byNameCodec().listOf().optionalFieldOf("grid", List.of()).forGetter(Pattern::grid),
             ResourceKey.codec(Registries.RECIPE).optionalFieldOf("recipe").forGetter(Pattern::recipe),
             Codec.BOOL.optionalFieldOf("exact", false).forGetter(Pattern::exact),
-            Codec.BOOL.optionalFieldOf("checked", false).forGetter(Pattern::checked)
+            Codec.BOOL.optionalFieldOf("checked", false).forGetter(Pattern::checked),
+            Codec.BOOL.optionalFieldOf("innate", false).forGetter(Pattern::innate)
     ).apply(instance, Pattern::new));
 
     /** Network codec. */
@@ -60,7 +64,23 @@ public record Pattern(int slot, Item output, int count, List<Item> grid, Optiona
             ByteBufCodecs.optional(ResourceKey.streamCodec(Registries.RECIPE)), Pattern::recipe,
             ByteBufCodecs.BOOL, Pattern::exact,
             ByteBufCodecs.BOOL, Pattern::checked,
+            ByteBufCodecs.BOOL, Pattern::innate,
             Pattern::new);
+
+    /**
+     * A pattern the player made (not innate).
+     *
+     * @param slot    the library slot
+     * @param output  the crafted item
+     * @param count   how many one craft makes
+     * @param grid    the grid (padded / cut to 9 cells)
+     * @param recipe  the recipe
+     * @param exact   whether exactly the grid items are used
+     * @param checked whether it is crafted
+     */
+    public Pattern(int slot, Item output, int count, List<Item> grid, Optional<ResourceKey<Recipe<?>>> recipe, boolean exact, boolean checked) {
+        this(slot, output, count, grid, recipe, exact, checked, false);
+    }
 
     /**
      * @param slot    the library slot
@@ -70,6 +90,7 @@ public record Pattern(int slot, Item output, int count, List<Item> grid, Optiona
      * @param recipe  the recipe
      * @param exact   whether exactly the grid items are used
      * @param checked whether it is crafted
+     * @param innate  whether it follows an innate recipe of the Job
      */
     public Pattern {
         List<Item> cells = new ArrayList<>(grid.subList(0, Math.min(GRID, grid.size())));
@@ -92,6 +113,14 @@ public record Pattern(int slot, Item output, int count, List<Item> grid, Optiona
      * @return a copy with another checkmark
      */
     public Pattern withChecked(boolean newChecked) {
-        return new Pattern(slot, output, count, grid, recipe, exact, newChecked);
+        return new Pattern(slot, output, count, grid, recipe, exact, newChecked, innate);
+    }
+
+    /**
+     * @param newSlot the library slot
+     * @return a copy in another slot
+     */
+    public Pattern withSlot(int newSlot) {
+        return new Pattern(newSlot, output, count, grid, recipe, exact, checked, innate);
     }
 }

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:fletcher_string_from_wool",
+  "max_ticks": 400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

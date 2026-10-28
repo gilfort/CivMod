@@ -52,7 +52,9 @@ public final class PatternsTab extends JobBlockTab {
             // The library of the Patterns tab shown, else the one looked at last (the Base Job's before any).
             Job job = menu.activeTab() instanceof PatternsTab shown ? shown.job
                     : menu.tab(PatternsTab.class).flatMap(first -> first.data.get().job()).orElse(menu.getInfo().jobType());
-            // A pattern its Job filters out loses its checkmark as soon as the tab shows it; foreign ones keep theirs.
+            // The innate recipes first; a pattern its Job filters out loses its checkmark as soon as the tab shows it,
+            // foreign ones keep theirs.
+            Patterns.syncInnate(level, pos, job);
             Patterns.uncheckFiltered(level, pos, job);
             return PatternsTabData.of(level, pos, job);
         }, PatternsTabData.Sync::new);

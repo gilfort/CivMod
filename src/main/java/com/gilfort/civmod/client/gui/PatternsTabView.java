@@ -9,7 +9,9 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.client.ClientInnateRecipes;
 import com.gilfort.civmod.logistics.Pattern;
+import com.gilfort.civmod.logistics.PatternRecipes;
 import com.gilfort.civmod.menu.GuiIcons;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
@@ -270,6 +272,10 @@ final class PatternsTabView implements JobBlockTabView {
             return false;
         }
         if (target < Pattern.SLOTS) {
+            if (tab().innate(target)) {
+                // Innate recipes are locked.
+                return false;
+            }
             sendPattern(PatternsTabData.Edit.setOutput(menu.containerId, job(), target, stack.getItem()));
         } else if (target == TARGET_OUTPUT) {
             sendPattern(PatternsTabData.Edit.setOutput(menu.containerId, job(), editing, stack.getItem()));
@@ -302,7 +308,8 @@ final class PatternsTabView implements JobBlockTabView {
                 if (tab().pattern(target).isPresent()) {
                     sendPattern(PatternsTabData.Edit.toggleCheck(menu.containerId, job(), target));
                 }
-            } else {
+            } else if (!tab().innate(target)) {
+                // An innate recipe only toggles its checkmark: no editor.
                 screen.clickSound();
                 showEditor(target);
             }
@@ -362,7 +369,8 @@ final class PatternsTabView implements JobBlockTabView {
         }
         return List.of(Component.translatable("civmod.gui.patterns.help.click"), Component.translatable("civmod.gui.patterns.help.check"),
                 Component.translatable("civmod.gui.patterns.help.item"), Component.translatable("civmod.gui.patterns.help.viewer"),
-                Component.translatable("civmod.gui.patterns.help.crafted", GuiIcons.inlineCheckmark()));
+                Component.translatable("civmod.gui.patterns.help.crafted", GuiIcons.inlineCheckmark()),
+                Component.translatable("civmod.gui.patterns.help.innate", GuiIcons.inlineLock()));
     }
 
     // ---------------------------------------------------------------- drawing
@@ -387,12 +395,16 @@ final class PatternsTabView implements JobBlockTabView {
                 graphics.item(icon, x, y);
                 graphics.itemDecorations(font, icon, x, y);
             });
-            if (tab.unusable(slot)) {
-                // Filtered, a foreign recipe type (keeps its checkmark) or a locked library: the Job cannot use it.
+            if (tab.unusable(slot) || tab.needs().containsKey(slot)) {
+                // Filtered, a foreign recipe type (keeps its checkmark), a locked library or an innate recipe lacking its
+                // tool or station: the Job cannot use it now.
                 CivGui.slotInactive(graphics, x, y);
             }
             if (pattern.filter(Pattern::checked).isPresent()) {
                 graphics.blitSprite(RenderPipelines.GUI_TEXTURED, GuiIcons.CHECKMARK, x - 1, y - 1, 9, 9);
+            }
+            if (pattern.filter(Pattern::innate).isPresent()) {
+                graphics.blitSprite(RenderPipelines.GUI_TEXTURED, GuiIcons.LOCK, x + 11, y + 9, 5, 7);
             }
             if (slot == hovered) {
                 CivGui.slotHover(graphics, x, y);
@@ -406,7 +418,7 @@ final class PatternsTabView implements JobBlockTabView {
         state.ifPresent(line -> graphics.text(font, CivGui.fit(font, line, screen.panelWidth() - 2 * CivGui.PADDING), CivGui.PADDING, y + 9,
                 CivGui.ERROR_COLOR, false));
         if (hovered >= 0) {
-            graphics.setComponentTooltipForNextFrame(font, tooltip(tab, hovered), mouseX, mouseY);
+            graphics.setComponentTooltipForNextFrame(font, tooltip(tab, job(), hovered), mouseX, mouseY);
         }
     }
 
@@ -418,13 +430,24 @@ final class PatternsTabView implements JobBlockTabView {
         return tab.foreign().contains(slot) ? Component.translatable("civmod.gui.patterns.foreign") : tab.filteredLine();
     }
 
-    private static List<Component> tooltip(PatternsTabData tab, int slot) {
+    private static List<Component> tooltip(PatternsTabData tab, Job job, int slot) {
         List<Component> lines = new ArrayList<>();
         Optional<Pattern> pattern = tab.pattern(slot);
         if (pattern.filter(Pattern::valid).isPresent()) {
             Pattern found = pattern.get();
             lines.add(Component.translatable("civmod.gui.clerk.request.amount", found.count(), new ItemStack(found.output()).getHoverName()));
-            lines.add(Component.translatable(found.exact() ? "civmod.gui.patterns.exact" : "civmod.gui.patterns.recipe").withStyle(ChatFormatting.GRAY));
+            if (found.innate()) {
+                // Its inputs, as no editor shows them: a tag input by its tag ("Any Wool"), not by the grid's first item.
+                List<Component> inputs = found.recipe().flatMap(ClientInnateRecipes::recipe)
+                        .map(recipe -> recipe.ingredients().stream().map(PatternRecipes::name).toList())
+                        .orElseGet(() -> found.grid().stream().filter(item -> item != Items.AIR).map(item -> new ItemStack(item).getHoverName()).toList());
+                inputs.forEach(input -> lines.add(Component.literal("  ").append(input).withStyle(ChatFormatting.GRAY)));
+            }
+            lines.add((found.innate() ? Component.translatable("civmod.gui.patterns.innate", job.displayName())
+                    : Component.translatable(found.exact() ? "civmod.gui.patterns.exact" : "civmod.gui.patterns.recipe")).withStyle(ChatFormatting.GRAY));
+            if (tab.needs().containsKey(slot)) {
+                lines.add(tab.needs().get(slot).copy().withStyle(ChatFormatting.RED));
+            }
             if (tab.unusable(slot)) {
                 lines.add(unusableLine(tab, slot).copy().withStyle(ChatFormatting.RED));
             } else {

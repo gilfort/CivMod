@@ -1,7 +1,9 @@
 package com.gilfort.civmod.menu;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -47,13 +49,14 @@ import net.minecraft.world.item.crafting.RecipeType;
  * @param notice       the state line: "A Craftsperson masters only 6 recipes at once – choose which to check." while a new
  *                     pattern stayed unchecked at the limit, or the checkmarks removed by a dropped limit
  * @param recipeTypes  the recipe types the Job follows (what a recipe viewer's transfer button may fill)
+ * @param needs        the slots of innate patterns a settler last had to skip, with what they need ("Needs Shears")
  */
 public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List<Pattern> patterns, Set<Integer> filtered, Set<Integer> foreign,
-        Component filteredLine, Optional<Component> notice, List<RecipeType<?>> recipeTypes) {
+        Component filteredLine, Optional<Component> notice, List<RecipeType<?>> recipeTypes, Map<Integer, Component> needs) {
 
     /** Nothing (any other JobBlock, or before the first sync). */
     public static final PatternsTabData EMPTY = new PatternsTabData(Optional.empty(), false, Patterns.BASE_CHECKMARKS, List.of(), Set.of(), Set.of(),
-            Component.empty(), Optional.empty(), List.of());
+            Component.empty(), Optional.empty(), List.of(), Map.of());
 
     /** Network codec of a set of library slots. */
     private static final StreamCodec<ByteBuf, Set<Integer>> SLOTS_CODEC = ByteBufCodecs.VAR_INT
@@ -70,6 +73,7 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
             ComponentSerialization.STREAM_CODEC, PatternsTabData::filteredLine,
             ByteBufCodecs.optional(ComponentSerialization.STREAM_CODEC), PatternsTabData::notice,
             ByteBufCodecs.registry(Registries.RECIPE_TYPE).apply(ByteBufCodecs.list()), PatternsTabData::recipeTypes,
+            ByteBufCodecs.map(HashMap::new, ByteBufCodecs.VAR_INT, ComponentSerialization.STREAM_CODEC, Pattern.SLOTS), PatternsTabData::needs,
             PatternsTabData::new);
 
     /**
@@ -82,8 +86,10 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
      * @param filteredLine the state line of a filtered pattern
      * @param notice       the state line
      * @param recipeTypes  the recipe types the producer follows
+     * @param needs        what skipped innate patterns need, by slot
      */
     public PatternsTabData {
+        needs = Map.copyOf(needs);
         patterns = List.copyOf(patterns);
         filtered = Set.copyOf(filtered);
         foreign = Set.copyOf(foreign);
@@ -110,8 +116,12 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
             case SettlementBlock.Notice.AtLimit atLimit -> Component.translatable("civmod.gui.patterns.at_limit", job.displayName(), atLimit.limit());
             case SettlementBlock.Notice.Trimmed trimmed -> Component.translatable("civmod.gui.patterns.trimmed", trimmed.removed(), trimmed.limit());
         });
+        Map<ResourceKey<Recipe<?>>, Component> skipped = block.needs(job);
+        Map<Integer, Component> needs = new HashMap<>();
+        patterns.stream().filter(Pattern::innate).forEach(pattern -> pattern.recipe().map(skipped::get)
+                .ifPresent(line -> needs.put(pattern.slot(), line)));
         return new PatternsTabData(Optional.of(job), Patterns.locked(block, job), block.checkLimit(job), patterns, filtered, foreign, profile.filteredLine(),
-                notice, profile.recipeTypes());
+                notice, profile.recipeTypes(), needs);
     }
 
     /**
@@ -141,6 +151,14 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
      */
     public Optional<Pattern> pattern(int slot) {
         return patterns.stream().filter(pattern -> pattern.slot() == slot).findFirst();
+    }
+
+    /**
+     * @param slot a library slot
+     * @return whether it holds an innate pattern (locked: only its checkmark changes)
+     */
+    public boolean innate(int slot) {
+        return pattern(slot).filter(Pattern::innate).isPresent();
     }
 
     /**

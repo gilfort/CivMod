@@ -1,0 +1,7 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:dyer"],
+  "ingredients": ["#civmod:dyed_wool"],
+  "result": { "id": "minecraft:white_wool" },
+  "station": "#civmod:stations/water_cauldron"
+}

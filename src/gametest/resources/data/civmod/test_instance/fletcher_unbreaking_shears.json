@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:fletcher_unbreaking_shears",
+  "max_ticks": 400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

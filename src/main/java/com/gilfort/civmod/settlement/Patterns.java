@@ -11,7 +11,9 @@ import java.util.stream.Collectors;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
+import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ProducingProfile;
+import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.PatternRecipes;
 import com.gilfort.civmod.registry.ModJobs;
@@ -20,6 +22,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
@@ -27,6 +30,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 
 /**
@@ -43,6 +47,11 @@ import net.minecraft.world.item.crafting.RecipeType;
  * keeps its checkmark but is skipped. A filtered pattern loses its checkmark. A new pattern is checked automatically while
  * the limit allows. The library of a Job no longer unlocked at the JobBlock (a replaced Station Type) is kept but
  * "locked": unusable and not editable until the Job is unlocked again.
+ * <p>
+ * Innate recipes ({@link InnateRecipes}) sit in the first slots of a Job's library, ordered by recipe id, as locked
+ * patterns ({@link Pattern#innate()}): they are always usable (the profile's recipe types, filters and domain do not
+ * apply), count towards the checkmark limit and only toggle their checkmark; edit, clear, overwrite and recipe viewer
+ * transfers are refused. {@link #syncInnate} lays them out again whenever the library is used or the datapacks change.
  */
 public final class Patterns {
 
@@ -158,7 +167,7 @@ public final class Patterns {
      *         filters
      */
     static boolean allowed(ServerLevel level, ProducingProfile profile, Pattern pattern) {
-        return pattern.valid() && !foreign(level, profile, pattern) && !filtered(level, profile, pattern);
+        return pattern.valid() && (pattern.innate() || !foreign(level, profile, pattern) && !filtered(level, profile, pattern));
     }
 
     /**
@@ -177,10 +186,11 @@ public final class Patterns {
      * @param level   the level
      * @param profile a Producing profile
      * @param pattern a pattern
-     * @return whether it follows a recipe of another type than the profile's (a recipe that is gone counts as none)
+     * @return whether it follows a recipe of another type than the profile's (a recipe that is gone counts as none; an
+     *         innate pattern never does)
      */
     public static boolean foreign(ServerLevel level, ProducingProfile profile, Pattern pattern) {
-        return pattern.valid() && pattern.recipe().flatMap(id -> PatternRecipes.holder(level, id))
+        return pattern.valid() && !pattern.innate() && pattern.recipe().flatMap(id -> PatternRecipes.holder(level, id))
                 .filter(holder -> !profile.recipeTypes().contains(holder.value().getType())).isPresent();
     }
 
@@ -189,10 +199,10 @@ public final class Patterns {
      * @param profile a Producing profile
      * @param pattern a pattern
      * @return whether the profile's filters reject its output or an input (all its alternatives), or the pattern lies
-     *         outside the profile's domain (no input with an alternative in the domain tag)
+     *         outside the profile's domain (no input with an alternative in the domain tag); never for an innate pattern
      */
     public static boolean filtered(ServerLevel level, ProducingProfile profile, Pattern pattern) {
-        if (!pattern.valid()) {
+        if (!pattern.valid() || pattern.innate()) {
             return false;
         }
         List<Ingredient> inputs = allInputs(level, profile, pattern);
@@ -233,7 +243,7 @@ public final class Patterns {
      */
     public static Optional<Pattern> cycle(ServerLevel level, BlockPos pos, Job job, int slot, int direction) {
         Optional<SettlementBlock> block = block(level, pos, job);
-        Optional<Pattern> current = block.flatMap(found -> pattern(found, job, slot)).filter(Pattern::valid);
+        Optional<Pattern> current = block.flatMap(found -> pattern(found, job, slot)).filter(pattern -> pattern.valid() && !pattern.innate());
         if (current.isEmpty()) {
             return Optional.empty();
         }
@@ -321,7 +331,7 @@ public final class Patterns {
      */
     public static boolean toggleCheck(ServerLevel level, BlockPos pos, Job job, int slot) {
         SettlementData data = SettlementData.get(level);
-        Optional<SettlementBlock> found = block(data, pos, job);
+        Optional<SettlementBlock> found = block(level, pos, job);
         Optional<Pattern> pattern = found.flatMap(block -> pattern(block, job, slot));
         if (pattern.isEmpty()) {
             return false;
@@ -338,7 +348,7 @@ public final class Patterns {
     }
 
     /**
-     * Empties a library slot.
+     * Empties a library slot; an innate pattern stays.
      *
      * @param data the dimension's settlement data
      * @param pos  the JobBlock
@@ -347,7 +357,7 @@ public final class Patterns {
      */
     public static void clear(SettlementData data, BlockPos pos, Job job, int slot) {
         block(data, pos, job).map(block -> block.library(job)).ifPresent(library -> {
-            if (library.mutablePatterns().removeIf(pattern -> pattern.slot() == slot)) {
+            if (library.mutablePatterns().removeIf(pattern -> pattern.slot() == slot && !pattern.innate())) {
                 library.setNotice(Optional.empty());
                 data.setDirty();
             }
@@ -456,6 +466,135 @@ public final class Patterns {
     }
 
     /**
+     * Lays out the Job's innate recipes in the first slots of its library, ordered by recipe id (vault
+     * {@code Systems/Producing Jobs.md}). A player pattern on a slot an innate recipe needs moves to the next free slot
+     * (lost if none is left: patterns are ghost items); a removed innate recipe frees its slot. An innate pattern keeps
+     * the check state of its recipe id; a new one is checked while the checkmark limit has room. A locked library is
+     * left as it is.
+     *
+     * @param level the level
+     * @param pos   the JobBlock
+     * @param job   the Producing Job whose library it is
+     * @return whether the library changed
+     */
+    public static boolean syncInnate(ServerLevel level, BlockPos pos, Job job) {
+        return syncInnate(level, pos, job, InnateRecipes.of(level, job));
+    }
+
+    /**
+     * {@link #syncInnate(ServerLevel, BlockPos, Job)} with a given list of innate recipes, as after a datapack change.
+     *
+     * @param level  the level
+     * @param pos    the JobBlock
+     * @param job    the Producing Job whose library it is
+     * @param innate the Job's innate recipes, ordered by recipe id
+     * @return whether the library changed
+     */
+    public static boolean syncInnate(ServerLevel level, BlockPos pos, Job job, List<RecipeHolder<JobCraftingRecipe>> innate) {
+        SettlementData data = SettlementData.get(level);
+        return block(data, pos, job).map(block -> syncInnate(level, data, block, job, innate)).orElse(false);
+    }
+
+    /**
+     * Lays out the innate recipes of every unlocked Producing library in the dimension (after a datapack load).
+     *
+     * @param level the level
+     */
+    public static void syncInnate(ServerLevel level) {
+        SettlementData data = SettlementData.get(level);
+        for (Settlement settlement : data.settlements()) {
+            for (SettlementBlock block : settlement.blocks()) {
+                if (isProducing(block)) {
+                    ModJobs.REGISTRY.stream().filter(job -> hasLibrary(block, job) && !locked(block, job))
+                            .forEach(job -> syncInnate(level, data, block, job, InnateRecipes.of(level, job)));
+                }
+            }
+        }
+    }
+
+    private static boolean syncInnate(ServerLevel level, SettlementData data, SettlementBlock block, Job job,
+            List<RecipeHolder<JobCraftingRecipe>> recipes) {
+        List<Pattern> current = block.patterns(job);
+        if (recipes.isEmpty() && current.stream().noneMatch(Pattern::innate)) {
+            return false;
+        }
+        SettlementBlock.Library library = block.library(job);
+        if (library.innateLaidOut() == recipes) {
+            // Laid out from this very list before (InnateRecipes keeps one list per recipe set) and only syncInnate
+            // moves innate patterns: nothing to do. Keeps the per-decision call of the Producing loop at O(1).
+            return false;
+        }
+        library.setInnateLaidOut(recipes);
+        Map<ResourceKey<Recipe<?>>, Pattern> before = current.stream().filter(Pattern::innate).filter(pattern -> pattern.recipe().isPresent())
+                .collect(Collectors.toMap(pattern -> pattern.recipe().get(), pattern -> pattern, (first, second) -> first));
+        List<Pattern> laidOut = new ArrayList<>();
+        List<Integer> fresh = new ArrayList<>();
+        int innate = Math.min(recipes.size(), Pattern.SLOTS);
+        for (int slot = 0; slot < innate; slot++) {
+            RecipeHolder<JobCraftingRecipe> holder = recipes.get(slot);
+            Pattern old = before.get(holder.id());
+            if (old == null) {
+                fresh.add(slot);
+            }
+            laidOut.add(InnateRecipes.pattern(slot, holder, old != null && old.checked()));
+        }
+        boolean[] taken = new boolean[Pattern.SLOTS];
+        for (int slot = 0; slot < innate; slot++) {
+            taken[slot] = true;
+        }
+        List<Pattern> displaced = new ArrayList<>();
+        for (Pattern pattern : current) {
+            if (pattern.innate()) {
+                continue;
+            }
+            if (taken[pattern.slot()]) {
+                displaced.add(pattern);
+            } else {
+                taken[pattern.slot()] = true;
+                laidOut.add(pattern);
+            }
+        }
+        for (Pattern pattern : displaced) {
+            // The next free slot; none left: the pattern is lost (a ghost item, nothing to give back).
+            for (int slot = innate; slot < Pattern.SLOTS; slot++) {
+                if (!taken[slot]) {
+                    taken[slot] = true;
+                    laidOut.add(pattern.withSlot(slot));
+                    break;
+                }
+            }
+        }
+        laidOut.sort((a, b) -> Integer.compare(a.slot(), b.slot()));
+        if (laidOut.equals(current)) {
+            return false;
+        }
+        List<Pattern> patterns = library.mutablePatterns();
+        patterns.clear();
+        patterns.addAll(laidOut);
+        for (int slot : fresh) {
+            // Like every new pattern: checked while the limit has room.
+            if (usable(level, block, job).size() < library.checkLimit()) {
+                patterns.set(slot, patterns.get(slot).withChecked(true));
+            }
+        }
+        data.setDirty();
+        return true;
+    }
+
+    /**
+     * Records which innate recipes a settler had to skip and what they need, shown in the Patterns tab.
+     *
+     * @param level the level
+     * @param pos   the JobBlock
+     * @param job   the Producing Job whose library it is
+     * @param needs what each skipped innate recipe needs, by recipe id (empty: none skipped)
+     */
+    public static void setNeeds(ServerLevel level, BlockPos pos, Job job, Map<ResourceKey<Recipe<?>>, Component> needs) {
+        block(SettlementData.get(level), pos, job).map(block -> block.library(job)).filter(library -> !library.needs().equals(needs))
+                .ifPresent(library -> library.setNeeds(needs));
+    }
+
+    /**
      * The inputs of one execution of a pattern: exactly its grid items, or the ingredients of its recipe (tags flexible,
      * without the alternatives the profile's input filter rejects). A recipe that is gone falls back to the grid items.
      *
@@ -476,7 +615,12 @@ public final class Patterns {
     }
 
     private static List<Ingredient> allInputs(ServerLevel level, ProducingProfile profile, Pattern pattern) {
-        if (!pattern.exact()) {
+        if (pattern.innate()) {
+            Optional<JobCraftingRecipe> innate = InnateRecipes.recipe(level, pattern);
+            if (innate.isPresent()) {
+                return innate.get().ingredients();
+            }
+        } else if (!pattern.exact()) {
             Optional<PatternRecipes.Shape> shape = pattern.recipe().flatMap(id -> PatternRecipes.byKey(level, profile.recipeTypes(), id));
             if (shape.isPresent()) {
                 return shape.get().ingredients();
@@ -508,6 +652,10 @@ public final class Patterns {
             return Optional.empty();
         }
         SettlementBlock block = found.get();
+        if (pattern(block, job, slot).filter(Pattern::innate).isPresent()) {
+            // Innate recipes are locked: no edit, overwrite or recipe viewer transfer.
+            return Optional.empty();
+        }
         SettlementBlock.Library library = block.library(job);
         boolean allowed = allowed(level, profile(job), pattern);
         Optional<Pattern> replaced = pattern(block, job, slot).filter(Pattern::valid);
@@ -533,8 +681,12 @@ public final class Patterns {
         data.setDirty();
     }
 
+    /** The JobBlock as {@link #block(SettlementData, BlockPos, Job)}, its library's innate recipes laid out first. */
     private static Optional<SettlementBlock> block(ServerLevel level, BlockPos pos, Job job) {
-        return block(SettlementData.get(level), pos, job);
+        SettlementData data = SettlementData.get(level);
+        Optional<SettlementBlock> found = block(data, pos, job);
+        found.ifPresent(block -> syncInnate(level, data, block, job, InnateRecipes.of(level, job)));
+        return found;
     }
 
     /** The JobBlock, if it keeps a library for the Job that is not locked (edits of a locked library are refused). */
