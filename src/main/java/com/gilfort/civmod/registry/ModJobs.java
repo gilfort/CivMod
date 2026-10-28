@@ -5,6 +5,8 @@ import com.gilfort.civmod.api.CategoryProfile;
 import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
+import com.gilfort.civmod.job.AnimalFarmerProfile;
+import com.gilfort.civmod.job.BeekeeperProfile;
 import com.gilfort.civmod.job.CraftspersonProfile;
 import com.gilfort.civmod.job.FarmingProfiles;
 import com.gilfort.civmod.job.FishermanProfile;
@@ -88,6 +90,14 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> SMELTER = JOBS.register("smelter", () -> Job.builder(JobCategory.PRODUCING)
             .icon(ModItems.SMELTER_BLOCK).bubbleIcon(() -> Items.IRON_INGOT).displayItem(() -> Items.COAL).hungerFactor(0.5).baseExp(1)
             .jobFactor(1.0).unlockItem(() -> Items.FURNACE).profile(SmelterProfile::new).build());
+    /** See vault {@code Jobs/Animal Farmer.md}; a Specialization of the Gatherer, unlocked by a hay bale. */
+    public static final DeferredHolder<Job, Job> ANIMAL_FARMER = JOBS.register("animal_farmer", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
+            .parent(GATHERER).icon(() -> Items.HAY_BLOCK).bubbleIcon(() -> Items.LEATHER).hungerFactor(1.0).baseExp(1).jobFactor(1.0)
+            .unlockItem(() -> Items.HAY_BLOCK).farmCurve(FarmingProfiles.ANIMAL_CURVE).profile(AnimalFarmerProfile::new).build());
+    /** See vault {@code Jobs/Beekeeper.md}; a Specialization of the Gatherer, unlocked by a beehive. */
+    public static final DeferredHolder<Job, Job> BEEKEEPER = JOBS.register("beekeeper", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
+            .parent(GATHERER).icon(() -> Items.BEEHIVE).bubbleIcon(() -> Items.HONEYCOMB).hungerFactor(1.0).baseExp(1)
+            .unlockItem(() -> Items.BEEHIVE).farmCurve(FarmingProfiles.HIVE_CURVE).profile(BeekeeperProfile::new).build());
 
     private ModJobs() {
     }
