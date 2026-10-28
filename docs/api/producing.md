@@ -90,7 +90,7 @@ public Optional<TagKey<Item>> domain() {
 - A recipe belongs to the domain if **any input** has an alternative in the tag, so a mixed recipe fits several domains (a piston – planks, cobblestone, iron, redstone – is in a wood, a stone, a metal and a redstone domain).
 - A pattern outside the domain is greyed out with "Outside this Job's domain" and cannot be checked (like a filtered pattern; it loses a checkmark it had, e.g. after the tag changed).
 - Intermediates follow the same rule: the specialist crafts only intermediates inside its domain. One outside it must be in stock, otherwise the request shows "Missing: …" (a Mechanic making repeaters needs sticks from a Craftsperson or the Clerk's storage).
-- Domains are item tags, so datapacks change them. CivMod's built-in Mechanic (unlocked by and working at a Crafter, `crafting`) uses `civmod:domains/redstone`, its Smith (unlocked by and working at a smithing table, `crafting` and `smithing`) uses `civmod:metals`.
+- Domains are item tags, so datapacks change them. CivMod's built-in Mechanic (unlocked by and working at a Crafter, `crafting`) uses `civmod:domains/redstone`, its Smith (unlocked by and working at a smithing table, `crafting` and `smithing`) uses `civmod:metals`, its Fletcher (fletching table, `crafting`) `civmod:domains/fletching`, its Stonemason (stonecutter; `stonecutting` at the stonecutter, `crafting` at a crafting table nearby) `civmod:domains/stone` and its Dyer (loom, `crafting`) `civmod:domains/dye`.
 
 ## Station extras
 
