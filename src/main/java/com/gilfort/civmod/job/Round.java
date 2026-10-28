@@ -36,10 +36,8 @@ final class Round {
     final List<BlockPos> sources;
     /** The input deliveries the round waits for (on "Delivery: Deliveryman"). */
     final List<UUID> inputs;
-    /** The tools of innate recipes the settler lacks on its belt, taken at {@link #toolSource} (empty: none). */
+    /** The tools of innate recipes the settler lacks on its belt, taken at the collect inventory (empty: none). */
     final List<Ingredient> tools;
-    /** Where the tools are fetched: the collect inventory. */
-    final BlockPos toolSource;
     /** The nearest station per station tag of a recipe type other than the work place of the day's, looked up once. */
     final Map<TagKey<Block>, Optional<BlockPos>> stations = new HashMap<>();
     /**
@@ -61,12 +59,10 @@ final class Round {
      * @param plan    how the claimed amount is made
      * @param takes   the inputs (and fuel) to fetch, by item
      * @param sources where the inputs are fetched (empty: everything is held already)
-     * @param inputs     the input deliveries bringing inputs to the collect inventory first (empty: none)
-     * @param tools      the tools of innate recipes to take at the collect inventory (empty: none)
-     * @param toolSource the collect inventory
+     * @param inputs  the input deliveries bringing inputs to the collect inventory first (empty: none)
+     * @param tools   the tools of innate recipes to take at the collect inventory (empty: none)
      */
-    Round(UUID request, Item item, CraftPlan plan, Map<Item, Integer> takes, List<BlockPos> sources, List<UUID> inputs, List<Ingredient> tools,
-            BlockPos toolSource) {
+    Round(UUID request, Item item, CraftPlan plan, Map<Item, Integer> takes, List<BlockPos> sources, List<UUID> inputs, List<Ingredient> tools) {
         this.request = request;
         this.item = item;
         this.steps = plan.steps();
@@ -74,7 +70,6 @@ final class Round {
         this.sources = new ArrayList<>(sources);
         this.inputs = List.copyOf(inputs);
         this.tools = List.copyOf(tools);
-        this.toolSource = toolSource;
         this.phase = !inputs.isEmpty() ? Phase.WAIT : sources.isEmpty() ? Phase.CRAFT : Phase.FETCH;
     }
 

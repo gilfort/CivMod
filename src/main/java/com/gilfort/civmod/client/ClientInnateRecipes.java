@@ -1,14 +1,11 @@
 package com.gilfort.civmod.client;
 
-import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
-import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.JobCraftingRecipe;
-import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.registry.ModRecipes;
 
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -37,8 +34,7 @@ public final class ClientInnateRecipes {
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     static void onRecipesReceived(RecipesReceivedEvent event) {
         if (event.getRecipeTypes().contains(ModRecipes.JOB_CRAFTING.get())) {
-            recipes = event.getRecipeMap().byType(ModRecipes.JOB_CRAFTING.get()).stream()
-                    .sorted(Comparator.comparing(holder -> holder.id().identifier().toString())).toList();
+            recipes = InnateRecipes.sorted(event.getRecipeMap().byType(ModRecipes.JOB_CRAFTING.get()));
         }
     }
 
@@ -50,19 +46,10 @@ public final class ClientInnateRecipes {
     }
 
     /**
-     * @param recipe an innate recipe
-     * @return the Producing Jobs that know it (unknown or other Jobs left out)
-     */
-    public static List<Job> jobs(JobCraftingRecipe recipe) {
-        return recipe.jobs().stream().map(ModJobs.REGISTRY::getValue).filter(Objects::nonNull)
-                .filter(job -> job.category() == JobCategory.PRODUCING).toList();
-    }
-
-    /**
      * @return every Producing Job with an innate recipe, each once
      */
     public static List<Job> allJobs() {
-        return recipes.stream().flatMap(holder -> jobs(holder.value()).stream()).distinct().toList();
+        return recipes.stream().flatMap(holder -> InnateRecipes.jobs(holder.value()).stream()).distinct().toList();
     }
 
     /**

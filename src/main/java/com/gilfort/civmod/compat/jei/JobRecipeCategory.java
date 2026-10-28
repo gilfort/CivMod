@@ -6,6 +6,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.client.ClientInnateRecipes;
+import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.registry.ModItems;
 
 import mezz.jei.api.gui.builder.IRecipeLayoutBuilder;
@@ -54,7 +55,7 @@ final class JobRecipeCategory extends AbstractRecipeCategory<RecipeHolder<JobCra
         recipe.station().ifPresent(station -> builder.addSlot(RecipeIngredientRole.CRAFTING_STATION, 77, EXTRAS_Y).setStandardSlotBackground()
                 .addItemStacks(ClientInnateRecipes.stationItems(station))
                 .addRichTooltipCallback((view, tooltip) -> tooltip.add(Component.translatable("civmod.jei.job_recipes.station"))));
-        List<Job> jobs = ClientInnateRecipes.jobs(recipe);
+        List<Job> jobs = InnateRecipes.jobs(recipe);
         for (int i = 0; i < jobs.size() && i < WIDTH / 18; i++) {
             Job job = jobs.get(i);
             builder.addSlot(RecipeIngredientRole.RENDER_ONLY, 1 + i * 18, JOBS_Y).add(job.icon())

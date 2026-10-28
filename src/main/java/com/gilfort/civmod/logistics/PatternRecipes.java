@@ -241,6 +241,15 @@ public final class PatternRecipes {
     }
 
     /**
+     * @param ingredient an ingredient
+     * @return the item standing for it where one item is shown or counted: its first alternative, {@link Items#AIR} if
+     *         it has none
+     */
+    public static Item representative(Ingredient ingredient) {
+        return first(ingredient).orElse(Items.AIR);
+    }
+
+    /**
      * What stays after one execution (empty buckets, bottles, ...).
      *
      * @param consumed the items used in one execution

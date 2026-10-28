@@ -6,6 +6,7 @@ import java.util.List;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.client.ClientInnateRecipes;
+import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.registry.ModItems;
 
 import me.shedaniel.math.Point;
@@ -69,7 +70,7 @@ final class JobRecipeCategory implements DisplayCategory<JobRecipeDisplay> {
                     .map(stack -> stack.tooltip(Component.translatable("civmod.jei.job_recipes.station"))).toList();
             widgets.add(Widgets.createSlot(new Point(x + 77, y + 38)).entries(stations));
         });
-        List<Job> jobs = ClientInnateRecipes.jobs(recipe);
+        List<Job> jobs = InnateRecipes.jobs(recipe);
         for (int i = 0; i < jobs.size() && i < 7; i++) {
             Job job = jobs.get(i);
             widgets.add(Widgets.createSlot(new Point(x + 1 + i * 18, y + 58)).entries(List.of(EntryStacks.of(job.icon()).tooltip(job.displayName())))
