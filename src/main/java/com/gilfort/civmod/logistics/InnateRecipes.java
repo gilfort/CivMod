@@ -14,6 +14,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.JobCraftingRecipe;
+import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.registry.ModRecipes;
 
@@ -85,6 +86,19 @@ public final class InnateRecipes {
      */
     public static List<TagKey<Block>> stations(ServerLevel level, Job job) {
         return index(level).stations().getOrDefault(job, List.of());
+    }
+
+    /**
+     * @param recipe an innate recipe
+     * @return the station tags it is worked at: its own station, else the main recipe type's station of each Job that
+     *         knows it (each once)
+     */
+    public static List<TagKey<Block>> stations(JobCraftingRecipe recipe) {
+        if (recipe.station().isPresent()) {
+            return List.of(recipe.station().get());
+        }
+        return jobs(recipe).stream().flatMap(job -> job.profile(ProducingProfile.class).stream())
+                .map(profile -> profile.station(profile.recipeTypes().getFirst())).distinct().toList();
     }
 
     /**

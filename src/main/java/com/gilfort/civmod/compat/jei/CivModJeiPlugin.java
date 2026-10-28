@@ -51,7 +51,7 @@ import net.minecraft.world.item.crafting.RecipeType;
  * JobBlocks' pattern slots a pattern's output or input; the recipe transfer button fills a pattern from a recipe of
  * every recipe type a registered Producing Job follows ({@link Patterns#allRecipeTypes()}: crafting, stonecutting, an
  * addon's modded type, …). The innate recipes ({@code civmod:job_crafting}) get the display-only "Job Recipes"
- * category ({@link JobRecipeCategory}) with the Jobs that know them as catalysts. JEI finds this class by its
+ * category ({@link InnateRecipeCategory}) with the Jobs that know them as catalysts. JEI finds this class by its
  * annotation; without JEI it is never loaded.
  */
 @JeiPlugin
@@ -64,17 +64,17 @@ public final class CivModJeiPlugin implements IModPlugin {
 
     @Override
     public void registerCategories(IRecipeCategoryRegistration registration) {
-        registration.addRecipeCategories(new JobRecipeCategory(registration.getJeiHelpers().getGuiHelper()));
+        registration.addRecipeCategories(new InnateRecipeCategory(registration.getJeiHelpers().getGuiHelper()));
     }
 
     @Override
     public void registerRecipes(IRecipeRegistration registration) {
-        registration.addRecipes(JobRecipeCategory.TYPE, ClientInnateRecipes.recipes());
+        registration.addRecipes(InnateRecipeCategory.TYPE, ClientInnateRecipes.recipes());
     }
 
     @Override
     public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
-        ClientInnateRecipes.allJobs().forEach(job -> registration.addCraftingStation(JobRecipeCategory.TYPE, job.icon()));
+        ClientInnateRecipes.allJobs().forEach(job -> registration.addCraftingStation(InnateRecipeCategory.TYPE, job.icon()));
     }
 
     @Override
