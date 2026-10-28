@@ -12,7 +12,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import org.jspecify.annotations.Nullable;
+
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.job.SavedScan;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.StockRule;
@@ -32,6 +35,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 
@@ -179,6 +183,8 @@ public final class SettlementBlock {
         private final Map<UUID, Integer> workerLimits = new HashMap<>();
         /** What the innate recipes a settler last skipped need, by recipe id (not saved). */
         private Map<ResourceKey<Recipe<?>>, Component> needs = Map.of();
+        /** The innate recipe list the patterns were last laid out from, compared by identity (not saved). */
+        private @Nullable List<RecipeHolder<JobCraftingRecipe>> innateLaidOut;
 
         /**
          * @return the checkmark limit each settler working this library last reported, by settler
@@ -231,6 +237,18 @@ public final class SettlementBlock {
 
         void setNeeds(Map<ResourceKey<Recipe<?>>, Component> needs) {
             this.needs = Map.copyOf(needs);
+        }
+
+        /**
+         * @return the innate recipe list the patterns were last laid out from ({@link Patterns#syncInnate}), null before
+         *         the first layout
+         */
+        @Nullable List<RecipeHolder<JobCraftingRecipe>> innateLaidOut() {
+            return innateLaidOut;
+        }
+
+        void setInnateLaidOut(List<RecipeHolder<JobCraftingRecipe>> recipes) {
+            this.innateLaidOut = recipes;
         }
     }
 
