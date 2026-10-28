@@ -6,6 +6,7 @@ import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.CraftspersonProfile;
+import com.gilfort.civmod.job.FarmingProfiles;
 import com.gilfort.civmod.job.FishermanProfile;
 import com.gilfort.civmod.job.LumberjackProfile;
 import com.gilfort.civmod.job.MechanicProfile;
@@ -45,6 +46,14 @@ public final class ModJobs {
     /** See vault {@code Jobs/Fisherman.md}. */
     public static final DeferredHolder<Job, Job> FISHERMAN = JOBS.register("fisherman", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
             .icon(ModItems.FISHERMAN_BLOCK).bubbleIcon(() -> Items.COD).hungerFactor(0.5).baseExp(5).profile(FishermanProfile::new).build());
+    /** See vault {@code Jobs/Gatherer.md}; collects what wild plants drop, bare-handed; the Base Job of the farming Specializations. */
+    public static final DeferredHolder<Job, Job> GATHERER = JOBS.register("gatherer", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
+            .icon(ModItems.GATHERER_BLOCK).bubbleIcon(() -> Items.SWEET_BERRIES).hungerFactor(1.0).baseExp(1).unlockItem(() -> Items.SWEET_BERRIES)
+            .farmCurve(FarmingProfiles.PLANT_CURVE).profile(FarmingProfiles::gatherer).build());
+    /** See vault {@code Jobs/Plantation Farmer.md}; a Specialization of the Gatherer, unlocked by bamboo. */
+    public static final DeferredHolder<Job, Job> PLANTATION_FARMER = JOBS.register("plantation_farmer", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
+            .parent(GATHERER).icon(() -> Items.BAMBOO).bubbleIcon(() -> Items.SUGAR_CANE).hungerFactor(1.0).baseExp(1).unlockItem(() -> Items.BAMBOO)
+            .farmCurve(FarmingProfiles.PLANT_CURVE).profile(FarmingProfiles::plantationFarmer).build());
     /** See vault {@code Jobs/Adventurer.md}; the Base Job of the Mission Board. */
     public static final DeferredHolder<Job, Job> ADVENTURER = JOBS.register("adventurer", () -> Job.builder(JobCategory.MISSION)
             .icon(ModItems.MISSION_BOARD).bubbleIcon(() -> Items.MAP).hungerFactor(1.0).baseExp(10).build());

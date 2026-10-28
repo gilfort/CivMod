@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:plant_farm_curve",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -32,7 +32,13 @@ public final class JobBlockTabs {
             return tabs;
         }
         switch (jobType.category()) {
-            case RESOURCE_COLLECTION -> tabs.add(new FoundTab());
+            case RESOURCE_COLLECTION -> {
+                tabs.add(new FoundTab());
+                // Only a Base Job with Specializations (the Gatherer): Lumberjack, Miner and Fisherman keep three tabs.
+                if (StationTypes.hasStationTypes(jobType)) {
+                    tabs.add(new StationTypesTab(true));
+                }
+            }
             case PRODUCING -> tabs.addAll(producing(jobType));
             case MISSION -> tabs.addAll(List.of(new MissionsTab(), new StationTypesTab(StationTypes.hasStationTypes(jobType))));
             case GUARD, LOGISTICS, SERVICE -> {

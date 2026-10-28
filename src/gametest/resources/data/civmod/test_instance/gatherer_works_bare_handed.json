@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:gatherer_works_bare_handed",
+  "max_ticks": 2400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

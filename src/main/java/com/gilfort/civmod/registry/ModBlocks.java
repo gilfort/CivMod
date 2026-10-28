@@ -33,6 +33,8 @@ public final class ModBlocks {
     public static final DeferredBlock<JobBlock> MINER_BLOCK = jobBlock("miner_block", ModJobs.MINER);
     /** JobBlock offering the Fisherman job. */
     public static final DeferredBlock<JobBlock> FISHERMAN_BLOCK = jobBlock("fisherman_block", ModJobs.FISHERMAN);
+    /** JobBlock offering the Gatherer job and its farming Specializations. */
+    public static final DeferredBlock<JobBlock> GATHERER_BLOCK = jobBlock("gatherer_block", ModJobs.GATHERER);
 
     /** The Mission Board: JobBlock of all Mission Jobs, offering the Adventurer and holding several settlers. */
     public static final DeferredBlock<JobBlock> MISSION_BOARD = jobBlock("mission_board", ModJobs.ADVENTURER);
