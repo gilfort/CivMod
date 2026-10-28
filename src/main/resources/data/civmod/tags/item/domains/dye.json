@@ -1,0 +1,12 @@
+{
+  "values": [
+    { "id": "#c:dyes", "required": false },
+    "#minecraft:flowers",
+    "minecraft:ink_sac",
+    "minecraft:glow_ink_sac",
+    "minecraft:cocoa_beans",
+    "minecraft:beetroot",
+    "minecraft:lapis_lazuli",
+    "minecraft:bone_meal"
+  ]
+}

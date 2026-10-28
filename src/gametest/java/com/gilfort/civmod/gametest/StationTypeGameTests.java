@@ -176,7 +176,8 @@ public final class StationTypeGameTests {
                 "The job picker offers the Stonecutter: " + offered(level, pos));
         helper.assertTrue(StationTypesTabData.of(level, pos).unlocked().contains(stonecutter) && StationTypesTabData.of(level, pos).open() == 2,
                 "The tab shows it: " + StationTypesTabData.of(level, pos));
-        helper.assertTrue(ScrollOfAssignmentItem.workPlaceJob(level, block(level, pos), cutter).filter(stonecutter::equals).isPresent(),
+        // The stonecutter also unlocks CivMod's Stonemason, which works at stonecutters too: the point serves both.
+        helper.assertTrue(ScrollOfAssignmentItem.workPlaceJob(level, block(level, pos), cutter).isPresent() && stonecutter.isValidWorkPlace(level, cutter),
                 "The unlock item is no work place: the stonecutter in the world is the Stonecutter's work point");
         helper.assertFalse(menu.clickMenuButton(player, menu.tab(StationTypesTab.class).orElseThrow().slotButtonId(1)), "Unlocked already: refused");
         helper.assertTrue(menu.getCarried().getCount() == 1, "Kept");
@@ -184,17 +185,19 @@ public final class StationTypeGameTests {
     }
 
     /**
-     * One item unlocks every Job naming it: a stonecutter unlocks the example addon's Stonecutter and the GameTest Mason;
-     * the "?" overview lists both under the stonecutter. Datapacks override an unlock item ({@code unlock_item}).
+     * One item unlocks every Job naming it: a stonecutter unlocks CivMod's Stonemason, the example addon's Stonecutter and
+     * the GameTest Mason; the "?" overview lists all three under the stonecutter. Datapacks override an unlock item
+     * ({@code unlock_item}).
      */
     private static void itemUnlocksTwoJobs(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
+        Job stonemason = job(CivMod.id("stonemason"));
         Job stonecutter = job(STONECUTTER);
         Job mason = job(MASON);
         Job smith = job(SMITH);
         List<StationTypes.Unlock> overview = StationTypes.overview(ModJobs.CRAFTSPERSON.get());
-        helper.assertTrue(overview.stream().anyMatch(unlock -> unlock.item() == Items.STONECUTTER && unlock.jobs().size() == 2
-                && unlock.jobs().containsAll(List.of(stonecutter, mason)))
+        helper.assertTrue(overview.stream().anyMatch(unlock -> unlock.item() == Items.STONECUTTER && unlock.jobs().size() == 3
+                && unlock.jobs().containsAll(List.of(stonemason, stonecutter, mason)))
                 && overview.contains(new StationTypes.Unlock(Items.SMITHING_TABLE, List.of(smith))),
                 "\"?\": every unlock item with all Jobs it unlocks: " + overview);
         helper.assertTrue(job(CivMod.id("gametest_dummy")).unlockItem().equals(Optional.of(Items.STICK)), "Datapack override of the unlock item");
@@ -202,8 +205,8 @@ public final class StationTypeGameTests {
         BlockPos pos = CraftspersonGameTests.craftsperson(helper, relative);
         setLevel(helper, relative, 2);
         helper.assertTrue(unlock(helper, pos, 1, Items.STONECUTTER), "Stonecutter in slot 2");
-        helper.assertTrue(offered(level, pos).size() == 3 && offered(level, pos).getFirst() == ModJobs.CRAFTSPERSON.get()
-                && offered(level, pos).containsAll(List.of(stonecutter, mason)), "Both unlocked: " + offered(level, pos));
+        helper.assertTrue(offered(level, pos).size() == 4 && offered(level, pos).getFirst() == ModJobs.CRAFTSPERSON.get()
+                && offered(level, pos).containsAll(List.of(stonemason, stonecutter, mason)), "All three unlocked: " + offered(level, pos));
         helper.succeed();
     }
 

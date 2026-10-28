@@ -353,7 +353,8 @@ public final class ExampleAddonGameTests {
         StationTypeGameTests.setLevel(helper, new BlockPos(1, 1, 5), 2);
         helper.assertTrue(StationTypeGameTests.unlock(helper, craft, 1, Items.STONECUTTER), "Stonecutter unlocked");
         block = data.settlementAt(craft).flatMap(found -> found.block(craft)).orElseThrow();
-        helper.assertTrue(ScrollOfAssignmentItem.workPlaceJob(level, block, cutter).filter(stonecutter::equals).isPresent(),
+        // The stonecutter also unlocks CivMod's Stonemason, which works at stonecutters too: the point serves both.
+        helper.assertTrue(ScrollOfAssignmentItem.workPlaceJob(level, block, cutter).isPresent() && stonecutter.isValidWorkPlace(level, cutter),
                 "Unlocked: a work point for the Stonecutter: " + ScrollOfAssignmentItem.workPlaceJob(level, block, cutter));
         helper.assertFalse(ModJobs.CRAFTSPERSON.get().isValidWorkPlace(level, cutter), "Not a Craftsperson station");
         helper.assertTrue(JobAssignments.cyclePoint(data, craft, cutter, true, false) == JobAssignments.PointResult.WORK, "Work point set");
