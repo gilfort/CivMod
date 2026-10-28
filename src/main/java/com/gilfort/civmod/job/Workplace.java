@@ -487,7 +487,7 @@ final class Workplace {
      * @param day     the day
      * @param dayTime the time of day
      */
-    void ensureScan(ServerLevel level, ResourceCollectionProfile profile, JobBlockSite site, BlockPos poi, long day, long dayTime) {
+    void ensureScan(ServerLevel level, Job job, ResourceCollectionProfile profile, JobBlockSite site, BlockPos poi, long day, long dayTime) {
         ScanKey key = new ScanKey(profile.scanCenter(site.pos(), site.block().workPoints(), poi), profile.scanRadius(site.level()),
                 profile.rescanDaily() ? day : -1L);
         if (key.equals(scanKey) || scanning != null) {
@@ -507,9 +507,9 @@ final class Workplace {
             scanKey = key;
             scanning = null;
             dropped.clear();
-            // The JobBlock keeps the latest scan for its Found tab.
+            // The JobBlock keeps the latest scan per Job for its Found tab.
             SavedScan.of(jobBlock, key.center(), key.radius(), key.day(), result)
-                    .ifPresent(saved -> JobAssignments.rememberScan(SettlementData.get(level), jobBlock, saved));
+                    .ifPresent(saved -> JobAssignments.rememberScan(SettlementData.get(level), jobBlock, job, saved));
         });
     }
 

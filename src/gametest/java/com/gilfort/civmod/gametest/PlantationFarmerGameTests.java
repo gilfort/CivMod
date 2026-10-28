@@ -1,6 +1,7 @@
 package com.gilfort.civmod.gametest;
 
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
@@ -9,19 +10,26 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.job.JobStatus;
+import com.gilfort.civmod.menu.FoundTab;
+import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.StationTypesTab;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.JobPlaces;
+import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -40,6 +48,8 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 public final class PlantationFarmerGameTests {
 
     private static final double EPSILON = 1.0E-6;
+    private static final Identifier SWEET_BERRY_BUSH = Identifier.withDefaultNamespace("sweet_berry_bush");
+    private static final Identifier PUMPKIN = Identifier.withDefaultNamespace("pumpkin");
 
     private PlantationFarmerGameTests() {
     }
@@ -51,6 +61,7 @@ public final class PlantationFarmerGameTests {
             register(helper, "plantation_farmer_delivers_with_axe", PlantationFarmerGameTests::deliversWithAxe);
             register(helper, "plantation_farmer_no_tool", PlantationFarmerGameTests::noTool);
             register(helper, "plant_farm_curve", PlantationFarmerGameTests::farmCurve);
+            register(helper, "gatherer_found_tab_per_job", PlantationFarmerGameTests::foundTabPerJob);
         });
     }
 
@@ -174,6 +185,70 @@ public final class PlantationFarmerGameTests {
         helper.assertTrue(job.farmCurve().orElseThrow().productivity(5000, 5) == FarmCurve.MAX, "At most twice the shared formula");
         forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         helper.succeed();
+    }
+
+    /**
+     * A Gatherer and a Plantation Farmer on one Gatherer JobBlock: the Found tab shows a section per Job with that Job's
+     * scan, an exclusion belongs to one Job (the Plantation Farmer pauses, the Gatherer goes on), and the JobBlock saves
+     * the scan and the exclusions per Job.
+     */
+    private static void foundTabPerJob(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        BlockPos relative = GathererGameTests.gathererBlock(helper);
+        // Level 3: two settlers.
+        StationTypeGameTests.setLevel(helper, relative, 3);
+        BlockPos jobBlock = helper.absolutePos(relative);
+        SettlementData data = SettlementData.get(level);
+        TestAssignments.setStationType(data, jobBlock, 1, Items.BAMBOO);
+        for (int x = 5; x < 8; x++) {
+            helper.setBlock(new BlockPos(x, 1, 5), GathererGameTests.bush(3));
+            helper.setBlock(new BlockPos(x, 1, 7), Blocks.PUMPKIN);
+        }
+        int settlement = data.settlementAt(jobBlock).orElseThrow().id();
+        Job gatherer = ModJobs.GATHERER.get();
+        Job plantation = ModJobs.PLANTATION_FARMER.get();
+        Settler picker = GathererGameTests.settler(helper, jobBlock, new BlockPos(3, 1, 3), "Picker");
+        TestAssignments.assign(data, jobBlock, picker.getUUID(), "Picker", settlement, List.of(), gatherer);
+        picker.addJob(new SettlerJob(gatherer, jobBlock));
+        Settler planter = GathererGameTests.settler(helper, jobBlock, new BlockPos(3, 1, 4), "Planter");
+        planter.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_AXE));
+        helper.assertTrue(TestAssignments.assign(data, jobBlock, planter.getUUID(), "Planter", settlement, List.of(), plantation)
+                == JobAssignments.AssignResult.OK, "Plantation Farmer assignment failed");
+        planter.addJob(new SettlerJob(plantation, jobBlock));
+        JobBlockMenu menu = StationTypeGameTests.menu(helper, helper.makeMockPlayer(GameType.CREATIVE), jobBlock);
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(FoundTabData.of(level, jobBlock).sections().stream().filter(FoundTabData.Section::scanned).count() == 2,
+                        "Both Jobs scanned: " + FoundTabData.of(level, jobBlock)))
+                .thenExecute(() -> {
+                    FoundTabData tab = FoundTabData.of(level, jobBlock);
+                    helper.assertValueEqual(tab.sections().stream().map(FoundTabData.Section::job).toList(), List.of(gatherer, plantation), "Sections");
+                    helper.assertValueEqual(types(tab.section(gatherer).orElseThrow()), List.of(SWEET_BERRY_BUSH), "Gatherer section");
+                    helper.assertValueEqual(types(tab.section(plantation).orElseThrow()), List.of(PUMPKIN), "Plantation Farmer section");
+                    FoundTab found = menu.tab(FoundTab.class).orElseThrow();
+                    helper.assertFalse(found.toggleExcluded(gatherer, PUMPKIN), "The Gatherer section does not list pumpkins");
+                    helper.assertTrue(found.toggleExcluded(plantation, PUMPKIN), "Pumpkins excluded for the Plantation Farmer");
+                    SettlementBlock block = JobBlockSite.blockAt(level, jobBlock).orElseThrow();
+                    helper.assertValueEqual(block.excluded(plantation), Set.of(PUMPKIN), "Plantation Farmer exclusions");
+                    helper.assertTrue(block.excluded(gatherer).isEmpty(), "The Gatherer excludes nothing");
+                    var ops = level.registryAccess().createSerializationContext(JsonOps.INSTANCE);
+                    SettlementBlock loaded = SettlementBlock.CODEC.parse(ops, SettlementBlock.CODEC.encodeStart(ops, block).getOrThrow()).getOrThrow();
+                    helper.assertValueEqual(loaded.excluded(plantation), Set.of(PUMPKIN), "Exclusions saved per Job");
+                    helper.assertTrue(loaded.foundScan(gatherer).isPresent() && loaded.foundScan(plantation).isPresent(), "Scans saved per Job");
+                })
+                .thenWaitUntil(() -> helper.assertTrue(planter.getWork().status(jobBlock) == JobStatus.ALL_EXCLUDED,
+                        "Plantation Farmer not paused: " + planter.getWork().status(jobBlock)))
+                .thenExecute(() -> helper.assertTrue(picker.getWork().status(jobBlock) != JobStatus.ALL_EXCLUDED, "The Gatherer goes on"))
+                .thenExecute(() -> {
+                    picker.discard();
+                    planter.discard();
+                    forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+                })
+                .thenSucceed();
+    }
+
+    private static List<Identifier> types(FoundTabData.Section section) {
+        return section.entries().stream().map(FoundTabData.Entry::type).toList();
     }
 
     private static void assertNear(GameTestHelper helper, double actual, double expected, String what) {

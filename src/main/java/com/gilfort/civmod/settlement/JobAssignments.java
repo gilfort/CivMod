@@ -500,27 +500,29 @@ public final class JobAssignments {
      *
      * @param data     the dimension's settlement data
      * @param jobBlock the JobBlock position
+     * @param job      the Job whose exclusion it is (one Found tab section)
      * @param type     the found resource type
      * @return whether the type is excluded now
      */
-    public static boolean toggleExcluded(SettlementData data, BlockPos jobBlock, Identifier type) {
+    public static boolean toggleExcluded(SettlementData data, BlockPos jobBlock, Job job, Identifier type) {
         Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
-        boolean excluded = block.map(found -> found.toggleExcluded(type)).orElse(false);
+        boolean excluded = block.map(found -> found.toggleExcluded(job, type)).orElse(false);
         block.ifPresent(found -> data.changed());
         return excluded;
     }
 
     /**
-     * Keeps the latest scan of a settler working a JobBlock on the JobBlock, so its Found tab shows it without a
-     * settler.
+     * Keeps the latest scan of a settler working a JobBlock on the JobBlock, per Job, so its Found tab shows it without
+     * a settler.
      *
      * @param data     the dimension's settlement data
      * @param jobBlock the JobBlock position
+     * @param job      the Job the settler works there
      * @param scan     the scan
      */
-    public static void rememberScan(SettlementData data, BlockPos jobBlock, SavedScan scan) {
-        JobBlockSite.blockAt(data, jobBlock).filter(block -> !block.foundScan().equals(Optional.of(scan))).ifPresent(block -> {
-            block.setFoundScan(scan);
+    public static void rememberScan(SettlementData data, BlockPos jobBlock, Job job, SavedScan scan) {
+        JobBlockSite.blockAt(data, jobBlock).filter(block -> !block.foundScan(job).equals(Optional.of(scan))).ifPresent(block -> {
+            block.setFoundScan(job, scan);
             data.changed();
         });
     }

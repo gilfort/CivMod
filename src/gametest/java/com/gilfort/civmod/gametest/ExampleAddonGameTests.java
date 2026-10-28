@@ -238,7 +238,7 @@ public final class ExampleAddonGameTests {
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         Settler settler = sandDigger(helper, List.of(Blocks.SAND, Blocks.RED_SAND));
         BlockPos jobBlock = settler.getJobs().get(0).jobBlock();
-        SettlementWorld.toggleExcluded(level, jobBlock, RED_SAND);
+        SettlementWorld.toggleExcluded(level, jobBlock, settler.getJobs().get(0).jobType(), RED_SAND);
         helper.startSequence()
                 .thenWaitUntil(() -> helper.assertTrue(FoundTabData.of(level, jobBlock).entry(RED_SAND).filter(FoundTabData.Entry::excluded).isPresent(),
                         "Red sand not listed as excluded: " + FoundTabData.of(level, jobBlock)))
