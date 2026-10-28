@@ -223,9 +223,9 @@ public final class VeggyFarmerGameTests {
         List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(24, 0, 24));
         for (int x = 0; x < 25; x++) {
             for (int z = 0; z < 25; z++) {
-                boolean field = x >= 17 && x <= 23 && z >= 17 && z <= 23;
+                boolean field = x >= 12 && x <= 16 && z >= 6 && z <= 10;
                 helper.setBlock(new BlockPos(x, 0, z), field ? Blocks.FARMLAND : Blocks.GRASS_BLOCK);
-                if (field && !(x == 20 && z == 20)) {
+                if (field && !(x == 14 && z == 8)) {
                     helper.setBlock(new BlockPos(x, 1, z), crop(Blocks.WHEAT, 7));
                 }
             }
@@ -236,20 +236,21 @@ public final class VeggyFarmerGameTests {
         BlockPos jobBlock = helper.absolutePos(relative);
         SettlementData data = SettlementData.get(level);
         TestAssignments.setStationType(data, jobBlock, 1, Items.COMPOSTER);
-        scarecrow(helper, new BlockPos(4, 1, 4));
-        scarecrow(helper, new BlockPos(20, 1, 20));
+        // More than 10 blocks (the scan radius at level 2) from the field.
+        scarecrow(helper, new BlockPos(1, 1, 5));
+        scarecrow(helper, new BlockPos(14, 1, 8));
         Job job = ModJobs.VEGGY_FARMER.get();
-        BlockPos fieldScarecrow = helper.absolutePos(new BlockPos(20, 1, 20));
+        BlockPos fieldScarecrow = helper.absolutePos(new BlockPos(14, 1, 8));
         helper.assertTrue(job.isValidWorkPlace(level, fieldScarecrow), "A scarecrow is a work place");
         helper.assertFalse(job.isValidWorkPlace(level, fieldScarecrow.above()), "Only its lower half");
-        JobAssignments.cyclePoint(data, jobBlock, fieldScarecrow, true, false);
+        helper.assertValueEqual(JobAssignments.cyclePoint(data, jobBlock, fieldScarecrow, true, false), JobAssignments.PointResult.WORK, "Scroll");
         Settler settler = veggyFarmer(helper, jobBlock);
         JobBlockMenu menu = StationTypeGameTests.menu(helper, helper.makeMockPlayer(GameType.CREATIVE), jobBlock);
         helper.startSequence()
                 .thenWaitUntil(() -> helper.assertTrue(settler.getWork().buffer(jobBlock).counts().getOrDefault(Items.WHEAT, 0) > 0,
                         "No wheat yet (status " + settler.getWork().status(jobBlock) + ")"))
                 .thenExecute(() -> {
-                    helper.assertTrue(helper.getBlockState(new BlockPos(18, 1, 18)).equals(crop(Blocks.WHEAT, 7)), "The wheat is never harvested");
+                    helper.assertTrue(helper.getBlockState(new BlockPos(13, 1, 7)).equals(crop(Blocks.WHEAT, 7)), "The wheat is never harvested");
                     List<Identifier> found = FoundTabData.of(level, jobBlock).section(job).orElseThrow().entries().stream()
                             .map(FoundTabData.Entry::type).toList();
                     helper.assertValueEqual(found, List.of(WHEAT), "Found tab");
@@ -314,8 +315,8 @@ public final class VeggyFarmerGameTests {
         helper.assertBlockPresent(Blocks.AIR, new BlockPos(5, 1, 2));
         Optional<RecipeHolder<?>> recipe = level.getServer().getRecipeManager().byKey(ResourceKey.create(Registries.RECIPE, CivMod.id("scarecrow")));
         helper.assertTrue(recipe.isPresent(), "Scarecrow recipe");
-        BlockPos relative = new BlockPos(1, 1, 6);
-        helper.setBlock(new BlockPos(1, 0, 6), Blocks.STONE);
+        BlockPos relative = new BlockPos(1, 1, 1);
+        helper.setBlock(new BlockPos(1, 0, 1), Blocks.STONE);
         helper.setBlock(relative, ModBlocks.GATHERER_BLOCK.get());
         StationTypeGameTests.setLevel(helper, relative, 2);
         BlockPos pos = helper.absolutePos(relative);
