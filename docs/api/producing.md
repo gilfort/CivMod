@@ -118,7 +118,7 @@ A profile with `smithing` works `smithing_transform` recipes (netherite upgrades
 
 ## Parallel stations and fuel
 
-A furnace Job (CivMod's Smelter, later its Cook or a modded smeltery) works several stations at once and burns fuel. Two optional hooks turn this on; the loop does the rest.
+A furnace Job (CivMod's Smelter, its Cook and Founder, or a modded smeltery) works several stations at once and burns fuel. Two optional hooks turn this on; the loop does the rest.
 
 | Method | Meaning | Default |
 |---|---|---|
@@ -151,7 +151,8 @@ public Optional<List<Item>> fuel() {
 
 **Fuel.** With `fuel()` present the JobBlock gets a Fuel tab: up to 6 ghost slots shared by all settlers of the block, the order is the priority, the profile's list is the default until the player changes it. Only items with a vanilla burn time (`minecraft:cooking_fuel` component) are taken.
 
-- Every execution needs heat: the recipe's cooking time for a cooking recipe (`AbstractCookingRecipe.cookingTime()`), 200 ticks otherwise. Fuel per item therefore stays vanilla, whatever the settler's speed.
+- Every execution needs heat: the recipe's cooking time for a cooking recipe (`AbstractCookingRecipe.cookingTime()`) divided by the station's vanilla cooking speed (2 for a smoker or blast furnace, any block of the `minecraft:block/fast_cooking` predicate), 200 ticks otherwise. Fuel per item therefore stays vanilla, whatever the settler's speed.
+- A cooking recipe's work time (`workTime`) is divided by the same cooking speed: CivMod's Cook and Founder are twice as fast as the Smelter on the same 200-tick recipes.
 - Each station keeps the *Remaining Heat* of the fuel it burnt, on its block entity, for its next charge: one coal (1600 ticks) smelts 8 items, also over 8 single-item rounds. A broken station loses it.
 - A round fetches its fuel with its inputs (from the collect inventory and the requesting Clerk, or as input deliveries on "Delivery: Deliveryman"): the heat its charges need minus the stations' Remaining Heat, burning the highest-priority listed fuel in the buffer or in stock first. It claims only as much as the fuel covers.
 - No listed fuel in stock: with exactly one fuel listed, job status and request name it ("Missing: 1× Coal"); with several (any will do) or none listed, both say "Missing: Fuel" (`Request.Missing.ANY_FUEL`). A listed item that does not burn is skipped for the next listed fuel.

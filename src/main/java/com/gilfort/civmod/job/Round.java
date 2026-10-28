@@ -47,6 +47,8 @@ final class Round {
      * Job with parallel stations runs one charge per station; the inputs leave the buffer when an execution is done.
      */
     final Map<BlockPos, Double> charges = new LinkedHashMap<>();
+    /** The vanilla cooking speed per station a cooking step is worked at ({@link Furnaces#cookingSpeed}), looked up once. */
+    final Map<BlockPos, Double> cookingSpeeds = new HashMap<>();
     /** The stations the current step is worked at (the station of the step first), chosen at the last decision. */
     List<BlockPos> chargeStations = List.of();
     Phase phase;

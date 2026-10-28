@@ -50,6 +50,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.SwingAnimation;
+import net.minecraft.world.item.crafting.AbstractCookingRecipe;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
@@ -428,11 +429,15 @@ final class ProducingLoop implements CategoryLoop {
         RecipeType<?> main = profile(job).recipeTypes().getFirst();
         for (CraftPlan.Step step : plan.steps()) {
             Optional<RecipeHolder<?>> recipe = recipe(level, step.pattern());
-            int cost = recipe.map(Furnaces::heatOf).orElse(Furnaces.STANDARD_HEAT);
             int lanes = recipe.filter(holder -> holder.value().getType() != main).isPresent() ? 1 : heat.length;
+            int[] cost = new int[lanes];
+            for (int lane = 0; lane < lanes; lane++) {
+                BlockPos station = supply.stations().get(lane);
+                cost[lane] = recipe.map(holder -> Furnaces.heatOf(level, station, holder)).orElse(Furnaces.STANDARD_HEAT);
+            }
             for (int execution = 0; execution < step.crafts(); execution++) {
                 int lane = execution % lanes;
-                while (heat[lane] < cost) {
+                while (heat[lane] < cost[lane]) {
                     Optional<Item> unit = fuels.stream().filter(fuel -> inBuffer.getOrDefault(fuel, 0) + inStock.getOrDefault(fuel, 0) > 0).findFirst();
                     if (unit.isEmpty()) {
                         int firstBurn = fuels.isEmpty() ? 0 : burn.get(fuels.getFirst());
@@ -452,7 +457,7 @@ final class ProducingLoop implements CategoryLoop {
                     }
                     heat[lane] += burn.get(fuel);
                 }
-                heat[lane] -= cost;
+                heat[lane] -= cost[lane];
             }
         }
         return new FuelNeed(takes, missing);
@@ -740,7 +745,7 @@ final class ProducingLoop implements CategoryLoop {
             return new Worked(0, noFuel ? Outcome.NO_FUEL : Outcome.WORKING);
         }
         double add = ticks * speed(level, job) / 20.0;
-        double need = workTime(level, job, round);
+        double need = workTime(level, job, round, stations.getFirst());
         int executed = 0;
         List<BlockPos> done = new ArrayList<>();
         for (Map.Entry<BlockPos, Double> charge : List.copyOf(round.charges.entrySet())) {
@@ -782,7 +787,7 @@ final class ProducingLoop implements CategoryLoop {
         }
         CraftPlan.Step step = round.steps.get(round.step);
         Optional<List<Item>> fuels = Fuels.forJob(job.jobType(), site.block());
-        int cost = recipe(level, step.pattern()).map(Furnaces::heatOf).orElse(Furnaces.STANDARD_HEAT);
+        Optional<RecipeHolder<?>> recipe = recipe(level, step.pattern());
         JobBuffer buffer = shell.workplace(job.jobBlock()).buffer();
         boolean noFuel = false;
         for (BlockPos pos : stations) {
@@ -792,7 +797,8 @@ final class ProducingLoop implements CategoryLoop {
             if (round.charges.containsKey(pos) || !isStation(level, job, pos)) {
                 continue;
             }
-            if (fuels.isPresent() && !Furnaces.pay(level, pos, cost, fuels.get(), buffer)) {
+            if (fuels.isPresent() && !Furnaces.pay(level, pos, recipe.map(holder -> Furnaces.heatOf(level, pos, holder)).orElse(Furnaces.STANDARD_HEAT),
+                    fuels.get(), buffer)) {
                 noFuel = true;
                 continue;
             }
@@ -976,9 +982,18 @@ final class ProducingLoop implements CategoryLoop {
         return pattern.recipe().flatMap(id -> PatternRecipes.holder(level, id));
     }
 
-    /** Operations one execution of the round's current step takes (the profile's work time; 1 for a recipe that is gone). */
-    private static double workTime(ServerLevel level, SettlerJob job, Round round) {
-        return recipe(level, round.steps.get(round.step).pattern()).map(profile(job)::workTime).orElse(1.0);
+    /**
+     * Operations one execution of the round's current step takes: the profile's work time (1 for a recipe that is gone),
+     * a cooking recipe divided by the station's vanilla cooking speed (a smoker or blast furnace cooks twice as fast,
+     * {@link Furnaces#cookingSpeed}, looked up once per round and station).
+     *
+     * @param station the station the step is worked at (the first of its stations)
+     */
+    private static double workTime(ServerLevel level, SettlerJob job, Round round, BlockPos station) {
+        return recipe(level, round.steps.get(round.step).pattern())
+                .map(holder -> profile(job).workTime(holder) / (holder.value() instanceof AbstractCookingRecipe
+                        ? round.cookingSpeeds.computeIfAbsent(station, pos -> Furnaces.cookingSpeed(level, pos)) : 1.0))
+                .orElse(1.0);
     }
 
     // ---------------------------------------------------------------- station
@@ -1247,7 +1262,7 @@ final class ProducingLoop implements CategoryLoop {
                 List<BlockPos> stations = mainStep(level, job, round) ? stations(level, job, site, day, ofDay) : List.of(ofDay);
                 // Up to the next finished charge (the one furthest on); none runs yet: they start first.
                 double furthest = round.charges.values().stream().mapToDouble(Double::doubleValue).max().orElse(Double.NaN);
-                double span = Double.isNaN(furthest) ? 0.0 : Math.min(ticks, Math.max(0.0, (workTime(level, job, round) - furthest) / perTick));
+                double span = Double.isNaN(furthest) ? 0.0 : Math.min(ticks, Math.max(0.0, (workTime(level, job, round, stations.getFirst()) - furthest) / perTick));
                 Worked worked = work(level, job, site, round, stations, span, false);
                 ticks -= span;
                 clock += span;
