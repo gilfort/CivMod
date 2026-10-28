@@ -73,7 +73,15 @@ public final class ModJobs {
     /** See vault {@code Jobs/Smelter.md}; smelts requested items at furnaces, several in parallel, burning fuel. */
     public static final DeferredHolder<Job, Job> SMELTER = JOBS.register("smelter", () -> Job.builder(JobCategory.PRODUCING)
             .icon(ModItems.SMELTER_BLOCK).bubbleIcon(() -> Items.IRON_INGOT).displayItem(() -> Items.COAL).hungerFactor(0.5).baseExp(1)
-            .jobFactor(1.0).unlockItem(() -> Items.FURNACE).profile(SmelterProfile::new).build());
+            .jobFactor(1.0).unlockItem(() -> Items.FURNACE).profile(SmelterProfile::smelter).build());
+    /** See vault {@code Jobs/Cook.md}; cooks food at smokers, several in parallel, burning fuel; a Specialization of the Smelter. */
+    public static final DeferredHolder<Job, Job> COOK = JOBS.register("cook", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(SMELTER).icon(() -> Items.SMOKER).bubbleIcon(() -> Items.COOKED_BEEF).displayItem(() -> Items.COOKED_BEEF).hungerFactor(0.5)
+            .baseExp(1).jobFactor(1.0).unlockItem(() -> Items.SMOKER).profile(SmelterProfile::cook).build());
+    /** See vault {@code Jobs/Founder.md}; smelts ores and metal at blast furnaces, several in parallel, burning fuel; a Specialization of the Smelter. */
+    public static final DeferredHolder<Job, Job> FOUNDER = JOBS.register("founder", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(SMELTER).icon(() -> Items.BLAST_FURNACE).bubbleIcon(() -> Items.IRON_INGOT).displayItem(() -> Items.RAW_IRON).hungerFactor(0.5)
+            .baseExp(1).jobFactor(1.0).unlockItem(() -> Items.BLAST_FURNACE).profile(SmelterProfile::founder).build());
 
     private ModJobs() {
     }

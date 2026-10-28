@@ -436,8 +436,8 @@ public final class SmelterGameTests {
         JobBlockEntity entity = (JobBlockEntity) level.getBlockEntity(pos);
         JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(level, pos, smelter(), 1));
         FuelTab tab = menu.tab(FuelTab.class).orElseThrow();
-        helper.assertTrue(tab.shown() && menu.tab(StationTypesTab.class).map(StationTypesTab::shown).equals(Optional.of(false)),
-                "Fuel tab shown, no Station Types tab yet");
+        helper.assertTrue(tab.shown() && menu.tab(StationTypesTab.class).map(StationTypesTab::shown).equals(Optional.of(true)),
+                "Fuel tab and Station Types tab shown");
         FuelTabData data = FuelTabData.of(level, pos);
         helper.assertTrue(data.fuel().equals(List.of(Items.COAL, Items.CHARCOAL)) && data.nextEmptyGhostSlot() == 2, "Default list: " + data);
 

@@ -28,8 +28,12 @@ import net.minecraft.world.level.storage.loot.LootContext;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
+import net.minecraft.world.level.storage.loot.providers.number.floats.ContextFloatProviders;
+import net.minecraft.world.level.storage.loot.providers.number.floats.ResolvableFloat;
 import net.minecraft.world.level.storage.loot.providers.number.ints.ResolvableInt;
 import net.minecraft.world.phys.Vec3;
+
+import org.jspecify.annotations.Nullable;
 
 /**
  * The real furnaces a fuel-burning Producing Job works at (vault {@code Jobs/Smelter.md}): smelting is simulated in the
@@ -60,11 +64,31 @@ final class Furnaces {
     }
 
     /**
+     * @param level  the level
+     * @param pos    the station
      * @param recipe the recipe of an execution
-     * @return the heat one execution needs, in ticks of burn time: the cooking time (fuel per item stays vanilla)
+     * @return the heat one execution needs there, in ticks of burn time: the cooking time at the station's vanilla
+     *         cooking speed ({@link #cookingSpeed}), so fuel per item stays vanilla
      */
-    static int heatOf(RecipeHolder<?> recipe) {
-        return recipe.value() instanceof AbstractCookingRecipe cooking ? cooking.cookingTime() : STANDARD_HEAT;
+    static int heatOf(ServerLevel level, BlockPos pos, RecipeHolder<?> recipe) {
+        return recipe.value() instanceof AbstractCookingRecipe cooking ? (int) Math.ceil(cooking.cookingTime() / cookingSpeed(level, pos)) : STANDARD_HEAT;
+    }
+
+    /**
+     * The vanilla cooking speed of a station (vault {@code Jobs/Cook.md}, {@code Jobs/Founder.md}): 2 for a smoker or
+     * blast furnace (the {@code minecraft:block/fast_cooking} predicate), 1 for a furnace. Read from vanilla's default
+     * cooking speed, not from a fuel item: the speed a fuel would give is not used.
+     *
+     * @param level the level
+     * @param pos   the station
+     * @return its cooking speed multiplier (1 for a station that is no furnace)
+     */
+    static double cookingSpeed(ServerLevel level, BlockPos pos) {
+        if (!(level.getBlockEntity(pos) instanceof AbstractFurnaceBlockEntity furnace)) {
+            return 1.0;
+        }
+        float speed = ResolvableFloat.fromKey(ContextFloatProviders.COOKING_DEFAULT_SPEED_MULTIPLIER).get(context(level, pos, furnace, null), 1.0F);
+        return speed > 0.0F ? speed : 1.0;
     }
 
     /**
@@ -160,14 +184,18 @@ final class Furnaces {
         }
         BaseContainerBlockEntity container = level.getBlockEntity(pos) instanceof BaseContainerBlockEntity found ? found
                 : new FurnaceBlockEntity(pos, Blocks.FURNACE.defaultBlockState());
-        LootContext context = new LootContext.Builder(new LootParams.Builder(level)
+        return ResolvableInt.getFromItem(fuel, DataComponents.COOKING_FUEL, CookingFuel::burnTime, context(level, pos, container, fuel), 0);
+    }
+
+    /** The loot context vanilla resolves a furnace's fuel values in (its block, block entity and container). */
+    private static LootContext context(ServerLevel level, BlockPos pos, BaseContainerBlockEntity container, @Nullable ItemStack fuel) {
+        return new LootContext.Builder(new LootParams.Builder(level)
                 .withParameter(LootContextParams.BLOCK_STATE, container.getBlockState())
                 .withParameter(LootContextParams.BLOCK_ENTITY, container)
                 .withParameter(LootContextParams.ORIGIN, Vec3.atCenterOf(pos))
                 .withParameter(LootContextParams.CONTAINER, container)
                 .withOptionalParameter(net.neoforged.neoforge.common.loot.NeoForgeLootContextParams.QUERIED_STACK, fuel)
                 .create(LootContextParamSets.CONTAINER_PROCESS)).create(Optional.empty());
-        return ResolvableInt.getFromItem(fuel, DataComponents.COOKING_FUEL, CookingFuel::burnTime, context, 0);
     }
 
     /**
