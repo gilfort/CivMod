@@ -21,7 +21,7 @@ import net.minecraft.resources.Identifier;
 
 /**
  * A scan result saved with a settler (needed to catch up after loading) and on the JobBlock (its Found tab), with the
- * key it was made for. Only the built-in result types are saved (wood, mine, water, block counts); an addon's own
+ * key it was made for. Only the built-in result types are saved (wood, mine, water, block counts, animals, hives); an addon's own
  * {@link ScanResult} stays in memory (documented on {@link ScanResult}).
  *
  * @param jobBlock the JobBlock of the job
@@ -42,16 +42,24 @@ public record SavedScan(BlockPos jobBlock, BlockPos center, int radius, long day
             Identifier.CODEC.listOf().fieldOf("ores").forGetter(result -> List.copyOf(result.ores()))
     ).apply(instance, (stones, ores) -> new MineScan.Result(Set.copyOf(stones), Set.copyOf(ores))));
 
+    private static final Codec<HiveScan.Result> HIVES = RecordCodecBuilder.create(instance -> instance.group(
+            Codec.unboundedMap(Identifier.CODEC, Codec.INT).fieldOf("counts").forGetter(HiveScan.Result::counts),
+            Codec.INT.fieldOf("full").forGetter(HiveScan.Result::full)
+    ).apply(instance, (counts, full) -> new HiveScan.Result(Map.copyOf(counts), full)));
+
     /**
      * The saved result types, each under its own key next to the scan key (Lumberjack, Miner, Fisherman, Simple
-     * Collection profiles). A new built-in type is one more entry.
+     * Collection profiles, Animal Farmer, Beekeeper). A new built-in type is one more entry.
      */
     private static final List<Kind<?>> KINDS = List.of(
             new Kind<>("wood", WoodScan.Result.class, WOOD),
             new Kind<>("mine", MineScan.Result.class, MINE),
             new Kind<>("water", WaterScan.Result.class, Codec.INT.xmap(WaterScan.Result::new, WaterScan.Result::water)),
             new Kind<>("counts", BlockCountScan.Result.class, Codec.unboundedMap(Identifier.CODEC, Codec.INT)
-                    .xmap(counts -> new BlockCountScan.Result(Map.copyOf(counts)), BlockCountScan.Result::counts)));
+                    .xmap(counts -> new BlockCountScan.Result(Map.copyOf(counts)), BlockCountScan.Result::counts)),
+            new Kind<>("animals", AnimalScan.Result.class, Codec.unboundedMap(Identifier.CODEC, Codec.INT)
+                    .xmap(counts -> new AnimalScan.Result(Map.copyOf(counts)), AnimalScan.Result::counts)),
+            new Kind<>("hives", HiveScan.Result.class, HIVES));
 
     /** The result under the key of its type. */
     private static final MapCodec<ScanResult> RESULT = new MapCodec<>() {

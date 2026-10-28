@@ -26,6 +26,11 @@ public final class FarmingProfiles {
     /** The farm curve of the plant Jobs: {@code k} 0.005, cap 100 / 350 / 750 / 1350 / 2000 counted plants. */
     public static final FarmCurve PLANT_CURVE = new FarmCurve(0.005, List.of(100, 350, 750, 1350, 2000));
 
+    /** The farm curve of the Animal Farmer: {@code k} 0.1, cap 20 / 40 / 60 / 80 / 100 counted animals. */
+    public static final FarmCurve ANIMAL_CURVE = new FarmCurve(0.1, List.of(20, 40, 60, 80, 100));
+    /** The farm curve of the Beekeeper: {@code k} 0.2, cap 10 / 20 / 30 / 40 / 50 counted hives. */
+    public static final FarmCurve HIVE_CURVE = new FarmCurve(0.2, List.of(10, 20, 30, 40, 50));
+
     private FarmingProfiles() {
     }
 

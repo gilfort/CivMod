@@ -487,5 +487,15 @@
   "item.civmod.hammer": "Hammer",
   "item.civmod.thought_bubble": "Thought Bubble",
   "item.civmod.problem_marker": "Problem Marker",
-  "civmod.configuration.showThoughtBubbles": "Show Thought Bubbles"
+  "civmod.configuration.showThoughtBubbles": "Show Thought Bubbles",
+  "job.civmod.animal_farmer": "Animal Farmer",
+  "job.civmod.animal_farmer.indefinite": "an Animal Farmer",
+  "job.civmod.animal_farmer.description": "Collects leather, meat, wool and eggs from the farm animals around a hay bale, without killing them",
+  "civmod.scroll.work_place.animal_farmer": "a hay bale",
+  "civmod.gui.found.animal": "%s: %s",
+  "civmod.gui.found.animals": "Animals: %s",
+  "job.civmod.beekeeper": "Beekeeper",
+  "job.civmod.beekeeper.indefinite": "a Beekeeper",
+  "job.civmod.beekeeper.description": "Collects honeycomb from beehives and bee nests with honey",
+  "civmod.scroll.work_place.beekeeper": "a beehive or bee nest"
 }
