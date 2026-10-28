@@ -37,6 +37,10 @@ public final class CivModJobs {
     public static final DeferredHolder<Job, Job> SMELTER = job("smelter");
     /** Producing: Specialization of the Craftsperson, crafts metal recipes and netherite upgrades; unlocked by a smithing table. */
     public static final DeferredHolder<Job, Job> SMITH = job("smith");
+    /** Resource Collection: collects the loot of farm animals and eggs with an axe, without killing; a Specialization of the Gatherer. */
+    public static final DeferredHolder<Job, Job> ANIMAL_FARMER = job("animal_farmer");
+    /** Resource Collection: collects honeycomb from hives with honey with shears; a Specialization of the Gatherer. */
+    public static final DeferredHolder<Job, Job> BEEKEEPER = job("beekeeper");
 
     private CivModJobs() {
     }
