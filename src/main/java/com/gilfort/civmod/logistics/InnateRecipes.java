@@ -1,6 +1,7 @@
 package com.gilfort.civmod.logistics;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -13,19 +14,20 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.JobCraftingRecipe;
+import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.registry.ModRecipes;
 
-import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeMap;
 import net.minecraft.world.level.block.Block;
@@ -34,13 +36,14 @@ import net.minecraft.world.level.block.Block;
  * The innate recipes of the Producing Jobs (vault {@code Systems/Producing Jobs.md}): every {@code civmod:job_crafting}
  * recipe ({@link JobCraftingRecipe}) naming a Job in {@code jobs}, ordered by recipe id. They apply to every Producing
  * Job; Jobs of another category or unknown Jobs in {@code jobs} are ignored with a log warning (once per datapack load).
- * Resolved once per loaded recipe set.
+ * Resolved once per loaded recipe set: the recipes per Job, their station tags per Job and the recipes by id, so the
+ * lookups of the Producing loop cost one map access.
  */
 public final class InnateRecipes {
 
     /** The recipe set the cache was built from (replaced on every datapack reload). */
     private static @Nullable RecipeMap cachedFrom;
-    private static Map<Job, List<RecipeHolder<JobCraftingRecipe>>> byJob = Map.of();
+    private static Index index = Index.EMPTY;
 
     private InnateRecipes() {
     }
@@ -48,10 +51,11 @@ public final class InnateRecipes {
     /**
      * @param level the level
      * @param job   a Job
-     * @return the innate recipes of the Job, ordered by recipe id (none for a Job that is not Producing)
+     * @return the innate recipes of the Job, ordered by recipe id (none for a Job that is not Producing). The same list
+     *         instance until the datapacks change.
      */
     public static List<RecipeHolder<JobCraftingRecipe>> of(ServerLevel level, Job job) {
-        return byJob(level).getOrDefault(job, List.of());
+        return index(level).byJob().getOrDefault(job, List.of());
     }
 
     /**
@@ -60,11 +64,19 @@ public final class InnateRecipes {
      * @return the innate recipe it follows, empty if it is no innate pattern or the recipe is gone
      */
     public static Optional<JobCraftingRecipe> recipe(ServerLevel level, Pattern pattern) {
-        if (!pattern.innate()) {
+        if (!pattern.innate() || pattern.recipe().isEmpty()) {
             return Optional.empty();
         }
-        return pattern.recipe().flatMap(id -> PatternRecipes.holder(level, id)).map(RecipeHolder::value)
-                .filter(JobCraftingRecipe.class::isInstance).map(JobCraftingRecipe.class::cast);
+        return Optional.ofNullable(index(level).byId().get(pattern.recipe().get()));
+    }
+
+    /**
+     * @param level   the level
+     * @param pattern a pattern
+     * @return the tool of the innate recipe it follows, empty if it needs none (or is no innate pattern)
+     */
+    public static Optional<Ingredient> tool(ServerLevel level, Pattern pattern) {
+        return recipe(level, pattern).flatMap(JobCraftingRecipe::tool);
     }
 
     /**
@@ -73,7 +85,36 @@ public final class InnateRecipes {
      * @return the station tags its innate recipes name (each once)
      */
     public static List<TagKey<Block>> stations(ServerLevel level, Job job) {
-        return of(level, job).stream().flatMap(holder -> holder.value().station().stream()).distinct().toList();
+        return index(level).stations().getOrDefault(job, List.of());
+    }
+
+    /**
+     * @param recipe an innate recipe
+     * @return the station tags it is worked at: its own station, else the main recipe type's station of each Job that
+     *         knows it (each once)
+     */
+    public static List<TagKey<Block>> stations(JobCraftingRecipe recipe) {
+        if (recipe.station().isPresent()) {
+            return List.of(recipe.station().get());
+        }
+        return jobs(recipe).stream().flatMap(job -> job.profile(ProducingProfile.class).stream())
+                .map(profile -> profile.station(profile.recipeTypes().getFirst())).distinct().toList();
+    }
+
+    /**
+     * @param recipe an innate recipe
+     * @return the Producing Jobs it names (unknown Jobs and Jobs of another category left out)
+     */
+    public static List<Job> jobs(JobCraftingRecipe recipe) {
+        return recipe.jobs().stream().map(ModJobs.REGISTRY::getValue).filter(InnateRecipes::producing).toList();
+    }
+
+    /**
+     * @param recipes innate recipes
+     * @return them ordered by recipe id
+     */
+    public static List<RecipeHolder<JobCraftingRecipe>> sorted(Collection<RecipeHolder<JobCraftingRecipe>> recipes) {
+        return recipes.stream().sorted(Comparator.comparing(holder -> holder.id().identifier().toString())).toList();
     }
 
     /**
@@ -87,7 +128,7 @@ public final class InnateRecipes {
     public static Pattern pattern(int slot, RecipeHolder<JobCraftingRecipe> holder, boolean checked) {
         JobCraftingRecipe recipe = holder.value();
         ItemStack result = recipe.result().create();
-        List<Item> grid = recipe.ingredients().stream().map(ingredient -> ingredient.items().findFirst().map(Holder::value).orElse(Items.AIR)).toList();
+        List<Item> grid = recipe.ingredients().stream().map(PatternRecipes::representative).toList();
         return new Pattern(slot, result.getItem(), result.getCount(), grid, Optional.of(holder.id()), false, checked, true);
     }
 
@@ -96,46 +137,63 @@ public final class InnateRecipes {
      * @return the state line of a recipe skipped without it ("Needs Shears")
      */
     public static Component needsTool(Ingredient tool) {
-        Item item = tool.items().findFirst().map(Holder::value).orElse(Items.AIR);
-        return Component.translatable("civmod.gui.patterns.needs_tool", new ItemStack(item).getHoverName());
+        Component first = new ItemStack(PatternRecipes.representative(tool)).getHoverName();
+        Optional<TagKey<Item>> tag = tool.isCustom() ? Optional.empty() : tool.getValues().unwrapKey();
+        return Component.translatable("civmod.gui.patterns.needs_tool", tag.map(found -> PatternRecipes.tagName(found, first)).orElse(first));
     }
 
     /**
      * @param station an innate recipe's station
-     * @return the state line of a recipe skipped without it ("Needs a Water Cauldron nearby")
+     * @return the state line of a recipe skipped without it ("Needs a station nearby: Water Cauldron"), the tag named
+     *         by its translation, else by its first block
      */
     public static Component needsStation(TagKey<Block> station) {
-        Component name = BuiltInRegistries.BLOCK.get(station).flatMap(set -> set.stream().findFirst())
+        Component first = BuiltInRegistries.BLOCK.get(station).flatMap(set -> set.stream().findFirst())
                 .map(block -> block.value().getName()).orElse(Component.literal("#" + station.location()));
-        return Component.translatable("civmod.gui.patterns.needs_station", name);
+        return Component.translatable("civmod.gui.patterns.needs_station", PatternRecipes.tagName(station, first));
     }
 
-    private static Map<Job, List<RecipeHolder<JobCraftingRecipe>>> byJob(ServerLevel level) {
+    private static boolean producing(@Nullable Job job) {
+        return job != null && job.category() == JobCategory.PRODUCING;
+    }
+
+    private static Index index(ServerLevel level) {
         RecipeMap recipes = level.recipeAccess().recipeMap();
         if (recipes != cachedFrom) {
-            byJob = build(recipes);
+            index = build(recipes);
             cachedFrom = recipes;
         }
-        return byJob;
+        return index;
     }
 
-    private static Map<Job, List<RecipeHolder<JobCraftingRecipe>>> build(RecipeMap recipes) {
-        Map<Job, List<RecipeHolder<JobCraftingRecipe>>> built = new HashMap<>();
-        List<RecipeHolder<JobCraftingRecipe>> all = new ArrayList<>(recipes.byType(ModRecipes.JOB_CRAFTING.get()));
-        all.sort(Comparator.comparing(holder -> holder.id().identifier().toString()));
-        for (RecipeHolder<JobCraftingRecipe> holder : all) {
+    private static Index build(RecipeMap recipes) {
+        Map<Job, List<RecipeHolder<JobCraftingRecipe>>> byJob = new HashMap<>();
+        Map<ResourceKey<Recipe<?>>, JobCraftingRecipe> byId = new HashMap<>();
+        for (RecipeHolder<JobCraftingRecipe> holder : sorted(recipes.byType(ModRecipes.JOB_CRAFTING.get()))) {
+            byId.put(holder.id(), holder.value());
             for (Identifier id : holder.value().jobs()) {
-                Job job = ModJobs.REGISTRY.getValue(id);
-                if (job == null) {
-                    CivMod.LOGGER.warn("Innate recipe {} names the unknown Job {}: ignored for it", holder.id().identifier(), id);
-                } else if (job.category() != JobCategory.PRODUCING) {
-                    CivMod.LOGGER.warn("Innate recipe {} names {}, which is no Producing Job: ignored for it", holder.id().identifier(), id);
-                } else {
-                    built.computeIfAbsent(job, key -> new ArrayList<>()).add(holder);
+                if (!producing(ModJobs.REGISTRY.getValue(id))) {
+                    CivMod.LOGGER.warn("Innate recipe {} names {}, which is no known Producing Job: ignored for it", holder.id().identifier(), id);
                 }
             }
+            jobs(holder.value()).forEach(job -> byJob.computeIfAbsent(job, key -> new ArrayList<>()).add(holder));
         }
-        built.replaceAll((job, list) -> List.copyOf(list));
-        return Map.copyOf(built);
+        Map<Job, List<TagKey<Block>>> stations = new HashMap<>();
+        byJob.forEach((job, list) -> stations.put(job, list.stream().flatMap(holder -> holder.value().station().stream()).distinct().toList()));
+        byJob.replaceAll((job, list) -> List.copyOf(list));
+        return new Index(Map.copyOf(byJob), Map.copyOf(stations), Map.copyOf(byId));
+    }
+
+    /**
+     * The innate recipes of one loaded recipe set.
+     *
+     * @param byJob    the recipes per Producing Job, ordered by recipe id
+     * @param stations the station tags the recipes of each Job name, each once
+     * @param byId     every innate recipe by id
+     */
+    private record Index(Map<Job, List<RecipeHolder<JobCraftingRecipe>>> byJob, Map<Job, List<TagKey<Block>>> stations,
+            Map<ResourceKey<Recipe<?>>, JobCraftingRecipe> byId) {
+
+        static final Index EMPTY = new Index(Map.of(), Map.of(), Map.of());
     }
 }

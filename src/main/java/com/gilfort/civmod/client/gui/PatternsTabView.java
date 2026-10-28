@@ -9,7 +9,9 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.client.ClientInnateRecipes;
 import com.gilfort.civmod.logistics.Pattern;
+import com.gilfort.civmod.logistics.PatternRecipes;
 import com.gilfort.civmod.menu.GuiIcons;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
@@ -435,9 +437,11 @@ final class PatternsTabView implements JobBlockTabView {
             Pattern found = pattern.get();
             lines.add(Component.translatable("civmod.gui.clerk.request.amount", found.count(), new ItemStack(found.output()).getHoverName()));
             if (found.innate()) {
-                // Its inputs, as no editor shows them.
-                found.grid().stream().filter(item -> item != Items.AIR).forEach(item -> lines.add(Component.literal("  ")
-                        .append(new ItemStack(item).getHoverName()).withStyle(ChatFormatting.GRAY)));
+                // Its inputs, as no editor shows them: a tag input by its tag ("Any Wool"), not by the grid's first item.
+                List<Component> inputs = found.recipe().flatMap(ClientInnateRecipes::recipe)
+                        .map(recipe -> recipe.ingredients().stream().map(PatternRecipes::name).toList())
+                        .orElseGet(() -> found.grid().stream().filter(item -> item != Items.AIR).map(item -> new ItemStack(item).getHoverName()).toList());
+                inputs.forEach(input -> lines.add(Component.literal("  ").append(input).withStyle(ChatFormatting.GRAY)));
             }
             lines.add((found.innate() ? Component.translatable("civmod.gui.patterns.innate", job.displayName())
                     : Component.translatable(found.exact() ? "civmod.gui.patterns.exact" : "civmod.gui.patterns.recipe")).withStyle(ChatFormatting.GRAY));

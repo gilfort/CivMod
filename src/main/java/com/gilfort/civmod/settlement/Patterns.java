@@ -519,6 +519,12 @@ public final class Patterns {
             return false;
         }
         SettlementBlock.Library library = block.library(job);
+        if (library.innateLaidOut() == recipes) {
+            // Laid out from this very list before (InnateRecipes keeps one list per recipe set) and only syncInnate
+            // moves innate patterns: nothing to do. Keeps the per-decision call of the Producing loop at O(1).
+            return false;
+        }
+        library.setInnateLaidOut(recipes);
         Map<ResourceKey<Recipe<?>>, Pattern> before = current.stream().filter(Pattern::innate).filter(pattern -> pattern.recipe().isPresent())
                 .collect(Collectors.toMap(pattern -> pattern.recipe().get(), pattern -> pattern, (first, second) -> first));
         List<Pattern> laidOut = new ArrayList<>();

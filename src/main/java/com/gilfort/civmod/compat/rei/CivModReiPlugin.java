@@ -52,7 +52,7 @@ import net.minecraft.world.phys.shapes.Shapes;
  * differ ({@code plugins/stone_cutting}, {@code plugins/campfire}).
  * <p>
  * The innate recipes ({@code civmod:job_crafting}) get the display-only "Job Recipes" category
- * ({@link JobRecipeCategory}) with the Jobs that know them as workstations.
+ * ({@link InnateRecipeCategory}) with the Jobs that know them as workstations.
  */
 @REIPluginClient
 public final class CivModReiPlugin implements REIClientPlugin {
@@ -64,13 +64,13 @@ public final class CivModReiPlugin implements REIClientPlugin {
 
     @Override
     public void registerCategories(CategoryRegistry registry) {
-        registry.add(new JobRecipeCategory());
-        ClientInnateRecipes.allJobs().forEach(job -> registry.addWorkstations(JobRecipeDisplay.CATEGORY, EntryStacks.of(job.icon())));
+        registry.add(new InnateRecipeCategory());
+        ClientInnateRecipes.allJobs().forEach(job -> registry.addWorkstations(InnateRecipeDisplay.CATEGORY, EntryStacks.of(job.icon())));
     }
 
     @Override
     public void registerDisplays(DisplayRegistry registry) {
-        ClientInnateRecipes.recipes().forEach(holder -> registry.add(new JobRecipeDisplay(holder)));
+        ClientInnateRecipes.recipes().forEach(holder -> registry.add(new InnateRecipeDisplay(holder)));
     }
 
     @Override

@@ -295,13 +295,13 @@ final class ProducingLoop implements CategoryLoop {
                 }
             }
             // Tools of innate recipes not on the belt are fetched at the collect inventory first.
-            List<Ingredient> tools = plan.steps().stream().map(step -> InnateRecipes.recipe(level, step.pattern()).flatMap(JobCraftingRecipe::tool))
+            List<Ingredient> tools = plan.steps().stream().map(step -> InnateRecipes.tool(level, step.pattern()))
                     .flatMap(Optional::stream).filter(tool -> SettlerTools.best(settler, tool).isEmpty()).distinct().toList();
             if (!tools.isEmpty() && !sources.contains(site.collect())) {
                 sources = new ArrayList<>(sources);
                 sources.addFirst(site.collect());
             }
-            return new Pick(Optional.of(new Round(request.id(), request.item(), plan, takes, sources, inputs, tools, site.collect())), true,
+            return new Pick(Optional.of(new Round(request.id(), request.item(), plan, takes, sources, inputs, tools)), true,
                     Optional.empty(), Optional.empty());
         }
         if (tries > 0) {
@@ -607,7 +607,7 @@ final class ProducingLoop implements CategoryLoop {
                     // Waiting for the Clerk.
                     yield JobStep.STAY;
                 }
-                fetch(level, job, round, source, ClerkStorage.stock(level, source, dayTime, counter), true);
+                fetch(level, job, site.get(), round, source, ClerkStorage.stock(level, source, dayTime, counter), true);
                 visit = null;
                 yield JobStep.DONE;
             }
@@ -623,7 +623,7 @@ final class ProducingLoop implements CategoryLoop {
     }
 
     /** Takes the round's inputs from one source into the buffer; after the last source the craft starts. */
-    private void fetch(ServerLevel level, SettlerJob job, Round round, BlockPos source, Stock stock, boolean effects) {
+    private void fetch(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, BlockPos source, Stock stock, boolean effects) {
         JobBuffer buffer = shell.workplace(job.jobBlock()).buffer();
         boolean taken = false;
         for (Map.Entry<Item, Integer> entry : List.copyOf(round.toTake.entrySet())) {
@@ -640,7 +640,7 @@ final class ProducingLoop implements CategoryLoop {
         if (taken && stock.counter()) {
             ClerkCounter.handOut(level, source, effects);
         }
-        if (source.equals(round.toolSource)) {
+        if (source.equals(site.collect())) {
             for (Ingredient tool : round.tools) {
                 if (SettlerTools.best(settler, tool).isEmpty()) {
                     SettlerTools.take(settler, stock, tool);
@@ -823,17 +823,18 @@ final class ProducingLoop implements CategoryLoop {
      * One execution of the round's current step in the buffer: inputs out, the profile's "execute recipe" result in
      * (by default the output and the remainders), EXP.
      *
-     * @return whether it was executed (false: inputs gone, the round failed)
+     * @return whether it was executed (false: inputs gone, the round failed; or the tool gone, the round released)
      */
     private boolean craftOne(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, boolean effects) {
         CraftPlan.Step step = round.steps.get(round.step);
         JobBuffer buffer = shell.workplace(job.jobBlock()).buffer();
-        Optional<Ingredient> tool = InnateRecipes.recipe(level, step.pattern()).flatMap(JobCraftingRecipe::tool);
+        Optional<Ingredient> tool = InnateRecipes.tool(level, step.pattern());
         Optional<ItemStack> worn = tool.flatMap(kind -> SettlerTools.best(settler, kind));
         if (tool.isPresent() && worn.isEmpty()) {
-            // The tool broke or was never fetched: the round fails like on missing inputs.
-            fail(level, job.jobBlock(), round, List.of(new Request.Missing(tool.get().items().findFirst().map(holder -> holder.value())
-                    .orElse(net.minecraft.world.item.Items.AIR), 1)), level.getGameTime());
+            // The tool broke or was never fetched: only this recipe is skipped (vault Systems/Producing Jobs.md). The claim
+            // is released without marking the request missing; the next pick skips the recipe with "Needs Shears" and
+            // the Job keeps working its other recipes.
+            release(level, job.jobBlock());
             return false;
         }
         List<ItemStack> consumed = new ArrayList<>();
@@ -841,8 +842,7 @@ final class ProducingLoop implements CategoryLoop {
             ItemStack one = buffer.takeOne(input);
             if (one.isEmpty()) {
                 consumed.forEach(buffer::add);
-                fail(level, job.jobBlock(), round, List.of(new Request.Missing(input.items().findFirst().map(holder -> holder.value())
-                        .orElse(net.minecraft.world.item.Items.AIR), 1)), level.getGameTime());
+                fail(level, job.jobBlock(), round, List.of(new Request.Missing(PatternRecipes.representative(input), 1)), level.getGameTime());
                 return false;
             }
             consumed.add(one);
@@ -1233,7 +1233,7 @@ final class ProducingLoop implements CategoryLoop {
                 workplace.setRound(round);
                 if (round.phase != Round.Phase.WAIT) {
                     for (BlockPos source : List.copyOf(round.sources)) {
-                        fetch(level, job, round, source, ClerkStorage.stock(level, source, DayClock.dayTime((long) clock), true), false);
+                        fetch(level, job, site, round, source, ClerkStorage.stock(level, source, DayClock.dayTime((long) clock), true), false);
                     }
                 }
                 continue;
@@ -1244,7 +1244,7 @@ final class ProducingLoop implements CategoryLoop {
                 Optional<JobStatus> waiting = waitForInputs(level, site, round, DayClock.dayTime(now), now);
                 waiting.ifPresent(status -> shell.setStatus(jobBlock, status));
                 if (waiting.isEmpty()) {
-                    fetch(level, job, round, site.collect(), ClerkStorage.stock(level, site.collect(), DayClock.dayTime(now), true), false);
+                    fetch(level, job, site, round, site.collect(), ClerkStorage.stock(level, site.collect(), DayClock.dayTime(now), true), false);
                 } else if (workplace.round() != null) {
                     // The Deliverymen bring the inputs later: the next job takes the rest of the time.
                     return new SimulatedWork(operations, ticks);

@@ -8,12 +8,14 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobPlaces;
+import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
@@ -31,6 +33,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -46,6 +49,8 @@ public final class FletcherGameTests {
 
     /** Work time of the previous workday the request tests catch up: plenty for a few executions at job factor 0.3. */
     private static final long WORK_TICKS = 4000L;
+    /** Work time of the previous workday the Unbreaking test catches up: plenty for 8 executions at job factor 0.3. */
+    private static final long LONG_WORK_TICKS = 16000L;
     /** The work time the arrow tests catch up: enough for 4 executions at job factor 1.2, not at 0.3. */
     private static final long SPEED_TICKS = 1200L;
 
@@ -58,6 +63,9 @@ public final class FletcherGameTests {
             register(helper, "fletcher_unlock", FletcherGameTests::unlock);
             register(helper, "fletcher_string_from_wool", FletcherGameTests::stringFromWool);
             register(helper, "fletcher_without_shears", FletcherGameTests::withoutShears);
+            register(helper, "fletcher_unbreaking_shears", FletcherGameTests::unbreakingShears);
+            register(helper, "fletcher_shears_from_collect", FletcherGameTests::shearsFromCollect);
+            register(helper, "fletcher_shears_break_mid_round", FletcherGameTests::shearsBreakMidRound);
             register(helper, "fletcher_target_faster", FletcherGameTests::targetFaster);
             register(helper, "fletcher_without_target_slower", FletcherGameTests::withoutTargetSlower);
         });
@@ -149,6 +157,71 @@ public final class FletcherGameTests {
         Optional<String> line = Optional.ofNullable(tab.needs().get(1)).map(Component::getString);
         helper.assertTrue(line.equals(Optional.of("Needs Shears")), "The string recipe is marked: " + tab.needs());
         helper.assertTrue(!tab.needs().containsKey(0), "The flint recipe is not");
+        cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /**
+     * Unbreaking works on the tool of an innate recipe like on a Resource Collection tool: Unbreaking III shears take
+     * far less than 1 durability per execution over 8 executions (all 8 losing one: chance 1 in 65536).
+     */
+    private static void unbreakingShears(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = setup(helper, List.of(new ItemStack(Items.WOOL.white(), 8)), List.of(new ItemStack(Items.STRING, 16)));
+        BlockPos craft = fletchery(helper, new BlockPos(1, 1, 5));
+        helper.setBlock(new BlockPos(3, 1, 5), Blocks.FLETCHING_TABLE);
+        Settler settler = worker(helper, setup, craft);
+        ItemStack shears = new ItemStack(Items.SHEARS);
+        shears.enchant(level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.UNBREAKING), 3);
+        settler.getInventory().setItem(Settler.BELT_START, shears);
+        CraftspersonGameTests.catchUp(level, settler, LONG_WORK_TICKS);
+        helper.assertTrue(count(level, setup.clerk(), Items.STRING) == 16, "16 string arrived (status " + settler.getWork().status(craft) + ")");
+        ItemStack worn = settler.getInventory().getItem(Settler.BELT_START);
+        helper.assertTrue(worn.is(Items.SHEARS) && worn.getDamageValue() < 8, "Unbreaking spared durability: damage " + worn.getDamageValue());
+        cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /** Without shears on the belt the Fletcher takes the shears from its collect inventory (the JobBlock) and uses them. */
+    private static void shearsFromCollect(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = setup(helper, List.of(new ItemStack(Items.WOOL.white())), List.of(new ItemStack(Items.STRING, 2)));
+        BlockPos craft = fletchery(helper, new BlockPos(1, 1, 5));
+        helper.setBlock(new BlockPos(3, 1, 5), Blocks.FLETCHING_TABLE);
+        ((Container) level.getBlockEntity(craft)).setItem(0, new ItemStack(Items.SHEARS));
+        Settler settler = worker(helper, setup, craft);
+        CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
+        helper.assertTrue(count(level, setup.clerk(), Items.STRING) == 2, "2 string arrived (status " + settler.getWork().status(craft) + ")");
+        ItemStack worn = settler.getInventory().getItem(Settler.BELT_START);
+        helper.assertTrue(worn.is(Items.SHEARS) && worn.getDamageValue() == 1, "The fetched shears are on the belt, worn by 1: " + worn);
+        helper.assertTrue(ClerkStorage.stock(level, craft, false).count(stack -> stack.is(Items.SHEARS)) == 0, "Taken out of the collect inventory");
+        cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /**
+     * Shears that break during a round skip only the string recipe: the request is not marked missing shears, the
+     * recipe shows "Needs Shears" and the Fletcher keeps working its other recipes (gravel becomes flint).
+     */
+    private static void shearsBreakMidRound(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = setup(helper, List.of(new ItemStack(Items.WOOL.white(), 2), new ItemStack(Items.GRAVEL)),
+                List.of(new ItemStack(Items.STRING, 4), new ItemStack(Items.FLINT)));
+        BlockPos craft = fletchery(helper, new BlockPos(1, 1, 5));
+        helper.setBlock(new BlockPos(3, 1, 5), Blocks.FLETCHING_TABLE);
+        Settler settler = worker(helper, setup, craft);
+        ItemStack shears = new ItemStack(Items.SHEARS);
+        // One use left: they break on the first execution.
+        shears.setDamageValue(shears.getMaxDamage() - 1);
+        settler.getInventory().setItem(Settler.BELT_START, shears);
+        CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
+        helper.assertTrue(settler.getInventory().getItem(Settler.BELT_START).isEmpty(), "The shears broke");
+        helper.assertTrue(count(level, setup.clerk(), Items.FLINT) == 1, "Flint arrived (status " + settler.getWork().status(craft) + ")");
+        List<Request.Missing> missing = Requests.forRule(setup.settlement(), setup.clerk(), 0).map(Request::missing).orElse(List.of());
+        helper.assertTrue(missing.stream().noneMatch(entry -> entry.item() == Items.SHEARS), "The string request is not marked missing shears: " + missing);
+        PatternsTabData tab = PatternsTabData.of(level, craft, fletcher());
+        Optional<String> line = Optional.ofNullable(tab.needs().get(1)).map(Component::getString);
+        helper.assertTrue(line.equals(Optional.of("Needs Shears")), "The string recipe is marked: " + tab.needs());
         cleanUp(setup, settler);
         helper.succeed();
     }
