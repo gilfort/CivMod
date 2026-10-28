@@ -137,17 +137,20 @@ public final class InnateRecipes {
      * @return the state line of a recipe skipped without it ("Needs Shears")
      */
     public static Component needsTool(Ingredient tool) {
-        return Component.translatable("civmod.gui.patterns.needs_tool", new ItemStack(PatternRecipes.representative(tool)).getHoverName());
+        Component first = new ItemStack(PatternRecipes.representative(tool)).getHoverName();
+        Optional<TagKey<Item>> tag = tool.isCustom() ? Optional.empty() : tool.getValues().unwrapKey();
+        return Component.translatable("civmod.gui.patterns.needs_tool", tag.map(found -> PatternRecipes.tagName(found, first)).orElse(first));
     }
 
     /**
      * @param station an innate recipe's station
-     * @return the state line of a recipe skipped without it ("Needs a Water Cauldron nearby")
+     * @return the state line of a recipe skipped without it ("Needs a station nearby: Water Cauldron"), the tag named
+     *         by its translation, else by its first block
      */
     public static Component needsStation(TagKey<Block> station) {
-        Component name = BuiltInRegistries.BLOCK.get(station).flatMap(set -> set.stream().findFirst())
+        Component first = BuiltInRegistries.BLOCK.get(station).flatMap(set -> set.stream().findFirst())
                 .map(block -> block.value().getName()).orElse(Component.literal("#" + station.location()));
-        return Component.translatable("civmod.gui.patterns.needs_station", name);
+        return Component.translatable("civmod.gui.patterns.needs_station", PatternRecipes.tagName(station, first));
     }
 
     private static boolean producing(@Nullable Job job) {

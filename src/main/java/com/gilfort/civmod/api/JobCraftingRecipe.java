@@ -61,7 +61,7 @@ import net.minecraft.world.level.block.Block;
  * only this recipe is skipped and marked in the Patterns tab ("Needs Shears").</li>
  * <li>{@code station} (optional): a block {@code #tag}; the settler works the recipe at the nearest such station (as a
  * step of another recipe type). Without it the station of the Job's main recipe type counts. A missing station skips
- * the recipe and marks it ("Needs a Water Cauldron nearby").</li>
+ * the recipe and marks it ("Needs a station nearby: Water Cauldron").</li>
  * </ul>
  *
  * @param jobs        the Jobs that know the recipe

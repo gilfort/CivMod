@@ -11,6 +11,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.logistics.Pattern;
+import com.gilfort.civmod.logistics.PatternRecipes;
 import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.Patterns;
@@ -23,6 +24,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemStackTemplate;
@@ -60,11 +62,32 @@ public final class InnateRecipeGameTests {
             register(helper, "innate_removed_and_check_state", InnateRecipeGameTests::removedAndCheckState);
             register(helper, "innate_station_per_recipe", InnateRecipeGameTests::stationPerRecipe);
             register(helper, "innate_missing_station", InnateRecipeGameTests::missingStation);
+            register(helper, "innate_names", InnateRecipeGameTests::names);
         });
     }
 
     private static void register(RegisterEvent.RegisterHelper<Consumer<GameTestHelper>> helper, String name, Consumer<GameTestHelper> test) {
         helper.register(ResourceKey.create(Registries.TEST_FUNCTION, CivMod.id(name)), test);
+    }
+
+    /**
+     * Ingredients and "Needs …" lines name a tag by its translation, not by its first member: the string recipe takes
+     * "Any Wool" and needs "Shears"; a single item keeps its name; a tag without translation falls back to its first
+     * member.
+     */
+    private static void names(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        JobCraftingRecipe string = InnateRecipes.of(level, FletcherGameTests.fletcher()).stream().filter(holder -> holder.id().equals(STRING))
+                .findFirst().orElseThrow().value();
+        String wool = PatternRecipes.name(string.ingredients().getFirst()).getString();
+        helper.assertTrue(wool.equals("Any Wool"), "A tag input is named by its tag: " + wool);
+        String tool = InnateRecipes.needsTool(string.tool().orElseThrow()).getString();
+        helper.assertTrue(tool.equals("Needs Shears"), "The tool line: " + tool);
+        String gravel = PatternRecipes.name(Ingredient.of(Items.GRAVEL)).getString();
+        helper.assertTrue(gravel.equals("Gravel"), "A single item keeps its name: " + gravel);
+        String anvil = InnateRecipes.needsStation(BlockTags.ANVIL).getString();
+        helper.assertTrue(anvil.equals("Needs a station nearby: Anvil"), "An untranslated tag falls back to its first member: " + anvil);
+        helper.succeed();
     }
 
     /**
@@ -190,7 +213,7 @@ public final class InnateRecipeGameTests {
     }
 
     /**
-     * Without an anvil the gravel recipe is skipped and marked "Needs a Anvil nearby"; the mason still crafts sticks
+     * Without an anvil the gravel recipe is skipped and marked "Needs a station nearby: Anvil"; the mason still crafts sticks
      * from its own pattern.
      */
     private static void missingStation(GameTestHelper helper) {
@@ -204,7 +227,7 @@ public final class InnateRecipeGameTests {
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.STICK) == 4, "Sticks arrived (status " + settler.getWork().status(craft) + ")");
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.GRAVEL) == 0, "No gravel without an anvil");
         Optional<String> line = Optional.ofNullable(PatternsTabData.of(level, craft, mason()).needs().get(0)).map(Component::getString);
-        helper.assertTrue(line.equals(Optional.of("Needs a Anvil nearby")), "The gravel recipe is marked: " + line);
+        helper.assertTrue(line.equals(Optional.of("Needs a station nearby: Anvil")), "The gravel recipe is marked: " + line);
         FletcherGameTests.cleanUp(setup, settler);
         helper.succeed();
     }

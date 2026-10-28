@@ -228,8 +228,8 @@ public final class SettlementBlock {
         }
 
         /**
-         * @return the innate recipes a settler last had to skip, with what they need ("Needs Shears", "Needs a Water
-         *         Cauldron nearby"), by recipe id (read-only; not saved)
+         * @return the innate recipes a settler last had to skip, with what they need ("Needs Shears", "Needs a station
+         *         nearby: Water Cauldron"), by recipe id (read-only; not saved)
          */
         public Map<ResourceKey<Recipe<?>>, Component> needs() {
             return Collections.unmodifiableMap(needs);

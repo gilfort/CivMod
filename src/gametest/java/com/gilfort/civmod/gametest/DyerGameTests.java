@@ -135,7 +135,7 @@ public final class DyerGameTests {
     }
 
     /**
-     * Without a water cauldron the bleaching recipe is skipped and marked "Needs a Water Cauldron nearby"; the dye is made
+     * Without a water cauldron the bleaching recipe is skipped and marked "Needs a station nearby: Water Cauldron"; the dye is made
      * all the same.
      */
     private static void withoutCauldron(GameTestHelper helper) {
@@ -153,7 +153,7 @@ public final class DyerGameTests {
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.WOOL.red()) == 1, "The red wool stays");
         PatternsTabData tab = PatternsTabData.of(level, craft, dyer());
         Optional<String> line = Optional.ofNullable(tab.needs().get(0)).map(Component::getString);
-        helper.assertTrue(line.equals(Optional.of("Needs a Water Cauldron nearby")), "The bleaching recipe is marked: " + tab.needs());
+        helper.assertTrue(line.equals(Optional.of("Needs a station nearby: Water Cauldron")), "The bleaching recipe is marked: " + tab.needs());
         FletcherGameTests.cleanUp(setup, settler);
         helper.succeed();
     }

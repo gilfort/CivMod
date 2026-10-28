@@ -8,9 +8,11 @@ import java.util.Optional;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -247,6 +249,28 @@ public final class PatternRecipes {
      */
     public static Item representative(Ingredient ingredient) {
         return first(ingredient).orElse(Items.AIR);
+    }
+
+    /**
+     * @param ingredient an ingredient
+     * @return its name: a tag ingredient as "Any Wool" ({@link #tagName}), else the name of its first alternative
+     */
+    public static Component name(Ingredient ingredient) {
+        Component first = new ItemStack(representative(ingredient)).getHoverName();
+        Optional<TagKey<Item>> tag = ingredient.isCustom() ? Optional.empty() : ingredient.getValues().unwrapKey();
+        return tag.<Component>map(found -> Component.translatable("civmod.gui.patterns.any_of", tagName(found, first))).orElse(first);
+    }
+
+    /**
+     * @param tag      a tag
+     * @param fallback its name when the tag has no translation (e.g. its first member's)
+     * @return its translation {@code tag.<registry>.<namespace>.<path>} (the convention of NeoForge and the vanilla
+     *         tag names), else the fallback
+     */
+    public static Component tagName(TagKey<?> tag, Component fallback) {
+        Identifier id = tag.location();
+        String key = "tag." + tag.registry().identifier().getPath().replace('/', '.') + "." + id.getNamespace() + "." + id.getPath().replace('/', '.');
+        return Component.translatableWithFallback(key, fallback.getString());
     }
 
     /**
