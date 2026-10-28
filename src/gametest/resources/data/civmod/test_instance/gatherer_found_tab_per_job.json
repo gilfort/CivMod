@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "civmod:day",
+  "environment": "civmod:level_three_gatherer",
   "function": "civmod:gatherer_found_tab_per_job",
   "max_ticks": 2400,
   "structure": "minecraft:empty",

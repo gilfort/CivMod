@@ -42,6 +42,8 @@ public final class ModItems {
     public static final DeferredItem<BlockItem> CRAFTSPERSON_BLOCK = jobBlockItem(ModBlocks.CRAFTSPERSON_BLOCK);
     /** Item of the {@link ModBlocks#SMELTER_BLOCK}. */
     public static final DeferredItem<BlockItem> SMELTER_BLOCK = jobBlockItem(ModBlocks.SMELTER_BLOCK);
+    /** Item of the {@link ModBlocks#SCARECROW}. */
+    public static final DeferredItem<BlockItem> SCARECROW = ITEMS.registerSimpleBlockItem(ModBlocks.SCARECROW);
 
     /** The Scroll of Assignment. */
     public static final DeferredItem<ScrollOfAssignmentItem> SCROLL_OF_ASSIGNMENT = ITEMS.registerItem("scroll_of_assignment",

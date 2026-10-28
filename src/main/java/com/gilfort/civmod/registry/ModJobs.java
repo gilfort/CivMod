@@ -15,6 +15,7 @@ import com.gilfort.civmod.job.MechanicProfile;
 import com.gilfort.civmod.job.MinerProfile;
 import com.gilfort.civmod.job.SmelterProfile;
 import com.gilfort.civmod.job.SmithProfile;
+import com.gilfort.civmod.job.VeggyFarmerProfile;
 
 import net.minecraft.core.Registry;
 import net.minecraft.world.item.Items;
@@ -56,6 +57,10 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> PLANTATION_FARMER = JOBS.register("plantation_farmer", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
             .parent(GATHERER).icon(() -> Items.BAMBOO).bubbleIcon(() -> Items.SUGAR_CANE).hungerFactor(1.0).baseExp(1).unlockItem(() -> Items.BAMBOO)
             .farmCurve(FarmingProfiles.PLANT_CURVE).profile(FarmingProfiles::plantationFarmer).build());
+    /** See vault {@code Jobs/Veggy Farmer.md}; a Specialization of the Gatherer, unlocked by a composter; works the crops around a scarecrow. */
+    public static final DeferredHolder<Job, Job> VEGGY_FARMER = JOBS.register("veggy_farmer", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
+            .parent(GATHERER).icon(() -> Items.COMPOSTER).bubbleIcon(() -> Items.WHEAT).hungerFactor(1.0).baseExp(1).unlockItem(() -> Items.COMPOSTER)
+            .farmCurve(FarmingProfiles.PLANT_CURVE).profile(VeggyFarmerProfile::new).build());
     /** See vault {@code Jobs/Adventurer.md}; the Base Job of the Mission Board. */
     public static final DeferredHolder<Job, Job> ADVENTURER = JOBS.register("adventurer", () -> Job.builder(JobCategory.MISSION)
             .icon(ModItems.MISSION_BOARD).bubbleIcon(() -> Items.MAP).hungerFactor(1.0).baseExp(10).build());

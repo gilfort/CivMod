@@ -23,6 +23,7 @@ import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.TestAssignments;
 import com.mojang.serialization.JsonOps;
 
@@ -196,7 +197,8 @@ public final class PlantationFarmerGameTests {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         BlockPos relative = GathererGameTests.gathererBlock(helper);
-        // Level 3: two settlers.
+        // Level 3: two settlers. Its exclusion radius (90) reaches the neighbouring tests of a batch, so the test runs in
+        // its own batch (environment civmod:level_three_gatherer).
         StationTypeGameTests.setLevel(helper, relative, 3);
         BlockPos jobBlock = helper.absolutePos(relative);
         SettlementData data = SettlementData.get(level);
@@ -242,6 +244,8 @@ public final class PlantationFarmerGameTests {
                 .thenExecute(() -> {
                     picker.discard();
                     planter.discard();
+                    // The next batch reuses this place: its settlement must not outlive the test.
+                    SettlementWorld.remove(level, jobBlock);
                     forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
                 })
                 .thenSucceed();

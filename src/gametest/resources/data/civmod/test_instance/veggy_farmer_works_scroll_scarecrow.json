@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:veggy_farmer_works_scroll_scarecrow",
+  "max_ticks": 2400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
