@@ -1,5 +1,8 @@
 package com.gilfort.civmod.job;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
@@ -12,7 +15,8 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 
 /**
- * The automatic work place search of Resource Collection Jobs: the nearest matching block in a box around the JobBlock.
+ * The automatic work place search of Resource Collection Jobs: the nearest (or every) matching block in a box around
+ * the JobBlock.
  * Unloaded chunks and chunk sections whose palette has no matching block are skipped.
  */
 public final class BlockSearch {
@@ -43,8 +47,33 @@ public final class BlockSearch {
      */
     public static @Nullable BlockPos nearest(ServerLevel level, BlockPos center, int horizontal, int vertical, Predicate<BlockState> matches,
             Predicate<BlockPos> usable) {
-        BlockPos best = null;
-        double bestDistance = Double.MAX_VALUE;
+        BlockPos[] best = new BlockPos[1];
+        double[] bestDistance = {Double.MAX_VALUE};
+        visit(level, center, horizontal, vertical, matches, pos -> {
+            double distance = pos.distSqr(center);
+            if (distance < bestDistance[0] && usable.test(pos)) {
+                bestDistance[0] = distance;
+                best[0] = pos;
+            }
+        });
+        return best[0];
+    }
+
+    /**
+     * @param level      the level
+     * @param center     the centre of the search (the JobBlock)
+     * @param horizontal how far along x and z
+     * @param vertical   how far up and down
+     * @param matches    the blocks searched for
+     * @return every matching block in the box, in no particular order
+     */
+    public static List<BlockPos> all(ServerLevel level, BlockPos center, int horizontal, int vertical, Predicate<BlockState> matches) {
+        List<BlockPos> found = new ArrayList<>();
+        visit(level, center, horizontal, vertical, matches, found::add);
+        return found;
+    }
+
+    private static void visit(ServerLevel level, BlockPos center, int horizontal, int vertical, Predicate<BlockState> matches, Consumer<BlockPos> found) {
         for (int sx = SectionPos.blockToSectionCoord(center.getX() - horizontal); sx <= SectionPos.blockToSectionCoord(center.getX() + horizontal); sx++) {
             for (int sz = SectionPos.blockToSectionCoord(center.getZ() - horizontal); sz <= SectionPos.blockToSectionCoord(center.getZ() + horizontal); sz++) {
                 if (!level.hasChunk(sx, sz)) {
@@ -68,14 +97,9 @@ public final class BlockSearch {
                                 }
                                 BlockPos pos = new BlockPos(SectionPos.sectionToBlockCoord(sx) + x, SectionPos.sectionToBlockCoord(sy) + y,
                                         SectionPos.sectionToBlockCoord(sz) + z);
-                                if (Math.abs(pos.getX() - center.getX()) > horizontal || Math.abs(pos.getZ() - center.getZ()) > horizontal
-                                        || Math.abs(pos.getY() - center.getY()) > vertical) {
-                                    continue;
-                                }
-                                double distance = pos.distSqr(center);
-                                if (distance < bestDistance && usable.test(pos)) {
-                                    bestDistance = distance;
-                                    best = pos;
+                                if (Math.abs(pos.getX() - center.getX()) <= horizontal && Math.abs(pos.getZ() - center.getZ()) <= horizontal
+                                        && Math.abs(pos.getY() - center.getY()) <= vertical) {
+                                    found.accept(pos);
                                 }
                             }
                         }
@@ -83,6 +107,5 @@ public final class BlockSearch {
                 }
             }
         }
-        return best;
     }
 }

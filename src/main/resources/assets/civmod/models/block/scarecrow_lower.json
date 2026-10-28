@@ -1,0 +1,106 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "particle": "minecraft:block/hay_block_side",
+    "post": "minecraft:block/oak_log",
+    "hay": "minecraft:block/hay_block_side"
+  },
+  "elements": [
+    {
+      "from": [
+        7,
+        0,
+        7
+      ],
+      "to": [
+        9,
+        8,
+        9
+      ],
+      "faces": {
+        "north": {
+          "texture": "#post"
+        },
+        "east": {
+          "texture": "#post"
+        },
+        "south": {
+          "texture": "#post"
+        },
+        "west": {
+          "texture": "#post"
+        },
+        "up": {
+          "texture": "#post"
+        },
+        "down": {
+          "texture": "#post"
+        }
+      }
+    },
+    {
+      "from": [
+        4,
+        8,
+        5
+      ],
+      "to": [
+        12,
+        16,
+        11
+      ],
+      "faces": {
+        "north": {
+          "texture": "#hay"
+        },
+        "east": {
+          "texture": "#hay"
+        },
+        "south": {
+          "texture": "#hay"
+        },
+        "west": {
+          "texture": "#hay"
+        },
+        "up": {
+          "texture": "#hay"
+        },
+        "down": {
+          "texture": "#hay"
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        13,
+        7
+      ],
+      "to": [
+        16,
+        15,
+        9
+      ],
+      "faces": {
+        "north": {
+          "texture": "#post"
+        },
+        "east": {
+          "texture": "#post"
+        },
+        "south": {
+          "texture": "#post"
+        },
+        "west": {
+          "texture": "#post"
+        },
+        "up": {
+          "texture": "#post"
+        },
+        "down": {
+          "texture": "#post"
+        }
+      }
+    }
+  ]
+}

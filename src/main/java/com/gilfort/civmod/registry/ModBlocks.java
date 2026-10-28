@@ -6,6 +6,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.block.JobBlock;
+import com.gilfort.civmod.block.ScarecrowBlock;
 
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -47,6 +48,11 @@ public final class ModBlocks {
 
     /** JobBlock offering the Smelter: smelts at furnaces around it. */
     public static final DeferredBlock<JobBlock> SMELTER_BLOCK = jobBlock("smelter_block", ModJobs.SMELTER);
+
+    /** The Scarecrow: the Veggy Farmer's work place, two blocks high, may stand on farmland. */
+    public static final DeferredBlock<ScarecrowBlock> SCARECROW = BLOCKS.registerBlock("scarecrow", ScarecrowBlock::new,
+            properties -> properties.mapColor(MapColor.COLOR_YELLOW).strength(1.0F).sound(SoundType.WOOD).noOcclusion().forceSolidOff()
+                    .ignitedByLava());
 
     private ModBlocks() {
     }
