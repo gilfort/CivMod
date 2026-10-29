@@ -56,7 +56,7 @@ public final class InnateRecipes {
      *         instance until the datapacks change.
      */
     public static List<RecipeHolder<JobCraftingRecipe>> of(ServerLevel level, Job job) {
-        return index(level).byJob().getOrDefault(job, List.of());
+        return index(level).producing().getOrDefault(job, JobRecipes.EMPTY).recipes();
     }
 
     /**
@@ -96,7 +96,7 @@ public final class InnateRecipes {
      * @return the station tags its innate recipes name (each once)
      */
     public static List<TagKey<Block>> stations(ServerLevel level, Job job) {
-        return index(level).stations().getOrDefault(job, List.of());
+        return index(level).producing().getOrDefault(job, JobRecipes.EMPTY).stations();
     }
 
     /**
@@ -209,24 +209,34 @@ public final class InnateRecipes {
                 }
             }
         }
-        Map<Job, List<TagKey<Block>>> stations = new HashMap<>();
-        byJob.forEach((job, list) -> stations.put(job, list.stream().flatMap(holder -> holder.value().station().stream()).distinct().toList()));
-        byJob.replaceAll((job, list) -> List.copyOf(list));
+        Map<Job, JobRecipes> producing = new HashMap<>();
+        byJob.forEach((job, list) -> producing.put(job, new JobRecipes(List.copyOf(list),
+                list.stream().flatMap(holder -> holder.value().station().stream()).distinct().toList())));
         collecting.replaceAll((job, list) -> List.copyOf(list));
-        return new Index(Map.copyOf(byJob), Map.copyOf(collecting), Map.copyOf(stations), Map.copyOf(byId));
+        return new Index(Map.copyOf(producing), Map.copyOf(collecting), Map.copyOf(byId));
+    }
+
+    /**
+     * The innate recipes of one Producing Job.
+     *
+     * @param recipes  its recipes, ordered by recipe id
+     * @param stations the station tags they name, each once
+     */
+    private record JobRecipes(List<RecipeHolder<JobCraftingRecipe>> recipes, List<TagKey<Block>> stations) {
+
+        static final JobRecipes EMPTY = new JobRecipes(List.of(), List.of());
     }
 
     /**
      * The innate recipes of one loaded recipe set.
      *
-     * @param byJob      the recipes per Producing Job, ordered by recipe id
+     * @param producing  the recipes and stations per Producing Job
      * @param collecting the recipes per Resource Collection Job, ordered by recipe id
-     * @param stations   the station tags the recipes of each Producing Job name, each once
      * @param byId       every innate recipe by id
      */
-    private record Index(Map<Job, List<RecipeHolder<JobCraftingRecipe>>> byJob, Map<Job, List<RecipeHolder<JobCraftingRecipe>>> collecting,
-            Map<Job, List<TagKey<Block>>> stations, Map<ResourceKey<Recipe<?>>, JobCraftingRecipe> byId) {
+    private record Index(Map<Job, JobRecipes> producing, Map<Job, List<RecipeHolder<JobCraftingRecipe>>> collecting,
+            Map<ResourceKey<Recipe<?>>, JobCraftingRecipe> byId) {
 
-        static final Index EMPTY = new Index(Map.of(), Map.of(), Map.of(), Map.of());
+        static final Index EMPTY = new Index(Map.of(), Map.of(), Map.of());
     }
 }
