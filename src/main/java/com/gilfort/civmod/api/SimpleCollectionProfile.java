@@ -1,6 +1,7 @@
 package com.gilfort.civmod.api;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.DoubleUnaryOperator;
@@ -53,8 +54,8 @@ import net.minecraft.world.level.block.state.BlockState;
  * down; each block type of the tag is counted, types found fewer than {@code minimumCount} times are left out. Plants
  * count only when ripe (crops at full age, berry bushes with berries, ripe cocoa, cave vines with glow berries) and a
  * two-block plant once.</li>
- * <li>Roll: a found type weighted by its count, then the drops of its loot table (of its ripe state) with the settler's
- * tool (Silk Touch and Fortune apply). Types the tool cannot harvest are never rolled; types excluded at the JobBlock or
+ * <li>Roll: a counted state weighted by its count (so a found type by its count), then the drops of its loot table (an
+ * age-2 berry bush gives what an age-2 bush drops) with the settler's tool (Silk Touch and Fortune apply). Types the tool cannot harvest are never rolled; types excluded at the JobBlock or
  * at their Max at the Home Clerk leave the roll. Every found type is a main resource.</li>
  * <li>Speed: the shared speed formula × {@code productivity} of the total count (default 1) × the Job's farm curve, if it
  * has one ({@link Job#farmCurve()}).</li>
@@ -192,17 +193,19 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
             // Every type excluded or at Max: an empty roll still counts as work (EXP, tool wear).
             return Optional.of(new Produced(List.of(), context.tool()));
         }
-        int total = group.stream().mapToInt(type -> scan.counts().get(type)).sum();
-        int pick = context.level().getRandom().nextInt(total);
-        Identifier rolled = group.getLast();
-        for (Identifier type : group) {
-            pick -= scan.counts().get(type);
+        // Weighted by count per counted state: the roll gives the loot of the state it picks (an age-2 berry bush).
+        Set<Identifier> rolledTypes = Set.copyOf(group);
+        List<Map.Entry<BlockState, Integer>> states = scan.states().entrySet().stream()
+                .filter(entry -> rolledTypes.contains(BuiltInRegistries.BLOCK.getKey(entry.getKey().getBlock()))).toList();
+        int pick = context.level().getRandom().nextInt(states.stream().mapToInt(Map.Entry::getValue).sum());
+        BlockState state = states.getLast().getKey();
+        for (Map.Entry<BlockState, Integer> entry : states) {
+            pick -= entry.getValue();
             if (pick < 0) {
-                rolled = type;
+                state = entry.getKey();
                 break;
             }
         }
-        BlockState state = PlantStates.rolled(BuiltInRegistries.BLOCK.getValue(rolled));
         List<ItemStack> drops = Block.getDrops(state, context.level(), context.poi(), null, context.settler(), context.tool());
         return Optional.of(new Produced(drops, context.tool()));
     }

@@ -12,6 +12,7 @@ import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.job.BlockCountScan;
 import com.gilfort.civmod.job.JobStatus;
+import com.gilfort.civmod.job.SavedScan;
 import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -21,6 +22,7 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -60,6 +62,7 @@ public final class GathererGameTests {
             register(helper, "gatherer_works_bare_handed", GathererGameTests::worksBareHanded);
             register(helper, "gatherer_unripe_gives_nothing", GathererGameTests::unripeGivesNothing);
             register(helper, "gatherer_seeds_from_grass", GathererGameTests::seedsFromGrass);
+            register(helper, "gatherer_bush_rolls_its_age", GathererGameTests::bushRollsItsAge);
         });
     }
 
@@ -163,6 +166,38 @@ public final class GathererGameTests {
         Map<Item, Integer> berries = roll(profile, settler, level, poi, new BlockCountScan.Result(Map.of(SWEET_BERRY_BUSH, 5)));
         double perRoll = berries.getOrDefault(Items.SWEET_BERRIES, 0) / (double) SAMPLES;
         helper.assertTrue(perRoll >= 2.0 && perRoll <= 3.0, "2–3 berries per roll of a ripe bush: " + berries);
+        settler.discard();
+        helper.succeed();
+    }
+
+    /**
+     * A bush with berries rolls the loot of the age it was counted at: age-2 bushes give 1–2 berries per roll, age-3
+     * bushes 2–3; the scan keeps the ages through a save.
+     */
+    private static void bushRollsItsAge(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        gathererBlock(helper);
+        ResourceCollectionProfile profile = ModJobs.GATHERER.get().profile(ResourceCollectionProfile.class).orElseThrow();
+        for (int x = 4; x < 8; x++) {
+            helper.setBlock(new BlockPos(x, 1, 5), bush(2));
+        }
+        BlockPos center = helper.absolutePos(new BlockPos(5, 1, 5));
+        ScanResult young = profile.createScan(center, 4).runAll(level);
+        helper.assertValueEqual(young.foundBlocks(), List.of(SWEET_BERRY_BUSH), "Age-2 bushes count");
+        Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
+        double youngPerRoll = roll(profile, settler, level, center, young).getOrDefault(Items.SWEET_BERRIES, 0) / (double) SAMPLES;
+        helper.assertTrue(youngPerRoll >= 1.0 && youngPerRoll <= 2.0, "1–2 berries per roll of an age-2 bush: " + youngPerRoll);
+        var ops = level.registryAccess().createSerializationContext(JsonOps.INSTANCE);
+        SavedScan saved = SavedScan.of(center, center, 4, 1, young).orElseThrow();
+        ScanResult loaded = SavedScan.CODEC.parse(ops, SavedScan.CODEC.encodeStart(ops, saved).getOrThrow())
+                .getOrThrow().result();
+        helper.assertValueEqual(loaded, young, "The saved scan keeps the counted ages");
+        for (int x = 4; x < 8; x++) {
+            helper.setBlock(new BlockPos(x, 1, 5), bush(3));
+        }
+        double ripePerRoll = roll(profile, settler, level, center, profile.createScan(center, 4).runAll(level))
+                .getOrDefault(Items.SWEET_BERRIES, 0) / (double) SAMPLES;
+        helper.assertTrue(ripePerRoll >= 2.0 && ripePerRoll <= 3.0, "2–3 berries per roll of an age-3 bush: " + ripePerRoll);
         settler.discard();
         helper.succeed();
     }

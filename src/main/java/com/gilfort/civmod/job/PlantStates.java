@@ -11,18 +11,19 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 
 /**
- * Which block states a collecting Job counts and which state it rolls the loot of (vault
- * {@code Systems/Resource Collection Jobs.md}): plants count only when ripe, so an unripe berry bush gives nothing.
- * A scan counts by block type ({@link BlockCountScan}); the roll uses the type's ripe state, whose loot the plant drops
- * when harvested.
+ * Which block states a collecting Job counts (vault {@code Systems/Resource Collection Jobs.md}): plants count only
+ * when ripe, so an unripe berry bush gives nothing. A scan counts per block type and per counted state
+ * ({@link BlockCountScan}); a roll uses the loot of a counted state, so an age-2 berry bush gives what an age-2 bush
+ * drops.
  * <ul>
  * <li>Crops ({@link CropBlock}, also modded ones): only at their maximum age.</li>
- * <li>Sweet berry bushes: age 2 or 3 (with berries); the roll uses age 3.</li>
+ * <li>Sweet berry bushes: age 2 or 3 (with berries).</li>
  * <li>Cocoa and nether wart: only at their maximum age.</li>
  * <li>Cave vines: only with glow berries.</li>
  * <li>Two-block plants (tall grass, large fern): only the lower half, so each plant counts once.</li>
- * <li>Every other block: any state; the roll uses its default state.</li>
+ * <li>Every other block: any state.</li>
  * </ul>
+ * Where only the type is known (the tool check, the Max check), {@link #rolled(Block)} stands for it: its ripe state.
  */
 public final class PlantStates {
 
@@ -61,7 +62,7 @@ public final class PlantStates {
 
     /**
      * @param block a counted block type
-     * @return the state whose loot a roll of that type produces (its ripe state, else the default state)
+     * @return the state that stands for the type (its fully ripe state, else the default state)
      */
     public static BlockState rolled(Block block) {
         BlockState state = block.defaultBlockState();

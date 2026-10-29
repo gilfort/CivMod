@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.gilfort.civmod.api.ScanResult;
@@ -18,6 +19,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * A scan result saved with a settler (needed to catch up after loading) and on the JobBlock (its Found tab), with the
@@ -47,6 +49,19 @@ public record SavedScan(BlockPos jobBlock, BlockPos center, int radius, long day
             Codec.INT.fieldOf("full").forGetter(HiveScan.Result::full)
     ).apply(instance, (counts, full) -> new HiveScan.Result(Map.copyOf(counts), full)));
 
+    /** One counted block state and its count. */
+    private static final Codec<Map.Entry<BlockState, Integer>> STATE_COUNT = RecordCodecBuilder.create(instance -> instance.group(
+            BlockState.CODEC.fieldOf("state").forGetter(Map.Entry::getKey),
+            Codec.INT.fieldOf("count").forGetter(Map.Entry::getValue)
+    ).apply(instance, Map::entry));
+
+    /** Block counts per counted state; a save from before the states (counts per block id) loads with the rolled states. */
+    private static final Codec<BlockCountScan.Result> COUNTS = Codec.withAlternative(
+            STATE_COUNT.listOf().xmap(entries -> BlockCountScan.Result.ofStates(entries.stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, Integer::sum))),
+                    result -> List.copyOf(result.states().entrySet())),
+            Codec.unboundedMap(Identifier.CODEC, Codec.INT).xmap(counts -> new BlockCountScan.Result(Map.copyOf(counts)), BlockCountScan.Result::counts));
+
     /**
      * The saved result types, each under its own key next to the scan key (Lumberjack, Miner, Fisherman, Simple
      * Collection profiles, Animal Farmer, Beekeeper). A new built-in type is one more entry.
@@ -55,8 +70,7 @@ public record SavedScan(BlockPos jobBlock, BlockPos center, int radius, long day
             new Kind<>("wood", WoodScan.Result.class, WOOD),
             new Kind<>("mine", MineScan.Result.class, MINE),
             new Kind<>("water", WaterScan.Result.class, Codec.INT.xmap(WaterScan.Result::new, WaterScan.Result::water)),
-            new Kind<>("counts", BlockCountScan.Result.class, Codec.unboundedMap(Identifier.CODEC, Codec.INT)
-                    .xmap(counts -> new BlockCountScan.Result(Map.copyOf(counts)), BlockCountScan.Result::counts)),
+            new Kind<>("counts", BlockCountScan.Result.class, COUNTS),
             new Kind<>("animals", AnimalScan.Result.class, Codec.unboundedMap(Identifier.CODEC, Codec.INT)
                     .xmap(counts -> new AnimalScan.Result(Map.copyOf(counts)), AnimalScan.Result::counts)),
             new Kind<>("hives", HiveScan.Result.class, HIVES));
