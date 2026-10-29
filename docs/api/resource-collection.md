@@ -5,7 +5,7 @@ A Resource Collection Job scans the area around its work place and produces cont
 The Job fills in its specifics through a `ResourceCollectionProfile`. There are two levels:
 
 - **`SimpleCollectionProfile.builder()`** – "count the blocks of a tag, produce their drops". A few lines; enough for most Jobs.
-- **`ResourceCollectionProfile`** – the full interface for Jobs with their own scan or roll (CivMod's Lumberjack, Miner and Fisherman).
+- **`ResourceCollectionProfile`** – the full interface for Jobs with their own scan or roll (CivMod's Lumberjack, Miner, Fisherman, Veggy Farmer, Animal Farmer and Beekeeper; the Gatherer and Plantation Farmer use the builder).
 
 Every Resource Collection Base Job needs a JobBlock (see [getting started](getting-started.md#jobblock-factory)); its window shows the tabs Storage, Info and Found, and Station Types when the Base Job has Specializations (CivMod's Gatherer). The Found tab shows one section per Job of the JobBlock's settlers; the JobBlock keeps the scan and the exclusions per Job.
 

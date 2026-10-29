@@ -33,7 +33,7 @@ import net.minecraft.world.level.Level;
  * <p>
  * Most collecting Jobs count blocks and produce their drops: {@link SimpleCollectionProfile#builder} builds such a
  * profile from a block tag and a tool tag. Implement this interface for Jobs with their own scan or roll (CivMod's
- * Lumberjack, Miner and Fisherman do).
+ * Lumberjack, Miner, Fisherman, Veggy Farmer, Animal Farmer and Beekeeper do).
  * <p>
  * A scan runs spread over ticks ({@link SectionScan}, one chunk section per step) whenever the scan centre or radius
  * change, or every day ({@link #rescanDaily()}); the settler keeps working with the previous result meanwhile.

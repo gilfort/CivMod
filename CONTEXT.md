@@ -17,7 +17,7 @@ The public package `com.gilfort.civmod.api` (all `@ApiStatus.Experimental` until
 _Avoid_: Plugin API, SDK
 
 **Profile**:
-The specifics a Job fills into its category's work loop; must belong to the Job's category. Code: `CategoryProfile`, read with `Job.profile(Class)`; `MissionProfile` (public, neutral hooks for success / death chances, `MissionProfile.NEUTRAL` when a Mission Job declares none), `ProducingProfile` (public, required for a Producing Job: recipe types, station tag per recipe type, input / output `ItemFilter`s, checkmark limit, work time per recipe, "execute recipe" hook; guide `docs/api/producing.md`), `ResourceCollectionProfile` (public; CivMod's Lumberjack, Miner and Fisherman implement it, job-specific options such as the Lumberjack's leaves stay in their Job: the internal `SecondaryToolProfile` gives the Lumberjack its shears), `SimpleCollectionProfile` (public builder: block tag, optional tool tag (without one bare-handed), radius rule, minimum count, productivity curve; ripe plants only (`PlantStates`); output = drops of the found blocks weighted by count; guide `docs/api/resource-collection.md`); a farming Job's **farm curve** (`FarmCurve`, `Job.farmCurve()`, `Job.productivity(scan, jobBlockLevel)`) speeds it up with the farm size, capped per JobBlock level.
+The specifics a Job fills into its category's work loop; must belong to the Job's category. Code: `CategoryProfile`, read with `Job.profile(Class)`; `MissionProfile` (public, neutral hooks for success / death chances, `MissionProfile.NEUTRAL` when a Mission Job declares none), `ProducingProfile` (public, required for a Producing Job: recipe types, station tag per recipe type, input / output `ItemFilter`s, checkmark limit, work time per recipe, "execute recipe" hook; guide `docs/api/producing.md`), `ResourceCollectionProfile` (public; CivMod's Lumberjack, Miner, Fisherman, Veggy Farmer, Animal Farmer and Beekeeper implement it, the Gatherer and Plantation Farmer use the builder below, job-specific options such as the Lumberjack's leaves stay in their Job: the internal `SecondaryToolProfile` gives the Lumberjack its shears), `SimpleCollectionProfile` (public builder: block tag, optional tool tag (without one bare-handed), radius rule, minimum count, productivity curve; ripe plants only (`PlantStates`); output = drops of the found blocks weighted by count; guide `docs/api/resource-collection.md`); a farming Job's **farm curve** (`FarmCurve`, `Job.farmCurve()`, `Job.productivity(scan, jobBlockLevel)`) speeds it up with the farm size, capped per JobBlock level.
 _Avoid_: Job type, behaviour
 
 **Settler Shell**:
@@ -77,6 +77,30 @@ _Avoid_: Advanced job, sub-job
 **Station Types**:
 The 5 slots of a JobBlock whose Base Job has Specializations (the Mission Board too: slot 1 the Adventurer): slot 1 the Base Job's station (locked), one more open slot per level. An unlock item put into an open slot is consumed and unlocks every Specialization naming it at this JobBlock; put into a filled slot it replaces the old one, settlers of a Job no longer unlocked fall back to the Base Job (its library is kept, locked). Not the work place: the Job still needs its station in the world. Code: `StationTypes` (`put`, `unlocked`, `overview`), saved in `SettlementBlock.stationTypes()`; tab `StationTypesTab` (button `StationTypesTab.slotButtonId`, data `StationTypesTabData`), `StationTypesTabView`; offered Jobs `JobPlaces.offered(SettlementBlock)`.
 _Avoid_: Upgrade slot, unlock slot
+
+**Gatherer**:
+The Resource Collection Base Job of the Gatherer JobBlock: bare-handed, it collects the loot of the ripe wild plants of `#civmod:gatherables` (bushes, grass, ferns, mushrooms, leaf litter) around its work place, never changing them; parent of the farming Specializations below. Code: `FarmingProfiles.gatherer` (a `SimpleCollectionProfile`), `ModJobs.GATHERER`, `ModBlocks.GATHERER_BLOCK`.
+_Avoid_: Forager, harvester
+
+**Plantation Farmer**:
+A Specialization of the Gatherer (unlocked by bamboo) that collects with an axe from the plants of `#civmod:plantations` (sugar cane, bamboo, cactus, cocoa, vines, melons, pumpkins, kelp, sea pickles), each block of a stacked plant counted. Code: `FarmingProfiles.plantationFarmer`, `ModJobs.PLANTATION_FARMER`.
+
+**Veggy Farmer**:
+A Specialization of the Gatherer (unlocked by a composter) that works the crop field around a **Scarecrow**: with a hoe it collects the loot of the mature crops of `#minecraft:crops` and mature nether wart within 5 × JobBlock level of the scarecrow of the day; without a scarecrow "Blocked", "No scarecrow". Code: `VeggyFarmerProfile`, `ModJobs.VEGGY_FARMER`.
+
+**Animal Farmer**:
+A Specialization of the Gatherer (unlocked by a hay bale) that collects the loot of the adult animals of `#civmod:farm_animals` around an exposed hay bale (5 × JobBlock level) without killing them, and eggs from chickens; with an axe, whose Looting counts. An animal type is at its Max only when every item its loot can give is. Innate recipes: milk, mushroom stew. Code: `AnimalFarmerProfile`, `AnimalScan`, `LootItems`, `ModJobs.ANIMAL_FARMER`.
+_Avoid_: Rancher, butcher (no animal is killed)
+
+**Beekeeper**:
+A Specialization of the Gatherer (unlocked by a beehive) that collects honeycomb with shears from the beehives and bee nests holding honey around its work place (5 × JobBlock level), never changing their honey level; a full hive (honey level 5) offers honey bottles. Code: `BeekeeperProfile` (a `BlockCountScan` per block and honey level), `ModJobs.BEEKEEPER`.
+
+**Scarecrow**:
+The Veggy Farmer's work place: a two-block-high block that may stand on farmland and keeps it farmland; its lower half is the work point (up to 8 set with the Scroll of Assignment, one a day, else a random one within 20 blocks of the JobBlock). Code: `ScarecrowBlock`, `ModBlocks.SCARECROW`.
+
+**Farm curve**:
+How a farming Resource Collection Job speeds up with the size of its farm: productivity `0.2 × (1 + k × count)`, at most 2.0, where the count (plants, animals, hives; `ResourceCollectionProfile.farmCount`) is capped per JobBlock level (plants: `k` 0.005, caps 100 / 350 / 750 / 1350 / 2000; animals: 0.1, 20–100; hives: 0.2, 10–50); a datapack overrides it in `civmod_jobs/<job>.json` under `farm_curve`. Code: `FarmCurve`, `Job.farmCurve()`, `Job.productivity(scan, jobBlockLevel)`, `FarmingProfiles`.
+_Avoid_: Growth bonus, farm bonus
 
 **Laborer**:
 The implicit lowest-priority fallback Job of every settler; not a Job Category and never stored.
