@@ -50,8 +50,8 @@ import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
  * <li>Work place: a hay bale set with the Scroll of Assignment, else the nearest within 20 blocks.</li>
  * <li>Scan: every day one box query around the hay bale, 5 × JobBlock level wide, for the adults of
  * {@code #civmod:farm_animals} ({@link AnimalScan}).</li>
- * <li>Roll: an animal type weighted by its count, then the loot table of a live adult of that type near the hay bale
- * (one small, bounded query per output) with the settler as attacker; a chicken lays an egg instead 20 % of the time.
+ * <li>Roll: an animal type weighted by its count, then the loot table of a live adult of that type in the box of the
+ * scan (one small, bounded query per output) with the settler as attacker; a chicken lays an egg instead 20 % of the time.
  * No animal is hurt, no XP drops.</li>
  * <li>Speed: the shared formula × the farm curve of the counted animals.</li>
  * </ul>
@@ -66,8 +66,6 @@ public final class AnimalFarmerProfile implements ResourceCollectionProfile {
     private static final int HALF_HEIGHT = 5;
     /** The scan radius per JobBlock level. */
     private static final int RADIUS_PER_LEVEL = 5;
-    /** Where a roll looks for its sample animal: the scan radius at the highest JobBlock level. */
-    private static final int SAMPLE_RADIUS = 5 * RADIUS_PER_LEVEL;
 
     /** The items each loot table can give ({@link #droppedItems}); a reload brings new tables, the old ones drop out. */
     private final Map<LootTable, Set<Item>> possibleItems = new WeakHashMap<>();
@@ -176,7 +174,7 @@ public final class AnimalFarmerProfile implements ResourceCollectionProfile {
             }
         }
         EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(rolled);
-        Optional<Animal> sample = AnimalScan.sample(level, AnimalScan.box(context.poi(), SAMPLE_RADIUS, HALF_HEIGHT), type, level.getRandom());
+        Optional<Animal> sample = AnimalScan.sample(level, AnimalScan.box(context.poi(), scanRadius(context.jobBlockLevel()), HALF_HEIGHT), type, level.getRandom());
         // An animal that walked off since the scan: the work is done, nothing to collect this time.
         List<ItemStack> drops = sample.map(animal -> animal instanceof Chicken && level.getRandom().nextDouble() < EGG_CHANCE
                 ? egg(level, animal) : loot(level, animal, context.settler())).orElse(List.of());

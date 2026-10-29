@@ -402,13 +402,14 @@ public interface ResourceCollectionProfile extends CategoryProfile {
      * @param atMax      the items at their Max at the Home Clerk (left out of the roll)
      * @param dropped    the items a resource type can give with the tool ({@link #droppedItems}, cached per scan)
      * @param rareChanceFactor the biome bonuses' factor on the chance of the {@link #rareGroup()} (1 without)
+     * @param jobBlockLevel    the JobBlock level (1–5), the level the scan radius was taken for ({@link #scanRadius})
      */
     @ApiStatus.Experimental
     record Context(ServerLevel level, PathfinderMob settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Set<Identifier> excluded, int skillLevel, Set<Item> atMax, Function<Identifier, Set<Item>> dropped,
-            double rareChanceFactor) {
+            double rareChanceFactor, int jobBlockLevel) {
 
         /**
-         * A context without biome bonuses (rare chance factor 1).
+         * A context without biome bonuses (rare chance factor 1) at JobBlock level 1.
          *
          * @param level      the level
          * @param settler    the settler
@@ -422,7 +423,7 @@ public interface ResourceCollectionProfile extends CategoryProfile {
          */
         public Context(ServerLevel level, PathfinderMob settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Set<Identifier> excluded,
                 int skillLevel, Set<Item> atMax, Function<Identifier, Set<Item>> dropped) {
-            this(level, settler, scan, poi, tool, excluded, skillLevel, atMax, dropped, 1.0);
+            this(level, settler, scan, poi, tool, excluded, skillLevel, atMax, dropped, 1.0, 1);
         }
 
         /**

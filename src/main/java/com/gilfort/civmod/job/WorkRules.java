@@ -193,7 +193,7 @@ final class WorkRules {
             accumulated = 0.0;
             ResourceCollectionProfile.Context context = new ResourceCollectionProfile.Context(level, settler, scan, poi, rollTool,
                     excluded, skillLevel, atMax, type -> workplace.dropped(level, profile, poi, type, rollTool),
-                    bonus.rareChance().value());
+                    bonus.rareChance().value(), site.level());
             if (supply.collect().isPresent() && CollectionRecipes.refill(level, settler, job.jobType(), profile, scan, excluded, atMax, supply.collect().get())
                     && supply.collect().get().counter()) {
                 supply.handedOut().run();

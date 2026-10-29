@@ -64,6 +64,7 @@ public final class AnimalFarmerGameTests {
             register(helper, "animal_farmer_exclusion", AnimalFarmerGameTests::exclusion);
             register(helper, "animal_farmer_found_and_saved", AnimalFarmerGameTests::foundAndSaved);
             register(helper, "animal_farmer_max_needs_every_drop", AnimalFarmerGameTests::maxNeedsEveryDrop);
+            register(helper, "animal_farmer_sample_in_scan_box", AnimalFarmerGameTests::sampleInScanBox);
         });
     }
 
@@ -210,6 +211,32 @@ public final class AnimalFarmerGameTests {
         SavedScan loaded = SavedScan.CODEC.parse(ops, SavedScan.CODEC.encodeStart(ops, saved).getOrThrow()).getOrThrow();
         helper.assertValueEqual(loaded.result(), scan, "Saved scan");
         helper.assertTrue(((AnimalScan.Result) scan).has(EntityTypes.COW), "The scan exposes its entity types");
+        helper.succeed();
+    }
+
+    /**
+     * A roll looks for its animal in the box of the scan, 5 × JobBlock level: a cow 8 blocks from the hay bale gives
+     * nothing at level 1 and its loot at level 2.
+     */
+    private static void sampleInScanBox(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos jobBlock = pen(helper);
+        animal(helper, EntityTypes.COW, HAY.offset(8, 0, 0), false);
+        ScanResult scan = new AnimalScan.Result(Map.of(COW, 1));
+        Settler settler = GathererGameTests.settler(helper, jobBlock, new BlockPos(3, 1, 2), "Herder");
+        BlockPos poi = helper.absolutePos(HAY);
+        ItemStack axe = new ItemStack(Items.STONE_AXE);
+        List<ItemStack> levelOne = new ArrayList<>();
+        List<ItemStack> levelTwo = new ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            levelOne.addAll(profile().produce(new ResourceCollectionProfile.Context(level, settler, scan, poi, axe, Set.of(), 1, Set.of(),
+                    type -> profile().droppedItems(level, poi, type, axe), 1.0, 1)).orElseThrow().stacks());
+            levelTwo.addAll(profile().produce(new ResourceCollectionProfile.Context(level, settler, scan, poi, axe, Set.of(), 1, Set.of(),
+                    type -> profile().droppedItems(level, poi, type, axe), 1.0, 2)).orElseThrow().stacks());
+        }
+        helper.assertTrue(levelOne.isEmpty(), "The cow is outside the level-1 box: " + levelOne);
+        helper.assertFalse(levelTwo.isEmpty(), "The cow is inside the level-2 box");
+        settler.discard();
         helper.succeed();
     }
 
