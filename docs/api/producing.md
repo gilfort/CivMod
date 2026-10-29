@@ -173,7 +173,7 @@ Job-only recipes the player cannot craft anywhere: CivMod's recipe type `civmod:
 }
 ```
 
-- `jobs`: Job ids. A Job that is not Producing (or not registered) is ignored with a log warning.
+- `jobs`: Job ids. A Job that is neither Producing nor Resource Collection (or not registered) is ignored with a log warning. Resource Collection Jobs use innate recipes differently (`requires`, `weight`): see [Resource Collection Jobs](resource-collection.md#innate-recipes).
 - `ingredients`: 1–9 ingredients, shapeless (item ids, `#tags` or lists, like vanilla recipes).
 - `result`: the item stack one execution makes.
 - `tool` (optional): an item id or `#tag`. The settler takes the tool from its collect inventory onto its belt at the start of a round (like a Resource Collection tool) and wears it by 1 durability per execution; Unbreaking works. Without the tool on the belt or in the collect inventory only this recipe is skipped, and the Patterns tab marks it ("Needs Shears"); the Job keeps working its other recipes.
