@@ -295,7 +295,7 @@ public final class VeggyFarmerGameTests {
         Map<Item, Integer> counts = new HashMap<>();
         for (int i = 0; i < SAMPLES; i++) {
             Optional<ResourceCollectionProfile.Produced> produced = profile.produce(new ResourceCollectionProfile.Context(level, settler, scan, poi,
-                    tool, Set.of(WHEAT), 1, Set.of(), type -> profile.dropped(level, poi, type, tool)));
+                    tool, Set.of(WHEAT), 1, Set.of(), type -> profile.droppedItems(level, poi, type, tool)));
             produced.ifPresent(found -> found.stacks().forEach(stack -> counts.merge(stack.getItem(), stack.getCount(), Integer::sum)));
         }
         return counts;

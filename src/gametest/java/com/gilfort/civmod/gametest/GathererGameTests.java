@@ -207,7 +207,7 @@ public final class GathererGameTests {
         Map<Item, Integer> counts = new HashMap<>();
         for (int i = 0; i < SAMPLES; i++) {
             Optional<ResourceCollectionProfile.Produced> produced = profile.produce(new ResourceCollectionProfile.Context(level, settler, scan, poi,
-                    ItemStack.EMPTY, Set.of(), 1, Set.of(), type -> profile.dropped(level, poi, type, ItemStack.EMPTY)));
+                    ItemStack.EMPTY, Set.of(), 1, Set.of(), type -> profile.droppedItems(level, poi, type, ItemStack.EMPTY)));
             produced.ifPresent(found -> found.stacks().forEach(stack -> counts.merge(stack.getItem(), stack.getCount(), Integer::sum)));
         }
         return counts;

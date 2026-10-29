@@ -223,7 +223,7 @@ public record FoundTabData(List<Section> sections) {
             return new Section(job, false, List.of(), List.of());
         }
         Optional<ResourceCollectionProfile.Worker> worker = Optional.ofNullable(settler).flatMap(working -> working.getWork().worker(pos));
-        // Max: the dropped item with the working settler's tool (without one the plain drop).
+        // Max: the items a type can give with the working settler's tool (without one the plain drop).
         Set<Item> atMax = StockRules.atMax(level, site);
         Optional<Component> clerk = block.homeClerk().flatMap(site.settlement()::block).map(ClerkStorage::name);
         ItemStack tool = worker.map(ResourceCollectionProfile.Worker::tool).orElse(ItemStack.EMPTY);
@@ -232,12 +232,13 @@ public record FoundTabData(List<Section> sections) {
         boolean rareActs = !bonus.rareChance().sources().isEmpty();
         Set<Identifier> excluded = block.excluded(job);
         List<Entry> entries = new ArrayList<>(profile.found(scan, worker).stream().map(entry -> {
-            // The dropped item only when needed: it rolls the block's loot.
-            Item dropped = atMax.isEmpty() && bonus.doubleDrops().isEmpty() ? null : profile.dropped(level, pos, entry.type(), tool);
+            // The dropped items only when needed: they roll the block's loot.
+            boolean max = !atMax.isEmpty() && ResourceCollectionProfile.atMax(profile.droppedItems(level, pos, entry.type(), tool), atMax);
             boolean rare = rareActs && profile.inRareGroup(scan, entry.type());
-            List<BiomeBonus.DoubleDrop> drops = dropped == null ? List.of() : bonus.doubleDrops(new ItemStack(dropped));
+            List<BiomeBonus.DoubleDrop> drops = bonus.doubleDrops().isEmpty() ? List.of()
+                    : bonus.doubleDrops(new ItemStack(profile.dropped(level, pos, entry.type(), tool)));
             return new Entry(entry.type(), entry.icon(), !entry.available(), excluded.contains(entry.type()),
-                    !atMax.isEmpty() && atMax.contains(dropped) ? clerk : Optional.empty(), rare, !drops.isEmpty(),
+                    max ? clerk : Optional.empty(), rare, !drops.isEmpty(),
                     BiomeBonusText.sourceLines(job, bonus, rare, drops), Optional.empty());
         }).toList());
         // The innate recipes the scan offers, after the found resources (no biome bonus acts on them).

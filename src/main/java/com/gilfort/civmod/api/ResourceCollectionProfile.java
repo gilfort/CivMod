@@ -252,8 +252,9 @@ public interface ResourceCollectionProfile extends CategoryProfile {
     }
 
     /**
-     * The item a found type drops, for the Max check of its Home Clerk's stock rule (vault
-     * {@code Systems/Resource Collection Jobs.md}): by default the block's item.
+     * The item a found type drops (vault {@code Systems/Resource Collection Jobs.md}): what the Max check of its Home
+     * Clerk's stock rule looks at unless {@link #droppedItems} names more, and what a biome bonus's double drop is
+     * checked against in the Found tab. By default the block's item.
      *
      * @param level the level
      * @param pos   where it would be mined (loot context origin)
@@ -266,8 +267,33 @@ public interface ResourceCollectionProfile extends CategoryProfile {
     }
 
     /**
+     * Every item a found type can give, for the Max check of its Home Clerk's stock rule (vault
+     * {@code Systems/Resource Collection Jobs.md}): the type is at its Max only when all of them are. By default the one
+     * {@link #dropped} item; override it when a type's loot gives several items (CivMod's Animal Farmer: beef and
+     * leather from a cow).
+     *
+     * @param level the level
+     * @param pos   where it would be obtained (loot context origin)
+     * @param type  a found type
+     * @param tool  the tool it would be obtained with (may be empty)
+     * @return the items it can give (never empty; {@code minecraft:air} alone if it gives nothing)
+     */
+    default Set<Item> droppedItems(ServerLevel level, BlockPos pos, Identifier type, ItemStack tool) {
+        return Set.of(dropped(level, pos, type, tool));
+    }
+
+    /**
+     * @param items the items a type can give ({@link #droppedItems})
+     * @param atMax the items at their Max at the Home Clerk
+     * @return whether the type is at its Max: every item it can give is
+     */
+    static boolean atMax(Set<Item> items, Set<Item> atMax) {
+        return !items.isEmpty() && atMax.containsAll(items);
+    }
+
+    /**
      * The types a roll leaves out of its group (vault {@code Systems/Resource Collection Jobs.md}): those excluded at
-     * the JobBlock and those whose dropped item is at its Max at the Home Clerk.
+     * the JobBlock and those at their Max at the Home Clerk (every item of {@link #droppedItems} at its Max).
      *
      * @param context the production context
      * @param types   the types of the rolled group
@@ -280,7 +306,7 @@ public interface ResourceCollectionProfile extends CategoryProfile {
         }
         Set<Identifier> left = new HashSet<>(excluded);
         for (Identifier type : types) {
-            if (!left.contains(type) && context.atMax().contains(context.dropped().apply(type))) {
+            if (!left.contains(type) && atMax(context.dropped().apply(type), context.atMax())) {
                 left.add(type);
             }
         }
@@ -374,11 +400,11 @@ public interface ResourceCollectionProfile extends CategoryProfile {
      * @param excluded   the types excluded at the JobBlock
      * @param skillLevel the skill level
      * @param atMax      the items at their Max at the Home Clerk (left out of the roll)
-     * @param dropped    the item a resource type drops with the tool ({@link #dropped}, cached per scan)
+     * @param dropped    the items a resource type can give with the tool ({@link #droppedItems}, cached per scan)
      * @param rareChanceFactor the biome bonuses' factor on the chance of the {@link #rareGroup()} (1 without)
      */
     @ApiStatus.Experimental
-    record Context(ServerLevel level, PathfinderMob settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Set<Identifier> excluded, int skillLevel, Set<Item> atMax, Function<Identifier, Item> dropped,
+    record Context(ServerLevel level, PathfinderMob settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Set<Identifier> excluded, int skillLevel, Set<Item> atMax, Function<Identifier, Set<Item>> dropped,
             double rareChanceFactor) {
 
         /**
@@ -392,10 +418,10 @@ public interface ResourceCollectionProfile extends CategoryProfile {
          * @param excluded   the types excluded at the JobBlock
          * @param skillLevel the skill level
          * @param atMax      the items at their Max at the Home Clerk
-         * @param dropped    the item a resource type drops with the tool
+         * @param dropped    the items a resource type can give with the tool
          */
         public Context(ServerLevel level, PathfinderMob settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Set<Identifier> excluded,
-                int skillLevel, Set<Item> atMax, Function<Identifier, Item> dropped) {
+                int skillLevel, Set<Item> atMax, Function<Identifier, Set<Item>> dropped) {
             this(level, settler, scan, poi, tool, excluded, skillLevel, atMax, dropped, 1.0);
         }
 

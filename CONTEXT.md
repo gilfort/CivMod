@@ -156,7 +156,7 @@ _Avoid_: Threshold, mode, Minimum rule
 A stock rule's lower bound: when the stock (plus results in delivery) falls below it, the rule opens one request; without Min the rule never requests.
 
 **Max**:
-A stock rule's cap: collecting jobs whose Home Clerk holds ≥ Max of the item leave it out of their rolls (the dropped item, Silk Touch / Fortune considered; `ResourceCollectionProfile.dropped`, `ResourceCollectionProfile.leftOut`, `StockRules.atMax`) and pause when every main resource is excluded or at Max (`JobStatus.MAX_REACHED` / `NOTHING_TO_PRODUCE` / `ALL_EXCLUDED`, `WorkRules.pause`); the Found tab marks such an entry "Maximum reached at <Clerk>" (`FoundTabData.Entry.maxAt`). Stock above Max is **surplus**.
+A stock rule's cap: collecting jobs whose Home Clerk holds ≥ Max of the item leave it out of their rolls (the dropped item, Silk Touch / Fortune considered; a type whose loot gives several items, like the Animal Farmer's cow, only when all of them are at Max; `ResourceCollectionProfile.dropped` / `droppedItems`, `ResourceCollectionProfile.leftOut`, `StockRules.atMax`) and pause when every main resource is excluded or at Max (`JobStatus.MAX_REACHED` / `NOTHING_TO_PRODUCE` / `ALL_EXCLUDED`, `WorkRules.pause`); the Found tab marks such an entry "Maximum reached at <Clerk>" (`FoundTabData.Entry.maxAt`). Stock above Max is **surplus**.
 
 **Order**:
 How much a request orders on top of Min: the **target stock** of a rule is min(Min + Order, Max); without Order it is Max, without Max it is Min (`StockRule.target`). The open request asks for target − stock − amount being crafted − amount in delivery on every check and is withdrawn at the target; the open request is the hysteresis, nothing else is saved.

@@ -296,7 +296,7 @@ public final class AddonApiGameTests {
         ItemStack tool = new ItemStack(Items.STONE_SHOVEL);
         for (int i = 0; i < 2000; i++) {
             Optional<ResourceCollectionProfile.Produced> produced = profile.produce(new ResourceCollectionProfile.Context(level, settler, scan, poi,
-                    tool, excluded, 1, Set.of(), type -> profile.dropped(level, poi, type, tool)));
+                    tool, excluded, 1, Set.of(), type -> profile.droppedItems(level, poi, type, tool)));
             items(produced).forEach(item -> counts.merge(item, 1, Integer::sum));
         }
         return counts;

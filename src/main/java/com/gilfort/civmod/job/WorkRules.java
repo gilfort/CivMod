@@ -256,7 +256,7 @@ final class WorkRules {
 
     /**
      * Whether a job pauses because nothing is left to produce (vault {@code Systems/Resource Collection Jobs.md}):
-     * every main resource is excluded at the JobBlock or its dropped item is at Max at the Home Clerk.
+     * every main resource is excluded at the JobBlock or every item it can give is at Max at the Home Clerk.
      *
      * @param level     the level
      * @param job       the Job (its exclusions at the JobBlock)
@@ -283,7 +283,7 @@ final class WorkRules {
         for (Identifier type : main) {
             if (excludedTypes.contains(type)) {
                 excluded++;
-            } else if (!atMax.contains(workplace.dropped(level, profile, site.pos(), type, tool))) {
+            } else if (!ResourceCollectionProfile.atMax(workplace.dropped(level, profile, site.pos(), type, tool), atMax)) {
                 return End.NONE;
             }
         }

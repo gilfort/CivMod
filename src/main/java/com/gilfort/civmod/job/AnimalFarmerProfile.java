@@ -1,9 +1,13 @@
 package com.gilfort.civmod.job;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
@@ -21,9 +25,8 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.animal.chicken.Chicken;
@@ -65,8 +68,9 @@ public final class AnimalFarmerProfile implements ResourceCollectionProfile {
     private static final int RADIUS_PER_LEVEL = 5;
     /** Where a roll looks for its sample animal: the scan radius at the highest JobBlock level. */
     private static final int SAMPLE_RADIUS = 5 * RADIUS_PER_LEVEL;
-    /** How often {@link #dropped} rolls a throwaway animal's loot to find an item. */
-    private static final int DROPPED_TRIES = 4;
+
+    /** The items each loot table can give ({@link #droppedItems}); a reload brings new tables, the old ones drop out. */
+    private final Map<LootTable, Set<Item>> possibleItems = new WeakHashMap<>();
 
     @Override
     public boolean isTool(ItemStack stack) {
@@ -210,21 +214,34 @@ public final class AnimalFarmerProfile implements ResourceCollectionProfile {
         return drops;
     }
 
-    /** The first item of the type's loot, rolled on a throwaway animal (never added to the world). */
+    /** The first item the type's loot can give (fixed: read from the loot table, never rolled). */
     @Override
     public Item dropped(ServerLevel level, BlockPos pos, Identifier type, ItemStack tool) {
-        Entity entity = BuiltInRegistries.ENTITY_TYPE.getValue(type).create(level, EntitySpawnReason.LOAD);
-        if (!(entity instanceof Animal animal)) {
-            return Items.AIR;
+        return droppedItems(level, pos, type, tool).iterator().next();
+    }
+
+    /**
+     * Every item the type's loot table can give (a cow: leather and beef; a chicken also its eggs), so the type is at its
+     * Max only when all of them are. Read once per loot table and kept until a datapack reload replaces the table.
+     */
+    @Override
+    public Set<Item> droppedItems(ServerLevel level, BlockPos pos, Identifier type, ItemStack tool) {
+        EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.getValue(type);
+        Optional<ResourceKey<LootTable>> key = entityType.getDefaultLootTable();
+        if (key.isEmpty()) {
+            return Set.of(Items.AIR);
         }
-        animal.setPos(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
-        for (int i = 0; i < DROPPED_TRIES; i++) {
-            Optional<ItemStack> first = loot(level, animal, null).stream().filter(stack -> !stack.isEmpty()).findFirst();
-            if (first.isPresent()) {
-                return first.get().getItem();
+        LootTable table = level.getServer().reloadableRegistries().getLootTable(key.get());
+        Set<Item> items = possibleItems.get(table);
+        if (items == null) {
+            Set<Item> found = new LinkedHashSet<>(LootItems.of(level, key.get()));
+            if (entityType == EntityTypes.CHICKEN) {
+                found.addAll(LootItems.of(level, BuiltInLootTables.CHICKEN_LAY));
             }
+            items = found.isEmpty() ? Set.of(Items.AIR) : Collections.unmodifiableSet(found);
+            possibleItems.put(table, items);
         }
-        return Items.AIR;
+        return items;
     }
 
     /** Each animal type as its spawn egg, named with its count. */

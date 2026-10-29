@@ -63,6 +63,7 @@ public final class AnimalFarmerGameTests {
             register(helper, "animal_farmer_egg_share", AnimalFarmerGameTests::eggShare);
             register(helper, "animal_farmer_exclusion", AnimalFarmerGameTests::exclusion);
             register(helper, "animal_farmer_found_and_saved", AnimalFarmerGameTests::foundAndSaved);
+            register(helper, "animal_farmer_max_needs_every_drop", AnimalFarmerGameTests::maxNeedsEveryDrop);
         });
     }
 
@@ -138,7 +139,7 @@ public final class AnimalFarmerGameTests {
         BlockPos poi = helper.absolutePos(HAY);
         ItemStack axe = new ItemStack(Items.STONE_AXE);
         return new ResourceCollectionProfile.Context(level, settler, scan, poi, axe, excluded, 1, Set.of(),
-                type -> profile().dropped(level, poi, type, axe));
+                type -> profile().droppedItems(level, poi, type, axe));
     }
 
     /** All items of {@code rolls} productions. */
@@ -209,6 +210,31 @@ public final class AnimalFarmerGameTests {
         SavedScan loaded = SavedScan.CODEC.parse(ops, SavedScan.CODEC.encodeStart(ops, saved).getOrThrow()).getOrThrow();
         helper.assertValueEqual(loaded.result(), scan, "Saved scan");
         helper.assertTrue(((AnimalScan.Result) scan).has(EntityTypes.COW), "The scan exposes its entity types");
+        helper.succeed();
+    }
+
+    /**
+     * An animal type is at its Max only when every item its loot can give is: a cow with beef at Max still rolls (it
+     * gives leather), with beef and leather at Max it leaves the roll. Every check gives the same answer.
+     */
+    private static void maxNeedsEveryDrop(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos jobBlock = pen(helper);
+        BlockPos poi = helper.absolutePos(HAY);
+        ItemStack axe = new ItemStack(Items.STONE_AXE);
+        for (int i = 0; i < 20; i++) {
+            helper.assertValueEqual(profile().droppedItems(level, poi, COW, axe), Set.of(Items.BEEF, Items.LEATHER), "What a cow can give");
+            helper.assertValueEqual(profile().dropped(level, poi, COW, axe), profile().dropped(level, poi, COW, ItemStack.EMPTY), "Dropped item is fixed");
+        }
+        ScanResult scan = new AnimalScan.Result(Map.of(COW, 1));
+        Settler settler = GathererGameTests.settler(helper, jobBlock, new BlockPos(3, 1, 2), "Herder");
+        ResourceCollectionProfile.Context beef = new ResourceCollectionProfile.Context(level, settler, scan, poi, axe, Set.of(), 1, Set.of(Items.BEEF),
+                type -> profile().droppedItems(level, poi, type, axe));
+        helper.assertTrue(profile().leftOut(beef, List.of(COW)).isEmpty(), "Beef at Max: the cow still gives leather");
+        ResourceCollectionProfile.Context both = new ResourceCollectionProfile.Context(level, settler, scan, poi, axe, Set.of(), 1,
+                Set.of(Items.BEEF, Items.LEATHER), type -> profile().droppedItems(level, poi, type, axe));
+        helper.assertValueEqual(profile().leftOut(both, List.of(COW)), Set.of(COW), "Beef and leather at Max: the cow leaves the roll");
+        settler.discard();
         helper.succeed();
     }
 
