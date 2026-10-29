@@ -13,7 +13,8 @@ import net.minecraft.world.item.ItemStack;
 
 /**
  * Tools of a settler, a shared part used by the Job Category work loops (vault {@code Systems/Job Categories.md}):
- * the best tool on the belt, fetching tools from a container and tool wear.
+ * the best tool on the belt, fetching tools (and the inputs of innate recipes) from a container, the belt's free slots
+ * and tool wear.
  */
 final class SettlerTools {
 
@@ -74,13 +75,7 @@ final class SettlerTools {
      * @return whether a tool was taken
      */
     static boolean take(Settler settler, Stock stock, Predicate<ItemStack> kind) {
-        int freeSlot = -1;
-        for (int i = Settler.BELT_START; i < Settler.BELT_START + Settler.BELT_SIZE; i++) {
-            if (settler.getInventory().getItem(i).isEmpty()) {
-                freeSlot = i;
-                break;
-            }
-        }
+        int freeSlot = freeBeltSlot(settler);
         Optional<Integer> index = find(stock, kind);
         if (freeSlot < 0 || index.isEmpty()) {
             return false;
@@ -91,6 +86,71 @@ final class SettlerTools {
         }
         settler.getInventory().setItem(freeSlot, tool);
         return true;
+    }
+
+    /**
+     * Takes up to a stack of a kind (an innate recipe's input) from the collect inventory onto a free belt slot; what
+     * does not fit one stack goes back, or drops at the settler when the inventory is full.
+     *
+     * @param settler the settler
+     * @param stock   what the settler reaches at its collect inventory
+     * @param kind    the kind of item
+     * @return whether anything was taken
+     */
+    static boolean takeStack(Settler settler, Stock stock, Predicate<ItemStack> kind) {
+        int free = freeBeltSlot(settler);
+        Optional<Integer> index = find(stock, kind);
+        if (free < 0 || index.isEmpty()) {
+            return false;
+        }
+        ItemStack sample = stock.contents().get(index.get());
+        ItemStack belt = ItemStack.EMPTY;
+        for (ItemStack taken : stock.take(sample.getItem(), sample.getMaxStackSize())) {
+            if (belt.isEmpty()) {
+                belt = taken.copy();
+            } else if (ItemStack.isSameItemSameComponents(belt, taken) && belt.getCount() + taken.getCount() <= belt.getMaxStackSize()) {
+                belt.grow(taken.getCount());
+            } else {
+                ItemStack rest = stock.insert(taken);
+                if (!rest.isEmpty() && settler.level() instanceof ServerLevel level) {
+                    settler.spawnAtLocation(level, rest);
+                }
+            }
+        }
+        if (belt.isEmpty()) {
+            return false;
+        }
+        settler.getInventory().setItem(free, belt);
+        return true;
+    }
+
+    /**
+     * @param settler the settler
+     * @param kind    the kind of item
+     * @return how many items of the kind are on the belt
+     */
+    static int beltCount(Settler settler, Predicate<ItemStack> kind) {
+        int count = 0;
+        for (int i = Settler.BELT_START; i < Settler.BELT_START + Settler.BELT_SIZE; i++) {
+            ItemStack stack = settler.getInventory().getItem(i);
+            if (!stack.isEmpty() && kind.test(stack)) {
+                count += stack.getCount();
+            }
+        }
+        return count;
+    }
+
+    /**
+     * @param settler the settler
+     * @return the inventory index of the first empty belt slot, -1 if the belt is full
+     */
+    static int freeBeltSlot(Settler settler) {
+        for (int i = Settler.BELT_START; i < Settler.BELT_START + Settler.BELT_SIZE; i++) {
+            if (settler.getInventory().getItem(i).isEmpty()) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /**

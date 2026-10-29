@@ -96,7 +96,7 @@ public final class CollectionRecipes {
             JobCraftingRecipe recipe = holder.value();
             ItemStack icon = recipe.result().create();
             Optional<Component> needs = recipe.ingredients().stream()
-                    .filter(input -> (settler == null || belt(settler, input) == 0) && !collect.contains(input::test)).findFirst()
+                    .filter(input -> (settler == null || SettlerTools.beltCount(settler, input::test) == 0) && !collect.contains(input::test)).findFirst()
                     .map(InnateRecipes::needsInput);
             return new Listed(type(holder), icon, icon.getItem(), needs);
         }).toList();
@@ -133,7 +133,7 @@ public final class CollectionRecipes {
      */
     static Optional<Predicate<ItemStack>> missingInput(ServerLevel level, Settler settler, Job job, ResourceCollectionProfile profile, @Nullable ScanResult scan,
             Set<Identifier> excluded, Set<Item> atMax, Stock collect) {
-        if (freeBeltSlot(settler) < 0) {
+        if (SettlerTools.freeBeltSlot(settler) < 0) {
             return Optional.empty();
         }
         for (Offer offer : allowed(level, job, profile, scan, excluded, atMax)) {
@@ -156,7 +156,7 @@ public final class CollectionRecipes {
         boolean taken = false;
         for (Offer offer : allowed(level, job, profile, scan, excluded, atMax)) {
             for (Ingredient input : missing(settler, offer.holder().value())) {
-                taken |= take(settler, collect, input::test);
+                taken |= SettlerTools.takeStack(settler, collect, input::test);
             }
         }
         return taken;
@@ -244,53 +244,5 @@ public final class CollectionRecipes {
             }
         }
         return -1;
-    }
-
-    private static int belt(Settler settler, Ingredient input) {
-        int count = 0;
-        for (int i = Settler.BELT_START; i < Settler.BELT_START + Settler.BELT_SIZE; i++) {
-            ItemStack stack = settler.getInventory().getItem(i);
-            if (!stack.isEmpty() && input.test(stack)) {
-                count += stack.getCount();
-            }
-        }
-        return count;
-    }
-
-    private static int freeBeltSlot(Settler settler) {
-        for (int i = Settler.BELT_START; i < Settler.BELT_START + Settler.BELT_SIZE; i++) {
-            if (settler.getInventory().getItem(i).isEmpty()) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    /** Takes up to a stack of an input from the collect inventory onto a free belt slot. */
-    private static boolean take(Settler settler, Stock stock, Predicate<ItemStack> kind) {
-        int free = freeBeltSlot(settler);
-        Optional<Integer> index = SettlerTools.find(stock, kind);
-        if (free < 0 || index.isEmpty()) {
-            return false;
-        }
-        ItemStack sample = stock.contents().get(index.get());
-        ItemStack belt = ItemStack.EMPTY;
-        for (ItemStack taken : stock.take(sample.getItem(), sample.getMaxStackSize())) {
-            if (belt.isEmpty()) {
-                belt = taken.copy();
-            } else if (ItemStack.isSameItemSameComponents(belt, taken) && belt.getCount() + taken.getCount() <= belt.getMaxStackSize()) {
-                belt.grow(taken.getCount());
-            } else {
-                ItemStack rest = stock.insert(taken);
-                if (!rest.isEmpty() && settler.level() instanceof ServerLevel level) {
-                    settler.spawnAtLocation(level, rest);
-                }
-            }
-        }
-        if (belt.isEmpty()) {
-            return false;
-        }
-        settler.getInventory().setItem(free, belt);
-        return true;
     }
 }
