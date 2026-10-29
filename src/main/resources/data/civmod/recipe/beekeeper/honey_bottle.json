@@ -1,0 +1,7 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:beekeeper"],
+  "ingredients": ["minecraft:glass_bottle"],
+  "result": { "id": "minecraft:honey_bottle" },
+  "requires": { "block": ["minecraft:beehive", "minecraft:bee_nest"], "state": { "honey_level": "5" } }
+}

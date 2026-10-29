@@ -16,9 +16,12 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
+import com.gilfort.civmod.job.CollectionRecipes;
 import com.gilfort.civmod.job.SavedScan;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.StationTypes;
@@ -39,7 +42,8 @@ import net.minecraft.world.item.ItemStack;
 /**
  * What the "Found" tab of a Resource Collection JobBlock shows (vault {@code Systems/Resource Collection Jobs.md}): one
  * {@link Section} per Job of the settlers assigned to the JobBlock (a Gatherer JobBlock hosts the Gatherer and its
- * Specializations), each with the resources of that Job's latest scan, its exclusions, the tool marks for the settler
+ * Specializations), each with the resources of that Job's latest scan and the innate recipes it offers (milk while cows
+ * were found, {@link CollectionRecipes}), its exclusions, the tool and input marks for the settler
  * working there and scan info lines (the Fisherman's water and treasure chance). The server sends it while the menu is
  * open whenever it changed ({@link Sync}); the client excludes or includes an entry of a section with {@link Toggle}.
  *
@@ -62,9 +66,12 @@ public record FoundTabData(List<Section> sections) {
      * @param doubleBonus whether a biome bonus's double drop acts on its dropped item (a star; two offset stars with
      *                    {@code rareBonus})
      * @param bonusLines  the tooltip of the stars: each effect with its source
+     * @param needsInput  for an innate recipe ({@code type} is the recipe id): the line of the input neither on the
+     *                    working settler's belt nor in the collect inventory ("Needs: Bucket"; greyed out, left out of
+     *                    the roll), empty when it has its inputs or for a found resource
      */
     public record Entry(Identifier type, ItemStack icon, boolean needsTool, boolean excluded, Optional<Component> maxAt, boolean rareBonus,
-            boolean doubleBonus, List<Component> bonusLines) {
+            boolean doubleBonus, List<Component> bonusLines, Optional<Component> needsInput) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Entry> STREAM_CODEC = StreamCodec.composite(
@@ -76,6 +83,7 @@ public record FoundTabData(List<Section> sections) {
                 ByteBufCodecs.BOOL, Entry::rareBonus,
                 ByteBufCodecs.BOOL, Entry::doubleBonus,
                 ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), Entry::bonusLines,
+                ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs::optional), Entry::needsInput,
                 Entry::new);
 
         /**
@@ -87,6 +95,7 @@ public record FoundTabData(List<Section> sections) {
          * @param rareBonus   whether the rare chance acts on it
          * @param doubleBonus whether a double drop acts on it
          * @param bonusLines  the stars' tooltip
+         * @param needsInput  the missing input of an innate recipe
          */
         public Entry {
             bonusLines = List.copyOf(bonusLines);
@@ -97,13 +106,13 @@ public record FoundTabData(List<Section> sections) {
             // ItemStack has no value equality.
             return other instanceof Entry entry && type.equals(entry.type) && ItemStack.matches(icon, entry.icon) && needsTool == entry.needsTool
                     && excluded == entry.excluded && maxAt.equals(entry.maxAt) && rareBonus == entry.rareBonus && doubleBonus == entry.doubleBonus
-                    && bonusLines.equals(entry.bonusLines);
+                    && bonusLines.equals(entry.bonusLines) && needsInput.equals(entry.needsInput);
         }
 
         @Override
         public int hashCode() {
-            return type.hashCode() * 31 + maxAt.hashCode() * 7 + bonusLines.hashCode() * 17 + (rareBonus ? 8 : 0) + (doubleBonus ? 4 : 0)
-                    + (needsTool ? 2 : 0) + (excluded ? 1 : 0);
+            return type.hashCode() * 31 + maxAt.hashCode() * 7 + bonusLines.hashCode() * 17 + needsInput.hashCode() * 13 + (rareBonus ? 8 : 0)
+                    + (doubleBonus ? 4 : 0) + (needsTool ? 2 : 0) + (excluded ? 1 : 0);
         }
     }
 
@@ -222,15 +231,21 @@ public record FoundTabData(List<Section> sections) {
         BiomeBonus bonus = settler == null ? BiomeBonus.NONE : CivModApi.biomeBonus(settler, pos);
         boolean rareActs = !bonus.rareChance().sources().isEmpty();
         Set<Identifier> excluded = block.excluded(job);
-        List<Entry> entries = profile.found(scan, worker).stream().map(entry -> {
+        List<Entry> entries = new ArrayList<>(profile.found(scan, worker).stream().map(entry -> {
             // The dropped item only when needed: it rolls the block's loot.
             Item dropped = atMax.isEmpty() && bonus.doubleDrops().isEmpty() ? null : profile.dropped(level, pos, entry.type(), tool);
             boolean rare = rareActs && profile.inRareGroup(scan, entry.type());
             List<BiomeBonus.DoubleDrop> drops = dropped == null ? List.of() : bonus.doubleDrops(new ItemStack(dropped));
             return new Entry(entry.type(), entry.icon(), !entry.available(), excluded.contains(entry.type()),
                     !atMax.isEmpty() && atMax.contains(dropped) ? clerk : Optional.empty(), rare, !drops.isEmpty(),
-                    BiomeBonusText.sourceLines(job, bonus, rare, drops));
-        }).toList();
+                    BiomeBonusText.sourceLines(job, bonus, rare, drops), Optional.empty());
+        }).toList());
+        // The innate recipes the scan offers, after the found resources (no biome bonus acts on them).
+        Stock collect = ClerkStorage.stock(level, site.collect(), DayClock.dayTime(level), true);
+        for (CollectionRecipes.Listed recipe : CollectionRecipes.listed(level, job, profile, scan, settler, collect)) {
+            entries.add(new Entry(recipe.type(), recipe.icon(), false, excluded.contains(recipe.type()),
+                    atMax.contains(recipe.result()) ? clerk : Optional.empty(), false, false, List.of(), recipe.needs()));
+        }
         return new Section(job, true, entries, profile.foundLines(scan, worker));
     }
 

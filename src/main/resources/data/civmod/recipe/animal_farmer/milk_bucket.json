@@ -1,0 +1,7 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:animal_farmer"],
+  "ingredients": ["minecraft:bucket"],
+  "result": { "id": "minecraft:milk_bucket" },
+  "requires": { "entity": "minecraft:cow" }
+}

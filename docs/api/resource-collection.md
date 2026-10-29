@@ -75,13 +75,36 @@ Implement `ResourceCollectionProfile` for a Job with its own scan or roll. Requi
 | `createScan(center, radius)` | a new `SectionScan`: one chunk section per `step`, loaded chunks only |
 | `produce(context)` | one roll: the items and the tool to wear, empty for nothing |
 
-Optional hooks (`default` methods): `autoSearch(level, jobBlock, free)` (the search the loop calls: it must skip places that fail `free`, i.e. places occupied by another settler today; the default takes `autoSearch(level, jobBlock)` and gives up when that place is occupied, so override it to find the next free one), `scanCenter` (first work point, else the JobBlock; the builder uses the work place of the day), `scanRadius`, `needsResources`, `blockingReason`, `productivity`, `farmCount`, `needsTool`, `speed`, `canObtain`, `swings`, `reach`, `mainResources`, `dropped`, `leftOut`, `found`, `foundLines`.
+Optional hooks (`default` methods): `autoSearch(level, jobBlock, free)` (the search the loop calls: it must skip places that fail `free`, i.e. places occupied by another settler today; the default takes `autoSearch(level, jobBlock)` and gives up when that place is occupied, so override it to find the next free one), `scanCenter` (first work point, else the JobBlock; the builder uses the work place of the day), `scanRadius`, `needsResources`, `blockingReason`, `productivity`, `farmCount`, `needsTool`, `speed`, `canObtain`, `swings`, `reach`, `mainResources`, `dropped`, `leftOut`, `found`, `foundLines`, `finds`, `weight` (both for innate recipes, see below).
 
 **Occupied work places:** the work place of the day is occupied by its settler for the day; no other settler uses it. The loop skips occupied scroll work points and passes `free` to the auto-search; none free → "No free work place". Your Job needs no code for this. Players are never kept from a Resource Collection work place.
 
 Inside `produce`, call `leftOut(context, types)` for the types of the rolled group: it returns the types excluded at the JobBlock and those whose dropped item is at its Max. Keep the group roll as it is and spread the weights over the remaining types; a fully left-out group gives an empty roll (`new Produced(List.of(), context.tool())`), never a roll into another group.
 
 Scan results of your own `ScanResult` types are kept in memory only: after a restart the Found tab waits for the next scan.
+
+## Innate recipes
+
+A collecting Job can turn a consumed input into a product while it works (CivMod: milk buckets, mushroom stew, honey bottles). These are `civmod:job_crafting` recipes (`JobCraftingRecipe`, see [Producing Jobs](producing.md#innate-recipes)) that name the Job in `jobs`, with two optional fields only Resource Collection uses:
+
+```json
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:beekeeper"],
+  "ingredients": ["minecraft:glass_bottle"],
+  "result": { "id": "minecraft:honey_bottle" },
+  "requires": { "block": ["minecraft:beehive", "minecraft:bee_nest"], "state": { "honey_level": "5" } },
+  "weight": 1
+}
+```
+
+- `requires` (optional): what the Job's scan must have found. Either `{"entity": <entity type id, #tag or list>}` or `{"block": <block id, #tag or list>, "state": {<property>: <value or {"min", "max"}>}}` (`state` optional). Without `requires` the recipe is offered whenever the Job has a scan.
+- `weight` (optional, default 1, at least 1): the recipe's weight in the roll against the found types.
+- `tool` and `station` do not apply to Resource Collection.
+
+While the scan found what `requires` names, the recipe is an own entry of the Found tab (after the found resources) and joins the roll like a found type: each roll picks between the found types (not left out) with `weight(scan, type)` each and the ready recipes with their `weight`; only when a found type wins does the loop call `produce`. A rolled recipe uses up one belt item per ingredient and collects the result; no tool wear, no double drop. The settler fetches the ingredients from its collect inventory onto its belt like a tool (a stack each, while a belt slot is free). Without them the entry is greyed out ("Needs: Bucket") and leaves the roll; the Job keeps working. Right-click exclusion and the Home Clerk's Max of the result apply to the entry.
+
+Your profile decides what counts as found with `finds(scan, requires)`: by default a found block type whose default state matches a block requirement; override it for a scan of entities or block states (CivMod's Animal Farmer checks adult animals, the Beekeeper full hives). `weight(scan, type)` is 1 per found type by default (the Animal Farmer weighs an animal type by its count).
 
 ## Biome bonuses
 

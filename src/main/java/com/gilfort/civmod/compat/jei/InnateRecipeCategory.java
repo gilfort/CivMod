@@ -24,8 +24,8 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 
 /**
  * JEI's display-only "Job Recipes" category (vault {@code Systems/Producing Jobs.md}): an innate recipe's inputs and
- * result, its tool and station (without an own station: the main station of its Jobs), and the icons of the Jobs that
- * know it ({@link InnateRecipeLayout}). No transfer button: innate recipes are no patterns the player makes.
+ * result, its tool and station (without an own station: the main station of its Jobs), what a Resource Collection
+ * recipe requires, and the icons of the Jobs that know it ({@link InnateRecipeLayout}). No transfer button: innate recipes are no patterns the player makes.
  */
 final class InnateRecipeCategory extends AbstractRecipeCategory<RecipeHolder<JobCraftingRecipe>> {
 
@@ -55,6 +55,9 @@ final class InnateRecipeCategory extends AbstractRecipeCategory<RecipeHolder<Job
                     .addItemStacks(stations)
                     .addRichTooltipCallback((view, tooltip) -> tooltip.add(Component.translatable(InnateRecipeLayout.STATION_LINE)));
         }
+        recipe.requires().ifPresent(requires -> builder.addSlot(RecipeIngredientRole.RENDER_ONLY, InnateRecipeLayout.REQUIRES_X, InnateRecipeLayout.EXTRAS_Y)
+                .setStandardSlotBackground().addItemStacks(InnateRecipeLayout.requiresIcons(requires))
+                .addRichTooltipCallback((view, tooltip) -> InnateRecipeLayout.requiresLines(requires).forEach(tooltip::add)));
         List<Job> jobs = InnateRecipes.jobs(recipe);
         for (int i = 0; i < jobs.size() && i < InnateRecipeLayout.MAX_JOBS; i++) {
             Job job = jobs.get(i);

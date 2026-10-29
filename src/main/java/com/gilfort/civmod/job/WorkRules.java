@@ -194,15 +194,25 @@ final class WorkRules {
             ResourceCollectionProfile.Context context = new ResourceCollectionProfile.Context(level, settler, scan, poi, rollTool,
                     excluded, skillLevel, atMax, type -> workplace.dropped(level, profile, poi, type, rollTool),
                     bonus.rareChance().value());
-            Optional<ResourceCollectionProfile.Produced> produced = profile instanceof SecondaryToolProfile withSecondary
-                    ? withSecondary.produce(context, withSecondary.secondaryTool(site.block()).flatMap(kind -> SettlerTools.best(settler, kind)))
-                    : profile.produce(context);
+            if (supply.collect().isPresent() && CollectionRecipes.refill(level, settler, job.jobType(), profile, scan, excluded, atMax, supply.collect().get())
+                    && supply.collect().get().counter()) {
+                supply.handedOut().run();
+            }
+            // An innate recipe ready on the belt competes with the found types; it wears no tool and is never doubled.
+            Optional<ItemStack> crafted = CollectionRecipes.roll(settler, job.jobType(), profile, context);
+            Optional<ResourceCollectionProfile.Produced> produced = crafted.isPresent()
+                    ? Optional.of(new ResourceCollectionProfile.Produced(List.of(crafted.get()), ItemStack.EMPTY))
+                    : profile instanceof SecondaryToolProfile withSecondary
+                            ? withSecondary.produce(context, withSecondary.secondaryTool(site.block()).flatMap(kind -> SettlerTools.best(settler, kind)))
+                            : profile.produce(context);
             rolls++;
             if (produced.isPresent()) {
-                SettlerTools.wear(level, settler, produced.get().worn());
-                wear++;
+                if (crafted.isEmpty()) {
+                    SettlerTools.wear(level, settler, produced.get().worn());
+                    wear++;
+                }
                 // A lost double drop (negative chance) yields nothing, but counts as work like an empty roll.
-                List<ItemStack> stacks = bonus.applyDoubleDrop(produced.get().stacks(), level.getRandom());
+                List<ItemStack> stacks = crafted.isPresent() ? produced.get().stacks() : bonus.applyDoubleDrop(produced.get().stacks(), level.getRandom());
                 // An empty roll (fully excluded group) yields nothing but earns the EXP of the activity.
                 boolean room = true;
                 if (!stacks.isEmpty()) {

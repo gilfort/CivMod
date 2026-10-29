@@ -288,7 +288,36 @@ public interface ResourceCollectionProfile extends CategoryProfile {
     }
 
     /**
-     * What the JobBlock's Found tab lists (by default the found block types); each entry can be excluded.
+     * Whether the scan found what an innate recipe of the Job requires ({@link JobCraftingRecipe#requires()}): while it
+     * does, the recipe is a Found tab entry and joins the roll. By default a found block type whose default state matches
+     * a block requirement; entity requirements never match. Override it for a scan of entities or block states (CivMod's
+     * Animal Farmer and Beekeeper do).
+     *
+     * @param scan     the scan result
+     * @param requires what the recipe requires
+     * @return whether the scan found it
+     */
+    default boolean finds(ScanResult scan, JobCraftingRecipe.Requirement requires) {
+        return requires.block().isPresent() && scan.foundBlocks().stream()
+                .anyMatch(type -> requires.matches(BuiltInRegistries.BLOCK.getValue(type).defaultBlockState()));
+    }
+
+    /**
+     * The weight of a found type in a roll that also offers innate recipes ({@link JobCraftingRecipe#weight()}): the loop
+     * first picks between the found types (those not left out, each with this weight) and the offered recipes, and only
+     * calls {@link #produce} when a found type won. 1 by default; the Animal Farmer weighs an animal type by its count.
+     *
+     * @param scan the scan result
+     * @param type a found type ({@link ScanResult#foundBlocks()})
+     * @return its weight (0 or more)
+     */
+    default int weight(ScanResult scan, Identifier type) {
+        return 1;
+    }
+
+    /**
+     * What the JobBlock's Found tab lists (by default the found block types); each entry can be excluded. The loop adds
+     * an entry per offered innate recipe after them.
      *
      * @param scan   the scan result
      * @param worker the settler working the JobBlock, if any (without one no tool marks)

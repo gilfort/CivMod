@@ -1,9 +1,21 @@
 package com.gilfort.civmod.compat;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import com.gilfort.civmod.api.JobCraftingRecipe;
+import com.mojang.serialization.JsonOps;
+
+import net.minecraft.advancements.predicates.StatePropertiesPredicate;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.SpawnEggItem;
+
 /**
  * The layout of the display-only "Job Recipes" category shared by JEI and REI (vault {@code Systems/Producing Jobs.md}):
- * the inputs in a 3×3 grid, an arrow, the result; below them the tool and the station; at the bottom the icons of the
- * Jobs that know the recipe. Positions are relative to the category's top left corner, in pixels.
+ * the inputs in a 3×3 grid, an arrow, the result; below them the tool and the station, below the result what a
+ * Resource Collection recipe requires; at the bottom the icons of the Jobs that know the recipe. Positions are relative
+ * to the category's top left corner, in pixels.
  */
 public final class InnateRecipeLayout {
 
@@ -36,8 +48,41 @@ public final class InnateRecipeLayout {
     public static final String TOOL_LINE = TITLE + ".tool";
     /** Tooltip line of the station slot. */
     public static final String STATION_LINE = TITLE + ".station";
+    /** The slot of what a Resource Collection recipe requires: below the result. */
+    public static final int REQUIRES_X = OUTPUT_X;
+    /** Tooltip line of the requires slot. */
+    public static final String REQUIRES_LINE = TITLE + ".requires";
+    /** Tooltip line of a required block state. */
+    public static final String STATE_LINE = TITLE + ".state";
 
     private InnateRecipeLayout() {
+    }
+
+    /**
+     * @param requires what a Resource Collection recipe requires
+     * @return the icons of the requires slot: the spawn eggs of the entity types, else the items of the blocks
+     */
+    public static List<ItemStack> requiresIcons(JobCraftingRecipe.Requirement requires) {
+        List<ItemStack> icons = new ArrayList<>();
+        requires.entity().ifPresent(types -> types.forEach(type -> SpawnEggItem.byId(type.value()).ifPresent(egg -> icons.add(new ItemStack(egg)))));
+        requires.block().ifPresent(blocks -> blocks.forEach(block -> {
+            ItemStack item = new ItemStack(block.value().asItem());
+            if (!item.isEmpty()) {
+                icons.add(item);
+            }
+        }));
+        return icons;
+    }
+
+    /**
+     * @param requires what a Resource Collection recipe requires
+     * @return the tooltip lines of the requires slot ("Requires nearby", the block state if any)
+     */
+    public static List<Component> requiresLines(JobCraftingRecipe.Requirement requires) {
+        List<Component> lines = new ArrayList<>(List.of(Component.translatable(REQUIRES_LINE)));
+        requires.state().flatMap(state -> StatePropertiesPredicate.CODEC.encodeStart(JsonOps.INSTANCE, state).result())
+                .ifPresent(json -> lines.add(Component.translatable(STATE_LINE, json.toString().replaceAll("[{}\"]", "").replace(":", ": ").replace(",", ", "))));
+        return lines;
     }
 
     /**

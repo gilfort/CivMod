@@ -2,6 +2,7 @@ package com.gilfort.civmod.job;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
@@ -20,6 +21,7 @@ import com.gilfort.civmod.settlement.StockRules;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.level.block.state.BlockState;
@@ -27,7 +29,8 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * Work loop of the Resource Collection Job Category (vault {@code Systems/Resource Collection Jobs.md}); its contract
- * with the Job is the {@link ResourceCollectionProfile}. Per job: fetch the tool, take the work place of the day and the scan from the
+ * with the Job is the {@link ResourceCollectionProfile}. Per job: fetch the tool (and the inputs of its innate recipes,
+ * {@link CollectionRecipes}), take the work place of the day and the scan from the
  * job's {@link Workplace}, walk there and produce into its buffer, which the shell delivers at ~80 % or at the end of
  * the day. Production (live every work tick, catch-up per simulated hour) goes through the {@link WorkRules}; this
  * loop only adds the live effects (swing, hit sound, level-up) and chooses where output goes.
@@ -89,10 +92,10 @@ final class ResourceCollectionLoop implements CategoryLoop {
             return JobStep.skip();
         }
         ResourceCollectionProfile profile = found.get();
-        Optional<WorkRules.MissingTool> missing = WorkRules.missingTool(settler, profile, site,
-                ClerkStorage.stock(level, site.collect(), dayTime, !shell.counterUnreachable(level, site.collect())));
+        Stock collect = ClerkStorage.stock(level, site.collect(), dayTime, !shell.counterUnreachable(level, site.collect()));
+        Optional<WorkRules.MissingTool> missing = WorkRules.missingTool(settler, profile, site, collect);
         if (missing.isPresent()) {
-            return fetchTool(level, site, missing.get(), dayTime);
+            return fetchTool(level, site, missing.get(), dayTime, JobStatus.FETCHING_TOOL);
         }
         BlockPos poi = workplace.workPlaceOfDay(level, settler, profile, site, day);
         if (poi == null) {
@@ -110,16 +113,23 @@ final class ResourceCollectionLoop implements CategoryLoop {
             return JobStep.blocked(JobStatus.NO_RESOURCES);
         }
         ItemStack tool = SettlerTools.best(settler, profile::isTool).orElse(ItemStack.EMPTY);
-        Optional<JobStatus> paused = WorkRules.pause(level, job.jobType(), profile, workplace, site, tool, StockRules.atMax(level, site)).pauseStatus();
+        Set<Item> atMax = StockRules.atMax(level, site);
+        Optional<JobStatus> paused = WorkRules.pause(level, job.jobType(), profile, workplace, site, tool, atMax).pauseStatus();
         if (paused.isPresent()) {
             return JobStep.blocked(paused.get());
+        }
+        // The inputs of the innate recipes are fetched like a tool; without them the recipes just leave the roll.
+        Optional<Predicate<ItemStack>> input = CollectionRecipes.missingInput(level, settler, job.jobType(), profile, workplace.scan(),
+                site.block().excluded(job.jobType()), atMax, collect);
+        if (input.isPresent()) {
+            return fetchTool(level, site, new WorkRules.MissingTool(input.get(), true), dayTime, JobStatus.FETCHING_INPUTS);
         }
         step = Step.WORK;
         showTool(profile);
         return JobStep.walk(poi, profile.reach(), JobStatus.WORKING);
     }
 
-    private JobStep fetchTool(ServerLevel level, JobBlockSite site, WorkRules.MissingTool tool, long dayTime) {
+    private JobStep fetchTool(ServerLevel level, JobBlockSite site, WorkRules.MissingTool tool, long dayTime, JobStatus status) {
         if (!tool.inCollect()) {
             return JobStep.blocked(JobStatus.NO_TOOL);
         }
@@ -129,7 +139,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
             step = Step.FETCH_TOOL;
             toolVisit = visit;
         }
-        return JobStep.walk(toolVisit.target(), toolVisit.reach(), JobStatus.FETCHING_TOOL);
+        return JobStep.walk(toolVisit.target(), toolVisit.reach(), status);
     }
 
     /** End-of-work sweep: a drop-off with anything left gets a pickup for the Deliverymen. */
@@ -173,7 +183,10 @@ final class ResourceCollectionLoop implements CategoryLoop {
         return job.jobType().profile(ResourceCollectionProfile.class).map(profile -> profile.isWorkPlace(level, target)).orElse(true);
     }
 
-    /** At the collect inventory: takes the tool (at a working Clerk's counter after waiting for its turn). */
+    /**
+     * At the collect inventory: takes the tool and the inputs of the innate recipes (at a working Clerk's counter after
+     * waiting for its turn).
+     */
     private JobStep fetchToolAt(ServerLevel level, SettlerJob job) {
         Optional<ResourceCollectionProfile> profile = job.jobType().profile(ResourceCollectionProfile.class);
         Optional<JobBlockSite> site = JobBlockSite.at(level, job.jobBlock());
@@ -185,7 +198,10 @@ final class ResourceCollectionLoop implements CategoryLoop {
                 return JobStep.STAY;
             }
             Stock stock = ClerkStorage.stock(level, collect, DayClock.dayTime(level), counter);
-            if (WorkRules.refill(settler, profile.get(), site.get(), stock) && stock.counter()) {
+            boolean taken = WorkRules.refill(settler, profile.get(), site.get(), stock);
+            taken |= CollectionRecipes.refill(level, settler, job.jobType(), profile.get(), shell.workplace(job.jobBlock()).scan(),
+                    site.get().block().excluded(job.jobType()), StockRules.atMax(level, site.get()), stock);
+            if (taken && stock.counter()) {
                 ClerkCounter.handOut(level, collect, true);
             }
         }
