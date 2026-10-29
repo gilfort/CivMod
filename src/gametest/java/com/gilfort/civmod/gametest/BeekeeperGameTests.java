@@ -9,7 +9,6 @@ import com.gilfort.civmod.api.FarmCurve;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
-import com.gilfort.civmod.job.HiveScan;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.job.SavedScan;
 import com.gilfort.civmod.npc.Settler;
@@ -109,10 +108,6 @@ public final class BeekeeperGameTests {
         var ops = level.registryAccess().createSerializationContext(JsonOps.INSTANCE);
         SavedScan saved = SavedScan.of(jobBlock, helper.absolutePos(HIVE), 10, 3, scan).orElseThrow(() -> new AssertionError("Hive scan is saved"));
         helper.assertValueEqual(SavedScan.CODEC.parse(ops, SavedScan.CODEC.encodeStart(ops, saved).getOrThrow()).getOrThrow().result(), scan, "Saved");
-        helper.setBlock(NEST, hive(Blocks.BEE_NEST, BeehiveBlock.MAX_HONEY_LEVELS));
-        HiveScan.Result full = (HiveScan.Result) profile.createScan(helper.absolutePos(HIVE), 10).runAll(level);
-        helper.assertValueEqual(full.full(), 1, "Full hives exposed for innate recipes");
-        helper.setBlock(NEST, hive(Blocks.BEE_NEST, 0));
         Settler settler = beekeeper(helper, jobBlock);
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.SHEARS));
         helper.succeedWhen(() -> {

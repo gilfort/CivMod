@@ -69,6 +69,7 @@ public final class CollectionRecipeGameTests {
             register(helper, "collection_recipe_max", CollectionRecipeGameTests::atMax);
             register(helper, "collection_recipe_honey_needs_full_hive", CollectionRecipeGameTests::honeyNeedsFullHive);
             register(helper, "collection_recipe_honey_bottles", CollectionRecipeGameTests::honeyBottles);
+            register(helper, "collection_recipe_full_hive_per_block", CollectionRecipeGameTests::fullHivePerBlock);
             register(helper, "collection_recipe_block_state_requirement", CollectionRecipeGameTests::blockStateRequirement);
             register(helper, "collection_recipe_weight_by_count", CollectionRecipeGameTests::weightByCount);
         });
@@ -272,6 +273,20 @@ public final class CollectionRecipeGameTests {
         return new JobCraftingRecipe.Requirement(Optional.empty(), Optional.of(HolderSet.direct(block.builtInRegistryHolder())), state.build());
     }
 
+    /**
+     * A full hive counts for its own block only: with a full bee nest and a beehive that is not full, a full-beehive
+     * requirement finds nothing, a full-bee-nest requirement finds the nest.
+     */
+    private static void fullHivePerBlock(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BeekeeperGameTests.apiary(helper, 3, BeehiveBlock.MAX_HONEY_LEVELS);
+        ResourceCollectionProfile profile = ModJobs.BEEKEEPER.get().profile(ResourceCollectionProfile.class).orElseThrow();
+        ScanResult scan = profile.createScan(helper.absolutePos(new BlockPos(4, 1, 4)), 10).runAll(level);
+        StatePropertiesPredicate.Builder full = StatePropertiesPredicate.Builder.properties().hasProperty(BeehiveBlock.HONEY_LEVEL, BeehiveBlock.MAX_HONEY_LEVELS);
+        helper.assertValueEqual(profile.count(scan, requires(Blocks.BEEHIVE, full)), 0, "No full beehive");
+        helper.assertValueEqual(profile.count(scan, requires(Blocks.BEE_NEST, full)), 1, "One full bee nest");
+        helper.succeed();
+    }
 
     /**
      * A builder Job's block requirement with a state matches the states its scan counted: age-3 berry bushes for an

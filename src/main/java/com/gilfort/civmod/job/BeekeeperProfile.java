@@ -31,7 +31,8 @@ import net.neoforged.neoforge.common.Tags;
  * <ul>
  * <li>Tool: shears.</li>
  * <li>Work place: a beehive or bee nest set with the Scroll of Assignment, else the nearest within 20 blocks.</li>
- * <li>Scan: every day the hives and nests with honey level 1 or more within 5 × JobBlock level ({@link HiveScan}).</li>
+ * <li>Scan: every day the hives and nests with honey level 1 or more within 5 × JobBlock level, counted per block and
+ * honey level ({@link BlockCountScan}; a full hive is one at honey level 5).</li>
  * <li>Roll: one honeycomb; a honey level is never changed.</li>
  * <li>Speed: the shared formula × the farm curve of the counted hives.</li>
  * </ul>
@@ -92,7 +93,7 @@ public final class BeekeeperProfile implements ResourceCollectionProfile {
 
     @Override
     public SectionScan<? extends ScanResult> createScan(BlockPos center, int radius) {
-        return new HiveScan(center, radius, HALF_HEIGHT);
+        return new BlockCountScan(center, radius, HALF_HEIGHT, state -> honey(state) >= 1, 1);
     }
 
     @Override
@@ -106,31 +107,22 @@ public final class BeekeeperProfile implements ResourceCollectionProfile {
         return hives(scan).total();
     }
 
-    private static HiveScan.Result hives(@Nullable ScanResult scan) {
-        return scan instanceof HiveScan.Result hives ? hives : HiveScan.Result.EMPTY;
+    private static BlockCountScan.Result hives(@Nullable ScanResult scan) {
+        return scan instanceof BlockCountScan.Result hives ? hives : BlockCountScan.Result.EMPTY;
     }
 
     /**
-     * The counted hives and nests of an innate recipe's required block: all with honey while the requirement matches a
-     * hive with honey (level 1), else the full ones (level 5) while it matches a full hive; the scan knows no other honey
-     * levels.
+     * @param state a block state
+     * @return its honey level if it is a beehive or bee nest, else -1
      */
+    static int honey(BlockState state) {
+        return state.is(BlockTags.BEEHIVES) && state.hasProperty(BeehiveBlock.HONEY_LEVEL) ? state.getValue(BeehiveBlock.HONEY_LEVEL) : -1;
+    }
+
+    /** The counted hives and nests in a state an innate recipe requires (a full beehive counts for beehives only). */
     @Override
     public int count(ScanResult scan, JobCraftingRecipe.Requirement requires) {
-        HiveScan.Result hives = hives(scan);
-        int count = 0;
-        for (Identifier type : hives.foundBlocks()) {
-            BlockState state = BuiltInRegistries.BLOCK.getValue(type).defaultBlockState();
-            if (!state.hasProperty(BeehiveBlock.HONEY_LEVEL)) {
-                continue;
-            }
-            if (requires.matches(state.setValue(BeehiveBlock.HONEY_LEVEL, 1))) {
-                count += hives.counts().get(type);
-            } else if (requires.matches(state.setValue(BeehiveBlock.HONEY_LEVEL, BeehiveBlock.MAX_HONEY_LEVELS))) {
-                count += hives.full();
-            }
-        }
-        return count;
+        return requires.block().isEmpty() ? 0 : hives(scan).matching(requires::matches);
     }
 
     @Override
