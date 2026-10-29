@@ -25,8 +25,9 @@ import net.minecraft.world.item.ItemStack;
 
 /**
  * REI's display-only "Job Recipes" category (vault {@code Systems/Producing Jobs.md}): an innate recipe's inputs and
- * result, its tool and station (without an own station: the main station of its Jobs), and the icons of the Jobs that
- * know it ({@link InnateRecipeLayout}). No transfer handler: innate recipes are no patterns the player makes.
+ * result, its tool and station (without an own station: the main station of its Jobs), what a Resource Collection
+ * recipe requires, and the icons of the Jobs that know it ({@link InnateRecipeLayout}). No transfer handler: innate
+ * recipes are no patterns the player makes.
  */
 final class InnateRecipeCategory implements DisplayCategory<InnateRecipeDisplay> {
 
@@ -77,6 +78,12 @@ final class InnateRecipeCategory implements DisplayCategory<InnateRecipeDisplay>
         if (!stations.isEmpty()) {
             widgets.add(Widgets.createSlot(new Point(x + InnateRecipeLayout.STATION_X, y + InnateRecipeLayout.EXTRAS_Y)).entries(stations));
         }
+        recipe.requires().ifPresent(requires -> {
+            Component[] lines = InnateRecipeLayout.requiresLines(requires).toArray(Component[]::new);
+            widgets.add(Widgets.createSlot(new Point(x + InnateRecipeLayout.REQUIRES_X, y + InnateRecipeLayout.EXTRAS_Y))
+                    .entries(InnateRecipeLayout.requiresIcons(requires).stream().map(EntryStacks::of).map(stack -> stack.tooltip(lines)).toList())
+                    .unmarkInputOrOutput());
+        });
         List<Job> jobs = InnateRecipes.jobs(recipe);
         for (int i = 0; i < jobs.size() && i < InnateRecipeLayout.MAX_JOBS; i++) {
             Job job = jobs.get(i);

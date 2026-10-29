@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:collection_recipe_honey_needs_full_hive",
+  "max_ticks": 3600,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

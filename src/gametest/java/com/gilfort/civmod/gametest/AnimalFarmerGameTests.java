@@ -83,7 +83,7 @@ public final class AnimalFarmerGameTests {
     }
 
     /** A grass pen with a level-2 Gatherer JobBlock at (1, 1, 1), the hay bale in slot 1 and a hay bale at {@link #HAY}. */
-    private static BlockPos pen(GameTestHelper helper) {
+    static BlockPos pen(GameTestHelper helper) {
         BlockPos relative = GathererGameTests.gathererBlock(helper);
         StationTypeGameTests.setLevel(helper, relative, 2);
         BlockPos jobBlock = helper.absolutePos(relative);
@@ -92,7 +92,7 @@ public final class AnimalFarmerGameTests {
         return jobBlock;
     }
 
-    private static Settler animalFarmer(GameTestHelper helper, BlockPos jobBlock) {
+    static Settler animalFarmer(GameTestHelper helper, BlockPos jobBlock) {
         SettlementData data = SettlementData.get(helper.getLevel());
         Settler settler = GathererGameTests.settler(helper, jobBlock, new BlockPos(3, 1, 2), "Herder");
         TestAssignments.assign(data, jobBlock, settler.getUUID(), "Herder", data.settlementAt(jobBlock).orElseThrow().id(), List.of(),

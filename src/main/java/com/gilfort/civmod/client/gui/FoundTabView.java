@@ -23,7 +23,8 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
  * {@code Systems/Resource Collection Jobs.md}); the client side of {@link FoundTab}: per Job of the JobBlock's settlers a
  * section (headed by the Job's name when there are several) with its scan info lines, then its found resources as a slot
  * grid. Excluded entries are grey and struck through, entries at their Max at the Home Clerk grey ("Maximum reached at
- * &lt;Clerk&gt;"); a star marks each biome bonus effect acting on an entry (its tooltip names the effects and their
+ * &lt;Clerk&gt;"), innate recipes without their input grey ("Needs: Bucket"); a star marks each biome bonus effect
+ * acting on an entry (its tooltip names the effects and their
  * files); a right click excludes or includes one for its section's Job. A tab that does not fit the panel scrolls by
  * rows (mouse wheel, or the scrollbar right of the grid, which then has 8 columns).
  */
@@ -219,7 +220,7 @@ final class FoundTabView implements JobBlockTabView {
     private void slot(GuiGraphicsExtractor graphics, Font font, FoundTabData.Entry entry, int x, int y, boolean hovered, int mouseX, int mouseY) {
         CivGui.slot(graphics, x, y);
         graphics.item(entry.icon(), x, y);
-        if (entry.excluded() || entry.needsTool() || entry.maxAt().isPresent()) {
+        if (entry.excluded() || entry.needsTool() || entry.maxAt().isPresent() || entry.needsInput().isPresent()) {
             CivGui.slotInactive(graphics, x, y);
         }
         if (entry.excluded()) {
@@ -236,6 +237,7 @@ final class FoundTabView implements JobBlockTabView {
         if (entry.needsTool()) {
             lines.add(Component.translatable("civmod.gui.found.needs_tool").withStyle(ChatFormatting.RED));
         }
+        entry.needsInput().ifPresent(needs -> lines.add(needs.copy().withStyle(ChatFormatting.RED)));
         if (entry.excluded()) {
             lines.add(Component.translatable("civmod.gui.found.excluded").withStyle(ChatFormatting.GRAY));
         }

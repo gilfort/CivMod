@@ -7,11 +7,13 @@ import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.api.SectionScan;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
@@ -19,6 +21,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.BeehiveBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.common.Tags;
 
 /**
@@ -104,6 +108,26 @@ public final class BeekeeperProfile implements ResourceCollectionProfile {
 
     private static HiveScan.Result hives(@Nullable ScanResult scan) {
         return scan instanceof HiveScan.Result hives ? hives : HiveScan.Result.EMPTY;
+    }
+
+    /**
+     * An innate recipe's hive is found when a counted hive or nest type matches: as a full hive (honey level 5) while the
+     * scan counted a full one, else as a hive with honey (level 1); the scan knows no other honey levels.
+     */
+    @Override
+    public boolean finds(ScanResult scan, JobCraftingRecipe.Requirement requires) {
+        HiveScan.Result hives = hives(scan);
+        for (Identifier type : hives.foundBlocks()) {
+            BlockState state = BuiltInRegistries.BLOCK.getValue(type).defaultBlockState();
+            if (!state.hasProperty(BeehiveBlock.HONEY_LEVEL)) {
+                continue;
+            }
+            if ((hives.full() > 0 && requires.matches(state.setValue(BeehiveBlock.HONEY_LEVEL, BeehiveBlock.MAX_HONEY_LEVELS)))
+                    || requires.matches(state.setValue(BeehiveBlock.HONEY_LEVEL, 1))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

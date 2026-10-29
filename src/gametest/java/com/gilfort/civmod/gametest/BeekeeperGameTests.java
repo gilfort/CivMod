@@ -62,12 +62,12 @@ public final class BeekeeperGameTests {
         helper.register(ResourceKey.create(Registries.TEST_FUNCTION, CivMod.id(name)), test);
     }
 
-    private static BlockState hive(Block block, int honey) {
+    static BlockState hive(Block block, int honey) {
         return block.defaultBlockState().setValue(BeehiveBlock.HONEY_LEVEL, honey);
     }
 
     /** A level-2 Gatherer JobBlock with the beehive in slot 1, a beehive and a bee nest with the given honey levels. */
-    private static BlockPos apiary(GameTestHelper helper, int hiveHoney, int nestHoney) {
+    static BlockPos apiary(GameTestHelper helper, int hiveHoney, int nestHoney) {
         BlockPos relative = GathererGameTests.gathererBlock(helper);
         StationTypeGameTests.setLevel(helper, relative, 2);
         BlockPos jobBlock = helper.absolutePos(relative);
@@ -77,7 +77,7 @@ public final class BeekeeperGameTests {
         return jobBlock;
     }
 
-    private static Settler beekeeper(GameTestHelper helper, BlockPos jobBlock) {
+    static Settler beekeeper(GameTestHelper helper, BlockPos jobBlock) {
         SettlementData data = SettlementData.get(helper.getLevel());
         Settler settler = GathererGameTests.settler(helper, jobBlock, new BlockPos(3, 1, 2), "Keeper");
         TestAssignments.assign(data, jobBlock, settler.getUUID(), "Keeper", data.settlementAt(jobBlock).orElseThrow().id(), List.of(),

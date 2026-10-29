@@ -1,0 +1,7 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:animal_farmer"],
+  "ingredients": ["minecraft:bowl"],
+  "result": { "id": "minecraft:mushroom_stew" },
+  "requires": { "entity": "minecraft:mooshroom" }
+}

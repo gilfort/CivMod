@@ -8,6 +8,7 @@ import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.api.SectionScan;
@@ -132,6 +133,19 @@ public final class AnimalFarmerProfile implements ResourceCollectionProfile {
 
     private static AnimalScan.Result animals(@Nullable ScanResult scan) {
         return scan instanceof AnimalScan.Result animals ? animals : AnimalScan.Result.EMPTY;
+    }
+
+    /** An innate recipe's animal is found when an adult of a required type was counted (a cow for milk). */
+    @Override
+    public boolean finds(ScanResult scan, JobCraftingRecipe.Requirement requires) {
+        AnimalScan.Result animals = animals(scan);
+        return animals.foundBlocks().stream().map(BuiltInRegistries.ENTITY_TYPE::getValue).anyMatch(type -> requires.matches(type) && animals.has(type));
+    }
+
+    /** An animal type weighs as much as its count, like in {@link #produce}. */
+    @Override
+    public int weight(ScanResult scan, Identifier type) {
+        return animals(scan).counts().getOrDefault(type, 0);
     }
 
     @Override
