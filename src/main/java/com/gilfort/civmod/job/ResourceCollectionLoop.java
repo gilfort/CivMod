@@ -114,7 +114,8 @@ final class ResourceCollectionLoop implements CategoryLoop {
         }
         ItemStack tool = SettlerTools.best(settler, profile::isTool).orElse(ItemStack.EMPTY);
         Set<Item> atMax = StockRules.atMax(level, site);
-        Optional<JobStatus> paused = WorkRules.pause(level, job.jobType(), profile, workplace, site, tool, atMax).pauseStatus();
+        List<CollectionRecipes.Offer> offered = CollectionRecipes.offered(level, job.jobType(), profile, workplace.scan());
+        Optional<JobStatus> paused = WorkRules.pause(level, job.jobType(), profile, workplace, site, tool, atMax, offered).pauseStatus();
         if (paused.isPresent()) {
             return JobStep.blocked(paused.get());
         }

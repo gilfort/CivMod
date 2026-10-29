@@ -150,7 +150,9 @@ final class WorkRules {
             return new Result(0, 0, 0, 0, false, End.NO_RESOURCES, workTicks);
         }
         Set<Identifier> excluded = site.block().excluded(job.jobType());
-        if (allExcluded(profile, scan, excluded)) {
+        // The recipes the scan offers: fixed while the scan is (filtered per roll by exclusion and Max).
+        List<CollectionRecipes.Offer> offered = CollectionRecipes.offered(level, job.jobType(), profile, scan);
+        if (allExcluded(profile, scan, excluded, offered)) {
             return new Result(0, 0, 0, 0, false, End.ALL_EXCLUDED, workTicks);
         }
         if (scan != null && profile.blockingReason(scan).isPresent()) {
@@ -184,7 +186,7 @@ final class WorkRules {
             // The Max check per roll: the Home Clerk's stock may have changed (catch-up delivers straight into it).
             Set<Item> atMax = StockRules.atMax(level, site);
             ItemStack rollTool = tool.get();
-            End pause = pause(level, job.jobType(), profile, workplace, site, rollTool, atMax);
+            End pause = pause(level, job.jobType(), profile, workplace, site, rollTool, atMax, offered);
             if (pause != End.NONE) {
                 end = pause;
                 break;
@@ -244,19 +246,23 @@ final class WorkRules {
      * @param profile  the job's profile
      * @param scan     the job's scan (null while the first scan runs)
      * @param excluded the types excluded for the job at its JobBlock
-     * @return whether the scan found main resources and every one of them is excluded at the JobBlock (the job pauses)
+     * @param offered  the innate recipes the scan offers ({@link CollectionRecipes#offered})
+     * @return whether the scan found main resources or offers recipes and every one of them is excluded at the JobBlock
+     *         (the job pauses; decision 2026-10-29: recipes count like found types)
      */
-    static boolean allExcluded(ResourceCollectionProfile profile, @Nullable ScanResult scan, Set<Identifier> excluded) {
+    static boolean allExcluded(ResourceCollectionProfile profile, @Nullable ScanResult scan, Set<Identifier> excluded, List<CollectionRecipes.Offer> offered) {
         if (scan == null || excluded.isEmpty()) {
             return false;
         }
         List<Identifier> main = profile.mainResources(scan);
-        return !main.isEmpty() && excluded.containsAll(main);
+        return (!main.isEmpty() || !offered.isEmpty()) && excluded.containsAll(main)
+                && offered.stream().allMatch(offer -> excluded.contains(CollectionRecipes.type(offer.holder())));
     }
 
     /**
      * Whether a job pauses because nothing is left to produce (vault {@code Systems/Resource Collection Jobs.md}):
-     * every main resource is excluded at the JobBlock or every item it can give is at Max at the Home Clerk.
+     * every main resource is excluded at the JobBlock or every item it can give is at Max at the Home Clerk, and so is
+     * every innate recipe the scan offers (excluded, or its result at Max; decision 2026-10-29).
      *
      * @param level     the level
      * @param job       the Job (its exclusions at the JobBlock)
@@ -265,18 +271,20 @@ final class WorkRules {
      * @param site      the JobBlock
      * @param tool      the tool the drops are checked with (may be empty)
      * @param atMax     the items at Max at the Home Clerk ({@link StockRules#atMax})
+     * @param offered   the innate recipes the scan offers ({@link CollectionRecipes#offered})
      * @return {@link End#ALL_EXCLUDED}, {@link End#MAX_REACHED} or {@link End#NOTHING_TO_PRODUCE} for a pause, else
      *         {@link End#NONE}
      */
     static End pause(ServerLevel level, Job job, ResourceCollectionProfile profile, Workplace workplace, JobBlockSite site, ItemStack tool,
-            Set<Item> atMax) {
+            Set<Item> atMax, List<CollectionRecipes.Offer> offered) {
         ScanResult scan = workplace.scan();
         Set<Identifier> excludedTypes = site.block().excluded(job);
         if (scan == null || (atMax.isEmpty() && excludedTypes.isEmpty())) {
             return End.NONE;
         }
         List<Identifier> main = profile.mainResources(scan);
-        if (main.isEmpty()) {
+        int entries = main.size() + offered.size();
+        if (entries == 0) {
             return End.NONE;
         }
         int excluded = 0;
@@ -287,7 +295,14 @@ final class WorkRules {
                 return End.NONE;
             }
         }
-        return excluded == main.size() ? End.ALL_EXCLUDED : excluded == 0 ? End.MAX_REACHED : End.NOTHING_TO_PRODUCE;
+        for (CollectionRecipes.Offer offer : offered) {
+            if (excludedTypes.contains(CollectionRecipes.type(offer.holder()))) {
+                excluded++;
+            } else if (!atMax.contains(offer.holder().value().result().create().getItem())) {
+                return End.NONE;
+            }
+        }
+        return excluded == entries ? End.ALL_EXCLUDED : excluded == 0 ? End.MAX_REACHED : End.NOTHING_TO_PRODUCE;
     }
 
     /**

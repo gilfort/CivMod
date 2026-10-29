@@ -72,6 +72,7 @@ public final class CollectionRecipeGameTests {
             register(helper, "collection_recipe_full_hive_per_block", CollectionRecipeGameTests::fullHivePerBlock);
             register(helper, "collection_recipe_block_state_requirement", CollectionRecipeGameTests::blockStateRequirement);
             register(helper, "collection_recipe_weight_by_count", CollectionRecipeGameTests::weightByCount);
+            register(helper, "collection_recipe_keeps_job_running", CollectionRecipeGameTests::keepsJobRunning);
         });
     }
 
@@ -325,4 +326,31 @@ public final class CollectionRecipeGameTests {
         helper.succeed();
     }
 
+    /**
+     * An offered recipe keeps the Job running like a found type: with the cow excluded the Animal Farmer still fetches
+     * buckets and makes milk, no cow loot; with the milk excluded too it pauses ("All resources excluded").
+     */
+    private static void keepsJobRunning(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        BlockPos jobBlock = AnimalFarmerGameTests.pen(helper);
+        Container collect = (Container) level.getBlockEntity(jobBlock);
+        Settler settler = milkingFarmer(helper, jobBlock, 16);
+        Job job = ModJobs.ANIMAL_FARMER.get();
+        SettlementWorld.toggleExcluded(level, jobBlock, job, COW);
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(belt(settler, Items.BUCKET) > 0,
+                        "No buckets fetched (status " + settler.getWork().status(jobBlock) + ")"))
+                .thenExecute(() -> {
+                    catchUpDay(level, settler);
+                    helper.assertTrue(collected(settler, jobBlock, List.of(collect), Items.MILK_BUCKET) > 0,
+                            "No milk with the cow excluded (status " + settler.getWork().status(jobBlock) + ")");
+                    helper.assertValueEqual(collected(settler, jobBlock, List.of(collect), Items.BEEF, Items.LEATHER), 0, "No cow loot");
+                    SettlementWorld.toggleExcluded(level, jobBlock, job, MILK);
+                })
+                .thenWaitUntil(() -> helper.assertTrue(settler.getWork().status(jobBlock) == JobStatus.ALL_EXCLUDED,
+                        "Cow and milk excluded: status " + settler.getWork().status(jobBlock)))
+                .thenExecute(() -> cleanUp(helper, settler, forced))
+                .thenSucceed();
+    }
 }
