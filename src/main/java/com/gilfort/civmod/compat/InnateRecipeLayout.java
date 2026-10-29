@@ -2,6 +2,7 @@ package com.gilfort.civmod.compat;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.mojang.serialization.JsonOps;
@@ -80,9 +81,17 @@ public final class InnateRecipeLayout {
      */
     public static List<Component> requiresLines(JobCraftingRecipe.Requirement requires) {
         List<Component> lines = new ArrayList<>(List.of(Component.translatable(REQUIRES_LINE)));
-        requires.state().flatMap(state -> StatePropertiesPredicate.CODEC.encodeStart(JsonOps.INSTANCE, state).result())
-                .ifPresent(json -> lines.add(Component.translatable(STATE_LINE, json.toString().replaceAll("[{}\"]", "").replace(":", ": ").replace(",", ", "))));
+        requires.state().flatMap(InnateRecipeLayout::stateLine).ifPresent(lines::add);
         return lines;
+    }
+
+    /**
+     * @param state a block-state predicate
+     * @return its tooltip line ("State: age: 3"), empty if it cannot be shown
+     */
+    public static Optional<Component> stateLine(StatePropertiesPredicate state) {
+        return StatePropertiesPredicate.CODEC.encodeStart(JsonOps.INSTANCE, state).result()
+                .map(json -> Component.translatable(STATE_LINE, json.toString().replaceAll("[{}\"]", "").replace(":", ": ").replace(",", ", ")));
     }
 
     /**

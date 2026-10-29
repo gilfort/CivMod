@@ -38,7 +38,7 @@ public final class FarmingProfiles {
      * @return the Gatherer's profile: bare-handed, the loot of the ripe {@link #GATHERABLES}
      */
     public static ResourceCollectionProfile gatherer() {
-        return SimpleCollectionProfile.builder(GATHERABLES).build();
+        return SimpleCollectionProfile.builder(GATHERABLES).dropPool(CivMod.id("gatherer")).build();
     }
 
     /**
@@ -46,6 +46,6 @@ public final class FarmingProfiles {
      *         plant counted
      */
     public static ResourceCollectionProfile plantationFarmer() {
-        return SimpleCollectionProfile.builder(PLANTATIONS).tool(ItemTags.AXES, () -> Items.STONE_AXE).build();
+        return SimpleCollectionProfile.builder(PLANTATIONS).tool(ItemTags.AXES, () -> Items.STONE_AXE).dropPool(CivMod.id("plantation_farmer")).build();
     }
 }

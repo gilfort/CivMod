@@ -1,0 +1,5 @@
+{
+  "job": "civmod:plantation_farmer",
+  "from": "minecraft:vine",
+  "result": "minecraft:vine"
+}

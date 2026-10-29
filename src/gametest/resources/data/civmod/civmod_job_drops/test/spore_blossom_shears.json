@@ -1,0 +1,7 @@
+{
+  "job": "civmod:gatherer",
+  "from": "minecraft:spore_blossom",
+  "result": "minecraft:pink_petals",
+  "mode": "replace",
+  "tool": "minecraft:shears"
+}

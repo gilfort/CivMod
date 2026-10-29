@@ -3,6 +3,7 @@ package com.gilfort.civmod.network;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.command.CivModCommand;
 import com.gilfort.civmod.item.JobPicker;
+import com.gilfort.civmod.job.JobDrops;
 import com.gilfort.civmod.menu.ClerkTabData;
 import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.menu.FoundTabData;
@@ -120,5 +121,6 @@ public final class CivNetwork {
         registrar.playToClient(FoundTabData.Sync.TYPE, FoundTabData.Sync.STREAM_CODEC);
         registrar.playToClient(JobBlockInfo.Sync.TYPE, JobBlockInfo.Sync.STREAM_CODEC);
         registrar.playToClient(ThoughtBubble.Show.TYPE, ThoughtBubble.Show.STREAM_CODEC);
+        registrar.playToClient(JobDrops.Sync.TYPE, JobDrops.Sync.STREAM_CODEC);
     }
 }

@@ -2,10 +2,12 @@ package com.gilfort.civmod.job;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.BlockingReason;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ScanResult;
@@ -39,11 +41,12 @@ import net.minecraft.world.level.block.state.BlockState;
  * <li>Roll: a crop type weighted by its count, then the loot of its mature state with the hoe (Fortune applies). The
  * crops are never harvested.</li>
  * <li>Tool: a hoe ({@code #minecraft:hoes}); speed: the shared formula × the plant farm curve of the Job.</li>
+ * <li>NPC drop pool ({@link JobDrops}): the scan also counts the blocks of the Job's entries, the roll adds them.</li>
  * </ul>
  * Roll, tool and speed are those of a {@link SimpleCollectionProfile}; this profile adds the scarecrow and the crop
  * filter.
  */
-public final class VeggyFarmerProfile extends FarmProfile {
+public final class VeggyFarmerProfile extends FarmProfile implements DropPoolProfile {
 
     /** The reason without a scarecrow. */
     private static final BlockingReason NO_SCARECROW = BlockingReason.of("civmod.blocked.no_scarecrow").withIcon(ModItems.SCARECROW.get());
@@ -51,7 +54,7 @@ public final class VeggyFarmerProfile extends FarmProfile {
     private static final int HALF_HEIGHT = 10;
 
     private final SimpleCollectionProfile crops = SimpleCollectionProfile.builder(BlockTags.CROPS)
-            .tool(ItemTags.HOES, () -> Items.STONE_HOE).build();
+            .tool(ItemTags.HOES, () -> Items.STONE_HOE).dropPool(CivMod.id("veggy_farmer")).build();
 
     /**
      * @param state a block state
@@ -93,7 +96,8 @@ public final class VeggyFarmerProfile extends FarmProfile {
 
     @Override
     public SectionScan<? extends ScanResult> createScan(BlockPos center, int radius) {
-        return new BlockCountScan(center, radius, HALF_HEIGHT, VeggyFarmerProfile::counts, 1);
+        JobDrops.Pool pool = pool();
+        return new BlockCountScan(center, radius, HALF_HEIGHT, state -> counts(state) || pool.counts(state), 1);
     }
 
     /** "No scarecrow" without a work place; an empty field is "No resources". */
@@ -113,8 +117,13 @@ public final class VeggyFarmerProfile extends FarmProfile {
     }
 
     @Override
-    public Optional<Produced> produce(Context context) {
-        return crops.produce(context);
+    public Optional<Identifier> dropPool() {
+        return crops.dropPool();
+    }
+
+    @Override
+    public Optional<Produced> produce(Context context, JobDrops.Tools tools) {
+        return crops.produce(context, tools);
     }
 
     @Override
@@ -125,5 +134,10 @@ public final class VeggyFarmerProfile extends FarmProfile {
     @Override
     public Item dropped(ServerLevel level, BlockPos pos, Identifier type, ItemStack tool) {
         return crops.dropped(level, pos, type, tool);
+    }
+
+    @Override
+    public Set<Item> droppedItems(ServerLevel level, BlockPos pos, Identifier type, ItemStack tool) {
+        return crops.droppedItems(level, pos, type, tool);
     }
 }

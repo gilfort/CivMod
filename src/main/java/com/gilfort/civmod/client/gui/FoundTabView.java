@@ -258,6 +258,7 @@ final class FoundTabView implements JobBlockTabView {
         }
         CivGui.slotHover(graphics, x, y);
         List<Component> lines = new ArrayList<>(List.of(entry.icon().getHoverName()));
+        lines.addAll(entry.dropLines());
         if (entry.needsTool()) {
             lines.add(Component.translatable("civmod.gui.found.needs_tool").withStyle(ChatFormatting.RED));
         }

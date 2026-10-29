@@ -1,0 +1,6 @@
+{
+  "job": ["civmod:lumberjack", "civmod:gatherer"],
+  "from": "minecraft:wither_rose",
+  "result": "minecraft:bone_meal",
+  "chance": 0.0
+}

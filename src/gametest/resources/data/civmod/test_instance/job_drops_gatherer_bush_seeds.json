@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:job_drops_gatherer_bush_seeds",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -1,7 +1,7 @@
 package com.gilfort.civmod.api;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.DoubleUnaryOperator;
@@ -14,6 +14,8 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.job.BlockCountScan;
 import com.gilfort.civmod.job.BlockSearch;
+import com.gilfort.civmod.job.DropPoolProfile;
+import com.gilfort.civmod.job.JobDrops;
 import com.gilfort.civmod.job.PlantStates;
 
 import net.minecraft.core.BlockPos;
@@ -63,7 +65,7 @@ import net.minecraft.world.level.block.state.BlockState;
  * </ul>
  */
 @ApiStatus.Experimental
-public final class SimpleCollectionProfile implements ResourceCollectionProfile {
+public final class SimpleCollectionProfile implements DropPoolProfile {
 
     private static final int AUTO_SEARCH_HORIZONTAL = 20;
     /** How far up and down the scan and the work place search reach. */
@@ -76,6 +78,7 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
     private final int minimumCount;
     private final DoubleUnaryOperator productivity;
     private final Optional<BlockingReason> nothingFound;
+    private final Optional<Identifier> dropPool;
 
     private SimpleCollectionProfile(Builder builder) {
         this.blocks = builder.blocks;
@@ -85,6 +88,18 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
         this.minimumCount = builder.minimumCount;
         this.productivity = builder.productivity;
         this.nothingFound = Optional.ofNullable(builder.nothingFound);
+        this.dropPool = Optional.ofNullable(builder.dropPool);
+    }
+
+    @ApiStatus.Internal
+    @Override
+    public Optional<Identifier> dropPool() {
+        return dropPool;
+    }
+
+    /** A block of the tag, or one an entry of the Job's drop pool drops from (in any state). */
+    private boolean isBlock(BlockState state) {
+        return state.is(blocks) || pool().names(state);
     }
 
     /**
@@ -113,12 +128,12 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
 
     @Override
     public boolean isWorkPlace(ServerLevel level, BlockPos pos) {
-        return level.isLoaded(pos) && level.getBlockState(pos).is(blocks);
+        return level.isLoaded(pos) && isBlock(level.getBlockState(pos));
     }
 
     @Override
     public boolean isAssignableWorkPlace(Level level, BlockPos pos) {
-        return level.getBlockState(pos).is(blocks);
+        return isBlock(level.getBlockState(pos));
     }
 
     @Override
@@ -128,7 +143,7 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
 
     @Override
     public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock, Predicate<BlockPos> free) {
-        return BlockSearch.nearest(level, jobBlock, AUTO_SEARCH_HORIZONTAL, HALF_HEIGHT, state -> state.is(blocks),
+        return BlockSearch.nearest(level, jobBlock, AUTO_SEARCH_HORIZONTAL, HALF_HEIGHT, this::isBlock,
                 pos -> free.test(pos) && BlockSearch.isExposed(level, pos));
     }
 
@@ -140,7 +155,7 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
 
     @Override
     public int scanRadius(int jobBlockLevel) {
-        return radius == null ? ResourceCollectionProfile.super.scanRadius(jobBlockLevel) : radius.applyAsInt(jobBlockLevel);
+        return radius == null ? DropPoolProfile.super.scanRadius(jobBlockLevel) : radius.applyAsInt(jobBlockLevel);
     }
 
     @Override
@@ -150,7 +165,8 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
 
     @Override
     public SectionScan<? extends ScanResult> createScan(BlockPos center, int radius) {
-        return new BlockCountScan(center, radius, HALF_HEIGHT, state -> state.is(blocks) && PlantStates.counts(state), minimumCount);
+        JobDrops.Pool pool = pool();
+        return new BlockCountScan(center, radius, HALF_HEIGHT, state -> (state.is(blocks) && PlantStates.counts(state)) || pool.counts(state), minimumCount);
     }
 
     @Override
@@ -187,38 +203,52 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
 
     @Override
     public Optional<Produced> produce(Context context) {
+        return produce(context, JobDrops.Tools.NONE);
+    }
+
+    /**
+     * The roll with the Job's drop pool: after the loot of the picked state (unless an entry replaces it) every entry of
+     * that state rolls on its own; a type whose loot is replaced and whose entries are all at Max or miss their tool
+     * leaves the roll.
+     */
+    @ApiStatus.Internal
+    @Override
+    public Optional<Produced> produce(Context context, JobDrops.Tools tools) {
         BlockCountScan.Result scan = counted(context.scan());
         List<Identifier> harvestable = scan.foundBlocks().stream().filter(type -> canObtain(context.tool(), type)).toList();
         if (harvestable.isEmpty()) {
             return Optional.empty();
         }
         Set<Identifier> leftOut = leftOut(context, harvestable);
-        List<Identifier> group = harvestable.stream().filter(type -> !leftOut.contains(type)).toList();
+        JobDrops.Pool pool = pool();
+        List<Identifier> group = harvestable.stream()
+                .filter(type -> !leftOut.contains(type) && !pool.exhausted(type, false, context.atMax(), tools)).toList();
         if (group.isEmpty()) {
             // Every type excluded or at Max: an empty roll still counts as work (EXP, tool wear).
             return Optional.of(new Produced(List.of(), context.tool()));
         }
         // Weighted by count per counted state: the roll gives the loot of the state it picks (an age-2 berry bush).
-        Set<Identifier> rolledTypes = Set.copyOf(group);
-        List<Map.Entry<BlockState, Integer>> states = scan.states().entrySet().stream()
-                .filter(entry -> rolledTypes.contains(BuiltInRegistries.BLOCK.getKey(entry.getKey().getBlock()))).toList();
-        int pick = context.level().getRandom().nextInt(states.stream().mapToInt(Map.Entry::getValue).sum());
-        BlockState state = states.getLast().getKey();
-        for (Map.Entry<BlockState, Integer> entry : states) {
-            pick -= entry.getValue();
-            if (pick < 0) {
-                state = entry.getKey();
-                break;
-            }
+        BlockState state = scan.pick(Set.copyOf(group), context.level().getRandom());
+        List<JobDrops.Drop> entries = pool.of(state);
+        List<ItemStack> drops = new ArrayList<>();
+        if (!JobDrops.replaces(entries)) {
+            drops.addAll(Block.getDrops(state, context.level(), context.poi(), null, context.settler(), context.tool()));
         }
-        List<ItemStack> drops = Block.getDrops(state, context.level(), context.poi(), null, context.settler(), context.tool());
+        drops.addAll(JobDrops.roll(context.level(), entries, context.tool(), context.atMax(), tools, new ItemStack(state.getBlock())));
         return Optional.of(new Produced(drops, context.tool()));
     }
 
+    /** The tool harvests the block, or an entry of the Job's drop pool drops from it. */
     @Override
     public boolean canObtain(ItemStack tool, Identifier block) {
         BlockState state = PlantStates.rolled(BuiltInRegistries.BLOCK.getValue(block));
-        return !state.requiresCorrectToolForDrops() || (!tool.isEmpty() && tool.isCorrectToolForDrops(state));
+        return !state.requiresCorrectToolForDrops() || (!tool.isEmpty() && tool.isCorrectToolForDrops(state)) || !pool().ofType(block, false).isEmpty();
+    }
+
+    /** The first item of the block's loot, and the results of the Job's drop pool entries for it. */
+    @Override
+    public Set<Item> droppedItems(ServerLevel level, BlockPos pos, Identifier type, ItemStack tool) {
+        return pool().droppedItems(type, false, () -> Set.of(dropped(level, pos, type, tool)));
     }
 
     /** The first item of the block's loot with the tool. */
@@ -242,6 +272,7 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
         private int minimumCount = 1;
         private DoubleUnaryOperator productivity = total -> 1.0;
         private @Nullable BlockingReason nothingFound;
+        private @Nullable Identifier dropPool;
 
         private Builder(TagKey<Block> blocks) {
             this.blocks = blocks;
@@ -295,6 +326,18 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
          */
         public Builder whenNothingFound(BlockingReason reason) {
             this.nothingFound = reason;
+            return this;
+        }
+
+        /**
+         * CivMod's farming Jobs only: the profile takes the entries of the Job's NPC drop pool ({@link JobDrops}).
+         *
+         * @param job the Job id
+         * @return this builder
+         */
+        @ApiStatus.Internal
+        public Builder dropPool(Identifier job) {
+            this.dropPool = job;
             return this;
         }
 

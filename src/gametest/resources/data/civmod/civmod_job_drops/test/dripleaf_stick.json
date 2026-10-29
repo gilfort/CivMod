@@ -1,0 +1,5 @@
+{
+  "job": ["civmod:gatherer"],
+  "from": "minecraft:big_dripleaf",
+  "result": "minecraft:stick"
+}

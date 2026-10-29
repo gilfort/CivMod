@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 import com.gilfort.civmod.client.ClientInnateRecipes;
+import com.gilfort.civmod.client.ClientJobDrops;
 import com.gilfort.civmod.client.gui.JobBlockScreen;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.menu.JobBlockMenu;
@@ -52,7 +53,8 @@ import net.minecraft.world.phys.shapes.Shapes;
  * differ ({@code plugins/stone_cutting}, {@code plugins/campfire}).
  * <p>
  * The innate recipes ({@code civmod:job_crafting}) get the display-only "Job Recipes" category
- * ({@link InnateRecipeCategory}) with the Jobs that know them as workstations.
+ * ({@link InnateRecipeCategory}) with the Jobs that know them as workstations; the NPC drop pool entries the
+ * display-only "Settler Gathering" category ({@link GatheringCategory}) with their Jobs as workstations.
  */
 @REIPluginClient
 public final class CivModReiPlugin implements REIClientPlugin {
@@ -66,11 +68,14 @@ public final class CivModReiPlugin implements REIClientPlugin {
     public void registerCategories(CategoryRegistry registry) {
         registry.add(new InnateRecipeCategory());
         ClientInnateRecipes.allJobs().forEach(job -> registry.addWorkstations(InnateRecipeDisplay.CATEGORY, EntryStacks.of(job.icon())));
+        registry.add(new GatheringCategory());
+        ClientJobDrops.allJobs().forEach(job -> registry.addWorkstations(GatheringDisplay.CATEGORY, EntryStacks.of(job.icon())));
     }
 
     @Override
     public void registerDisplays(DisplayRegistry registry) {
         ClientInnateRecipes.recipes().forEach(holder -> registry.add(new InnateRecipeDisplay(holder)));
+        ClientJobDrops.drops().forEach(drop -> registry.add(new GatheringDisplay(drop)));
     }
 
     @Override

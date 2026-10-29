@@ -1,0 +1,6 @@
+{
+  "job": "civmod:animal_farmer",
+  "from": "minecraft:armadillo",
+  "result": "minecraft:armadillo_scute",
+  "mode": "replace"
+}

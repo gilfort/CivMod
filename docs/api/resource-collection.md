@@ -106,6 +106,36 @@ While the scan found what `requires` names, the recipe is an own entry of the Fo
 
 Your profile decides how much of it the scan found with `count(scan, requires)` (0: the recipe is not offered): by default the number of found block types whose default state matches a block requirement; the builder counts the blocks counted in a matching state (an age-3 berry bush); override it for a scan of entities or block states (CivMod's Animal Farmer counts adult animals, the Beekeeper hives with honey or full hives). `weight(scan, type)` is 1 per found type by default (the Animal Farmer weighs an animal type by its count).
 
+## NPC drop pools
+
+Modpacks give CivMod's farming Jobs (Gatherer, Plantation Farmer, Veggy Farmer, Animal Farmer, Beekeeper) extra drops only settlers get, without code: one JSON per entry in `data/<namespace>/civmod_job_drops/` (subfolders are fine). An entry can also add a new plant or animal: the Job's scan then counts it (Found tab, farm curve) and the settler "harvests" it without changing the world.
+
+```json
+{
+  "job": "civmod:gatherer",
+  "from": "minecraft:bush",
+  "state": { "age": "3" },
+  "result": { "id": "minecraft:melon_seeds", "count": { "min": 1, "max": 2 } },
+  "chance": 0.05,
+  "mode": "add",
+  "tool": "#c:tools/shear"
+}
+```
+
+- `job`: a Job id or a list. `[]` turns the entry off, so a pack disables a default by shipping a file at the same path. Entries for other Jobs (Lumberjack, Miner, Fisherman, addon Jobs) are ignored with a log warning.
+- `from`: a block id, `#block tag` or a list; for the Animal Farmer entity type ids or tags (adult animals around the hay bale).
+- `state` (optional, blocks only): block-state properties the counted block must have, exact values or `{"min", "max"}` (unripe blocks are not counted and do not roll the entry).
+- `result`: an item id, or `{"id", "count"}` with a number or `{"min", "max"}` (1–64).
+- `chance` (optional, 0–1, default 1): each entry rolls on its own every time its type is rolled.
+- `mode` (optional): `add` (default) keeps the type's normal loot; `replace` skips it for that Job (one `replace` entry is enough; the other entries still roll).
+- `tool` (optional): an item id or `#item tag`. The settler uses such a tool straight from its collect inventory for that drop (1 durability when the entry drops, no visible tool switch); without one the entry is skipped and its Found tab line says "Needs: Shears". Without `tool` the Job's own tool counts (or bare hands).
+
+Enchantments of the tool used apply: Fortune (blocks) or Looting (animals) add 0–1 items per level to the count; Silk Touch on a block gives the block itself once per output instead of the entries' results. An unknown Job, block, entity type or item skips the file with a log warning; files reload with `/reload`.
+
+An output still picks one found type weighted by count, rolls its normal loot (mode `add`), then every entry of that Job and type. Nothing dropped is an empty output that still counts as work. Excluding a type in the Found tab excludes all its drops; the Home Clerk's Max works per result item: an entry whose result is at Max is skipped, a type pauses only when everything it can give is at Max, and a type whose loot is replaced and whose entries are all at Max or miss their tool leaves the roll. The type's tooltip lists its extra drops ("Also: Melon Seeds 5 %"). JEI and REI show every entry in the display-only "Settler Gathering" category (the normal loot is not shown).
+
+CivMod's defaults: the Plantation Farmer gets a vine from vines (100 %), the Gatherer melon, pumpkin and beetroot seeds from bushes (5 % each).
+
 ## Biome bonuses
 
 The loop applies a biome bonus's `speed` to `speed × productivity` and its `double_drop` to the stacks `produce` returns. `rare_chance` needs the profile: a roll with a rare group (the Miner's ores, the Fisherman's treasure) overrides `rareGroup()` with the group's name and multiplies the group's chance with `context.rareChance(baseChance)` (capped at 1.0). Profiles without a rare group ignore `rare_chance`. A profile whose Found tab lists the rare group's types overrides `inRareGroup(scan, type)` too (the Miner: its ores), so the tab marks them with a bonus star. See the getting-started guide for the file format.

@@ -1,0 +1,6 @@
+{
+  "job": "civmod:gatherer",
+  "from": "minecraft:bush",
+  "result": "minecraft:melon_seeds",
+  "chance": 0.05
+}

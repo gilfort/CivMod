@@ -12,6 +12,7 @@ import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.api.SectionScan;
@@ -53,9 +54,13 @@ import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
  * scan (one small, bounded query per output) with the settler as attacker; a chicken lays an egg instead 20 % of the time.
  * No animal is hurt, no XP drops.</li>
  * <li>Speed: the shared formula × the farm curve of the counted animals.</li>
+ * <li>NPC drop pool ({@link JobDrops}): the scan also counts the adult animals of the Job's entries; their entries add to
+ * the loot of a rolled type (or replace it).</li>
  * </ul>
  */
-public final class AnimalFarmerProfile extends FarmProfile {
+public final class AnimalFarmerProfile extends FarmProfile implements DropPoolProfile {
+
+    private static final Identifier JOB = CivMod.id("animal_farmer");
 
     /** The chance that a rolled chicken gives an egg instead of its loot. */
     public static final double EGG_CHANCE = 0.2;
@@ -94,7 +99,18 @@ public final class AnimalFarmerProfile extends FarmProfile {
 
     @Override
     public SectionScan<? extends ScanResult> createScan(BlockPos center, int radius) {
-        return new AnimalScan(center, radius, HALF_HEIGHT);
+        JobDrops.Pool pool = pool();
+        return new AnimalScan(center, radius, HALF_HEIGHT, type -> !pool.of(type).isEmpty());
+    }
+
+    @Override
+    public Optional<Identifier> dropPool() {
+        return Optional.of(JOB);
+    }
+
+    @Override
+    public boolean entityDrops() {
+        return true;
     }
 
     /** Every counted animal. */
@@ -121,15 +137,17 @@ public final class AnimalFarmerProfile extends FarmProfile {
         return animals(scan).counts().getOrDefault(type, 0);
     }
 
+    /** Then the drop pool entries of the rolled type (Looting of the tool used applies, never Silk Touch). */
     @Override
-    public Optional<Produced> produce(Context context) {
+    public Optional<Produced> produce(Context context, JobDrops.Tools tools) {
         AnimalScan.Result scan = animals(context.scan());
         List<Identifier> types = scan.foundBlocks();
         if (types.isEmpty()) {
             return Optional.empty();
         }
         Set<Identifier> leftOut = leftOut(context, types);
-        List<Identifier> group = types.stream().filter(type -> !leftOut.contains(type)).toList();
+        JobDrops.Pool pool = pool();
+        List<Identifier> group = types.stream().filter(type -> !leftOut.contains(type) && !pool.exhausted(type, true, context.atMax(), tools)).toList();
         if (group.isEmpty()) {
             // Every type excluded or at Max: an empty roll still counts as work (EXP, tool wear).
             return Optional.of(new Produced(List.of(), context.tool()));
@@ -146,9 +164,17 @@ public final class AnimalFarmerProfile extends FarmProfile {
         }
         EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(rolled);
         Optional<Animal> sample = AnimalScan.sample(level, AnimalScan.box(context.poi(), scanRadius(context.jobBlockLevel()), HALF_HEIGHT), type, level.getRandom());
-        // An animal that walked off since the scan: the work is done, nothing to collect this time.
-        List<ItemStack> drops = sample.map(animal -> animal instanceof Chicken && level.getRandom().nextDouble() < EGG_CHANCE
-                ? egg(level, animal) : loot(level, animal, context.settler())).orElse(List.of());
+        if (sample.isEmpty()) {
+            // An animal that walked off since the scan: the work is done, nothing to collect this time.
+            return Optional.of(new Produced(List.of(), context.tool()));
+        }
+        Animal animal = sample.get();
+        List<JobDrops.Drop> entries = pool.of(type);
+        List<ItemStack> drops = new ArrayList<>();
+        if (!JobDrops.replaces(entries)) {
+            drops.addAll(animal instanceof Chicken && level.getRandom().nextDouble() < EGG_CHANCE ? egg(level, animal) : loot(level, animal, context.settler()));
+        }
+        drops.addAll(JobDrops.roll(level, entries, context.tool(), context.atMax(), tools, ItemStack.EMPTY));
         return Optional.of(new Produced(drops, context.tool()));
     }
 
@@ -190,11 +216,16 @@ public final class AnimalFarmerProfile extends FarmProfile {
     }
 
     /**
-     * Every item the type's loot table can give (a cow: leather and beef; a chicken also its eggs), so the type is at its
-     * Max only when all of them are. Read once per loot table and kept until a datapack reload replaces the table.
+     * Every item the type's loot table can give (a cow: leather and beef; a chicken also its eggs) and the results of the
+     * Job's drop pool entries for it, so the type is at its Max only when all of them are. The loot items are read once
+     * per loot table and kept until a datapack reload replaces the table.
      */
     @Override
     public Set<Item> droppedItems(ServerLevel level, BlockPos pos, Identifier type, ItemStack tool) {
+        return pool().droppedItems(type, true, () -> lootItems(level, type));
+    }
+
+    private Set<Item> lootItems(ServerLevel level, Identifier type) {
         EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.getValue(type);
         Optional<ResourceKey<LootTable>> key = entityType.getDefaultLootTable();
         if (key.isEmpty()) {

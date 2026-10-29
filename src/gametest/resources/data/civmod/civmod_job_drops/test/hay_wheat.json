@@ -1,0 +1,6 @@
+{
+  "job": "civmod:plantation_farmer",
+  "from": "minecraft:hay_block",
+  "result": "minecraft:wheat",
+  "mode": "replace"
+}

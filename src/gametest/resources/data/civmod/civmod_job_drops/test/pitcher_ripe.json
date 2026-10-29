@@ -1,0 +1,7 @@
+{
+  "job": "civmod:gatherer",
+  "from": "minecraft:pitcher_crop",
+  "state": { "age": "4" },
+  "result": { "id": "minecraft:apple", "count": { "min": 2, "max": 2 } },
+  "mode": "replace"
+}

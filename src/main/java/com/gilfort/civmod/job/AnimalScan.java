@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.ScanResult;
@@ -24,8 +25,8 @@ import net.minecraft.world.phys.AABB;
 
 /**
  * Scan of the Animal Farmer (vault {@code Jobs/Animal Farmer.md}): counts the adult animals of
- * {@code #civmod:farm_animals} per entity type in a box around the hay bale. One box query in a single {@link #step};
- * it sees the animals of loaded chunks only.
+ * {@code #civmod:farm_animals} (and of the Job's drop pool entries) per entity type in a box around the hay bale. One
+ * box query in a single {@link #step}; it sees the animals of loaded chunks only.
  */
 public final class AnimalScan implements SectionScan<AnimalScan.Result> {
 
@@ -67,6 +68,7 @@ public final class AnimalScan implements SectionScan<AnimalScan.Result> {
     }
 
     private final AABB box;
+    private final Predicate<EntityType<?>> counted;
     private boolean done;
     private Result result = Result.EMPTY;
 
@@ -76,7 +78,18 @@ public final class AnimalScan implements SectionScan<AnimalScan.Result> {
      * @param halfHeight how far up and down
      */
     public AnimalScan(BlockPos center, int radius, int halfHeight) {
+        this(center, radius, halfHeight, type -> false);
+    }
+
+    /**
+     * @param center     the scan centre (the hay bale)
+     * @param radius     the horizontal reach
+     * @param halfHeight how far up and down
+     * @param also       entity types counted besides {@link #FARM_ANIMALS} (those of the Job's drop pool entries)
+     */
+    public AnimalScan(BlockPos center, int radius, int halfHeight, Predicate<EntityType<?>> also) {
         this.box = box(center, radius, halfHeight);
+        this.counted = type -> BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(type).is(FARM_ANIMALS) || also.test(type);
     }
 
     /**
@@ -89,12 +102,9 @@ public final class AnimalScan implements SectionScan<AnimalScan.Result> {
         return new AABB(center).inflate(radius, halfHeight, radius);
     }
 
-    /**
-     * @param animal an animal
-     * @return whether the Animal Farmer counts it: a living adult of {@link #FARM_ANIMALS}
-     */
-    public static boolean counts(Animal animal) {
-        return animal.isAlive() && !animal.isBaby() && animal.getType().builtInRegistryHolder().is(FARM_ANIMALS);
+    /** A living adult. */
+    private static boolean adult(Animal animal) {
+        return animal.isAlive() && !animal.isBaby();
     }
 
     @Override
@@ -108,7 +118,7 @@ public final class AnimalScan implements SectionScan<AnimalScan.Result> {
             return;
         }
         Map<Identifier, Integer> counts = new HashMap<>();
-        for (Animal animal : level.getEntitiesOfClass(Animal.class, box, AnimalScan::counts)) {
+        for (Animal animal : level.getEntitiesOfClass(Animal.class, box, animal -> adult(animal) && counted.test(animal.getType()))) {
             counts.merge(BuiltInRegistries.ENTITY_TYPE.getKey(animal.getType()), 1, Integer::sum);
         }
         result = new Result(Map.copyOf(counts));
@@ -128,11 +138,11 @@ public final class AnimalScan implements SectionScan<AnimalScan.Result> {
      * @param box    where to look
      * @param type   the rolled type
      * @param random the random source
-     * @return one of the first animals found, empty if none is there (it walked off)
+     * @return one of the first living adults found, empty if none is there (it walked off)
      */
     public static Optional<Animal> sample(ServerLevel level, AABB box, EntityType<?> type, RandomSource random) {
         List<Animal> found = new ArrayList<>();
-        level.getEntities(EntityTypeTest.forClass(Animal.class), box, animal -> animal.getType() == type && counts(animal), found, SAMPLE_LIMIT);
+        level.getEntities(EntityTypeTest.forClass(Animal.class), box, animal -> animal.getType() == type && adult(animal), found, SAMPLE_LIMIT);
         return found.isEmpty() ? Optional.empty() : Optional.of(found.get(random.nextInt(found.size())));
     }
 }

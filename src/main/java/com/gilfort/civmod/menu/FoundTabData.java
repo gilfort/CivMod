@@ -17,6 +17,8 @@ import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.job.CollectionRecipes;
+import com.gilfort.civmod.job.DropPoolProfile;
+import com.gilfort.civmod.job.JobDrops;
 import com.gilfort.civmod.job.SavedScan;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Stock;
@@ -69,9 +71,11 @@ public record FoundTabData(List<Section> sections) {
      * @param needsInput  for an innate recipe ({@code type} is the recipe id): the line of the input neither on the
      *                    working settler's belt nor in the collect inventory ("Needs: Bucket"; greyed out, left out of
      *                    the roll), empty when it has its inputs or for a found resource
+     * @param dropLines   the extra drops of the Job's NPC drop pool for the type ("Also: Melon Seeds 5 %"), greyed out at
+     *                    Max or without their tool ({@link JobDrops#lines})
      */
     public record Entry(Identifier type, ItemStack icon, boolean needsTool, boolean excluded, Optional<Component> maxAt, boolean rareBonus,
-            boolean doubleBonus, List<Component> bonusLines, Optional<Component> needsInput) {
+            boolean doubleBonus, List<Component> bonusLines, Optional<Component> needsInput, List<Component> dropLines) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Entry> STREAM_CODEC = StreamCodec.composite(
@@ -84,6 +88,7 @@ public record FoundTabData(List<Section> sections) {
                 ByteBufCodecs.BOOL, Entry::doubleBonus,
                 ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), Entry::bonusLines,
                 ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs::optional), Entry::needsInput,
+                ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), Entry::dropLines,
                 Entry::new);
 
         /**
@@ -96,9 +101,11 @@ public record FoundTabData(List<Section> sections) {
          * @param doubleBonus whether a double drop acts on it
          * @param bonusLines  the stars' tooltip
          * @param needsInput  the missing input of an innate recipe
+         * @param dropLines   the extra drops of the drop pool
          */
         public Entry {
             bonusLines = List.copyOf(bonusLines);
+            dropLines = List.copyOf(dropLines);
         }
 
         @Override
@@ -106,12 +113,13 @@ public record FoundTabData(List<Section> sections) {
             // ItemStack has no value equality.
             return other instanceof Entry entry && type.equals(entry.type) && ItemStack.matches(icon, entry.icon) && needsTool == entry.needsTool
                     && excluded == entry.excluded && maxAt.equals(entry.maxAt) && rareBonus == entry.rareBonus && doubleBonus == entry.doubleBonus
-                    && bonusLines.equals(entry.bonusLines) && needsInput.equals(entry.needsInput);
+                    && bonusLines.equals(entry.bonusLines) && needsInput.equals(entry.needsInput) && dropLines.equals(entry.dropLines);
         }
 
         @Override
         public int hashCode() {
-            return type.hashCode() * 31 + maxAt.hashCode() * 7 + bonusLines.hashCode() * 17 + needsInput.hashCode() * 13 + (rareBonus ? 8 : 0)
+            return type.hashCode() * 31 + maxAt.hashCode() * 7 + bonusLines.hashCode() * 17 + needsInput.hashCode() * 13 + dropLines.hashCode() * 19
+                    + (rareBonus ? 8 : 0)
                     + (doubleBonus ? 4 : 0) + (needsTool ? 2 : 0) + (excluded ? 1 : 0);
         }
     }
@@ -231,6 +239,10 @@ public record FoundTabData(List<Section> sections) {
         BiomeBonus bonus = settler == null ? BiomeBonus.NONE : CivModApi.biomeBonus(settler, pos);
         boolean rareActs = !bonus.rareChance().sources().isEmpty();
         Set<Identifier> excluded = block.excluded(job);
+        Stock collect = ClerkStorage.stock(level, site.collect(), DayClock.dayTime(level), true);
+        // The extra drops of the Job's NPC drop pool, with the tools of the collect inventory.
+        Optional<DropPoolProfile> pooled = profile instanceof DropPoolProfile dropPool ? Optional.of(dropPool) : Optional.empty();
+        JobDrops.Tools tools = JobDrops.Tools.of(level, null, () -> collect);
         List<Entry> entries = new ArrayList<>(profile.found(scan, worker).stream().map(entry -> {
             // The dropped items only when needed: they roll the block's loot.
             boolean max = !atMax.isEmpty() && ResourceCollectionProfile.atMax(profile.droppedItems(level, pos, entry.type(), tool), atMax);
@@ -239,13 +251,13 @@ public record FoundTabData(List<Section> sections) {
                     : bonus.doubleDrops(new ItemStack(profile.dropped(level, pos, entry.type(), tool)));
             return new Entry(entry.type(), entry.icon(), !entry.available(), excluded.contains(entry.type()),
                     max ? clerk : Optional.empty(), rare, !drops.isEmpty(),
-                    BiomeBonusText.sourceLines(job, bonus, rare, drops), Optional.empty());
+                    BiomeBonusText.sourceLines(job, bonus, rare, drops), Optional.empty(),
+                    pooled.map(dropPool -> JobDrops.lines(dropPool.pool().ofType(entry.type(), dropPool.entityDrops()), atMax, tools)).orElse(List.of()));
         }).toList());
         // The innate recipes the scan offers, after the found resources (no biome bonus acts on them).
-        Stock collect = ClerkStorage.stock(level, site.collect(), DayClock.dayTime(level), true);
         for (CollectionRecipes.Listed recipe : CollectionRecipes.listed(level, job, profile, scan, settler, collect)) {
             entries.add(new Entry(recipe.type(), recipe.icon(), false, excluded.contains(recipe.type()),
-                    atMax.contains(recipe.result()) ? clerk : Optional.empty(), false, false, List.of(), recipe.needs()));
+                    atMax.contains(recipe.result()) ? clerk : Optional.empty(), false, false, List.of(), recipe.needs(), List.of()));
         }
         return new Section(job, true, entries, profile.foundLines(scan, worker));
     }
