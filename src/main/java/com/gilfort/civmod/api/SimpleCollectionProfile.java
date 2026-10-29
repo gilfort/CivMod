@@ -1,7 +1,7 @@
 package com.gilfort.civmod.api;
 
 import java.util.List;
-import java.util.Objects;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.DoubleUnaryOperator;
@@ -14,7 +14,7 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.job.BlockCountScan;
 import com.gilfort.civmod.job.BlockSearch;
-import com.gilfort.civmod.job.MinerProfile;
+import com.gilfort.civmod.job.PlantStates;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -45,15 +45,19 @@ import net.minecraft.world.level.block.state.BlockState;
  * <p>
  * Behaviour:
  * <ul>
+ * <li>Tool: the items of the {@code tool} tag; without {@code tool(...)} the Job works bare-handed (no tool wear, never
+ * "No tool").</li>
  * <li>Work place: the nearest exposed block of the tag (a settler can stand next to or on top of it) within 20 blocks of
  * the JobBlock, or a block of the tag set with the Scroll of Assignment. The world is never changed.</li>
- * <li>Scan: every day, around the first work point (else the JobBlock), radius by JobBlock level (default 10 × level),
- * 10 blocks up and down; each block type of the tag is counted, types found fewer than {@code minimumCount} times are
- * left out.</li>
- * <li>Roll: a found type weighted by its count, then the drops of its loot table with the settler's tool (Silk Touch and
- * Fortune apply). Types the tool cannot harvest are never rolled; types excluded at the JobBlock or at their Max at the
- * Home Clerk leave the roll. Every found type is a main resource.</li>
- * <li>Speed: the shared speed formula × {@code productivity} of the total count (default 1).</li>
+ * <li>Scan: every day, around the work place of the day, radius by JobBlock level (default 10 × level), 10 blocks up and
+ * down; each block type of the tag is counted, types found fewer than {@code minimumCount} times are left out. Plants
+ * count only when ripe (crops at full age, berry bushes with berries, ripe cocoa, cave vines with glow berries) and a
+ * two-block plant once.</li>
+ * <li>Roll: a counted state weighted by its count (so a found type by its count), then the drops of its loot table (an
+ * age-2 berry bush gives what an age-2 bush drops) with the settler's tool (Silk Touch and Fortune apply). Types the tool cannot harvest are never rolled; types excluded at the JobBlock or
+ * at their Max at the Home Clerk leave the roll. Every found type is a main resource.</li>
+ * <li>Speed: the shared speed formula × {@code productivity} of the total count (default 1) × the Job's farm curve, if it
+ * has one ({@link Job#farmCurve()}).</li>
  * <li>Nothing found: status "No resources", or with {@code whenNothingFound} status "Blocked" with that reason (also
  * when no work place is found).</li>
  * </ul>
@@ -66,8 +70,8 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
     private static final int HALF_HEIGHT = 10;
 
     private final TagKey<Block> blocks;
-    private final TagKey<Item> tool;
-    private final Supplier<? extends ItemLike> toolIcon;
+    private final @Nullable TagKey<Item> tool;
+    private final @Nullable Supplier<? extends ItemLike> toolIcon;
     private final @Nullable IntUnaryOperator radius;
     private final int minimumCount;
     private final DoubleUnaryOperator productivity;
@@ -75,8 +79,8 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
 
     private SimpleCollectionProfile(Builder builder) {
         this.blocks = builder.blocks;
-        this.tool = Objects.requireNonNull(builder.tool, "tool");
-        this.toolIcon = Objects.requireNonNull(builder.toolIcon, "tool icon");
+        this.tool = builder.tool;
+        this.toolIcon = builder.toolIcon;
         this.radius = builder.radius;
         this.minimumCount = builder.minimumCount;
         this.productivity = builder.productivity;
@@ -93,12 +97,18 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
 
     @Override
     public boolean isTool(ItemStack stack) {
-        return stack.is(tool);
+        return tool != null && stack.is(tool);
+    }
+
+    /** Without a tool: air (never shown, the Job never lacks a tool). */
+    @Override
+    public Item toolIcon() {
+        return toolIcon == null ? Items.AIR : toolIcon.get().asItem();
     }
 
     @Override
-    public Item toolIcon() {
-        return toolIcon.get().asItem();
+    public boolean needsTool() {
+        return tool != null;
     }
 
     @Override
@@ -119,7 +129,13 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
     @Override
     public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock, Predicate<BlockPos> free) {
         return BlockSearch.nearest(level, jobBlock, AUTO_SEARCH_HORIZONTAL, HALF_HEIGHT, state -> state.is(blocks),
-                pos -> free.test(pos) && MinerProfile.isExposed(level, pos));
+                pos -> free.test(pos) && BlockSearch.isExposed(level, pos));
+    }
+
+    /** The work place of the day: a Specialization's work place, never another Job's work point. */
+    @Override
+    public BlockPos scanCenter(BlockPos jobBlock, List<BlockPos> workPoints, BlockPos workPlace) {
+        return workPlace;
     }
 
     @Override
@@ -134,7 +150,7 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
 
     @Override
     public SectionScan<? extends ScanResult> createScan(BlockPos center, int radius) {
-        return new BlockCountScan(center, radius, HALF_HEIGHT, state -> state.is(blocks), minimumCount);
+        return new BlockCountScan(center, radius, HALF_HEIGHT, state -> state.is(blocks) && PlantStates.counts(state), minimumCount);
     }
 
     @Override
@@ -152,9 +168,21 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
         return productivity.applyAsDouble(counted(scan).total());
     }
 
+    /** Every counted block. */
+    @Override
+    public int farmCount(@Nullable ScanResult scan) {
+        return counted(scan).total();
+    }
+
     /** The scan of this profile ({@link #createScan}), empty while none is done. */
     private static BlockCountScan.Result counted(@Nullable ScanResult scan) {
         return scan instanceof BlockCountScan.Result counted ? counted : BlockCountScan.Result.EMPTY;
+    }
+
+    /** The counted blocks whose counted state matches an innate recipe's block requirement (an age-3 berry bush). */
+    @Override
+    public int count(ScanResult scan, JobCraftingRecipe.Requirement requires) {
+        return requires.block().isEmpty() ? 0 : counted(scan).matching(requires::matches);
     }
 
     @Override
@@ -170,31 +198,33 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
             // Every type excluded or at Max: an empty roll still counts as work (EXP, tool wear).
             return Optional.of(new Produced(List.of(), context.tool()));
         }
-        int total = group.stream().mapToInt(type -> scan.counts().get(type)).sum();
-        int pick = context.level().getRandom().nextInt(total);
-        Identifier rolled = group.getLast();
-        for (Identifier type : group) {
-            pick -= scan.counts().get(type);
+        // Weighted by count per counted state: the roll gives the loot of the state it picks (an age-2 berry bush).
+        Set<Identifier> rolledTypes = Set.copyOf(group);
+        List<Map.Entry<BlockState, Integer>> states = scan.states().entrySet().stream()
+                .filter(entry -> rolledTypes.contains(BuiltInRegistries.BLOCK.getKey(entry.getKey().getBlock()))).toList();
+        int pick = context.level().getRandom().nextInt(states.stream().mapToInt(Map.Entry::getValue).sum());
+        BlockState state = states.getLast().getKey();
+        for (Map.Entry<BlockState, Integer> entry : states) {
+            pick -= entry.getValue();
             if (pick < 0) {
-                rolled = type;
+                state = entry.getKey();
                 break;
             }
         }
-        BlockState state = BuiltInRegistries.BLOCK.getValue(rolled).defaultBlockState();
         List<ItemStack> drops = Block.getDrops(state, context.level(), context.poi(), null, context.settler(), context.tool());
         return Optional.of(new Produced(drops, context.tool()));
     }
 
     @Override
     public boolean canObtain(ItemStack tool, Identifier block) {
-        BlockState state = BuiltInRegistries.BLOCK.getValue(block).defaultBlockState();
+        BlockState state = PlantStates.rolled(BuiltInRegistries.BLOCK.getValue(block));
         return !state.requiresCorrectToolForDrops() || (!tool.isEmpty() && tool.isCorrectToolForDrops(state));
     }
 
     /** The first item of the block's loot with the tool. */
     @Override
     public Item dropped(ServerLevel level, BlockPos pos, Identifier type, ItemStack tool) {
-        BlockState state = BuiltInRegistries.BLOCK.getValue(type).defaultBlockState();
+        BlockState state = PlantStates.rolled(BuiltInRegistries.BLOCK.getValue(type));
         return Block.getDrops(state, level, pos, null, null, tool).stream().filter(stack -> !stack.isEmpty()).findFirst()
                 .map(ItemStack::getItem).orElse(Items.AIR);
     }
@@ -218,7 +248,8 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
         }
 
         /**
-         * @param tool the items that count as the Job's tool; required
+         * @param tool the items that count as the Job's tool; without a tool the Job works bare-handed (no tool wear,
+         *             never "No tool")
          * @param icon the tool shown in the "no tool" thought bubble (its simplest usable form, usually the JobBlock's
          *             starter tool)
          * @return this builder

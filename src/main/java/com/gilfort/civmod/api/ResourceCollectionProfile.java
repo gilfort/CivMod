@@ -33,7 +33,7 @@ import net.minecraft.world.level.Level;
  * <p>
  * Most collecting Jobs count blocks and produce their drops: {@link SimpleCollectionProfile#builder} builds such a
  * profile from a block tag and a tool tag. Implement this interface for Jobs with their own scan or roll (CivMod's
- * Lumberjack, Miner and Fisherman do).
+ * Lumberjack, Miner, Fisherman, Veggy Farmer, Animal Farmer and Beekeeper do).
  * <p>
  * A scan runs spread over ticks ({@link SectionScan}, one chunk section per step) whenever the scan centre or radius
  * change, or every day ({@link #rescanDaily()}); the settler keeps working with the previous result meanwhile.
@@ -155,6 +155,25 @@ public interface ResourceCollectionProfile extends CategoryProfile {
     }
 
     /**
+     * The size of the farm in the scan that the Job's farm curve ({@link Job#farmCurve()}) runs on: more counted plants,
+     * animals or hives make it faster, up to a cap per JobBlock level. Only read for a Job with a farm curve.
+     *
+     * @param scan the scan result (null while the first scan runs)
+     * @return the counted size, 0 by default
+     */
+    default int farmCount(@Nullable ScanResult scan) {
+        return 0;
+    }
+
+    /**
+     * @return whether the Job needs a tool on the belt (status "No tool" without one); a Job without works bare-handed
+     *         with {@link ItemStack#EMPTY} as its tool and wears nothing
+     */
+    default boolean needsTool() {
+        return true;
+    }
+
+    /**
      * The rare group of the Job's roll (vault {@code Systems/JobBlock.md}, decisions on biome bonuses): a roll that first
      * picks a group and then a type in it has a rare group (Miner: ores instead of stone; Fisherman: treasure instead
      * of fish), whose chance a biome bonus's {@code rare_chance} multiplies. A profile with one applies the factor in
@@ -233,8 +252,9 @@ public interface ResourceCollectionProfile extends CategoryProfile {
     }
 
     /**
-     * The item a found type drops, for the Max check of its Home Clerk's stock rule (vault
-     * {@code Systems/Resource Collection Jobs.md}): by default the block's item.
+     * The item a found type drops (vault {@code Systems/Resource Collection Jobs.md}): what the Max check of its Home
+     * Clerk's stock rule looks at unless {@link #droppedItems} names more, and what a biome bonus's double drop is
+     * checked against in the Found tab. By default the block's item.
      *
      * @param level the level
      * @param pos   where it would be mined (loot context origin)
@@ -247,8 +267,33 @@ public interface ResourceCollectionProfile extends CategoryProfile {
     }
 
     /**
+     * Every item a found type can give, for the Max check of its Home Clerk's stock rule (vault
+     * {@code Systems/Resource Collection Jobs.md}): the type is at its Max only when all of them are. By default the one
+     * {@link #dropped} item; override it when a type's loot gives several items (CivMod's Animal Farmer: beef and
+     * leather from a cow).
+     *
+     * @param level the level
+     * @param pos   where it would be obtained (loot context origin)
+     * @param type  a found type
+     * @param tool  the tool it would be obtained with (may be empty)
+     * @return the items it can give (never empty; {@code minecraft:air} alone if it gives nothing)
+     */
+    default Set<Item> droppedItems(ServerLevel level, BlockPos pos, Identifier type, ItemStack tool) {
+        return Set.of(dropped(level, pos, type, tool));
+    }
+
+    /**
+     * @param items the items a type can give ({@link #droppedItems})
+     * @param atMax the items at their Max at the Home Clerk
+     * @return whether the type is at its Max: every item it can give is
+     */
+    static boolean atMax(Set<Item> items, Set<Item> atMax) {
+        return !items.isEmpty() && atMax.containsAll(items);
+    }
+
+    /**
      * The types a roll leaves out of its group (vault {@code Systems/Resource Collection Jobs.md}): those excluded at
-     * the JobBlock and those whose dropped item is at its Max at the Home Clerk.
+     * the JobBlock and those at their Max at the Home Clerk (every item of {@link #droppedItems} at its Max).
      *
      * @param context the production context
      * @param types   the types of the rolled group
@@ -261,7 +306,7 @@ public interface ResourceCollectionProfile extends CategoryProfile {
         }
         Set<Identifier> left = new HashSet<>(excluded);
         for (Identifier type : types) {
-            if (!left.contains(type) && context.atMax().contains(context.dropped().apply(type))) {
+            if (!left.contains(type) && atMax(context.dropped().apply(type), context.atMax())) {
                 left.add(type);
             }
         }
@@ -269,7 +314,38 @@ public interface ResourceCollectionProfile extends CategoryProfile {
     }
 
     /**
-     * What the JobBlock's Found tab lists (by default the found block types); each entry can be excluded.
+     * How much of what an innate recipe of the Job requires ({@link JobCraftingRecipe#requires()}) the scan found (vault
+     * {@code Systems/Resource Collection Jobs.md}, decision 2026-10-29): while it is more than 0 the recipe is a Found tab
+     * entry and joins the roll with its weight × this count (20 cows: milk weighs 20). By default the number of found
+     * block types whose default state matches a block requirement (the scan has no counts per block); entity
+     * requirements never match. Override it for a scan that counts blocks, block states or entities
+     * ({@link SimpleCollectionProfile} and CivMod's Animal Farmer and Beekeeper do).
+     *
+     * @param scan     the scan result
+     * @param requires what the recipe requires
+     * @return how many of it the scan found, 0 if none
+     */
+    default int count(ScanResult scan, JobCraftingRecipe.Requirement requires) {
+        return requires.block().isEmpty() ? 0 : (int) scan.foundBlocks().stream()
+                .filter(type -> requires.matches(BuiltInRegistries.BLOCK.getValue(type).defaultBlockState())).count();
+    }
+
+    /**
+     * The weight of a found type in a roll that also offers innate recipes ({@link JobCraftingRecipe#weight()}): the loop
+     * first picks between the found types (those not left out, each with this weight) and the offered recipes, and only
+     * calls {@link #produce} when a found type won. 1 by default; the Animal Farmer weighs an animal type by its count.
+     *
+     * @param scan the scan result
+     * @param type a found type ({@link ScanResult#foundBlocks()})
+     * @return its weight (0 or more)
+     */
+    default int weight(ScanResult scan, Identifier type) {
+        return 1;
+    }
+
+    /**
+     * What the JobBlock's Found tab lists (by default the found block types); each entry can be excluded. The loop adds
+     * an entry per offered innate recipe after them.
      *
      * @param scan   the scan result
      * @param worker the settler working the JobBlock, if any (without one no tool marks)
@@ -326,15 +402,16 @@ public interface ResourceCollectionProfile extends CategoryProfile {
      * @param excluded   the types excluded at the JobBlock
      * @param skillLevel the skill level
      * @param atMax      the items at their Max at the Home Clerk (left out of the roll)
-     * @param dropped    the item a resource type drops with the tool ({@link #dropped}, cached per scan)
+     * @param dropped    the items a resource type can give with the tool ({@link #droppedItems}, cached per scan)
      * @param rareChanceFactor the biome bonuses' factor on the chance of the {@link #rareGroup()} (1 without)
+     * @param jobBlockLevel    the JobBlock level (1–5), the level the scan radius was taken for ({@link #scanRadius})
      */
     @ApiStatus.Experimental
-    record Context(ServerLevel level, PathfinderMob settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Set<Identifier> excluded, int skillLevel, Set<Item> atMax, Function<Identifier, Item> dropped,
-            double rareChanceFactor) {
+    record Context(ServerLevel level, PathfinderMob settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Set<Identifier> excluded, int skillLevel, Set<Item> atMax, Function<Identifier, Set<Item>> dropped,
+            double rareChanceFactor, int jobBlockLevel) {
 
         /**
-         * A context without biome bonuses (rare chance factor 1).
+         * A context without biome bonuses (rare chance factor 1) at JobBlock level 1.
          *
          * @param level      the level
          * @param settler    the settler
@@ -344,11 +421,11 @@ public interface ResourceCollectionProfile extends CategoryProfile {
          * @param excluded   the types excluded at the JobBlock
          * @param skillLevel the skill level
          * @param atMax      the items at their Max at the Home Clerk
-         * @param dropped    the item a resource type drops with the tool
+         * @param dropped    the items a resource type can give with the tool
          */
         public Context(ServerLevel level, PathfinderMob settler, @Nullable ScanResult scan, BlockPos poi, ItemStack tool, Set<Identifier> excluded,
-                int skillLevel, Set<Item> atMax, Function<Identifier, Item> dropped) {
-            this(level, settler, scan, poi, tool, excluded, skillLevel, atMax, dropped, 1.0);
+                int skillLevel, Set<Item> atMax, Function<Identifier, Set<Item>> dropped) {
+            this(level, settler, scan, poi, tool, excluded, skillLevel, atMax, dropped, 1.0, 1);
         }
 
         /**

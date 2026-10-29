@@ -292,25 +292,55 @@ public final class SettlementBlock {
     }
 
     /**
-     * The settings of a JobBlock's places, grouped for the save codec (saved flat, next to the other fields).
+     * The Found tab state of one Resource Collection Job of the JobBlock, as saved.
+     *
+     * @param job      the Job
+     * @param excluded the found resource types excluded by the player (kept when a scan no longer finds them)
+     * @param scan     the last scan of a settler working the JobBlock in that Job (the Found tab without a settler)
+     */
+    private record SavedFound(Job job, List<Identifier> excluded, Optional<SavedScan> scan) {
+
+        static final Codec<SavedFound> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                Job.CODEC.fieldOf("job").forGetter(SavedFound::job),
+                Identifier.CODEC.listOf().optionalFieldOf("excluded", List.of()).forGetter(SavedFound::excluded),
+                SavedScan.CODEC.optionalFieldOf("scan").forGetter(SavedFound::scan)
+        ).apply(instance, SavedFound::new));
+    }
+
+    /**
+     * The settings of a JobBlock's places, grouped for the save codec (saved flat, next to the other fields). The
+     * exclusions and the scan saved before the Found tab was kept per Job ({@code excluded}, {@code found_scan}) are
+     * read as the Base Job's; a Job that no longer exists drops the Found tab state of every Job.
      *
      * @param autoAssign the Jobs whose free places jobless settlers take by themselves
-     * @param excluded   the found resource types excluded by the player (Resource Collection Jobs; kept when a scan no
-     *                   longer finds them)
-     * @param scan       the last scan of a settler working the JobBlock (the Found tab without a settler)
+     * @param legacyExcluded the exclusions of an older save (read only)
+     * @param legacyScan the scan of an older save (read only)
      * @param stationTypes the unlock items in the Station Types slots, by slot ({@link Items#AIR}: empty; slot 0 is the
      *                   Base Job's station and never read back)
+     * @param found      the Found tab state per Resource Collection Job
      */
-    private record PlaceFields(List<Job> autoAssign, Set<Identifier> excluded, Optional<SavedScan> scan, List<Item> stationTypes) {
+    private record PlaceFields(List<Job> autoAssign, List<Identifier> legacyExcluded, Optional<SavedScan> legacyScan, List<Item> stationTypes,
+            List<SavedFound> found) {
 
         static final MapCodec<PlaceFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Job.CODEC.listOf().optionalFieldOf("auto_assign", List.of()).forGetter(PlaceFields::autoAssign),
-                Identifier.CODEC.listOf().optionalFieldOf("excluded", List.of()).forGetter(fields -> fields.excluded().stream().sorted().toList()),
-                SavedScan.CODEC.optionalFieldOf("found_scan").forGetter(PlaceFields::scan),
-                BuiltInRegistries.ITEM.byNameCodec().listOf().lenientOptionalFieldOf("station_types", List.of()).forGetter(PlaceFields::stationTypes)
-        ).apply(instance, (autoAssign, excluded, scan, stationTypes) -> new PlaceFields(autoAssign, Set.copyOf(excluded), scan, stationTypes)));
+                Identifier.CODEC.listOf().optionalFieldOf("excluded", List.of()).forGetter(PlaceFields::legacyExcluded),
+                SavedScan.CODEC.optionalFieldOf("found_scan").forGetter(PlaceFields::legacyScan),
+                BuiltInRegistries.ITEM.byNameCodec().listOf().lenientOptionalFieldOf("station_types", List.of()).forGetter(PlaceFields::stationTypes),
+                SavedFound.CODEC.listOf().lenientOptionalFieldOf("found", List.of()).forGetter(PlaceFields::found)
+        ).apply(instance, PlaceFields::new));
 
-        static final PlaceFields NONE = new PlaceFields(List.of(), Set.of(), Optional.empty(), List.of());
+        static final PlaceFields NONE = new PlaceFields(List.of(), List.of(), Optional.empty(), List.of(), List.of());
+    }
+
+    /**
+     * What the JobBlock keeps for the Found tab section of one Resource Collection Job (vault
+     * {@code Systems/Resource Collection Jobs.md}): its exclusions and its last scan.
+     */
+    private static final class FoundState {
+
+        private final Set<Identifier> excluded = new HashSet<>();
+        private Optional<SavedScan> scan = Optional.empty();
     }
 
     /** Maximum number of work POIs per JobBlock. */
@@ -357,8 +387,7 @@ public final class SettlementBlock {
     private final Map<Job, Library> libraries = new LinkedHashMap<>();
     private boolean byDeliveryman;
     private Optional<List<Item>> fuel;
-    private final Set<Identifier> excluded = new HashSet<>();
-    private Optional<SavedScan> foundScan;
+    private final Map<Job, FoundState> found = new LinkedHashMap<>();
     private final Set<Job> autoAssign = new LinkedHashSet<>();
     private final List<Item> stationTypes = new ArrayList<>(Collections.nCopies(StationTypes.SLOTS, Items.AIR));
 
@@ -406,8 +435,16 @@ public final class SettlementBlock {
         this.byDeliveryman = producing.byDeliveryman();
         this.fuel = producing.fuel().map(List::copyOf);
         this.autoAssign.addAll(place.autoAssign());
-        this.excluded.addAll(place.excluded());
-        this.foundScan = place.scan();
+        place.found().forEach(saved -> {
+            FoundState state = foundState(saved.job());
+            state.excluded.addAll(saved.excluded());
+            state.scan = saved.scan();
+        });
+        if (!found.containsKey(jobType) && (!place.legacyExcluded().isEmpty() || place.legacyScan().isPresent())) {
+            FoundState state = foundState(jobType);
+            state.excluded.addAll(place.legacyExcluded());
+            state.scan = place.legacyScan();
+        }
         // Slot 0 holds the Base Job's station; only the unlock items of the other slots are kept.
         for (int slot = 1; slot < Math.min(StationTypes.SLOTS, place.stationTypes().size()); slot++) {
             this.stationTypes.set(slot, place.stationTypes().get(slot));
@@ -415,7 +452,13 @@ public final class SettlementBlock {
     }
 
     private PlaceFields placeFields() {
-        return new PlaceFields(List.copyOf(autoAssign), Set.copyOf(excluded), foundScan, List.copyOf(stationTypes));
+        List<SavedFound> saved = found.entrySet().stream()
+                .map(entry -> new SavedFound(entry.getKey(), entry.getValue().excluded.stream().sorted().toList(), entry.getValue().scan)).toList();
+        return new PlaceFields(List.copyOf(autoAssign), List.of(), Optional.empty(), List.copyOf(stationTypes), saved);
+    }
+
+    private FoundState foundState(Job job) {
+        return found.computeIfAbsent(job, key -> new FoundState());
     }
 
     /**
@@ -431,17 +474,21 @@ public final class SettlementBlock {
     }
 
     /**
-     * @return the found resource types excluded at this JobBlock (read-only; Resource Collection Jobs, else empty)
+     * @param job a Resource Collection Job of this JobBlock (its Base Job or a Specialization)
+     * @return the found resource types excluded for that Job at this JobBlock (read-only; empty for other Jobs)
      */
-    public Set<Identifier> excluded() {
-        return Collections.unmodifiableSet(excluded);
+    public Set<Identifier> excluded(Job job) {
+        FoundState state = found.get(job);
+        return state == null ? Set.of() : Collections.unmodifiableSet(state.excluded);
     }
 
     /**
+     * @param job  a Resource Collection Job of this JobBlock
      * @param type a found resource type
-     * @return whether it is excluded now (toggled)
+     * @return whether it is excluded for that Job now (toggled)
      */
-    boolean toggleExcluded(Identifier type) {
+    boolean toggleExcluded(Job job, Identifier type) {
+        Set<Identifier> excluded = foundState(job).excluded;
         if (!excluded.remove(type)) {
             excluded.add(type);
             return true;
@@ -450,14 +497,23 @@ public final class SettlementBlock {
     }
 
     /**
-     * @return the last scan of a settler working this JobBlock, if any
+     * @param job a Resource Collection Job of this JobBlock
+     * @return the last scan of a settler working this JobBlock in that Job, if any
      */
-    public Optional<SavedScan> foundScan() {
-        return foundScan;
+    public Optional<SavedScan> foundScan(Job job) {
+        FoundState state = found.get(job);
+        return state == null ? Optional.empty() : state.scan;
     }
 
-    void setFoundScan(SavedScan scan) {
-        foundScan = Optional.of(scan);
+    /**
+     * @return the Jobs this JobBlock keeps a scan of, in the order their first scan came in
+     */
+    public List<Job> scannedJobs() {
+        return found.entrySet().stream().filter(entry -> entry.getValue().scan.isPresent()).map(Map.Entry::getKey).toList();
+    }
+
+    void setFoundScan(Job job, SavedScan scan) {
+        foundState(job).scan = Optional.of(scan);
     }
 
     /**

@@ -124,14 +124,14 @@ public final class FoundTabGameTests {
                 .thenExecute(() -> {
                     FoundTabData tab = FoundTabData.of(level, jobBlock);
                     helper.assertTrue(tab.entry(OAK_LOG).filter(entry -> !entry.excluded() && !entry.needsTool()).isPresent(), "Oak log listed: " + tab);
-                    helper.assertFalse(menu.tab(FoundTab.class).orElseThrow().toggleExcluded(DIAMOND_ORE), "A type the tab does not list is refused");
-                    helper.assertTrue(JobBlockSite.blockAt(level, jobBlock).orElseThrow().excluded().isEmpty(), "Nothing excluded by the refused toggle");
-                    helper.assertTrue(menu.tab(FoundTab.class).orElseThrow().toggleExcluded(OAK_LOG), "Oak log toggled");
+                    helper.assertFalse(menu.tab(FoundTab.class).orElseThrow().toggleExcluded(ModJobs.LUMBERJACK.get(), DIAMOND_ORE), "A type the tab does not list is refused");
+                    helper.assertTrue(JobBlockSite.blockAt(level, jobBlock).orElseThrow().excluded(ModJobs.LUMBERJACK.get()).isEmpty(), "Nothing excluded by the refused toggle");
+                    helper.assertTrue(menu.tab(FoundTab.class).orElseThrow().toggleExcluded(ModJobs.LUMBERJACK.get(), OAK_LOG), "Oak log toggled");
                     helper.assertTrue(FoundTabData.of(level, jobBlock).entry(OAK_LOG).filter(FoundTabData.Entry::excluded).isPresent(), "Oak log excluded");
                 })
                 .thenWaitUntil(() -> helper.assertTrue(settler.getWork().status(jobBlock) == JobStatus.ALL_EXCLUDED,
                         "Not paused: " + settler.getWork().status(jobBlock)))
-                .thenExecute(() -> helper.assertTrue(menu.tab(FoundTab.class).orElseThrow().toggleExcluded(OAK_LOG), "Oak log included again"))
+                .thenExecute(() -> helper.assertTrue(menu.tab(FoundTab.class).orElseThrow().toggleExcluded(ModJobs.LUMBERJACK.get(), OAK_LOG), "Oak log included again"))
                 .thenExecuteAfter(2 * 100 + 20, () -> helper.assertTrue(settler.getWork().status(jobBlock) != JobStatus.ALL_EXCLUDED,
                         "Still paused after including the log: " + settler.getWork().status(jobBlock)))
                 .thenExecute(() -> cleanUp(level, settler, forced))
@@ -160,12 +160,12 @@ public final class FoundTabGameTests {
         helper.startSequence()
                 .thenWaitUntil(() -> helper.assertTrue(FoundTabData.of(level, jobBlock).scanned(), "Never scanned"))
                 .thenExecute(() -> {
-                    SettlementWorld.toggleExcluded(level, jobBlock, OAK_LOG);
+                    SettlementWorld.toggleExcluded(level, jobBlock, ModJobs.LUMBERJACK.get(), OAK_LOG);
                     var ops = level.registryAccess().createSerializationContext(JsonOps.INSTANCE);
                     SettlementBlock block = JobBlockSite.blockAt(level, jobBlock).orElseThrow();
                     SettlementBlock loaded = SettlementBlock.CODEC.parse(ops, SettlementBlock.CODEC.encodeStart(ops, block).getOrThrow()).getOrThrow();
-                    helper.assertTrue(loaded.excluded().equals(java.util.Set.of(OAK_LOG)), "Exclusion not saved: " + loaded.excluded());
-                    helper.assertTrue(loaded.foundScan().isPresent(), "Scan of the JobBlock not saved");
+                    helper.assertTrue(loaded.excluded(ModJobs.LUMBERJACK.get()).equals(java.util.Set.of(OAK_LOG)), "Exclusion not saved: " + loaded.excluded(ModJobs.LUMBERJACK.get()));
+                    helper.assertTrue(loaded.foundScan(ModJobs.LUMBERJACK.get()).isPresent(), "Scan of the JobBlock not saved");
                     SettlementWorld.unassign(level, jobBlock);
                     FoundTabData tab = FoundTabData.of(level, jobBlock);
                     helper.assertTrue(tab.scanned() && tab.entry(OAK_LOG).filter(FoundTabData.Entry::excluded).isPresent(),
@@ -188,7 +188,7 @@ public final class FoundTabGameTests {
                 .thenExecute(() -> {
                     helper.assertTrue(second[0].getWork().buffer(jobBlock).stacks().stream().noneMatch(stack -> stack.is(Items.OAK_LOG)),
                             "The new settler cut excluded oak");
-                    helper.assertTrue(JobBlockSite.blockAt(level, jobBlock).orElseThrow().excluded().contains(OAK_LOG), "Exclusion lost");
+                    helper.assertTrue(JobBlockSite.blockAt(level, jobBlock).orElseThrow().excluded(ModJobs.LUMBERJACK.get()).contains(OAK_LOG), "Exclusion lost");
                     first.discard();
                     cleanUp(level, second[0], forced);
                 })
@@ -208,7 +208,7 @@ public final class FoundTabGameTests {
                 }
             }
         }
-        SettlementWorld.toggleExcluded(level, jobBlock, OAK_LOG);
+        SettlementWorld.toggleExcluded(level, jobBlock, ModJobs.LUMBERJACK.get(), OAK_LOG);
         boolean[] done = new boolean[1];
         helper.onEachTick(() -> {
             if (done[0] || !FoundTabData.of(level, jobBlock).scanned()) {
@@ -273,7 +273,7 @@ public final class FoundTabGameTests {
                     && tab.entry(GRANITE).filter(entry -> !entry.needsTool()).isPresent(), "Diamond ore needs a better tool: " + tab);
             // Every stone (and any other ore the area may hold) is excluded: only the unminable diamond ore stays.
             tab.entries().stream().map(FoundTabData.Entry::type).filter(type -> !type.equals(DIAMOND_ORE))
-                    .forEach(type -> SettlementWorld.toggleExcluded(level, jobBlock, type));
+                    .forEach(type -> SettlementWorld.toggleExcluded(level, jobBlock, ModJobs.MINER.get(), type));
             helper.assertTrue(tab.entry(STONE).isPresent(), "Stone found: " + tab);
             Container container = (Container) level.getBlockEntity(jobBlock);
             int damageBefore = settler.getInventory().getItem(Settler.BELT_START).getDamageValue();

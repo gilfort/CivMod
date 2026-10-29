@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "P": "minecraft:carved_pumpkin",
+    "H": "minecraft:hay_block",
+    "S": "minecraft:stick"
+  },
+  "pattern": [
+    "P",
+    "H",
+    "S"
+  ],
+  "result": {
+    "id": "civmod:scarecrow"
+  }
+}

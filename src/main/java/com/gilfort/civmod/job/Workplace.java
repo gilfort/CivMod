@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
@@ -115,8 +116,8 @@ final class Workplace {
     private Transient dayState = new Transient();
     private @Nullable ScanResult scan;
     private @Nullable ScanKey scanKey;
-    /** The dropped item of each resource type per tool kind, for the Max checks of every roll; cleared with the scan. */
-    private final Map<DropKey, Item> dropped = new HashMap<>();
+    /** The items each resource type can give per tool kind, for the Max checks of every roll; cleared with the scan. */
+    private final Map<DropKey, Set<Item>> dropped = new HashMap<>();
     /** The scan in flight; its result is only stored while it is still the pending one. */
     private @Nullable ScanKey scanning;
     /** Counts scan requests; a result whose request is no longer the latest (restored in between) is dropped. */
@@ -514,7 +515,7 @@ final class Workplace {
      * @param day     the day
      * @param dayTime the time of day
      */
-    void ensureScan(ServerLevel level, ResourceCollectionProfile profile, JobBlockSite site, BlockPos poi, long day, long dayTime) {
+    void ensureScan(ServerLevel level, Job job, ResourceCollectionProfile profile, JobBlockSite site, BlockPos poi, long day, long dayTime) {
         ScanKey key = new ScanKey(profile.scanCenter(site.pos(), site.block().workPoints(), poi), profile.scanRadius(site.level()),
                 profile.rescanDaily() ? day : -1L);
         if (key.equals(scanKey) || scanning != null) {
@@ -534,9 +535,9 @@ final class Workplace {
             scanKey = key;
             scanning = null;
             dropped.clear();
-            // The JobBlock keeps the latest scan for its Found tab.
+            // The JobBlock keeps the latest scan per Job for its Found tab.
             SavedScan.of(jobBlock, key.center(), key.radius(), key.day(), result)
-                    .ifPresent(saved -> JobAssignments.rememberScan(SettlementData.get(level), jobBlock, saved));
+                    .ifPresent(saved -> JobAssignments.rememberScan(SettlementData.get(level), jobBlock, job, saved));
         });
     }
 
@@ -545,7 +546,7 @@ final class Workplace {
     }
 
     /**
-     * The item a resource type drops with a tool ({@link ResourceCollectionProfile#dropped}), computed once per scan and tool kind:
+     * The items a resource type can give with a tool ({@link ResourceCollectionProfile#droppedItems}), computed once per scan and tool kind:
      * the Max checks ask for it on every production roll.
      *
      * @param level   the level
@@ -553,16 +554,16 @@ final class Workplace {
      * @param pos     where the resource is mined
      * @param type    the resource type
      * @param tool    the tool
-     * @return the dropped item
+     * @return the items it can give
      */
-    Item dropped(ServerLevel level, ResourceCollectionProfile profile, BlockPos pos, Identifier type, ItemStack tool) {
+    Set<Item> dropped(ServerLevel level, ResourceCollectionProfile profile, BlockPos pos, Identifier type, ItemStack tool) {
         DropKey key = new DropKey(type, tool.getItem(), tool.getOrDefault(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY));
-        Item item = dropped.get(key);
-        if (item == null) {
-            item = profile.dropped(level, pos, type, tool);
-            dropped.put(key, item);
+        Set<Item> items = dropped.get(key);
+        if (items == null) {
+            items = profile.droppedItems(level, pos, type, tool);
+            dropped.put(key, items);
         }
-        return item;
+        return items;
     }
 
     /**

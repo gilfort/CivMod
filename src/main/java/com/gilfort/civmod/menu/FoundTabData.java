@@ -1,5 +1,8 @@
 package com.gilfort.civmod.menu;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -13,12 +16,15 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
+import com.gilfort.civmod.job.CollectionRecipes;
 import com.gilfort.civmod.job.SavedScan;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
-import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
+import com.gilfort.civmod.settlement.StationTypes;
 import com.gilfort.civmod.settlement.StockRules;
 
 import net.minecraft.core.BlockPos;
@@ -34,19 +40,19 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * What the "Found" tab of a Resource Collection JobBlock shows (vault {@code Systems/Resource Collection Jobs.md}): the
- * resources of the latest scan with their exclusions, the tool marks for the settler working there and scan info lines
- * (the Fisherman's water and treasure chance). The server sends it while the menu is open whenever it changed
- * ({@link Sync}); the client excludes or includes an entry with {@link Toggle}.
+ * What the "Found" tab of a Resource Collection JobBlock shows (vault {@code Systems/Resource Collection Jobs.md}): one
+ * {@link Section} per Job of the settlers assigned to the JobBlock (a Gatherer JobBlock hosts the Gatherer and its
+ * Specializations), each with the resources of that Job's latest scan and the innate recipes it offers (milk while cows
+ * were found, {@link CollectionRecipes}), its exclusions, the tool and input marks for the settler
+ * working there and scan info lines (the Fisherman's water and treasure chance). The server sends it while the menu is
+ * open whenever it changed ({@link Sync}); the client excludes or includes an entry of a section with {@link Toggle}.
  *
- * @param scanned whether the JobBlock has a scan yet ("Not scanned yet" otherwise)
- * @param entries the found resources
- * @param lines   scan info, one line per value
+ * @param sections the sections, the Base Job first
  */
-public record FoundTabData(boolean scanned, List<Entry> entries, List<Component> lines) {
+public record FoundTabData(List<Section> sections) {
 
     /** Not scanned yet (any other JobBlock, or before the first sync). */
-    public static final FoundTabData EMPTY = new FoundTabData(false, List.of(), List.of());
+    public static final FoundTabData EMPTY = new FoundTabData(List.of());
 
     /**
      * One found resource.
@@ -54,15 +60,18 @@ public record FoundTabData(boolean scanned, List<Entry> entries, List<Component>
      * @param type      the type (key of the exclusion)
      * @param icon      the icon
      * @param needsTool whether the working settler's tool cannot obtain it (never without a settler)
-     * @param excluded  whether it is excluded at the JobBlock
+     * @param excluded  whether it is excluded for the section's Job at the JobBlock
      * @param maxAt       the Home Clerk whose stock rule Max its dropped item has reached, empty if it is produced
      * @param rareBonus   whether a biome bonus's rare chance acts on it (a star)
      * @param doubleBonus whether a biome bonus's double drop acts on its dropped item (a star; two offset stars with
      *                    {@code rareBonus})
      * @param bonusLines  the tooltip of the stars: each effect with its source
+     * @param needsInput  for an innate recipe ({@code type} is the recipe id): the line of the input neither on the
+     *                    working settler's belt nor in the collect inventory ("Needs: Bucket"; greyed out, left out of
+     *                    the roll), empty when it has its inputs or for a found resource
      */
     public record Entry(Identifier type, ItemStack icon, boolean needsTool, boolean excluded, Optional<Component> maxAt, boolean rareBonus,
-            boolean doubleBonus, List<Component> bonusLines) {
+            boolean doubleBonus, List<Component> bonusLines, Optional<Component> needsInput) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Entry> STREAM_CODEC = StreamCodec.composite(
@@ -74,6 +83,7 @@ public record FoundTabData(boolean scanned, List<Entry> entries, List<Component>
                 ByteBufCodecs.BOOL, Entry::rareBonus,
                 ByteBufCodecs.BOOL, Entry::doubleBonus,
                 ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), Entry::bonusLines,
+                ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs::optional), Entry::needsInput,
                 Entry::new);
 
         /**
@@ -85,6 +95,7 @@ public record FoundTabData(boolean scanned, List<Entry> entries, List<Component>
          * @param rareBonus   whether the rare chance acts on it
          * @param doubleBonus whether a double drop acts on it
          * @param bonusLines  the stars' tooltip
+         * @param needsInput  the missing input of an innate recipe
          */
         public Entry {
             bonusLines = List.copyOf(bonusLines);
@@ -95,31 +106,64 @@ public record FoundTabData(boolean scanned, List<Entry> entries, List<Component>
             // ItemStack has no value equality.
             return other instanceof Entry entry && type.equals(entry.type) && ItemStack.matches(icon, entry.icon) && needsTool == entry.needsTool
                     && excluded == entry.excluded && maxAt.equals(entry.maxAt) && rareBonus == entry.rareBonus && doubleBonus == entry.doubleBonus
-                    && bonusLines.equals(entry.bonusLines);
+                    && bonusLines.equals(entry.bonusLines) && needsInput.equals(entry.needsInput);
         }
 
         @Override
         public int hashCode() {
-            return type.hashCode() * 31 + maxAt.hashCode() * 7 + bonusLines.hashCode() * 17 + (rareBonus ? 8 : 0) + (doubleBonus ? 4 : 0)
-                    + (needsTool ? 2 : 0) + (excluded ? 1 : 0);
+            return type.hashCode() * 31 + maxAt.hashCode() * 7 + bonusLines.hashCode() * 17 + needsInput.hashCode() * 13 + (rareBonus ? 8 : 0)
+                    + (doubleBonus ? 4 : 0) + (needsTool ? 2 : 0) + (excluded ? 1 : 0);
+        }
+    }
+
+    /**
+     * The part of the tab of one Job.
+     *
+     * @param job     the Job (its profile renders the entries, its exclusions mark them)
+     * @param scanned whether the JobBlock has a scan of that Job yet ("Not scanned yet" otherwise)
+     * @param entries the found resources
+     * @param lines   scan info, one line per value
+     */
+    public record Section(Job job, boolean scanned, List<Entry> entries, List<Component> lines) {
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, Section> STREAM_CODEC = StreamCodec.composite(
+                Job.STREAM_CODEC, Section::job,
+                ByteBufCodecs.BOOL, Section::scanned,
+                Entry.STREAM_CODEC.apply(ByteBufCodecs.list()), Section::entries,
+                ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), Section::lines,
+                Section::new);
+
+        /**
+         * @param job     the Job
+         * @param scanned whether it has a scan
+         * @param entries the found resources
+         * @param lines   scan info
+         */
+        public Section {
+            entries = List.copyOf(entries);
+            lines = List.copyOf(lines);
+        }
+
+        /**
+         * @param type a resource type
+         * @return the entry of that type, if listed
+         */
+        public Optional<Entry> entry(Identifier type) {
+            return entries.stream().filter(entry -> entry.type().equals(type)).findFirst();
         }
     }
 
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, FoundTabData> STREAM_CODEC = StreamCodec.composite(
-            ByteBufCodecs.BOOL, FoundTabData::scanned,
-            Entry.STREAM_CODEC.apply(ByteBufCodecs.list()), FoundTabData::entries,
-            ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), FoundTabData::lines,
+            Section.STREAM_CODEC.apply(ByteBufCodecs.list()), FoundTabData::sections,
             FoundTabData::new);
 
     /**
-     * @param scanned whether the JobBlock has a scan
-     * @param entries the found resources
-     * @param lines   scan info
+     * @param sections the sections
      */
     public FoundTabData {
-        entries = List.copyOf(entries);
-        lines = List.copyOf(lines);
+        sections = List.copyOf(sections);
     }
 
     /**
@@ -131,53 +175,85 @@ public record FoundTabData(boolean scanned, List<Entry> entries, List<Component>
     }
 
     /**
-     * The tab of a JobBlock: the scan of the settler working it (else the last one the JobBlock kept), tool marks and
-     * treasure chance for that settler.
+     * The tab of a JobBlock: a section per Job of its assigned settlers (without settlers one per Job the JobBlock kept
+     * a scan of, else the Base Job's), each with the scan of a settler working the JobBlock in that Job (else the last
+     * one the JobBlock kept), tool marks and treasure chance for that settler.
      *
      * @param level the level
      * @param pos   the JobBlock position
-     * @return the current tab ({@link #EMPTY} without a scan or for other JobBlocks)
+     * @return the current tab ({@link #EMPTY} for other JobBlocks)
      */
     public static FoundTabData of(ServerLevel level, BlockPos pos) {
         // Absent when the JobBlock left its settlement since the menu opened: the menu syncs every tick.
         Optional<JobBlockSite> found = JobBlockSite.at(level, pos).filter(site -> hasTab(site.block().jobType()));
-        Optional<ResourceCollectionProfile> profile = found.flatMap(site -> site.block().jobType().profile(ResourceCollectionProfile.class));
-        if (found.isEmpty() || profile.isEmpty()) {
+        if (found.isEmpty()) {
             return EMPTY;
         }
         JobBlockSite site = found.get();
+        List<Section> sections = new ArrayList<>();
+        for (Job job : jobs(site.block())) {
+            job.profile(ResourceCollectionProfile.class).ifPresent(profile -> sections.add(section(level, site, job, profile)));
+        }
+        return new FoundTabData(sections);
+    }
+
+    /** The Jobs with a section: the Base Job first, then its Specializations in registry order. */
+    private static List<Job> jobs(SettlementBlock block) {
+        Set<Job> jobs = new LinkedHashSet<>();
+        block.assignees().forEach(assignee -> jobs.add(assignee.job()));
+        if (jobs.isEmpty()) {
+            jobs.addAll(block.scannedJobs());
+        }
+        if (jobs.isEmpty()) {
+            jobs.add(block.jobType());
+        }
+        List<Job> order = new ArrayList<>(List.of(block.jobType()));
+        order.addAll(StationTypes.specializations(block.jobType()));
+        return jobs.stream().sorted(Comparator.comparingInt(job -> order.contains(job) ? order.indexOf(job) : order.size())).toList();
+    }
+
+    /** The section of one Job. */
+    private static Section section(ServerLevel level, JobBlockSite site, Job job, ResourceCollectionProfile profile) {
+        BlockPos pos = site.pos();
         SettlementBlock block = site.block();
-        Settler settler = worker(level, block);
+        Settler settler = worker(level, block, job);
         ScanResult scan = Optional.ofNullable(settler).flatMap(working -> working.getWork().scan(pos))
-                .or(() -> block.foundScan().map(SavedScan::result)).orElse(null);
+                .or(() -> block.foundScan(job).map(SavedScan::result)).orElse(null);
         if (scan == null) {
-            return EMPTY;
+            return new Section(job, false, List.of(), List.of());
         }
         Optional<ResourceCollectionProfile.Worker> worker = Optional.ofNullable(settler).flatMap(working -> working.getWork().worker(pos));
-        // Max: the dropped item with the working settler's tool (without one the plain drop).
+        // Max: the items a type can give with the working settler's tool (without one the plain drop).
         Set<Item> atMax = StockRules.atMax(level, site);
         Optional<Component> clerk = block.homeClerk().flatMap(site.settlement()::block).map(ClerkStorage::name);
         ItemStack tool = worker.map(ResourceCollectionProfile.Worker::tool).orElse(ItemStack.EMPTY);
         // The biome bonus acting on the working settler today: stars at the drops it changes.
         BiomeBonus bonus = settler == null ? BiomeBonus.NONE : CivModApi.biomeBonus(settler, pos);
-        Job job = Optional.ofNullable(settler).flatMap(working -> working.jobAt(pos)).map(SettlerJob::jobType).orElse(block.jobType());
         boolean rareActs = !bonus.rareChance().sources().isEmpty();
-        List<Entry> entries = profile.get().found(scan, worker).stream().map(entry -> {
-            // The dropped item only when needed: it rolls the block's loot.
-            Item dropped = atMax.isEmpty() && bonus.doubleDrops().isEmpty() ? null : profile.get().dropped(level, pos, entry.type(), tool);
-            boolean rare = rareActs && profile.get().inRareGroup(scan, entry.type());
-            List<BiomeBonus.DoubleDrop> drops = dropped == null ? List.of() : bonus.doubleDrops(new ItemStack(dropped));
-            return new Entry(entry.type(), entry.icon(), !entry.available(), block.excluded().contains(entry.type()),
-                    !atMax.isEmpty() && atMax.contains(dropped) ? clerk : Optional.empty(), rare, !drops.isEmpty(),
-                    BiomeBonusText.sourceLines(job, bonus, rare, drops));
-        }).toList();
-        return new FoundTabData(true, entries, profile.get().foundLines(scan, worker));
+        Set<Identifier> excluded = block.excluded(job);
+        List<Entry> entries = new ArrayList<>(profile.found(scan, worker).stream().map(entry -> {
+            // The dropped items only when needed: they roll the block's loot.
+            boolean max = !atMax.isEmpty() && ResourceCollectionProfile.atMax(profile.droppedItems(level, pos, entry.type(), tool), atMax);
+            boolean rare = rareActs && profile.inRareGroup(scan, entry.type());
+            List<BiomeBonus.DoubleDrop> drops = bonus.doubleDrops().isEmpty() ? List.of()
+                    : bonus.doubleDrops(new ItemStack(profile.dropped(level, pos, entry.type(), tool)));
+            return new Entry(entry.type(), entry.icon(), !entry.available(), excluded.contains(entry.type()),
+                    max ? clerk : Optional.empty(), rare, !drops.isEmpty(),
+                    BiomeBonusText.sourceLines(job, bonus, rare, drops), Optional.empty());
+        }).toList());
+        // The innate recipes the scan offers, after the found resources (no biome bonus acts on them).
+        Stock collect = ClerkStorage.stock(level, site.collect(), DayClock.dayTime(level), true);
+        for (CollectionRecipes.Listed recipe : CollectionRecipes.listed(level, job, profile, scan, settler, collect)) {
+            entries.add(new Entry(recipe.type(), recipe.icon(), false, excluded.contains(recipe.type()),
+                    atMax.contains(recipe.result()) ? clerk : Optional.empty(), false, false, List.of(), recipe.needs()));
+        }
+        return new Section(job, true, entries, profile.foundLines(scan, worker));
     }
 
-    /** The loaded settler working the JobBlock, null if none. */
-    private static @Nullable Settler worker(ServerLevel level, SettlementBlock block) {
+    /** The loaded settler working the JobBlock in that Job, null if none. */
+    private static @Nullable Settler worker(ServerLevel level, SettlementBlock block, Job job) {
         for (SettlementBlock.Assignee assignee : block.assignees()) {
-            if (level.getEntity(assignee.id()) instanceof Settler settler) {
+            if (assignee.job() == job && level.getEntity(assignee.id()) instanceof Settler settler) {
                 return settler;
             }
         }
@@ -185,11 +261,40 @@ public record FoundTabData(boolean scanned, List<Entry> entries, List<Component>
     }
 
     /**
+     * @return whether any section has a scan
+     */
+    public boolean scanned() {
+        return sections.stream().anyMatch(Section::scanned);
+    }
+
+    /**
+     * @param job a Job
+     * @return its section, if the tab shows one
+     */
+    public Optional<Section> section(Job job) {
+        return sections.stream().filter(section -> section.job() == job).findFirst();
+    }
+
+    /**
+     * @return the found resources of every section, in section order
+     */
+    public List<Entry> entries() {
+        return sections.stream().flatMap(section -> section.entries().stream()).toList();
+    }
+
+    /**
+     * @return the scan info lines of every section, in section order
+     */
+    public List<Component> lines() {
+        return sections.stream().flatMap(section -> section.lines().stream()).toList();
+    }
+
+    /**
      * @param type a resource type
-     * @return the entry of that type, if listed
+     * @return the first entry of that type in any section, if listed
      */
     public Optional<Entry> entry(Identifier type) {
-        return entries.stream().filter(entry -> entry.type().equals(type)).findFirst();
+        return sections.stream().flatMap(section -> section.entry(type).stream()).findFirst();
     }
 
     /**
@@ -216,12 +321,13 @@ public record FoundTabData(boolean scanned, List<Entry> entries, List<Component>
     }
 
     /**
-     * Client → server: exclude or include a found resource of the open JobBlock menu.
+     * Client → server: exclude or include a found resource of one section of the open JobBlock menu.
      *
      * @param containerId the menu's container id
+     * @param job         the Job of the section
      * @param resource    the resource type
      */
-    public record Toggle(int containerId, Identifier resource) implements CustomPacketPayload {
+    public record Toggle(int containerId, Job job, Identifier resource) implements CustomPacketPayload {
 
         /** Payload type. */
         public static final Type<Toggle> TYPE = new Type<>(CivMod.id("toggle_found"));
@@ -229,6 +335,7 @@ public record FoundTabData(boolean scanned, List<Entry> entries, List<Component>
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Toggle> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.VAR_INT, Toggle::containerId,
+                Job.STREAM_CODEC, Toggle::job,
                 Identifier.STREAM_CODEC, Toggle::resource,
                 Toggle::new);
 

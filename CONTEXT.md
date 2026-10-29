@@ -17,7 +17,7 @@ The public package `com.gilfort.civmod.api` (all `@ApiStatus.Experimental` until
 _Avoid_: Plugin API, SDK
 
 **Profile**:
-The specifics a Job fills into its category's work loop; must belong to the Job's category. Code: `CategoryProfile`, read with `Job.profile(Class)`; `MissionProfile` (public, neutral hooks for success / death chances, `MissionProfile.NEUTRAL` when a Mission Job declares none), `ProducingProfile` (public, required for a Producing Job: recipe types, station tag per recipe type, input / output `ItemFilter`s, checkmark limit, work time per recipe, "execute recipe" hook; guide `docs/api/producing.md`), `ResourceCollectionProfile` (public; CivMod's Lumberjack, Miner and Fisherman implement it, job-specific options such as the Lumberjack's leaves stay in their Job: the internal `SecondaryToolProfile` gives the Lumberjack its shears), `SimpleCollectionProfile` (public builder: block tag, tool tag, radius rule, minimum count, productivity curve; output = drops of the found blocks weighted by count; guide `docs/api/resource-collection.md`).
+The specifics a Job fills into its category's work loop; must belong to the Job's category. Code: `CategoryProfile`, read with `Job.profile(Class)`; `MissionProfile` (public, neutral hooks for success / death chances, `MissionProfile.NEUTRAL` when a Mission Job declares none), `ProducingProfile` (public, required for a Producing Job: recipe types, station tag per recipe type, input / output `ItemFilter`s, checkmark limit, work time per recipe, "execute recipe" hook; guide `docs/api/producing.md`), `ResourceCollectionProfile` (public; CivMod's Lumberjack, Miner, Fisherman, Veggy Farmer, Animal Farmer and Beekeeper implement it, the Gatherer and Plantation Farmer use the builder below, job-specific options such as the Lumberjack's leaves stay in their Job: the internal `SecondaryToolProfile` gives the Lumberjack its shears), `SimpleCollectionProfile` (public builder: block tag, optional tool tag (without one bare-handed), radius rule, minimum count, productivity curve; ripe plants only (`PlantStates`); output = drops of the found blocks weighted by count; guide `docs/api/resource-collection.md`); a farming Job's **farm curve** (`FarmCurve`, `Job.farmCurve()`, `Job.productivity(scan, jobBlockLevel)`) speeds it up with the farm size, capped per JobBlock level.
 _Avoid_: Job type, behaviour
 
 **Settler Shell**:
@@ -64,7 +64,7 @@ The JobBlock tab of a Resource Collection Job listing what its scan found (Lumbe
 _Avoid_: Scan tab, resource list in the settler window
 
 **Excluded resource**:
-A found type the player right-clicked off in the Found tab; the job no longer produces it. Stored per JobBlock in the settlement data (survives a settler change, applies in catch-up, kept when a scan no longer finds it). Inside the rolled group (Miner stone / ore, Lumberjack logs vs rare drops, Fisherman fish vs treasure) the weights spread over the rest; a fully excluded group gives an empty roll (EXP and tool wear, no item). Every main resource excluded (`ResourceCollectionProfile.mainResources`) pauses the job with "All resources excluded" (`JobStatus.ALL_EXCLUDED`, retried after 30 s, at once when one is included). Code: `SettlementBlock.excluded()`, toggled through `SettlementWorld.toggleExcluded` / `JobAssignments.toggleExcluded`; `WorkRules.allExcluded`, `MinerOutput.Roll`.
+A found type the player right-clicked off in the Found tab; the job no longer produces it. Stored per JobBlock and Job in the settlement data (survives a settler change, applies in catch-up, kept when a scan no longer finds it); the Found tab shows a section per Job of the JobBlock's settlers (`FoundTabData.Section`). Inside the rolled group (Miner stone / ore, Lumberjack logs vs rare drops, Fisherman fish vs treasure) the weights spread over the rest; a fully excluded group gives an empty roll (EXP and tool wear, no item). Every main resource excluded (`ResourceCollectionProfile.mainResources`), and every innate recipe the scan offers too, pauses the job with "All resources excluded" (`JobStatus.ALL_EXCLUDED`, retried after 30 s, at once when one is included). Code: `SettlementBlock.excluded(job)`, toggled through `SettlementWorld.toggleExcluded` / `JobAssignments.toggleExcluded`; `WorkRules.allExcluded`, `MinerOutput.Roll`.
 _Avoid_: Blacklist, filter
 
 **Base Job**:
@@ -77,6 +77,30 @@ _Avoid_: Advanced job, sub-job
 **Station Types**:
 The 5 slots of a JobBlock whose Base Job has Specializations (the Mission Board too: slot 1 the Adventurer): slot 1 the Base Job's station (locked), one more open slot per level. An unlock item put into an open slot is consumed and unlocks every Specialization naming it at this JobBlock; put into a filled slot it replaces the old one, settlers of a Job no longer unlocked fall back to the Base Job (its library is kept, locked). Not the work place: the Job still needs its station in the world. Code: `StationTypes` (`put`, `unlocked`, `overview`), saved in `SettlementBlock.stationTypes()`; tab `StationTypesTab` (button `StationTypesTab.slotButtonId`, data `StationTypesTabData`), `StationTypesTabView`; offered Jobs `JobPlaces.offered(SettlementBlock)`.
 _Avoid_: Upgrade slot, unlock slot
+
+**Gatherer**:
+The Resource Collection Base Job of the Gatherer JobBlock: bare-handed, it collects the loot of the ripe wild plants of `#civmod:gatherables` (bushes, grass, ferns, mushrooms, leaf litter) around its work place, never changing them; parent of the farming Specializations below. Code: `FarmingProfiles.gatherer` (a `SimpleCollectionProfile`), `ModJobs.GATHERER`, `ModBlocks.GATHERER_BLOCK`.
+_Avoid_: Forager, harvester
+
+**Plantation Farmer**:
+A Specialization of the Gatherer (unlocked by bamboo) that collects with an axe from the plants of `#civmod:plantations` (sugar cane, bamboo, cactus, cocoa, vines, melons, pumpkins, kelp, sea pickles), each block of a stacked plant counted. Code: `FarmingProfiles.plantationFarmer`, `ModJobs.PLANTATION_FARMER`.
+
+**Veggy Farmer**:
+A Specialization of the Gatherer (unlocked by a composter) that works the crop field around a **Scarecrow**: with a hoe it collects the loot of the mature crops of `#minecraft:crops` and mature nether wart within 5 × JobBlock level of the scarecrow of the day; without a scarecrow "Blocked", "No scarecrow". Code: `VeggyFarmerProfile`, `ModJobs.VEGGY_FARMER`.
+
+**Animal Farmer**:
+A Specialization of the Gatherer (unlocked by a hay bale) that collects the loot of the adult animals of `#civmod:farm_animals` around an exposed hay bale (5 × JobBlock level) without killing them, and eggs from chickens; with an axe, whose Looting counts. An animal type is at its Max only when every item its loot can give is. Innate recipes: milk, mushroom stew. Code: `AnimalFarmerProfile`, `AnimalScan`, `LootItems`, `ModJobs.ANIMAL_FARMER`.
+_Avoid_: Rancher, butcher (no animal is killed)
+
+**Beekeeper**:
+A Specialization of the Gatherer (unlocked by a beehive) that collects honeycomb with shears from the beehives and bee nests holding honey around its work place (5 × JobBlock level), never changing their honey level; a full hive (honey level 5) offers honey bottles. Code: `BeekeeperProfile` (a `BlockCountScan` per block and honey level), `ModJobs.BEEKEEPER`.
+
+**Scarecrow**:
+The Veggy Farmer's work place: a two-block-high block that may stand on farmland and keeps it farmland; its lower half is the work point (up to 8 set with the Scroll of Assignment, one a day, else a random one within 20 blocks of the JobBlock). Code: `ScarecrowBlock`, `ModBlocks.SCARECROW`.
+
+**Farm curve**:
+How a farming Resource Collection Job speeds up with the size of its farm: productivity `0.2 × (1 + k × count)`, at most 2.0, where the count (plants, animals, hives; `ResourceCollectionProfile.farmCount`) is capped per JobBlock level (plants: `k` 0.005, caps 100 / 350 / 750 / 1350 / 2000; animals: 0.1, 20–100; hives: 0.2, 10–50); a datapack overrides it in `civmod_jobs/<job>.json` under `farm_curve`. Code: `FarmCurve`, `Job.farmCurve()`, `Job.productivity(scan, jobBlockLevel)`, `FarmingProfiles`.
+_Avoid_: Growth bonus, farm bonus
 
 **Laborer**:
 The implicit lowest-priority fallback Job of every settler; not a Job Category and never stored.
@@ -156,7 +180,7 @@ _Avoid_: Threshold, mode, Minimum rule
 A stock rule's lower bound: when the stock (plus results in delivery) falls below it, the rule opens one request; without Min the rule never requests.
 
 **Max**:
-A stock rule's cap: collecting jobs whose Home Clerk holds ≥ Max of the item leave it out of their rolls (the dropped item, Silk Touch / Fortune considered; `ResourceCollectionProfile.dropped`, `ResourceCollectionProfile.leftOut`, `StockRules.atMax`) and pause when every main resource is excluded or at Max (`JobStatus.MAX_REACHED` / `NOTHING_TO_PRODUCE` / `ALL_EXCLUDED`, `WorkRules.pause`); the Found tab marks such an entry "Maximum reached at <Clerk>" (`FoundTabData.Entry.maxAt`). Stock above Max is **surplus**.
+A stock rule's cap: collecting jobs whose Home Clerk holds ≥ Max of the item leave it out of their rolls (the dropped item, Silk Touch / Fortune considered; a type whose loot gives several items, like the Animal Farmer's cow, only when all of them are at Max; `ResourceCollectionProfile.dropped` / `droppedItems`, `ResourceCollectionProfile.leftOut`, `StockRules.atMax`) and pause when every main resource is excluded or at Max (`JobStatus.MAX_REACHED` / `NOTHING_TO_PRODUCE` / `ALL_EXCLUDED`, `WorkRules.pause`); the Found tab marks such an entry "Maximum reached at <Clerk>" (`FoundTabData.Entry.maxAt`). Stock above Max is **surplus**.
 
 **Order**:
 How much a request orders on top of Min: the **target stock** of a rule is min(Min + Order, Max); without Order it is Max, without Max it is Min (`StockRule.target`). The open request asks for target − stock − amount being crafted − amount in delivery on every check and is withdrawn at the target; the open request is the hysteresis, nothing else is saved.
@@ -244,7 +268,7 @@ One of the 54 slots of a pattern library: a 3×3 grid and an output. Made from t
 _Avoid_: Recipe (a pattern follows one), blueprint
 
 **Innate recipe**:
-A Job-only recipe of the type `civmod:job_crafting` that players cannot craft: every Producing Job named in its `jobs` knows it, in the first library slots by recipe id, locked (only the checkmark toggles), counting towards the checkmark limit; domain and filters do not apply. May name a tool (fetched onto the belt, worn per execution) and a station; without them only that recipe is skipped and marked in the Patterns tab ("Needs Shears"). Code: `JobCraftingRecipe` (API, `ModRecipes.JOB_CRAFTING`), `InnateRecipes` (per Job, tool / station lines), `Pattern.innate`, `Patterns.syncInnate` (layout on use and datapack reload, `InnateRecipeEvents`), `Patterns.setNeeds` / `PatternsTabData.needs`; recipe viewers: `ClientInnateRecipes`, the "Job Recipes" categories in `compat/jei` and `compat/rei`.
+A Job-only recipe of the type `civmod:job_crafting` that players cannot craft: every Producing Job named in its `jobs` knows it, in the first library slots by recipe id, locked (only the checkmark toggles), counting towards the checkmark limit; domain and filters do not apply. May name a tool (fetched onto the belt, worn per execution) and a station; without them only that recipe is skipped and marked in the Patterns tab ("Needs Shears"). Code: `JobCraftingRecipe` (API, `ModRecipes.JOB_CRAFTING`), `InnateRecipes` (per Job, tool / station lines), `Pattern.innate`, `Patterns.syncInnate` (layout on use and datapack reload, `InnateRecipeEvents`), `Patterns.setNeeds` / `PatternsTabData.needs`; recipe viewers: `ClientInnateRecipes`, the "Job Recipes" categories in `compat/jei` and `compat/rei`. For a Resource Collection Job named in `jobs` the recipe instead joins the roll: optional `requires` (an entity type, or a block with optional state, that the scan must have found; `ResourceCollectionProfile.count`) and `weight` (default 1, times the count of `requires` in the scan, against `ResourceCollectionProfile.weight` of the found types; `CollectionRecipes.Offer`); while offered it is an own Found tab entry (type = recipe id, exclusion and Max apply, greyed out "Needs: Bucket" without its input); the settler fetches the inputs from its collect inventory onto the belt like a tool, uses one per ingredient and collects the result (no tool wear, no double drop). Code: `CollectionRecipes`, `JobCraftingRecipe.Requirement`, `InnateRecipes.collecting`; recipes `recipe/animal_farmer/` (milk, mushroom stew), `recipe/beekeeper/` (honey bottle).
 _Avoid_: Built-in pattern, Job recipe (in code)
 
 **Fletcher**:

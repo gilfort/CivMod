@@ -193,7 +193,7 @@ public final class BiomeBonusGameTests {
         int fishCaught = 0;
         for (int i = 0; i < 200; i++) {
             var produced = profile.produce(new ResourceCollectionProfile.Context(level, settler, null, poi, rod,
-                    Set.of(), 100, Set.of(), type -> profile.dropped(level, poi, type, rod), 4.0)).orElseThrow();
+                    Set.of(), 100, Set.of(), type -> profile.droppedItems(level, poi, type, rod), 4.0, 1)).orElseThrow();
             fishCaught += (int) produced.stacks().stream().filter(stack -> fish.contains(stack.getItem())).count();
         }
         helper.assertTrue(fishCaught == 0, "Treasure chance capped at 100 %: " + fishCaught + " fish caught");

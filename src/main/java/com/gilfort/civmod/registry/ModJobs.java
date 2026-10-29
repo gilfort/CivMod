@@ -5,14 +5,18 @@ import com.gilfort.civmod.api.CategoryProfile;
 import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
+import com.gilfort.civmod.job.AnimalFarmerProfile;
+import com.gilfort.civmod.job.BeekeeperProfile;
 import com.gilfort.civmod.job.CraftspersonProfile;
 import com.gilfort.civmod.job.DomainProfile;
+import com.gilfort.civmod.job.FarmingProfiles;
 import com.gilfort.civmod.job.FishermanProfile;
 import com.gilfort.civmod.job.LumberjackProfile;
 import com.gilfort.civmod.job.MechanicProfile;
 import com.gilfort.civmod.job.MinerProfile;
 import com.gilfort.civmod.job.SmelterProfile;
 import com.gilfort.civmod.job.SmithProfile;
+import com.gilfort.civmod.job.VeggyFarmerProfile;
 
 import net.minecraft.core.Registry;
 import net.minecraft.world.item.Items;
@@ -46,6 +50,18 @@ public final class ModJobs {
     /** See vault {@code Jobs/Fisherman.md}. */
     public static final DeferredHolder<Job, Job> FISHERMAN = JOBS.register("fisherman", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
             .icon(ModItems.FISHERMAN_BLOCK).bubbleIcon(() -> Items.COD).hungerFactor(0.5).baseExp(5).profile(FishermanProfile::new).build());
+    /** See vault {@code Jobs/Gatherer.md}; collects what wild plants drop, bare-handed; the Base Job of the farming Specializations. */
+    public static final DeferredHolder<Job, Job> GATHERER = JOBS.register("gatherer", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
+            .icon(ModItems.GATHERER_BLOCK).bubbleIcon(() -> Items.SWEET_BERRIES).hungerFactor(1.0).baseExp(1).unlockItem(() -> Items.SWEET_BERRIES)
+            .farmCurve(FarmingProfiles.PLANT_CURVE).profile(FarmingProfiles::gatherer).build());
+    /** See vault {@code Jobs/Plantation Farmer.md}; a Specialization of the Gatherer, unlocked by bamboo. */
+    public static final DeferredHolder<Job, Job> PLANTATION_FARMER = JOBS.register("plantation_farmer", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
+            .parent(GATHERER).icon(() -> Items.BAMBOO).bubbleIcon(() -> Items.SUGAR_CANE).hungerFactor(1.0).baseExp(1).unlockItem(() -> Items.BAMBOO)
+            .farmCurve(FarmingProfiles.PLANT_CURVE).profile(FarmingProfiles::plantationFarmer).build());
+    /** See vault {@code Jobs/Veggy Farmer.md}; a Specialization of the Gatherer, unlocked by a composter; works the crops around a scarecrow. */
+    public static final DeferredHolder<Job, Job> VEGGY_FARMER = JOBS.register("veggy_farmer", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
+            .parent(GATHERER).icon(() -> Items.COMPOSTER).bubbleIcon(() -> Items.WHEAT).hungerFactor(1.0).baseExp(1).unlockItem(() -> Items.COMPOSTER)
+            .farmCurve(FarmingProfiles.PLANT_CURVE).profile(VeggyFarmerProfile::new).build());
     /** See vault {@code Jobs/Adventurer.md}; the Base Job of the Mission Board. */
     public static final DeferredHolder<Job, Job> ADVENTURER = JOBS.register("adventurer", () -> Job.builder(JobCategory.MISSION)
             .icon(ModItems.MISSION_BOARD).bubbleIcon(() -> Items.MAP).hungerFactor(1.0).baseExp(10).build());
@@ -87,6 +103,14 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> SMELTER = JOBS.register("smelter", () -> Job.builder(JobCategory.PRODUCING)
             .icon(ModItems.SMELTER_BLOCK).bubbleIcon(() -> Items.IRON_INGOT).displayItem(() -> Items.COAL).hungerFactor(0.5).baseExp(1)
             .jobFactor(1.0).unlockItem(() -> Items.FURNACE).profile(SmelterProfile::smelter).build());
+    /** See vault {@code Jobs/Animal Farmer.md}; a Specialization of the Gatherer, unlocked by a hay bale. */
+    public static final DeferredHolder<Job, Job> ANIMAL_FARMER = JOBS.register("animal_farmer", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
+            .parent(GATHERER).icon(() -> Items.HAY_BLOCK).bubbleIcon(() -> Items.LEATHER).hungerFactor(1.0).baseExp(1).jobFactor(1.0)
+            .unlockItem(() -> Items.HAY_BLOCK).farmCurve(FarmingProfiles.ANIMAL_CURVE).profile(AnimalFarmerProfile::new).build());
+    /** See vault {@code Jobs/Beekeeper.md}; a Specialization of the Gatherer, unlocked by a beehive. */
+    public static final DeferredHolder<Job, Job> BEEKEEPER = JOBS.register("beekeeper", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
+            .parent(GATHERER).icon(() -> Items.BEEHIVE).bubbleIcon(() -> Items.HONEYCOMB).hungerFactor(1.0).baseExp(1)
+            .unlockItem(() -> Items.BEEHIVE).farmCurve(FarmingProfiles.HIVE_CURVE).profile(BeekeeperProfile::new).build());
     /** See vault {@code Jobs/Cook.md}; cooks food at smokers, several in parallel, burning fuel; a Specialization of the Smelter. */
     public static final DeferredHolder<Job, Job> COOK = JOBS.register("cook", () -> Job.builder(JobCategory.PRODUCING)
             .parent(SMELTER).icon(() -> Items.SMOKER).bubbleIcon(() -> Items.COOKED_BEEF).displayItem(() -> Items.COOKED_BEEF).hungerFactor(0.5)

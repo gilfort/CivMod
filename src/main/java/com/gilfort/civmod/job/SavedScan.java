@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.gilfort.civmod.api.ScanResult;
@@ -18,10 +19,11 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * A scan result saved with a settler (needed to catch up after loading) and on the JobBlock (its Found tab), with the
- * key it was made for. Only the built-in result types are saved (wood, mine, water, block counts); an addon's own
+ * key it was made for. Only the built-in result types are saved (wood, mine, water, block counts, animals); an addon's own
  * {@link ScanResult} stays in memory (documented on {@link ScanResult}).
  *
  * @param jobBlock the JobBlock of the job
@@ -43,15 +45,40 @@ public record SavedScan(BlockPos jobBlock, BlockPos center, int radius, long day
     ).apply(instance, (stones, ores) -> new MineScan.Result(Set.copyOf(stones), Set.copyOf(ores))));
 
     /**
+     * A Beekeeper scan saved before it counted per honey level (now saved as block counts): loads as hives with honey,
+     * without the full ones until the next scan. Never written.
+     */
+    private static final Codec<BlockCountScan.Result> LEGACY_HIVES = RecordCodecBuilder.create(instance -> instance.group(
+            Codec.unboundedMap(Identifier.CODEC, Codec.INT).fieldOf("counts").forGetter(BlockCountScan.Result::counts),
+            Codec.INT.optionalFieldOf("full", 0).forGetter(result -> 0)
+    ).apply(instance, (counts, full) -> new BlockCountScan.Result(Map.copyOf(counts))));
+
+    /** One counted block state and its count. */
+    private static final Codec<Map.Entry<BlockState, Integer>> STATE_COUNT = RecordCodecBuilder.create(instance -> instance.group(
+            BlockState.CODEC.fieldOf("state").forGetter(Map.Entry::getKey),
+            Codec.INT.fieldOf("count").forGetter(Map.Entry::getValue)
+    ).apply(instance, Map::entry));
+
+    /** Block counts per counted state; a save from before the states (counts per block id) loads with the rolled states. */
+    private static final Codec<BlockCountScan.Result> COUNTS = Codec.withAlternative(
+            STATE_COUNT.listOf().xmap(entries -> BlockCountScan.Result.ofStates(entries.stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, Integer::sum))),
+                    result -> List.copyOf(result.states().entrySet())),
+            Codec.unboundedMap(Identifier.CODEC, Codec.INT).xmap(counts -> new BlockCountScan.Result(Map.copyOf(counts)), BlockCountScan.Result::counts));
+
+    /**
      * The saved result types, each under its own key next to the scan key (Lumberjack, Miner, Fisherman, Simple
-     * Collection profiles). A new built-in type is one more entry.
+     * Collection profiles and the Beekeeper, Animal Farmer). A new built-in type is one more entry; a result is written
+     * under the first entry of its type, so a legacy entry after it only loads.
      */
     private static final List<Kind<?>> KINDS = List.of(
             new Kind<>("wood", WoodScan.Result.class, WOOD),
             new Kind<>("mine", MineScan.Result.class, MINE),
             new Kind<>("water", WaterScan.Result.class, Codec.INT.xmap(WaterScan.Result::new, WaterScan.Result::water)),
-            new Kind<>("counts", BlockCountScan.Result.class, Codec.unboundedMap(Identifier.CODEC, Codec.INT)
-                    .xmap(counts -> new BlockCountScan.Result(Map.copyOf(counts)), BlockCountScan.Result::counts)));
+            new Kind<>("counts", BlockCountScan.Result.class, COUNTS),
+            new Kind<>("animals", AnimalScan.Result.class, Codec.unboundedMap(Identifier.CODEC, Codec.INT)
+                    .xmap(counts -> new AnimalScan.Result(Map.copyOf(counts)), AnimalScan.Result::counts)),
+            new Kind<>("hives", BlockCountScan.Result.class, LEGACY_HIVES));
 
     /** The result under the key of its type. */
     private static final MapCodec<ScanResult> RESULT = new MapCodec<>() {

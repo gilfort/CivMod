@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:collection_recipe_milk",
+  "max_ticks": 3600,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
