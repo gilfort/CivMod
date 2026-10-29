@@ -3,6 +3,7 @@ package com.gilfort.civmod.job;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import com.gilfort.civmod.api.ScanResult;
@@ -13,6 +14,7 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -75,6 +77,24 @@ public final class BlockCountScan implements SectionScan<BlockCountScan.Result> 
          */
         public int matching(Predicate<BlockState> state) {
             return states.entrySet().stream().filter(entry -> state.test(entry.getKey())).mapToInt(Map.Entry::getValue).sum();
+        }
+
+        /**
+         * @param types  the block ids that may be rolled (at least one of them counted)
+         * @param random the random source
+         * @return a counted state of those types, picked weighted by its count
+         */
+        public BlockState pick(Set<Identifier> types, RandomSource random) {
+            List<Map.Entry<BlockState, Integer>> rolled = states.entrySet().stream()
+                    .filter(entry -> types.contains(BuiltInRegistries.BLOCK.getKey(entry.getKey().getBlock()))).toList();
+            int pick = random.nextInt(rolled.stream().mapToInt(Map.Entry::getValue).sum());
+            for (Map.Entry<BlockState, Integer> entry : rolled) {
+                pick -= entry.getValue();
+                if (pick < 0) {
+                    return entry.getKey();
+                }
+            }
+            return rolled.getLast().getKey();
         }
 
         @Override

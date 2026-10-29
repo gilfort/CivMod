@@ -1,12 +1,15 @@
 package com.gilfort.civmod.job;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.api.SectionScan;
@@ -21,6 +24,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BeehiveBlock;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.common.Tags;
 
@@ -33,10 +37,14 @@ import net.neoforged.neoforge.common.Tags;
  * <li>Scan: every day the hives and nests with honey level 1 or more within 5 × JobBlock level, counted per block and
  * honey level ({@link BlockCountScan}; a full hive is one at honey level 5).</li>
  * <li>Roll: one honeycomb; a honey level is never changed.</li>
+ * <li>NPC drop pool ({@link JobDrops}): the scan also counts the blocks of the Job's entries, weighted by count against
+ * the hives in the roll; the entries of a rolled hive or block add to its drops.</li>
  * <li>Speed: the shared formula × the farm curve of the counted hives.</li>
  * </ul>
  */
-public final class BeekeeperProfile extends FarmProfile {
+public final class BeekeeperProfile extends FarmProfile implements DropPoolProfile {
+
+    private static final Identifier JOB = CivMod.id("beekeeper");
 
     /** How far up and down the scan and the work place search reach. */
     private static final int HALF_HEIGHT = 10;
@@ -68,7 +76,8 @@ public final class BeekeeperProfile extends FarmProfile {
 
     @Override
     public SectionScan<? extends ScanResult> createScan(BlockPos center, int radius) {
-        return new BlockCountScan(center, radius, HALF_HEIGHT, state -> honey(state) >= 1, 1);
+        JobDrops.Pool pool = pool();
+        return new BlockCountScan(center, radius, HALF_HEIGHT, state -> honey(state) >= 1 || pool.counts(state), 1);
     }
 
     /** Every hive and nest with honey. */
@@ -96,19 +105,52 @@ public final class BeekeeperProfile extends FarmProfile {
     }
 
     @Override
-    public Optional<Produced> produce(Context context) {
-        List<Identifier> types = hives(context.scan()).foundBlocks();
+    public Optional<Identifier> dropPool() {
+        return Optional.of(JOB);
+    }
+
+    /**
+     * A counted hive or entry block weighted by its count: a hive gives one honeycomb, an entry block its loot (unless an
+     * entry replaces it), then the entries of the picked state roll.
+     */
+    @Override
+    public Optional<Produced> produce(Context context, JobDrops.Tools tools) {
+        BlockCountScan.Result scan = hives(context.scan());
+        List<Identifier> types = scan.foundBlocks();
         if (types.isEmpty()) {
             return Optional.empty();
         }
         Set<Identifier> leftOut = leftOut(context, types);
-        boolean any = types.stream().anyMatch(type -> !leftOut.contains(type));
-        return Optional.of(new Produced(any ? List.of(new ItemStack(Items.HONEYCOMB)) : List.of(), context.tool()));
+        JobDrops.Pool pool = pool();
+        Set<Identifier> group = types.stream().filter(type -> !leftOut.contains(type) && !pool.exhausted(type, false, context.atMax(), tools))
+                .collect(Collectors.toSet());
+        if (group.isEmpty()) {
+            return Optional.of(new Produced(List.of(), context.tool()));
+        }
+        BlockState state = scan.pick(group, context.level().getRandom());
+        List<JobDrops.Drop> entries = pool.of(state);
+        List<ItemStack> drops = new ArrayList<>();
+        if (!JobDrops.replaces(entries)) {
+            drops.addAll(honey(state) >= 1 ? List.of(new ItemStack(Items.HONEYCOMB))
+                    : Block.getDrops(state, context.level(), context.poi(), null, context.settler(), context.tool()));
+        }
+        drops.addAll(JobDrops.roll(context.level(), entries, context.tool(), context.atMax(), tools, new ItemStack(state.getBlock())));
+        return Optional.of(new Produced(drops, context.tool()));
     }
 
-    /** Honeycomb from every hive and nest. */
+    /** Honeycomb from every hive and nest; the first item of an entry block's loot. */
     @Override
     public Item dropped(ServerLevel level, BlockPos pos, Identifier type, ItemStack tool) {
-        return Items.HONEYCOMB;
+        Block block = BuiltInRegistries.BLOCK.getValue(type);
+        if (block.defaultBlockState().is(BlockTags.BEEHIVES)) {
+            return Items.HONEYCOMB;
+        }
+        return Block.getDrops(block.defaultBlockState(), level, pos, null, null, tool).stream().filter(stack -> !stack.isEmpty()).findFirst()
+                .map(ItemStack::getItem).orElse(Items.AIR);
+    }
+
+    @Override
+    public Set<Item> droppedItems(ServerLevel level, BlockPos pos, Identifier type, ItemStack tool) {
+        return pool().droppedItems(type, false, () -> Set.of(dropped(level, pos, type, tool)));
     }
 }

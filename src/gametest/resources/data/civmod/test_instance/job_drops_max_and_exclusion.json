@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:job_drops_max_and_exclusion",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

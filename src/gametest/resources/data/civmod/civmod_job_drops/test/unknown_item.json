@@ -1,0 +1,5 @@
+{
+  "job": "civmod:gatherer",
+  "from": "minecraft:wither_rose",
+  "result": "civmod:no_such_item"
+}

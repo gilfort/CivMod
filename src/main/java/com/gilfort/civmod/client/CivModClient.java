@@ -125,6 +125,7 @@ public final class CivModClient {
         event.register(StationTypesTabData.Sync.TYPE, JobBlockScreen::handleStationTypeTab);
         event.register(com.gilfort.civmod.menu.FuelTabData.Sync.TYPE, JobBlockScreen::handleFuelTab);
         event.register(com.gilfort.civmod.menu.FoundTabData.Sync.TYPE, JobBlockScreen::handleFoundTab);
+        event.register(com.gilfort.civmod.job.JobDrops.Sync.TYPE, ClientJobDrops::handle);
         event.register(com.gilfort.civmod.menu.JobBlockInfo.Sync.TYPE, JobBlockScreen::handleInfo);
         event.register(com.gilfort.civmod.npc.ThoughtBubble.Show.TYPE, ThoughtBubbleRenderer::handle);
     }

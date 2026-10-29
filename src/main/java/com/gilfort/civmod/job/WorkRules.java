@@ -11,9 +11,11 @@ import com.gilfort.civmod.api.BiomeBonus;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
+import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.StockRules;
@@ -207,7 +209,11 @@ final class WorkRules {
                     ? Optional.of(new ResourceCollectionProfile.Produced(List.of(crafted.get()), ItemStack.EMPTY))
                     : profile instanceof SecondaryToolProfile withSecondary
                             ? withSecondary.produce(context, withSecondary.secondaryTool(site.block()).flatMap(kind -> SettlerTools.best(settler, kind)))
-                            : profile.produce(context);
+                            : profile instanceof DropPoolProfile pooled
+                                    // Entries with their own tool use it from the collect inventory, read only when one asks.
+                                    ? pooled.produce(context, JobDrops.Tools.of(level, settler, () -> supply.collect()
+                                            .orElseGet(() -> ClerkStorage.stock(level, site.collect(), DayClock.dayTime(level), true))))
+                                    : profile.produce(context);
             rolls++;
             if (produced.isPresent()) {
                 if (crafted.isEmpty()) {

@@ -9,6 +9,7 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.client.ClientInnateRecipes;
+import com.gilfort.civmod.client.ClientJobDrops;
 import com.gilfort.civmod.client.gui.JobBlockScreen;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.menu.JobBlockMenu;
@@ -51,8 +52,9 @@ import net.minecraft.world.item.crafting.RecipeType;
  * JobBlocks' pattern slots a pattern's output or input; the recipe transfer button fills a pattern from a recipe of
  * every recipe type a registered Producing Job follows ({@link Patterns#allRecipeTypes()}: crafting, stonecutting, an
  * addon's modded type, …). The innate recipes ({@code civmod:job_crafting}) get the display-only "Job Recipes"
- * category ({@link InnateRecipeCategory}) with the Jobs that know them as catalysts. JEI finds this class by its
- * annotation; without JEI it is never loaded.
+ * category ({@link InnateRecipeCategory}) with the Jobs that know them as catalysts; the NPC drop pool entries the
+ * display-only "Settler Gathering" category ({@link GatheringCategory}) with their Jobs as catalysts. JEI finds this
+ * class by its annotation; without JEI it is never loaded.
  */
 @JeiPlugin
 public final class CivModJeiPlugin implements IModPlugin {
@@ -64,17 +66,20 @@ public final class CivModJeiPlugin implements IModPlugin {
 
     @Override
     public void registerCategories(IRecipeCategoryRegistration registration) {
-        registration.addRecipeCategories(new InnateRecipeCategory(registration.getJeiHelpers().getGuiHelper()));
+        registration.addRecipeCategories(new InnateRecipeCategory(registration.getJeiHelpers().getGuiHelper()),
+                new GatheringCategory(registration.getJeiHelpers().getGuiHelper()));
     }
 
     @Override
     public void registerRecipes(IRecipeRegistration registration) {
         registration.addRecipes(InnateRecipeCategory.TYPE, ClientInnateRecipes.recipes());
+        registration.addRecipes(GatheringCategory.TYPE, ClientJobDrops.drops());
     }
 
     @Override
     public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
         ClientInnateRecipes.allJobs().forEach(job -> registration.addCraftingStation(InnateRecipeCategory.TYPE, job.icon()));
+        ClientJobDrops.allJobs().forEach(job -> registration.addCraftingStation(GatheringCategory.TYPE, job.icon()));
     }
 
     @Override
