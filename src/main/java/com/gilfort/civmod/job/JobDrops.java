@@ -67,6 +67,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 import net.neoforged.neoforge.event.OnDatapackSyncEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.codec.NeoForgeStreamCodecs;
 
 /**
  * NPC drop pools (vault {@code Systems/Resource Collection Jobs.md}, decisions 2026-10-29): extra drops only settlers
@@ -229,7 +230,7 @@ public final class JobDrops {
                 ByteBufCodecs.optional(StatePropertiesPredicate.STREAM_CODEC), Entry::state,
                 Result.STREAM_CODEC, Entry::result,
                 ByteBufCodecs.DOUBLE, Entry::chance,
-                ByteBufCodecs.BOOL.map(replace -> replace ? Mode.REPLACE : Mode.ADD, mode -> mode == Mode.REPLACE), Entry::mode,
+                NeoForgeStreamCodecs.enumCodec(Mode.class), Entry::mode,
                 ByteBufCodecs.optional(TAG_OR_ELEMENT_STREAM_CODEC), Entry::tool,
                 Entry::new);
 
@@ -491,7 +492,8 @@ public final class JobDrops {
     /**
      * Rolls the entries of a rolled type, each on its own with its {@code chance}: an entry whose result is at its Max
      * or whose own tool is missing is skipped; Fortune (blocks) or Looting (entities) of the tool used adds 0–1 items per
-     * level; Silk Touch on a block gives the block itself once instead of the entries' results.
+     * level; Silk Touch on a block gives the block itself once instead of the entries' results (not while the block is
+     * at Max).
      *
      * @param level   the level
      * @param entries the entries of the rolled block state or entity type
@@ -542,7 +544,7 @@ public final class JobDrops {
                 stacks.add(new ItemStack(item, Math.min(count, max)));
             }
         }
-        if (silk) {
+        if (silk && !atMax.contains(block.getItem())) {
             stacks.add(block.copyWithCount(1));
         }
         return stacks;
@@ -583,7 +585,7 @@ public final class JobDrops {
      * @param tool an entry's {@code tool}
      * @return its name: the item's, or the tag's (named after its first item)
      */
-    public static Component toolName(ExtraCodecs.TagOrElementLocation tool) {
+    private static Component toolName(ExtraCodecs.TagOrElementLocation tool) {
         if (!tool.tag()) {
             return new ItemStack(BuiltInRegistries.ITEM.getValue(tool.id())).getHoverName();
         }
@@ -633,7 +635,7 @@ public final class JobDrops {
      * @param entry the parsed entry
      * @return the entry with the farming Jobs only, or the error
      */
-    public static DataResult<Entry> validate(Identifier id, Entry entry) {
+    private static DataResult<Entry> validate(Identifier id, Entry entry) {
         List<Identifier> jobs = new ArrayList<>();
         for (Identifier jobId : entry.jobs()) {
             Optional<Job> job = ModJobs.REGISTRY.getOptional(jobId);

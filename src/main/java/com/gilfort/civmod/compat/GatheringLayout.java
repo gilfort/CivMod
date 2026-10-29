@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Set;
 
 import com.gilfort.civmod.client.ClientJobDrops;
+import com.gilfort.civmod.client.gui.CivGui;
 import com.gilfort.civmod.job.JobDrops;
 
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -53,8 +54,8 @@ public final class GatheringLayout {
     public static final int NOTE_Y = 42;
     /** How many Job icons fit into the row. */
     public static final int MAX_JOBS = WIDTH / SLOT;
-    /** Text colour of the chance and the note (the recipe viewers' grey). */
-    public static final int TEXT_COLOR = 0xFF404040;
+    /** Text colour of the chance and the note: the shared label grey. */
+    public static final int TEXT_COLOR = CivGui.LABEL_COLOR;
 
     /** Title of the category ("Settler Gathering"). */
     public static final String TITLE = "civmod.recipe_viewer.settler_gathering";

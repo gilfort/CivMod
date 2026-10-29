@@ -17,6 +17,7 @@ import me.shedaniel.rei.api.client.registry.display.DisplayCategory;
 import me.shedaniel.rei.api.common.category.CategoryIdentifier;
 import me.shedaniel.rei.api.common.util.EntryStacks;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 /**
@@ -67,9 +68,10 @@ final class GatheringCategory implements DisplayCategory<GatheringDisplay> {
                 .disableBackground().markOutput());
         widgets.add(Widgets.createLabel(new Point(x + GatheringLayout.CHANCE_X, y + GatheringLayout.ROW_Y + GatheringLayout.TEXT_Y),
                 GatheringLayout.chance(drop)).leftAligned().noShadow().color(GatheringLayout.TEXT_COLOR));
-        if (!GatheringLayout.toolIcons(drop).isEmpty()) {
+        List<ItemStack> tools = GatheringLayout.toolIcons(drop);
+        if (!tools.isEmpty()) {
             widgets.add(Widgets.createSlot(new Point(x + GatheringLayout.TOOL_X, y + GatheringLayout.ROW_Y))
-                    .entries(GatheringLayout.toolIcons(drop).stream().map(EntryStacks::of)
+                    .entries(tools.stream().map(EntryStacks::of)
                             .map(stack -> stack.tooltip(Component.translatable(GatheringLayout.TOOL_LINE))).toList()).unmarkInputOrOutput());
         }
         List<Job> jobs = ClientJobDrops.jobs(drop);

@@ -102,14 +102,6 @@ public final class AnimalScan implements SectionScan<AnimalScan.Result> {
         return new AABB(center).inflate(radius, halfHeight, radius);
     }
 
-    /**
-     * @param animal an animal
-     * @return whether the Animal Farmer counts it: a living adult of {@link #FARM_ANIMALS}
-     */
-    public static boolean counts(Animal animal) {
-        return adult(animal) && animal.getType().builtInRegistryHolder().is(FARM_ANIMALS);
-    }
-
     /** A living adult. */
     private static boolean adult(Animal animal) {
         return animal.isAlive() && !animal.isBaby();
