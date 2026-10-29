@@ -69,6 +69,7 @@ public final class CollectionRecipeGameTests {
             register(helper, "collection_recipe_max", CollectionRecipeGameTests::atMax);
             register(helper, "collection_recipe_honey_needs_full_hive", CollectionRecipeGameTests::honeyNeedsFullHive);
             register(helper, "collection_recipe_honey_bottles", CollectionRecipeGameTests::honeyBottles);
+            register(helper, "collection_recipe_block_state_requirement", CollectionRecipeGameTests::blockStateRequirement);
             register(helper, "collection_recipe_weight_by_count", CollectionRecipeGameTests::weightByCount);
         });
     }
@@ -266,8 +267,32 @@ public final class CollectionRecipeGameTests {
                 .thenSucceed();
     }
 
+    /** A block requirement with a state, for a test. */
+    private static JobCraftingRecipe.Requirement requires(Block block, StatePropertiesPredicate.Builder state) {
+        return new JobCraftingRecipe.Requirement(Optional.empty(), Optional.of(HolderSet.direct(block.builtInRegistryHolder())), state.build());
+    }
 
 
+    /**
+     * A builder Job's block requirement with a state matches the states its scan counted: age-3 berry bushes for an
+     * age-3 requirement, nothing while only age-2 bushes were counted.
+     */
+    private static void blockStateRequirement(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        GathererGameTests.gathererBlock(helper);
+        ResourceCollectionProfile profile = ModJobs.GATHERER.get().profile(ResourceCollectionProfile.class).orElseThrow();
+        JobCraftingRecipe.Requirement ripe = requires(Blocks.SWEET_BERRY_BUSH, StatePropertiesPredicate.Builder.properties().hasProperty(SweetBerryBushBlock.AGE, 3));
+        BlockPos center = helper.absolutePos(new BlockPos(5, 1, 5));
+        for (int x = 4; x < 7; x++) {
+            helper.setBlock(new BlockPos(x, 1, 5), GathererGameTests.bush(3));
+        }
+        helper.assertValueEqual(profile.count(profile.createScan(center, 4).runAll(level), ripe), 3, "Three age-3 bushes");
+        for (int x = 4; x < 7; x++) {
+            helper.setBlock(new BlockPos(x, 1, 5), GathererGameTests.bush(2));
+        }
+        helper.assertValueEqual(profile.count(profile.createScan(center, 4).runAll(level), ripe), 0, "No age-3 bush");
+        helper.succeed();
+    }
 
     /** An offered recipe weighs its {@code weight} × the count of its {@code requires}: milk weighs 3 with three cows. */
     private static void weightByCount(GameTestHelper helper) {

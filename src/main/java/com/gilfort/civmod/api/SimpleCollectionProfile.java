@@ -180,11 +180,10 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
         return scan instanceof BlockCountScan.Result counted ? counted : BlockCountScan.Result.EMPTY;
     }
 
-    /** The counted blocks of the types whose ripe state matches an innate recipe's block requirement. */
+    /** The counted blocks whose counted state matches an innate recipe's block requirement (an age-3 berry bush). */
     @Override
     public int count(ScanResult scan, JobCraftingRecipe.Requirement requires) {
-        return requires.block().isEmpty() ? 0 : counted(scan).counts().entrySet().stream()
-                .filter(entry -> requires.matches(PlantStates.rolled(BuiltInRegistries.BLOCK.getValue(entry.getKey())))).mapToInt(Map.Entry::getValue).sum();
+        return requires.block().isEmpty() ? 0 : counted(scan).matching(requires::matches);
     }
 
     @Override

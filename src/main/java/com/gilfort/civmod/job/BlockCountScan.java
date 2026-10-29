@@ -69,6 +69,14 @@ public final class BlockCountScan implements SectionScan<BlockCountScan.Result> 
             return counts.values().stream().mapToInt(Integer::intValue).sum();
         }
 
+        /**
+         * @param state which counted states to sum
+         * @return how many blocks were counted in a matching state
+         */
+        public int matching(Predicate<BlockState> state) {
+            return states.entrySet().stream().filter(entry -> state.test(entry.getKey())).mapToInt(Map.Entry::getValue).sum();
+        }
+
         @Override
         public List<Identifier> foundBlocks() {
             return counts.keySet().stream().sorted().toList();
