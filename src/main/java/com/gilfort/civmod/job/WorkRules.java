@@ -196,12 +196,13 @@ final class WorkRules {
             ResourceCollectionProfile.Context context = new ResourceCollectionProfile.Context(level, settler, scan, poi, rollTool,
                     excluded, skillLevel, atMax, type -> workplace.dropped(level, profile, poi, type, rollTool),
                     bonus.rareChance().value(), site.level());
-            if (supply.collect().isPresent() && CollectionRecipes.refill(level, settler, job.jobType(), profile, scan, excluded, atMax, supply.collect().get())
+            List<CollectionRecipes.Offer> allowed = CollectionRecipes.allowed(offered, excluded, atMax);
+            if (supply.collect().isPresent() && CollectionRecipes.refill(settler, allowed, supply.collect().get())
                     && supply.collect().get().counter()) {
                 supply.handedOut().run();
             }
             // An innate recipe ready on the belt competes with the found types; it wears no tool and is never doubled.
-            Optional<ItemStack> crafted = CollectionRecipes.roll(settler, job.jobType(), profile, context);
+            Optional<ItemStack> crafted = CollectionRecipes.roll(settler, profile, context, allowed);
             Optional<ResourceCollectionProfile.Produced> produced = crafted.isPresent()
                     ? Optional.of(new ResourceCollectionProfile.Produced(List.of(crafted.get()), ItemStack.EMPTY))
                     : profile instanceof SecondaryToolProfile withSecondary

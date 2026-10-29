@@ -120,8 +120,8 @@ final class ResourceCollectionLoop implements CategoryLoop {
             return JobStep.blocked(paused.get());
         }
         // The inputs of the innate recipes are fetched like a tool; without them the recipes just leave the roll.
-        Optional<Predicate<ItemStack>> input = CollectionRecipes.missingInput(level, settler, job.jobType(), profile, workplace.scan(),
-                site.block().excluded(job.jobType()), atMax, collect);
+        Optional<Predicate<ItemStack>> input = CollectionRecipes.missingInput(settler,
+                CollectionRecipes.allowed(offered, site.block().excluded(job.jobType()), atMax), collect);
         if (input.isPresent()) {
             return fetchTool(level, site, new WorkRules.MissingTool(input.get(), true), dayTime, JobStatus.FETCHING_INPUTS);
         }
@@ -200,8 +200,9 @@ final class ResourceCollectionLoop implements CategoryLoop {
             }
             Stock stock = ClerkStorage.stock(level, collect, DayClock.dayTime(level), counter);
             boolean taken = WorkRules.refill(settler, profile.get(), site.get(), stock);
-            taken |= CollectionRecipes.refill(level, settler, job.jobType(), profile.get(), shell.workplace(job.jobBlock()).scan(),
-                    site.get().block().excluded(job.jobType()), StockRules.atMax(level, site.get()), stock);
+            List<CollectionRecipes.Offer> offered = CollectionRecipes.offered(level, job.jobType(), profile.get(), shell.workplace(job.jobBlock()).scan());
+            taken |= CollectionRecipes.refill(settler, CollectionRecipes.allowed(offered, site.get().block().excluded(job.jobType()),
+                    StockRules.atMax(level, site.get())), stock);
             if (taken && stock.counter()) {
                 ClerkCounter.handOut(level, collect, true);
             }

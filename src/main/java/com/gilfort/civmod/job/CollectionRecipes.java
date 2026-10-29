@@ -110,10 +110,17 @@ public final class CollectionRecipes {
         return holder.id().identifier();
     }
 
-    /** The offered recipes that may join the roll: not excluded and their result not at Max. */
-    static List<Offer> allowed(ServerLevel level, Job job, ResourceCollectionProfile profile, @Nullable ScanResult scan,
-            Set<Identifier> excluded, Set<Item> atMax) {
-        return offered(level, job, profile, scan).stream()
+    /**
+     * The offered recipes that may join the roll: not excluded and their result not at Max. Filters an offer list made
+     * once per scan, so a roll does not look the recipes up again.
+     *
+     * @param offered  the recipes the scan offers ({@link #offered})
+     * @param excluded the types excluded for the Job at the JobBlock
+     * @param atMax    the items at Max at the Home Clerk
+     * @return the allowed offers
+     */
+    static List<Offer> allowed(List<Offer> offered, Set<Identifier> excluded, Set<Item> atMax) {
+        return offered.stream()
                 .filter(offer -> !excluded.contains(type(offer.holder())) && !atMax.contains(offer.holder().value().result().create().getItem())).toList();
     }
 
@@ -121,22 +128,16 @@ public final class CollectionRecipes {
      * The input the settler should fetch before it works (live play walks to the collect inventory for it): an
      * ingredient of an allowed recipe that is not on the belt but in the collect inventory, while a belt slot is free.
      *
-     * @param level    the level
-     * @param settler  the settler
-     * @param job      the Job
-     * @param profile  its profile
-     * @param scan     its scan
-     * @param excluded the types excluded for the Job at the JobBlock
-     * @param atMax    the items at Max at the Home Clerk
-     * @param collect  what the settler reaches at its collect inventory
+     * @param settler the settler
+     * @param allowed the recipes that may join the roll ({@link #allowed})
+     * @param collect what the settler reaches at its collect inventory
      * @return the missing input, empty if there is nothing to fetch
      */
-    static Optional<Predicate<ItemStack>> missingInput(ServerLevel level, Settler settler, Job job, ResourceCollectionProfile profile, @Nullable ScanResult scan,
-            Set<Identifier> excluded, Set<Item> atMax, Stock collect) {
+    static Optional<Predicate<ItemStack>> missingInput(Settler settler, List<Offer> allowed, Stock collect) {
         if (SettlerTools.freeBeltSlot(settler) < 0) {
             return Optional.empty();
         }
-        for (Offer offer : allowed(level, job, profile, scan, excluded, atMax)) {
+        for (Offer offer : allowed) {
             for (Ingredient input : missing(settler, offer.holder().value())) {
                 if (SettlerTools.find(collect, input::test).isPresent()) {
                     return Optional.of(input::test);
@@ -149,12 +150,14 @@ public final class CollectionRecipes {
     /**
      * Takes the missing inputs of the allowed recipes from the collect inventory onto the belt (a stack each).
      *
+     * @param settler the settler
+     * @param allowed the recipes that may join the roll ({@link #allowed})
+     * @param collect what the settler reaches at its collect inventory
      * @return whether anything was taken
      */
-    static boolean refill(ServerLevel level, Settler settler, Job job, ResourceCollectionProfile profile, @Nullable ScanResult scan, Set<Identifier> excluded,
-            Set<Item> atMax, Stock collect) {
+    static boolean refill(Settler settler, List<Offer> allowed, Stock collect) {
         boolean taken = false;
-        for (Offer offer : allowed(level, job, profile, scan, excluded, atMax)) {
+        for (Offer offer : allowed) {
             for (Ingredient input : missing(settler, offer.holder().value())) {
                 taken |= SettlerTools.takeStack(settler, collect, input::test);
             }
@@ -168,17 +171,17 @@ public final class CollectionRecipes {
      * Without a ready recipe nothing is rolled here.
      *
      * @param settler the settler
-     * @param job     the Job
      * @param profile its profile
      * @param context the production context
+     * @param allowed the recipes that may join the roll ({@link #allowed} with the context's exclusions and Max)
      * @return the result of the rolled recipe, empty when the found types won (or no recipe is ready)
      */
-    static Optional<ItemStack> roll(Settler settler, Job job, ResourceCollectionProfile profile, ResourceCollectionProfile.Context context) {
+    static Optional<ItemStack> roll(Settler settler, ResourceCollectionProfile profile, ResourceCollectionProfile.Context context, List<Offer> allowed) {
         ScanResult scan = context.scan();
         if (scan == null) {
             return Optional.empty();
         }
-        List<Offer> ready = allowed(context.level(), job, profile, scan, context.excluded(), context.atMax()).stream()
+        List<Offer> ready = allowed.stream()
                 .filter(offer -> missing(settler, offer.holder().value()).isEmpty()).toList();
         if (ready.isEmpty()) {
             return Optional.empty();

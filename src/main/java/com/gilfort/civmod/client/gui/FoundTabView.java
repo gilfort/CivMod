@@ -111,9 +111,33 @@ final class FoundTabView implements JobBlockTabView {
         return rows.subList(from, rows.size()).stream().mapToInt(Row::height).sum();
     }
 
+    /**
+     * The rows of a tab as laid out for a panel height, kept while both stay the same (the tab data is replaced on every
+     * sync), so drawing, hovering and scrolling in one frame lay the rows out once.
+     *
+     * @param tab       the tab data laid out
+     * @param available the height the rows may fill
+     * @param scrolls   whether the tab does not fit the panel (then it scrolls)
+     * @param rows      the rows
+     */
+    private record Layout(FoundTabData tab, int available, boolean scrolls, List<Row> rows) {
+    }
+
+    /** The latest layout, null before the first. */
+    private @Nullable Layout layout;
+
+    private Layout layout(FoundTabData tab) {
+        int height = available();
+        if (layout == null || !layout.tab().equals(tab) || layout.available() != height) {
+            boolean scrolls = height(rows(tab, COLUMNS), 0) > height;
+            layout = new Layout(tab, height, scrolls, scrolls ? rows(tab, COLUMNS - 1) : rows(tab, COLUMNS));
+        }
+        return layout;
+    }
+
     /** Whether the tab does not fit the panel (then it scrolls). */
     private boolean scrolls(FoundTabData tab) {
-        return height(rows(tab, COLUMNS), 0) > available();
+        return layout(tab).scrolls();
     }
 
     /** Columns of the grid: one fewer while the scrollbar needs the room. */
@@ -123,7 +147,7 @@ final class FoundTabView implements JobBlockTabView {
 
     /** The rows as laid out now. */
     private List<Row> rows(FoundTabData tab) {
-        return rows(tab, columns(tab));
+        return layout(tab).rows();
     }
 
     /** The largest row offset: the first row from which the rest fits. */
