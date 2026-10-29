@@ -111,23 +111,26 @@ public final class BeekeeperProfile implements ResourceCollectionProfile {
     }
 
     /**
-     * An innate recipe's hive is found when a counted hive or nest type matches: as a full hive (honey level 5) while the
-     * scan counted a full one, else as a hive with honey (level 1); the scan knows no other honey levels.
+     * The counted hives and nests of an innate recipe's required block: all with honey while the requirement matches a
+     * hive with honey (level 1), else the full ones (level 5) while it matches a full hive; the scan knows no other honey
+     * levels.
      */
     @Override
-    public boolean finds(ScanResult scan, JobCraftingRecipe.Requirement requires) {
+    public int count(ScanResult scan, JobCraftingRecipe.Requirement requires) {
         HiveScan.Result hives = hives(scan);
+        int count = 0;
         for (Identifier type : hives.foundBlocks()) {
             BlockState state = BuiltInRegistries.BLOCK.getValue(type).defaultBlockState();
             if (!state.hasProperty(BeehiveBlock.HONEY_LEVEL)) {
                 continue;
             }
-            if ((hives.full() > 0 && requires.matches(state.setValue(BeehiveBlock.HONEY_LEVEL, BeehiveBlock.MAX_HONEY_LEVELS)))
-                    || requires.matches(state.setValue(BeehiveBlock.HONEY_LEVEL, 1))) {
-                return true;
+            if (requires.matches(state.setValue(BeehiveBlock.HONEY_LEVEL, 1))) {
+                count += hives.counts().get(type);
+            } else if (requires.matches(state.setValue(BeehiveBlock.HONEY_LEVEL, BeehiveBlock.MAX_HONEY_LEVELS))) {
+                count += hives.full();
             }
         }
-        return false;
+        return count;
     }
 
     @Override

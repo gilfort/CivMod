@@ -137,11 +137,12 @@ public final class AnimalFarmerProfile implements ResourceCollectionProfile {
         return scan instanceof AnimalScan.Result animals ? animals : AnimalScan.Result.EMPTY;
     }
 
-    /** An innate recipe's animal is found when an adult of a required type was counted (a cow for milk). */
+    /** The counted adults of an innate recipe's required types (the cows for milk). */
     @Override
-    public boolean finds(ScanResult scan, JobCraftingRecipe.Requirement requires) {
+    public int count(ScanResult scan, JobCraftingRecipe.Requirement requires) {
         AnimalScan.Result animals = animals(scan);
-        return animals.foundBlocks().stream().map(BuiltInRegistries.ENTITY_TYPE::getValue).anyMatch(type -> requires.matches(type) && animals.has(type));
+        return animals.counts().entrySet().stream().filter(entry -> requires.matches(BuiltInRegistries.ENTITY_TYPE.getValue(entry.getKey())))
+                .mapToInt(Map.Entry::getValue).sum();
     }
 
     /** An animal type weighs as much as its count, like in {@link #produce}. */

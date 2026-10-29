@@ -314,18 +314,20 @@ public interface ResourceCollectionProfile extends CategoryProfile {
     }
 
     /**
-     * Whether the scan found what an innate recipe of the Job requires ({@link JobCraftingRecipe#requires()}): while it
-     * does, the recipe is a Found tab entry and joins the roll. By default a found block type whose default state matches
-     * a block requirement; entity requirements never match. Override it for a scan of entities or block states (CivMod's
-     * Animal Farmer and Beekeeper do).
+     * How much of what an innate recipe of the Job requires ({@link JobCraftingRecipe#requires()}) the scan found (vault
+     * {@code Systems/Resource Collection Jobs.md}, decision 2026-10-29): while it is more than 0 the recipe is a Found tab
+     * entry and joins the roll with its weight × this count (20 cows: milk weighs 20). By default the number of found
+     * block types whose default state matches a block requirement (the scan has no counts per block); entity
+     * requirements never match. Override it for a scan that counts blocks, block states or entities
+     * ({@link SimpleCollectionProfile} and CivMod's Animal Farmer and Beekeeper do).
      *
      * @param scan     the scan result
      * @param requires what the recipe requires
-     * @return whether the scan found it
+     * @return how many of it the scan found, 0 if none
      */
-    default boolean finds(ScanResult scan, JobCraftingRecipe.Requirement requires) {
-        return requires.block().isPresent() && scan.foundBlocks().stream()
-                .anyMatch(type -> requires.matches(BuiltInRegistries.BLOCK.getValue(type).defaultBlockState()));
+    default int count(ScanResult scan, JobCraftingRecipe.Requirement requires) {
+        return requires.block().isEmpty() ? 0 : (int) scan.foundBlocks().stream()
+                .filter(type -> requires.matches(BuiltInRegistries.BLOCK.getValue(type).defaultBlockState())).count();
     }
 
     /**

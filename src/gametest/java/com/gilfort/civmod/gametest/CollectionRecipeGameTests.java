@@ -5,6 +5,14 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.settlement.SettlementWorld;
+import com.gilfort.civmod.job.JobStatus;
+import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.job.CollectionRecipes;
+import com.gilfort.civmod.api.ScanResult;
+import com.gilfort.civmod.api.ResourceCollectionProfile;
+import com.gilfort.civmod.api.JobCraftingRecipe;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.FoundTabData;
@@ -15,6 +23,11 @@ import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.SweetBerryBushBlock;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.core.HolderSet;
+import net.minecraft.advancements.predicates.StatePropertiesPredicate;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
@@ -42,6 +55,7 @@ public final class CollectionRecipeGameTests {
     private static final long DAY = 24000L;
     private static final Identifier MILK = CivMod.id("animal_farmer/milk_bucket");
     private static final Identifier HONEY = CivMod.id("beekeeper/honey_bottle");
+    private static final Identifier COW = Identifier.withDefaultNamespace("cow");
     private static final Identifier BEEHIVE = Identifier.withDefaultNamespace("beehive");
 
     private CollectionRecipeGameTests() {
@@ -55,6 +69,7 @@ public final class CollectionRecipeGameTests {
             register(helper, "collection_recipe_max", CollectionRecipeGameTests::atMax);
             register(helper, "collection_recipe_honey_needs_full_hive", CollectionRecipeGameTests::honeyNeedsFullHive);
             register(helper, "collection_recipe_honey_bottles", CollectionRecipeGameTests::honeyBottles);
+            register(helper, "collection_recipe_weight_by_count", CollectionRecipeGameTests::weightByCount);
         });
     }
 
@@ -250,4 +265,24 @@ public final class CollectionRecipeGameTests {
                 })
                 .thenSucceed();
     }
+
+
+
+
+    /** An offered recipe weighs its {@code weight} × the count of its {@code requires}: milk weighs 3 with three cows. */
+    private static void weightByCount(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        AnimalFarmerGameTests.pen(helper);
+        for (int x = 5; x < 8; x++) {
+            AnimalFarmerGameTests.animal(helper, EntityTypes.COW, new BlockPos(x, 1, 6), false);
+        }
+        Job job = ModJobs.ANIMAL_FARMER.get();
+        ResourceCollectionProfile profile = job.profile(ResourceCollectionProfile.class).orElseThrow();
+        ScanResult scan = profile.createScan(helper.absolutePos(new BlockPos(4, 1, 4)), 10).runAll(level);
+        Optional<CollectionRecipes.Offer> milk = CollectionRecipes.offered(level, job, profile, scan).stream()
+                .filter(offer -> CollectionRecipes.type(offer.holder()).equals(MILK)).findFirst();
+        helper.assertValueEqual(milk.map(CollectionRecipes.Offer::weight), Optional.of(3), "Milk weight with three cows");
+        helper.succeed();
+    }
+
 }

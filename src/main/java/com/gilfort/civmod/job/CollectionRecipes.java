@@ -48,18 +48,36 @@ public final class CollectionRecipes {
     }
 
     /**
+     * A recipe the scan offers.
+     *
+     * @param holder the recipe
+     * @param weight its weight in the roll: its {@code weight} × the count of its {@code requires} in the scan (decision
+     *               2026-10-29; 20 cows: milk weighs 20), its {@code weight} alone without {@code requires}
+     */
+    public record Offer(RecipeHolder<JobCraftingRecipe> holder, int weight) {
+    }
+
+    /**
      * @param level   the level
      * @param job     a Resource Collection Job
      * @param profile its profile
      * @param scan    its scan (null while the first scan runs)
-     * @return its innate recipes whose {@code requires} the scan found, ordered by recipe id
+     * @return its innate recipes whose {@code requires} the scan found ({@link ResourceCollectionProfile#count}), ordered
+     *         by recipe id
      */
-    public static List<RecipeHolder<JobCraftingRecipe>> offered(ServerLevel level, Job job, ResourceCollectionProfile profile, @Nullable ScanResult scan) {
+    public static List<Offer> offered(ServerLevel level, Job job, ResourceCollectionProfile profile, @Nullable ScanResult scan) {
         List<RecipeHolder<JobCraftingRecipe>> recipes = InnateRecipes.collecting(level, job);
         if (scan == null || recipes.isEmpty()) {
             return List.of();
         }
-        return recipes.stream().filter(holder -> holder.value().requires().map(requires -> profile.finds(scan, requires)).orElse(true)).toList();
+        List<Offer> offers = new ArrayList<>();
+        for (RecipeHolder<JobCraftingRecipe> holder : recipes) {
+            int count = holder.value().requires().map(requires -> profile.count(scan, requires)).orElse(1);
+            if (count > 0) {
+                offers.add(new Offer(holder, holder.value().weight() * count));
+            }
+        }
+        return offers;
     }
 
     /**
@@ -74,7 +92,7 @@ public final class CollectionRecipes {
      * @return the entries, ordered by recipe id
      */
     public static List<Listed> listed(ServerLevel level, Job job, ResourceCollectionProfile profile, ScanResult scan, @Nullable Settler settler, Stock collect) {
-        return offered(level, job, profile, scan).stream().map(holder -> {
+        return offered(level, job, profile, scan).stream().map(Offer::holder).map(holder -> {
             JobCraftingRecipe recipe = holder.value();
             ItemStack icon = recipe.result().create();
             Optional<Component> needs = recipe.ingredients().stream()
@@ -93,10 +111,10 @@ public final class CollectionRecipes {
     }
 
     /** The offered recipes that may join the roll: not excluded and their result not at Max. */
-    static List<RecipeHolder<JobCraftingRecipe>> allowed(ServerLevel level, Job job, ResourceCollectionProfile profile, @Nullable ScanResult scan,
+    static List<Offer> allowed(ServerLevel level, Job job, ResourceCollectionProfile profile, @Nullable ScanResult scan,
             Set<Identifier> excluded, Set<Item> atMax) {
         return offered(level, job, profile, scan).stream()
-                .filter(holder -> !excluded.contains(type(holder)) && !atMax.contains(holder.value().result().create().getItem())).toList();
+                .filter(offer -> !excluded.contains(type(offer.holder())) && !atMax.contains(offer.holder().value().result().create().getItem())).toList();
     }
 
     /**
@@ -118,8 +136,8 @@ public final class CollectionRecipes {
         if (freeBeltSlot(settler) < 0) {
             return Optional.empty();
         }
-        for (RecipeHolder<JobCraftingRecipe> holder : allowed(level, job, profile, scan, excluded, atMax)) {
-            for (Ingredient input : missing(settler, holder.value())) {
+        for (Offer offer : allowed(level, job, profile, scan, excluded, atMax)) {
+            for (Ingredient input : missing(settler, offer.holder().value())) {
                 if (SettlerTools.find(collect, input::test).isPresent()) {
                     return Optional.of(input::test);
                 }
@@ -136,8 +154,8 @@ public final class CollectionRecipes {
     static boolean refill(ServerLevel level, Settler settler, Job job, ResourceCollectionProfile profile, @Nullable ScanResult scan, Set<Identifier> excluded,
             Set<Item> atMax, Stock collect) {
         boolean taken = false;
-        for (RecipeHolder<JobCraftingRecipe> holder : allowed(level, job, profile, scan, excluded, atMax)) {
-            for (Ingredient input : missing(settler, holder.value())) {
+        for (Offer offer : allowed(level, job, profile, scan, excluded, atMax)) {
+            for (Ingredient input : missing(settler, offer.holder().value())) {
                 taken |= take(settler, collect, input::test);
             }
         }
@@ -145,7 +163,7 @@ public final class CollectionRecipes {
     }
 
     /**
-     * The roll between the found types and the recipes ready on the belt (each with its weight): when a recipe wins, the
+     * The roll between the found types and the recipes ready on the belt (each with its {@link Offer#weight()}): when a recipe wins, the
      * settler uses up its ingredients and gets its result; otherwise the profile rolls ({@link ResourceCollectionProfile#produce}).
      * Without a ready recipe nothing is rolled here.
      *
@@ -160,24 +178,24 @@ public final class CollectionRecipes {
         if (scan == null) {
             return Optional.empty();
         }
-        List<RecipeHolder<JobCraftingRecipe>> ready = allowed(context.level(), job, profile, scan, context.excluded(), context.atMax()).stream()
-                .filter(holder -> missing(settler, holder.value()).isEmpty()).toList();
+        List<Offer> ready = allowed(context.level(), job, profile, scan, context.excluded(), context.atMax()).stream()
+                .filter(offer -> missing(settler, offer.holder().value()).isEmpty()).toList();
         if (ready.isEmpty()) {
             return Optional.empty();
         }
         List<Identifier> types = scan.foundBlocks();
         Set<Identifier> leftOut = profile.leftOut(context, types);
         int found = types.stream().filter(type -> !leftOut.contains(type)).mapToInt(type -> Math.max(0, profile.weight(scan, type))).sum();
-        int pick = context.level().getRandom().nextInt(found + ready.stream().mapToInt(holder -> holder.value().weight()).sum());
+        int pick = context.level().getRandom().nextInt(found + ready.stream().mapToInt(Offer::weight).sum());
         if (pick < found) {
             return Optional.empty();
         }
         pick -= found;
-        for (RecipeHolder<JobCraftingRecipe> holder : ready) {
-            pick -= holder.value().weight();
+        for (Offer offer : ready) {
+            pick -= offer.weight();
             if (pick < 0) {
-                consume(settler, holder.value());
-                return Optional.of(holder.value().result().create());
+                consume(settler, offer.holder().value());
+                return Optional.of(offer.holder().value().result().create());
             }
         }
         return Optional.empty();

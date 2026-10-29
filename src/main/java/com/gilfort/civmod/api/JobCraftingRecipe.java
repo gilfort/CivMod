@@ -48,8 +48,8 @@ import net.minecraft.world.level.block.state.BlockState;
  * <p>
  * Every <b>Resource Collection Job</b> named in {@link #jobs()} turns a consumed input into a product while it works
  * (milk from cows into buckets): while the Job's scan found what {@link #requires()} names, the recipe is an own entry
- * of the JobBlock's Found tab and joins the Job's roll like a found type, with its {@link #weight()} against the weights
- * of the found types ({@link ResourceCollectionProfile#weight}). When it is rolled, the settler uses up one of each
+ * of the JobBlock's Found tab and joins the Job's roll like a found type, with its {@link #weight()} times the count of its
+ * {@code requires} in the scan against the weights of the found types ({@link ResourceCollectionProfile#weight}). When it is rolled, the settler uses up one of each
  * ingredient from its belt (it fetches them from its collect inventory like a tool) and collects the result; the Job's
  * tool is not worn and no double drop applies. Without the ingredients the entry leaves the roll and is greyed out
  * ("Needs: Bucket"); the Job goes on with its other drops. The Found tab exclusion and the Home Clerk's Max of the result
@@ -97,11 +97,12 @@ import net.minecraft.world.level.block.state.BlockState;
  * {@code {"block": <block id, #tag or list>, "state": {<property>: <value>}}} (a found block; {@code state} is optional
  * and takes exact values or {@code {"min": .., "max": ..}} ranges), e.g.
  * {@code {"block": ["minecraft:beehive", "minecraft:bee_nest"], "state": {"honey_level": "5"}}}. Each Job's profile
- * decides what its scan has found ({@link ResourceCollectionProfile#finds}). Without {@code requires} the recipe is
- * offered whenever the Job has a scan.</li>
+ * decides how many of it its scan has found ({@link ResourceCollectionProfile#count}). Without {@code requires} the
+ * recipe is offered whenever the Job has a scan.</li>
  * <li>{@code weight} (optional, Resource Collection only, default 1, at least 1): the recipe's weight in the roll against
  * the weights of the found types (the Animal Farmer weighs an animal type by its count, other Jobs each found type by
- * 1).</li>
+ * 1), times the count of its {@code requires} in the scan (20 cows: milk weighs 20 × {@code weight}); without
+ * {@code requires} the weight alone.</li>
  * </ul>
  *
  * @param jobs        the Jobs that know the recipe

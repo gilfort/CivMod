@@ -7,6 +7,7 @@ import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.api.BlockingReason;
+import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.api.SectionScan;
@@ -133,6 +134,11 @@ public final class VeggyFarmerProfile implements ResourceCollectionProfile {
     @Override
     public int farmCount(@Nullable ScanResult scan) {
         return crops.farmCount(scan);
+    }
+
+    @Override
+    public int count(ScanResult scan, JobCraftingRecipe.Requirement requires) {
+        return crops.count(scan, requires);
     }
 
     @Override
