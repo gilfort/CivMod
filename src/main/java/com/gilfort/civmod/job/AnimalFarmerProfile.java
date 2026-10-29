@@ -13,7 +13,6 @@ import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.api.JobCraftingRecipe;
-import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.api.SectionScan;
 
@@ -56,16 +55,13 @@ import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
  * <li>Speed: the shared formula × the farm curve of the counted animals.</li>
  * </ul>
  */
-public final class AnimalFarmerProfile implements ResourceCollectionProfile {
+public final class AnimalFarmerProfile extends FarmProfile {
 
     /** The chance that a rolled chicken gives an egg instead of its loot. */
     public static final double EGG_CHANCE = 0.2;
-    private static final int AUTO_SEARCH_HORIZONTAL = 20;
     private static final int AUTO_SEARCH_VERTICAL = 10;
     /** How far up and down from the hay bale animals count. */
     private static final int HALF_HEIGHT = 5;
-    /** The scan radius per JobBlock level. */
-    private static final int RADIUS_PER_LEVEL = 5;
 
     /** The items each loot table can give ({@link #droppedItems}); a reload brings new tables, the old ones drop out. */
     private final Map<LootTable, Set<Item>> possibleItems = new WeakHashMap<>();
@@ -91,40 +87,14 @@ public final class AnimalFarmerProfile implements ResourceCollectionProfile {
     }
 
     @Override
-    public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock) {
-        return autoSearch(level, jobBlock, pos -> true);
-    }
-
-    @Override
     public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock, Predicate<BlockPos> free) {
         return BlockSearch.nearest(level, jobBlock, AUTO_SEARCH_HORIZONTAL, AUTO_SEARCH_VERTICAL, state -> state.is(Blocks.HAY_BLOCK),
                 pos -> free.test(pos) && BlockSearch.isExposed(level, pos));
     }
 
-    /** The hay bale of the day. */
-    @Override
-    public BlockPos scanCenter(BlockPos jobBlock, List<BlockPos> workPoints, BlockPos workPlace) {
-        return workPlace;
-    }
-
-    @Override
-    public int scanRadius(int jobBlockLevel) {
-        return RADIUS_PER_LEVEL * jobBlockLevel;
-    }
-
-    @Override
-    public boolean rescanDaily() {
-        return true;
-    }
-
     @Override
     public SectionScan<? extends ScanResult> createScan(BlockPos center, int radius) {
         return new AnimalScan(center, radius, HALF_HEIGHT);
-    }
-
-    @Override
-    public boolean needsResources() {
-        return true;
     }
 
     /** Every counted animal. */

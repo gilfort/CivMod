@@ -8,7 +8,6 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.api.BlockingReason;
 import com.gilfort.civmod.api.JobCraftingRecipe;
-import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.api.SectionScan;
 import com.gilfort.civmod.api.SimpleCollectionProfile;
@@ -44,17 +43,15 @@ import net.minecraft.world.level.block.state.BlockState;
  * Roll, tool and speed are those of a {@link SimpleCollectionProfile}; this profile adds the scarecrow and the crop
  * filter.
  */
-public final class VeggyFarmerProfile implements ResourceCollectionProfile {
+public final class VeggyFarmerProfile extends FarmProfile {
 
     /** The reason without a scarecrow. */
     private static final BlockingReason NO_SCARECROW = BlockingReason.of("civmod.blocked.no_scarecrow").withIcon(ModItems.SCARECROW.get());
-    private static final int AUTO_SEARCH_HORIZONTAL = 20;
     /** How far up and down the scan and the scarecrow search reach. */
     private static final int HALF_HEIGHT = 10;
-    private static final int RADIUS_PER_LEVEL = 5;
 
     private final SimpleCollectionProfile crops = SimpleCollectionProfile.builder(BlockTags.CROPS)
-            .tool(ItemTags.HOES, () -> Items.STONE_HOE).radius(level -> RADIUS_PER_LEVEL * level).build();
+            .tool(ItemTags.HOES, () -> Items.STONE_HOE).build();
 
     /**
      * @param state a block state
@@ -86,11 +83,6 @@ public final class VeggyFarmerProfile implements ResourceCollectionProfile {
         return ScarecrowBlock.isLowerHalf(level.getBlockState(pos));
     }
 
-    @Override
-    public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock) {
-        return autoSearch(level, jobBlock, pos -> true);
-    }
-
     /** A random free scarecrow in reach. */
     @Override
     public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock, Predicate<BlockPos> free) {
@@ -99,30 +91,9 @@ public final class VeggyFarmerProfile implements ResourceCollectionProfile {
         return found.isEmpty() ? null : found.get(level.getRandom().nextInt(found.size()));
     }
 
-    /** The scarecrow of the day. */
-    @Override
-    public BlockPos scanCenter(BlockPos jobBlock, List<BlockPos> workPoints, BlockPos workPlace) {
-        return workPlace;
-    }
-
-    @Override
-    public int scanRadius(int jobBlockLevel) {
-        return crops.scanRadius(jobBlockLevel);
-    }
-
-    @Override
-    public boolean rescanDaily() {
-        return true;
-    }
-
     @Override
     public SectionScan<? extends ScanResult> createScan(BlockPos center, int radius) {
         return new BlockCountScan(center, radius, HALF_HEIGHT, VeggyFarmerProfile::counts, 1);
-    }
-
-    @Override
-    public boolean needsResources() {
-        return true;
     }
 
     /** "No scarecrow" without a work place; an empty field is "No resources". */

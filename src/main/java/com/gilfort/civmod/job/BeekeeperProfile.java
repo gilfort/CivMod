@@ -8,7 +8,6 @@ import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.api.JobCraftingRecipe;
-import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.api.SectionScan;
 
@@ -37,13 +36,10 @@ import net.neoforged.neoforge.common.Tags;
  * <li>Speed: the shared formula × the farm curve of the counted hives.</li>
  * </ul>
  */
-public final class BeekeeperProfile implements ResourceCollectionProfile {
+public final class BeekeeperProfile extends FarmProfile {
 
-    private static final int AUTO_SEARCH_HORIZONTAL = 20;
     /** How far up and down the scan and the work place search reach. */
     private static final int HALF_HEIGHT = 10;
-    /** The scan radius per JobBlock level. */
-    private static final int RADIUS_PER_LEVEL = 5;
 
     @Override
     public boolean isTool(ItemStack stack) {
@@ -66,39 +62,13 @@ public final class BeekeeperProfile implements ResourceCollectionProfile {
     }
 
     @Override
-    public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock) {
-        return autoSearch(level, jobBlock, pos -> true);
-    }
-
-    @Override
     public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock, Predicate<BlockPos> free) {
         return BlockSearch.nearest(level, jobBlock, AUTO_SEARCH_HORIZONTAL, HALF_HEIGHT, state -> state.is(BlockTags.BEEHIVES), free);
-    }
-
-    /** The hive of the day. */
-    @Override
-    public BlockPos scanCenter(BlockPos jobBlock, List<BlockPos> workPoints, BlockPos workPlace) {
-        return workPlace;
-    }
-
-    @Override
-    public int scanRadius(int jobBlockLevel) {
-        return RADIUS_PER_LEVEL * jobBlockLevel;
-    }
-
-    @Override
-    public boolean rescanDaily() {
-        return true;
     }
 
     @Override
     public SectionScan<? extends ScanResult> createScan(BlockPos center, int radius) {
         return new BlockCountScan(center, radius, HALF_HEIGHT, state -> honey(state) >= 1, 1);
-    }
-
-    @Override
-    public boolean needsResources() {
-        return true;
     }
 
     /** Every hive and nest with honey. */
