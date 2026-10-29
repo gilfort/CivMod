@@ -14,7 +14,6 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.job.BlockCountScan;
 import com.gilfort.civmod.job.BlockSearch;
-import com.gilfort.civmod.job.MinerProfile;
 import com.gilfort.civmod.job.PlantStates;
 
 import net.minecraft.core.BlockPos;
@@ -130,7 +129,7 @@ public final class SimpleCollectionProfile implements ResourceCollectionProfile 
     @Override
     public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock, Predicate<BlockPos> free) {
         return BlockSearch.nearest(level, jobBlock, AUTO_SEARCH_HORIZONTAL, HALF_HEIGHT, state -> state.is(blocks),
-                pos -> free.test(pos) && MinerProfile.isExposed(level, pos));
+                pos -> free.test(pos) && BlockSearch.isExposed(level, pos));
     }
 
     /** The work place of the day: a Specialization's work place, never another Job's work point. */

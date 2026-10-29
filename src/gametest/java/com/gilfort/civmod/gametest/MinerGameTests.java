@@ -8,9 +8,9 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.job.BlockSearch;
 import com.gilfort.civmod.job.MineScan;
 import com.gilfort.civmod.job.MinerOutput;
-import com.gilfort.civmod.job.MinerProfile;
 import com.gilfort.civmod.job.MinerWeights;
 import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.npc.Settler;
@@ -177,8 +177,8 @@ public final class MinerGameTests {
             }
         }
         ServerLevel level = helper.getLevel();
-        helper.assertFalse(MinerProfile.isExposed(level, helper.absolutePos(new BlockPos(4, 3, 4))), "Enclosed block is not exposed");
-        helper.assertTrue(MinerProfile.isExposed(level, helper.absolutePos(new BlockPos(4, 5, 4))), "Top block is exposed");
+        helper.assertFalse(BlockSearch.isExposed(level, helper.absolutePos(new BlockPos(4, 3, 4))), "Enclosed block is not exposed");
+        helper.assertTrue(BlockSearch.isExposed(level, helper.absolutePos(new BlockPos(4, 5, 4))), "Top block is exposed");
         helper.succeed();
     }
 

@@ -13,7 +13,6 @@ import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.api.SectionScan;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -77,29 +76,11 @@ public final class MinerProfile implements ResourceCollectionProfile {
     public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock, Predicate<BlockPos> free) {
         // Ordered by Manhattan distance: the first match is (nearly) the nearest; stops early in typical terrain.
         for (BlockPos pos : BlockPos.withinBoxByManhattanDistance(jobBlock, AUTO_SEARCH_HORIZONTAL, AUTO_SEARCH_VERTICAL, AUTO_SEARCH_HORIZONTAL)) {
-            if (level.isLoaded(pos) && isMinable(level.getBlockState(pos)) && isExposed(level, pos) && free.test(pos)) {
+            if (level.isLoaded(pos) && isMinable(level.getBlockState(pos)) && BlockSearch.isExposed(level, pos) && free.test(pos)) {
                 return pos.immutable();
             }
         }
         return null;
-    }
-
-    /**
-     * @param level the level
-     * @param pos   a block
-     * @return whether a settler can stand next to or on top of it
-     */
-    public static boolean isExposed(ServerLevel level, BlockPos pos) {
-        if (SettlerWork.canStand(level, pos.above())) {
-            return true;
-        }
-        for (Direction direction : Direction.Plane.HORIZONTAL) {
-            BlockPos side = pos.relative(direction);
-            if (level.isLoaded(side) && SettlerWork.canStand(level, side)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     @Override

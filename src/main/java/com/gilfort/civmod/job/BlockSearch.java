@@ -8,6 +8,7 @@ import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
@@ -16,12 +17,31 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 
 /**
  * The automatic work place search of Resource Collection Jobs: the nearest (or every) matching block in a box around
- * the JobBlock.
+ * the JobBlock, and whether a found block is exposed (the Miner's stone face, the Animal Farmer's hay bale, a builder
+ * Job's block).
  * Unloaded chunks and chunk sections whose palette has no matching block are skipped.
  */
 public final class BlockSearch {
 
     private BlockSearch() {
+    }
+
+    /**
+     * @param level the level
+     * @param pos   a block
+     * @return whether a settler can stand next to or on top of it (not buried in a wall or floor)
+     */
+    public static boolean isExposed(ServerLevel level, BlockPos pos) {
+        if (SettlerWork.canStand(level, pos.above())) {
+            return true;
+        }
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            BlockPos side = pos.relative(direction);
+            if (level.isLoaded(side) && SettlerWork.canStand(level, side)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

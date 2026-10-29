@@ -98,7 +98,7 @@ public final class AnimalFarmerProfile implements ResourceCollectionProfile {
     @Override
     public @Nullable BlockPos autoSearch(ServerLevel level, BlockPos jobBlock, Predicate<BlockPos> free) {
         return BlockSearch.nearest(level, jobBlock, AUTO_SEARCH_HORIZONTAL, AUTO_SEARCH_VERTICAL, state -> state.is(Blocks.HAY_BLOCK),
-                pos -> free.test(pos) && MinerProfile.isExposed(level, pos));
+                pos -> free.test(pos) && BlockSearch.isExposed(level, pos));
     }
 
     /** The hay bale of the day. */
