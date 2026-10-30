@@ -126,6 +126,11 @@ public final class UpgradeItemGameTests {
         return component.getContents() instanceof TranslatableContents contents ? contents.getKey() : component.getString();
     }
 
+    /** Whether the result swings the player's arm (on the client or from the server). */
+    private static boolean swings(InteractionResult result) {
+        return result instanceof InteractionResult.Success success && success.shouldSwing();
+    }
+
     private static ItemStack upgrade(Item item) {
         return new ItemStack(item);
     }
@@ -141,6 +146,7 @@ public final class UpgradeItemGameTests {
         ItemStack stack = upgrade(ModItems.JOB_BLOCK_UPGRADE_2.get());
         InteractionResult result = click(helper, player, BLOCK, stack);
         helper.assertTrue(result.consumesAction(), "The click is consumed (no window): " + result);
+        helper.assertTrue(swings(result), "An upgrade swings the arm: " + result);
         helper.assertTrue(level(helper, BLOCK) == 2 && settlementLevel(helper, BLOCK) == 2, "Block and settlement entry at Lv 2");
         helper.assertTrue(stack.isEmpty(), "The item is used up");
         ItemStack drop = new ItemStack(ModBlocks.MINER_BLOCK.get());
@@ -170,7 +176,10 @@ public final class UpgradeItemGameTests {
         BlockPos abs = helper.absolutePos(BLOCK);
 
         ItemStack lv2 = upgrade(ModItems.JOB_BLOCK_UPGRADE_2.get());
-        helper.assertTrue(click(helper, player, BLOCK, lv2).consumesAction(), "A refused click opens no window either");
+        InteractionResult refusedClick = click(helper, player, BLOCK, lv2);
+        helper.assertTrue(refusedClick.consumesAction(), "A refused click opens no window either: " + refusedClick);
+        helper.assertFalse(swings(refusedClick), "A refused click does not swing the arm: " + refusedClick);
+        helper.assertTrue(player.containerMenu == player.inventoryMenu, "No window is open");
         helper.assertTrue(level(helper, BLOCK) == 1 && lv2.getCount() == 1, "Skill 19 < 20: the block stays, the item is kept");
         helper.assertTrue(JobBlockUpgrade.refusal(level, abs, 1, 2).map(UpgradeItemGameTests::key)
                 .equals(java.util.Optional.of("civmod.upgrade.needs_worker")), "Reason: needs a worker at the cap");

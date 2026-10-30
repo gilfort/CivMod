@@ -43,7 +43,7 @@ public final class JobBlockUpgrade {
      * @param targetLevel the level the item upgrades to
      * @return whether the block was upgraded
      */
-    public static boolean use(ServerLevel level, BlockPos pos, JobBlockEntity jobBlock, Player player, ItemStack stack, int targetLevel) {
+    static boolean use(ServerLevel level, BlockPos pos, JobBlockEntity jobBlock, Player player, ItemStack stack, int targetLevel) {
         int current = jobBlock.getJobLevel();
         Optional<Component> refusal = refusal(level, pos, current, targetLevel);
         if (refusal.isPresent()) {

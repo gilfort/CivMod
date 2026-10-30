@@ -5,13 +5,18 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.job.JobBuffer;
+import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.logistics.Pickups;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.ClerkTabData;
 import com.gilfort.civmod.menu.ClerkTabData.TaskRow;
 import com.gilfort.civmod.menu.ClerkTabData.TaskStatus;
+import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.Deliveries;
 import com.gilfort.civmod.settlement.JobAssignments;
@@ -58,6 +63,7 @@ public final class ClerkTasksGameTests {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "clerk_tasks_order_and_status", ClerkTasksGameTests::orderAndStatus);
             register(helper, "clerk_tasks_warehouse", ClerkTasksGameTests::warehouse);
+            register(helper, "clerk_tasks_carried_icon", ClerkTasksGameTests::carriedIcon);
         });
     }
 
@@ -87,6 +93,8 @@ public final class ClerkTasksGameTests {
         helper.assertValueEqual(key(tasks.get(0).text()), "civmod.gui.clerk.task.request.open", "Unclaimed: \"8 Stone Pickaxe\"");
         helper.assertValueEqual(key(tasks.get(1).text()), "civmod.gui.clerk.task.request", "Claimed: \"Carl: 5 Torch\"");
         helper.assertValueEqual(arg(tasks.get(1).text(), 0), "Carl", "Named after its producer");
+        helper.assertValueEqual(String.valueOf(tasks.get(0).icon().getCount()), arg(tasks.get(0).text(), 0), "The icon carries the requested amount");
+        helper.assertValueEqual(String.valueOf(tasks.get(1).icon().getCount()), arg(tasks.get(1).text(), 1), "Also while it is crafted");
         helper.assertTrue(keys(tasks.get(0).details()).contains("civmod.gui.clerk.request.no_producer"), "Reason in the tooltip");
         helper.assertTrue(keys(tasks.get(1).details()).contains("civmod.gui.clerk.request.crafting"), "Producer in the tooltip");
 
@@ -112,6 +120,41 @@ public final class ClerkTasksGameTests {
         helper.assertValueEqual(statuses(tasks), List.of(TaskStatus.BLOCKED, TaskStatus.IN_PROGRESS, TaskStatus.IN_PROGRESS), "Taken: in progress");
         helper.assertValueEqual(icons(tasks), List.of(Items.STONE_PICKAXE, Items.TORCH, Items.OAK_LOG), "Requests before deliveries");
         helper.assertTrue(tasks.get(2).details().stream().anyMatch(line -> line.getString().equals("Dora")), "Deliveryman in the tooltip");
+        helper.succeed();
+    }
+
+    /**
+     * A pickup whose drop-off is empty because its Deliveryman carries the items shows the first carried item, not the
+     * drop-off block; without a load it falls back to the block.
+     */
+    private static void carriedIcon(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        SettlementData data = SettlementData.get(level);
+        BlockPos clerk = StockRuleGameTests.workingClerk(helper);
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        helper.setBlock(new BlockPos(7, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
+        helper.setBlock(new BlockPos(9, 1, 1), Blocks.CHEST);
+        BlockPos lumberjack = helper.absolutePos(new BlockPos(7, 1, 1));
+        BlockPos dropOff = helper.absolutePos(new BlockPos(9, 1, 1));
+        JobAssignments.cyclePoint(data, lumberjack, dropOff, false, true);
+        JobAssignments.cyclePoint(data, lumberjack, dropOff, false, true);
+        Container chest = (Container) level.getBlockEntity(dropOff);
+        chest.setItem(0, new ItemStack(Items.OAK_LOG, 64));
+        Pickups.delivered(level, JobBlockSite.at(level, lumberjack).orElseThrow(), false);
+        helper.assertTrue(Deliveries.get(settlement, dropOff).isPresent(), "Pickup posted");
+
+        Settler dora = ClerkGameTests.settler(helper, new BlockPos(2, 1, 4), data, settlement);
+        dora.addJob(new SettlerJob(ModJobs.DELIVERYMAN.get(), clerk));
+        JobBuffer load = new JobBuffer();
+        load.add(new ItemStack(Items.BIRCH_LOG, 20));
+        dora.getWork().restore(new SettlerWork.BuffersSnapshot(List.of(new SettlerWork.BufferEntry(clerk, load)), List.of()));
+        Deliveries.take(data, settlement, dropOff, dora.getUUID(), "Dora", DayClock.day(level));
+        chest.setItem(0, ItemStack.EMPTY);
+        helper.assertValueEqual(icons(ClerkTabData.of(level, clerk).tasks()), List.of(Items.BIRCH_LOG), "Carried away: the first carried item");
+
+        helper.assertTrue(dora.getWork().buffer(clerk).deliver(ItemStack::getCount), "The load is unloaded");
+        helper.assertValueEqual(icons(ClerkTabData.of(level, clerk).tasks()), List.of(Items.CHEST), "Nothing carried: the drop-off block");
+        dora.discard();
         helper.succeed();
     }
 

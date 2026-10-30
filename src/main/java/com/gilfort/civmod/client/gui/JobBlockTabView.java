@@ -166,40 +166,44 @@ interface JobBlockTabView {
     // ---------------------------------------------------------------- contributions to the Workers tab
 
     /**
-     * Adds the view's toggle button to the Workers tab's bottom row ({@link WorkersTabView#button}); called on every
-     * widget rebuild. A view that adds one says so in {@link #workersToggle}.
+     * A toggle button a view adds to the Workers tab's bottom row; it presses the menu button on client and server.
      *
-     * @param workers the Workers tab's index
+     * @param label    the label (the current state)
+     * @param buttonId the menu button id
      */
-    default void initWorkers(int workers) {
+    record WorkersToggle(Component label, int buttonId) {
     }
 
     /**
-     * @return whether the view adds a toggle button to the Workers tab's bottom row now
-     */
-    default boolean workersToggle() {
-        return false;
-    }
-
-    /**
-     * @return how many lines the view draws below the Workers tab's list ({@link #extractWorkers})
-     */
-    default int workersLines() {
-        return 0;
-    }
-
-    /**
-     * Draws the view's lines of the Workers tab below its list.
+     * A line a view adds below the Workers tab's list.
      *
-     * @param graphics the graphics extractor (panel coordinates)
-     * @param y        the y of the first line
-     * @param width    the line width
-     * @param color    the text colour
-     * @param mouseX   the mouse x position
-     * @param mouseY   the mouse y position
-     * @return the y below the lines
+     * @param text    the text
+     * @param tooltip the lines shown while the mouse is over the text (none: no tooltip)
      */
-    default int extractWorkers(GuiGraphicsExtractor graphics, int y, int width, int color, int mouseX, int mouseY) {
-        return y;
+    record WorkersLine(Component text, List<Component> tooltip) {
+
+        /**
+         * @param text    the text
+         * @param tooltip the tooltip lines
+         */
+        public WorkersLine {
+            tooltip = List.copyOf(tooltip);
+        }
+    }
+
+    /**
+     * Asked on every widget rebuild and every frame, so the Workers tab's layout and its button always agree.
+     *
+     * @return the view's toggle button in the Workers tab's bottom row now, empty for none
+     */
+    default Optional<WorkersToggle> workersToggle() {
+        return Optional.empty();
+    }
+
+    /**
+     * @return the view's lines below the Workers tab's list now
+     */
+    default List<WorkersLine> workersLines() {
+        return List.of();
     }
 }

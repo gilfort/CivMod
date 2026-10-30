@@ -16,6 +16,7 @@ import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.menu.StationTypesTabData;
 import com.gilfort.civmod.menu.StockTab;
+import com.gilfort.civmod.menu.WorkersTab;
 import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.settlement.JobPointsDisplay;
 import com.gilfort.civmod.settlement.SettlementOutline;
@@ -97,6 +98,11 @@ public final class CivNetwork {
         registrar.playToServer(FoundTabData.Toggle.TYPE, FoundTabData.Toggle.STREAM_CODEC, (payload, context) -> {
             if (context.player().containerMenu instanceof JobBlockMenu menu && menu.containerId == payload.containerId()) {
                 menu.tab(FoundTab.class).ifPresent(tab -> tab.toggleExcluded(payload.job(), payload.resource()));
+            }
+        });
+        registrar.playToServer(WorkersTab.Worker.TYPE, WorkersTab.Worker.STREAM_CODEC, (payload, context) -> {
+            if (context.player() instanceof ServerPlayer player) {
+                payload.handle(player);
             }
         });
         registrar.playToServer(JobPicker.Choose.TYPE, JobPicker.Choose.STREAM_CODEC, (payload, context) -> {

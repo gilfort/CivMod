@@ -126,32 +126,17 @@ final class TasksTabView implements JobBlockTabView {
             ClerkTabData.TaskRow task = rows.get(offset + row);
             int y = rowsY() + row * ROW_HEIGHT;
             graphics.item(task.icon(), left, y + 1);
-            Component status = statusIcon(task.status());
+            // A request's icon carries its amount.
+            graphics.itemDecorations(font, task.icon(), left, y + 1);
+            Component status = task.status().icon();
             int statusWidth = font.width(status);
             int textY = y + (ROW_HEIGHT - font.lineHeight) / 2 + 1;
-            graphics.text(font, status, right - statusWidth, textY, statusColor(task.status()), false);
+            graphics.text(font, status, right - statusWidth, textY, task.status().color(), false);
             graphics.text(font, CivGui.fit(font, task.text(), right - statusWidth - 4 - left - 20), left + 20, textY, CivGui.LABEL_COLOR, false);
             if (mouseX >= screen.left() + left && mouseX < screen.left() + right && mouseY >= screen.top() + y
                     && mouseY < screen.top() + y + ROW_HEIGHT) {
                 graphics.setComponentTooltipForNextFrame(font, task.details(), mouseX, mouseY);
             }
         }
-    }
-
-    /** "▶" in progress, "⌛" waiting, "✕" blocked. */
-    private static Component statusIcon(ClerkTabData.TaskStatus status) {
-        return Component.literal(switch (status) {
-            case BLOCKED -> "✕";
-            case IN_PROGRESS -> "▶";
-            case WAITING -> "⌛";
-        });
-    }
-
-    private static int statusColor(ClerkTabData.TaskStatus status) {
-        return switch (status) {
-            case BLOCKED -> CivGui.ERROR_COLOR;
-            case IN_PROGRESS -> CivGui.LABEL_COLOR;
-            case WAITING -> CivGui.HINT_COLOR;
-        };
     }
 }

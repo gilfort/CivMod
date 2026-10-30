@@ -7,12 +7,15 @@ import java.util.Objects;
 import java.util.Optional;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.client.gui.CivGui;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.DeliveryTask;
 import com.gilfort.civmod.logistics.Producers;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.logistics.Pickups;
+import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.Deliveries;
 import com.gilfort.civmod.settlement.JobBlockSite;
@@ -81,17 +84,49 @@ public record ClerkTabData(int level, List<StockRule> rules, List<TaskRow> tasks
         nowhere = List.copyOf(nowhere);
     }
 
-    /** The status icon of a task, in list order. */
+    /** The status of a task: its icon and colour in the Tasks tab, and its place in the list (blocked first, waiting last). */
     public enum TaskStatus {
         /** Nobody can work on it: no producer, inputs missing or no Deliveryman (a red ✕). */
-        BLOCKED,
+        BLOCKED("✕", CivGui.ERROR_COLOR, 0),
         /** A producer crafts it or a Deliveryman is on it. */
-        IN_PROGRESS,
+        IN_PROGRESS("▶", CivGui.LABEL_COLOR, 1),
         /** Waiting for a producer or a Deliveryman to take it. */
-        WAITING;
+        WAITING("⌛", CivGui.HINT_COLOR, 2);
 
         /** Network codec. */
         public static final StreamCodec<ByteBuf, TaskStatus> STREAM_CODEC = ByteBufCodecs.idMapper(i -> values()[i], TaskStatus::ordinal);
+
+        private final String icon;
+        private final int color;
+        private final int order;
+
+        TaskStatus(String icon, int color, int order) {
+            this.icon = icon;
+            this.color = color;
+            this.order = order;
+        }
+
+        /**
+         * @return the status icon ("✕", "▶", "⌛")
+         */
+        public Component icon() {
+            return Component.literal(icon);
+        }
+
+        /**
+         * @return the icon's colour (ARGB; the {@link CivGui} constants are compile-time constants, so the server does
+         *         not load the client class)
+         */
+        public int color() {
+            return color;
+        }
+
+        /**
+         * @return its place in the list, lowest first
+         */
+        public int order() {
+            return order;
+        }
     }
 
     /**
@@ -174,7 +209,7 @@ public record ClerkTabData(int level, List<StockRule> rules, List<TaskRow> tasks
         List<TaskRow> tasks = new ArrayList<>(requests(level, settlement.get(), clerk, clerks));
         tasks.addAll(deliveries(level, settlement.get(), clerks));
         // A stable sort: requests stay before deliveries, each in its own order.
-        tasks.sort(Comparator.comparing(TaskRow::status));
+        tasks.sort(Comparator.comparingInt(row -> row.status().order()));
         return new ClerkTabData(block.get().level(), block.get().stockRules(), tasks, served(settlement.get(), block.get()),
                 Warehouses.servedBy(settlement.get(), clerk).map(ClerkStorage::name), StockRules.surplusNowhere(level, clerk));
     }
@@ -210,10 +245,9 @@ public record ClerkTabData(int level, List<StockRule> rules, List<TaskRow> tasks
                             gray(Component.translatable("civmod.gui.clerk.request.priority", request.priority()))));
                     BlockPos target = request.target().get();
                     if (!target.equals(clerk)) {
-                        Component name = settlement.block(target).map(ClerkStorage::name).orElse(Component.literal(target.toShortString()));
-                        details.add(gray(Component.translatable("civmod.gui.clerk.task.for", name)));
+                        details.add(gray(Component.translatable("civmod.gui.clerk.task.for", name(settlement, target))));
                     }
-                    return new TaskRow(new ItemStack(request.item()), text, status, details);
+                    return new TaskRow(new ItemStack(request.item(), amount), text, status, details);
                 }).toList();
     }
 
@@ -261,10 +295,14 @@ public record ClerkTabData(int level, List<StockRule> rules, List<TaskRow> tasks
                 icon = new ItemStack(result.item());
                 text = Component.translatable("civmod.gui.clerk.delivery.result", source, name(settlement, result.clerk()));
             } else {
-                // A pickup: the first item waiting at the drop-off; the source block while it is unloaded or carried away.
+                // A pickup: the first item waiting at the drop-off; while it is unloaded or carried away the first item
+                // its Deliveryman carries, else the source block.
                 boolean loaded = level.isLoaded(task.source());
                 items = site.filter(found -> loaded).map(found -> Pickups.contents(level, found, task.source()).items()).orElse(0);
                 icon = site.filter(found -> loaded).map(found -> Pickups.firstItem(level, found, task.source())).orElse(ItemStack.EMPTY);
+                if (icon.isEmpty()) {
+                    icon = task.takerOn(day).map(taker -> firstCarried(level, taker)).orElse(ItemStack.EMPTY);
+                }
                 if (icon.isEmpty() && loaded) {
                     icon = new ItemStack(level.getBlockState(task.source()).getBlock().asItem());
                 }
@@ -290,6 +328,15 @@ public record ClerkTabData(int level, List<StockRule> rules, List<TaskRow> tasks
             List<Component> details = List.of(text, gray(Component.translatable("civmod.gui.clerk.delivery.items", items)), gray(state));
             return new TaskRow(icon, text, status, details);
         }).toList();
+    }
+
+    /** The first item in a Deliveryman's load (a copy), empty if it is not loaded or carries nothing. */
+    private static ItemStack firstCarried(ServerLevel level, DeliveryTask.Taker taker) {
+        if (!(level.getEntity(taker.settler()) instanceof Settler settler)) {
+            return ItemStack.EMPTY;
+        }
+        return settler.getJobs().stream().filter(job -> job.jobType() == ModJobs.DELIVERYMAN.get())
+                .flatMap(job -> settler.getWork().buffer(job.jobBlock()).stacks().stream()).findFirst().map(ItemStack::copy).orElse(ItemStack.EMPTY);
     }
 
     /** The name of a Clerk JobBlock (its position if it is gone). */
