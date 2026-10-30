@@ -15,6 +15,26 @@ import net.minecraft.world.item.ItemStack;
 public abstract sealed class JobBlockTab permits StorageTab, WorkersTab, FoundTab, MissionsTab, StockTab, ClerkListTab, PatternsTab,
         StationTypesTab, FuelTab {
 
+    /**
+     * Where a tab sits in the tab bar (vault {@code Systems/GUI.md}, tab order): {@link JobBlockTabs} sorts a window's
+     * tabs by group, tabs of one group keep the order they were added in. The top row holds the block settings, the
+     * bottom row every Patterns tab.
+     */
+    public enum Group {
+        /** The Workers tab, first in every window (the window opens on it). */
+        WORKERS,
+        /** The Storage tab. */
+        STORAGE,
+        /** The tabs of the Job Category or Job (Found, Missions, the Clerk's Stock and task tabs). */
+        JOB,
+        /** The Station Types tab. */
+        STATION_TYPES,
+        /** The Fuel tab of a Job burning fuel. */
+        FUEL,
+        /** The Patterns tabs, below the panel: the Base Job's first, then its Specializations. */
+        PATTERNS
+    }
+
     private JobBlockMenu menu;
     private int index = -1;
     private int firstButton;
@@ -30,10 +50,17 @@ public abstract sealed class JobBlockTab permits StorageTab, WorkersTab, FoundTa
     public abstract ItemStack icon();
 
     /**
+     * @return the group that places the tab in the tab bar
+     */
+    public Group group() {
+        return Group.JOB;
+    }
+
+    /**
      * @return whether the entry sits below the panel instead of on top (such tabs come after the top ones)
      */
-    public boolean below() {
-        return false;
+    public final boolean below() {
+        return group() == Group.PATTERNS;
     }
 
     /**

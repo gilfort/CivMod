@@ -144,19 +144,19 @@ public final class AddonApiGameTests {
         return Math.abs(a - b) < EPSILON;
     }
 
-    /** The window's tabs follow the Job Category; only the Clerk keeps its own tabs. */
+    /** The window's tabs and their order follow the Job Category; only the Clerk keeps its own tabs. */
     private static void tabsByCategory(GameTestHelper helper) {
         String storage = "civmod.gui.job_block.tab.storage";
-        String info = "civmod.gui.job_block.tab.workers";
-        helper.assertValueEqual(tabs(ModJobs.LUMBERJACK.get()), List.of(storage, info, "civmod.gui.job_block.tab.found"), "Resource Collection: Found tab");
-        List<String> producing = List.of(storage, info, "civmod.gui.patterns.tab_job", "civmod.gui.station_types.tab");
-        helper.assertValueEqual(tabs(ModJobs.CRAFTSPERSON.get()).subList(0, 4), producing, "Craftsperson: Patterns tab");
-        helper.assertValueEqual(tabs(job(PRODUCER)), producing, "Any Producing Job: Patterns tab");
-        helper.assertValueEqual(tabs(ModJobs.ADVENTURER.get()), List.of(storage, info, "civmod.gui.job_block.tab.missions", "civmod.gui.station_types.tab"),
+        String workers = "civmod.gui.job_block.tab.workers";
+        helper.assertValueEqual(tabs(ModJobs.LUMBERJACK.get()), List.of(workers, storage, "civmod.gui.job_block.tab.found"), "Resource Collection: Found tab");
+        List<String> producing = List.of(workers, storage, "civmod.gui.station_types.tab", "civmod.gui.patterns.tab_job");
+        helper.assertValueEqual(tabs(ModJobs.CRAFTSPERSON.get()).subList(0, 4), producing, "Craftsperson: Station Types, then its Patterns tab");
+        helper.assertValueEqual(tabs(job(PRODUCER)), producing, "Any Producing Job: Station Types, then its Patterns tab");
+        helper.assertValueEqual(tabs(ModJobs.ADVENTURER.get()), List.of(workers, storage, "civmod.gui.job_block.tab.missions", "civmod.gui.station_types.tab"),
                 "Mission: Missions and Station Types tabs");
-        helper.assertValueEqual(tabs(ModJobs.CLERK.get()), List.of(storage, info, "civmod.gui.clerk.tab.stock", "civmod.gui.clerk.tab.requests",
+        helper.assertValueEqual(tabs(ModJobs.CLERK.get()), List.of(workers, storage, "civmod.gui.clerk.tab.stock", "civmod.gui.clerk.tab.requests",
                 "civmod.gui.clerk.tab.deliveries"), "Clerk keeps its tabs");
-        helper.assertValueEqual(tabs(job(NO_COSTS)), List.of(storage, info), "Service: Storage and Info only");
+        helper.assertValueEqual(tabs(job(NO_COSTS)), List.of(workers, storage), "Service: Workers and Storage only");
         helper.succeed();
     }
 

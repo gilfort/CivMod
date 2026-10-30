@@ -207,8 +207,8 @@ public final class ExampleAddonGameTests {
         helper.assertTrue(digger != null && digger.category() == JobCategory.RESOURCE_COLLECTION
                 && digger.profile(SimpleCollectionProfile.class).isPresent(), "The Sand Digger is a builder Resource Collection Job: " + digger);
         helper.assertTrue(digger.displayName().getString().equals("Sand Digger"), "Lang key: " + digger.displayName().getString());
-        helper.assertValueEqual(JobBlockTabGameTests.keys(JobBlockTabs.of(digger)), List.of("civmod.gui.job_block.tab.storage", "civmod.gui.job_block.tab.workers",
-                "civmod.gui.job_block.tab.found"), "Storage, Info, Found");
+        helper.assertValueEqual(JobBlockTabGameTests.keys(JobBlockTabs.of(digger)), List.of("civmod.gui.job_block.tab.workers", "civmod.gui.job_block.tab.storage",
+                "civmod.gui.job_block.tab.found"), "Workers, Storage, Found");
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         Settler settler = sandDigger(helper, List.of(Blocks.SAND));
         BlockPos jobBlock = settler.getJobs().get(0).jobBlock();
