@@ -13,6 +13,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.logistics.Pattern;
+import com.gilfort.civmod.logistics.PatternLayout;
 import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
@@ -50,13 +51,19 @@ import net.minecraft.world.item.crafting.RecipeType;
  *                     pattern stayed unchecked at the limit, or the checkmarks removed by a dropped limit
  * @param recipeTypes  the recipe types the Job follows (what a recipe viewer's transfer button may fill)
  * @param needs        the slots of innate patterns a settler last had to skip, with what they need ("Needs Shears")
+ * @param layouts      the layouts of the Job's recipe types, in order (the editor's layout buttons)
+ * @param slotLayouts  the layout of each pattern, by slot (vault {@code Systems/Producing Jobs.md})
  */
 public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List<Pattern> patterns, Set<Integer> filtered, Set<Integer> foreign,
-        Component filteredLine, Optional<Component> notice, List<RecipeType<?>> recipeTypes, Map<Integer, Component> needs) {
+        Component filteredLine, Optional<Component> notice, List<RecipeType<?>> recipeTypes, Map<Integer, Component> needs, List<PatternLayout> layouts,
+        Map<Integer, PatternLayout> slotLayouts) {
 
     /** Nothing (any other JobBlock, or before the first sync). */
     public static final PatternsTabData EMPTY = new PatternsTabData(Optional.empty(), false, Patterns.BASE_CHECKMARKS, List.of(), Set.of(), Set.of(),
-            Component.empty(), Optional.empty(), List.of(), Map.of());
+            Component.empty(), Optional.empty(), List.of(), Map.of(), List.of(), Map.of());
+
+    /** The layout shown before the first sync. */
+    private static final PatternLayout NO_LAYOUT = new PatternLayout(RecipeType.CRAFTING, PatternLayout.Kind.GRID, Items.CRAFTING_TABLE);
 
     /** Network codec of a set of library slots. */
     private static final StreamCodec<ByteBuf, Set<Integer>> SLOTS_CODEC = ByteBufCodecs.VAR_INT
@@ -74,6 +81,8 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
             ByteBufCodecs.optional(ComponentSerialization.STREAM_CODEC), PatternsTabData::notice,
             ByteBufCodecs.registry(Registries.RECIPE_TYPE).apply(ByteBufCodecs.list()), PatternsTabData::recipeTypes,
             ByteBufCodecs.map(HashMap::new, ByteBufCodecs.VAR_INT, ComponentSerialization.STREAM_CODEC, Pattern.SLOTS), PatternsTabData::needs,
+            PatternLayout.STREAM_CODEC.apply(ByteBufCodecs.list()), PatternsTabData::layouts,
+            ByteBufCodecs.map(HashMap::new, ByteBufCodecs.VAR_INT, PatternLayout.STREAM_CODEC, Pattern.SLOTS), PatternsTabData::slotLayouts,
             PatternsTabData::new);
 
     /**
@@ -87,9 +96,13 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
      * @param notice       the state line
      * @param recipeTypes  the recipe types the producer follows
      * @param needs        what skipped innate patterns need, by slot
+     * @param layouts      the layouts of the Job's recipe types
+     * @param slotLayouts  the layout of each pattern, by slot
      */
     public PatternsTabData {
         needs = Map.copyOf(needs);
+        layouts = List.copyOf(layouts);
+        slotLayouts = Map.copyOf(slotLayouts);
         patterns = List.copyOf(patterns);
         filtered = Set.copyOf(filtered);
         foreign = Set.copyOf(foreign);
@@ -121,7 +134,8 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
         patterns.stream().filter(Pattern::innate).forEach(pattern -> pattern.recipe().map(skipped::get)
                 .ifPresent(line -> needs.put(pattern.slot(), line)));
         return new PatternsTabData(Optional.of(job), Patterns.locked(block, job), block.checkLimit(job), patterns, filtered, foreign, profile.filteredLine(),
-                notice, profile.recipeTypes(), needs);
+                notice, profile.recipeTypes(), needs, profile.recipeTypes().stream().map(type -> PatternLayout.of(level, profile, type)).toList(),
+                patterns.stream().collect(Collectors.toMap(Pattern::slot, pattern -> Patterns.layout(level, profile, pattern))));
     }
 
     /**
@@ -151,6 +165,18 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
      */
     public Optional<Pattern> pattern(int slot) {
         return patterns.stream().filter(pattern -> pattern.slot() == slot).findFirst();
+    }
+
+    /**
+     * @param slot a library slot
+     * @return the layout the editor shows the slot in: its pattern's, else the Job's first recipe type's
+     */
+    public PatternLayout layout(int slot) {
+        PatternLayout found = slotLayouts.get(slot);
+        if (found != null) {
+            return found;
+        }
+        return layouts.isEmpty() ? NO_LAYOUT : layouts.getFirst();
     }
 
     /**
@@ -187,8 +213,11 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
         if (open.filter(Pattern::valid).isEmpty()) {
             return Pattern.GRID;
         }
+        if (open.get().innate()) {
+            return -1;
+        }
         List<Item> grid = open.get().grid();
-        for (int cell = 0; cell < Pattern.GRID; cell++) {
+        for (int cell = 0; cell < layout(slot).kind().cells(); cell++) {
             if (grid.get(cell) == Items.AIR) {
                 return cell;
             }
@@ -258,9 +287,11 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
      * @param item        the item ({@link Op#SET_OUTPUT}, {@link Op#SET_INPUT}; {@link Items#AIR} empties a cell)
      * @param recipe      the recipe the viewer showed ({@link Op#TRANSFER})
      * @param grid        the items the viewer showed, row by row ({@link Op#TRANSFER})
+     * @param layout      the recipe type of the editor's layout ({@link Op#SET_INPUT}) or of the viewer's recipe
+     *                    ({@link Op#TRANSFER})
      */
-    public record Edit(int containerId, Job job, Op op, int slot, int index, Item item, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid)
-            implements CustomPacketPayload {
+    public record Edit(int containerId, Job job, Op op, int slot, int index, Item item, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid,
+            Optional<RecipeType<?>> layout) implements CustomPacketPayload {
 
         /** Payload type. */
         public static final Type<Edit> TYPE = new Type<>(CivMod.id("edit_pattern"));
@@ -275,7 +306,24 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
                 ByteBufCodecs.registry(Registries.ITEM), Edit::item,
                 ByteBufCodecs.optional(ResourceKey.streamCodec(Registries.RECIPE)), Edit::recipe,
                 ByteBufCodecs.registry(Registries.ITEM).apply(ByteBufCodecs.list(Pattern.GRID)), Edit::grid,
+                ByteBufCodecs.optional(ByteBufCodecs.registry(Registries.RECIPE_TYPE)), Edit::layout,
                 Edit::new);
+
+        /**
+         * An edit without a layout.
+         *
+         * @param containerId the menu's container id
+         * @param job         the Job whose library it is
+         * @param op          what to do
+         * @param slot        the library slot
+         * @param index       the grid cell or the direction
+         * @param item        the item
+         * @param recipe      the recipe the viewer showed
+         * @param grid        the items the viewer showed
+         */
+        public Edit(int containerId, Job job, Op op, int slot, int index, Item item, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid) {
+            this(containerId, job, op, slot, index, item, recipe, grid, Optional.empty());
+        }
 
         /**
          * @param containerId the menu's container id
@@ -294,10 +342,11 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
          * @param slot        the library slot
          * @param index       the grid cell
          * @param item        the item, {@link Items#AIR} to empty the cell
+         * @param layout      the recipe type of the editor's layout
          * @return the edit
          */
-        public static Edit setInput(int containerId, Job job, int slot, int index, Item item) {
-            return new Edit(containerId, job, Op.SET_INPUT, slot, index, item, Optional.empty(), List.of());
+        public static Edit setInput(int containerId, Job job, int slot, int index, Item item, RecipeType<?> layout) {
+            return new Edit(containerId, job, Op.SET_INPUT, slot, index, item, Optional.empty(), List.of(), Optional.of(layout));
         }
 
         /**
@@ -341,6 +390,19 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
          */
         public static Edit transfer(int containerId, Job job, int slot, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid) {
             return new Edit(containerId, job, Op.TRANSFER, slot, 0, Items.AIR, recipe, grid);
+        }
+
+        /**
+         * @param containerId the menu's container id
+         * @param job         the Job whose library it is
+         * @param slot        the library slot
+         * @param type        the recipe type of the recipe the viewer showed (the layout of an unknown recipe)
+         * @param recipe      the recipe the viewer showed
+         * @param grid        the items it showed, row by row
+         * @return the edit
+         */
+        public static Edit transfer(int containerId, Job job, int slot, RecipeType<?> type, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid) {
+            return new Edit(containerId, job, Op.TRANSFER, slot, 0, Items.AIR, recipe, grid, Optional.of(type));
         }
 
         @Override

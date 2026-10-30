@@ -492,6 +492,7 @@
   "civmod.gui.patterns.help.crafted": "Only %s patterns are crafted.",
   "civmod.gui.patterns.help.cell": "Click a cell with an item: exact input",
   "civmod.gui.patterns.help.empty_cell": "Right-click a cell: empty it",
+  "civmod.gui.patterns.help.layout": "Click a station icon: its layout (clears inputs)",
   "civmod.gui.patterns.editing": "Pattern %s",
   "civmod.gui.patterns.check": "Check",
   "civmod.gui.patterns.uncheck": "Uncheck",
