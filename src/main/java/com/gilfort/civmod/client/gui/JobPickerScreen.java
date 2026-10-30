@@ -81,7 +81,6 @@ public class JobPickerScreen extends CivScreen {
 
     @Override
     protected List<Component> helpLines() {
-        return List.of(Component.translatable("civmod.gui.job_picker.help.choose"), Component.translatable("civmod.gui.job_picker.help.full"),
-                Component.translatable("civmod.gui.job_picker.help.change"));
+        return List.of(Component.translatable("civmod.gui.job_picker.help.choose"), Component.translatable("civmod.gui.job_picker.help.change"));
     }
 }

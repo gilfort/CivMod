@@ -221,7 +221,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
             return List.of(Component.translatable("civmod.gui.settler.help.cap"));
         }
         if (tab == SettlerMenu.TAB_JOBS) {
-            return List.of(Component.translatable("civmod.gui.settler.help.switch"), Component.translatable("civmod.gui.settler.help.switch_skill"));
+            return List.of(Component.translatable("civmod.gui.settler.help.switch"));
         }
         return List.of();
     }
