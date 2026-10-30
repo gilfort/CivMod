@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:gui_text_review_pass",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

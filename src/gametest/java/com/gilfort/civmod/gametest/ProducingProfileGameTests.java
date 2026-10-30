@@ -56,7 +56,7 @@ public final class ProducingProfileGameTests {
         Pattern ladder = Patterns.setOutput(level, pos, CraftspersonGameTests.craftJob(), 6, Items.LADDER).orElseThrow();
         helper.assertFalse(ladder.checked(), "At the limit: the new pattern stays unchecked");
         String line = PatternsTabData.of(level, pos, CraftspersonGameTests.craftJob()).notice().map(component -> component.getString()).orElse("");
-        helper.assertTrue(line.equals("A Craftsperson masters only 6 recipes at once – choose which to check."), "State line: " + line);
+        helper.assertTrue(line.equals("All checkmarks used"), "State line: " + line);
 
         helper.assertFalse(Patterns.toggleCheck(level, pos, CraftspersonGameTests.craftJob(), 0), "Unchecking the sticks frees a checkmark");
         helper.assertTrue(PatternsTabData.of(level, pos, CraftspersonGameTests.craftJob()).notice().isEmpty(), "The line disappears on the next toggle");
