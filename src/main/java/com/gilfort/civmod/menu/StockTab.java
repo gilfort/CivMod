@@ -14,14 +14,14 @@ import net.minecraft.world.item.Items;
 /**
  * The Clerk's "Stock" tab (vault {@code Jobs/Clerk.md}): its stock rules, with the player inventory to pick items
  * from; the client edits a rule with {@link ClerkTabData.Edit}. Shows the Clerk's data ({@link ClerkTabData}), shared
- * with the Requests and Deliveries tabs.
+ * with the Tasks tab.
  */
 public final class StockTab extends JobBlockTab {
 
     private final TabData<ClerkTabData> data;
 
     /**
-     * @param data the Clerk's data, shared with its Requests and Deliveries tabs
+     * @param data the Clerk's data, shared with its Tasks tab
      */
     StockTab(TabData<ClerkTabData> data) {
         this.data = data;

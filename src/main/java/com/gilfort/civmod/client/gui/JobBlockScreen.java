@@ -9,7 +9,6 @@ import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.menu.ClerkTabData;
-import com.gilfort.civmod.menu.DeliveriesTab;
 import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.menu.FuelTab;
@@ -20,11 +19,11 @@ import com.gilfort.civmod.menu.JobBlockTab;
 import com.gilfort.civmod.menu.MissionsTab;
 import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.menu.PatternsTab;
-import com.gilfort.civmod.menu.RequestsTab;
 import com.gilfort.civmod.menu.StationTypesTabData;
 import com.gilfort.civmod.menu.StationTypesTab;
 import com.gilfort.civmod.menu.StockTab;
 import com.gilfort.civmod.menu.StorageTab;
+import com.gilfort.civmod.menu.TasksTab;
 import com.gilfort.civmod.menu.TabData;
 import com.gilfort.civmod.menu.WorkersTab;
 
@@ -96,8 +95,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
                 case FoundTab found -> new FoundTabView(this, found);
                 case MissionsTab missions -> new MissionsTabView(this, missions);
                 case StockTab stock -> new StockTabView(this, stock);
-                case RequestsTab requests -> new RequestsTabView(this, requests);
-                case DeliveriesTab deliveries -> new DeliveriesTabView(this, deliveries);
+                case TasksTab tasks -> new TasksTabView(this, tasks);
                 case StationTypesTab stations -> new StationTypesTabView(this, stations);
                 case FuelTab fuel -> new FuelTabView(this, fuel);
                 case PatternsTab _ -> library;

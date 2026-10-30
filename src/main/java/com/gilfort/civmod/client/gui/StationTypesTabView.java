@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.JobBlockTab;
 import com.gilfort.civmod.menu.StationTypesTabData;
@@ -106,7 +107,13 @@ final class StationTypesTabView implements JobBlockTabView {
     @Override
     public List<Component> helpLines(JobBlockTab shown) {
         StationTypesTabData tab = stations.data().get();
-        List<Component> lines = new ArrayList<>(List.of(Component.translatable("civmod.gui.station_types.help.put")));
+        List<Component> lines = new ArrayList<>(List.of(Component.translatable("civmod.gui.station_types.help.put"),
+                Component.translatable("civmod.gui.station_types.help.replace")));
+        if (tab.unlocked().stream().allMatch(job -> job.category() == JobCategory.PRODUCING)) {
+            // Only Producing Jobs work at a station: Mission Jobs work away from the settlement, Resource Collection Jobs
+            // at their work place.
+            lines.add(Component.translatable("civmod.gui.station_types.help.station"));
+        }
         for (StationTypes.Unlock unlock : tab.overview()) {
             Component item = new ItemStack(unlock.item()).getHoverName();
             for (Job job : unlock.jobs()) {

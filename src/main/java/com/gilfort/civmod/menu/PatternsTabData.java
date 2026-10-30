@@ -47,7 +47,7 @@ import net.minecraft.world.item.crafting.RecipeType;
  * @param filtered     the slots of patterns the Job's filters reject
  * @param foreign      the slots of patterns of a recipe type the Job does not follow (they keep their checkmark)
  * @param filteredLine the state line of a filtered pattern ("Not allowed for this Job")
- * @param notice       the state line: "All checkmarks used" while a new
+ * @param notice       the state line: "A Craftsperson masters only 6 recipes at once – choose which to check." while a new
  *                     pattern stayed unchecked at the limit, or the checkmarks removed by a dropped limit
  * @param recipeTypes  the recipe types the Job follows (what a recipe viewer's transfer button may fill)
  * @param needs        the slots of innate patterns a settler last had to skip, with what they need ("Needs Shears")
@@ -126,7 +126,7 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
         Set<Integer> foreign = slots(patterns, pattern -> Patterns.foreign(level, profile, pattern));
         Set<Integer> filtered = slots(patterns, pattern -> !foreign.contains(pattern.slot()) && Patterns.filtered(level, profile, pattern));
         Optional<Component> notice = block.notice(job).map(found -> switch (found) {
-            case SettlementBlock.Notice.AtLimit _ -> Component.translatable("civmod.gui.patterns.at_limit");
+            case SettlementBlock.Notice.AtLimit atLimit -> Component.translatable("civmod.gui.patterns.at_limit", job.displayName(), atLimit.limit());
             case SettlementBlock.Notice.Trimmed trimmed -> Component.translatable("civmod.gui.patterns.trimmed", trimmed.removed(), trimmed.limit());
         });
         Map<ResourceKey<Recipe<?>>, Component> skipped = block.needs(job);

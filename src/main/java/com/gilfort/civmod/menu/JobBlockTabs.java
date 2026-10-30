@@ -28,7 +28,7 @@ public final class JobBlockTabs {
         List<JobBlockTab> tabs = new ArrayList<>(List.of(new StorageTab(), new WorkersTab()));
         if (jobType == ModJobs.CLERK.get()) {
             TabData<ClerkTabData> clerk = StockTab.newData();
-            tabs.addAll(List.of(new StockTab(clerk), new RequestsTab(clerk), new DeliveriesTab(clerk)));
+            tabs.addAll(List.of(new StockTab(clerk), new TasksTab(clerk)));
             return tabs;
         }
         switch (jobType.category()) {
