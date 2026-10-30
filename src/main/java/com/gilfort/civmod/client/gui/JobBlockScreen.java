@@ -106,7 +106,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         return List.copyOf(result);
     }
 
-    /** The tabs below the panel (a Producing JobBlock's Specializations). */
+    /** The tabs below the panel (a Producing JobBlock's Patterns tabs). */
     @Override
     protected List<TabBar.Tab> bottomTabs() {
         return barTabs(menu, true);

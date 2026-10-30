@@ -49,6 +49,11 @@ public final class WorkersTab extends JobBlockTab {
     }
 
     @Override
+    public Group group() {
+        return Group.WORKERS;
+    }
+
+    @Override
     int buttons() {
         return OPEN + MAX_WORKERS;
     }

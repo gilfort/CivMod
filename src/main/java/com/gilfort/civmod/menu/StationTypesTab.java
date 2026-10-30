@@ -38,6 +38,11 @@ public final class StationTypesTab extends JobBlockTab {
     }
 
     @Override
+    public Group group() {
+        return Group.STATION_TYPES;
+    }
+
+    @Override
     public boolean shown() {
         return specializations;
     }

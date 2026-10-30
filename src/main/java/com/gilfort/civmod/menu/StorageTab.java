@@ -21,6 +21,11 @@ public final class StorageTab extends JobBlockTab {
     }
 
     @Override
+    public Group group() {
+        return Group.STORAGE;
+    }
+
+    @Override
     boolean showsInventory() {
         return true;
     }

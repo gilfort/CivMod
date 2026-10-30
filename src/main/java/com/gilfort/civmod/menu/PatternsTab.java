@@ -87,8 +87,8 @@ public final class PatternsTab extends JobBlockTab {
     }
 
     @Override
-    public boolean below() {
-        return !base;
+    public Group group() {
+        return Group.PATTERNS;
     }
 
     @Override
