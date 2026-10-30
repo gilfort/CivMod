@@ -42,8 +42,7 @@ public final class JobBlockTabGameTests {
     private static final String FOUND = "civmod.gui.job_block.tab.found";
     private static final String MISSIONS = "civmod.gui.job_block.tab.missions";
     private static final String STOCK = "civmod.gui.clerk.tab.stock";
-    private static final String REQUESTS = "civmod.gui.clerk.tab.requests";
-    private static final String DELIVERIES = "civmod.gui.clerk.tab.deliveries";
+    private static final String TASKS = "civmod.gui.clerk.tab.tasks";
     private static final String PATTERNS = "civmod.gui.patterns.tab_job";
     private static final String STATION_TYPES = "civmod.gui.station_types.tab";
     private static final String FUEL = "civmod.gui.fuel.tab";
@@ -199,10 +198,10 @@ public final class JobBlockTabGameTests {
         helper.succeed();
     }
 
-    /** Clerk: Workers, Storage, Stock, Requests, Deliveries in the tall panel. */
+    /** Clerk: Workers, Storage, Stock, Tasks in the tall panel (one Tasks tab replaces Requests and Deliveries, #142). */
     private static void clerk(GameTestHelper helper) {
-        assertTabs(helper, ModJobs.CLERK.get(), List.of(WORKERS, STORAGE, STOCK, REQUESTS, DELIVERIES),
-                List.of(Items.NAME_TAG, Items.CHEST, Items.WRITABLE_BOOK, Items.PAPER, Items.BUNDLE), true, List.of(1, 2));
+        assertTabs(helper, ModJobs.CLERK.get(), List.of(WORKERS, STORAGE, STOCK, TASKS),
+                List.of(Items.NAME_TAG, Items.CHEST, Items.WRITABLE_BOOK, Items.PAPER), true, List.of(1, 2));
         helper.succeed();
     }
 

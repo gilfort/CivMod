@@ -129,6 +129,27 @@ public final class Pickups {
     }
 
     /**
+     * @param level  the level
+     * @param site   the JobBlock the drop-off belongs to
+     * @param source the drop-off
+     * @return the first item it holds for pickup (empty while it is unloaded or holds nothing for pickup)
+     */
+    public static ItemStack firstItem(ServerLevel level, JobBlockSite site, BlockPos source) {
+        ResourceHandler<ItemResource> handler = handler(level, source);
+        if (handler == null) {
+            return ItemStack.EMPTY;
+        }
+        Predicate<ItemStack> kept = kept(site, source);
+        for (int i = 0; i < handler.size(); i++) {
+            ItemResource resource = handler.getResource(i);
+            if (!resource.isEmpty() && handler.getAmountAsLong(i) > 0 && !kept.test(resource.toStack())) {
+                return resource.toStack();
+            }
+        }
+        return ItemStack.EMPTY;
+    }
+
+    /**
      * Takes what fits out of a drop-off, slot by slot.
      *
      * @param level  the level

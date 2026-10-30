@@ -30,7 +30,7 @@ public final class JobBlockTabs {
         List<JobBlockTab> tabs = new ArrayList<>(List.of(new WorkersTab(), new StorageTab()));
         if (jobType == ModJobs.CLERK.get()) {
             TabData<ClerkTabData> clerk = StockTab.newData();
-            tabs.addAll(List.of(new StockTab(clerk), new RequestsTab(clerk), new DeliveriesTab(clerk)));
+            tabs.addAll(List.of(new StockTab(clerk), new TasksTab(clerk)));
         } else {
             switch (jobType.category()) {
                 case RESOURCE_COLLECTION -> {
@@ -47,7 +47,7 @@ public final class JobBlockTabs {
                 }
             }
         }
-        // A stable sort: tabs of one group keep the order they were added in (Stock before the Clerk's task tabs, the
+        // A stable sort: tabs of one group keep the order they were added in (Stock before the Clerk's Tasks tab, the
         // Base Job's Patterns tab before its Specializations').
         tabs.sort(Comparator.comparing(JobBlockTab::group));
         return tabs;

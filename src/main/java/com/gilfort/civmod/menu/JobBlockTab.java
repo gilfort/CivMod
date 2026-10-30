@@ -12,7 +12,7 @@ import net.minecraft.world.item.ItemStack;
  * chooses the tabs of a JobBlock; the {@link JobBlockMenu} gives each its index and button ids and only iterates over
  * them. The view of a tab is client code ({@code client.gui.JobBlockTabView}), never loaded on a dedicated server.
  */
-public abstract sealed class JobBlockTab permits StorageTab, WorkersTab, FoundTab, MissionsTab, StockTab, ClerkListTab, PatternsTab,
+public abstract sealed class JobBlockTab permits StorageTab, WorkersTab, FoundTab, MissionsTab, StockTab, TasksTab, PatternsTab,
         StationTypesTab, FuelTab {
 
     /**
