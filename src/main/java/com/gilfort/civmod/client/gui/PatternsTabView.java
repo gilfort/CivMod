@@ -45,7 +45,7 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
  * Producing Job with a library there; the client side of {@link PatternsTab}, one view for all of them. Two views: the library (54 pattern slots
  * with checkmarks) and the editor of one pattern (the layout of its recipe type ({@link PatternLayout}) with layout buttons
  * on top, output, recipe arrows, Check / Clear / Back; an innate recipe read only). Also the target
- * of recipe viewer transfers. Adds the delivery toggle (Self / Deliveryman) to the Info tab.
+ * of recipe viewer transfers. Adds the delivery toggle (Self / Deliveryman) to the Workers tab.
  */
 final class PatternsTabView implements JobBlockTabView {
 
@@ -101,15 +101,20 @@ final class PatternsTabView implements JobBlockTabView {
         return menu.tab(PatternsTab.class).orElseThrow().data();
     }
 
-    /** The delivery toggle (Self / Deliveryman) on the Info tab of a JobBlock in a settlement; the Base Job's tab handles it. */
+    /** The delivery toggle (Self / Deliveryman) on the Workers tab of a JobBlock in a settlement; the Base Job's tab handles it. */
     @Override
-    public void initInfo(int info) {
+    public void initWorkers(int workers) {
         JobBlockInfo current = menu.getInfo();
         PatternsTab base = menu.tab(PatternsTab.class).orElseThrow();
-        if (current.inSettlement()) {
-            InfoTabView.button(screen, info, Component.translatable(current.byDeliveryman() ? "civmod.gui.job_block.delivery.deliveryman"
-                    : "civmod.gui.job_block.delivery.self"), InfoTabView.TOGGLE_ROW, base.buttonId(PatternsTab.TOGGLE_DELIVERY), true);
+        if (workersToggle()) {
+            WorkersTabView.button(screen, workers, Component.translatable(current.byDeliveryman() ? "civmod.gui.job_block.delivery.deliveryman"
+                    : "civmod.gui.job_block.delivery.self"), base.buttonId(PatternsTab.TOGGLE_DELIVERY));
         }
+    }
+
+    @Override
+    public boolean workersToggle() {
+        return menu.getInfo().inSettlement();
     }
 
     /** Another tab: the editor closes. */

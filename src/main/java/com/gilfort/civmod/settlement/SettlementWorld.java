@@ -128,6 +128,23 @@ public final class SettlementWorld {
     }
 
     /**
+     * Removes one settler from one JobBlock by its UUID (✕ in the Workers tab): like
+     * {@link #unassign(ServerLevel, BlockPos, Settler)} when it is loaded, otherwise its job list follows on its next
+     * membership check.
+     *
+     * @param level    the dimension
+     * @param jobBlock the JobBlock position
+     * @param settler  the settler UUID
+     * @return whether the settler worked the JobBlock
+     */
+    public static boolean unassign(ServerLevel level, BlockPos jobBlock, UUID settler) {
+        if (level.getEntity(settler) instanceof Settler entity) {
+            return unassign(level, jobBlock, entity);
+        }
+        return JobAssignments.unassign(SettlementData.get(level), jobBlock, settler);
+    }
+
+    /**
      * Frees all jobs of a settler (e.g. it died on a mission): every JobBlock forgets it and its job list is emptied.
      *
      * @param level   the dimension

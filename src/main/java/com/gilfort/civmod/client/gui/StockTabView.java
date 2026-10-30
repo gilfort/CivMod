@@ -33,7 +33,7 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 /**
  * The Clerk's "Stock" tab of the {@link JobBlockScreen} (vault {@code Jobs/Clerk.md}); the client side of
  * {@link StockTab}: 5 rows of 9 stock slots (9 per JobBlock level active) and the editor of the selected rule below.
- * The Info tab gets the Warehouse lines ({@link #extractInfo}).
+ * The Workers tab gets the Warehouse line ({@link #extractWorkers}).
  */
 final class StockTabView implements JobBlockTabView {
 
@@ -419,14 +419,21 @@ final class StockTabView implements JobBlockTabView {
                 Component.translatable("civmod.gui.clerk.stock.help.order"));
     }
 
-    // ---------------------------------------------------------------- Info tab
+    // ---------------------------------------------------------------- Workers tab
+
+    /** The Warehouse line, if the Clerk serves or is served by a Warehouse. */
+    @Override
+    public int workersLines() {
+        ClerkTabData tab = clerk();
+        return tab.servedBy().isPresent() || !tab.served().isEmpty() ? 1 : 0;
+    }
 
     /**
-     * Draws the Warehouse line of the Info tab: a Warehouse counts its Served Clerks (names on hover), a Served Clerk
+     * Draws the Warehouse line of the Workers tab: a Warehouse counts its Served Clerks (names on hover), a Served Clerk
      * names its Warehouse.
      */
     @Override
-    public int extractInfo(GuiGraphicsExtractor graphics, int y, int width, int color, int mouseX, int mouseY) {
+    public int extractWorkers(GuiGraphicsExtractor graphics, int y, int width, int color, int mouseX, int mouseY) {
         Font font = font();
         ClerkTabData tab = clerk();
         if (tab.servedBy().isPresent()) {

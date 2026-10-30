@@ -21,7 +21,7 @@ import net.minecraft.world.item.crafting.RecipeType;
 /**
  * The client view of a {@link JobBlockTab} in the {@link JobBlockScreen}: what the tab draws and how it takes input.
  * The screen hands every call to the view of the selected tab, except {@link #init}, {@link #onTabChanged},
- * {@link #mouseReleased} and the Info tab contributions, which every view of the window gets. Several tabs may share
+ * {@link #mouseReleased} and the Workers tab contributions, which every view of the window gets. Several tabs may share
  * one view (the Patterns tabs of a JobBlock).
  */
 interface JobBlockTabView {
@@ -163,18 +163,33 @@ interface JobBlockTabView {
         return Optional.empty();
     }
 
-    // ---------------------------------------------------------------- contributions to the Info tab
+    // ---------------------------------------------------------------- contributions to the Workers tab
 
     /**
-     * Adds the view's widgets to the Info tab (called on every widget rebuild).
+     * Adds the view's toggle button to the Workers tab's bottom row ({@link WorkersTabView#button}); called on every
+     * widget rebuild. A view that adds one says so in {@link #workersToggle}.
      *
-     * @param info the Info tab's index
+     * @param workers the Workers tab's index
      */
-    default void initInfo(int info) {
+    default void initWorkers(int workers) {
     }
 
     /**
-     * Draws the view's lines of the Info tab below the Job lines.
+     * @return whether the view adds a toggle button to the Workers tab's bottom row now
+     */
+    default boolean workersToggle() {
+        return false;
+    }
+
+    /**
+     * @return how many lines the view draws below the Workers tab's list ({@link #extractWorkers})
+     */
+    default int workersLines() {
+        return 0;
+    }
+
+    /**
+     * Draws the view's lines of the Workers tab below its list.
      *
      * @param graphics the graphics extractor (panel coordinates)
      * @param y        the y of the first line
@@ -184,14 +199,7 @@ interface JobBlockTabView {
      * @param mouseY   the mouse y position
      * @return the y below the lines
      */
-    default int extractInfo(GuiGraphicsExtractor graphics, int y, int width, int color, int mouseX, int mouseY) {
+    default int extractWorkers(GuiGraphicsExtractor graphics, int y, int width, int color, int mouseX, int mouseY) {
         return y;
-    }
-
-    /**
-     * @return whether the Info tab offers to free the JobBlock's only place
-     */
-    default boolean offersUnassign() {
-        return true;
     }
 }

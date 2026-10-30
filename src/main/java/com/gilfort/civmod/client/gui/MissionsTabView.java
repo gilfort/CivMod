@@ -85,12 +85,6 @@ final class MissionsTabView implements JobBlockTabView {
                 .bounds(left + CivGui.PADDING + buttonWidth + 4, y, buttonWidth, 20).build());
     }
 
-    /** The Mission Board's Info tab has no Free button. */
-    @Override
-    public boolean offersUnassign() {
-        return false;
-    }
-
     /** Another tab was selected: the assignment view closes. */
     @Override
     public void onTabChanged() {

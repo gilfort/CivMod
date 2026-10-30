@@ -21,7 +21,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Menu of a JobBlock: a window of tabs ({@link JobBlockTab}, chosen by {@link JobBlockTabs}). Every window has the
- * Storage tab (27 slots + player inventory) and the Info tab; the other tabs depend on the Job Category. The menu gives
+ * Storage tab (27 slots + player inventory) and the Workers tab; the other tabs depend on the Job Category. The menu gives
  * every tab its index and its range of menu button ids, shows the player inventory on the tabs that pick items from
  * it, sends the tabs' synced data ({@link TabData}) and otherwise only iterates over its tabs.
  */

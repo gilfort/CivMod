@@ -73,6 +73,8 @@ public final class CivGui {
     private static final int HELP_MARGIN = 4;
     /** Width the help lines are wrapped to. */
     private static final int HELP_WIDTH = 200;
+    /** Room the help icon takes from the right end of the title row (icon, margin and a gap). */
+    static final int HELP_ROOM = HELP_MARGIN + HELP_SIZE + 2;
 
     private CivGui() {
     }

@@ -34,7 +34,7 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 public final class JobBlockTabGameTests {
 
     private static final String STORAGE = "civmod.gui.job_block.tab.storage";
-    private static final String INFO = "civmod.gui.job_block.tab.info";
+    private static final String WORKERS = "civmod.gui.job_block.tab.workers";
     private static final String FOUND = "civmod.gui.job_block.tab.found";
     private static final String MISSIONS = "civmod.gui.job_block.tab.missions";
     private static final String STOCK = "civmod.gui.clerk.tab.stock";
@@ -109,24 +109,24 @@ public final class JobBlockTabGameTests {
         helper.assertValueEqual(inventoryTabs(menu), inventory, name + ": tabs with the player inventory");
     }
 
-    /** Lumberjack, Miner and Fisherman: Storage, Info, Found. */
+    /** Lumberjack, Miner and Fisherman: Storage, Workers, Found. */
     private static void resourceCollection(GameTestHelper helper) {
         for (Job job : List.of(ModJobs.LUMBERJACK.get(), ModJobs.MINER.get(), ModJobs.FISHERMAN.get())) {
-            assertTabs(helper, job, List.of(STORAGE, INFO, FOUND), List.of(Items.CHEST, Items.BOOK, Items.SPYGLASS), false, List.of(0));
+            assertTabs(helper, job, List.of(STORAGE, WORKERS, FOUND), List.of(Items.CHEST, Items.NAME_TAG, Items.SPYGLASS), false, List.of(0));
         }
         helper.succeed();
     }
 
     /**
-     * Craftsperson: Storage, Info, its Patterns tab, Station Types; one Patterns tab per Specialization below the panel,
+     * Craftsperson: Storage, Workers, its Patterns tab, Station Types; one Patterns tab per Specialization below the panel,
      * hidden until it is unlocked.
      */
     private static void craftsperson(GameTestHelper helper) {
         Job craftsperson = ModJobs.CRAFTSPERSON.get();
         JobBlockMenu menu = menu(helper, craftsperson);
         List<JobBlockTab> top = top(menu);
-        helper.assertValueEqual(keys(top), List.of(STORAGE, INFO, PATTERNS, STATION_TYPES), "Top tab labels");
-        helper.assertValueEqual(icons(top), List.of(Items.CHEST, Items.BOOK, Items.CRAFTING_TABLE, Items.SMITHING_TABLE), "Top tab icons");
+        helper.assertValueEqual(keys(top), List.of(STORAGE, WORKERS, PATTERNS, STATION_TYPES), "Top tab labels");
+        helper.assertValueEqual(icons(top), List.of(Items.CHEST, Items.NAME_TAG, Items.CRAFTING_TABLE, Items.SMITHING_TABLE), "Top tab icons");
         List<JobBlockTab> below = menu.tabs().stream().filter(JobBlockTab::below).toList();
         helper.assertValueEqual(menu.tabs().subList(0, top.size()), top, "The tabs below the panel come last");
         List<Job> specializations = List.of(StationTypeGameTests.job(CivMod.id("gametest_mason")), StationTypeGameTests.job(CivMod.id("smith")));
@@ -139,7 +139,7 @@ public final class JobBlockTabGameTests {
             helper.assertTrue(below.get(i).icon().is(job.icon().getItem()), "Specialization tab icon: " + job.icon());
             helper.assertFalse(below.get(i).shown(), "Hidden until unlocked");
         }
-        helper.assertTrue(top.stream().allMatch(JobBlockTab::shown), "Storage, Info, Patterns and Station Types are shown");
+        helper.assertTrue(top.stream().allMatch(JobBlockTab::shown), "Storage, Workers, Patterns and Station Types are shown");
         helper.assertValueEqual(menu.getTabCount(), menu.tabs().size(), "Tab count");
         helper.assertTrue(menu.isTall(), "Tall panel");
         List<Integer> inventory = new java.util.ArrayList<>(List.of(0, 2, 3));
@@ -149,30 +149,30 @@ public final class JobBlockTabGameTests {
         helper.assertValueEqual(inventoryTabs(menu), inventory, "Inventory on Storage, Patterns and Station Types");
         // A Producing Job without Specializations: no Station Types tab is shown.
         JobBlockMenu mechanic = menu(helper, ModJobs.MECHANIC.get());
-        helper.assertValueEqual(keys(mechanic.tabs()), List.of(STORAGE, INFO, PATTERNS, STATION_TYPES), "Mechanic tab labels");
+        helper.assertValueEqual(keys(mechanic.tabs()), List.of(STORAGE, WORKERS, PATTERNS, STATION_TYPES), "Mechanic tab labels");
         helper.assertFalse(mechanic.tabs().get(3).shown(), "Without Specializations the Station Types tab is hidden");
         helper.succeed();
     }
 
-    /** Clerk: Storage, Info, Stock, Requests, Deliveries in the tall panel. */
+    /** Clerk: Storage, Workers, Stock, Requests, Deliveries in the tall panel. */
     private static void clerk(GameTestHelper helper) {
-        assertTabs(helper, ModJobs.CLERK.get(), List.of(STORAGE, INFO, STOCK, REQUESTS, DELIVERIES),
-                List.of(Items.CHEST, Items.BOOK, Items.WRITABLE_BOOK, Items.PAPER, Items.BUNDLE), true, List.of(0, 2));
+        assertTabs(helper, ModJobs.CLERK.get(), List.of(STORAGE, WORKERS, STOCK, REQUESTS, DELIVERIES),
+                List.of(Items.CHEST, Items.NAME_TAG, Items.WRITABLE_BOOK, Items.PAPER, Items.BUNDLE), true, List.of(0, 2));
         helper.succeed();
     }
 
-    /** Mission Board: Storage, Info, Missions, Station Types (tall, with the player inventory). */
+    /** Mission Board: Storage, Workers, Missions, Station Types (tall, with the player inventory). */
     private static void missionBoard(GameTestHelper helper) {
-        assertTabs(helper, ModJobs.ADVENTURER.get(), List.of(STORAGE, INFO, MISSIONS, STATION_TYPES),
-                List.of(Items.CHEST, Items.BOOK, Items.MAP, Items.SMITHING_TABLE), true, List.of(0, 3));
+        assertTabs(helper, ModJobs.ADVENTURER.get(), List.of(STORAGE, WORKERS, MISSIONS, STATION_TYPES),
+                List.of(Items.CHEST, Items.NAME_TAG, Items.MAP, Items.SMITHING_TABLE), true, List.of(0, 3));
         helper.succeed();
     }
 
-    /** A Service JobBlock and a Logistics JobBlock other than the Clerk: Storage and Info only. */
+    /** A Service JobBlock and a Logistics JobBlock other than the Clerk: Storage and Workers only. */
     private static void standard(GameTestHelper helper) {
         Job service = ModJobs.REGISTRY.getValue(Identifier.fromNamespaceAndPath(CivMod.MOD_ID, "gametest_no_costs"));
         for (Job job : List.of(service, ModJobs.DELIVERYMAN.get())) {
-            assertTabs(helper, job, List.of(STORAGE, INFO), List.of(Items.CHEST, Items.BOOK), false, List.of(0));
+            assertTabs(helper, job, List.of(STORAGE, WORKERS), List.of(Items.CHEST, Items.NAME_TAG), false, List.of(0));
         }
         helper.succeed();
     }

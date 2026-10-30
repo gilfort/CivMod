@@ -169,11 +169,23 @@ public abstract class CivContainerScreen<T extends CivMenu> extends AbstractCont
 
     @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-        graphics.text(font, title, titleLabelX, titleLabelY, CivGui.LABEL_COLOR, false);
+        extractTitle(graphics, mouseX, mouseY);
         if (showsPlayerInventory()) {
             graphics.text(font, playerInventoryTitle, inventoryLabelX, inventoryLabelY, CivGui.LABEL_COLOR, false);
         }
         extractTabLabels(graphics, menu.getActiveTab(), mouseX, mouseY);
+    }
+
+    /**
+     * Draws the title line in the top left corner (coordinates relative to the panel); a screen may replace it with a
+     * header that stays the same on every tab.
+     *
+     * @param graphics the graphics extractor
+     * @param mouseX   the mouse x position
+     * @param mouseY   the mouse y position
+     */
+    protected void extractTitle(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        graphics.text(font, title, titleLabelX, titleLabelY, CivGui.LABEL_COLOR, false);
     }
 
     /**

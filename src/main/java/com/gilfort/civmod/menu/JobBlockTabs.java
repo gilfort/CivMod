@@ -12,7 +12,7 @@ import com.gilfort.civmod.settlement.StationTypes;
 /**
  * The tabs of a JobBlock window, chosen by the Job Category of the JobBlock's Job (vault
  * {@code Systems/Job Categories.md}), so an addon Job gets the same window as a built-in one. Every window starts with
- * the Storage and Info tabs; only the Clerk keeps tabs keyed to its Job. This is the one place that knows which
+ * the Storage and Workers tabs; only the Clerk keeps tabs keyed to its Job. This is the one place that knows which
  * category shows which tabs.
  */
 public final class JobBlockTabs {
@@ -25,7 +25,7 @@ public final class JobBlockTabs {
      * @return new tabs for its window, in tab order (the tabs below the panel last)
      */
     public static List<JobBlockTab> of(Job jobType) {
-        List<JobBlockTab> tabs = new ArrayList<>(List.of(new StorageTab(), new InfoTab()));
+        List<JobBlockTab> tabs = new ArrayList<>(List.of(new StorageTab(), new WorkersTab()));
         if (jobType == ModJobs.CLERK.get()) {
             TabData<ClerkTabData> clerk = StockTab.newData();
             tabs.addAll(List.of(new StockTab(clerk), new RequestsTab(clerk), new DeliveriesTab(clerk)));
@@ -42,7 +42,7 @@ public final class JobBlockTabs {
             case PRODUCING -> tabs.addAll(producing(jobType));
             case MISSION -> tabs.addAll(List.of(new MissionsTab(), new StationTypesTab(StationTypes.hasStationTypes(jobType))));
             case GUARD, LOGISTICS, SERVICE -> {
-                // Storage and Info only.
+                // Storage and Workers only.
             }
         }
         return tabs;

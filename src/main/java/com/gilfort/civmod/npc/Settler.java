@@ -595,11 +595,22 @@ public class Settler extends PathfinderMob {
             return InteractionResult.SUCCESS;
         }
         if (player instanceof ServerPlayer serverPlayer && hand == InteractionHand.MAIN_HAND) {
-            SettlerInfo info = SettlerInfo.of(this);
-            serverPlayer.openMenu(new SimpleMenuProvider((id, inventory, p) -> new SettlerMenu(id, inventory, this, info), getName()),
-                    buffer -> SettlerInfo.STREAM_CODEC.encode(buffer, info));
+            openWindow(serverPlayer, Optional.empty());
         }
         return InteractionResult.SUCCESS;
+    }
+
+    /**
+     * Opens the settler window for a player.
+     *
+     * @param player the player
+     * @param anchor the JobBlock it was opened from (the Workers tab): the window then also stays open while the player
+     *               stays at that block; empty when opened at the settler
+     */
+    public void openWindow(ServerPlayer player, Optional<BlockPos> anchor) {
+        SettlerInfo info = SettlerInfo.of(this);
+        player.openMenu(new SimpleMenuProvider((id, inventory, p) -> new SettlerMenu(id, inventory, this, info, anchor), getName()),
+                buffer -> SettlerInfo.STREAM_CODEC.encode(buffer, info));
     }
 
     private void feedBy(ServerPlayer player, ItemStack held) {
