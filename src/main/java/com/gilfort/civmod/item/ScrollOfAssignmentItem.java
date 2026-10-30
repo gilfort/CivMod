@@ -34,7 +34,9 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemInstance;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ItemStackTemplate;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
@@ -70,6 +72,15 @@ public class ScrollOfAssignmentItem extends Item {
      */
     public static Optional<ScrollBinding> binding(ItemStack stack) {
         return Optional.ofNullable(stack.get(ModDataComponents.SCROLL_BINDING.get()));
+    }
+
+    /**
+     * The scroll is not used up in a crafting recipe (the JobBlock Upgrade recipes): it comes back like a bucket, with
+     * its binding.
+     */
+    @Override
+    public ItemStackTemplate getCraftingRemainder(ItemInstance instance) {
+        return instance instanceof ItemStack stack && !stack.isEmpty() ? ItemStackTemplate.fromNonEmptyStack(stack, 1) : new ItemStackTemplate(this);
     }
 
     @Override

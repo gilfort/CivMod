@@ -1,7 +1,7 @@
 package com.gilfort.civmod.settlement;
 
 import com.gilfort.civmod.api.Job;
-import com.gilfort.civmod.block.UpgradeCosts;
+import com.gilfort.civmod.block.JobBlockSettlers;
 
 import net.minecraft.core.BlockPos;
 
@@ -73,10 +73,10 @@ public final class SettlementRules {
      * @param baseJob a Base Job a JobBlock offers
      * @param level   the JobBlock level
      * @return how many settlers the JobBlock holds in that Base Job and its Specializations: the {@code settlers} list
-     *         of {@code civmod_upgrades/<job>.json} ({@link UpgradeCosts#settlers}), 1 without one
+     *         of {@code civmod_job_blocks/<job>.json} ({@link JobBlockSettlers#settlers}), 1 without one
      */
     public static int capacity(Job baseJob, int level) {
-        return UpgradeCosts.settlers(baseJob, level);
+        return JobBlockSettlers.settlers(baseJob, level);
     }
 
     /**

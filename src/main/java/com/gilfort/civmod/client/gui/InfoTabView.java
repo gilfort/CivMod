@@ -14,29 +14,23 @@ import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.mojang.blaze3d.platform.InputConstants;
 
-import net.minecraft.ChatFormatting;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 
 /**
  * The "Info" tab of the {@link JobBlockScreen}; the client side of {@link InfoTab}: Job, level and skill cap, settlement
  * status, one line per offered Job with its automatic assignment checkbox, today's biome on the Job line (its bonus
- * effects on hover; the "?" lists every biome with an effect for the Job), upgrade costs (a row of slots that scrolls
- * with the mouse wheel) and the Upgrade, leaf collection and Free buttons. Other tabs' views add their own lines and
+ * effects on hover; the "?" lists every biome with an effect for the Job) and the leaf collection and Free buttons. Other tabs' views add their own lines and
  * buttons ({@link JobBlockTabView#extractInfo}, {@link JobBlockTabView#initInfo}).
  * <p>
  * Unconnected JobBlocks show the info greyed out with a red hint; storage keeps working.
  */
 final class InfoTabView implements JobBlockTabView {
 
-    private static final int COST_SLOTS = 7;
-    private static final int COST_X = CivGui.PADDING + 9;
     private static final int LINE_HEIGHT = 11;
     /** Top of the first Job line (below job, level and settlement). */
     private static final int JOB_LINES_Y = 22 + 3 * LINE_HEIGHT;
@@ -48,8 +42,6 @@ final class InfoTabView implements JobBlockTabView {
     private final JobBlockScreen screen;
     private final JobBlockMenu menu;
     private final InfoTab tab;
-    private int costOffset;
-    private int costRowY = -1;
 
     /**
      * @param screen the screen showing the tab
@@ -59,10 +51,6 @@ final class InfoTabView implements JobBlockTabView {
         this.screen = screen;
         this.menu = screen.getMenu();
         this.tab = tab;
-    }
-
-    private static LocalPlayer player() {
-        return Minecraft.getInstance().player;
     }
 
     /**
@@ -92,10 +80,6 @@ final class InfoTabView implements JobBlockTabView {
     @Override
     public void init() {
         JobBlockInfo info = menu.getInfo();
-        boolean max = info.level() >= SettlementRules.MAX_LEVEL;
-        Component upgradeLabel = max ? Component.translatable("civmod.gui.job_block.upgrade.max")
-                : Component.translatable("civmod.gui.job_block.upgrade.to", info.level() + 1);
-        button(upgradeLabel, 28, tab.buttonId(InfoTab.UPGRADE), !max && (player().isCreative() || info.canAffordNext(player().getInventory())));
         if (info.jobType().profile(LumberjackProfile.class).isPresent() && info.inSettlement()) {
             button(Component.translatable(info.collectLeaves() ? "civmod.gui.job_block.leaves.on" : "civmod.gui.job_block.leaves.off"), TOGGLE_ROW,
                     tab.buttonId(InfoTab.TOGGLE_LEAVES), true);
@@ -199,7 +183,6 @@ final class InfoTabView implements JobBlockTabView {
         for (JobBlockTabView view : screen.views()) {
             y = view.extractInfo(graphics, y, width, color, mouseX, mouseY);
         }
-        extractCosts(graphics, info, y, mouseX, mouseY);
     }
 
     /** Left edge of the automatic assignment checkboxes (panel coordinates). */
@@ -251,55 +234,5 @@ final class InfoTabView implements JobBlockTabView {
                             MissionsTabView.title(entry.mission(), MissionsTabView.mission(entry.mission()))))).orElseGet(() -> Component.literal(name)));
         }
         return lines;
-    }
-
-    /**
-     * Draws the costs of the next level as a row of slots (icon, needed count, red tint when missing); more than
-     * {@value #COST_SLOTS} entries scroll with the mouse wheel.
-     */
-    private void extractCosts(GuiGraphicsExtractor graphics, JobBlockInfo info, int y, int mouseX, int mouseY) {
-        List<JobBlockInfo.CostEntry> costs = info.nextCosts();
-        if (costs.isEmpty() || info.level() >= SettlementRules.MAX_LEVEL) {
-            return;
-        }
-        Font font = screen.getFont();
-        graphics.text(font, Component.translatable("civmod.gui.job_block.upgrade.costs"), CivGui.PADDING, y, CivGui.LABEL_COLOR, false);
-        int rowY = y + 10;
-        costRowY = rowY;
-        costOffset = Math.clamp(costOffset, 0, Math.max(0, costs.size() - COST_SLOTS));
-        boolean creative = player().isCreative();
-        if (costOffset > 0) {
-            graphics.text(font, Component.literal("«"), CivGui.PADDING, rowY + 4, CivGui.LABEL_COLOR, false);
-        }
-        if (costOffset + COST_SLOTS < costs.size()) {
-            graphics.text(font, Component.literal("»"), COST_X + COST_SLOTS * 18 + 2, rowY + 4, CivGui.LABEL_COLOR, false);
-        }
-        for (int i = 0; i < Math.min(COST_SLOTS, costs.size() - costOffset); i++) {
-            JobBlockInfo.CostEntry cost = costs.get(costOffset + i);
-            int x = COST_X + i * 18;
-            CivGui.slot(graphics, x, rowY);
-            graphics.item(cost.icon(), x, rowY);
-            graphics.itemDecorations(font, cost.icon(), x, rowY, Integer.toString(cost.count()));
-            int have = cost.count(player().getInventory());
-            if (!creative && have < cost.count()) {
-                graphics.fill(x, rowY, x + 16, rowY + 16, CivGui.MISSING_TINT);
-            }
-            if (mouseX >= screen.left() + x && mouseX < screen.left() + x + 16 && mouseY >= screen.top() + rowY && mouseY < screen.top() + rowY + 16) {
-                graphics.setComponentTooltipForNextFrame(font, List.of(cost.icon().getHoverName(),
-                        Component.translatable("civmod.gui.job_block.upgrade.have", have, cost.count())
-                                .withStyle(creative || have >= cost.count() ? ChatFormatting.GREEN : ChatFormatting.RED)),
-                        mouseX, mouseY);
-            }
-        }
-    }
-
-    @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
-        int size = menu.getInfo().nextCosts().size();
-        if (size > COST_SLOTS && costRowY >= 0 && mouseY >= screen.top() + costRowY - 2 && mouseY < screen.top() + costRowY + 18) {
-            costOffset = Math.clamp(costOffset - (int) Math.signum(scrollY), 0, size - COST_SLOTS);
-            return true;
-        }
-        return false;
     }
 }

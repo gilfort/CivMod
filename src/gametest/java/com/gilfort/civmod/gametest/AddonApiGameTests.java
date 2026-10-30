@@ -18,7 +18,7 @@ import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.api.SimpleCollectionProfile;
 import com.gilfort.civmod.block.JobBlockEntity;
-import com.gilfort.civmod.block.UpgradeCosts;
+import com.gilfort.civmod.block.JobBlockSettlers;
 import com.gilfort.civmod.job.BlockCountScan;
 import com.gilfort.civmod.job.CraftspersonProfile;
 import com.gilfort.civmod.job.FishermanProfile;
@@ -37,6 +37,7 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.TestAssignments;
 import com.mojang.serialization.JsonOps;
@@ -121,7 +122,7 @@ public final class AddonApiGameTests {
                 new Item.Properties().setId(ResourceKey.create(Registries.ITEM, NO_COSTS_BLOCK)))));
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "api_tabs_by_category", AddonApiGameTests::tabsByCategory);
-            register(helper, "api_upgrade_cost_fallback", AddonApiGameTests::upgradeCostFallback);
+            register(helper, "api_job_block_file_fallback", AddonApiGameTests::jobBlockFileFallback);
             register(helper, "api_job_block_factory", AddonApiGameTests::jobBlockFactory);
             register(helper, "api_mission_profile_hooks", AddonApiGameTests::missionProfileHooks);
             register(helper, "api_profile_category_check", AddonApiGameTests::profileCategoryCheck);
@@ -164,15 +165,12 @@ public final class AddonApiGameTests {
         return JobBlockTabGameTests.keys(JobBlockTabs.of(job));
     }
 
-    /** A job without an upgrade cost file uses the default costs; a job with a file keeps its own. */
-    private static void upgradeCostFallback(GameTestHelper helper) {
-        List<UpgradeCosts.Cost> fallback = UpgradeCosts.get(job(NO_COSTS), 2);
-        helper.assertTrue(fallback.size() == 2 && fallback.get(0).tag().filter(ItemTags.PLANKS::equals).isPresent()
-                && fallback.get(0).count() == 32 && fallback.get(1).item().orElseThrow() == Items.IRON_INGOT && fallback.get(1).count() == 8,
-                "Default costs for level 2: " + fallback);
-        helper.assertTrue(UpgradeCosts.get(job(NO_COSTS), 5).size() == 3, "Default costs up to level 5");
-        List<UpgradeCosts.Cost> dummy = UpgradeCosts.get(job(CivMod.id("gametest_dummy")), 2);
-        helper.assertTrue(dummy.size() == 1 && dummy.get(0).item().orElseThrow() == Items.DIAMOND, "Own file wins: " + dummy);
+    /** A job without a {@code civmod_job_blocks} file holds 1 settler on every level; a job with a file reads its list. */
+    private static void jobBlockFileFallback(GameTestHelper helper) {
+        for (int level = SettlementRules.MIN_LEVEL; level <= SettlementRules.MAX_LEVEL; level++) {
+            helper.assertTrue(JobBlockSettlers.settlers(job(NO_COSTS), level) == 1, "1 settler without a file at level " + level);
+        }
+        helper.assertTrue(JobBlockSettlers.settlers(job(CivMod.id("gametest_dummy")), 5) == 6, "Own file wins");
         helper.succeed();
     }
 

@@ -40,8 +40,8 @@ import net.minecraft.world.level.block.Block;
  * stations worked at once per JobBlock level, see {@link ProducingProfile#parallelStations}; any Job
  * {@code station_extras}, blocks near the station of the day that replace the job factor, a list of
  * {@code { blocks (id, list or #tag), radius, job_factor }} where the highest match counts; a farming Resource Collection
- * Job {@code farm_curve}, see {@link FarmCurve}), the JobBlock upgrade costs in
- * {@code data/<namespace>/civmod_upgrades/<job>.json}. The job's names come from the lang keys
+ * Job {@code farm_curve}, see {@link FarmCurve}), the settlers per JobBlock level in
+ * {@code data/<namespace>/civmod_job_blocks/<job>.json}. The job's names come from the lang keys
  * {@code job.<namespace>.<job>} and {@code job.<namespace>.<job>.indefinite} ("an Adventurer"), its one-line description
  * in the Station Types overview from {@code job.<namespace>.<job>.description}.
  * <p>

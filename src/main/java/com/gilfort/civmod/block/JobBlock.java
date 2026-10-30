@@ -5,6 +5,7 @@ import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.item.JobBlockUpgradeItem;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
@@ -12,6 +13,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Containers;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -51,6 +53,22 @@ public class JobBlock extends BaseEntityBlock {
     @Override
     public @Nullable BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         return new JobBlockEntity(pos, state);
+    }
+
+    /**
+     * A JobBlock Upgrade item upgrades the block or names why not; either way the window does not open
+     * ({@link JobBlockUpgrade}). Sneaking skips this (vanilla), so the item does nothing then.
+     */
+    @Override
+    protected InteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand,
+            BlockHitResult hitResult) {
+        if (!(stack.getItem() instanceof JobBlockUpgradeItem upgrade)) {
+            return super.useItemOn(stack, state, level, pos, player, hand, hitResult);
+        }
+        if (level instanceof ServerLevel serverLevel && level.getBlockEntity(pos) instanceof JobBlockEntity jobBlock) {
+            JobBlockUpgrade.use(serverLevel, pos, jobBlock, player, stack, upgrade.targetLevel());
+        }
+        return InteractionResult.SUCCESS;
     }
 
     @Override

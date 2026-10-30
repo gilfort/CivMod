@@ -6,14 +6,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
-import java.util.stream.Stream;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.BiomeBonus;
 import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
-import com.gilfort.civmod.block.UpgradeCosts;
 import com.gilfort.civmod.job.BiomeBonuses;
 import com.gilfort.civmod.mission.MissionOffer;
 import com.gilfort.civmod.mission.MissionRules;
@@ -29,7 +27,6 @@ import com.gilfort.civmod.settlement.SettlementWorld;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
@@ -38,9 +35,6 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.tags.TagKey;
-import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.item.ItemStack;
 
 /**
  * Snapshot of a JobBlock's state shown in the info tab; sent to the client when the menu opens.
@@ -56,13 +50,11 @@ import net.minecraft.world.item.ItemStack;
  * @param places         the offered Jobs with taken / places
  * @param collectLeaves  whether a Lumberjack also collects leaves
  * @param byDeliveryman  whether Deliverymen carry a Craftsperson's results ("Delivery: Deliveryman")
- * @param costs          upgrade costs per target level (index 0 = level 2)
  * @param missionTab   the missions and Mission Job settlers (Mission Board only, else empty)
  * @param biome          today's biome bonus line and the "?" overview of the Job's biome bonuses
  */
 public record JobBlockInfo(Job jobType, int level, Component settlementName, boolean inSettlement, boolean connected,
         int distance, int required, List<SettlementBlock.Assignee> assignees, List<JobPlaces.Line> places, boolean collectLeaves, boolean byDeliveryman,
-        List<List<CostEntry>> costs,
         MissionTab missionTab, BiomeInfo biome) {
 
     /**
@@ -249,84 +241,6 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
     }
 
     /**
-     * An upgrade cost as shown to the client.
-     *
-     * @param icon  the item shown (count 1)
-     * @param tag   the item tag that pays it, if it is a tag cost
-     * @param count the count
-     */
-    public record CostEntry(ItemStack icon, Optional<Identifier> tag, int count) {
-
-        /** Network codec. */
-        public static final StreamCodec<RegistryFriendlyByteBuf, CostEntry> STREAM_CODEC = StreamCodec.composite(
-                ItemStack.STREAM_CODEC, CostEntry::icon,
-                Identifier.STREAM_CODEC.apply(ByteBufCodecs::optional), CostEntry::tag,
-                ByteBufCodecs.VAR_INT, CostEntry::count,
-                CostEntry::new);
-
-        /**
-         * @param cost a server-side cost
-         * @return the entry
-         */
-        public static CostEntry of(UpgradeCosts.Cost cost) {
-            return new CostEntry(cost.icon().copyWithCount(1), cost.tag().map(TagKey::location), cost.count());
-        }
-
-        /**
-         * @param stack an item stack
-         * @return whether it pays this cost
-         */
-        public boolean matches(ItemStack stack) {
-            return !stack.isEmpty() && tag.map(id -> stack.is(TagKey.create(Registries.ITEM, id))).orElseGet(() -> stack.is(icon.getItem()));
-        }
-
-        /**
-         * @param inventory a player inventory
-         * @return how many matching items it holds
-         */
-        public int count(Inventory inventory) {
-            int have = 0;
-            for (int i = 0; i < inventory.getContainerSize(); i++) {
-                ItemStack stack = inventory.getItem(i);
-                if (matches(stack)) {
-                    have += stack.getCount();
-                }
-            }
-            return have;
-        }
-    }
-
-    /**
-     * @param inventory a player inventory
-     * @return whether the next upgrade is affordable (false at the maximum level)
-     */
-    public boolean canAffordNext(Inventory inventory) {
-        if (level >= SettlementRules.MAX_LEVEL) {
-            return false;
-        }
-        return nextCosts().stream().allMatch(cost -> cost.count(inventory) >= cost.count());
-    }
-
-    /**
-     * @return the costs of the next level (empty at the maximum)
-     */
-    public List<CostEntry> nextCosts() {
-        int index = level - 1;
-        return index >= 0 && index < costs.size() ? costs.get(index) : List.of();
-    }
-
-    /**
-     * @param newLevel the new level
-     * @return a copy with another level
-     */
-    public JobBlockInfo withLevel(int newLevel) {
-        // The Base Jobs plus the Jobs offered so far (unlocked by Station Types); the level opens no Job by itself.
-        List<Job> offered = Stream.concat(JobPlaces.offered(jobType).stream(), offeredJobs().stream()).distinct().toList();
-        return new JobBlockInfo(jobType, newLevel, settlementName, inSettlement, connected, distance, required, assignees,
-                JobPlaces.lines(jobType, newLevel, offered, assignees, autoJobs()), collectLeaves, byDeliveryman, costs, missionTab, biome);
-    }
-
-    /**
      * @return the offered Jobs, in line order
      */
     private List<Job> offeredJobs() {
@@ -349,19 +263,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         List<JobPlaces.Line> changed = places.stream()
                 .map(line -> line.job() == job ? new JobPlaces.Line(line.job(), line.taken(), line.places(), on) : line).toList();
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, changed, collectLeaves,
-                byDeliveryman, costs, missionTab, biome);
-    }
-
-    /**
-     * @param jobType the job
-     * @return the upgrade costs of all levels (index 0 = level 2)
-     */
-    public static List<List<CostEntry>> costsOf(Job jobType) {
-        List<List<CostEntry>> result = new ArrayList<>();
-        for (int target = SettlementRules.MIN_LEVEL + 1; target <= SettlementRules.MAX_LEVEL; target++) {
-            result.add(UpgradeCosts.get(jobType, target).stream().map(CostEntry::of).toList());
-        }
-        return List.copyOf(result);
+                byDeliveryman, missionTab, biome);
     }
 
     /** Network codec. */
@@ -377,7 +279,6 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
             JobPlaces.Line.STREAM_CODEC.apply(ByteBufCodecs.list()), JobBlockInfo::places,
             ByteBufCodecs.BOOL, JobBlockInfo::collectLeaves,
             ByteBufCodecs.BOOL, JobBlockInfo::byDeliveryman,
-            CostEntry.STREAM_CODEC.apply(ByteBufCodecs.list()).apply(ByteBufCodecs.list()), JobBlockInfo::costs,
             MissionTab.STREAM_CODEC, JobBlockInfo::missionTab,
             BiomeInfo.STREAM_CODEC, JobBlockInfo::biome,
             JobBlockInfo::new);
@@ -412,7 +313,6 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
                 List.copyOf(assignees), JobPlaces.lines(jobType, jobLevel, block.map(JobPlaces::offered).orElseGet(() -> JobPlaces.offered(jobType)),
                         assignees, block.map(SettlementBlock::autoAssign).orElse(Set.of())),
                 block.map(SettlementBlock::collectLeaves).orElse(false), block.map(SettlementBlock::byDeliveryman).orElse(false),
-                costsOf(jobType),
                 new MissionTab(SettlementWorld.missionOffer(level, pos), taken, settlers, OutcomeRules.get()),
                 BiomeInfo.of(level, pos, jobType, assignees));
     }
@@ -422,7 +322,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withoutAssignees() {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, List.of(),
-                JobPlaces.lines(jobType, level, offeredJobs(), List.of(), autoJobs()), collectLeaves, byDeliveryman, costs,
+                JobPlaces.lines(jobType, level, offeredJobs(), List.of(), autoJobs()), collectLeaves, byDeliveryman,
                 new MissionTab(missionTab.offer(), List.of(), List.of(), missionTab.rules()), biome);
     }
 
@@ -431,7 +331,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withLeavesToggled() {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, places, !collectLeaves,
-                byDeliveryman, costs, missionTab, biome);
+                byDeliveryman, missionTab, biome);
     }
 
     /**
@@ -439,7 +339,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withDeliveryToggled() {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, places, collectLeaves,
-                !byDeliveryman, costs, missionTab, biome);
+                !byDeliveryman, missionTab, biome);
     }
 
     /**
@@ -461,7 +361,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
     }
 
     private JobBlockInfo withMissionTab(MissionTab changed) {
-        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, places, collectLeaves, byDeliveryman, costs,
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, places, collectLeaves, byDeliveryman,
                 changed, biome);
     }
 
@@ -486,6 +386,6 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public static JobBlockInfo unknown(Job jobType, int jobLevel) {
         return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, List.of(), JobPlaces.lines(jobType, jobLevel, List.of()), false, false,
-                costsOf(jobType), MissionTab.EMPTY, BiomeInfo.NONE);
+                MissionTab.EMPTY, BiomeInfo.NONE);
     }
 }

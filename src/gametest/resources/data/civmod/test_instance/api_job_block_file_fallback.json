@@ -1,8 +1,8 @@
 {
   "type": "minecraft:function",
   "environment": "civmod:day",
-  "function": "civmod:skill_upgrade_costs",
-  "max_ticks": 40,
+  "function": "civmod:api_job_block_file_fallback",
+  "max_ticks": 20,
   "structure": "minecraft:empty",
-  "padding": 4
+  "padding": 40
 }

@@ -6,6 +6,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.block.StarterTools;
+import com.gilfort.civmod.item.JobBlockUpgradeItem;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 
 import net.minecraft.world.item.BlockItem;
@@ -49,6 +50,16 @@ public final class ModItems {
     public static final DeferredItem<ScrollOfAssignmentItem> SCROLL_OF_ASSIGNMENT = ITEMS.registerItem("scroll_of_assignment",
             ScrollOfAssignmentItem::new, properties -> properties.stacksTo(1));
 
+    // The Upgrade items follow the scroll, so the creative tab lists them right after it.
+    /** JobBlock Upgrade Lv 2 (iron). */
+    public static final DeferredItem<JobBlockUpgradeItem> JOB_BLOCK_UPGRADE_2 = jobBlockUpgrade(2);
+    /** JobBlock Upgrade Lv 3 (gold). */
+    public static final DeferredItem<JobBlockUpgradeItem> JOB_BLOCK_UPGRADE_3 = jobBlockUpgrade(3);
+    /** JobBlock Upgrade Lv 4 (diamond). */
+    public static final DeferredItem<JobBlockUpgradeItem> JOB_BLOCK_UPGRADE_4 = jobBlockUpgrade(4);
+    /** JobBlock Upgrade Lv 5 (netherite). */
+    public static final DeferredItem<JobBlockUpgradeItem> JOB_BLOCK_UPGRADE_5 = jobBlockUpgrade(5);
+
     /** Render-only item for the red X above unconnected JobBlocks; not obtainable. */
     public static final DeferredItem<Item> UNCONNECTED_MARKER = ITEMS.registerSimpleItem("unconnected_marker");
     /** Render-only icon: work POI. */
@@ -81,6 +92,11 @@ public final class ModItems {
             DROP_OFF_MARKER, BED_MARKER, BED_ICON, STAND_SPOT_MARKER, HAMMER, THOUGHT_BUBBLE, PROBLEM_MARKER);
 
     private ModItems() {
+    }
+
+    /** The JobBlock Upgrade item that raises a JobBlock to {@code targetLevel}. */
+    private static DeferredItem<JobBlockUpgradeItem> jobBlockUpgrade(int targetLevel) {
+        return ITEMS.registerItem("job_block_upgrade_" + targetLevel, properties -> new JobBlockUpgradeItem(targetLevel, properties));
     }
 
     /** The item of a JobBlock without a starter tool (Clerk, Craftsperson, Mission Board), from the JobBlock factory. */

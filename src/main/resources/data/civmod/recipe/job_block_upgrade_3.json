@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "M": "minecraft:gold_ingot",
+    "S": "civmod:scroll_of_assignment"
+  },
+  "pattern": [
+    "MMM",
+    "MSM",
+    "MMM"
+  ],
+  "result": {
+    "id": "civmod:job_block_upgrade_3"
+  }
+}

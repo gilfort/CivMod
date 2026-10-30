@@ -7,7 +7,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
-import com.gilfort.civmod.block.UpgradeCosts;
+import com.gilfort.civmod.block.JobBlockSettlers;
 import com.gilfort.civmod.job.JobBalancing;
 import com.gilfort.civmod.registry.ModItems;
 import com.gilfort.civmod.registry.ModJobs;
@@ -26,7 +26,7 @@ import net.neoforged.neoforge.registries.RegisterEvent;
  * GameTests for the job registry and per-job datapack overrides.
  * <p>
  * Registers {@code civmod:gametest_dummy}, a job without work loop whose balancing values the test datapack overrides
- * ({@code civmod_jobs/gametest_dummy.json}, {@code civmod_upgrades/gametest_dummy.json}).
+ * ({@code civmod_jobs/gametest_dummy.json}, {@code civmod_job_blocks/gametest_dummy.json}).
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class JobGameTests {
@@ -87,15 +87,13 @@ public final class JobGameTests {
         helper.succeed();
     }
 
-    /** The test datapack overrides hunger factor, base EXP and upgrade costs of the dummy job; built-in jobs keep their defaults. */
+    /** The test datapack overrides hunger factor, base EXP and JobBlock settlers of the dummy job; built-in jobs keep their defaults. */
     private static void datapackOverride(GameTestHelper helper) {
         Job dummy = ModJobs.REGISTRY.getValue(CivMod.id("gametest_dummy"));
         helper.assertTrue(dummy != null, "Dummy job registered");
         helper.assertTrue(dummy.hungerFactor() == 2.5 && dummy.defaultHungerFactor() == DUMMY_HUNGER_FACTOR, "Hunger factor overridden: " + dummy.hungerFactor());
         helper.assertTrue(dummy.baseExp() == 7 && dummy.defaultBaseExp() == DUMMY_BASE_EXP, "Base EXP overridden: " + dummy.baseExp());
-        List<UpgradeCosts.Cost> costs = UpgradeCosts.get(dummy, 2);
-        helper.assertTrue(costs.size() == 1 && costs.get(0).item().orElseThrow() == Items.DIAMOND && costs.get(0).count() == 3,
-                "Upgrade costs by job id: " + costs);
+        helper.assertTrue(JobBlockSettlers.settlers(dummy, 1) == 2, "Settlers by job id, the leftover cost entry ignored");
         Job fisherman = ModJobs.FISHERMAN.get();
         helper.assertTrue(fisherman.hungerFactor() == 0.5 && fisherman.baseExp() == 5, "Built-in jobs keep their defaults");
         helper.succeed();
