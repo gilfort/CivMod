@@ -36,7 +36,7 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
  * {@link StockTab}. Two views: the rule grid fills the space above the player inventory (8 rows of 9, 9 rules per
  * JobBlock level active; it scrolls like the Found tab when there are more slots); a click on a rule, or a new item in a
  * slot, opens the editor view of that rule (item and name on top, Min / Max / Order, Priority, delete and "◀ Back";
- * Escape returns too). The Workers tab gets the Warehouse line ({@link #extractWorkers}).
+ * Escape returns too). The Workers tab gets the Warehouse line ({@link #workersLines}).
  */
 final class StockTabView implements JobBlockTabView {
 
@@ -566,35 +566,19 @@ final class StockTabView implements JobBlockTabView {
 
     // ---------------------------------------------------------------- Workers tab
 
-    /** The Warehouse line, if the Clerk serves or is served by a Warehouse. */
-    @Override
-    public int workersLines() {
-        ClerkTabData tab = clerk();
-        return tab.servedBy().isPresent() || !tab.served().isEmpty() ? 1 : 0;
-    }
-
     /**
-     * Draws the Warehouse line of the Workers tab: a Warehouse counts its Served Clerks (names on hover), a Served Clerk
-     * names its Warehouse.
+     * The Warehouse line of the Workers tab: a Served Clerk names its Warehouse, a Warehouse counts its Served Clerks
+     * (names on hover); none for a Clerk without Warehouse.
      */
     @Override
-    public int extractWorkers(GuiGraphicsExtractor graphics, int y, int width, int color, int mouseX, int mouseY) {
-        Font font = font();
+    public List<WorkersLine> workersLines() {
         ClerkTabData tab = clerk();
         if (tab.servedBy().isPresent()) {
-            graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.clerk.served_by", tab.servedBy().get()), width), CivGui.PADDING, y,
-                    color, false);
-            return y + 11;
+            return List.of(new WorkersLine(Component.translatable("civmod.gui.clerk.served_by", tab.servedBy().get()), List.of()));
         }
         if (tab.served().isEmpty()) {
-            return y;
+            return List.of();
         }
-        Component line = Component.translatable("civmod.gui.clerk.served", tab.served().size());
-        graphics.text(font, CivGui.fit(font, line, width), CivGui.PADDING, y, color, false);
-        if (mouseX >= screen.left() + CivGui.PADDING && mouseX < screen.left() + CivGui.PADDING + Math.min(width, font.width(line))
-                && mouseY >= screen.top() + y && mouseY < screen.top() + y + font.lineHeight) {
-            graphics.setComponentTooltipForNextFrame(font, tab.served(), mouseX, mouseY);
-        }
-        return y + 11;
+        return List.of(new WorkersLine(Component.translatable("civmod.gui.clerk.served", tab.served().size()), tab.served()));
     }
 }

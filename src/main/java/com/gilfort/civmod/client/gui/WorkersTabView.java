@@ -2,6 +2,7 @@ package com.gilfort.civmod.client.gui;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import com.gilfort.civmod.client.SettlerRenderer;
 import com.gilfort.civmod.job.LumberjackProfile;
@@ -22,14 +23,16 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 /**
  * The "Workers" tab of the {@link JobBlockScreen} (vault {@code Systems/GUI.md}, "Info becomes Workers"); the client
  * side of {@link WorkersTab}: per offered Job a line "Deliveryman 2/4" (the first one with today's biome, its effects on
  * hover) and its automatic assignment button on the right (coloured on, grey off); below it one row per settler with
  * head, name, "Lv 23" and ✕. A click on head or name opens the settler window; a settler on a mission is greyed with
- * "Away". The list scrolls (mouse wheel, scrollbar). Below it other tabs' views add their lines and the toggle row
- * ({@link JobBlockTabView#extractWorkers}, {@link JobBlockTabView#initWorkers}).
+ * "Away". The list scrolls (mouse wheel, scrollbar; {@link ListScroller}). Below it other tabs' views add their lines and
+ * the toggle row ({@link JobBlockTabView#workersLines}, {@link JobBlockTabView#workersToggle}). Clicks on a settler row
+ * name the settler ({@link WorkersTab.Worker}), not its place in the list.
  */
 final class WorkersTabView implements JobBlockTabView {
 
@@ -56,10 +59,7 @@ final class WorkersTabView implements JobBlockTabView {
     private final JobBlockScreen screen;
     private final JobBlockMenu menu;
     private final WorkersTab tab;
-    /** The first row shown. */
-    private int offset;
-    /** Whether the scrollbar is being dragged. */
-    private boolean dragging;
+    private final ListScroller scroller;
 
     /**
      * A row of the list.
@@ -78,23 +78,7 @@ final class WorkersTabView implements JobBlockTabView {
         this.screen = screen;
         this.menu = screen.getMenu();
         this.tab = tab;
-    }
-
-    /**
-     * Adds a toggle button of the Workers tab: across the panel in its bottom row; it presses a menu button on client and
-     * server and rebuilds the widgets.
-     *
-     * @param screen   the screen
-     * @param workers  the Workers tab's index
-     * @param label    the label
-     * @param buttonId the menu button id
-     */
-    static void button(JobBlockScreen screen, int workers, Component label, int buttonId) {
-        screen.addWidget(workers, Button.builder(label, pressed -> {
-            screen.clickMenuButton(buttonId);
-            screen.rebuild();
-        }).bounds(screen.left() + CivGui.PADDING, screen.top() + screen.panelHeight() - BOTTOM_MARGIN - 20, screen.panelWidth() - 2 * CivGui.PADDING, 20)
-                .build());
+        this.scroller = new ListScroller(screen);
     }
 
     // ---------------------------------------------------------------- layout
@@ -105,14 +89,22 @@ final class WorkersTabView implements JobBlockTabView {
         return info.jobType().profile(LumberjackProfile.class).isPresent() && info.inSettlement();
     }
 
-    /** Whether the bottom row holds a toggle button. */
-    private boolean toggleRow() {
-        return leavesToggle() || screen.views().stream().anyMatch(JobBlockTabView::workersToggle);
+    /** The toggle buttons of the bottom row: the leaf toggle, then the other views' toggles. */
+    private List<WorkersToggle> toggles() {
+        List<WorkersToggle> toggles = new ArrayList<>();
+        if (leavesToggle()) {
+            toggles.add(new WorkersToggle(Component.translatable(menu.getInfo().collectLeaves() ? "civmod.gui.job_block.leaves.on"
+                    : "civmod.gui.job_block.leaves.off"), tab.buttonId(WorkersTab.TOGGLE_LEAVES)));
+        }
+        screen.views().forEach(view -> view.workersToggle().ifPresent(toggles::add));
+        return toggles;
     }
 
     /** The lines other views draw below the list. */
-    private int footerLines() {
-        return screen.views().stream().mapToInt(JobBlockTabView::workersLines).sum();
+    private List<WorkersLine> footer() {
+        List<WorkersLine> lines = new ArrayList<>();
+        screen.views().forEach(view -> lines.addAll(view.workersLines()));
+        return lines;
     }
 
     /** The rows: every Job line, then its workers; workers whose Job has no line last. */
@@ -137,30 +129,29 @@ final class WorkersTabView implements JobBlockTabView {
         return rows;
     }
 
+    /** Top of the footer lines (panel coordinates): above the toggle row. */
+    private int footerY() {
+        return screen.panelHeight() - BOTTOM_MARGIN - (toggles().isEmpty() ? 0 : TOGGLE_HEIGHT) - footer().size() * LINE_HEIGHT;
+    }
+
     /** How many rows fit between the header and the lines and buttons below the list. */
     private int visible() {
-        int bottom = screen.panelHeight() - BOTTOM_MARGIN - (toggleRow() ? TOGGLE_HEIGHT : 0) - footerLines() * LINE_HEIGHT;
-        return Math.max(1, (bottom - TOP) / ROW_HEIGHT);
+        return Math.max(1, (footerY() - TOP) / ROW_HEIGHT);
     }
 
     private int maxOffset(List<Row> rows) {
         return Math.max(0, rows.size() - visible());
     }
 
-    /** The first row shown, kept inside the list. */
-    private int first(List<Row> rows) {
-        offset = Math.clamp(offset, 0, maxOffset(rows));
-        return offset;
-    }
-
-    private boolean scrolls(List<Row> rows) {
-        return rows.size() > visible();
-    }
-
     /** Right edge of the rows' content (panel coordinates): left of the scrollbar while the list scrolls. */
     private int right(List<Row> rows) {
         int right = screen.panelWidth() - CivGui.PADDING;
-        return scrolls(rows) ? right - CivGui.SCROLLBAR_WIDTH - SCROLLBAR_GAP : right;
+        return maxOffset(rows) > 0 ? right - CivGui.SCROLLBAR_WIDTH - SCROLLBAR_GAP : right;
+    }
+
+    /** Left edge of the scrollbar (panel coordinates). */
+    private int scrollbarX() {
+        return screen.panelWidth() - CivGui.PADDING - CivGui.SCROLLBAR_WIDTH;
     }
 
     /** Top of the row shown at position {@code shown} (panel coordinates). */
@@ -170,12 +161,12 @@ final class WorkersTabView implements JobBlockTabView {
 
     // ---------------------------------------------------------------- widgets
 
-    /** The ✕ buttons of the shown settler rows, the toggle row and the other views' toggles. */
+    /** The ✕ buttons of the shown settler rows and the toggle row. */
     @Override
     public void init() {
         JobBlockInfo info = menu.getInfo();
         List<Row> rows = rows(info);
-        int first = first(rows);
+        int first = scroller.offset(maxOffset(rows));
         int end = Math.min(rows.size(), first + visible());
         int x = screen.left() + right(rows) - ICON;
         for (int i = first; i < end; i++) {
@@ -183,18 +174,21 @@ final class WorkersTabView implements JobBlockTabView {
             if (row.worker() < 0) {
                 continue;
             }
-            int id = tab.unassignButtonId(row.worker());
+            UUID settler = info.workers().get(row.worker()).assignee().id();
             Button remove = screen.addWidget(tab.index(), Button.builder(Component.literal("✕"), pressed -> {
-                screen.clickMenuButton(id);
+                tab.unassign(settler);
+                ClientPacketDistributor.sendToServer(new WorkersTab.Worker(menu.containerId, settler, false));
                 screen.rebuild();
             }).bounds(x, screen.top() + rowY(i - first) + 1, ICON, ICON).build());
             remove.setTooltip(Tooltip.create(Component.translatable("civmod.gui.job_block.unassign")));
         }
-        if (leavesToggle()) {
-            button(screen, tab.index(), Component.translatable(info.collectLeaves() ? "civmod.gui.job_block.leaves.on" : "civmod.gui.job_block.leaves.off"),
-                    tab.buttonId(WorkersTab.TOGGLE_LEAVES));
+        for (WorkersToggle toggle : toggles()) {
+            screen.addWidget(tab.index(), Button.builder(toggle.label(), pressed -> {
+                screen.clickMenuButton(toggle.buttonId());
+                screen.rebuild();
+            }).bounds(screen.left() + CivGui.PADDING, screen.top() + screen.panelHeight() - BOTTOM_MARGIN - 20, screen.panelWidth() - 2 * CivGui.PADDING, 20)
+                    .build());
         }
-        screen.views().forEach(view -> view.initWorkers(tab.index()));
     }
 
     @Override
@@ -223,12 +217,11 @@ final class WorkersTabView implements JobBlockTabView {
         JobBlockInfo info = menu.getInfo();
         int color = info.inSettlement() && info.connected() ? CivGui.LABEL_COLOR : CivGui.HINT_COLOR;
         List<Row> rows = rows(info);
-        int first = first(rows);
+        int max = maxOffset(rows);
+        int first = scroller.offset(max);
         int end = Math.min(rows.size(), first + visible());
         int right = right(rows);
-        if (scrolls(rows)) {
-            CivGui.scrollbar(graphics, screen.panelWidth() - CivGui.PADDING - CivGui.SCROLLBAR_WIDTH, TOP, visible() * ROW_HEIGHT, offset, maxOffset(rows));
-        }
+        scroller.extract(graphics, scrollbarX(), TOP, visible() * ROW_HEIGHT, max);
         for (int i = first; i < end; i++) {
             Row row = rows.get(i);
             int y = rowY(i - first);
@@ -238,9 +231,14 @@ final class WorkersTabView implements JobBlockTabView {
                 workerRow(graphics, font, info.workers().get(row.worker()), y, right, color, mouseX, mouseY);
             }
         }
-        int y = screen.panelHeight() - BOTTOM_MARGIN - (toggleRow() ? TOGGLE_HEIGHT : 0) - footerLines() * LINE_HEIGHT + 2;
-        for (JobBlockTabView view : screen.views()) {
-            y = view.extractWorkers(graphics, y, screen.panelWidth() - 2 * CivGui.PADDING, color, mouseX, mouseY);
+        int y = footerY() + 2;
+        int width = screen.panelWidth() - 2 * CivGui.PADDING;
+        for (WorkersLine line : footer()) {
+            graphics.text(font, CivGui.fit(font, line.text(), width), CivGui.PADDING, y, color, false);
+            if (!line.tooltip().isEmpty() && over(CivGui.PADDING, y, Math.min(width, font.width(line.text())), font.lineHeight, mouseX, mouseY)) {
+                graphics.setComponentTooltipForNextFrame(font, line.tooltip(), mouseX, mouseY);
+            }
+            y += LINE_HEIGHT;
         }
     }
 
@@ -328,17 +326,17 @@ final class WorkersTabView implements JobBlockTabView {
         }
         JobBlockInfo info = menu.getInfo();
         List<Row> rows = rows(info);
-        if (overScrollbar(rows, event.x(), event.y())) {
-            dragging = true;
-            dragTo(rows, event.y());
+        int max = maxOffset(rows);
+        int before = scroller.offset(max);
+        if (scroller.press(event.x(), event.y(), scrollbarX(), TOP, visible() * ROW_HEIGHT, max)) {
+            rebuildIfMoved(before, max);
             return true;
         }
-        int first = first(rows);
-        int end = Math.min(rows.size(), first + visible());
+        int end = Math.min(rows.size(), before + visible());
         int right = right(rows);
-        for (int i = first; i < end; i++) {
+        for (int i = before; i < end; i++) {
             Row row = rows.get(i);
-            int y = rowY(i - first);
+            int y = rowY(i - before);
             if (row.worker() < 0) {
                 if (info.inSettlement() && over(right - ICON, y + 1, ICON, ICON, event.x(), event.y())) {
                     screen.clickMenuButton(tab.autoButtonId(row.line(), !info.places().get(row.line()).auto()));
@@ -347,7 +345,7 @@ final class WorkersTabView implements JobBlockTabView {
                 }
             } else if (info.workers().get(row.worker()).opensWindow()
                     && over(CivGui.PADDING + INDENT, y, right - ICON - 4 - CivGui.PADDING - INDENT, ROW_HEIGHT, event.x(), event.y())) {
-                screen.clickMenuButton(tab.openButtonId(row.worker()));
+                ClientPacketDistributor.sendToServer(new WorkersTab.Worker(menu.containerId, info.workers().get(row.worker()).assignee().id(), true));
                 screen.clickSound();
                 return true;
             }
@@ -358,51 +356,34 @@ final class WorkersTabView implements JobBlockTabView {
     /** Scrolls the list by one row per wheel step. */
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
-        List<Row> rows = rows(menu.getInfo());
-        if (!scrolls(rows)) {
+        int max = maxOffset(rows(menu.getInfo()));
+        int before = scroller.offset(max);
+        if (!scroller.wheel(scrollY, max)) {
             return false;
         }
-        scrollTo(rows, offset - (int) Math.signum(scrollY));
+        rebuildIfMoved(before, max);
         return true;
     }
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event) {
-        if (!dragging) {
+        int max = maxOffset(rows(menu.getInfo()));
+        int before = scroller.offset(max);
+        if (!scroller.drag(event.y(), TOP, visible() * ROW_HEIGHT, max)) {
             return false;
         }
-        dragTo(rows(menu.getInfo()), event.y());
+        rebuildIfMoved(before, max);
         return true;
     }
 
     @Override
     public boolean mouseReleased() {
-        boolean was = dragging;
-        dragging = false;
-        return was;
+        return scroller.release();
     }
 
-    private boolean overScrollbar(List<Row> rows, double mouseX, double mouseY) {
-        return scrolls(rows) && over(screen.panelWidth() - CivGui.PADDING - CivGui.SCROLLBAR_WIDTH, TOP, CivGui.SCROLLBAR_WIDTH, visible() * ROW_HEIGHT,
-                mouseX, mouseY);
-    }
-
-    /** Moves the list so the scroller's centre follows the mouse. */
-    private void dragTo(List<Row> rows, double mouseY) {
-        int height = visible() * ROW_HEIGHT;
-        int track = height - CivGui.scrollerHeight(height);
-        if (track <= 0) {
-            return;
-        }
-        double y = mouseY - screen.top() - TOP - CivGui.scrollerHeight(height) / 2.0;
-        scrollTo(rows, (int) Math.round(y / track * maxOffset(rows)));
-    }
-
-    /** Shows the list from that row; the ✕ buttons move with it. */
-    private void scrollTo(List<Row> rows, int row) {
-        int target = Math.clamp(row, 0, maxOffset(rows));
-        if (target != offset) {
-            offset = target;
+    /** The ✕ buttons move with the list: rebuilt when the first row shown changed. */
+    private void rebuildIfMoved(int before, int max) {
+        if (scroller.offset(max) != before) {
             screen.rebuild();
         }
     }

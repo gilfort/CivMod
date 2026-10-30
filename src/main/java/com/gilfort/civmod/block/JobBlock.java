@@ -56,8 +56,10 @@ public class JobBlock extends BaseEntityBlock {
     }
 
     /**
-     * A JobBlock Upgrade item upgrades the block or names why not; either way the window does not open
-     * ({@link JobBlockUpgrade}). Sneaking skips this (vanilla), so the item does nothing then.
+     * A JobBlock Upgrade item upgrades the block or names why not; either way the click is consumed, so the window does
+     * not open and nothing is placed ({@link JobBlockUpgrade}). Only the server knows whether it upgrades: the arm swings
+     * from there on an upgrade ({@link InteractionResult#SUCCESS_SERVER}, the client does not predict a swing) and not on
+     * a refusal ({@link InteractionResult#CONSUME}). Sneaking skips this (vanilla), so the item does nothing then.
      */
     @Override
     protected InteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand,
@@ -65,10 +67,12 @@ public class JobBlock extends BaseEntityBlock {
         if (!(stack.getItem() instanceof JobBlockUpgradeItem upgrade)) {
             return super.useItemOn(stack, state, level, pos, player, hand, hitResult);
         }
-        if (level instanceof ServerLevel serverLevel && level.getBlockEntity(pos) instanceof JobBlockEntity jobBlock) {
-            JobBlockUpgrade.use(serverLevel, pos, jobBlock, player, stack, upgrade.targetLevel());
+        if (!(level instanceof ServerLevel serverLevel)) {
+            return InteractionResult.SUCCESS_SERVER;
         }
-        return InteractionResult.SUCCESS;
+        boolean upgraded = level.getBlockEntity(pos) instanceof JobBlockEntity jobBlock
+                && JobBlockUpgrade.use(serverLevel, pos, jobBlock, player, stack, upgrade.targetLevel());
+        return upgraded ? InteractionResult.SUCCESS_SERVER : InteractionResult.CONSUME;
     }
 
     @Override

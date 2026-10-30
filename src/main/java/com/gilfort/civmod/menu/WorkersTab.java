@@ -3,6 +3,7 @@ package com.gilfort.civmod.menu;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.AutoAssignment;
@@ -10,7 +11,12 @@ import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
+import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -31,12 +37,6 @@ public final class WorkersTab extends JobBlockTab {
     private static final int AUTO_ASSIGN = 1;
     /** Most Job lines of a JobBlock with an automatic assignment toggle. */
     private static final int MAX_JOB_LINES = 16;
-    /** Buttons from here: unassign a worker ({@link #unassignButtonId}). */
-    private static final int UNASSIGN = AUTO_ASSIGN + 2 * MAX_JOB_LINES;
-    /** Most workers of a JobBlock with their own buttons. */
-    private static final int MAX_WORKERS = 32;
-    /** Buttons from here: open a worker's settler window ({@link #openButtonId}). */
-    private static final int OPEN = UNASSIGN + MAX_WORKERS;
 
     @Override
     public Component label() {
@@ -55,7 +55,7 @@ public final class WorkersTab extends JobBlockTab {
 
     @Override
     int buttons() {
-        return OPEN + MAX_WORKERS;
+        return AUTO_ASSIGN + 2 * MAX_JOB_LINES;
     }
 
     /**
@@ -70,22 +70,6 @@ public final class WorkersTab extends JobBlockTab {
         return buttonId(AUTO_ASSIGN + 2 * line + (on ? 1 : 0));
     }
 
-    /**
-     * @param worker the index of the worker ({@link JobBlockInfo#workers()})
-     * @return the menu button id of its ✕
-     */
-    public int unassignButtonId(int worker) {
-        return buttonId(UNASSIGN + worker);
-    }
-
-    /**
-     * @param worker the index of the worker ({@link JobBlockInfo#workers()})
-     * @return the menu button id that opens its settler window
-     */
-    public int openButtonId(int worker) {
-        return buttonId(OPEN + worker);
-    }
-
     @Override
     boolean clickButton(Player player, int button) {
         JobBlockMenu menu = menu();
@@ -94,13 +78,7 @@ public final class WorkersTab extends JobBlockTab {
             menu.site().ifPresent(site -> JobAssignments.toggleLeaves(SettlementData.get(site.level()), site.pos()));
             return true;
         }
-        if (button < UNASSIGN) {
-            return setAuto((button - AUTO_ASSIGN) / 2, (button - AUTO_ASSIGN) % 2 == 1);
-        }
-        if (button < OPEN) {
-            return unassign(button - UNASSIGN);
-        }
-        return open(player, button - OPEN);
+        return setAuto((button - AUTO_ASSIGN) / 2, (button - AUTO_ASSIGN) % 2 == 1);
     }
 
     /** Sets the automatic assignment toggle of a Job line; switching it on may assign settlers at once (fresh snapshot). */
@@ -123,35 +101,92 @@ public final class WorkersTab extends JobBlockTab {
         return true;
     }
 
-    /** ✕: removes one settler from the JobBlock at once; its skill and EXP stay with it (fresh snapshot). */
-    private boolean unassign(int worker) {
+    /** The listed worker that is this settler, empty if it left the list (the row a click was meant for is gone). */
+    private Optional<JobBlockInfo.Worker> worker(UUID settler) {
+        return menu().getInfo().workers().stream().filter(worker -> worker.assignee().id().equals(settler)).findFirst();
+    }
+
+    /**
+     * ✕: removes one settler from the JobBlock at once; its skill and EXP stay with it (fresh snapshot). The client
+     * applies it to its snapshot and sends {@link Worker}; the server unassigns.
+     *
+     * @param settler the settler of the row
+     * @return whether it was listed (and is unassigned now)
+     */
+    public boolean unassign(UUID settler) {
         JobBlockMenu menu = menu();
-        JobBlockInfo info = menu.getInfo();
-        if (worker >= info.workers().size()) {
+        if (worker(settler).isEmpty()) {
             return false;
         }
-        UUID settler =info.workers().get(worker).assignee().id();
         Optional<JobBlockMenu.Site> site = menu.site();
         if (site.isPresent()) {
             SettlementWorld.unassign(site.get().level(), site.get().pos(), settler);
             menu.refreshInfo(site.get());
         } else {
-            menu.setInfo(info.withoutWorker(settler));
+            menu.setInfo(menu.getInfo().withoutWorker(settler));
         }
         return true;
     }
 
-    /** Opens the settler window of a loaded worker at home; it stays open while the player stays at the JobBlock. */
-    private boolean open(Player player, int worker) {
-        JobBlockInfo info = menu().getInfo();
-        if (worker >= info.workers().size() || !info.workers().get(worker).opensWindow()) {
+    /**
+     * Opens the settler window of a loaded worker at home (server); it stays open while the player stays at the JobBlock
+     * and the settler works there.
+     *
+     * @param player  the player clicking
+     * @param settler the settler of the row
+     * @return whether it is listed and opens its window
+     */
+    public boolean open(Player player, UUID settler) {
+        if (worker(settler).filter(JobBlockInfo.Worker::opensWindow).isEmpty()) {
             return false;
         }
         Optional<JobBlockMenu.Site> site = menu().site();
-        if (site.isPresent() && player instanceof ServerPlayer serverPlayer
-                && site.get().level().getEntity(info.workers().get(worker).assignee().id()) instanceof Settler settler) {
-            settler.openWindow(serverPlayer, Optional.of(site.get().pos()));
+        if (site.isPresent() && player instanceof ServerPlayer serverPlayer && site.get().level().getEntity(settler) instanceof Settler found) {
+            found.openWindow(serverPlayer, Optional.of(site.get().pos()));
         }
         return true;
+    }
+
+    /**
+     * Client → server: a click on a settler row of the open JobBlock window, keyed by the settler (the list may have
+     * changed since the client's last sync).
+     *
+     * @param containerId the menu's container id
+     * @param settler     the settler of the row
+     * @param open        true: open its settler window, false: unassign it (✕)
+     */
+    public record Worker(int containerId, UUID settler, boolean open) implements CustomPacketPayload {
+
+        /** Payload type. */
+        public static final Type<Worker> TYPE = new Type<>(CivMod.id("workers_tab_worker"));
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, Worker> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, Worker::containerId,
+                UUIDUtil.STREAM_CODEC, Worker::settler,
+                ByteBufCodecs.BOOL, Worker::open,
+                Worker::new);
+
+        @Override
+        public Type<Worker> type() {
+            return TYPE;
+        }
+
+        /**
+         * Applies the click to the player's open JobBlock window, while it is still valid.
+         *
+         * @param player the player
+         */
+        public void handle(ServerPlayer player) {
+            if (player.containerMenu instanceof JobBlockMenu menu && menu.containerId == containerId && menu.stillValid(player)) {
+                menu.tab(WorkersTab.class).ifPresent(tab -> {
+                    if (open) {
+                        tab.open(player, settler);
+                    } else {
+                        tab.unassign(settler);
+                    }
+                });
+            }
+        }
     }
 }

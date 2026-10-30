@@ -152,7 +152,7 @@ public final class WorkersTabGameTests {
         Player player = player(helper);
         JobBlockMenu menu = menu(helper, player);
         WorkersTab tab = menu.tab(WorkersTab.class).orElseThrow();
-        helper.assertTrue(menu.clickMenuButton(player, tab.unassignButtonId(index(menu.getInfo(), bob))), "✕ is taken");
+        helper.assertTrue(tab.unassign(bob.getUUID()), "✕ is taken");
         SettlementBlock block = JobBlockSite.blockAt(helper.getLevel(), helper.absolutePos(CLERK)).orElseThrow();
         helper.assertTrue(bob.getJobs().isEmpty() && block.assignee(bob.getUUID()).isEmpty(), "Bob left the JobBlock: " + bob.getJobs());
         helper.assertTrue(block.assignee(alice.getUUID()).isPresent() && alice.getJobs().size() == 1, "Alice stays");
@@ -160,7 +160,9 @@ public final class WorkersTabGameTests {
         helper.assertTrue(index(menu.getInfo(), bob) < 0 && index(menu.getInfo(), alice) >= 0, "The tab lists only Alice: " + menu.getInfo().workers());
         helper.assertTrue(menu.getInfo().places().stream().filter(line -> line.job() == ModJobs.DELIVERYMAN.get()).allMatch(line -> line.taken() == 0),
                 "The Deliveryman place is free: " + menu.getInfo().places());
-        helper.assertFalse(menu.clickMenuButton(player, tab.unassignButtonId(5)), "A row that does not exist does nothing");
+        // Keyed by settler: a click on a row that left the list in the meantime does nothing, even if another row took its place.
+        helper.assertFalse(tab.unassign(bob.getUUID()), "A settler no longer listed is not unassigned again");
+        helper.assertTrue(block.assignee(alice.getUUID()).isPresent(), "Alice stays after the stale click");
         alice.discard();
         bob.discard();
         helper.succeed();
@@ -189,11 +191,12 @@ public final class WorkersTabGameTests {
 
     /**
      * A settler window opened from the Workers tab stays open while the player stays at the JobBlock, even far from
-     * the settler; one opened at the settler closes when the player walks away.
+     * the settler, as long as the settler works there; one opened at the settler closes when the player walks away.
      */
     private static void settlerWindow(GameTestHelper helper) {
         Settlement settlement = clerkBlock(helper);
         Settler alice = settler(helper, settlement, "Alice", new BlockPos(3, 1, 3));
+        hire(helper, alice, ModJobs.DELIVERYMAN.get());
         alice.snapTo(alice.getX() + 30, alice.getY(), alice.getZ());
         Player player = player(helper);
         BlockPos pos = helper.absolutePos(CLERK);
@@ -201,6 +204,9 @@ public final class WorkersTabGameTests {
         helper.assertTrue(fromBlock.stillValid(player), "Valid at the JobBlock, far from the settler");
         SettlerMenu atSettler = new SettlerMenu(3, player.getInventory(), alice, SettlerInfo.of(alice), Optional.empty());
         helper.assertFalse(atSettler.stillValid(player), "Opened at the settler: closes away from it");
+        SettlementWorld.unassign(helper.getLevel(), pos, alice.getUUID());
+        helper.assertFalse(fromBlock.stillValid(player), "No longer assigned to the JobBlock: the JobBlock stops counting");
+        hire(helper, alice, ModJobs.DELIVERYMAN.get());
         player.snapTo(pos.getX() + 20.5, pos.getY() + 1, pos.getZ() + 0.5);
         helper.assertFalse(fromBlock.stillValid(player), "Away from the JobBlock and the settler: closes");
         alice.discard();

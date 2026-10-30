@@ -253,9 +253,13 @@ public class SettlerMenu extends CivMenu {
         return original;
     }
 
+    /**
+     * Open while the player is near the settler, or near the JobBlock the window was opened from as long as the settler
+     * still works there (once unassigned that block stops counting, like any settler window out of reach).
+     */
     @Override
     public boolean stillValid(Player player) {
         return settler == null || settler.isAlive() && (player.distanceToSqr(settler) < REACH_SQUARED
-                || anchor.filter(pos -> player.distanceToSqr(Vec3.atCenterOf(pos)) < REACH_SQUARED).isPresent());
+                || anchor.filter(pos -> settler.jobAt(pos).isPresent() && player.distanceToSqr(Vec3.atCenterOf(pos)) < REACH_SQUARED).isPresent());
     }
 }

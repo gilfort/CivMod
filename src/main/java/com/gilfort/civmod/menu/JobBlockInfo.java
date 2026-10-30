@@ -398,7 +398,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      * @param settler a settler UUID
      * @return a copy without that settler (the client's prediction of ✕ in the Workers tab)
      */
-    public JobBlockInfo withoutWorker(UUID settler) {
+    JobBlockInfo withoutWorker(UUID settler) {
         List<Worker> left = workers.stream().filter(worker -> !worker.assignee().id().equals(settler)).toList();
         String name = workers.stream().filter(worker -> worker.assignee().id().equals(settler)).map(worker -> worker.assignee().name()).findFirst()
                 .orElse("");

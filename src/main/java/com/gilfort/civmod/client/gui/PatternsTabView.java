@@ -103,18 +103,14 @@ final class PatternsTabView implements JobBlockTabView {
 
     /** The delivery toggle (Self / Deliveryman) on the Workers tab of a JobBlock in a settlement; the Base Job's tab handles it. */
     @Override
-    public void initWorkers(int workers) {
+    public Optional<WorkersToggle> workersToggle() {
         JobBlockInfo current = menu.getInfo();
-        PatternsTab base = menu.tab(PatternsTab.class).orElseThrow();
-        if (workersToggle()) {
-            WorkersTabView.button(screen, workers, Component.translatable(current.byDeliveryman() ? "civmod.gui.job_block.delivery.deliveryman"
-                    : "civmod.gui.job_block.delivery.self"), base.buttonId(PatternsTab.TOGGLE_DELIVERY));
+        if (!current.inSettlement()) {
+            return Optional.empty();
         }
-    }
-
-    @Override
-    public boolean workersToggle() {
-        return menu.getInfo().inSettlement();
+        PatternsTab base = menu.tab(PatternsTab.class).orElseThrow();
+        return Optional.of(new WorkersToggle(Component.translatable(current.byDeliveryman() ? "civmod.gui.job_block.delivery.deliveryman"
+                : "civmod.gui.job_block.delivery.self"), base.buttonId(PatternsTab.TOGGLE_DELIVERY)));
     }
 
     /** Another tab: the editor closes. */
