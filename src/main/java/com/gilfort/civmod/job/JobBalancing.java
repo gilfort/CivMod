@@ -33,8 +33,8 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 /**
  * Datapack overrides of a Job's balancing values (vault {@code Systems/Jobs.md}) from
  * {@code data/<namespace>/civmod_jobs/<job>.json} for the job {@code <namespace>:<job>}. Files of all packs are merged per
- * job, later values override; values not set keep the Job's default. Upgrade costs live in
- * {@link com.gilfort.civmod.block.UpgradeCosts}.
+ * job, later values override; values not set keep the Job's default. The settlers per JobBlock level live in
+ * {@link com.gilfort.civmod.block.JobBlockSettlers}.
  *
  * @param hungerFactor work hunger factor
  * @param baseExp      base EXP per produced resource

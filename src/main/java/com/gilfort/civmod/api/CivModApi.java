@@ -59,8 +59,9 @@ public final class CivModApi {
      * <p>
      * Register it in your namespace together with an item from {@link #jobBlockItem}. You ship the blockstate, model,
      * texture, recipe, loot table (copying the {@code civmod:job_level} component keeps the level when the block is
-     * broken), upgrade costs ({@code data/<namespace>/civmod_upgrades/<job>.json}; CivMod's default costs apply without
-     * them) and lang keys. Specializations and Mission Jobs have no JobBlock of their own.
+     * broken), the settlers per level ({@code data/<namespace>/civmod_job_blocks/<job>.json}; 1 place on every level
+     * without it) and lang keys. The JobBlock is upgraded with CivMod's JobBlock Upgrade items like every other one.
+     * Specializations and Mission Jobs have no JobBlock of their own.
      *
      * @param job        the offered Base Job (resolved lazily, Jobs register after blocks)
      * @param properties the block properties

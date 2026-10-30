@@ -6,6 +6,7 @@ import com.gilfort.civmod.client.gui.JobBlockScreen;
 import com.gilfort.civmod.client.gui.JobPickerScreen;
 import com.gilfort.civmod.menu.ClerkTabData;
 import com.gilfort.civmod.client.gui.SettlerScreen;
+import com.gilfort.civmod.item.JobBlockUpgradeItem;
 import com.gilfort.civmod.item.JobPicker;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 import com.gilfort.civmod.menu.StationTypesTabData;
@@ -140,6 +141,10 @@ public final class CivModClient {
             event.getToolTip().add(1, line.copy().withStyle(ChatFormatting.GRAY));
             event.getToolTip().add(2, Component.translatable("civmod.tooltip.scroll.help.bind").withStyle(ChatFormatting.DARK_GRAY));
             event.getToolTip().add(3, Component.translatable("civmod.tooltip.scroll.help.clear").withStyle(ChatFormatting.DARK_GRAY));
+        }
+        if (event.getItemStack().getItem() instanceof JobBlockUpgradeItem upgrade) {
+            event.getToolTip().add(1, Component.translatable("civmod.tooltip.job_block_upgrade", upgrade.targetLevel() - 1, upgrade.targetLevel())
+                    .withStyle(ChatFormatting.GRAY));
         }
         if (SettlementOutline.isJobBlockItem(event.getItemStack())) {
             int level = event.getItemStack().getOrDefault(ModDataComponents.JOB_LEVEL.get(), SettlementRules.MIN_LEVEL);

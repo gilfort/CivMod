@@ -39,8 +39,8 @@ import net.neoforged.neoforge.registries.DeferredRegister;
  * <p>
  * The Sand Digger is a Resource Collection Job built with {@link SimpleCollectionProfile}: it counts the sand around its
  * JobBlock and produces its drops with a shovel, without digging the world away. Its JobBlock comes from the factory;
- * the addon ships its blockstate, models, recipe, loot table, upgrade costs
- * ({@code data/civmod_example/civmod_upgrades/sand_digger.json}) and lang keys.
+ * the addon ships its blockstate, models, recipe, loot table, settlers per level
+ * ({@code data/civmod_example/civmod_job_blocks/sand_digger.json}) and lang keys.
  */
 @Mod(CivModExample.MOD_ID)
 public final class CivModExample {

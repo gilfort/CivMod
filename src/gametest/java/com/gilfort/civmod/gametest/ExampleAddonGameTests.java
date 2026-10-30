@@ -12,7 +12,6 @@ import com.gilfort.civmod.api.MissionProfile;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.api.SimpleCollectionProfile;
 import com.gilfort.civmod.block.JobBlockEntity;
-import com.gilfort.civmod.block.UpgradeCosts;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.job.JobBuffer;
@@ -199,7 +198,7 @@ public final class ExampleAddonGameTests {
 
     /**
      * The Sand Digger is a Resource Collection Job built with the {@link SimpleCollectionProfile} builder, with its own
-     * JobBlock (Found tab), lang key and upgrade costs. It scans the sand around its JobBlock and digs it live without
+     * JobBlock (Found tab), lang key and settlers file. It scans the sand around its JobBlock and digs it live without
      * touching the world; a caught-up day delivers sand into its drop-off (the JobBlock inventory).
      */
     private static void sandDiggerProduces(GameTestHelper helper) {
@@ -210,8 +209,6 @@ public final class ExampleAddonGameTests {
         helper.assertTrue(digger.displayName().getString().equals("Sand Digger"), "Lang key: " + digger.displayName().getString());
         helper.assertValueEqual(JobBlockTabGameTests.keys(JobBlockTabs.of(digger)), List.of("civmod.gui.job_block.tab.storage", "civmod.gui.job_block.tab.info",
                 "civmod.gui.job_block.tab.found"), "Storage, Info, Found");
-        List<UpgradeCosts.Cost> costs = UpgradeCosts.get(digger, 2);
-        helper.assertTrue(!costs.isEmpty() && costs.get(0).item().filter(Items.SAND::equals).isPresent(), "Own upgrade costs: " + costs);
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         Settler settler = sandDigger(helper, List.of(Blocks.SAND));
         BlockPos jobBlock = settler.getJobs().get(0).jobBlock();
