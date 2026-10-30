@@ -147,14 +147,14 @@ public final class PatternsTab extends JobBlockTab {
         BlockPos pos = site.get().pos();
         Optional<?> ignored = switch (edit.op()) {
             case SET_OUTPUT -> Patterns.setOutput(level, pos, job, edit.slot(), edit.item());
-            case SET_INPUT -> Patterns.setInput(level, pos, job, edit.slot(), edit.index(), edit.item());
+            case SET_INPUT -> Patterns.setInput(level, pos, job, edit.slot(), edit.index(), edit.item(), edit.layout());
             case CYCLE -> Patterns.cycle(level, pos, job, edit.slot(), edit.index());
             case TOGGLE_CHECK -> Optional.of(Patterns.toggleCheck(level, pos, job, edit.slot()));
             case CLEAR -> {
                 Patterns.clear(SettlementData.get(level), pos, job, edit.slot());
                 yield Optional.empty();
             }
-            case TRANSFER -> Patterns.transfer(level, pos, job, edit.slot(), edit.recipe(), edit.grid());
+            case TRANSFER -> Patterns.transfer(level, pos, job, edit.slot(), edit.recipe(), edit.grid(), edit.layout());
         };
         menu.syncSoon();
     }

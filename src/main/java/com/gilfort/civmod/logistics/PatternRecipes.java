@@ -3,8 +3,12 @@ package com.gilfort.civmod.logistics;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+
+import org.jspecify.annotations.Nullable;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -23,6 +27,7 @@ import net.minecraft.world.item.crafting.PlacementInfo;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeInput;
+import net.minecraft.world.item.crafting.RecipeMap;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.item.crafting.ShapedRecipe;
 import net.minecraft.world.item.crafting.SmithingTrimRecipe;
@@ -38,6 +43,10 @@ import net.minecraft.world.item.crafting.display.SlotDisplayContext;
  * pattern's grid.
  */
 public final class PatternRecipes {
+
+    /** {@link #singleInput} by recipe type, for the recipe set {@link #singleInputOf}. */
+    private static final Map<RecipeType<?>, Boolean> SINGLE_INPUT = new HashMap<>();
+    private static @Nullable RecipeMap singleInputOf;
 
     private PatternRecipes() {
     }
@@ -125,6 +134,42 @@ public final class PatternRecipes {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * @param level  the level
+     * @param layout the pattern's layout
+     * @param grid   9 items, row by row ({@link Items#AIR} for empty cells)
+     * @return the recipe of the layout's type the items in its cells (the first 1, 3 or 9) match exactly
+     */
+    public static Optional<Shape> matching(ServerLevel level, PatternLayout layout, List<Item> grid) {
+        List<Item> cells = new ArrayList<>(grid);
+        for (int i = layout.kind().cells(); i < cells.size(); i++) {
+            cells.set(i, Items.AIR);
+        }
+        return matching(level, List.of(layout.type()), cells);
+    }
+
+    /**
+     * Whether a recipe type without a known layout gets the single-input layout: each of its recipes has exactly one
+     * ingredient (and it has at least one). Cached per recipe set.
+     *
+     * @param level the level
+     * @param type  a recipe type
+     * @return whether its patterns get one input
+     */
+    static boolean singleInput(ServerLevel level, RecipeType<?> type) {
+        RecipeMap map = level.recipeAccess().recipeMap();
+        synchronized (SINGLE_INPUT) {
+            if (singleInputOf != map) {
+                SINGLE_INPUT.clear();
+                singleInputOf = map;
+            }
+            return SINGLE_INPUT.computeIfAbsent(type, key -> {
+                List<Shape> shapes = recipes(level, key).stream().map(holder -> shape(level, holder)).flatMap(Optional::stream).toList();
+                return !shapes.isEmpty() && shapes.stream().allMatch(shape -> shape.ingredients().size() == 1);
+            });
+        }
     }
 
     private static Optional<Shape> matchingCrafting(ServerLevel level, List<Item> grid) {
