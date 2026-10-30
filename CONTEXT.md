@@ -21,11 +21,15 @@ The specifics a Job fills into its category's work loop; must belong to the Job'
 _Avoid_: Job type, behaviour
 
 **Settler Shell**:
-The part of a settler's behaviour shared by every Job Category (acting on the Schedule, walking, food, sleep, job priorities, EXP, catch-up). Code: `SettlerWork`; it hands control to the `CategoryLoop` of the active Job's category (`ResourceCollectionLoop`, `MissionLoop`). Shared parts the loops use: the job's Workplace, delivery and EXP in the shell, the Work rules, tools in `SettlerTools`, `Fatigue`.
+The part of a settler's behaviour shared by every Job Category (acting on the Schedule, walking, food, sleep, job priorities, EXP, catch-up). Code: `SettlerWork`; meals and rest are carried out by `SettlerMeals` and `SettlerRest`, which answer with Body steps; it hands control to the `CategoryLoop` of the active Job's category (`ResourceCollectionLoop`, `MissionLoop`). Shared parts the loops use: the job's Workplace, delivery and EXP in the shell, the Work rules, tools in `SettlerTools`, `Fatigue`.
 
 **Job step**:
 What a category loop tells the Settler Shell its job wants next: walk to a target (and work there), deliver, wait, blocked (a status or a Blocking reason), skip, pause / hold the decision, worked this tick, done. Only the shell changes the settler's activity, walking target, active job and the job's status, after the loop returned; a status outside a step goes through the job's Workplace. Code: `JobStep`, applied in `SettlerWork.apply`.
 _Avoid_: Loops calling the shell to steer it (set the active job, start a walk, end a step)
+
+**Body step**:
+What the meal or rest module tells the Settler Shell a meal or rest intent wants next: stay, stop, eat from the pockets, work, done, walk to a target for an activity. Only the shell walks or teleports the settler and sets its activity. Code: `BodyStep`, applied in `SettlerWork.go`.
+_Avoid_: Meal or rest code starting walks or setting the activity
 
 **Sitting**:
 A settler state shown by pose: vanilla `Pose.SITTING` (synced like `Pose.SLEEPING`), drawn as the vanilla passenger pose lowered to the seat, hitbox about 1.3 blocks high (eye height, name tag and thought bubble follow), not pushable; the body keeps its facing, the head looks around, a held tool stays in the hand. A settler sits exactly while its job step is a work break (`JobStep.Pause` with `JobStatus.PAUSING`), on the ground at its own position, if it is on the ground and out of fluids when the break starts (decided once; neither the pose nor the decision is saved, the next decision after loading sets it again); any other step, a job step ended outside a decision (job removed, JobBlock broken) and damage stand it up. No seat entity. Code: `Settler.sitDown(seat, facing)` / `Settler.standUp()` (internal hook for later Tavern seats), decided in `SettlerWork.endDecision`, drawn by `SettlerRenderer`.
