@@ -14,7 +14,9 @@ All GUIs share one look across the whole mod, based on Minecraft defaults: vanil
 
 Tips, tutorials and usage info ("Click a slot with an item to …", "Right-click: delete", "Shift: ±10") never appear as inline text or in slot tooltips. They go into the help icon: a small "?" in the top right corner of the panel that shows all of them as a tooltip on mouse-over (`CivGui.help`, filled by overriding `helpLines` in `CivContainerScreen` / `CivScreen`, per tab). State stays inline: status and error lines ("No crafting recipe matches these items", "3 checkmarks removed …", "No open requests."). Icon-only buttons keep a short tooltip naming what they do ("Delete stock rule").
 
-*Review:* hard-coded colors, textures, paddings or fonts in a screen that a shared helper already provides; a new screen that does not extend the shared base; a hint or usage text drawn inline or added to a slot tooltip instead of `helpLines`.
+Each window holds only its own content (vault `Systems/GUI.md`, content guideline): a JobBlock window shows only the state of *this* block; everything about a person goes into the settler window; rules, times and formulas go into the Handbook; details go into tooltips; what every window has goes into the header (a JobBlock window's header line "Miner Block · Lv 2", `JobBlockScreen.extractTitle`).
+
+*Review:* hard-coded colors, textures, paddings or fonts in a screen that a shared helper already provides; a new screen that does not extend the shared base; a hint or usage text drawn inline or added to a slot tooltip instead of `helpLines`; a JobBlock tab showing a settler's details, a rule, time or formula, details inline that belong in a tooltip, or repeating what the header already shows.
 
 ## 3. Keyed state lives together
 

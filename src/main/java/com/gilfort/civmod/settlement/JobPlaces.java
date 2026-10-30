@@ -27,7 +27,7 @@ public final class JobPlaces {
     }
 
     /**
-     * One Job of a JobBlock as the job picker and the info tab show it.
+     * One Job of a JobBlock as the job picker and the Workers tab show it.
      *
      * @param job    the Job
      * @param taken  how many settlers hold one of the places it uses

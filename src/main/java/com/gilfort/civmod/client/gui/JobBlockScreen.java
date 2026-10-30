@@ -14,7 +14,6 @@ import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.menu.FuelTab;
 import com.gilfort.civmod.menu.FuelTabData;
-import com.gilfort.civmod.menu.InfoTab;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.JobBlockTab;
@@ -27,9 +26,12 @@ import com.gilfort.civmod.menu.StationTypesTab;
 import com.gilfort.civmod.menu.StockTab;
 import com.gilfort.civmod.menu.StorageTab;
 import com.gilfort.civmod.menu.TabData;
+import com.gilfort.civmod.menu.WorkersTab;
 
+import com.gilfort.civmod.settlement.SettlementRules;
 import com.mojang.blaze3d.platform.InputConstants;
 
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -90,7 +92,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
             PatternsTabView library = patterns;
             result.add(switch (tab) {
                 case StorageTab storage -> JobBlockTabView.NONE;
-                case InfoTab info -> new InfoTabView(this, info);
+                case WorkersTab workers -> new WorkersTabView(this, workers);
                 case FoundTab found -> new FoundTabView(this, found);
                 case MissionsTab missions -> new MissionsTabView(this, missions);
                 case StockTab stock -> new StockTabView(this, stock);
@@ -138,6 +140,37 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     @Override
     protected List<Component> helpLines(int tab) {
         return views.get(tab).helpLines(menu.tabs().get(tab));
+    }
+
+    /**
+     * The header line of every tab in place of the title: "Miner Block · Lv 2"; on hover the settlement (or why the
+     * block is not connected), "Level 2 / 5" and "Skill cap 40" (vault {@code Systems/GUI.md}, header line).
+     */
+    @Override
+    protected void extractTitle(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        JobBlockInfo info = menu.getInfo();
+        Component header = CivGui.fit(font, Component.translatable("civmod.gui.job_block.header", title, info.level()),
+                imageWidth - titleLabelX - CivGui.HELP_ROOM);
+        graphics.text(font, header, titleLabelX, titleLabelY, CivGui.LABEL_COLOR, false);
+        int x = leftPos + titleLabelX;
+        int y = topPos + titleLabelY;
+        if (mouseX >= x && mouseX < x + font.width(header) && mouseY >= y && mouseY < y + font.lineHeight) {
+            graphics.setComponentTooltipForNextFrame(font, headerLines(info), mouseX, mouseY);
+        }
+    }
+
+    /** The tooltip lines of the header. */
+    private static List<Component> headerLines(JobBlockInfo info) {
+        Component settlement;
+        if (!info.inSettlement()) {
+            settlement = Component.translatable("civmod.gui.job_block.not_registered").withStyle(ChatFormatting.RED);
+        } else if (!info.connected()) {
+            settlement = Component.translatable("civmod.gui.job_block.unconnected", info.required(), info.distance()).withStyle(ChatFormatting.RED);
+        } else {
+            settlement = info.settlementName();
+        }
+        return List.of(settlement, Component.translatable("civmod.tooltip.job_level", info.level(), SettlementRules.MAX_LEVEL),
+                Component.translatable("civmod.gui.job_block.skill_cap", SettlementRules.skillCap(info.level())));
     }
 
     // ---------------------------------------------------------------- input

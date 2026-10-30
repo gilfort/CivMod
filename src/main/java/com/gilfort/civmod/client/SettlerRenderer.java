@@ -66,6 +66,14 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
     }
 
     /**
+     * @param skin a settler's skin index ({@link Settler#getSkin()})
+     * @return its skin (also for the head in the JobBlock's Workers tab)
+     */
+    public static PlayerSkin skin(int skin) {
+        return SKINS[Math.floorMod(skin, SKINS.length)];
+    }
+
+    /**
      * @param context the renderer context
      */
     public SettlerRenderer(EntityRendererProvider.Context context) {

@@ -17,7 +17,7 @@ import net.minecraft.world.item.Items;
 /**
  * A "Patterns" tab of a Producing JobBlock (vault {@code Systems/Producing Jobs.md}): the pattern library of one Job,
  * with the player inventory to pick items from; the client edits a pattern with {@link PatternsTabData.Edit}. The Base
- * Job's tab sits on top and also handles the Info tab's delivery toggle (Self / Deliveryman); each Specialization's tab
+ * Job's tab sits on top and also handles the Workers tab's delivery toggle (Self / Deliveryman); each Specialization's tab
  * sits below the panel, shown while the Job is unlocked or its library holds a pattern. All Patterns tabs of a window
  * share one synced library ({@link PatternsTabData}): the one of the tab shown, else the one looked at last.
  */

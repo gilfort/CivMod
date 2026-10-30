@@ -147,7 +147,7 @@ public final class AddonApiGameTests {
     /** The window's tabs follow the Job Category; only the Clerk keeps its own tabs. */
     private static void tabsByCategory(GameTestHelper helper) {
         String storage = "civmod.gui.job_block.tab.storage";
-        String info = "civmod.gui.job_block.tab.info";
+        String info = "civmod.gui.job_block.tab.workers";
         helper.assertValueEqual(tabs(ModJobs.LUMBERJACK.get()), List.of(storage, info, "civmod.gui.job_block.tab.found"), "Resource Collection: Found tab");
         List<String> producing = List.of(storage, info, "civmod.gui.patterns.tab_job", "civmod.gui.station_types.tab");
         helper.assertValueEqual(tabs(ModJobs.CRAFTSPERSON.get()).subList(0, 4), producing, "Craftsperson: Patterns tab");
