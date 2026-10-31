@@ -35,6 +35,9 @@ _Avoid_: Meal or rest code starting walks or setting the activity
 Lv 1–20 / 21–40 / 41–60 / 61–80 / 81+. A settler's tier follows the highest capped target level of its current jobs; an unmet tier gives one grace day, then the settler works at the top of the lower tier in every job, and it climbs back at once when the needs are met. Code: `NeedState` (rules), `SettlerNeeds` (per settler); a new need is a `Need` listed in `Needs.ALL`.
 _Avoid_: Reading `SettlerSkills.effectiveLevel` for the level a settler works at (`SettlerWork.effectiveLevel` includes the need limit)
 
+**Food variety**:
+The tier 2 need of at least 3 distinct food items in the window: the last days (config, today included), but always at least the last 6 items eaten. Short of it, a settler at a food point prefers a food outside the window. Code: `FoodVariety` (the rule and the bounded list of meals, saved in `SettlerFood`), recorded by `SettlerMeals` with the simulated day in catch-up.
+
 **Hearth**:
 A block of the tag `civmod:hearth` inside a settlement's border, a block with a `lit` state only while lit. The settlement keeps them, saved and updated on block changes; one scan of the loaded border chunks follows a border change, none is periodic. Code: `Hearths`, `Settlement.hearths`.
 _Avoid_: Area scans for fire; reading `Settlement.hearths` directly (`Hearths.of` keeps it up to date)

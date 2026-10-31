@@ -11,6 +11,7 @@ import com.gilfort.civmod.job.NeedsReport;
 import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.registry.ModEntityTypes;
@@ -21,6 +22,8 @@ import com.gilfort.civmod.settlement.SettlementManager;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
@@ -30,9 +33,15 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -154,7 +163,8 @@ public final class NeedTierGameTests {
         NeedsReport report = SettlerInfo.of(settler).needs();
         helper.assertTrue(report.tier() == 3, "Tier from its job: " + report);
         helper.assertTrue(report.rows(1).size() == 2 && !report.rows(1).get(0).met(), "Tier 1 holds food (unmet) and fire: " + report);
-        for (int tier = 2; tier <= NeedState.MAX_TIER; tier++) {
+        helper.assertTrue(report.rows(2).size() == 2, "Tier 2 holds bed and food variety: " + report);
+        for (int tier = 3; tier <= NeedState.MAX_TIER; tier++) {
             helper.assertTrue(report.rows(tier).isEmpty(), "Needs without a system are hidden, tier " + tier);
         }
         settler.getWork().checkNeedsNow(level, 100L);
@@ -199,6 +209,15 @@ public final class NeedTierGameTests {
         Settler settler = hungry(helper, jobBlock, ModJobs.LUMBERJACK.get(), 45);
         SettlerJob job = settler.getJobs().get(0);
         long today = DayClock.day(level.getOverworldClockTime());
+        BlockPos head = helper.absolutePos(new BlockPos(5, 1, 5));
+        BlockState bed = Blocks.BED.pick(DyeColor.RED).defaultBlockState().setValue(BedBlock.FACING, Direction.NORTH);
+        level.setBlock(head.south(), bed.setValue(BedBlock.PART, BedPart.FOOT), Block.UPDATE_ALL);
+        level.setBlock(head, bed.setValue(BedBlock.PART, BedPart.HEAD), Block.UPDATE_ALL);
+        SettlementData data = SettlementData.get(level);
+        SettlerBeds.assign(level, data, data.settlementAt(jobBlock), settler.getUUID(), head);
+        for (Item food : List.of(Items.BREAD, Items.CARROT, Items.APPLE)) {
+            settler.getFood().variety().record(BuiltInRegistries.ITEM.getKey(food), today);
+        }
         settler.getWork().checkNeedsNow(level, today - 2);
         settler.getWork().checkNeedsNow(level, today - 1);
         settler.getWork().checkNeedsNow(level, today);

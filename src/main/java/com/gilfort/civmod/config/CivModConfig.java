@@ -109,6 +109,12 @@ public final class CivModConfig {
                     "A settler whose bed is further away sleeps at the camp instead.")
             .defineInRange("hearthRange", 24, 1, 256);
 
+    /** How many days the window of the Food variety need reaches back, today included. */
+    public static final ModConfigSpec.IntValue FOOD_VARIETY_DAYS = BUILDER
+            .comment("Food variety need: how many in-game days the window reaches back, today included.",
+                    "It always covers at least the last 6 food items eaten.")
+            .defineInRange("foodVarietyDays", 3, 1, 14);
+
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     private CivModConfig() {

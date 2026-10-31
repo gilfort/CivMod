@@ -7,6 +7,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * The needs of a settler as the Needs tab shows them.
@@ -26,8 +27,9 @@ public record NeedsReport(int tier, List<Row> rows) {
      * @param name   its name
      * @param met    whether it is met
      * @param detail the detail text
+     * @param icons  items shown with the detail, may be empty
      */
-    public record Row(int tier, Component name, boolean met, Component detail) {
+    public record Row(int tier, Component name, boolean met, Component detail, List<ItemStack> icons) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Row> STREAM_CODEC = StreamCodec.composite(
@@ -35,7 +37,19 @@ public record NeedsReport(int tier, List<Row> rows) {
                 ComponentSerialization.STREAM_CODEC, Row::name,
                 ByteBufCodecs.BOOL, Row::met,
                 ComponentSerialization.STREAM_CODEC, Row::detail,
+                ItemStack.OPTIONAL_STREAM_CODEC.apply(ByteBufCodecs.list()), Row::icons,
                 Row::new);
+
+        /**
+         * @param tier   its tier
+         * @param name   its name
+         * @param met    whether it is met
+         * @param detail the detail text
+         * @param icons  items shown with the detail, may be empty
+         */
+        public Row {
+            icons = List.copyOf(icons);
+        }
     }
 
     /** Network codec. */

@@ -48,6 +48,8 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
     /** Y of the Needs tab's first line. */
     private static final int NEEDS_TOP = 22;
     private static final int NEEDS_LINE = 10;
+    /** Size of an item icon in a need's row. */
+    private static final int NEED_ICON = 16;
     /** Space between two tiers in the Needs tab. */
     private static final int NEEDS_GAP = 4;
     private static final int NEED_MET_COLOR = 0xFF2E7D32;
@@ -226,15 +228,28 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                 graphics.text(font, mark, CivGui.PADDING, y, preview ? CivGui.HINT_COLOR : row.met() ? NEED_MET_COLOR : CivGui.ERROR_COLOR, false);
                 graphics.text(font, row.name(), nameX, y, preview ? CivGui.HINT_COLOR : CivGui.LABEL_COLOR, false);
                 graphics.text(font, CivGui.fit(font, row.detail(), width - nameX + CivGui.PADDING), nameX, y + NEEDS_LINE, CivGui.HINT_COLOR, false);
-                y += 2 * NEEDS_LINE;
+                int iconX = nameX;
+                for (ItemStack icon : row.icons()) {
+                    if (iconX + NEED_ICON > imageWidth - CivGui.PADDING) {
+                        break;
+                    }
+                    graphics.item(icon, iconX, y + 2 * NEEDS_LINE);
+                    iconX += NEED_ICON;
+                }
+                y += needRow(row);
             }
             y += NEEDS_GAP;
         }
     }
 
     /** The height of a tier's section in the Needs tab. */
-    private static int needsSection(int rows) {
-        return NEEDS_LINE + rows * 2 * NEEDS_LINE;
+    private static int needsSection(List<NeedsReport.Row> rows) {
+        return NEEDS_LINE + rows.stream().mapToInt(SettlerScreen::needRow).sum();
+    }
+
+    /** The height of a need's row: name, detail and a line of icons if it has any. */
+    private static int needRow(NeedsReport.Row row) {
+        return 2 * NEEDS_LINE + (row.icons().isEmpty() ? 0 : NEED_ICON);
     }
 
     private void extractMissionTab(GuiGraphicsExtractor graphics, SettlerInfo info) {
@@ -291,8 +306,8 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
             NeedsReport needs = menu.getInfo().needs();
             int y = topPos + NEEDS_TOP;
             for (int tier = 1; tier <= NeedState.MAX_TIER; tier++) {
-                int rows = needs.rows(tier).size();
-                if (rows == 0) {
+                List<NeedsReport.Row> rows = needs.rows(tier);
+                if (rows.isEmpty()) {
                     continue;
                 }
                 if (tier == needs.tier()) {

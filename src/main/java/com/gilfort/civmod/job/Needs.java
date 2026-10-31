@@ -6,10 +6,15 @@ import java.util.Optional;
 import java.util.OptionalInt;
 
 import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.food.FoodVariety;
 
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 
 /** The needs that exist so far: add a new {@link Need} to {@link #ALL}. */
 final class Needs {
@@ -68,8 +73,61 @@ final class Needs {
         }
     };
 
+    /** The bed need: the settler sleeps in its own real bed, not on straw at the camp. */
+    private static final Need BED = new Need() {
+        @Override
+        public int tier() {
+            return 2;
+        }
+
+        @Override
+        public Component name() {
+            return Component.translatable("civmod.need.bed");
+        }
+
+        @Override
+        public Item icon() {
+            return Blocks.BED.pick(DyeColor.RED).asItem();
+        }
+
+        @Override
+        public Check check(Context context) {
+            return context.rest().sleepsInOwnBed(context.level())
+                    ? new Check(true, Component.translatable("civmod.need.bed.own"))
+                    : new Check(false, Component.translatable("civmod.need.bed.straw"));
+        }
+    };
+
+    /** The food variety need: see {@link FoodVariety}. */
+    private static final Need FOOD_VARIETY = new Need() {
+        @Override
+        public int tier() {
+            return 2;
+        }
+
+        @Override
+        public Component name() {
+            return Component.translatable("civmod.need.food_variety");
+        }
+
+        @Override
+        public Item icon() {
+            return Items.APPLE;
+        }
+
+        @Override
+        public Check check(Context context) {
+            int days = CivModConfig.FOOD_VARIETY_DAYS.get();
+            FoodVariety variety = context.settler().getFood().variety();
+            Component detail = Component.translatable("civmod.need.food_variety.detail", variety.distinct(context.day(), days), FoodVariety.REQUIRED, days);
+            List<ItemStack> icons = variety.window(context.day(), days).stream()
+                    .flatMap(id -> BuiltInRegistries.ITEM.getOptional(id).stream()).map(ItemStack::new).toList();
+            return new Check(!variety.isShort(context.day(), days), detail, icons);
+        }
+    };
+
     /** Every need, in the order of its rows in the Needs tab. */
-    static final List<Need> ALL = List.of(FOOD, FIRE);
+    static final List<Need> ALL = List.of(FOOD, FIRE, BED, FOOD_VARIETY);
 
     private Needs() {
     }
