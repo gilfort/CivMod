@@ -30,7 +30,7 @@ Where parallel maps already exist, every removal path clears every map. Example:
 
 Work that scales per tick, per NPC, per settlement or per chunk is throttled, staggered, cached or event-driven, and its cost was discussed with the user before implementation (`CLAUDE.md`, rule 2).
 
-*Review:* new per-tick loops, area scans, pathfinding calls, chunk loads, network syncs or saved-data growth. Ask for `scripts/bench-compare.sh` output when the diff touches a hot path.
+*Review:* new per-tick loops, area scans, pathfinding calls, chunk loads, network syncs or saved-data growth. When the diff touches a hot path, flag it; `scripts/bench-compare.sh` runs only on the user's request.
 
 ## 5. Matches the surrounding code
 
