@@ -2,13 +2,13 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "C": "minecraft:chest",
+    "B": "minecraft:barrel",
     "P": "#minecraft:planks",
-    "T": "minecraft:crafting_table"
+    "S": "minecraft:crafting_table"
   },
   "pattern": [
-    "PTP",
-    "PCP"
+    "PSP",
+    "PBP"
   ],
   "result": {
     "id": "civmod:craftsperson_block"

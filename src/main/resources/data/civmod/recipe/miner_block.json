@@ -2,14 +2,13 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "T": "minecraft:stone_pickaxe",
     "B": "minecraft:barrel",
-    "P": "#minecraft:planks"
+    "P": "#minecraft:planks",
+    "S": "minecraft:stone_pickaxe"
   },
   "pattern": [
-    "PTP",
-    "PBP",
-    "PPP"
+    "PSP",
+    "PBP"
   ],
   "result": {
     "id": "civmod:miner_block"

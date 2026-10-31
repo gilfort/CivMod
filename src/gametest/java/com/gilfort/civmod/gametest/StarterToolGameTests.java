@@ -146,10 +146,9 @@ public final class StarterToolGameTests {
 
     private static boolean craftsFishermanBlock(GameTestHelper helper, Item top) {
         ItemStack planks = new ItemStack(Items.OAK_PLANKS);
-        CraftingInput input = CraftingInput.of(3, 3, List.of(
+        CraftingInput input = CraftingInput.of(3, 2, List.of(
                 planks, new ItemStack(top), planks,
-                planks, new ItemStack(Items.BARREL), planks,
-                planks, planks, planks));
+                planks, new ItemStack(Items.BARREL), planks));
         return helper.getLevel().recipeAccess().getRecipeFor(RecipeType.CRAFTING, input, helper.getLevel())
                 .map(holder -> holder.value().assemble(input).is(ModItems.FISHERMAN_BLOCK.get()))
                 .orElse(false);
