@@ -25,7 +25,7 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
  * grid. Excluded entries are grey and struck through, entries at their Max at the Home Clerk grey ("Maximum reached at
  * &lt;Clerk&gt;"), innate recipes without their input grey ("Needs: Bucket"); a star marks each biome bonus effect
  * acting on an entry (its tooltip names the effects and their
- * files); a right click excludes or includes one for its section's Job. A tab that does not fit the panel scrolls by
+ * files); a left click excludes or includes one for its section's Job. A tab that does not fit the panel scrolls by
  * rows (mouse wheel, or the scrollbar right of the grid, which then has 8 columns).
  */
 final class FoundTabView implements JobBlockTabView {
@@ -271,17 +271,17 @@ final class FoundTabView implements JobBlockTabView {
         graphics.setComponentTooltipForNextFrame(font, lines, mouseX, mouseY);
     }
 
-    /** A right click on an entry excludes or includes it for its section's Job; a left click on the scrollbar drags it. */
+    /** A left click on an entry excludes or includes it for its section's Job; on the scrollbar it drags the scrollbar. */
     @Override
     public boolean mouseClicked(MouseButtonEvent event) {
+        if (event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
+            return false;
+        }
         FoundTabData tab = found.data().get();
-        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT && overScrollbar(tab, event.x(), event.y())) {
+        if (overScrollbar(tab, event.x(), event.y())) {
             dragging = true;
             dragTo(tab, event.y());
             return true;
-        }
-        if (event.button() != InputConstants.MOUSE_BUTTON_RIGHT) {
-            return false;
         }
         Hit hit = entryAt(tab, event.x(), event.y());
         if (hit == null) {
