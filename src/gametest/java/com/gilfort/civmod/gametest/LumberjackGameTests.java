@@ -8,13 +8,18 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
+import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.job.Fatigue;
 import com.gilfort.civmod.job.JobBuffer;
+import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.job.LumberjackOutput;
 import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.job.ToolTiers;
 import com.gilfort.civmod.job.WoodScan;
+import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
@@ -33,6 +38,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -70,6 +76,10 @@ public final class LumberjackGameTests {
             register(helper, "lumberjack_buffer_delivery", LumberjackGameTests::bufferDelivery);
             register(helper, "lumberjack_fatigue", LumberjackGameTests::fatigue);
             register(helper, "lumberjack_sampled_scan", LumberjackGameTests::sampledScan);
+            register(helper, "lumberjack_scan_exact_in_sparse_areas", LumberjackGameTests::scanExactInSparseAreas);
+            register(helper, "lumberjack_log_thresholds_config", LumberjackGameTests::logThresholdsConfig);
+            register(helper, "lumberjack_too_few_logs_next_job", LumberjackGameTests::tooFewLogsNextJob);
+            register(helper, "lumberjack_too_few_logs_catch_up", LumberjackGameTests::tooFewLogsCatchUp);
             register(helper, "lumberjack_excluded_logs", LumberjackGameTests::excludedLogs);
             register(helper, "lumberjack_scan_ignores_stripped", LumberjackGameTests::scanIgnoresStripped);
             register(helper, "lumberjack_works_in_world", LumberjackGameTests::worksInWorld);
@@ -151,7 +161,10 @@ public final class LumberjackGameTests {
         helper.assertTrue(near(LumberjackOutput.speed(100), 1.682, 0.002), "Level 100 ≈ 1.682/s");
         helper.assertTrue(near(LumberjackOutput.productivity(20), 1.0, 1e-9) && near(LumberjackOutput.productivity(40), 1.0, 1e-9),
                 "Full productivity from 20 logs");
-        helper.assertTrue(near(LumberjackOutput.productivity(15), 0.75, 1e-9), "15 logs → −25 %");
+        helper.assertTrue(near(LumberjackOutput.productivity(19), 0.95, 1e-9), "19 logs → 95 %");
+        helper.assertTrue(near(LumberjackOutput.productivity(10), 0.5, 1e-9), "10 logs → 50 %");
+        helper.assertTrue(near(LumberjackOutput.productivity(4), 0.2, 1e-9), "4 logs → 20 %");
+        helper.assertTrue(LumberjackOutput.productivity(3) == 0.0, "3 logs → no production");
         helper.assertTrue(LumberjackOutput.productivity(0) == 0.0, "No logs → no production");
         helper.assertTrue(ToolTiers.multiplier(0) == 0.5 && ToolTiers.multiplier(1) == 1.0 && ToolTiers.multiplier(2) == 1.2
                 && ToolTiers.multiplier(3) == 1.5 && ToolTiers.multiplier(4) == 2.0, "Tier multipliers");
@@ -429,18 +442,171 @@ public final class LumberjackGameTests {
         helper.succeed();
     }
 
-    /** The sampled scan counts a 4×4×3 block of logs and a 4×4 layer of leaves exactly. */
-    private static void sampledScan(GameTestHelper helper) {
-        for (int x = 0; x < 4; x++) {
-            for (int z = 0; z < 4; z++) {
+    /**
+     * A lone tree is counted exactly wherever it stands on the sampling grid: 3 logs are 3 at all four column positions,
+     * not 0 or 12.
+     */
+    private static void scanExactInSparseAreas(GameTestHelper helper) {
+        assertColumnsCountedExactly(helper);
+        int full = CivModConfig.LUMBERJACK_FULL_LOGS.get();
+        try {
+            // A minimum above the full amount still needs real logs: 12 estimated logs must not pass as 3 real ones.
+            CivModConfig.LUMBERJACK_FULL_LOGS.set(1);
+            assertColumnsCountedExactly(helper);
+        } finally {
+            CivModConfig.LUMBERJACK_FULL_LOGS.set(full);
+        }
+        helper.succeed();
+    }
+
+    private static void assertColumnsCountedExactly(GameTestHelper helper) {
+        BlockPos center = helper.absolutePos(new BlockPos(1, 2, 1));
+        for (int x = 3; x <= 4; x++) {
+            for (int z = 3; z <= 4; z++) {
                 for (int y = 1; y <= 3; y++) {
                     helper.setBlock(new BlockPos(x, y, z), Blocks.OAK_LOG);
                 }
-                helper.setBlock(new BlockPos(x, 4, z), Blocks.OAK_LEAVES);
+                WoodScan.Result result = new WoodScan(center, 10).runAll(helper.getLevel());
+                helper.assertTrue(result.totalLogs() == 3, "Expected 3 logs at column " + x + "/" + z + ": " + result.logs());
+                for (int y = 1; y <= 3; y++) {
+                    helper.setBlock(new BlockPos(x, y, z), Blocks.AIR);
+                }
+            }
+        }
+    }
+
+    /** Changed config values apply at once, to the speed and to what blocks the job. */
+    private static void logThresholdsConfig(GameTestHelper helper) {
+        int minimum = CivModConfig.LUMBERJACK_MINIMUM_LOGS.get();
+        int full = CivModConfig.LUMBERJACK_FULL_LOGS.get();
+        ResourceCollectionProfile profile = ModJobs.LUMBERJACK.get().profile(ResourceCollectionProfile.class).orElseThrow();
+        try {
+            CivModConfig.LUMBERJACK_MINIMUM_LOGS.set(2);
+            CivModConfig.LUMBERJACK_FULL_LOGS.set(8);
+            helper.assertTrue(near(LumberjackOutput.productivity(2), 0.25, 1e-9), "2 of 8 logs → 25 %");
+            helper.assertTrue(near(LumberjackOutput.productivity(8), 1.0, 1e-9), "8 of 8 logs → 100 %");
+            helper.assertTrue(LumberjackOutput.productivity(1) == 0.0, "Below the minimum of 2 → no production");
+            helper.assertTrue(profile.hasResources(new WoodScan.Result(Map.of(OAK_LOG, 2), Map.of())), "2 logs reach the minimum of 2");
+            helper.assertFalse(profile.hasResources(new WoodScan.Result(Map.of(OAK_LOG, 1), Map.of())), "1 log is below the minimum of 2");
+        } finally {
+            CivModConfig.LUMBERJACK_MINIMUM_LOGS.set(minimum);
+            CivModConfig.LUMBERJACK_FULL_LOGS.set(full);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * A settler with a Lumberjack job at a 3 log tree and a Miner job as its next priority.
+     *
+     * @return the settler; its first job is the Lumberjack, its second the Miner
+     */
+    private static Settler tooFewLogs(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        for (int x = 0; x < 9; x++) {
+            for (int z = 0; z < 9; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
+        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
+        helper.setBlock(new BlockPos(1, 1, 5), ModBlocks.MINER_BLOCK.get());
+        helper.setBlock(new BlockPos(5, 1, 5), Blocks.GRANITE);
+        for (int y = 1; y <= 3; y++) {
+            helper.setBlock(new BlockPos(7, y, 1), Blocks.OAK_LOG);
+        }
+        BlockPos lumberjack = helper.absolutePos(new BlockPos(1, 1, 1));
+        BlockPos miner = helper.absolutePos(new BlockPos(1, 1, 5));
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(lumberjack).orElseThrow();
+        Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
+        Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(3, 1, 3)));
+        settler.snapTo(spawn.x, spawn.y, spawn.z, 0.0F, 0.0F);
+        settler.setCustomName(net.minecraft.network.chat.Component.literal("Tester"));
+        level.addFreshEntity(settler);
+        settler.joinSettlement(data, settlement);
+        settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_AXE));
+        settler.getInventory().setItem(Settler.BELT_START + 1, new ItemStack(Items.NETHERITE_PICKAXE));
+        settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
+        JobAssignments.cyclePoint(data, lumberjack, helper.absolutePos(new BlockPos(7, 1, 1)), true, false);
+        JobAssignments.cyclePoint(data, miner, helper.absolutePos(new BlockPos(5, 1, 5)), true, false);
+        helper.assertTrue(TestAssignments.assign(data, lumberjack, settler.getUUID(), "Tester", settlement.id(), List.of())
+                == JobAssignments.AssignResult.OK, "Lumberjack assignment failed");
+        helper.assertTrue(TestAssignments.assign(data, miner, settler.getUUID(), "Tester", settlement.id(), List.of(ModJobs.LUMBERJACK.get()))
+                == JobAssignments.AssignResult.OK, "Miner assignment failed");
+        settler.addJob(new SettlerJob(ModJobs.LUMBERJACK.get(), lumberjack));
+        settler.addJob(new SettlerJob(ModJobs.MINER.get(), miner));
+        return settler;
+    }
+
+    /** 3 logs: "No resources", the Found tab lists the logs all the same, and the settler produces at its next job. */
+    private static void tooFewLogsNextJob(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = forceChunks(helper);
+        Settler settler = tooFewLogs(helper);
+        BlockPos lumberjack = settler.getJobs().get(0).jobBlock();
+        BlockPos miner = settler.getJobs().get(1).jobBlock();
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(settler.getWork().status(lumberjack) == JobStatus.NO_RESOURCES,
+                        "Not blocked: " + settler.getWork().status(lumberjack)))
+                .thenExecute(() -> helper.assertTrue(FoundTabData.of(level, lumberjack).entry(OAK_LOG).isPresent(),
+                        "The tab lists the logs: " + FoundTabData.of(level, lumberjack)))
+                .thenWaitUntil(() -> helper.assertTrue(settler.getWork().buffer(miner).count() > 0,
+                        "Next job never worked (status " + settler.getWork().status(miner) + ")"))
+                .thenExecute(() -> {
+                    helper.assertTrue(settler.getWork().buffer(lumberjack).count() == 0, "Nothing cut from 3 logs");
+                    settler.discard();
+                    forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+                })
+                .thenSucceed();
+    }
+
+    /** Catch-up follows the same rules: a caught-up day at 3 logs cuts nothing and goes to the next job. */
+    private static void tooFewLogsCatchUp(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = forceChunks(helper);
+        Settler settler = tooFewLogs(helper);
+        BlockPos lumberjack = settler.getJobs().get(0).jobBlock();
+        BlockPos miner = settler.getJobs().get(1).jobBlock();
+        boolean[] done = new boolean[1];
+        helper.onEachTick(() -> {
+            if (done[0] || settler.getWork().scan(lumberjack).isEmpty() || settler.getWork().scan(miner).isEmpty()) {
+                return;
+            }
+            done[0] = true;
+            Container minerStorage = (Container) level.getBlockEntity(miner);
+            int before = stored(minerStorage) + settler.getWork().buffer(miner).count();
+            long clock = level.getOverworldClockTime();
+            settler.getWork().setCatchUp(clock - 24000L, clock);
+            CatchUp.runNow(level, List.of(settler));
+            helper.assertTrue(stored((Container) level.getBlockEntity(lumberjack)) + settler.getWork().buffer(lumberjack).count() == 0,
+                    "Wood cut from 3 logs in catch-up");
+            int mined = stored(minerStorage) + settler.getWork().buffer(miner).count() - before;
+            helper.assertTrue(mined > 0, "The next job took over the day");
+            settler.discard();
+            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+            helper.succeed();
+        });
+    }
+
+    private static int stored(Container container) {
+        int total = 0;
+        for (int i = 0; i < container.getContainerSize(); i++) {
+            total += container.getItem(i).getCount();
+        }
+        return total;
+    }
+
+    /** The sampled scan estimates a dense 4×4×6 block of logs and a 4×4 layer of leaves on its 2×2 grid. */
+    private static void sampledScan(GameTestHelper helper) {
+        for (int x = 0; x < 4; x++) {
+            for (int z = 0; z < 4; z++) {
+                for (int y = 1; y <= 6; y++) {
+                    helper.setBlock(new BlockPos(x, y, z), Blocks.OAK_LOG);
+                }
+                helper.setBlock(new BlockPos(x, 7, z), Blocks.OAK_LEAVES);
             }
         }
         WoodScan.Result result = new WoodScan(helper.absolutePos(new BlockPos(1, 2, 1)), 10).runAll(helper.getLevel());
-        helper.assertTrue(result.logs().getOrDefault(OAK_LOG, 0) == 48, "Expected 48 sampled logs: " + result.logs());
+        helper.assertTrue(result.logs().getOrDefault(OAK_LOG, 0) == 96, "Expected 96 sampled logs: " + result.logs());
         helper.assertTrue(result.leaves().getOrDefault(OAK_LEAVES, 0) == 16, "Expected 16 sampled leaves: " + result.leaves());
         helper.succeed();
     }

@@ -127,10 +127,20 @@ public interface ResourceCollectionProfile extends CategoryProfile {
     SectionScan<? extends ScanResult> createScan(BlockPos center, int radius);
 
     /**
-     * @return whether an empty scan stops the job (status "No resources")
+     * @return whether a scan without resources ({@link #hasResources}) stops the job (status "No resources")
      */
     default boolean needsResources() {
         return false;
+    }
+
+    /**
+     * Only read for a Job that {@link #needsResources()}.
+     *
+     * @param scan the scan result
+     * @return whether the scan holds enough to work with, by default anything at all
+     */
+    default boolean hasResources(ScanResult scan) {
+        return !scan.isEmpty();
     }
 
     /**

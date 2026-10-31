@@ -5,6 +5,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import com.gilfort.civmod.config.CivModConfig;
+
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
@@ -21,10 +23,6 @@ public final class LumberjackOutput {
 
     /** Share of logs in the output. */
     public static final double COMMON_SHARE = 0.9;
-    /** Logs needed for full productivity. */
-    public static final int MIN_LOGS = 20;
-    /** Productivity loss per missing log. */
-    public static final double MALUS_PER_MISSING_LOG = 0.05;
 
     private static final Identifier OAK_LEAVES = Identifier.withDefaultNamespace("oak_leaves");
     private static final Identifier DARK_OAK_LEAVES = Identifier.withDefaultNamespace("dark_oak_leaves");
@@ -42,13 +40,25 @@ public final class LumberjackOutput {
 
     /**
      * @param totalLogs the estimated logs in the scan area
-     * @return the productivity factor (1 at ≥ 20 logs, −5 % per missing log, 0 without logs)
+     * @return the productivity factor: 0 below the minimum, else logs / full amount up to 1 (server config)
      */
     public static double productivity(int totalLogs) {
-        if (totalLogs <= 0) {
-            return 0.0;
-        }
-        return Math.max(0.0, 1.0 - MALUS_PER_MISSING_LOG * Math.max(0, MIN_LOGS - totalLogs));
+        return hasEnoughLogs(totalLogs) ? Math.min(1.0, totalLogs / (double) CivModConfig.LUMBERJACK_FULL_LOGS.get()) : 0.0;
+    }
+
+    /**
+     * @param totalLogs the estimated logs in the scan area
+     * @return whether they reach the minimum the job needs to work (server config)
+     */
+    static boolean hasEnoughLogs(int totalLogs) {
+        return totalLogs >= CivModConfig.LUMBERJACK_MINIMUM_LOGS.get();
+    }
+
+    /**
+     * @return up to how many logs the scan has to count exactly: below this the amount decides over block or speed
+     */
+    static int logsCountedExactly() {
+        return Math.max(CivModConfig.LUMBERJACK_MINIMUM_LOGS.get(), CivModConfig.LUMBERJACK_FULL_LOGS.get());
     }
 
     /** What the next produced resource is. */

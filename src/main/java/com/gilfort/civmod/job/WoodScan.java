@@ -22,7 +22,8 @@ import net.neoforged.neoforge.common.Tags;
  * are left out) and leaves per block type in a cylinder around the primary work place.
  * <p>
  * Processes one chunk section per {@link #step} call, skips sections without logs or leaves (palette pre-filter)
- * and unloaded chunks, and samples every 4th block (2×2 grid in x/z), extrapolating ×4.
+ * and unloaded chunks, and samples every 4th block (2×2 grid in x/z), extrapolating ×4. A sparse area is counted again
+ * block by block: on the grid a lone tree reads as 0 or ×4, and the Lumberjack's minimum and speed need its real logs.
  */
 public final class WoodScan implements SectionScan<WoodScan.Result> {
 
@@ -30,6 +31,8 @@ public final class WoodScan implements SectionScan<WoodScan.Result> {
     public static final int HALF_HEIGHT = 10;
     /** Sampling factor (every 4th block). */
     private static final int SAMPLE_FACTOR = 4;
+    /** Distance between the sampled columns. */
+    private static final int SAMPLE_GRID = 2;
 
     /**
      * Result of a scan.
@@ -67,6 +70,8 @@ public final class WoodScan implements SectionScan<WoodScan.Result> {
     private int sectionY;
     private int sectionZ;
     private boolean done;
+    /** Whether the second pass runs, which counts every block. */
+    private boolean exact;
     private final Map<Identifier, Integer> logs = new HashMap<>();
     private final Map<Identifier, Integer> leaves = new HashMap<>();
 
@@ -109,10 +114,26 @@ public final class WoodScan implements SectionScan<WoodScan.Result> {
             if (++sectionZ > maxSectionZ) {
                 sectionZ = minSectionZ;
                 if (++sectionX > maxSectionX) {
-                    done = true;
+                    finishPass();
                 }
             }
         }
+    }
+
+    /**
+     * Below this estimate fewer real logs than the minimum or full amount are possible (a sample finds at most every
+     * log × {@value #SAMPLE_FACTOR}), so the pass is repeated exactly.
+     */
+    private void finishPass() {
+        int estimate = logs.values().stream().mapToInt(Integer::intValue).sum();
+        if (exact || estimate >= LumberjackOutput.logsCountedExactly() * SAMPLE_FACTOR) {
+            done = true;
+            return;
+        }
+        exact = true;
+        logs.clear();
+        leaves.clear();
+        sectionX = minSectionX;
     }
 
     private void scanSection(ServerLevel level, int sx, int sy, int sz) {
@@ -132,9 +153,11 @@ public final class WoodScan implements SectionScan<WoodScan.Result> {
         int baseY = SectionPos.sectionToBlockCoord(sy);
         int baseZ = SectionPos.sectionToBlockCoord(sz);
         long radiusSquared = (long) radius * radius;
+        int grid = exact ? 1 : SAMPLE_GRID;
+        int factor = exact ? 1 : SAMPLE_FACTOR;
         // Sample on an even grid in world coordinates so neighbouring sections line up.
-        for (int x = 0; x < 16; x += 2) {
-            for (int z = 0; z < 16; z += 2) {
+        for (int x = 0; x < 16; x += grid) {
+            for (int z = 0; z < 16; z += grid) {
                 int dx = baseX + x - center.getX();
                 int dz = baseZ + z - center.getZ();
                 if ((long) dx * dx + (long) dz * dz > radiusSquared) {
@@ -147,9 +170,9 @@ public final class WoodScan implements SectionScan<WoodScan.Result> {
                     }
                     BlockState state = section.getBlockState(x, y, z);
                     if (isLog(state)) {
-                        logs.merge(BuiltInRegistries.BLOCK.getKey(state.getBlock()), SAMPLE_FACTOR, Integer::sum);
+                        logs.merge(BuiltInRegistries.BLOCK.getKey(state.getBlock()), factor, Integer::sum);
                     } else if (state.is(BlockTags.LEAVES)) {
-                        leaves.merge(BuiltInRegistries.BLOCK.getKey(state.getBlock()), SAMPLE_FACTOR, Integer::sum);
+                        leaves.merge(BuiltInRegistries.BLOCK.getKey(state.getBlock()), factor, Integer::sum);
                     }
                 }
             }

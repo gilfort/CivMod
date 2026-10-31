@@ -81,8 +81,23 @@ public final class LumberjackProfile implements SecondaryToolProfile {
     }
 
     @Override
+    public boolean needsResources() {
+        return true;
+    }
+
+    /** At least the minimum of logs (vault {@code Jobs/Lumberjack.md}). */
+    @Override
+    public boolean hasResources(ScanResult scan) {
+        return LumberjackOutput.hasEnoughLogs(totalLogs(scan));
+    }
+
+    @Override
     public double productivity(@Nullable ScanResult scan) {
-        return LumberjackOutput.productivity(scan instanceof WoodScan.Result wood ? wood.totalLogs() : 0);
+        return LumberjackOutput.productivity(totalLogs(scan));
+    }
+
+    private static int totalLogs(@Nullable ScanResult scan) {
+        return scan instanceof WoodScan.Result wood ? wood.totalLogs() : 0;
     }
 
     @Override

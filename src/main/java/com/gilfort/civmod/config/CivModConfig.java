@@ -114,6 +114,16 @@ public final class CivModConfig {
                     "It always covers at least the last 6 food items eaten.")
             .defineInRange("foodVarietyDays", 3, 1, 14);
 
+    /** Logs a Lumberjack needs in its scan area to work at all. */
+    public static final ModConfigSpec.IntValue LUMBERJACK_MINIMUM_LOGS = BUILDER
+            .comment("Lumberjack: logs needed in the scan area to work at all; below this the job is blocked.")
+            .defineInRange("lumberjackMinimumLogs", 4, 1, 4096);
+
+    /** Logs a Lumberjack needs in its scan area for full speed. */
+    public static final ModConfigSpec.IntValue LUMBERJACK_FULL_LOGS = BUILDER
+            .comment("Lumberjack: logs in the scan area for full speed; below this the speed is found logs / this value.")
+            .defineInRange("lumberjackFullLogs", 20, 1, 4096);
+
     /** The built config spec, registered in the mod constructor. */
     public static final ModConfigSpec SPEC = BUILDER.build();
 
