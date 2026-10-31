@@ -168,7 +168,7 @@ final class WorkRules {
             return new Result(0, 0, 0, 0, false, End.OUTPUT_FULL, workTicks);
         }
         int cap = site.skillCap();
-        int skillLevel = settler.getSkills().effectiveLevel(job.jobType(), cap);
+        int skillLevel = settler.getWork().effectiveLevel(job);
         BiomeBonus bonus = workplace.biomeBonus(level, job.jobType());
         double accumulated = workplace.production();
         double ticks = workTicks;
@@ -233,7 +233,7 @@ final class WorkRules {
                     levelUp = true;
                 }
                 exp += amount;
-                skillLevel = settler.getSkills().effectiveLevel(job.jobType(), cap);
+                skillLevel = settler.getWork().effectiveLevel(job);
                 if (!room) {
                     end = End.OUTPUT_FULL;
                     break;

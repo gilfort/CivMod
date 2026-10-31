@@ -265,6 +265,13 @@ final class SettlerMeals {
             }
             return point;
         }
+
+        /**
+         * @return whether a food point has food for the settler now
+         */
+        boolean hasFood() {
+            return get().isPresent();
+        }
     }
 
     private Optional<ClerkStorage.FoodPoint> foodPointWithFood(ServerLevel level, long dayTime) {

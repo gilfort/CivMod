@@ -40,7 +40,7 @@ final class SettlerRest {
     private @Nullable RestPlace restPlace;
     private long restPlaceDay = -1;
     /** The {@link Settlement#hearthRevision()} the rest place was chosen with. */
-    private int restPlaceHearths;
+    private int restPlaceHearthRevision;
 
     /**
      * @param settler the settler
@@ -160,7 +160,7 @@ final class SettlerRest {
         if (settlement.isEmpty()) {
             return null;
         }
-        if (restPlace != null && restPlaceDay == day && restPlaceHearths == settlement.get().hearthRevision()
+        if (restPlace != null && restPlaceDay == day && restPlaceHearthRevision == settlement.get().hearthRevision()
                 && (!restPlace.bed() || SettlerBeds.head(level, restPlace.pos()).isPresent())) {
             return restPlace;
         }
@@ -168,7 +168,7 @@ final class SettlerRest {
         Sleeping sleeping = sleeping(level, settlement.get());
         restPlace = sleeping.bed().map(bed -> new RestPlace(bed, true, null)).orElseGet(() -> camp(level, settlement.get(), sleeping.hearth()));
         restPlaceDay = day;
-        restPlaceHearths = settlement.get().hearthRevision();
+        restPlaceHearthRevision = settlement.get().hearthRevision();
         return restPlace;
     }
 

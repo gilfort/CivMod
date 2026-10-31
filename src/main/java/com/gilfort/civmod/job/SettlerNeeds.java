@@ -51,7 +51,7 @@ final class SettlerNeeds {
         if (!morning && state.settled(tier)) {
             return;
         }
-        Optional<Need> unmet = Needs.firstUnmet(new Need.Context(level, day, settler, shell.meals(), shell.rest(), foodPoint));
+        Optional<Need> unmet = Needs.firstUnmet(context(level, day, foodPoint));
         int highestMet = Needs.highestMet(unmet);
         state = morning ? state.morning(day, tier, highestMet) : state.climb(tier, highestMet);
         missing = state.inGrace() ? unmet.orElse(null) : null;
@@ -98,11 +98,15 @@ final class SettlerNeeds {
      * @return all needs as they are now
      */
     NeedsReport report(ServerLevel level, long day, BooleanSupplier foodPoint) {
-        Need.Context context = new Need.Context(level, day, settler, shell.meals(), shell.rest(), foodPoint);
+        Need.Context context = context(level, day, foodPoint);
         return new NeedsReport(Math.min(state.workTier(), tier()), Needs.ALL.stream().map(need -> {
             Need.Check check = need.check(context);
             return new NeedsReport.Row(need.tier(), need.name(), check.met(), check.detail(), check.icons());
         }).toList());
+    }
+
+    private Need.Context context(ServerLevel level, long day, BooleanSupplier foodPoint) {
+        return new Need.Context(level, day, settler, shell.meals(), shell.rest(), foodPoint);
     }
 
     /**

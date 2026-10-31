@@ -39,7 +39,7 @@ import net.neoforged.neoforge.event.level.BlockEvent;
 public final class Hearths {
 
     /** The block tag of hearths. */
-    public static final TagKey<Block> TAG = TagKey.create(Registries.BLOCK, CivMod.id("hearth"));
+    private static final TagKey<Block> TAG = TagKey.create(Registries.BLOCK, CivMod.id("hearth"));
 
     private static final int CAMPFIRE_MIN = 3;
     private static final int CAMPFIRE_MAX = 6;
@@ -53,7 +53,7 @@ public final class Hearths {
      * @param state a block state
      * @return whether it is a hearth: in the tag, and lit if the block can be lit
      */
-    public static boolean isHearth(BlockState state) {
+    private static boolean isHearth(BlockState state) {
         return state.is(TAG) && (!state.hasProperty(BlockStateProperties.LIT) || state.getValue(BlockStateProperties.LIT));
     }
 
@@ -64,9 +64,9 @@ public final class Hearths {
      */
     public static Set<BlockPos> of(ServerLevel level, Settlement settlement) {
         int border = settlement.borderHash();
-        if (settlement.hearthBorder() != border) {
+        if (settlement.hearthBorderHash() != border) {
             scan(level, settlement);
-            settlement.setHearthBorder(border);
+            settlement.setHearthBorderHash(border);
             SettlementData.get(level).setDirty();
         }
         return settlement.hearths();

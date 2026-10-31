@@ -26,9 +26,9 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 /**
  * Screen of a settler: Overview (name, status, settlement, dismiss when homeless), Jobs (priority list; "⇄" opens the
- * job switcher listing the other Jobs unlocked at that job's JobBlock), Inventory
- * (tool belt, offhand, pockets), Needs (per need tier, the tier the settler works in highlighted), Mission (the one Mission Job, chosen from those the Mission Board offers; only for
- * settlers with a Mission Job) and one tab per job below the panel (status and buffer).
+ * job switcher listing the other Jobs unlocked at that job's JobBlock), Inventory (tool belt, offhand, pockets), Needs
+ * (per need tier, the tier the settler works in highlighted), Mission (the one Mission Job, chosen from those the
+ * Mission Board offers; only for settlers with a Mission Job) and one tab per job below the panel (status and buffer).
  */
 public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
 
@@ -52,7 +52,6 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
     private static final int NEED_ICON = 16;
     /** Space between two tiers in the Needs tab. */
     private static final int NEEDS_GAP = 4;
-    private static final int NEED_MET_COLOR = 0xFF2E7D32;
 
     /** The job whose switcher the Jobs tab shows, -1 for the priority list. */
     private int switching = -1;
@@ -225,7 +224,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
             for (NeedsReport.Row row : rows) {
                 Component mark = Component.literal(row.met() ? "✓" : "✗");
                 int nameX = CivGui.PADDING + font.width(mark) + 3;
-                graphics.text(font, mark, CivGui.PADDING, y, preview ? CivGui.HINT_COLOR : row.met() ? NEED_MET_COLOR : CivGui.ERROR_COLOR, false);
+                graphics.text(font, mark, CivGui.PADDING, y, preview ? CivGui.HINT_COLOR : row.met() ? CivGui.NEED_MET_COLOR : CivGui.ERROR_COLOR, false);
                 graphics.text(font, row.name(), nameX, y, preview ? CivGui.HINT_COLOR : CivGui.LABEL_COLOR, false);
                 graphics.text(font, CivGui.fit(font, row.detail(), width - nameX + CivGui.PADDING), nameX, y + NEEDS_LINE, CivGui.HINT_COLOR, false);
                 int iconX = nameX;
@@ -319,7 +318,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         if (tab >= SettlerMenu.FIRST_JOB_TAB) {
             state(menu.getInfo(), tab - SettlerMenu.FIRST_JOB_TAB).ifPresent(state -> {
                 SettlerInfo.SkillInfo skill = state.skill();
-                if (!skill.limited() && !skill.atCap()) {
+                if (!skill.atCap()) {
                     int x = leftPos + CivGui.PADDING;
                     int y = topPos + EXP_BAR_Y;
                     graphics.blitSprite(net.minecraft.client.renderer.RenderPipelines.GUI_TEXTURED, EXP_BACKGROUND, x, y, EXP_BAR_WIDTH, 5);
@@ -357,6 +356,8 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                         CivGui.PADDING, EXP_BAR_Y - 1, LIMITED_COLOR, false);
             } else {
                 graphics.text(font, Component.translatable("civmod.gui.settler.level", skill.level()), CivGui.PADDING, 45, CivGui.LABEL_COLOR, false);
+            }
+            if (!skill.atCap()) {
                 graphics.text(font, Component.translatable("civmod.gui.settler.exp", skill.exp(), skill.needed()), CivGui.PADDING + EXP_BAR_WIDTH + 4,
                         EXP_BAR_Y - 1, CivGui.HINT_COLOR, false);
             }

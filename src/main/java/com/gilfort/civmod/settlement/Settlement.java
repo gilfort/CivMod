@@ -31,7 +31,7 @@ public final class Settlement {
     /** Value of {@link #settlersDue()} once the starting settlers have arrived. */
     public static final long SETTLERS_ARRIVED = -1L;
 
-    /** Value of {@link #hearthBorder()} before the first look at the hearths. */
+    /** Value of {@link #hearthBorderHash()} before the first look at the hearths. */
     private static final int NO_BORDER = 0;
 
     /** Save codec. */
@@ -50,7 +50,7 @@ public final class Settlement {
             Codec.unboundedMap(UUIDUtil.STRING_CODEC, BlockPos.CODEC).optionalFieldOf("bed_reservations", Map.of())
                     .forGetter(Settlement::bedReservations),
             BlockPos.CODEC.listOf().optionalFieldOf("hearths", List.of()).forGetter(settlement -> List.copyOf(settlement.hearths)),
-            Codec.INT.optionalFieldOf("hearth_border", NO_BORDER).forGetter(Settlement::hearthBorder)
+            Codec.INT.optionalFieldOf("hearth_border", NO_BORDER).forGetter(Settlement::hearthBorderHash)
     ).apply(instance, Settlement::new));
 
     private final int id;
@@ -72,7 +72,7 @@ public final class Settlement {
     /** The hearths inside the border (see {@link Hearths}). */
     private final Set<BlockPos> hearths = new HashSet<>();
     /** The {@link #borderHash()} the hearths were looked for at. */
-    private int hearthBorder;
+    private int hearthBorderHash;
     /** Goes up with every change of the hearths (not saved). */
     private int hearthRevision;
 
@@ -92,10 +92,10 @@ public final class Settlement {
 
     private Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
             List<SettlementBlock> blocks, Map<String, UUID> beds, List<Request> requests, List<DeliveryTask> deliveries,
-            Map<UUID, BlockPos> bedReservations, List<BlockPos> hearths, int hearthBorder) {
+            Map<UUID, BlockPos> bedReservations, List<BlockPos> hearths, int hearthBorderHash) {
         this.bedReservations.putAll(bedReservations);
         this.hearths.addAll(hearths);
-        this.hearthBorder = hearthBorder;
+        this.hearthBorderHash = hearthBorderHash;
         this.requests.addAll(requests);
         this.deliveries.addAll(deliveries);
         beds.forEach((key, owner) -> this.beds.put(BlockPos.of(Long.parseLong(key)), owner));
@@ -259,12 +259,12 @@ public final class Settlement {
         return hearthRevision;
     }
 
-    int hearthBorder() {
-        return hearthBorder;
+    int hearthBorderHash() {
+        return hearthBorderHash;
     }
 
-    void setHearthBorder(int border) {
-        hearthBorder = border;
+    void setHearthBorderHash(int hash) {
+        hearthBorderHash = hash;
     }
 
     /**
