@@ -102,6 +102,18 @@ public final class CivModConfig {
             .comment("Multiplier on the output settlers produce while unloaded (1.0 = as if the player was there).")
             .defineInRange("catchUpMultiplier", 1.0, 0.0, 10.0);
 
+    /** Largest distance between a settler's sleeping place and a hearth for the Fire need. */
+    public static final ModConfigSpec.IntValue HEARTH_RANGE = BUILDER
+            .comment("Fire need: largest distance in blocks between a settler's sleeping place and a hearth.",
+                    "A settler whose bed is further away sleeps at the camp instead.")
+            .defineInRange("hearthRange", 24, 1, 256);
+
+    /** How many days the window of the Food variety need reaches back, today included. */
+    public static final ModConfigSpec.IntValue FOOD_VARIETY_DAYS = BUILDER
+            .comment("Food variety need: how many in-game days the window reaches back, today included.",
+                    "It always covers at least the last 6 food items eaten.")
+            .defineInRange("foodVarietyDays", 3, 1, 14);
+
     /** The built config spec, registered in the mod constructor. */
     public static final ModConfigSpec SPEC = BUILDER.build();
 

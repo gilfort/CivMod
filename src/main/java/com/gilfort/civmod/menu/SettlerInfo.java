@@ -7,6 +7,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.JobStatus;
+import com.gilfort.civmod.job.NeedsReport;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobBlockSite;
@@ -34,9 +35,10 @@ import net.minecraft.world.item.ItemStack;
  * @param bed            where the settler sleeps
  * @param food           food level, saturation and appetite
  * @param mission        the mission the settler is away on or waits to leave for (empty text if none)
+ * @param needs          the needs shown in the Needs tab
  */
 public record SettlerInfo(Component name, Component status, boolean homeless, Component settlementName, List<SettlerJob> jobs,
-        List<JobState> jobStates, Component bed, FoodInfo food, Component mission) {
+        List<JobState> jobStates, Component bed, FoodInfo food, Component mission, NeedsReport needs) {
 
     /**
      * Food state shown in the overview.
@@ -113,13 +115,14 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
      * @param level      the skill level
      * @param exp        EXP towards the next level
      * @param needed     EXP needed for the next level
-     * @param effective  the level the settler works at (limited by the JobBlock)
+     * @param effective  the level the settler works at (limited by the JobBlock and its needs)
      * @param blockLevel the JobBlock level
+     * @param limitedByNeeds whether unmet needs lower the level it works at
      */
-    public record SkillInfo(int level, int exp, int needed, int effective, int blockLevel) {
+    public record SkillInfo(int level, int exp, int needed, int effective, int blockLevel, boolean limitedByNeeds) {
 
         /** No skill data. */
-        public static final SkillInfo NONE = new SkillInfo(1, 0, 1, 1, 1);
+        public static final SkillInfo NONE = new SkillInfo(1, 0, 1, 1, 1, false);
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, SkillInfo> STREAM_CODEC = StreamCodec.composite(
@@ -128,6 +131,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
                 ByteBufCodecs.VAR_INT, SkillInfo::needed,
                 ByteBufCodecs.VAR_INT, SkillInfo::effective,
                 ByteBufCodecs.VAR_INT, SkillInfo::blockLevel,
+                ByteBufCodecs.BOOL, SkillInfo::limitedByNeeds,
                 SkillInfo::new);
 
         /**
@@ -156,6 +160,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
             ComponentSerialization.STREAM_CODEC, SettlerInfo::bed,
             FoodInfo.STREAM_CODEC, SettlerInfo::food,
             ComponentSerialization.STREAM_CODEC, SettlerInfo::mission,
+            NeedsReport.STREAM_CODEC, SettlerInfo::needs,
             SettlerInfo::new);
 
     /**
@@ -187,7 +192,8 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
                 com.gilfort.civmod.config.CivModConfig.APPETITE_MAX.get());
         return new SettlerInfo(settler.getName(), settler.statusText(), settler.isHomeless(), settlementName, settler.getJobs(), states, bed,
                 new FoodInfo(food.level(), food.saturation(), appetite),
-                settler.getWork().missionStatus().orElse(Component.empty()));
+                settler.getWork().missionStatus().orElse(Component.empty()),
+                settler.level() instanceof ServerLevel level ? settler.getWork().needsReport(level) : NeedsReport.NONE);
     }
 
     /**
@@ -200,7 +206,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
     private static SkillInfo skillInfo(Settler settler, SettlerJob job) {
         com.gilfort.civmod.job.SettlerSkills.Skill skill = settler.getSkills().get(job.jobType());
         return new SkillInfo(skill.level(), skill.exp(), com.gilfort.civmod.job.SkillRules.get().expToNext(skill.level()),
-                settler.getWork().effectiveLevel(job), settler.getWork().jobBlockLevel(job));
+                settler.getWork().effectiveLevel(job), settler.getWork().jobBlockLevel(job), settler.getWork().limitedByNeeds(job));
     }
 
     /**
@@ -213,7 +219,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
             return index >= 0 && index < jobStates.size() ? jobStates.get(index) : new JobState(JobStatus.IDLE, JobStatus.IDLE.displayName(), 0, 0, List.of(),
                     SkillInfo.NONE, List.of());
         }).toList();
-        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(jobs), states, bed, food, mission);
+        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(jobs), states, bed, food, mission, needs);
     }
 
     /**
@@ -229,6 +235,6 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
         if (index < states.size()) {
             states.set(index, states.get(index).switched(job, old.jobType()));
         }
-        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(switchedJobs), List.copyOf(states), bed, food, mission);
+        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(switchedJobs), List.copyOf(states), bed, food, mission, needs);
     }
 }

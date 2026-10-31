@@ -31,6 +31,25 @@ _Avoid_: Loops calling the shell to steer it (set the active job, start a walk, 
 What the meal or rest module tells the Settler Shell a meal or rest intent wants next: stay, stop, eat from the pockets, work, done, walk to a target for an activity. Only the shell walks or teleports the settler and sets its activity. Code: `BodyStep`, applied in `SettlerWork.go`.
 _Avoid_: Meal or rest code starting walks or setting the activity
 
+**Need tier**:
+Lv 1–20 / 21–40 / 41–60 / 61–80 / 81+. A settler's tier follows the highest capped target level of its current jobs; an unmet tier gives one grace day, then the settler works at the top of the lower tier in every job, and it climbs back at once when the needs are met. Code: `NeedState` (rules), `SettlerNeeds` (per settler); a new need is a `Need` listed in `Needs.ALL`.
+_Avoid_: Reading `SettlerSkills.effectiveLevel` for the level a settler works at (`SettlerWork.effectiveLevel` includes the need limit)
+
+**Food variety**:
+The tier 2 need of at least 3 distinct food items in the window: the last days (config, today included), but always at least the last 6 items eaten. Short of it, a settler at a food point prefers a food outside the window. Code: `FoodVariety` (the rule and the bounded list of meals, saved in `SettlerFood`), recorded by `SettlerMeals` with the simulated day in catch-up.
+
+**Hearth**:
+A block of the tag `civmod:hearth` inside a settlement's border, a block with a `lit` state only while lit. The settlement keeps them, saved and updated on block changes; one scan of the loaded border chunks follows a border change, none is periodic. Code: `Hearths`, `Settlement.hearths`.
+_Avoid_: Area scans for fire; reading `Settlement.hearths` directly (`Hearths.of` keeps it up to date)
+
+**Camp**:
+Where settlers sleep without a real bed near a hearth: a ring of straw beds around the hearth nearest to their JobBlock, feet to the fire, then the bare ground around it. The first settler going to bed in a settlement without a hearth places a campfire. A settler with a bed too far from any hearth keeps the bed but sleeps here; `SettlerRest.sleepsInOwnBed` tells the two apart. Code: `SettlerRest`, `SettlerBeds.reserveCampSpot`.
+_Avoid_: "Assigned bed" as "sleeps in a real bed" (`Settlement.bedOf` also holds a far bed)
+
+**Homeless / bedless**:
+Homeless: no settlement (`Settler.isHomeless`); needs are not checked. Bedless: in a settlement without a real bed; sleeps at the camp and takes every check.
+_Avoid_: "Homeless" for a settler without a bed
+
 **Sitting**:
 A settler state shown by pose: vanilla `Pose.SITTING` (synced like `Pose.SLEEPING`), drawn as the vanilla passenger pose lowered to the seat, hitbox about 1.3 blocks high (eye height, name tag and thought bubble follow), not pushable; the body keeps its facing, the head looks around, a held tool stays in the hand. A settler sits exactly while its job step is a work break (`JobStep.Pause` with `JobStatus.PAUSING`), on the ground at its own position, if it is on the ground and out of fluids when the break starts (decided once; neither the pose nor the decision is saved, the next decision after loading sets it again); any other step, a job step ended outside a decision (job removed, JobBlock broken) and damage stand it up. No seat entity. Code: `Settler.sitDown(seat, facing)` / `Settler.standUp()` (internal hook for later Tavern seats), decided in `SettlerWork.endDecision`, drawn by `SettlerRenderer`.
 _Avoid_: Seat entity, riding; a timer or cancel list of its own for the sitting

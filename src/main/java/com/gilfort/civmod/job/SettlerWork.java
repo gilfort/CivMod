@@ -148,6 +148,8 @@ public final class SettlerWork {
     private final SettlerMeals meals;
     /** Rest: carries out the rest intents of the Schedule. */
     private final SettlerRest resting;
+    /** Needs: the need tier and the limit it puts on the level the settler works at. */
+    private final SettlerNeeds needs;
     /** Where the settler delivers to (a Clerk drop-off takes at its counter). */
     private ClerkStorage.@Nullable Visit deliveryVisit;
     /** Clerk JobBlocks whose counter this settler found unreachable, with the day (only their block slots that day). */
@@ -191,6 +193,7 @@ public final class SettlerWork {
         thoughts = new SettlerThoughts(settler);
         meals = new SettlerMeals(this);
         resting = new SettlerRest(settler);
+        needs = new SettlerNeeds(this);
     }
 
     /**
@@ -753,6 +756,10 @@ public final class SettlerWork {
         checkStuck(level);
 
         SettlerMeals.FoodLookup foodLookup = meals.lookup(level, dayTime);
+        if (catchUpFrom < 0 && dayTime >= dayTimes(day).wake()) {
+            // Missed days first: catch-up checks them in their order.
+            needs.step(level, day, foodLookup::hasFood);
+        }
         Decision decision = Schedule.next(snapshot(level, day, dayTime, foodLookup, liveFacts(level, false, woke)));
         act(level, decision, foodLookup, day, dayTime);
     }
@@ -917,6 +924,7 @@ public final class SettlerWork {
             on.put(ThoughtBubble.HUNGRY_NO_FOOD,
                     SettlerThoughts.problemIcon(ThoughtBubble.HUNGRY_NO_FOOD));
         }
+        needs.missingIcon().ifPresent(icon -> on.put(ThoughtBubble.NEED_UNMET, icon));
         return on;
     }
 
@@ -1573,6 +1581,10 @@ public final class SettlerWork {
         long dayTime = from - day * DayClock.DAY_TICKS;
         cuDayTime = dayTime;
 
+        // The same need rules as live: the first hour of a day is its wake-up.
+        SettlerMeals.FoodLookup foodLookup = meals.lookup(level, dayTime);
+        needs.step(level, day, foodLookup::hasFood);
+
         // Start of the hour: back from foraging, the morning plan, a meal if hungry.
         if (decideCatchUp(level, day, dayTime) == Intent.FORAGE) {
             // Away while foraging (no hunger, no work).
@@ -1640,13 +1652,13 @@ public final class SettlerWork {
                 int foodBefore = food.level();
                 int pocketsBefore = meals.provisions();
                 switch (decision.intent()) {
-                    case EAT_FROM_POCKETS -> meals.eatFromPockets(level);
+                    case EAT_FROM_POCKETS -> meals.eatFromPockets(level, day);
                     case EAT_UNTIL_FULL -> {
-                        while (meals.eatFromPockets(level)) {
+                        while (meals.eatFromPockets(level, day)) {
                             // Until nothing fits any more.
                         }
                     }
-                    case FETCH_FOOD -> meals.visitFoodPointNow(level, foodLookup.get().orElseThrow(), decision.purpose(), dayTime);
+                    case FETCH_FOOD -> meals.visitFoodPointNow(level, foodLookup.get().orElseThrow(), decision.purpose(), day, dayTime);
                     case START_FORAGING -> {
                         meals.startForagingNow(day);
                         return Intent.FORAGE;
@@ -1942,10 +1954,99 @@ public final class SettlerWork {
 
     /**
      * @param job a job
-     * @return the level the settler works at in that job (its skill, at most the JobBlock cap)
+     * @return the level the settler works at in that job (its skill, at most the JobBlock cap and what its needs allow)
      */
     public int effectiveLevel(SettlerJob job) {
+        return needs.limit(cappedLevel(job));
+    }
+
+    /**
+     * @param job a job
+     * @return the capped target level of that job: its skill, at most the JobBlock cap
+     */
+    int cappedLevel(SettlerJob job) {
         return settler.getSkills().effectiveLevel(job.jobType(), SettlementRules.skillCap(jobBlockLevel(job)));
+    }
+
+    /**
+     * @param job a job
+     * @return whether unmet needs keep the settler below its capped target level in that job
+     */
+    public boolean limitedByNeeds(SettlerJob job) {
+        return effectiveLevel(job) < cappedLevel(job);
+    }
+
+    /**
+     * @return the settler's need tier, from its current jobs
+     */
+    public int needTier() {
+        return needs.tier();
+    }
+
+    /**
+     * @return where the settler stands on the need tiers (saved with it)
+     */
+    public NeedState needState() {
+        return needs.state();
+    }
+
+    /**
+     * @param saved the saved state
+     */
+    public void restoreNeeds(NeedState saved) {
+        needs.restore(saved);
+    }
+
+    /**
+     * @param level the level
+     * @return the needs as the Needs tab shows them now
+     */
+    public NeedsReport needsReport(ServerLevel level) {
+        Schedule.Moment moment = moment(level.getOverworldClockTime());
+        SettlerMeals.FoodLookup foodLookup = meals.lookup(level, moment.dayTime());
+        return needs.report(level, moment.day(), foodLookup::hasFood);
+    }
+
+    /**
+     * @param level the level
+     * @return whether the settler sleeps in its own real bed, not at the camp
+     */
+    public boolean sleepsInOwnBed(ServerLevel level) {
+        return resting.sleepsInOwnBed(level);
+    }
+
+    /**
+     * Goes to bed now, as at the start of the going-to-bed window (for tests; live the Schedule asks for it).
+     *
+     * @param level the level
+     */
+    public void goToBedNow(ServerLevel level) {
+        go(level, resting.evening(level, moment(level.getOverworldClockTime()).day(), true, activity));
+    }
+
+    /**
+     * Runs the need check of a decision on a given day (for tests; live it runs in every decision).
+     *
+     * @param level the level
+     * @param day   the day
+     */
+    public void checkNeedsNow(ServerLevel level, long day) {
+        SettlerMeals.FoodLookup foodLookup = meals.lookup(level, moment(level.getOverworldClockTime()).dayTime());
+        needs.step(level, day, foodLookup::hasFood);
+    }
+
+    /**
+     * @return the meals of this settler
+     */
+    SettlerMeals meals() {
+        return meals;
+    }
+
+    /**
+     * @return the rest of this settler
+     */
+    SettlerRest rest() {
+        return resting;
     }
 
     /**

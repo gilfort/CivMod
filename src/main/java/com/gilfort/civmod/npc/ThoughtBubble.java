@@ -41,7 +41,9 @@ public enum ThoughtBubble {
     /** Problem: hungry without food (bread). */
     HUNGRY_NO_FOOD(true),
     /** Problem: the Job's profile reports a blocking reason (its icon, else the generic "blocked" marker, a barrier). */
-    BLOCKED(true);
+    BLOCKED(true),
+    /** Problem: a need of its tier is unmet, on a grace day (the need's icon). */
+    NEED_UNMET(true);
 
     /** Network codec. */
     public static final StreamCodec<ByteBuf, ThoughtBubble> STREAM_CODEC = ByteBufCodecs.idMapper(i -> values()[i], ThoughtBubble::ordinal);

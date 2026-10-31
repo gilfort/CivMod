@@ -34,8 +34,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Menu of a settler: tabs Overview, Jobs (priority list), Inventory (tool belt, offhand, pockets) and Mission (the
- * settler's one Mission Job).
+ * Menu of a settler: tabs Overview, Jobs (priority list), Inventory (tool belt, offhand, pockets), Needs and Mission
+ * (the settler's one Mission Job).
  * <p>
  * Job edits and dismissal are menu button clicks; job edits are applied identically on client and server.
  */
@@ -47,10 +47,12 @@ public class SettlerMenu extends CivMenu {
     public static final int TAB_JOBS = 1;
     /** Inventory tab. */
     public static final int TAB_INVENTORY = 2;
-    /** Mission tab. */
-    public static final int TAB_MISSION = 3;
+    /** Needs tab. */
+    public static final int TAB_NEEDS = 3;
+    /** Mission tab (last of the top tabs: it is hidden without a Mission Job). */
+    public static final int TAB_MISSION = 4;
     /** First of the job tabs (one per job, shown below the panel). */
-    public static final int FIRST_JOB_TAB = 4;
+    public static final int FIRST_JOB_TAB = 5;
     /** Maximum number of job tabs. */
     public static final int MAX_JOB_TABS = 6;
 

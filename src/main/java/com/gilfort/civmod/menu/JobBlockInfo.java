@@ -24,7 +24,6 @@ import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementManager;
-import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
 import net.minecraft.core.BlockPos;
@@ -364,7 +363,6 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         List<TakenMission> taken = new ArrayList<>();
         List<MissionSettler> settlers = new ArrayList<>();
         List<Worker> workers = new ArrayList<>();
-        int cap = SettlementRules.skillCap(jobLevel);
         long now = level.getOverworldClockTime();
         for (SettlementBlock.Assignee assignee : assignees) {
             if (!(level.getEntity(assignee.id()) instanceof Settler settler)) {
@@ -375,7 +373,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
             settler.getWork().missionTrip().ifPresent(trip -> taken.add(new TakenMission(assignee.name(), trip.mission(), trip.departed())));
             settler.getJobs().stream().filter(job -> job.jobBlock().equals(pos) && job.jobType().category() == JobCategory.MISSION).findFirst()
                     .ifPresent(job -> settlers.add(new MissionSettler(assignee.id(), assignee.name(), job.jobType(),
-                            settler.getSkills().effectiveLevel(job.jobType(), cap))));
+                            settler.getWork().effectiveLevel(job))));
         }
         return new JobBlockInfo(jobType, jobLevel,
                 settlement.map(Settlement::displayName).orElse(Component.empty()),

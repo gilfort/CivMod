@@ -2,6 +2,7 @@ package com.gilfort.civmod.food;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
@@ -63,6 +64,14 @@ public final class SettlerFood {
     private long waitTime;
     private boolean away;
     private @Nullable BlockPos forageSpot;
+    private final FoodVariety variety = new FoodVariety();
+
+    /**
+     * @return the foods the settler ate lately
+     */
+    public FoodVariety variety() {
+        return variety;
+    }
 
     /**
      * @return the food level (0–20, the drumstick bar)
@@ -350,11 +359,23 @@ public final class SettlerFood {
      * @return the index of the chosen stack, empty if nothing may be eaten
      */
     public static Optional<Integer> choose(List<ItemStack> stacks, int level) {
+        return choose(stacks, level, stack -> true);
+    }
+
+    /**
+     * Chooses the food that brings the level closest to {@value #MAX} among the wanted stacks.
+     *
+     * @param stacks candidate stacks (any items)
+     * @param level  the food level
+     * @param wanted which stacks to consider
+     * @return the index of the chosen stack, empty if nothing wanted may be eaten
+     */
+    static Optional<Integer> choose(List<ItemStack> stacks, int level, Predicate<ItemStack> wanted) {
         int best = -1;
         int bestDistance = Integer.MAX_VALUE;
         for (int i = 0; i < stacks.size(); i++) {
             ItemStack stack = stacks.get(i);
-            if (!isEdible(stack) || !mayEat(level, nutrition(stack))) {
+            if (!isEdible(stack) || !mayEat(level, nutrition(stack)) || !wanted.test(stack)) {
                 continue;
             }
             int distance = Math.abs(MAX - (level + nutrition(stack)));
@@ -415,6 +436,7 @@ public final class SettlerFood {
         if (forageSpot != null) {
             food.putLong("forage_spot", forageSpot.asLong());
         }
+        food.store("meals", FoodVariety.Meal.CODEC.listOf(), variety.meals());
     }
 
     /**
@@ -436,6 +458,7 @@ public final class SettlerFood {
             waitTime = food.getLongOr("wait_time", 0L);
             away = food.getBooleanOr("away", false);
             forageSpot = food.getLong("forage_spot").map(BlockPos::of).orElse(null);
+            variety.restore(food.read("meals", FoodVariety.Meal.CODEC.listOf()).orElse(List.of()));
         });
     }
 

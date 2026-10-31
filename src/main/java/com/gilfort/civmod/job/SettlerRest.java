@@ -1,14 +1,18 @@
 package com.gilfort.civmod.job;
 
 import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.Set;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.job.Schedule.Activity;
 import com.gilfort.civmod.job.SettlerWork.RestPlace;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.settlement.Hearths;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
@@ -22,9 +26,10 @@ import net.minecraft.world.phys.Vec3;
 /**
  * Carries out the rest intents of the {@link Schedule} for the Settler Shell (vault {@code Systems/NPC Daily
  * Schedule.md}): rest near the rest place, go to bed, sleep, wake, return to the rest place after a skipped night. It
- * finds the rest place of the night (a bed, a straw bed spot or the ground) and keeps it. It answers the shell with a
- * {@link BodyStep} or a spot to stand on; only the shell walks or teleports the settler and sets its activity. The
- * module itself only lies the settler down, wakes it and sets the area it strolls in during the evening.
+ * finds the rest place of the night (its bed near a hearth, else the camp: a straw bed spot or the ground around a
+ * hearth) and keeps it. The first settler going to bed in a settlement without a hearth places a campfire. It answers
+ * the shell with a {@link BodyStep} or a spot to stand on; only the shell walks or teleports the settler and sets its
+ * activity. The module itself only lies the settler down, wakes it and sets the area it strolls in during the evening.
  */
 final class SettlerRest {
 
@@ -34,6 +39,8 @@ final class SettlerRest {
     private final Settler settler;
     private @Nullable RestPlace restPlace;
     private long restPlaceDay = -1;
+    /** The {@link Settlement#hearthRevision()} the rest place was chosen with. */
+    private int restPlaceHearthRevision;
 
     /**
      * @param settler the settler
@@ -56,6 +63,59 @@ final class SettlerRest {
         return Optional.ofNullable(restPlace).map(RestPlace::pos);
     }
 
+    /**
+     * Where the settler sleeps tonight, as the hearths and its bed stand now. Claims nothing and changes nothing, so it
+     * holds in the morning and in catch-up too.
+     *
+     * @param bed    the own real bed it sleeps in, empty at the camp
+     * @param hearth the hearth of the camp, empty in a bed or without a hearth
+     */
+    private record Sleeping(Optional<BlockPos> bed, Optional<BlockPos> hearth) {
+    }
+
+    private Sleeping sleeping(ServerLevel level, Settlement settlement) {
+        Set<BlockPos> hearths = Hearths.of(level, settlement);
+        int range = CivModConfig.HEARTH_RANGE.get();
+        Optional<BlockPos> bed = settlement.bedOf(settler.getUUID()).filter(head -> SettlerBeds.head(level, head).isPresent())
+                .filter(head -> hearths.isEmpty() || Hearths.nearest(hearths, head).filter(near -> Hearths.distance(head, near) <= range).isPresent());
+        return bed.isPresent() ? new Sleeping(bed, Optional.empty()) : new Sleeping(bed, Hearths.nearest(hearths, jobBlock(settlement)));
+    }
+
+    private BlockPos jobBlock(Settlement settlement) {
+        return settler.getJobs().stream().findFirst().map(SettlerJob::jobBlock)
+                .or(() -> settlement.anchor().map(SettlementBlock::pos)).orElse(settler.blockPosition());
+    }
+
+    /**
+     * @param level the level
+     * @return whether the settler sleeps in its own real bed; false at the camp, which also takes a settler whose bed
+     *         is too far from any hearth
+     */
+    boolean sleepsInOwnBed(ServerLevel level) {
+        return settlement(level).flatMap(settlement -> sleeping(level, settlement).bed()).isPresent();
+    }
+
+    /**
+     * @param level the level
+     * @return the blocks between the place the settler sleeps at and the nearest hearth, empty without a hearth
+     */
+    OptionalInt hearthDistance(ServerLevel level) {
+        Optional<Settlement> settlement = settlement(level);
+        if (settlement.isEmpty()) {
+            return OptionalInt.empty();
+        }
+        Sleeping sleeping = sleeping(level, settlement.get());
+        Set<BlockPos> hearths = Hearths.of(level, settlement.get());
+        Optional<BlockPos> place = restPlace().map(RestPlace::pos).or(sleeping::bed)
+                .or(() -> sleeping.hearth().map(hearth -> hearth.east(SettlerBeds.CAMP_RING)));
+        return place.flatMap(from -> Hearths.nearest(hearths, from).map(hearth -> Hearths.distance(from, hearth)))
+                .stream().mapToInt(Integer::intValue).findFirst();
+    }
+
+    private Optional<Settlement> settlement(ServerLevel level) {
+        return SettlementData.get(level).settlement(settler.getSettlementId());
+    }
+
     /** The day is not over: the rest place of the night is chosen again in the evening. */
     void clear() {
         restPlace = null;
@@ -72,6 +132,10 @@ final class SettlerRest {
      * @return walk to the rest place, stay on the way or in bed, or stand still (resting, or no rest place)
      */
     BodyStep evening(ServerLevel level, long day, boolean bed, Activity activity) {
+        if (bed && activity != Activity.GO_TO_BED && activity != Activity.SLEEP) {
+            placeCampfireIfNone(level);
+        }
+        RestPlace previous = restPlace;
         RestPlace rest = ensureRestPlace(level, day);
         if (rest != null) {
             settler.setHomeTo(rest.pos(), REST_RADIUS);
@@ -79,33 +143,45 @@ final class SettlerRest {
         if (!bed || rest == null) {
             return BodyStep.STOP;
         }
-        if (activity == Activity.GO_TO_BED || activity == Activity.SLEEP) {
+        if (activity == Activity.SLEEP || activity == Activity.GO_TO_BED && rest.equals(previous)) {
             return BodyStep.STAY;
         }
         return new BodyStep.Walk(Activity.GO_TO_BED, rest.pos(), SettlerWork.REACH);
     }
 
+    /** Only the live evening comes here: catch-up places nothing, the first live evening follows. */
+    private void placeCampfireIfNone(ServerLevel level) {
+        settlement(level).filter(settlement -> Hearths.of(level, settlement).isEmpty())
+                .ifPresent(settlement -> Hearths.placeCampfire(level, settlement, jobBlock(settlement)));
+    }
+
     private @Nullable RestPlace ensureRestPlace(ServerLevel level, long day) {
-        if (restPlace != null && restPlaceDay == day && (!restPlace.bed() || SettlerBeds.head(level, restPlace.pos()).isPresent())) {
-            return restPlace;
-        }
-        SettlementData data = SettlementData.get(level);
-        Optional<Settlement> settlement = data.settlement(settler.getSettlementId());
+        Optional<Settlement> settlement = settlement(level);
         if (settlement.isEmpty()) {
             return null;
         }
-        Optional<BlockPos> bed = SettlerBeds.ensureBed(level, data, settlement.get(), settler.getUUID(), settler.blockPosition());
-        if (bed.isPresent()) {
-            restPlace = new RestPlace(bed.get(), true, null);
-        } else {
-            BlockPos jobBlock = settler.getJobs().stream().findFirst().map(SettlerJob::jobBlock)
-                    .or(() -> settlement.get().anchor().map(SettlementBlock::pos)).orElse(settler.blockPosition());
-            restPlace = SettlerBeds.reserveStrawSpot(level, jobBlock, settler.getUUID())
-                    .map(spot -> new RestPlace(spot.pos(), false, spot))
-                    .orElse(new RestPlace(jobBlock.above(), false, null));
+        if (restPlace != null && restPlaceDay == day && restPlaceHearthRevision == settlement.get().hearthRevision()
+                && (!restPlace.bed() || SettlerBeds.head(level, restPlace.pos()).isPresent())) {
+            return restPlace;
         }
+        SettlerBeds.ensureBed(level, SettlementData.get(level), settlement.get(), settler.getUUID(), settler.blockPosition());
+        Sleeping sleeping = sleeping(level, settlement.get());
+        restPlace = sleeping.bed().map(bed -> new RestPlace(bed, true, null)).orElseGet(() -> camp(level, settlement.get(), sleeping.hearth()));
         restPlaceDay = day;
+        restPlaceHearthRevision = settlement.get().hearthRevision();
         return restPlace;
+    }
+
+    /** The ring around the hearth, its bare ground once the ring is full; without a hearth the place at the JobBlock. */
+    private RestPlace camp(ServerLevel level, Settlement settlement, Optional<BlockPos> hearth) {
+        BlockPos jobBlock = jobBlock(settlement);
+        RestPlace ground = new RestPlace(jobBlock.above(), false, null);
+        if (hearth.isPresent()) {
+            return SettlerBeds.reserveCampSpot(level, hearth.get(), settler.getUUID())
+                    .map(spot -> new RestPlace(spot.pos(), false, SettlerBeds.inCampRing(spot.pos(), hearth.get()) ? spot : null))
+                    .orElse(ground);
+        }
+        return SettlerBeds.reserveStrawSpot(level, jobBlock, settler.getUUID()).map(spot -> new RestPlace(spot.pos(), false, spot)).orElse(ground);
     }
 
     /**
