@@ -17,7 +17,7 @@ import net.minecraft.world.item.Items;
 /**
  * A "Patterns" tab of a Producing JobBlock (vault {@code Systems/Producing Jobs.md}): the pattern library of one Job,
  * with the player inventory to pick items from; the client edits a pattern with {@link PatternsTabData.Edit}. The Base
- * Job's tab sits on top and also handles the Info tab's delivery toggle (Self / Deliveryman); each Specialization's tab
+ * Job's tab sits on top and also handles the Workers tab's delivery toggle (Self / Deliveryman); each Specialization's tab
  * sits below the panel, shown while the Job is unlocked or its library holds a pattern. All Patterns tabs of a window
  * share one synced library ({@link PatternsTabData}): the one of the tab shown, else the one looked at last.
  */
@@ -87,8 +87,8 @@ public final class PatternsTab extends JobBlockTab {
     }
 
     @Override
-    public boolean below() {
-        return !base;
+    public Group group() {
+        return Group.PATTERNS;
     }
 
     @Override
@@ -147,14 +147,14 @@ public final class PatternsTab extends JobBlockTab {
         BlockPos pos = site.get().pos();
         Optional<?> ignored = switch (edit.op()) {
             case SET_OUTPUT -> Patterns.setOutput(level, pos, job, edit.slot(), edit.item());
-            case SET_INPUT -> Patterns.setInput(level, pos, job, edit.slot(), edit.index(), edit.item());
+            case SET_INPUT -> Patterns.setInput(level, pos, job, edit.slot(), edit.index(), edit.item(), edit.layout());
             case CYCLE -> Patterns.cycle(level, pos, job, edit.slot(), edit.index());
             case TOGGLE_CHECK -> Optional.of(Patterns.toggleCheck(level, pos, job, edit.slot()));
             case CLEAR -> {
                 Patterns.clear(SettlementData.get(level), pos, job, edit.slot());
                 yield Optional.empty();
             }
-            case TRANSFER -> Patterns.transfer(level, pos, job, edit.slot(), edit.recipe(), edit.grid());
+            case TRANSFER -> Patterns.transfer(level, pos, job, edit.slot(), edit.recipe(), edit.grid(), edit.layout());
         };
         menu.syncSoon();
     }

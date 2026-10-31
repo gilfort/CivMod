@@ -6,21 +6,21 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
-import java.util.stream.Stream;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.BiomeBonus;
 import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
-import com.gilfort.civmod.block.UpgradeCosts;
 import com.gilfort.civmod.job.BiomeBonuses;
+import com.gilfort.civmod.job.MissionTrip;
 import com.gilfort.civmod.mission.MissionOffer;
 import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.mission.OutcomeRules;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.JobPlaces;
+import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementManager;
@@ -29,7 +29,6 @@ import com.gilfort.civmod.settlement.SettlementWorld;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
@@ -38,12 +37,9 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.tags.TagKey;
-import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.item.ItemStack;
 
 /**
- * Snapshot of a JobBlock's state shown in the info tab; sent to the client when the menu opens.
+ * Snapshot of a JobBlock's state shown in the header line and the Workers tab; sent to the client when the menu opens.
  *
  * @param jobType        the offered job
  * @param level          the JobBlock level
@@ -52,17 +48,15 @@ import net.minecraft.world.item.ItemStack;
  * @param connected      whether the block is connected to the settlement chain
  * @param distance       distance to the nearest connected JobBlock (unconnected only)
  * @param required       distance needed to connect (unconnected only)
- * @param assignees      the settlers working this JobBlock with their Job
+ * @param workers        the settlers working this JobBlock: Job, level and mission state (the Workers tab)
  * @param places         the offered Jobs with taken / places
  * @param collectLeaves  whether a Lumberjack also collects leaves
  * @param byDeliveryman  whether Deliverymen carry a Craftsperson's results ("Delivery: Deliveryman")
- * @param costs          upgrade costs per target level (index 0 = level 2)
  * @param missionTab   the missions and Mission Job settlers (Mission Board only, else empty)
  * @param biome          today's biome bonus line and the "?" overview of the Job's biome bonuses
  */
 public record JobBlockInfo(Job jobType, int level, Component settlementName, boolean inSettlement, boolean connected,
-        int distance, int required, List<SettlementBlock.Assignee> assignees, List<JobPlaces.Line> places, boolean collectLeaves, boolean byDeliveryman,
-        List<List<CostEntry>> costs,
+        int distance, int required, List<Worker> workers, List<JobPlaces.Line> places, boolean collectLeaves, boolean byDeliveryman,
         MissionTab missionTab, BiomeInfo biome) {
 
     /**
@@ -130,7 +124,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
     }
 
     /**
-     * Server → client: the info tab changed on the server beyond what the client predicted (an automatic assignment
+     * Server → client: the info changed on the server beyond what the client predicted (an automatic assignment
      * toggle switched on assigned settlers).
      *
      * @param containerId the menu's container id
@@ -232,6 +226,70 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
     }
 
     /**
+     * A row of the Workers tab: a settler working the JobBlock (vault {@code Systems/GUI.md}, "Info becomes Workers").
+     *
+     * @param assignee the settler and the Job it holds here
+     * @param loaded   whether the settler entity is loaded (only then its window opens and its level is known)
+     * @param level    its skill level in that Job, 0 while unloaded
+     * @param skin     its skin index ({@code Settler#getSkin}), -1 while unloaded
+     * @param away     the mission it is away on, empty at home (also while it only reserved one)
+     */
+    public record Worker(SettlementBlock.Assignee assignee, boolean loaded, int level, int skin, Optional<Away> away) {
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, Worker> STREAM_CODEC = StreamCodec.composite(
+                SettlementBlock.Assignee.STREAM_CODEC, Worker::assignee,
+                ByteBufCodecs.BOOL, Worker::loaded,
+                ByteBufCodecs.VAR_INT, Worker::level,
+                ByteBufCodecs.INT, Worker::skin,
+                Away.STREAM_CODEC.apply(ByteBufCodecs::optional), Worker::away,
+                Worker::new);
+
+        /**
+         * A mission a worker is away on.
+         *
+         * @param mission  the mission id
+         * @param daysLeft the days until it is back ({@link #daysLeft})
+         */
+        public record Away(Identifier mission, int daysLeft) {
+
+            /** Network codec. */
+            public static final StreamCodec<RegistryFriendlyByteBuf, Away> STREAM_CODEC = StreamCodec.composite(
+                    Identifier.STREAM_CODEC, Away::mission,
+                    ByteBufCodecs.VAR_INT, Away::daysLeft,
+                    Away::new);
+        }
+
+        /** A worker whose entity is not loaded: name and Job only. */
+        static Worker unloaded(SettlementBlock.Assignee assignee) {
+            return new Worker(assignee, false, 0, -1, Optional.empty());
+        }
+
+        /** A loaded worker at the world time {@code now}. */
+        static Worker of(SettlementBlock.Assignee assignee, Settler settler, long now) {
+            Optional<Away> away = settler.getWork().missionTrip().filter(MissionTrip::departed)
+                    .map(trip -> new Away(trip.mission(), daysLeft(now, trip.returnTime())));
+            return new Worker(assignee, true, settler.getSkills().get(assignee.job()).level(), settler.getSkin(), away);
+        }
+
+        /**
+         * @param now        the world time
+         * @param returnTime the world time of the return
+         * @return the whole days until then, rounded up, at least 1 ("back in 2 d")
+         */
+        public static int daysLeft(long now, long returnTime) {
+            return (int) Math.max(1L, Math.ceilDiv(returnTime - now, DayClock.DAY_TICKS));
+        }
+
+        /**
+         * @return whether a click on the head or name opens the settler window (loaded and not away)
+         */
+        public boolean opensWindow() {
+            return loaded && away.isEmpty();
+        }
+    }
+
+    /**
      * A mission a settler of the board took: it left the offer.
      *
      * @param settler  the settler name
@@ -246,84 +304,6 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
                 Identifier.STREAM_CODEC, TakenMission::mission,
                 ByteBufCodecs.BOOL, TakenMission::departed,
                 TakenMission::new);
-    }
-
-    /**
-     * An upgrade cost as shown to the client.
-     *
-     * @param icon  the item shown (count 1)
-     * @param tag   the item tag that pays it, if it is a tag cost
-     * @param count the count
-     */
-    public record CostEntry(ItemStack icon, Optional<Identifier> tag, int count) {
-
-        /** Network codec. */
-        public static final StreamCodec<RegistryFriendlyByteBuf, CostEntry> STREAM_CODEC = StreamCodec.composite(
-                ItemStack.STREAM_CODEC, CostEntry::icon,
-                Identifier.STREAM_CODEC.apply(ByteBufCodecs::optional), CostEntry::tag,
-                ByteBufCodecs.VAR_INT, CostEntry::count,
-                CostEntry::new);
-
-        /**
-         * @param cost a server-side cost
-         * @return the entry
-         */
-        public static CostEntry of(UpgradeCosts.Cost cost) {
-            return new CostEntry(cost.icon().copyWithCount(1), cost.tag().map(TagKey::location), cost.count());
-        }
-
-        /**
-         * @param stack an item stack
-         * @return whether it pays this cost
-         */
-        public boolean matches(ItemStack stack) {
-            return !stack.isEmpty() && tag.map(id -> stack.is(TagKey.create(Registries.ITEM, id))).orElseGet(() -> stack.is(icon.getItem()));
-        }
-
-        /**
-         * @param inventory a player inventory
-         * @return how many matching items it holds
-         */
-        public int count(Inventory inventory) {
-            int have = 0;
-            for (int i = 0; i < inventory.getContainerSize(); i++) {
-                ItemStack stack = inventory.getItem(i);
-                if (matches(stack)) {
-                    have += stack.getCount();
-                }
-            }
-            return have;
-        }
-    }
-
-    /**
-     * @param inventory a player inventory
-     * @return whether the next upgrade is affordable (false at the maximum level)
-     */
-    public boolean canAffordNext(Inventory inventory) {
-        if (level >= SettlementRules.MAX_LEVEL) {
-            return false;
-        }
-        return nextCosts().stream().allMatch(cost -> cost.count(inventory) >= cost.count());
-    }
-
-    /**
-     * @return the costs of the next level (empty at the maximum)
-     */
-    public List<CostEntry> nextCosts() {
-        int index = level - 1;
-        return index >= 0 && index < costs.size() ? costs.get(index) : List.of();
-    }
-
-    /**
-     * @param newLevel the new level
-     * @return a copy with another level
-     */
-    public JobBlockInfo withLevel(int newLevel) {
-        // The Base Jobs plus the Jobs offered so far (unlocked by Station Types); the level opens no Job by itself.
-        List<Job> offered = Stream.concat(JobPlaces.offered(jobType).stream(), offeredJobs().stream()).distinct().toList();
-        return new JobBlockInfo(jobType, newLevel, settlementName, inSettlement, connected, distance, required, assignees,
-                JobPlaces.lines(jobType, newLevel, offered, assignees, autoJobs()), collectLeaves, byDeliveryman, costs, missionTab, biome);
     }
 
     /**
@@ -348,20 +328,8 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
     public JobBlockInfo withAuto(Job job, boolean on) {
         List<JobPlaces.Line> changed = places.stream()
                 .map(line -> line.job() == job ? new JobPlaces.Line(line.job(), line.taken(), line.places(), on) : line).toList();
-        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, changed, collectLeaves,
-                byDeliveryman, costs, missionTab, biome);
-    }
-
-    /**
-     * @param jobType the job
-     * @return the upgrade costs of all levels (index 0 = level 2)
-     */
-    public static List<List<CostEntry>> costsOf(Job jobType) {
-        List<List<CostEntry>> result = new ArrayList<>();
-        for (int target = SettlementRules.MIN_LEVEL + 1; target <= SettlementRules.MAX_LEVEL; target++) {
-            result.add(UpgradeCosts.get(jobType, target).stream().map(CostEntry::of).toList());
-        }
-        return List.copyOf(result);
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, workers, changed, collectLeaves,
+                byDeliveryman, missionTab, biome);
     }
 
     /** Network codec. */
@@ -373,11 +341,10 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
             ByteBufCodecs.BOOL, JobBlockInfo::connected,
             ByteBufCodecs.VAR_INT, JobBlockInfo::distance,
             ByteBufCodecs.VAR_INT, JobBlockInfo::required,
-            SettlementBlock.Assignee.STREAM_CODEC.apply(ByteBufCodecs.list()), JobBlockInfo::assignees,
+            Worker.STREAM_CODEC.apply(ByteBufCodecs.list()), JobBlockInfo::workers,
             JobPlaces.Line.STREAM_CODEC.apply(ByteBufCodecs.list()), JobBlockInfo::places,
             ByteBufCodecs.BOOL, JobBlockInfo::collectLeaves,
             ByteBufCodecs.BOOL, JobBlockInfo::byDeliveryman,
-            CostEntry.STREAM_CODEC.apply(ByteBufCodecs.list()).apply(ByteBufCodecs.list()), JobBlockInfo::costs,
             MissionTab.STREAM_CODEC, JobBlockInfo::missionTab,
             BiomeInfo.STREAM_CODEC, JobBlockInfo::biome,
             JobBlockInfo::new);
@@ -396,11 +363,15 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         List<SettlementBlock.Assignee> assignees = block.map(SettlementBlock::assignees).orElse(List.of());
         List<TakenMission> taken = new ArrayList<>();
         List<MissionSettler> settlers = new ArrayList<>();
+        List<Worker> workers = new ArrayList<>();
         int cap = SettlementRules.skillCap(jobLevel);
+        long now = level.getOverworldClockTime();
         for (SettlementBlock.Assignee assignee : assignees) {
             if (!(level.getEntity(assignee.id()) instanceof Settler settler)) {
+                workers.add(Worker.unloaded(assignee));
                 continue;
             }
+            workers.add(Worker.of(assignee, settler, now));
             settler.getWork().missionTrip().ifPresent(trip -> taken.add(new TakenMission(assignee.name(), trip.mission(), trip.departed())));
             settler.getJobs().stream().filter(job -> job.jobBlock().equals(pos) && job.jobType().category() == JobCategory.MISSION).findFirst()
                     .ifPresent(job -> settlers.add(new MissionSettler(assignee.id(), assignee.name(), job.jobType(),
@@ -409,37 +380,49 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         return new JobBlockInfo(jobType, jobLevel,
                 settlement.map(Settlement::displayName).orElse(Component.empty()),
                 settlement.isPresent(), status.connected(), status.distance(), status.required(),
-                List.copyOf(assignees), JobPlaces.lines(jobType, jobLevel, block.map(JobPlaces::offered).orElseGet(() -> JobPlaces.offered(jobType)),
+                List.copyOf(workers), JobPlaces.lines(jobType, jobLevel, block.map(JobPlaces::offered).orElseGet(() -> JobPlaces.offered(jobType)),
                         assignees, block.map(SettlementBlock::autoAssign).orElse(Set.of())),
                 block.map(SettlementBlock::collectLeaves).orElse(false), block.map(SettlementBlock::byDeliveryman).orElse(false),
-                costsOf(jobType),
                 new MissionTab(SettlementWorld.missionOffer(level, pos), taken, settlers, OutcomeRules.get()),
                 BiomeInfo.of(level, pos, jobType, assignees));
     }
 
     /**
-     * @return a copy without assignees
+     * @return the settlers working this JobBlock with their Job
      */
-    public JobBlockInfo withoutAssignees() {
-        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, List.of(),
-                JobPlaces.lines(jobType, level, offeredJobs(), List.of(), autoJobs()), collectLeaves, byDeliveryman, costs,
-                new MissionTab(missionTab.offer(), List.of(), List.of(), missionTab.rules()), biome);
+    public List<SettlementBlock.Assignee> assignees() {
+        return workers.stream().map(Worker::assignee).toList();
+    }
+
+    /**
+     * @param settler a settler UUID
+     * @return a copy without that settler (the client's prediction of ✕ in the Workers tab)
+     */
+    JobBlockInfo withoutWorker(UUID settler) {
+        List<Worker> left = workers.stream().filter(worker -> !worker.assignee().id().equals(settler)).toList();
+        String name = workers.stream().filter(worker -> worker.assignee().id().equals(settler)).map(worker -> worker.assignee().name()).findFirst()
+                .orElse("");
+        List<TakenMission> takenLeft = missionTab.taken().stream().filter(entry -> !entry.settler().equals(name)).toList();
+        List<MissionSettler> settlersLeft = missionTab.settlers().stream().filter(entry -> !entry.id().equals(settler)).toList();
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, left,
+                JobPlaces.lines(jobType, level, offeredJobs(), left.stream().map(Worker::assignee).toList(), autoJobs()), collectLeaves, byDeliveryman,
+                new MissionTab(missionTab.offer(), takenLeft, settlersLeft, missionTab.rules()), biome);
     }
 
     /**
      * @return a copy with leaf collection toggled
      */
     public JobBlockInfo withLeavesToggled() {
-        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, places, !collectLeaves,
-                byDeliveryman, costs, missionTab, biome);
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, workers, places, !collectLeaves,
+                byDeliveryman, missionTab, biome);
     }
 
     /**
      * @return a copy with the Craftsperson's delivery toggled (Self / Deliveryman)
      */
     public JobBlockInfo withDeliveryToggled() {
-        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, places, collectLeaves,
-                !byDeliveryman, costs, missionTab, biome);
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, workers, places, collectLeaves,
+                !byDeliveryman, missionTab, biome);
     }
 
     /**
@@ -461,7 +444,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
     }
 
     private JobBlockInfo withMissionTab(MissionTab changed) {
-        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, assignees, places, collectLeaves, byDeliveryman, costs,
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, workers, places, collectLeaves, byDeliveryman,
                 changed, biome);
     }
 
@@ -486,6 +469,6 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public static JobBlockInfo unknown(Job jobType, int jobLevel) {
         return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, List.of(), JobPlaces.lines(jobType, jobLevel, List.of()), false, false,
-                costsOf(jobType), MissionTab.EMPTY, BiomeInfo.NONE);
+                MissionTab.EMPTY, BiomeInfo.NONE);
     }
 }

@@ -11,6 +11,7 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.client.ClientInnateRecipes;
 import com.gilfort.civmod.logistics.Pattern;
+import com.gilfort.civmod.logistics.PatternLayout;
 import com.gilfort.civmod.logistics.PatternRecipes;
 import com.gilfort.civmod.menu.GuiIcons;
 import com.gilfort.civmod.menu.JobBlockInfo;
@@ -29,6 +30,7 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
@@ -41,8 +43,9 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 /**
  * The "Patterns" tabs of a JobBlock in the {@link JobBlockScreen} (vault {@code Systems/Producing Jobs.md}), one per
  * Producing Job with a library there; the client side of {@link PatternsTab}, one view for all of them. Two views: the library (54 pattern slots
- * with checkmarks) and the editor of one pattern (3×3 grid, output, recipe arrows, Check / Clear / Back). Also the target
- * of recipe viewer transfers. Adds the delivery toggle (Self / Deliveryman) to the Info tab.
+ * with checkmarks) and the editor of one pattern (the layout of its recipe type ({@link PatternLayout}) with layout buttons
+ * on top, output, recipe arrows, Check / Clear / Back; an innate recipe read only). Also the target
+ * of recipe viewer transfers. Adds the delivery toggle (Self / Deliveryman) to the Workers tab.
  */
 final class PatternsTabView implements JobBlockTabView {
 
@@ -50,11 +53,12 @@ final class PatternsTabView implements JobBlockTabView {
     private static final int LIBRARY_X = CivGui.PADDING;
     private static final int LIBRARY_Y = 18;
     private static final int LIBRARY_ROWS = 6;
-    /** The pattern editor: 3×3 grid and output slot. */
+    /** The pattern editor: the layout buttons on top, the inputs of the layout (3×3 grid at most) and the output slot. */
+    private static final int LAYOUT_Y = 17;
     private static final int GRID_X = 30;
-    private static final int GRID_Y = 30;
+    private static final int GRID_Y = 36;
     private static final int OUTPUT_X = 116;
-    private static final int OUTPUT_Y = 48;
+    private static final int OUTPUT_Y = GRID_Y + 18;
     private static final int PATTERN_BUTTONS_Y = 94;
     /** Ghost target ids of the editor (library slots are 0–53). */
     private static final int TARGET_CELL = 100;
@@ -64,7 +68,10 @@ final class PatternsTabView implements JobBlockTabView {
     private final JobBlockMenu menu;
     /** The pattern open in the editor, {@code -1} while the library is shown. */
     private int editing = -1;
+    /** The layout chosen with a layout button while the edited slot holds no pattern (null: the Job's first). */
+    private @Nullable RecipeType<?> chosenLayout;
     private @Nullable Button checkButton;
+    private @Nullable Button clearButton;
     private @Nullable Button previousButton;
     private @Nullable Button nextButton;
 
@@ -94,15 +101,16 @@ final class PatternsTabView implements JobBlockTabView {
         return menu.tab(PatternsTab.class).orElseThrow().data();
     }
 
-    /** The delivery toggle (Self / Deliveryman) on the Info tab of a JobBlock in a settlement; the Base Job's tab handles it. */
+    /** The delivery toggle (Self / Deliveryman) on the Workers tab of a JobBlock in a settlement; the Base Job's tab handles it. */
     @Override
-    public void initInfo(int info) {
+    public Optional<WorkersToggle> workersToggle() {
         JobBlockInfo current = menu.getInfo();
-        PatternsTab base = menu.tab(PatternsTab.class).orElseThrow();
-        if (current.inSettlement()) {
-            InfoTabView.button(screen, info, Component.translatable(current.byDeliveryman() ? "civmod.gui.job_block.delivery.deliveryman"
-                    : "civmod.gui.job_block.delivery.self"), InfoTabView.TOGGLE_ROW, base.buttonId(PatternsTab.TOGGLE_DELIVERY), true);
+        if (!current.inSettlement()) {
+            return Optional.empty();
         }
+        PatternsTab base = menu.tab(PatternsTab.class).orElseThrow();
+        return Optional.of(new WorkersToggle(Component.translatable(current.byDeliveryman() ? "civmod.gui.job_block.delivery.deliveryman"
+                : "civmod.gui.job_block.delivery.self"), base.buttonId(PatternsTab.TOGGLE_DELIVERY)));
     }
 
     /** Another tab: the editor closes. */
@@ -127,7 +135,7 @@ final class PatternsTabView implements JobBlockTabView {
         int width = (screen.panelWidth() - 2 * CivGui.PADDING - 4) / 3;
         checkButton = screen.addWidget(tabIndex, Button.builder(Component.empty(), button -> sendPattern(
                 PatternsTabData.Edit.toggleCheck(menu.containerId, job(), editing))).bounds(left + CivGui.PADDING, y, width, 20).build());
-        screen.addWidget(tabIndex, Button.builder(Component.translatable("civmod.gui.patterns.clear"), button -> sendPattern(
+        clearButton = screen.addWidget(tabIndex, Button.builder(Component.translatable("civmod.gui.patterns.clear"), button -> sendPattern(
                 PatternsTabData.Edit.clear(menu.containerId, job(), editing))).bounds(left + CivGui.PADDING + width + 2, y, width, 20).build());
         screen.addWidget(tabIndex, Button.builder(Component.translatable("gui.back"), button -> showLibrary())
                 .bounds(left + CivGui.PADDING + 2 * (width + 2), y, width, 20).build());
@@ -149,7 +157,7 @@ final class PatternsTabView implements JobBlockTabView {
 
     /** Shows the edited pattern's state on the editor buttons. */
     private void update() {
-        if (checkButton == null || previousButton == null || nextButton == null || editing < 0) {
+        if (checkButton == null || clearButton == null || previousButton == null || nextButton == null || editing < 0) {
             return;
         }
         PatternsTabData tab = tab();
@@ -158,19 +166,24 @@ final class PatternsTabView implements JobBlockTabView {
         checkButton.setMessage(Component.translatable(checked ? "civmod.gui.patterns.uncheck" : "civmod.gui.patterns.check"));
         checkButton.active = !tab.locked() && (checked || (pattern.filter(Pattern::valid).isPresent() && !tab.unusable(editing)
                 && tab.checked() < tab.limit()));
-        boolean recipe = pattern.filter(found -> found.valid() && !found.exact()).isPresent();
+        // An innate recipe is locked: only its checkmark changes.
+        clearButton.active = !tab.innate(editing);
+        boolean recipe = pattern.filter(found -> found.valid() && !found.exact() && !found.innate()).isPresent();
         previousButton.active = recipe;
         nextButton.active = recipe;
     }
 
     private void showEditor(int slot) {
         editing = slot;
+        chosenLayout = null;
         screen.rebuild();
     }
 
     private void showLibrary() {
         editing = -1;
+        chosenLayout = null;
         checkButton = null;
+        clearButton = null;
         previousButton = null;
         nextButton = null;
         screen.rebuild();
@@ -191,17 +204,78 @@ final class PatternsTabView implements JobBlockTabView {
         return LIBRARY_Y + (slot / 9) * 18;
     }
 
-    private static int cellX(int cell) {
-        return GRID_X + (cell % 3) * 18;
+    /** The layout of the open pattern: its own, else the one chosen with a layout button, else the Job's first. */
+    private PatternLayout layout(PatternsTabData tab) {
+        if (tab.pattern(editing).isEmpty() && chosenLayout != null) {
+            for (PatternLayout layout : tab.layouts()) {
+                if (layout.type() == chosenLayout) {
+                    return layout;
+                }
+            }
+        }
+        return tab.layout(editing);
     }
 
-    private static int cellY(int cell) {
-        return GRID_Y + (cell / 3) * 18;
+    /** How many cells the open pattern's layout shows: an innate recipe's inputs, else the layout's cells. */
+    private static int cellCount(PatternLayout layout, Optional<Pattern> pattern) {
+        if (layout.kind() == PatternLayout.Kind.ROW) {
+            return (int) pattern.map(found -> found.grid().stream().filter(item -> item != Items.AIR).count()).orElse(0L).longValue();
+        }
+        return layout.kind().cells();
+    }
+
+    /** The position of a cell (relative to the panel): left of the arrow, on the output's row unless it is a 3 × 3 grid. */
+    private static int cellX(PatternLayout.Kind kind, int cell, int count) {
+        return switch (kind) {
+            case GRID -> GRID_X + (cell % 3) * 18;
+            case SINGLE -> GRID_X + 36;
+            case SMITHING -> GRID_X + cell * 18;
+            case ROW -> count <= 3 ? GRID_X + (3 - count + cell) * 18 : GRID_X + (cell % 3) * 18;
+        };
+    }
+
+    private static int cellY(PatternLayout.Kind kind, int cell, int count) {
+        return kind == PatternLayout.Kind.GRID || (kind == PatternLayout.Kind.ROW && count > 3) ? GRID_Y + (cell / 3) * 18 : OUTPUT_Y;
+    }
+
+    /** The layout buttons on top of the editor, right-aligned (none while the Job has one recipe type or for an innate recipe). */
+    private List<Rect2i> layoutButtons(PatternsTabData tab) {
+        List<Rect2i> buttons = new ArrayList<>();
+        int count = tab.layouts().size();
+        if (editing < 0 || count < 2 || tab.innate(editing) || tab.locked()) {
+            return buttons;
+        }
+        for (int i = 0; i < count; i++) {
+            buttons.add(new Rect2i(screen.panelWidth() - CivGui.PADDING - 17 - (count - 1 - i) * 18, LAYOUT_Y, 16, 16));
+        }
+        return buttons;
+    }
+
+    private int layoutButtonAt(PatternsTabData tab, double x, double y) {
+        List<Rect2i> buttons = layoutButtons(tab);
+        for (int i = 0; i < buttons.size(); i++) {
+            if (buttons.get(i).contains((int) Math.floor(x - screen.left()), (int) Math.floor(y - screen.top()))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** A layout button: another layout clears the inputs (an empty slot only remembers the choice). */
+    private void chooseLayout(PatternsTabData tab, PatternLayout chosen) {
+        screen.clickSound();
+        if (layout(tab).type() == chosen.type()) {
+            return;
+        }
+        chosenLayout = chosen.type();
+        if (tab.pattern(editing).isPresent()) {
+            ClientPacketDistributor.sendToServer(PatternsTabData.Edit.clear(menu.containerId, job(), editing));
+        }
     }
 
     /**
-     * The ghost targets of the Patterns tab, relative to the panel: the library slots (output), or the grid cells and the
-     * output of the open pattern.
+     * The ghost targets of the Patterns tab, relative to the panel: the library slots (output), or the cells of the
+     * layout and the output of the open pattern (none for an innate recipe: it is locked).
      */
     private Map<Integer, Rect2i> areas() {
         Map<Integer, Rect2i> areas = new LinkedHashMap<>();
@@ -214,8 +288,14 @@ final class PatternsTabView implements JobBlockTabView {
             }
             return areas;
         }
-        for (int cell = 0; cell < Pattern.GRID; cell++) {
-            areas.put(TARGET_CELL + cell, new Rect2i(cellX(cell), cellY(cell), 16, 16));
+        PatternsTabData tab = tab();
+        if (tab.innate(editing)) {
+            return areas;
+        }
+        PatternLayout layout = layout(tab);
+        int count = cellCount(layout, tab.pattern(editing));
+        for (int cell = 0; cell < count; cell++) {
+            areas.put(TARGET_CELL + cell, new Rect2i(cellX(layout.kind(), cell, count), cellY(layout.kind(), cell, count), 16, 16));
         }
         areas.put(TARGET_OUTPUT, new Rect2i(OUTPUT_X, OUTPUT_Y, 16, 16));
         return areas;
@@ -280,7 +360,7 @@ final class PatternsTabView implements JobBlockTabView {
         } else if (target == TARGET_OUTPUT) {
             sendPattern(PatternsTabData.Edit.setOutput(menu.containerId, job(), editing, stack.getItem()));
         } else {
-            sendPattern(PatternsTabData.Edit.setInput(menu.containerId, job(), editing, target - TARGET_CELL, stack.getItem()));
+            sendPattern(PatternsTabData.Edit.setInput(menu.containerId, job(), editing, target - TARGET_CELL, stack.getItem(), layout(tab()).type()));
         }
         return true;
     }
@@ -294,6 +374,14 @@ final class PatternsTabView implements JobBlockTabView {
      */
     @Override
     public boolean mouseClicked(MouseButtonEvent event) {
+        if (editing >= 0 && menu.activeTab() instanceof PatternsTab) {
+            PatternsTabData tab = tab();
+            int button = layoutButtonAt(tab, event.x(), event.y());
+            if (button >= 0) {
+                chooseLayout(tab, tab.layouts().get(button));
+                return true;
+            }
+        }
         int target = ghostTargetAt(event.x(), event.y());
         if (target < 0) {
             return false;
@@ -308,15 +396,15 @@ final class PatternsTabView implements JobBlockTabView {
                 if (tab().pattern(target).isPresent()) {
                     sendPattern(PatternsTabData.Edit.toggleCheck(menu.containerId, job(), target));
                 }
-            } else if (!tab().innate(target)) {
-                // An innate recipe only toggles its checkmark: no editor.
+            } else {
+                // An innate recipe opens read only: its inputs in a row, only its checkmark changes.
                 screen.clickSound();
                 showEditor(target);
             }
             return true;
         }
         if (right && target != TARGET_OUTPUT) {
-            sendPattern(PatternsTabData.Edit.setInput(menu.containerId, job(), editing, target - TARGET_CELL, Items.AIR));
+            sendPattern(PatternsTabData.Edit.setInput(menu.containerId, job(), editing, target - TARGET_CELL, Items.AIR, layout(tab()).type()));
         }
         return true;
     }
@@ -342,7 +430,8 @@ final class PatternsTabView implements JobBlockTabView {
         if (!tab.follows(type)) {
             return Optional.of(Component.translatable(tab.locked() ? "civmod.gui.patterns.locked" : "civmod.gui.patterns.foreign"));
         }
-        int slot = editing;
+        // An open innate recipe is locked: the transfer fills the first empty slot instead.
+        int slot = tab.innate(editing) ? -1 : editing;
         for (int candidate = 0; slot < 0 && candidate < Pattern.SLOTS; candidate++) {
             if (tab.pattern(candidate).isEmpty()) {
                 slot = candidate;
@@ -352,7 +441,7 @@ final class PatternsTabView implements JobBlockTabView {
             return Optional.of(Component.translatable("civmod.gui.patterns.full"));
         }
         if (doTransfer) {
-            sendPattern(PatternsTabData.Edit.transfer(menu.containerId, job(), slot, recipe, grid));
+            sendPattern(PatternsTabData.Edit.transfer(menu.containerId, job(), slot, type, recipe, grid));
             PatternsTab.of(menu, job()).ifPresent(shown -> screen.select(shown.index()));
             showEditor(slot);
         }
@@ -365,7 +454,16 @@ final class PatternsTabView implements JobBlockTabView {
     @Override
     public List<Component> helpLines(JobBlockTab shown) {
         if (editing >= 0) {
-            return List.of(Component.translatable("civmod.gui.patterns.help.cell"), Component.translatable("civmod.gui.patterns.help.empty_cell"));
+            PatternsTabData tab = tab();
+            if (tab.innate(editing)) {
+                return List.of(Component.translatable("civmod.gui.patterns.help.innate", GuiIcons.inlineLock()));
+            }
+            List<Component> lines = new ArrayList<>(List.of(Component.translatable("civmod.gui.patterns.help.cell"),
+                    Component.translatable("civmod.gui.patterns.help.empty_cell")));
+            if (!layoutButtons(tab).isEmpty()) {
+                lines.add(Component.translatable("civmod.gui.patterns.help.layout"));
+            }
+            return lines;
         }
         return List.of(Component.translatable("civmod.gui.patterns.help.click"), Component.translatable("civmod.gui.patterns.help.check"),
                 Component.translatable("civmod.gui.patterns.help.item"), Component.translatable("civmod.gui.patterns.help.viewer"),
@@ -436,6 +534,11 @@ final class PatternsTabView implements JobBlockTabView {
         if (pattern.filter(Pattern::valid).isPresent()) {
             Pattern found = pattern.get();
             lines.add(Component.translatable("civmod.gui.clerk.request.amount", found.count(), new ItemStack(found.output()).getHoverName()));
+            Item station = tab.layout(slot).station();
+            if (station != Items.AIR) {
+                // Where it is made ("Stonecutter").
+                lines.add(new ItemStack(station).getHoverName().copy().withStyle(ChatFormatting.GRAY));
+            }
             if (found.innate()) {
                 // Its inputs, as no editor shows them: a tag input by its tag ("Any Wool"), not by the grid's first item.
                 List<Component> inputs = found.recipe().flatMap(ClientInnateRecipes::recipe)
@@ -463,10 +566,27 @@ final class PatternsTabView implements JobBlockTabView {
     private void extractEditor(GuiGraphicsExtractor graphics, PatternsTabData tab, int hovered, int mouseX, int mouseY) {
         Font font = screen.getFont();
         Optional<Pattern> pattern = tab.pattern(editing);
+        PatternLayout layout = layout(tab);
         graphics.text(font, Component.translatable("civmod.gui.patterns.editing", editing + 1), CivGui.PADDING, 18, CivGui.LABEL_COLOR, false);
-        for (int cell = 0; cell < Pattern.GRID; cell++) {
-            int x = cellX(cell);
-            int y = cellY(cell);
+        List<Rect2i> buttons = layoutButtons(tab);
+        int hoveredButton = layoutButtonAt(tab, mouseX, mouseY);
+        for (int i = 0; i < buttons.size(); i++) {
+            // Layout buttons: one per recipe type of the Job, the station's icon, the shown layout framed.
+            Rect2i button = buttons.get(i);
+            PatternLayout offered = tab.layouts().get(i);
+            CivGui.slot(graphics, button.getX(), button.getY());
+            graphics.item(new ItemStack(offered.station()), button.getX(), button.getY());
+            if (offered.type() == layout.type()) {
+                CivGui.slotSelected(graphics, button.getX(), button.getY());
+            }
+            if (i == hoveredButton) {
+                CivGui.slotHover(graphics, button.getX(), button.getY());
+            }
+        }
+        int count = cellCount(layout, pattern);
+        for (int cell = 0; cell < count; cell++) {
+            int x = cellX(layout.kind(), cell, count);
+            int y = cellY(layout.kind(), cell, count);
             CivGui.slot(graphics, x, y);
             int index = cell;
             Item item = pattern.map(found -> found.grid().get(index)).orElse(Items.AIR);
@@ -476,6 +596,10 @@ final class PatternsTabView implements JobBlockTabView {
             if (TARGET_CELL + cell == hovered) {
                 CivGui.slotHover(graphics, x, y);
             }
+        }
+        if (layout.kind() == PatternLayout.Kind.SINGLE && layout.station() != Items.AIR) {
+            // The station left of the single input (no fuel slot: the Fuel tab handles fuel).
+            graphics.item(new ItemStack(layout.station()), GRID_X + 18, OUTPUT_Y);
         }
         graphics.text(font, Component.literal("→"), GRID_X + 3 * 18 + 6, OUTPUT_Y + 4, CivGui.LABEL_COLOR, false);
         CivGui.slot(graphics, OUTPUT_X, OUTPUT_Y);
@@ -499,11 +623,32 @@ final class PatternsTabView implements JobBlockTabView {
             graphics.text(font, CivGui.fit(font, unusableLine(tab, editing), width)
 , CivGui.PADDING, y + 10, CivGui.ERROR_COLOR, false);
         }
-        if (hovered >= TARGET_CELL && hovered < TARGET_CELL + Pattern.GRID) {
-            Item item = pattern.map(found -> found.grid().get(hovered - TARGET_CELL)).orElse(Items.AIR);
+        if (hoveredButton >= 0) {
+            PatternLayout offered = tab.layouts().get(hoveredButton);
+            graphics.setComponentTooltipForNextFrame(font, List.of(offered.station() != Items.AIR ? new ItemStack(offered.station()).getHoverName()
+                    : Component.literal(String.valueOf(BuiltInRegistries.RECIPE_TYPE.getKey(offered.type())))), mouseX, mouseY);
+        }
+        int cell = hovered >= TARGET_CELL && hovered < TARGET_CELL + Pattern.GRID ? hovered - TARGET_CELL : innateCellAt(layout, pattern, mouseX, mouseY);
+        if (cell >= 0) {
+            Item item = pattern.map(found -> found.grid().get(cell)).orElse(Items.AIR);
             if (item != Items.AIR) {
                 graphics.setComponentTooltipForNextFrame(font, List.of(new ItemStack(item).getHoverName()), mouseX, mouseY);
             }
         }
+    }
+
+    /** The cell of an innate recipe under the mouse (they are no ghost targets), {@code -1} if none. */
+    private int innateCellAt(PatternLayout layout, Optional<Pattern> pattern, int mouseX, int mouseY) {
+        if (layout.kind() != PatternLayout.Kind.ROW) {
+            return -1;
+        }
+        int count = cellCount(layout, pattern);
+        for (int cell = 0; cell < count; cell++) {
+            if (new Rect2i(cellX(layout.kind(), cell, count), cellY(layout.kind(), cell, count), 16, 16).contains(mouseX - screen.left(),
+                    mouseY - screen.top())) {
+                return cell;
+            }
+        }
+        return -1;
     }
 }

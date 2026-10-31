@@ -35,6 +35,11 @@ public final class FuelTab extends JobBlockTab {
     }
 
     @Override
+    public Group group() {
+        return Group.FUEL;
+    }
+
+    @Override
     boolean tall() {
         return true;
     }

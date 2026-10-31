@@ -1,8 +1,0 @@
-{
-  "type": "minecraft:function",
-  "environment": "civmod:day",
-  "function": "civmod:skill_upgrade_in_world",
-  "max_ticks": 40,
-  "structure": "minecraft:empty",
-  "padding": 40
-}

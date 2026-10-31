@@ -275,7 +275,7 @@ public final class Deliveries {
     /**
      * @param settlement a settlement
      * @param clerks     Clerk JobBlocks
-     * @return the tasks handled for them or bringing results to them, in creation order (the Deliveries tab)
+     * @return the tasks handled for them or bringing results to them, in creation order (the Tasks tab)
      */
     public static List<DeliveryTask> toClerks(Settlement settlement, List<BlockPos> clerks) {
         return settlement.deliveries().stream().filter(task -> handler(settlement, task).filter(clerks::contains).isPresent()

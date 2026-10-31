@@ -21,7 +21,7 @@ import net.minecraft.world.item.crafting.RecipeType;
 /**
  * The client view of a {@link JobBlockTab} in the {@link JobBlockScreen}: what the tab draws and how it takes input.
  * The screen hands every call to the view of the selected tab, except {@link #init}, {@link #onTabChanged},
- * {@link #mouseReleased} and the Info tab contributions, which every view of the window gets. Several tabs may share
+ * {@link #mouseReleased} and the Workers tab contributions, which every view of the window gets. Several tabs may share
  * one view (the Patterns tabs of a JobBlock).
  */
 interface JobBlockTabView {
@@ -163,35 +163,47 @@ interface JobBlockTabView {
         return Optional.empty();
     }
 
-    // ---------------------------------------------------------------- contributions to the Info tab
+    // ---------------------------------------------------------------- contributions to the Workers tab
 
     /**
-     * Adds the view's widgets to the Info tab (called on every widget rebuild).
+     * A toggle button a view adds to the Workers tab's bottom row; it presses the menu button on client and server.
      *
-     * @param info the Info tab's index
+     * @param label    the label (the current state)
+     * @param buttonId the menu button id
      */
-    default void initInfo(int info) {
+    record WorkersToggle(Component label, int buttonId) {
     }
 
     /**
-     * Draws the view's lines of the Info tab below the Job lines.
+     * A line a view adds below the Workers tab's list.
      *
-     * @param graphics the graphics extractor (panel coordinates)
-     * @param y        the y of the first line
-     * @param width    the line width
-     * @param color    the text colour
-     * @param mouseX   the mouse x position
-     * @param mouseY   the mouse y position
-     * @return the y below the lines
+     * @param text    the text
+     * @param tooltip the lines shown while the mouse is over the text (none: no tooltip)
      */
-    default int extractInfo(GuiGraphicsExtractor graphics, int y, int width, int color, int mouseX, int mouseY) {
-        return y;
+    record WorkersLine(Component text, List<Component> tooltip) {
+
+        /**
+         * @param text    the text
+         * @param tooltip the tooltip lines
+         */
+        public WorkersLine {
+            tooltip = List.copyOf(tooltip);
+        }
     }
 
     /**
-     * @return whether the Info tab offers to free the JobBlock's only place
+     * Asked on every widget rebuild and every frame, so the Workers tab's layout and its button always agree.
+     *
+     * @return the view's toggle button in the Workers tab's bottom row now, empty for none
      */
-    default boolean offersUnassign() {
-        return true;
+    default Optional<WorkersToggle> workersToggle() {
+        return Optional.empty();
+    }
+
+    /**
+     * @return the view's lines below the Workers tab's list now
+     */
+    default List<WorkersLine> workersLines() {
+        return List.of();
     }
 }

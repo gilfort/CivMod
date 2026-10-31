@@ -1,5 +1,7 @@
 package com.gilfort.civmod.menu;
 
+import java.util.Optional;
+
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
@@ -13,6 +15,7 @@ import com.gilfort.civmod.settlement.MissionOffers;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.registry.ModMenuTypes;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -28,6 +31,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Menu of a settler: tabs Overview, Jobs (priority list), Inventory (tool belt, offhand, pockets) and Mission (the
@@ -67,7 +71,12 @@ public class SettlerMenu extends CivMenu {
     /** Number of settler slots in the menu (belt, offhand, pockets). */
     private static final int SETTLER_SLOTS = Settler.ARMOR_START;
 
+    /** Distance (squared) within which the window stays open: 8 blocks, like a container. */
+    private static final double REACH_SQUARED = 64.0;
+
     private final @Nullable Settler settler;
+    /** The JobBlock the window was opened from (Workers tab), empty when opened at the settler. */
+    private final Optional<BlockPos> anchor;
     private SettlerInfo info;
 
     /**
@@ -78,7 +87,7 @@ public class SettlerMenu extends CivMenu {
      * @param buffer      extra data written by the server
      */
     public SettlerMenu(int containerId, Inventory inventory, RegistryFriendlyByteBuf buffer) {
-        this(containerId, inventory, null, new SimpleContainer(Settler.INVENTORY_SIZE), SettlerInfo.STREAM_CODEC.decode(buffer));
+        this(containerId, inventory, null, new SimpleContainer(Settler.INVENTORY_SIZE), SettlerInfo.STREAM_CODEC.decode(buffer), Optional.empty());
     }
 
     /**
@@ -90,13 +99,29 @@ public class SettlerMenu extends CivMenu {
      * @param info        the info snapshot
      */
     public SettlerMenu(int containerId, Inventory inventory, Settler settler, SettlerInfo info) {
-        this(containerId, inventory, settler, settler.getInventory(), info);
+        this(containerId, inventory, settler, info, Optional.empty());
     }
 
-    private SettlerMenu(int containerId, Inventory inventory, @Nullable Settler settler, Container container, SettlerInfo info) {
+    /**
+     * Server constructor.
+     *
+     * @param containerId the container id
+     * @param inventory   the player inventory
+     * @param settler     the settler
+     * @param info        the info snapshot
+     * @param anchor      the JobBlock the window was opened from (Workers tab): it also stays open while the player
+     *                    stays at that block
+     */
+    public SettlerMenu(int containerId, Inventory inventory, Settler settler, SettlerInfo info, Optional<BlockPos> anchor) {
+        this(containerId, inventory, settler, settler.getInventory(), info, anchor);
+    }
+
+    private SettlerMenu(int containerId, Inventory inventory, @Nullable Settler settler, Container container, SettlerInfo info,
+            Optional<BlockPos> anchor) {
         super(ModMenuTypes.SETTLER.get(), containerId, FIRST_JOB_TAB + MAX_JOB_TABS);
         this.settler = settler;
         this.info = info;
+        this.anchor = anchor;
         for (int i = 0; i < Settler.BELT_SIZE; i++) {
             addSlot(new CivSlot(this, container, Settler.BELT_START + i, 8 + i * 18, BELT_Y, TAB_INVENTORY) {
                 @Override
@@ -228,8 +253,13 @@ public class SettlerMenu extends CivMenu {
         return original;
     }
 
+    /**
+     * Open while the player is near the settler, or near the JobBlock the window was opened from as long as the settler
+     * still works there (once unassigned that block stops counting, like any settler window out of reach).
+     */
     @Override
     public boolean stillValid(Player player) {
-        return settler == null || settler.isAlive() && player.distanceToSqr(settler) < 64.0;
+        return settler == null || settler.isAlive() && (player.distanceToSqr(settler) < REACH_SQUARED
+                || anchor.filter(pos -> settler.jobAt(pos).isPresent() && player.distanceToSqr(Vec3.atCenterOf(pos)) < REACH_SQUARED).isPresent());
     }
 }

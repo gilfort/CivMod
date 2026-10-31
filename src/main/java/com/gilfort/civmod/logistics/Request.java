@@ -40,7 +40,7 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
      * A part of a request a producer is crafting.
      *
      * @param settler the producer settler
-     * @param name    its name (for the Requests tab)
+     * @param name    its name (for the Tasks tab)
      * @param amount  the claimed amount
      */
     public record Claim(UUID settler, String name, int amount) {

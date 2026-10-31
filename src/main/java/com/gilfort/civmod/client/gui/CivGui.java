@@ -61,8 +61,6 @@ public final class CivGui {
     private static final int INACTIVE_TINT = 0xA0000000 | (INSET_FILL & 0xFFFFFF);
     /** Vanilla slot highlight under the mouse. */
     private static final int HOVER_TINT = 0x80FFFFFF;
-    /** Red slot fill over an item that is missing (an upgrade cost the player lacks). */
-    static final int MISSING_TINT = 0x80FF2020;
     /** Colour of a bonus star (vanilla gold). */
     static final int STAR_COLOR = 0xFFFFAA00;
     /** The bonus star glyph. */
@@ -75,6 +73,8 @@ public final class CivGui {
     private static final int HELP_MARGIN = 4;
     /** Width the help lines are wrapped to. */
     private static final int HELP_WIDTH = 200;
+    /** Room the help icon takes from the right end of the title row (icon, margin and a gap). */
+    static final int HELP_ROOM = HELP_MARGIN + HELP_SIZE + 2;
 
     private CivGui() {
     }

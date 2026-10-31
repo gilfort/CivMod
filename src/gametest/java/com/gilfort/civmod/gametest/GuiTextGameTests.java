@@ -41,7 +41,28 @@ public final class GuiTextGameTests {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "gui_text_help_lines", GuiTextGameTests::helpLines);
             register(helper, "gui_text_checkmark_inline", GuiTextGameTests::checkmarkInline);
+            register(helper, "gui_text_review_pass", GuiTextGameTests::reviewPass);
         });
+    }
+
+    /** The review pass of #143: rules left the windows for the Handbook, state lines lost their explanations. */
+    private static void reviewPass(GameTestHelper helper) {
+        JsonObject lang = lang(helper);
+        Map<String, String> texts = Map.of(
+                "civmod.gui.fuel.title", "Fuel",
+                "civmod.gui.fuel.none", "No fuel listed",
+                "civmod.gui.fuel.help.set", "Click with an item: set the fuel",
+                "civmod.gui.fuel.help.clear", "Right-click: empty",
+                "civmod.gui.patterns.at_limit", "All checkmarks used",
+                "civmod.gui.mission.chances.nobody", "No settler of this board would take it",
+                "civmod.gui.settler.laborer", "Laborer");
+        texts.forEach((key, text) -> helper.assertTrue(text.equals(string(lang, key)), "Text of " + key + ": " + string(lang, key)));
+        for (String key : new String[] {"civmod.gui.fuel.help.priority", "civmod.gui.fuel.help.rests", "civmod.gui.station_types.help.replace",
+                "civmod.gui.station_types.help.station", "civmod.gui.mission.help.marked", "civmod.gui.settler.help.switch_skill",
+                "civmod.gui.job_picker.help.full"}) {
+            helper.assertFalse(lang.has(key), "Moved to the Handbook or redundant: " + key);
+        }
+        helper.succeed();
     }
 
     private static void register(RegisterEvent.RegisterHelper<Consumer<GameTestHelper>> helper, String name, Consumer<GameTestHelper> test) {

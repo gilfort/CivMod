@@ -15,8 +15,10 @@ import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.logistics.Pattern;
+import com.gilfort.civmod.logistics.PatternLayout;
 import com.gilfort.civmod.logistics.PatternRecipes;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.registry.ModRecipes;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -32,6 +34,7 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
+import net.minecraft.world.level.block.Block;
 
 /**
  * The pattern libraries of a JobBlock (vault {@code Systems/Producing Jobs.md}, {@code Jobs/Craftsperson.md}): one per
@@ -274,16 +277,64 @@ public final class Patterns {
      * @return the new pattern, empty if the JobBlock keeps no (unlocked) library for the Job
      */
     public static Optional<Pattern> setInput(ServerLevel level, BlockPos pos, Job job, int slot, int index, Item item) {
+        return setInput(level, pos, job, slot, index, item, Optional.empty());
+    }
+
+    /**
+     * Sets one input of a pattern in a layout (vault {@code Systems/Producing Jobs.md}): the pattern uses exactly its
+     * grid items from now on, its output follows the recipe of the layout's type they match ({@link Items#AIR} while
+     * they match none). Another layout than the pattern's starts from empty inputs.
+     *
+     * @param level  the level
+     * @param pos    the JobBlock
+     * @param job    the Producing Job whose library it is
+     * @param slot   the library slot
+     * @param index  the cell (within the layout's cells)
+     * @param item   the item, {@link Items#AIR} to empty the cell
+     * @param layout the recipe type of the editor's layout (empty, or one the Job does not follow: the pattern's own)
+     * @return the new pattern, empty if the cell is outside the layout or the JobBlock keeps no (unlocked) library for
+     *         the Job
+     */
+    public static Optional<Pattern> setInput(ServerLevel level, BlockPos pos, Job job, int slot, int index, Item item, Optional<RecipeType<?>> layout) {
         Optional<SettlementBlock> block = block(level, pos, job);
-        if (index < 0 || index >= Pattern.GRID || block.isEmpty()) {
+        if (block.isEmpty()) {
             return Optional.empty();
         }
-        List<Item> grid = new ArrayList<>(pattern(block.get(), job, slot).map(Pattern::grid).orElse(List.of()));
+        ProducingProfile profile = profile(job);
+        Optional<Pattern> current = pattern(block.get(), job, slot);
+        RecipeType<?> own = current.<RecipeType<?>>map(pattern -> layoutType(level, profile, pattern)).orElse(profile.recipeTypes().getFirst());
+        RecipeType<?> type = layout.filter(profile.recipeTypes()::contains).orElse(own);
+        PatternLayout shown = PatternLayout.of(level, profile, type);
+        if (index < 0 || index >= shown.kind().cells()) {
+            return Optional.empty();
+        }
+        List<Item> grid = new ArrayList<>(current.filter(pattern -> type == own).map(Pattern::grid).orElse(List.of()));
         while (grid.size() < Pattern.GRID) {
             grid.add(Items.AIR);
         }
         grid.set(index, item);
-        return put(level, pos, job, slot, exactPattern(level, profile(job), slot, grid));
+        return put(level, pos, job, slot, exactPattern(level, shown, slot, grid));
+    }
+
+    /**
+     * @param level   the level
+     * @param profile the Producing profile of the library's Job
+     * @param pattern a pattern of the library
+     * @return the layout the editor shows it in: an innate recipe's row, else the layout of its {@link Pattern#layout()},
+     *         of its recipe's type (patterns saved before layouts existed), else of the Job's first recipe type
+     */
+    public static PatternLayout layout(ServerLevel level, ProducingProfile profile, Pattern pattern) {
+        if (pattern.innate()) {
+            TagKey<Block> station = InnateRecipes.recipe(level, pattern).flatMap(JobCraftingRecipe::station)
+                    .orElseGet(() -> profile.station(profile.recipeTypes().getFirst()));
+            return PatternLayout.innate(ModRecipes.JOB_CRAFTING.get(), station);
+        }
+        return PatternLayout.of(level, profile, layoutType(level, profile, pattern));
+    }
+
+    private static RecipeType<?> layoutType(ServerLevel level, ProducingProfile profile, Pattern pattern) {
+        return pattern.layout().or(() -> pattern.recipe().flatMap(id -> PatternRecipes.holder(level, id))
+                .<RecipeType<?>>map(holder -> holder.value().getType())).orElse(profile.recipeTypes().getFirst());
     }
 
     /**
@@ -301,6 +352,24 @@ public final class Patterns {
      */
     public static Optional<Pattern> transfer(ServerLevel level, BlockPos pos, Job job, int slot, Optional<ResourceKey<Recipe<?>>> recipe,
             List<Item> grid) {
+        return transfer(level, pos, job, slot, recipe, grid, Optional.empty());
+    }
+
+    /**
+     * {@link #transfer(ServerLevel, BlockPos, Job, int, Optional, List)} with the recipe type the viewer showed: the
+     * layout of exactly the shown items when the server does not know the recipe.
+     *
+     * @param level  the level
+     * @param pos    the JobBlock
+     * @param job    the Producing Job whose library it is
+     * @param slot   the library slot
+     * @param recipe the recipe id the viewer showed
+     * @param grid   the shown items, row by row
+     * @param type   the recipe type the viewer showed (empty, or one the Job does not follow: the Job's first type)
+     * @return the new pattern, empty if refused
+     */
+    public static Optional<Pattern> transfer(ServerLevel level, BlockPos pos, Job job, int slot, Optional<ResourceKey<Recipe<?>>> recipe,
+            List<Item> grid, Optional<RecipeType<?>> type) {
         Optional<SettlementBlock> block = block(level, pos, job);
         if (block.isEmpty()) {
             return Optional.empty();
@@ -316,7 +385,8 @@ public final class Patterns {
             // Recipes of other types than crafting show fewer inputs than the 3×3 grid.
             cells.add(Items.AIR);
         }
-        return put(level, pos, job, slot, shape.map(found -> recipePattern(slot, found)).orElseGet(() -> exactPattern(level, profile, slot, cells)));
+        PatternLayout layout = PatternLayout.of(level, profile, type.filter(profile.recipeTypes()::contains).orElse(profile.recipeTypes().getFirst()));
+        return put(level, pos, job, slot, shape.map(found -> recipePattern(slot, found)).orElseGet(() -> exactPattern(level, layout, slot, cells)));
     }
 
     /**
@@ -630,13 +700,18 @@ public final class Patterns {
     }
 
     private static Pattern recipePattern(int slot, PatternRecipes.Shape shape) {
-        return new Pattern(slot, shape.output(), shape.count(), shape.grid(), Optional.of(shape.id()), false, false);
+        return new Pattern(slot, shape.output(), shape.count(), shape.grid(), Optional.of(shape.id()), false, false, false, Optional.of(shape.type()));
     }
 
-    private static Pattern exactPattern(ServerLevel level, ProducingProfile profile, int slot, List<Item> grid) {
-        Optional<PatternRecipes.Shape> shape = PatternRecipes.matching(level, profile.recipeTypes(), grid);
+    /** Exactly the items in the layout's cells (the others stay empty); the output follows the recipe of its type they match. */
+    private static Pattern exactPattern(ServerLevel level, PatternLayout layout, int slot, List<Item> grid) {
+        List<Item> cells = new ArrayList<>(grid);
+        for (int i = layout.kind().cells(); i < cells.size(); i++) {
+            cells.set(i, Items.AIR);
+        }
+        Optional<PatternRecipes.Shape> shape = PatternRecipes.matching(level, layout, cells);
         return new Pattern(slot, shape.map(PatternRecipes.Shape::output).orElse(Items.AIR), shape.map(PatternRecipes.Shape::count).orElse(1),
-                grid, shape.map(PatternRecipes.Shape::id), true, false);
+                cells, shape.map(PatternRecipes.Shape::id), true, false, false, Optional.of(layout.type()));
     }
 
     /**

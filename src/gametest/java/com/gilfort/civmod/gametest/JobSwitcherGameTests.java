@@ -9,7 +9,7 @@ import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
-import com.gilfort.civmod.block.UpgradeCosts;
+import com.gilfort.civmod.block.JobBlockSettlers;
 import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.logistics.Producers;
 import com.gilfort.civmod.logistics.StockRule;
@@ -82,7 +82,7 @@ public final class JobSwitcherGameTests {
     private static int[] settlers(Job job) {
         int[] places = new int[SettlementRules.MAX_LEVEL];
         for (int level = SettlementRules.MIN_LEVEL; level <= SettlementRules.MAX_LEVEL; level++) {
-            places[level - 1] = UpgradeCosts.settlers(job, level);
+            places[level - 1] = JobBlockSettlers.settlers(job, level);
         }
         return places;
     }
@@ -93,9 +93,9 @@ public final class JobSwitcherGameTests {
     }
 
     /**
-     * The settlers a JobBlock holds per level come from the {@code settlers} list of {@code civmod_upgrades/<job>.json}:
+     * The settlers a JobBlock holds per level come from the {@code settlers} list of {@code civmod_job_blocks/<job>.json}:
      * Producing 1 / 1 / 2 / 2 / 3, Resource Collection 1, Mission Board 1 / 2 / 4 / 6 / 10, Clerk 1 and Deliverymen
-     * 1 / 2 / 4 / 6 / 8; a Job without a list has 1. Later packs replace the list; the costs stay readable.
+     * 1 / 2 / 4 / 6 / 8; a Job without a list has 1. Later packs replace the list; other entries are ignored.
      */
     private static void settlersPerLevel(GameTestHelper helper) {
         assertSettlers(helper, ModJobs.CRAFTSPERSON.get(), 1, 1, 2, 2, 3);
@@ -107,12 +107,11 @@ public final class JobSwitcherGameTests {
         assertSettlers(helper, ModJobs.DELIVERYMAN.get(), 1, 2, 4, 6, 8);
         assertSettlers(helper, StationTypeGameTests.job(CivMod.id("gametest_dummy")), 2, 3, 4, 5, 6);
         assertSettlers(helper, StationTypeGameTests.job(CivMod.id("gametest_mason")), 1, 1, 1, 1, 1);
-        helper.assertFalse(UpgradeCosts.get(ModJobs.CRAFTSPERSON.get(), 2).isEmpty(), "The costs next to the list stay readable");
 
         List<JsonElement> files = List.of(JsonParser.parseString("{\"settlers\": [1, 1, 2, 2, 3], \"2\": []}"),
                 JsonParser.parseString("{\"settlers\": [2, 2, 2, 2, 2]}"), JsonParser.parseString("{\"3\": []}"));
-        helper.assertTrue(UpgradeCosts.mergeSettlers(files).equals(Optional.of(List.of(2, 2, 2, 2, 2))),
-                "A later pack replaces the list, one without keeps it: " + UpgradeCosts.mergeSettlers(files));
+        helper.assertTrue(JobBlockSettlers.merge(files).equals(Optional.of(List.of(2, 2, 2, 2, 2))),
+                "A later pack replaces the list, one without keeps it, cost entries are ignored: " + JobBlockSettlers.merge(files));
 
         Job craftsperson = ModJobs.CRAFTSPERSON.get();
         for (int level = SettlementRules.MIN_LEVEL; level <= SettlementRules.MAX_LEVEL; level++) {

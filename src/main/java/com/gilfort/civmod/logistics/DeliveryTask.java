@@ -37,7 +37,7 @@ public record DeliveryTask(UUID id, BlockPos source, BlockPos jobBlock, long cre
      * The Deliveryman a task is locked to.
      *
      * @param settler the Deliveryman settler
-     * @param name    its name (for the Deliveries tab)
+     * @param name    its name (for the Tasks tab)
      * @param day     the day it took the task; a lock of an earlier day is over
      */
     public record Taker(UUID settler, String name, long day) {

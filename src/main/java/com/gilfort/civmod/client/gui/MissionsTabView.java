@@ -85,12 +85,6 @@ final class MissionsTabView implements JobBlockTabView {
                 .bounds(left + CivGui.PADDING + buttonWidth + 4, y, buttonWidth, 20).build());
     }
 
-    /** The Mission Board's Info tab has no Free button. */
-    @Override
-    public boolean offersUnassign() {
-        return false;
-    }
-
     /** Another tab was selected: the assignment view closes. */
     @Override
     public void onTabChanged() {
@@ -252,8 +246,7 @@ final class MissionsTabView implements JobBlockTabView {
         if (assigning >= 0) {
             return List.of(Component.translatable("civmod.gui.mission.help.assign"));
         }
-        return List.of(Component.translatable("civmod.gui.mission.help.mark"), Component.translatable("civmod.gui.mission.help.lock"),
-                Component.translatable("civmod.gui.mission.help.marked"));
+        return List.of(Component.translatable("civmod.gui.mission.help.mark"), Component.translatable("civmod.gui.mission.help.lock"));
     }
 
     /** "Assigned to <name>", or "Locked" when the assigned settler died or left the board (or is not loaded). */

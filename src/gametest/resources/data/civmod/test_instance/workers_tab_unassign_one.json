@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:workers_tab_unassign_one",
+  "max_ticks": 20,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
