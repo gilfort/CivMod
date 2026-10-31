@@ -3,11 +3,12 @@
   "category": "misc",
   "key": {
     "B": "minecraft:barrel",
-    "F": "minecraft:furnace"
+    "P": "#minecraft:planks",
+    "S": "minecraft:furnace"
   },
   "pattern": [
-    "F",
-    "B"
+    "PSP",
+    "PBP"
   ],
   "result": {
     "id": "civmod:smelter_block"
