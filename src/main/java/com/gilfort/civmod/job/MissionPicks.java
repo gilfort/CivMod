@@ -108,11 +108,10 @@ final class MissionPicks {
         }
         Map<Identifier, Mission> pool = Missions.all(level.registryAccess());
         MissionOffers.refresh(data, board, DayClock.day(level), pool, level.getRandom());
-        int cap = site.get().skillCap();
         List<Candidate> candidates = settlers.stream()
                 .filter(settler -> !settler.isRemoved() && !settler.getWork().missions().hasTrip())
                 .flatMap(settler -> MissionLoop.missionJob(settler.getJobs(), board)
-                        .map(job -> new Candidate(settler, job, settler.getSkills().effectiveLevel(job.jobType(), cap))).stream())
+                        .map(job -> new Candidate(settler, job, settler.getWork().effectiveLevel(job))).stream())
                 .toList();
         for (Candidate candidate : MissionRules.order(candidates, Candidate::skill, level.getRandom())) {
             List<MissionOffer.Entry> offer = site.get().block().missionOffer().entries();

@@ -117,6 +117,23 @@ final class SettlerMeals {
     }
 
     /**
+     * The hunger state of the food need ("Hungry – no food", foraging, starving).
+     *
+     * @param foodPoint whether a food point has food for the settler now
+     * @return the state as text, empty while the settler is not in it
+     */
+    Optional<Component> hungerState(java.util.function.BooleanSupplier foodPoint) {
+        SettlerFood food = settler.getFood();
+        String key = null;
+        if (food.isForaging()) {
+            key = "foraging";
+        } else if (food.level() < SettlerFood.HUNGRY && !hasPocketMeal() && !foodPoint.getAsBoolean()) {
+            key = food.level() <= 0 ? "starving" : "hungry";
+        }
+        return Optional.ofNullable(key).map(k -> Component.translatable("civmod.settler.status." + k));
+    }
+
+    /**
      * @param activity the current activity
      * @return a food-related status that replaces the job status, if any
      */

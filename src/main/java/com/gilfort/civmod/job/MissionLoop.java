@@ -307,7 +307,7 @@ final class MissionLoop implements CategoryLoop {
     private MissionRules.Outcome finish(ServerLevel level, SettlerJob job, JobBlockSite site, Mission mission, boolean catchUp) {
         OutcomeRules rules = OutcomeRules.get();
         int cap = site.skillCap();
-        int skill = settler.getSkills().effectiveLevel(job.jobType(), cap);
+        int skill = shell.effectiveLevel(job);
         MissionRules.Outcome outcome = forcedOutcome != null ? forcedOutcome
                 : MissionRules.roll(MissionRules.chances(rules, mission.recommendedLevel(), skill, job.jobType()), level.getRandom());
         if (outcome == MissionRules.Outcome.DEATH) {
