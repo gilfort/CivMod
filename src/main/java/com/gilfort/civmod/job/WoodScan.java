@@ -121,12 +121,12 @@ public final class WoodScan implements SectionScan<WoodScan.Result> {
     }
 
     /**
-     * Below this estimate fewer than the full amount of real logs is possible (a sample finds at most every log ×
-     * {@value #SAMPLE_FACTOR}), so the pass is repeated exactly.
+     * Below this estimate fewer real logs than the minimum or full amount are possible (a sample finds at most every
+     * log × {@value #SAMPLE_FACTOR}), so the pass is repeated exactly.
      */
     private void finishPass() {
         int estimate = logs.values().stream().mapToInt(Integer::intValue).sum();
-        if (exact || estimate >= LumberjackOutput.fullLogs() * SAMPLE_FACTOR) {
+        if (exact || estimate >= LumberjackOutput.logsCountedExactly() * SAMPLE_FACTOR) {
             done = true;
             return;
         }

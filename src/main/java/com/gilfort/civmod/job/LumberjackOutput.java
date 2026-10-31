@@ -43,7 +43,7 @@ public final class LumberjackOutput {
      * @return the productivity factor: 0 below the minimum, else logs / full amount up to 1 (server config)
      */
     public static double productivity(int totalLogs) {
-        return hasEnoughLogs(totalLogs) ? Math.min(1.0, totalLogs / (double) fullLogs()) : 0.0;
+        return hasEnoughLogs(totalLogs) ? Math.min(1.0, totalLogs / (double) CivModConfig.LUMBERJACK_FULL_LOGS.get()) : 0.0;
     }
 
     /**
@@ -55,10 +55,10 @@ public final class LumberjackOutput {
     }
 
     /**
-     * @return the logs for full speed (server config)
+     * @return up to how many logs the scan has to count exactly: below this the amount decides over block or speed
      */
-    static int fullLogs() {
-        return CivModConfig.LUMBERJACK_FULL_LOGS.get();
+    static int logsCountedExactly() {
+        return Math.max(CivModConfig.LUMBERJACK_MINIMUM_LOGS.get(), CivModConfig.LUMBERJACK_FULL_LOGS.get());
     }
 
     /** What the next produced resource is. */

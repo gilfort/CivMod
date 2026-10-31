@@ -447,6 +447,19 @@ public final class LumberjackGameTests {
      * not 0 or 12.
      */
     private static void scanExactInSparseAreas(GameTestHelper helper) {
+        assertColumnsCountedExactly(helper);
+        int full = CivModConfig.LUMBERJACK_FULL_LOGS.get();
+        try {
+            // A minimum above the full amount still needs real logs: 12 estimated logs must not pass as 3 real ones.
+            CivModConfig.LUMBERJACK_FULL_LOGS.set(1);
+            assertColumnsCountedExactly(helper);
+        } finally {
+            CivModConfig.LUMBERJACK_FULL_LOGS.set(full);
+        }
+        helper.succeed();
+    }
+
+    private static void assertColumnsCountedExactly(GameTestHelper helper) {
         BlockPos center = helper.absolutePos(new BlockPos(1, 2, 1));
         for (int x = 3; x <= 4; x++) {
             for (int z = 3; z <= 4; z++) {
@@ -460,7 +473,6 @@ public final class LumberjackGameTests {
                 }
             }
         }
-        helper.succeed();
     }
 
     /** Changed config values apply at once, to the speed and to what blocks the job. */

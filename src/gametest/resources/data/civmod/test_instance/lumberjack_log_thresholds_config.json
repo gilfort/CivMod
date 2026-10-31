@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:lumberjack_log_thresholds_config",
+  "max_ticks": 2400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
