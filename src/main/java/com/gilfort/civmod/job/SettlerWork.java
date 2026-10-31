@@ -2007,6 +2007,23 @@ public final class SettlerWork {
     }
 
     /**
+     * @param level the level
+     * @return whether the settler sleeps in its own real bed, not at the camp
+     */
+    public boolean sleepsInOwnBed(ServerLevel level) {
+        return resting.sleepsInOwnBed(level);
+    }
+
+    /**
+     * Goes to bed now, as at the start of the going-to-bed window (for tests; live the Schedule asks for it).
+     *
+     * @param level the level
+     */
+    public void goToBedNow(ServerLevel level) {
+        go(level, resting.evening(level, moment(level.getOverworldClockTime()).day(), true, activity));
+    }
+
+    /**
      * Runs the need check of a decision on a given day (for tests; live it runs in every decision).
      *
      * @param level the level
@@ -2022,6 +2039,13 @@ public final class SettlerWork {
      */
     SettlerMeals meals() {
         return meals;
+    }
+
+    /**
+     * @return the rest of this settler
+     */
+    SettlerRest rest() {
+        return resting;
     }
 
     /**

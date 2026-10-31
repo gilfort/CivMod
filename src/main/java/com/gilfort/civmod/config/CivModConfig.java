@@ -103,6 +103,12 @@ public final class CivModConfig {
             .defineInRange("catchUpMultiplier", 1.0, 0.0, 10.0);
 
     /** The built config spec, registered in the mod constructor. */
+    /** Largest distance between a settler's sleeping place and a hearth for the Fire need. */
+    public static final ModConfigSpec.IntValue HEARTH_RANGE = BUILDER
+            .comment("Fire need: largest distance in blocks between a settler's sleeping place and a hearth.",
+                    "A settler whose bed is further away sleeps at the camp instead.")
+            .defineInRange("hearthRange", 24, 1, 256);
+
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     private CivModConfig() {
