@@ -574,10 +574,11 @@ final class Workplace {
     }
 
     /**
-     * @return whether the latest scan found nothing and no newer scan is on its way
+     * @param profile the job's profile
+     * @return whether the latest scan holds no resources for the job and no newer scan is on its way
      */
-    boolean foundNothing() {
-        return scan != null && scan.isEmpty() && scanning == null;
+    boolean noResources(ResourceCollectionProfile profile) {
+        return scan != null && !profile.hasResources(scan) && scanning == null;
     }
 
     // ---------------------------------------------------------------- catch-up

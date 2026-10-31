@@ -72,7 +72,7 @@ final class WorkRules {
         NO_TOOL,
         /** The output (buffer, or drop-off and buffer) is full. */
         OUTPUT_FULL,
-        /** The scan found nothing for a job that needs resources. */
+        /** The scan holds too little for a job that needs resources. */
         NO_RESOURCES,
         /** Every main resource the scan found is excluded at the JobBlock. */
         ALL_EXCLUDED,
@@ -148,7 +148,7 @@ final class WorkRules {
     static Result work(ServerLevel level, Settler settler, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site, Workplace workplace,
             BlockPos poi, double workTicks, ToolSupply supply, Output output) {
         ScanResult scan = workplace.scan();
-        if (profile.needsResources() && scan != null && scan.isEmpty()) {
+        if (profile.needsResources() && scan != null && !profile.hasResources(scan)) {
             return new Result(0, 0, 0, 0, false, End.NO_RESOURCES, workTicks);
         }
         Set<Identifier> excluded = site.block().excluded(job.jobType());

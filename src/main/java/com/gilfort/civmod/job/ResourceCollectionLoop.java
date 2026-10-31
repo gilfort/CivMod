@@ -109,7 +109,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
         if (reason.isPresent()) {
             return JobStep.blocked(reason.get());
         }
-        if (profile.needsResources() && workplace.foundNothing()) {
+        if (profile.needsResources() && workplace.noResources(profile)) {
             return JobStep.blocked(JobStatus.NO_RESOURCES);
         }
         ItemStack tool = SettlerTools.best(settler, profile::isTool).orElse(ItemStack.EMPTY);
