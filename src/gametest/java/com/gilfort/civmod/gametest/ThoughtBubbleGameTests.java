@@ -76,6 +76,11 @@ public final class ThoughtBubbleGameTests {
         return new ThoughtBubble.Show(settler.getId(), bubble, icon, false);
     }
 
+    /** A hearth in the settlement: no settler complains about the fire. */
+    private static void hearth(GameTestHelper helper) {
+        helper.setBlock(new BlockPos(7, 1, 7), Blocks.CAMPFIRE);
+    }
+
     private static List<ThoughtBubble.Show> sent(Settler settler) {
         return settler.getWork().recentThoughts();
     }
@@ -105,6 +110,7 @@ public final class ThoughtBubbleGameTests {
         BlockPos clerk = ClerkGameTests.clerkWithStorage(helper);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        hearth(helper);
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 3), data, settlement);
         settler.getFood().setMorningDay(Math.floorDiv(level.getOverworldClockTime(), 24000L));
         settler.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.FISHING_ROD));
@@ -161,6 +167,7 @@ public final class ThoughtBubbleGameTests {
         BlockPos jobBlock = helper.absolutePos(relative);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
+        hearth(helper);
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(3, 1, 3), data, settlement);
         settler.getFood().setMorningDay(Math.floorDiv(level.getOverworldClockTime(), 24000L));
         helper.assertTrue(SettlementWorld.assign(level, jobBlock, settler, ModJobs.LUMBERJACK.get()) == JobAssignments.AssignResult.OK,
@@ -198,6 +205,7 @@ public final class ThoughtBubbleGameTests {
         BlockPos jobBlock = helper.absolutePos(relative);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
+        hearth(helper);
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(3, 1, 3), data, settlement);
         settler.getFood().setMorningDay(Math.floorDiv(level.getOverworldClockTime(), 24000L));
         helper.assertTrue(SettlementWorld.assign(level, jobBlock, settler, ModJobs.LUMBERJACK.get()) == JobAssignments.AssignResult.OK,
@@ -236,6 +244,7 @@ public final class ThoughtBubbleGameTests {
         CraftspersonGameTests.placeTable(helper, new BlockPos(3, 1, 5));
         CraftspersonGameTests.define(helper, craft, 0, Items.STONE_PICKAXE);
         CraftspersonGameTests.define(helper, craft, 1, Items.STONE_HOE);
+        hearth(helper);
         // Only the pickaxe is tried first: it lacks a cobblestone.
         Settler settler = CraftspersonGameTests.craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
 

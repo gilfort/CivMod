@@ -36,13 +36,18 @@ import net.neoforged.neoforge.event.entity.player.CanContinueSleepingEvent;
 
 /**
  * Beds of settlers (vault {@code Systems/NPC Daily Schedule.md}): automatic claim of the nearest free bed via the
- * vanilla POI manager, explicit assignment, and straw bed spots for settlers without bed.
+ * vanilla POI manager, explicit assignment, and straw bed spots for settlers without bed: the camp around a hearth, or
+ * next to the JobBlock while no hearth is left.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class SettlerBeds {
 
     /** Search radius for straw bed spots around the JobBlock. */
     public static final int STRAW_RADIUS = 4;
+    /** Distance of the straw beds from the hearth of a camp. */
+    public static final int CAMP_RING = 3;
+    /** How far from the hearth settlers lie on the bare ground once the ring is full. */
+    public static final int CAMP_GROUND = 6;
     /** Radius of the POI query; the settlement border check filters the result. */
     private static final int POI_RADIUS = 64;
 
@@ -249,14 +254,54 @@ public final class SettlerBeds {
                 return Optional.of(new StrawSpot(entry.getKey().pos(), facingTo(entry.getKey().pos(), jobBlock)));
             }
         }
-        Collection<BlockPos> taken = STRAW_SPOTS.keySet().stream().filter(key -> key.dimension().equals(level.dimension()))
-                .map(GlobalPos::pos).toList();
-        Optional<StrawSpot> spot = findStrawSpot(level, jobBlock, taken);
-        spot.ifPresent(found -> {
-            STRAW_SPOTS.entrySet().removeIf(entry -> entry.getValue().equals(settler));
-            STRAW_SPOTS.put(GlobalPos.of(level.dimension(), found.pos()), settler);
-        });
+        Optional<StrawSpot> spot = findStrawSpot(level, jobBlock, taken(level));
+        spot.ifPresent(found -> reserve(level, found, settler));
         return spot;
+    }
+
+    /**
+     * Reserves a spot of a camp: on the ring of {@value #CAMP_RING} blocks around the hearth with the feet to the fire,
+     * or further out up to {@value #CAMP_GROUND} blocks once the ring is full (see {@link #inCampRing}).
+     *
+     * @param level   the level
+     * @param hearth  the hearth
+     * @param settler the settler UUID
+     * @return the spot, empty if none is free
+     */
+    public static Optional<StrawSpot> reserveCampSpot(ServerLevel level, BlockPos hearth, UUID settler) {
+        for (Map.Entry<GlobalPos, UUID> entry : STRAW_SPOTS.entrySet()) {
+            BlockPos pos = entry.getKey().pos();
+            int ring = ring(pos, hearth);
+            if (entry.getValue().equals(settler) && entry.getKey().dimension().equals(level.dimension())
+                    && ring >= CAMP_RING && ring <= CAMP_GROUND && Math.abs(pos.getY() - hearth.getY()) <= 1) {
+                return Optional.of(new StrawSpot(pos, facingTo(pos, hearth).getOpposite()));
+            }
+        }
+        Optional<StrawSpot> spot = findSpot(level, hearth, CAMP_RING, CAMP_GROUND, true, taken(level));
+        spot.ifPresent(found -> reserve(level, found, settler));
+        return spot;
+    }
+
+    /**
+     * @param spot   a spot of a camp
+     * @param hearth the hearth
+     * @return whether it lies on the ring, on a straw bed; further out is the bare ground
+     */
+    public static boolean inCampRing(BlockPos spot, BlockPos hearth) {
+        return ring(spot, hearth) == CAMP_RING;
+    }
+
+    private static int ring(BlockPos pos, BlockPos center) {
+        return Math.max(Math.abs(pos.getX() - center.getX()), Math.abs(pos.getZ() - center.getZ()));
+    }
+
+    private static Collection<BlockPos> taken(ServerLevel level) {
+        return STRAW_SPOTS.keySet().stream().filter(key -> key.dimension().equals(level.dimension())).map(GlobalPos::pos).toList();
+    }
+
+    private static void reserve(ServerLevel level, StrawSpot spot, UUID settler) {
+        STRAW_SPOTS.entrySet().removeIf(entry -> entry.getValue().equals(settler));
+        STRAW_SPOTS.put(GlobalPos.of(level.dimension(), spot.pos()), settler);
     }
 
     /**
@@ -277,15 +322,20 @@ public final class SettlerBeds {
      * @return the spot
      */
     public static Optional<StrawSpot> findStrawSpot(ServerLevel level, BlockPos jobBlock, Collection<BlockPos> taken) {
-        for (int ring = 1; ring <= STRAW_RADIUS; ring++) {
+        return findSpot(level, jobBlock, 1, STRAW_RADIUS, false, taken);
+    }
+
+    private static Optional<StrawSpot> findSpot(ServerLevel level, BlockPos center, int firstRing, int lastRing, boolean feetToCenter,
+            Collection<BlockPos> taken) {
+        for (int ring = firstRing; ring <= lastRing; ring++) {
             for (int dx = -ring; dx <= ring; dx++) {
                 for (int dz = -ring; dz <= ring; dz++) {
                     if (Math.max(Math.abs(dx), Math.abs(dz)) != ring) {
                         continue;
                     }
                     for (int dy = -1; dy <= 1; dy++) {
-                        BlockPos pos = jobBlock.offset(dx, dy, dz);
-                        Direction facing = facingTo(pos, jobBlock);
+                        BlockPos pos = center.offset(dx, dy, dz);
+                        Direction facing = feetToCenter ? facingTo(pos, center).getOpposite() : facingTo(pos, center);
                         BlockPos foot = pos.relative(facing.getOpposite());
                         boolean nearTaken = taken.stream().anyMatch(other -> other.distManhattan(pos) <= 1 || other.distManhattan(foot) <= 1);
                         if (!nearTaken && isFree(level, pos) && isFree(level, foot)) {

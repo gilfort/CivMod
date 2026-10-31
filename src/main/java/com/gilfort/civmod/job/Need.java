@@ -24,9 +24,10 @@ interface Need {
      * @param level     the level
      * @param settler   the settler
      * @param meals     the settler's meals
+     * @param rest      the settler's rest: where it sleeps
      * @param foodPoint whether a food point has food for the settler now; a container lookup, ask it last
      */
-    record Context(ServerLevel level, Settler settler, SettlerMeals meals, BooleanSupplier foodPoint) {
+    record Context(ServerLevel level, Settler settler, SettlerMeals meals, SettlerRest rest, BooleanSupplier foodPoint) {
     }
 
     /**

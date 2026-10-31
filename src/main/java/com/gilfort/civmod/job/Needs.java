@@ -3,6 +3,9 @@ package com.gilfort.civmod.job;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
+
+import com.gilfort.civmod.config.CivModConfig;
 
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
@@ -35,8 +38,38 @@ final class Needs {
         }
     };
 
+    /** The fire need: a hearth within reach of the place the settler sleeps at. */
+    private static final Need FIRE = new Need() {
+        @Override
+        public int tier() {
+            return 1;
+        }
+
+        @Override
+        public Component name() {
+            return Component.translatable("civmod.need.fire");
+        }
+
+        @Override
+        public Item icon() {
+            return Items.CAMPFIRE;
+        }
+
+        @Override
+        public Check check(Context context) {
+            OptionalInt distance = context.rest().hearthDistance(context.level());
+            if (distance.isEmpty()) {
+                return new Check(false, Component.translatable("civmod.need.fire.none"));
+            }
+            int range = CivModConfig.HEARTH_RANGE.get();
+            return distance.getAsInt() <= range
+                    ? new Check(true, Component.translatable("civmod.need.fire.near", distance.getAsInt()))
+                    : new Check(false, Component.translatable("civmod.need.fire.far", distance.getAsInt(), range));
+        }
+    };
+
     /** Every need, in the order of its rows in the Needs tab. */
-    static final List<Need> ALL = List.of(FOOD);
+    static final List<Need> ALL = List.of(FOOD, FIRE);
 
     private Needs() {
     }

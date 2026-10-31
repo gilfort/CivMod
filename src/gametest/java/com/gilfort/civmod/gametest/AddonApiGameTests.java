@@ -318,6 +318,7 @@ public final class AddonApiGameTests {
         BlockPos jobBlock = helper.absolutePos(relative);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
+        helper.setBlock(new BlockPos(5, 1, 1), Blocks.CAMPFIRE);
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(3, 1, 3), data, settlement);
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_SHOVEL));
         settler.getFood().setMorningDay(Math.floorDiv(level.getOverworldClockTime(), 24000L));

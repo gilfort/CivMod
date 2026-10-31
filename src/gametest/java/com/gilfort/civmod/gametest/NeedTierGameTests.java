@@ -32,6 +32,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -152,7 +153,7 @@ public final class NeedTierGameTests {
         Settler settler = hungry(helper, jobBlock, ModJobs.LUMBERJACK.get(), 45);
         NeedsReport report = SettlerInfo.of(settler).needs();
         helper.assertTrue(report.tier() == 3, "Tier from its job: " + report);
-        helper.assertTrue(report.rows(1).size() == 1 && !report.rows(1).get(0).met(), "Tier 1 holds food, unmet: " + report);
+        helper.assertTrue(report.rows(1).size() == 2 && !report.rows(1).get(0).met(), "Tier 1 holds food (unmet) and fire: " + report);
         for (int tier = 2; tier <= NeedState.MAX_TIER; tier++) {
             helper.assertTrue(report.rows(tier).isEmpty(), "Needs without a system are hidden, tier " + tier);
         }
@@ -194,6 +195,7 @@ public final class NeedTierGameTests {
     private static void instantClimb(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos jobBlock = place(helper, new BlockPos(1, 1, 1), ModJobs.LUMBERJACK.get(), BLOCK_LEVEL);
+        helper.setBlock(new BlockPos(3, 1, 3), Blocks.CAMPFIRE);
         Settler settler = hungry(helper, jobBlock, ModJobs.LUMBERJACK.get(), 45);
         SettlerJob job = settler.getJobs().get(0);
         long today = DayClock.day(level.getOverworldClockTime());

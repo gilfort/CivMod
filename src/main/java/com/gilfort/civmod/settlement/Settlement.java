@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -30,6 +31,9 @@ public final class Settlement {
     /** Value of {@link #settlersDue()} once the starting settlers have arrived. */
     public static final long SETTLERS_ARRIVED = -1L;
 
+    /** Value of {@link #hearthBorder()} before the first look at the hearths. */
+    private static final int NO_BORDER = 0;
+
     /** Save codec. */
     public static final Codec<Settlement> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.INT.fieldOf("id").forGetter(Settlement::id),
@@ -44,7 +48,9 @@ public final class Settlement {
             Request.CODEC.listOf().optionalFieldOf("requests", List.of()).forGetter(Settlement::requests),
             DeliveryTask.CODEC.listOf().optionalFieldOf("deliveries", List.of()).forGetter(Settlement::deliveries),
             Codec.unboundedMap(UUIDUtil.STRING_CODEC, BlockPos.CODEC).optionalFieldOf("bed_reservations", Map.of())
-                    .forGetter(Settlement::bedReservations)
+                    .forGetter(Settlement::bedReservations),
+            BlockPos.CODEC.listOf().optionalFieldOf("hearths", List.of()).forGetter(settlement -> List.copyOf(settlement.hearths)),
+            Codec.INT.optionalFieldOf("hearth_border", NO_BORDER).forGetter(Settlement::hearthBorder)
     ).apply(instance, Settlement::new));
 
     private final int id;
@@ -63,6 +69,12 @@ public final class Settlement {
     private final Map<BlockPos, List<Reservations.Reservation>> reservations = new HashMap<>();
     /** Occupied work place → who occupies it (not saved, see {@link OccupiedPlaces}). */
     private final Map<BlockPos, OccupiedPlaces.Occupation> occupied = new HashMap<>();
+    /** The hearths inside the border (see {@link Hearths}). */
+    private final Set<BlockPos> hearths = new HashSet<>();
+    /** The {@link #borderHash()} the hearths were looked for at. */
+    private int hearthBorder;
+    /** Goes up with every change of the hearths (not saved). */
+    private int hearthRevision;
 
     /**
      * @param id          the settlement id (unique per dimension)
@@ -75,13 +87,15 @@ public final class Settlement {
      */
     public Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
             List<SettlementBlock> blocks) {
-        this(id, name, foundedAt, color, settlersDue, members, blocks, Map.of(), List.of(), List.of(), Map.of());
+        this(id, name, foundedAt, color, settlersDue, members, blocks, Map.of(), List.of(), List.of(), Map.of(), List.of(), NO_BORDER);
     }
 
     private Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
             List<SettlementBlock> blocks, Map<String, UUID> beds, List<Request> requests, List<DeliveryTask> deliveries,
-            Map<UUID, BlockPos> bedReservations) {
+            Map<UUID, BlockPos> bedReservations, List<BlockPos> hearths, int hearthBorder) {
         this.bedReservations.putAll(bedReservations);
+        this.hearths.addAll(hearths);
+        this.hearthBorder = hearthBorder;
         this.requests.addAll(requests);
         this.deliveries.addAll(deliveries);
         beds.forEach((key, owner) -> this.beds.put(BlockPos.of(Long.parseLong(key)), owner));
@@ -229,6 +243,61 @@ public final class Settlement {
 
     void removeBedReservationsOf(BlockPos head) {
         bedReservations.values().removeIf(head::equals);
+    }
+
+    /**
+     * @return the hearths inside the border (read-only; use {@link Hearths#of}, which keeps them up to date)
+     */
+    Set<BlockPos> hearths() {
+        return Collections.unmodifiableSet(hearths);
+    }
+
+    /**
+     * @return goes up with every change of the hearths: what was decided from them can be decided again
+     */
+    public int hearthRevision() {
+        return hearthRevision;
+    }
+
+    int hearthBorder() {
+        return hearthBorder;
+    }
+
+    void setHearthBorder(int border) {
+        hearthBorder = border;
+    }
+
+    /**
+     * @return a value that changes with the border (connected JobBlocks and their levels), never {@link #NO_BORDER}
+     */
+    int borderHash() {
+        int hash = 1;
+        for (SettlementBlock block : blocks.values()) {
+            if (block.connected()) {
+                hash += 31 * block.pos().hashCode() + block.level();
+            }
+        }
+        return hash == NO_BORDER ? 1 : hash;
+    }
+
+    void setHearths(Set<BlockPos> found) {
+        if (!hearths.equals(found)) {
+            hearths.clear();
+            hearths.addAll(found);
+            hearthRevision++;
+        }
+    }
+
+    boolean addHearth(BlockPos pos) {
+        boolean added = hearths.add(pos.immutable());
+        hearthRevision += added ? 1 : 0;
+        return added;
+    }
+
+    boolean removeHearth(BlockPos pos) {
+        boolean removed = hearths.remove(pos);
+        hearthRevision += removed ? 1 : 0;
+        return removed;
     }
 
     /**
