@@ -1652,13 +1652,13 @@ public final class SettlerWork {
                 int foodBefore = food.level();
                 int pocketsBefore = meals.provisions();
                 switch (decision.intent()) {
-                    case EAT_FROM_POCKETS -> meals.eatFromPockets(level);
+                    case EAT_FROM_POCKETS -> meals.eatFromPockets(level, day);
                     case EAT_UNTIL_FULL -> {
-                        while (meals.eatFromPockets(level)) {
+                        while (meals.eatFromPockets(level, day)) {
                             // Until nothing fits any more.
                         }
                     }
-                    case FETCH_FOOD -> meals.visitFoodPointNow(level, foodLookup.get().orElseThrow(), decision.purpose(), dayTime);
+                    case FETCH_FOOD -> meals.visitFoodPointNow(level, foodLookup.get().orElseThrow(), decision.purpose(), day, dayTime);
                     case START_FORAGING -> {
                         meals.startForagingNow(day);
                         return Intent.FORAGE;
@@ -2002,8 +2002,9 @@ public final class SettlerWork {
      * @return the needs as the Needs tab shows them now
      */
     public NeedsReport needsReport(ServerLevel level) {
-        SettlerMeals.FoodLookup foodLookup = meals.lookup(level, moment(level.getOverworldClockTime()).dayTime());
-        return needs.report(level, () -> foodLookup.get().isPresent());
+        Schedule.Moment moment = moment(level.getOverworldClockTime());
+        SettlerMeals.FoodLookup foodLookup = meals.lookup(level, moment.dayTime());
+        return needs.report(level, moment.day(), () -> foodLookup.get().isPresent());
     }
 
     /**

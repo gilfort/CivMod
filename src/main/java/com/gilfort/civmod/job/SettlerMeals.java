@@ -20,6 +20,7 @@ import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.SettlementData;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
@@ -311,7 +312,7 @@ final class SettlerMeals {
         }
         ItemStack one = stack.split(1);
         settler.getInventory().setChanged();
-        eatItem(level, one, null);
+        eatItem(level, one, null, today(level));
         if (eatUntilFull && hasPocketMeal()) {
             eatTimer = EAT_TICKS;
             return BodyStep.STAY;
@@ -348,7 +349,7 @@ final class SettlerMeals {
             if (counter && !shell.waitAtCounter(level, point.clerk())) {
                 return BodyStep.STAY;
             }
-            if (visitFoodPoint(level, point, DayClock.dayTime(level), point.visit().counter())
+            if (visitFoodPoint(level, point, today(level), DayClock.dayTime(level), point.visit().counter())
                     && counter) {
                 ClerkCounter.handOut(level, point.clerk(), true);
             }
@@ -444,11 +445,12 @@ final class SettlerMeals {
      * Eats one item from the pockets on the spot (catch-up).
      *
      * @param level the level
+     * @param day   the simulated day
      * @return whether there was something to eat
      */
-    boolean eatFromPockets(ServerLevel level) {
+    boolean eatFromPockets(ServerLevel level, long day) {
         Optional<Integer> choice = SettlerFood.choose(pocketStacks(), settler.getFood().level());
-        choice.ifPresent(slot -> eatItem(level, settler.getInventory().getItem(Settler.POCKETS_START + slot).split(1), null));
+        choice.ifPresent(slot -> eatItem(level, settler.getInventory().getItem(Settler.POCKETS_START + slot).split(1), null, day));
         return choice.isPresent();
     }
 
@@ -458,11 +460,12 @@ final class SettlerMeals {
      * @param level   the level
      * @param point   the food point
      * @param purpose why the settler fetches food
+     * @param day     the simulated day
      * @param dayTime the simulated day time
      */
-    void visitFoodPointNow(ServerLevel level, ClerkStorage.FoodPoint point, @Nullable MealPurpose purpose, long dayTime) {
+    void visitFoodPointNow(ServerLevel level, ClerkStorage.FoodPoint point, @Nullable MealPurpose purpose, long day, long dayTime) {
         mealPurpose = purpose;
-        if (visitFoodPoint(level, point, dayTime, true)) {
+        if (visitFoodPoint(level, point, day, dayTime, true)) {
             ClerkCounter.handOut(level, point.clerk(), false);
         }
         mealPurpose = null;
@@ -474,10 +477,11 @@ final class SettlerMeals {
      * At a food point: eats until full (not in the morning unless hungry), puts back leftover containers and refills
      * the provisions, from what the access rule lets the settler reach.
      *
+     * @param day       the day of the meal
      * @param atCounter whether the settler is served at the counter of a working Clerk (catch-up: always)
      * @return whether a working Clerk handed something out (food from its whole storage at the counter)
      */
-    private boolean visitFoodPoint(ServerLevel level, ClerkStorage.FoodPoint point, long dayTime, boolean atCounter) {
+    private boolean visitFoodPoint(ServerLevel level, ClerkStorage.FoodPoint point, long day, long dayTime, boolean atCounter) {
         boolean own = shell.ownClerk().filter(point.clerk()::equals).isPresent();
         Stock stock = own ? ClerkStorage.stock(level, point.clerk(), true) : ClerkStorage.stock(level, point.clerk(), dayTime, atCounter);
         if (stock.isEmpty()) {
@@ -493,7 +497,7 @@ final class SettlerMeals {
         }
         if (Schedule.eatsAtFoodPoint(mealPurpose, food.level())) {
             while (food.level() < SettlerFood.MAX) {
-                Optional<Integer> slot = SettlerFood.choose(stock.contents(), food.level());
+                Optional<Integer> slot = food.variety().choose(stock.contents(), food.level(), day, CivModConfig.FOOD_VARIETY_DAYS.get());
                 if (slot.isEmpty()) {
                     break;
                 }
@@ -502,7 +506,7 @@ final class SettlerMeals {
                     break;
                 }
                 handedOut = true;
-                eatItem(level, item, stock);
+                eatItem(level, item, stock, day);
             }
         }
         int wanted = CivModConfig.PROVISION_NUTRITION.get();
@@ -529,12 +533,22 @@ final class SettlerMeals {
         return handedOut && stock.counter() && !own;
     }
 
-    private void eatItem(ServerLevel level, ItemStack item, @Nullable Stock stock) {
+    /** The day meals are noted with outside catch-up: the day the needs are checked on. */
+    private long today(ServerLevel level) {
+        return shell.moment(level.getOverworldClockTime()).day();
+    }
+
+    private void recordMeal(ItemStack item, long day) {
+        settler.getFood().variety().record(BuiltInRegistries.ITEM.getKey(item.getItem()), day);
+    }
+
+    private void eatItem(ServerLevel level, ItemStack item, @Nullable Stock stock, long day) {
         net.minecraft.world.food.FoodProperties properties = item.get(net.minecraft.core.component.DataComponents.FOOD);
         if (properties == null) {
             return;
         }
         settler.getFood().eat(properties);
+        recordMeal(item, day);
         hungryNoFood = false;
         eatingEffects(level, item);
         ItemStack rest = SettlerFood.remainder(item);
@@ -560,6 +574,7 @@ final class SettlerMeals {
             net.minecraft.world.food.FoodProperties properties = item.get(net.minecraft.core.component.DataComponents.FOOD);
             if (properties != null) {
                 food.eat(properties);
+                recordMeal(item, today(level));
                 hungryNoFood = false;
                 eatingEffects(level, item);
                 return SettlerFood.remainder(item);
