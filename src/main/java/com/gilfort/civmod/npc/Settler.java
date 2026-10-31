@@ -691,6 +691,7 @@ public class Settler extends PathfinderMob {
         ContainerHelper.saveAllItems(output, inventory.getItems());
         food.save(output);
         output.store("skills", com.gilfort.civmod.job.SettlerSkills.CODEC, skills.snapshot());
+        output.store("needs", com.gilfort.civmod.job.NeedState.CODEC, work.needState());
     }
 
     @Override
@@ -707,6 +708,7 @@ public class Settler extends PathfinderMob {
         ContainerHelper.loadAllItems(input, inventory.getItems());
         food.load(input);
         input.read("skills", com.gilfort.civmod.job.SettlerSkills.CODEC).ifPresent(skills::restore);
+        input.read("needs", com.gilfort.civmod.job.NeedState.CODEC).ifPresent(work::restoreNeeds);
         setInvisible(isAway());
     }
 }

@@ -31,6 +31,10 @@ _Avoid_: Loops calling the shell to steer it (set the active job, start a walk, 
 What the meal or rest module tells the Settler Shell a meal or rest intent wants next: stay, stop, eat from the pockets, work, done, walk to a target for an activity. Only the shell walks or teleports the settler and sets its activity. Code: `BodyStep`, applied in `SettlerWork.go`.
 _Avoid_: Meal or rest code starting walks or setting the activity
 
+**Need tier**:
+Lv 1–20 / 21–40 / 41–60 / 61–80 / 81+. A settler's tier follows the highest capped target level of its current jobs; an unmet tier gives one grace day, then the settler works at the top of the lower tier in every job, and it climbs back at once when the needs are met. Code: `NeedState` (rules), `SettlerNeeds` (per settler); a new need is a `Need` listed in `Needs.ALL`.
+_Avoid_: Reading `SettlerSkills.effectiveLevel` for the level a settler works at (`SettlerWork.effectiveLevel` includes the need limit)
+
 **Sitting**:
 A settler state shown by pose: vanilla `Pose.SITTING` (synced like `Pose.SLEEPING`), drawn as the vanilla passenger pose lowered to the seat, hitbox about 1.3 blocks high (eye height, name tag and thought bubble follow), not pushable; the body keeps its facing, the head looks around, a held tool stays in the hand. A settler sits exactly while its job step is a work break (`JobStep.Pause` with `JobStatus.PAUSING`), on the ground at its own position, if it is on the ground and out of fluids when the break starts (decided once; neither the pose nor the decision is saved, the next decision after loading sets it again); any other step, a job step ended outside a decision (job removed, JobBlock broken) and damage stand it up. No seat entity. Code: `Settler.sitDown(seat, facing)` / `Settler.standUp()` (internal hook for later Tavern seats), decided in `SettlerWork.endDecision`, drawn by `SettlerRenderer`.
 _Avoid_: Seat entity, riding; a timer or cancel list of its own for the sitting

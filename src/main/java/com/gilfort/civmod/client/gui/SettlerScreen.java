@@ -5,6 +5,8 @@ import java.util.List;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.JobBuffer;
+import com.gilfort.civmod.job.NeedState;
+import com.gilfort.civmod.job.NeedsReport;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -25,7 +27,7 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 /**
  * Screen of a settler: Overview (name, status, settlement, dismiss when homeless), Jobs (priority list; "⇄" opens the
  * job switcher listing the other Jobs unlocked at that job's JobBlock), Inventory
- * (tool belt, offhand, pockets), Mission (the one Mission Job, chosen from those the Mission Board offers; only for
+ * (tool belt, offhand, pockets), Needs (per need tier, the tier the settler works in highlighted), Mission (the one Mission Job, chosen from those the Mission Board offers; only for
  * settlers with a Mission Job) and one tab per job below the panel (status and buffer).
  */
 public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
@@ -43,6 +45,12 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
     /** Y of the job switcher's first Job button. */
     private static final int SWITCH_TOP = 34;
     private static final int SWITCH_ICON = 16;
+    /** Y of the Needs tab's first line. */
+    private static final int NEEDS_TOP = 22;
+    private static final int NEEDS_LINE = 10;
+    /** Space between two tiers in the Needs tab. */
+    private static final int NEEDS_GAP = 4;
+    private static final int NEED_MET_COLOR = 0xFF2E7D32;
 
     /** The job whose switcher the Jobs tab shows, -1 for the priority list. */
     private int switching = -1;
@@ -57,6 +65,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                 new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.overview"), new ItemStack(Items.PLAYER_HEAD)),
                 new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.jobs"), new ItemStack(Items.IRON_PICKAXE)),
                 new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.inventory"), new ItemStack(Items.CHEST)),
+                new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.needs"), new ItemStack(Items.BREAD)),
                 new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.mission"), new ItemStack(Items.MAP))));
     }
 
@@ -192,9 +201,40 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                 graphics.text(font, Component.translatable("civmod.gui.settler.pockets"), CivGui.PADDING, SettlerMenu.POCKETS_Y - 10,
                         CivGui.LABEL_COLOR, false);
             }
+            case SettlerMenu.TAB_NEEDS -> extractNeedsTab(graphics, info.needs());
             case SettlerMenu.TAB_MISSION -> extractMissionTab(graphics, info);
             default -> extractJobTab(graphics, info, tab - SettlerMenu.FIRST_JOB_TAB, mouseX, mouseY);
         }
+    }
+
+    /** One section per tier with visible needs: the tier the settler works in highlighted, higher tiers dimmed as preview. */
+    private void extractNeedsTab(GuiGraphicsExtractor graphics, NeedsReport needs) {
+        int y = NEEDS_TOP;
+        int width = imageWidth - 2 * CivGui.PADDING;
+        for (int tier = 1; tier <= NeedState.MAX_TIER; tier++) {
+            List<NeedsReport.Row> rows = needs.rows(tier);
+            if (rows.isEmpty()) {
+                continue;
+            }
+            boolean preview = tier > needs.tier();
+            graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.settler.needs.tier." + tier), width), CivGui.PADDING, y,
+                    preview ? CivGui.HINT_COLOR : CivGui.LABEL_COLOR, false);
+            y += NEEDS_LINE;
+            for (NeedsReport.Row row : rows) {
+                Component mark = Component.literal(row.met() ? "✓" : "✗");
+                int nameX = CivGui.PADDING + font.width(mark) + 3;
+                graphics.text(font, mark, CivGui.PADDING, y, preview ? CivGui.HINT_COLOR : row.met() ? NEED_MET_COLOR : CivGui.ERROR_COLOR, false);
+                graphics.text(font, row.name(), nameX, y, preview ? CivGui.HINT_COLOR : CivGui.LABEL_COLOR, false);
+                graphics.text(font, CivGui.fit(font, row.detail(), width - nameX + CivGui.PADDING), nameX, y + NEEDS_LINE, CivGui.HINT_COLOR, false);
+                y += 2 * NEEDS_LINE;
+            }
+            y += NEEDS_GAP;
+        }
+    }
+
+    /** The height of a tier's section in the Needs tab. */
+    private static int needsSection(int rows) {
+        return NEEDS_LINE + rows * 2 * NEEDS_LINE;
     }
 
     private void extractMissionTab(GuiGraphicsExtractor graphics, SettlerInfo info) {
@@ -223,6 +263,9 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         if (tab == SettlerMenu.TAB_JOBS) {
             return List.of(Component.translatable("civmod.gui.settler.help.switch"));
         }
+        if (tab == SettlerMenu.TAB_NEEDS) {
+            return List.of(Component.translatable("civmod.gui.settler.help.needs"));
+        }
         return List.of();
     }
 
@@ -243,6 +286,20 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         if (tab == SettlerMenu.TAB_OVERVIEW) {
             int x = leftPos + CivGui.PADDING + font.width(Component.translatable("civmod.gui.settler.food")) + 4;
             CivGui.foodBar(graphics, x, topPos + FOOD_Y - 1, menu.getInfo().food().level(), menu.getInfo().food().saturation());
+        }
+        if (tab == SettlerMenu.TAB_NEEDS) {
+            NeedsReport needs = menu.getInfo().needs();
+            int y = topPos + NEEDS_TOP;
+            for (int tier = 1; tier <= NeedState.MAX_TIER; tier++) {
+                int rows = needs.rows(tier).size();
+                if (rows == 0) {
+                    continue;
+                }
+                if (tier == needs.tier()) {
+                    CivGui.inset(graphics, leftPos + CivGui.PADDING - 2, y - 2, imageWidth - 2 * CivGui.PADDING + 4, needsSection(rows) + 2);
+                }
+                y += needsSection(rows) + NEEDS_GAP;
+            }
         }
         if (tab >= SettlerMenu.FIRST_JOB_TAB) {
             state(menu.getInfo(), tab - SettlerMenu.FIRST_JOB_TAB).ifPresent(state -> {
@@ -277,7 +334,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                     imageWidth - 2 * CivGui.PADDING), CivGui.PADDING, 34, CivGui.LABEL_COLOR, false);
             SettlerInfo.SkillInfo skill = state.skill();
             if (skill.limited()) {
-                graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.settler.limited", skill.level(), skill.effective()),
+                graphics.text(font, CivGui.fit(font, Component.translatable(skill.limitedByNeeds() ? "civmod.gui.settler.limited_needs" : "civmod.gui.settler.limited", skill.level(), skill.effective()),
                         imageWidth - 2 * CivGui.PADDING), CivGui.PADDING, 45, LIMITED_COLOR, false);
             } else if (skill.atCap()) {
                 graphics.text(font, Component.translatable("civmod.gui.settler.level", skill.level()), CivGui.PADDING, 45, CivGui.LABEL_COLOR, false);
