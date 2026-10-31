@@ -10,9 +10,11 @@ import com.gilfort.civmod.food.FoodVariety;
 
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 
 /** The needs that exist so far: add a new {@link Need} to {@link #ALL}. */
 final class Needs {
@@ -85,7 +87,7 @@ final class Needs {
 
         @Override
         public Item icon() {
-            return Items.RED_BED;
+            return Blocks.BED.pick(DyeColor.RED).asItem();
         }
 
         @Override
