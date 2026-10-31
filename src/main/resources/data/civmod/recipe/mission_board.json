@@ -2,14 +2,13 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "M": "minecraft:map",
     "B": "minecraft:barrel",
-    "P": "#minecraft:planks"
+    "P": "#minecraft:planks",
+    "S": "minecraft:leather_boots"
   },
   "pattern": [
-    "PMP",
-    "PBP",
-    "PPP"
+    "PSP",
+    "PBP"
   ],
   "result": {
     "id": "civmod:mission_board"

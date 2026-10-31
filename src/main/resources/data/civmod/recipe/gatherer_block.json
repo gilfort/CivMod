@@ -2,12 +2,13 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "S": "minecraft:sweet_berries",
-    "B": "minecraft:barrel"
+    "B": "minecraft:barrel",
+    "P": "#minecraft:planks",
+    "S": "minecraft:wheat_seeds"
   },
   "pattern": [
-    "S",
-    "B"
+    "PSP",
+    "PBP"
   ],
   "result": {
     "id": "civmod:gatherer_block"

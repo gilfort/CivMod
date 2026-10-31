@@ -2,14 +2,13 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "T": "minecraft:stone_axe",
     "B": "minecraft:barrel",
-    "P": "#minecraft:planks"
+    "P": "#minecraft:planks",
+    "S": "minecraft:stone_axe"
   },
   "pattern": [
-    "PTP",
-    "PBP",
-    "PPP"
+    "PSP",
+    "PBP"
   ],
   "result": {
     "id": "civmod:lumberjack_block"
