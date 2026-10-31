@@ -57,6 +57,9 @@ public final class CivGui {
     /** Colour for error texts (vanilla dark red). */
     public static final int ERROR_COLOR = 0xFFAA0000;
 
+    /** Colour for a met need (dark green). */
+    public static final int NEED_MET_COLOR = 0xFF2E7D32;
+
     /** Translucent slot fill over a slot that cannot be used. */
     private static final int INACTIVE_TINT = 0xA0000000 | (INSET_FILL & 0xFFFFFF);
     /** Vanilla slot highlight under the mouse. */
