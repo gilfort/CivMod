@@ -107,7 +107,7 @@ public final class FoundTabGameTests {
     }
 
     /**
-     * "Not scanned yet" before the first scan, then the found logs; right-click through the menu excludes a listed type
+     * "Not scanned yet" before the first scan, then the found logs; a toggle through the menu excludes a listed type
      * (an unlisted one is refused); with every log excluded the job pauses with "All resources excluded", and
      * including the log again brings it back at once (well before the 30 s retry).
      */
