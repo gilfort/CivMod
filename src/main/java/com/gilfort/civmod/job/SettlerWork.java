@@ -758,7 +758,7 @@ public final class SettlerWork {
         SettlerMeals.FoodLookup foodLookup = meals.lookup(level, dayTime);
         if (catchUpFrom < 0 && dayTime >= dayTimes(day).wake()) {
             // Missed days first: catch-up checks them in their order.
-            needs.step(level, day, () -> foodLookup.get().isPresent());
+            needs.step(level, day, foodLookup::hasFood);
         }
         Decision decision = Schedule.next(snapshot(level, day, dayTime, foodLookup, liveFacts(level, false, woke)));
         act(level, decision, foodLookup, day, dayTime);
@@ -1583,7 +1583,7 @@ public final class SettlerWork {
 
         // The same need rules as live: the first hour of a day is its wake-up.
         SettlerMeals.FoodLookup foodLookup = meals.lookup(level, dayTime);
-        needs.step(level, day, () -> foodLookup.get().isPresent());
+        needs.step(level, day, foodLookup::hasFood);
 
         // Start of the hour: back from foraging, the morning plan, a meal if hungry.
         if (decideCatchUp(level, day, dayTime) == Intent.FORAGE) {
@@ -2004,7 +2004,7 @@ public final class SettlerWork {
     public NeedsReport needsReport(ServerLevel level) {
         Schedule.Moment moment = moment(level.getOverworldClockTime());
         SettlerMeals.FoodLookup foodLookup = meals.lookup(level, moment.dayTime());
-        return needs.report(level, moment.day(), () -> foodLookup.get().isPresent());
+        return needs.report(level, moment.day(), foodLookup::hasFood);
     }
 
     /**
@@ -2032,7 +2032,7 @@ public final class SettlerWork {
      */
     public void checkNeedsNow(ServerLevel level, long day) {
         SettlerMeals.FoodLookup foodLookup = meals.lookup(level, moment(level.getOverworldClockTime()).dayTime());
-        needs.step(level, day, () -> foodLookup.get().isPresent());
+        needs.step(level, day, foodLookup::hasFood);
     }
 
     /**

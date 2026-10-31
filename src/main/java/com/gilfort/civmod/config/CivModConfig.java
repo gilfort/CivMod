@@ -102,7 +102,6 @@ public final class CivModConfig {
             .comment("Multiplier on the output settlers produce while unloaded (1.0 = as if the player was there).")
             .defineInRange("catchUpMultiplier", 1.0, 0.0, 10.0);
 
-    /** The built config spec, registered in the mod constructor. */
     /** Largest distance between a settler's sleeping place and a hearth for the Fire need. */
     public static final ModConfigSpec.IntValue HEARTH_RANGE = BUILDER
             .comment("Fire need: largest distance in blocks between a settler's sleeping place and a hearth.",
@@ -115,6 +114,7 @@ public final class CivModConfig {
                     "It always covers at least the last 6 food items eaten.")
             .defineInRange("foodVarietyDays", 3, 1, 14);
 
+    /** The built config spec, registered in the mod constructor. */
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     private CivModConfig() {
