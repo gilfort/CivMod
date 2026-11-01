@@ -365,11 +365,11 @@ public final class SettlementWorld {
     public static void notifyPlacement(ServerPlayer player, SettlementManager.Placement placement) {
         Component message = switch (placement.outcome()) {
             case FOUNDED -> Component.translatable("civmod.settlement.founded");
-            case REVIVED -> Component.translatable("civmod.settlement.revived", placement.settlement().displayName());
+            case REVIVED -> Component.translatable("civmod.settlement.revived", placement.settlement().orElseThrow().displayName());
             case REFUSED -> Component.translatable("civmod.settlement.center_refused").withStyle(net.minecraft.ChatFormatting.RED);
-            case JOINED -> Component.translatable("civmod.settlement.joined", placement.settlement().displayName());
+            case JOINED -> Component.translatable("civmod.settlement.joined", placement.settlement().orElseThrow().displayName());
             case UNSETTLED -> Component.translatable("civmod.settlement.unsettled").withStyle(net.minecraft.ChatFormatting.RED);
-            case UNCONNECTED -> (placement.required() == 0 ? Component.translatable("civmod.settlement.unconnected_no_center")
+            case UNCONNECTED -> (placement.nothingToReach() ? Component.translatable("civmod.settlement.unconnected_no_center")
                     : Component.translatable("civmod.settlement.unconnected", placement.distance(), placement.required()))
                     .withStyle(net.minecraft.ChatFormatting.RED);
         };

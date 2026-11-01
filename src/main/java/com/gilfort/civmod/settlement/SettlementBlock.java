@@ -318,6 +318,7 @@ public final class SettlementBlock {
      * @param stationTypes the unlock items in the Station Types slots, by slot ({@link Items#AIR}: empty; slot 0 is the
      *                   Base Job's station and never read back)
      * @param found      the Found tab state per Resource Collection Job
+     * @param centerRace the race of a Center Block, empty for every other JobBlock
      */
     private record PlaceFields(List<Job> autoAssign, List<Identifier> legacyExcluded, Optional<SavedScan> legacyScan, List<Item> stationTypes,
             List<SavedFound> found, Optional<Identifier> centerRace) {
@@ -767,6 +768,13 @@ public final class SettlementBlock {
      */
     public Optional<Identifier> centerRace() {
         return centerRace;
+    }
+
+    /**
+     * @return whether this is a Center Block
+     */
+    public boolean isCenter() {
+        return centerRace.isPresent();
     }
 
     /**

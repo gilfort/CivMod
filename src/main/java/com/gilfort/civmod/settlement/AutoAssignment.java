@@ -172,7 +172,7 @@ public final class AutoAssignment {
             long day = DayClock.day(level);
             Long last = LAST_DAY.put(level.dimension(), day);
             if (last == null || day > last) {
-                // Also on the first tick after a start: a timer that ran out must not wait for the next morning.
+                // Also on the first tick after a start: a Center grace that ran out must not wait for the next morning.
                 SettlementWorld.morning(level, day);
             }
             if (last != null && day > last) {

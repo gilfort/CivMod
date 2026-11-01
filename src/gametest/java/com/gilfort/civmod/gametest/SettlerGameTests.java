@@ -57,7 +57,7 @@ public final class SettlerGameTests {
 
     private static Settlement found(SettlementData data, BlockPos pos, long gameTime) {
         return SettlementManager.placeCenter(data, pos, ModJobs.ADMINISTRATOR.get(), 1, Races.HUMAN, gameTime, RandomSource.create(0L),
-                SettlementManager.Listener.NONE).settlement();
+                SettlementManager.Listener.NONE).settlement().orElseThrow();
     }
 
     /** Founding schedules settlers 600 ticks later; only missing settlers up to the target are spawned. */

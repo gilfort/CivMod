@@ -42,9 +42,19 @@ public final class TestSettlements {
             return Optional.empty();
         }
         BlockPos center = pos.above(CENTER_HEIGHT);
-        found(data, center);
-        level.setBlock(center, ModBlocks.HUMAN_CENTER_BLOCK.get().defaultBlockState(), Block.UPDATE_ALL);
+        centerAt(level, center);
         return Optional.of(center);
+    }
+
+    /**
+     * Founds a settlement with a Center Block at exactly this position, whatever reaches it.
+     *
+     * @param level  the dimension
+     * @param center the Center Block position
+     */
+    public static void centerAt(ServerLevel level, BlockPos center) {
+        found(SettlementData.get(level), center);
+        level.setBlock(center, ModBlocks.HUMAN_CENTER_BLOCK.get().defaultBlockState(), Block.UPDATE_ALL);
     }
 
     /**
@@ -111,13 +121,13 @@ public final class TestSettlements {
      * @param settlement the settlement
      */
     public static void dissolve(ServerLevel level, Settlement settlement) {
-        settlement.blocks().stream().filter(block -> block.centerRace().isPresent()).map(SettlementBlock::pos).toList()
+        settlement.blocks().stream().filter(SettlementBlock::isCenter).map(SettlementBlock::pos).toList()
                 .forEach(center -> level.destroyBlock(center, false));
         SettlementWorld.morning(level, DayClock.day(level) + SettlementRules.CENTERLESS_DAYS + 1);
     }
 
     /**
-     * A settlement as an earlier version saved it: connected JobBlocks, no Center Block and no timer.
+     * A settlement as an earlier version saved it: connected JobBlocks, no Center Block and no Center grace.
      *
      * @param data      the settlement data
      * @param positions the JobBlock positions
@@ -132,13 +142,11 @@ public final class TestSettlements {
     }
 
     private static boolean reached(SettlementData data, BlockPos pos) {
-        return data.settlements().stream().flatMap(settlement -> settlement.blocks().stream()).anyMatch(block -> block.connected()
-                && SettlementRules.horizontalDistance(pos, block.pos()) <= SettlementRules.joinRadius(block));
+        return data.settlementContaining(pos).isPresent();
     }
 
-    private static Settlement found(SettlementData data, BlockPos center) {
+    private static void found(SettlementData data, BlockPos center) {
         Settlement settlement = data.create(0L, SettlementColors.DEFAULT, Settlement.SETTLERS_ARRIVED);
         data.addBlock(settlement, SettlementBlock.center(center, ModJobs.ADMINISTRATOR.get(), SettlementRules.MIN_LEVEL, Races.HUMAN));
-        return settlement;
     }
 }

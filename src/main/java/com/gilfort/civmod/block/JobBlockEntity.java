@@ -9,6 +9,7 @@ import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.registry.ModBlockEntityTypes;
 import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
@@ -47,7 +48,7 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
 
     private NonNullList<ItemStack> items = NonNullList.withSize(SLOTS, ItemStack.EMPTY);
     private int jobLevel = SettlementRules.MIN_LEVEL;
-    private int settlementId = -1;
+    private int settlementId = Settlement.NO_SETTLEMENT;
     private boolean connected = true;
     /** Counts every change of the slots (not saved): the Clerk stock view re-reads them when it moves. */
     private int changes;
@@ -101,7 +102,7 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     }
 
     /**
-     * @return the settlement id, {@code -1} if not registered yet
+     * @return the settlement id, {@link Settlement#NO_SETTLEMENT} if not registered yet
      */
     public int getSettlementId() {
         return settlementId;
@@ -149,7 +150,7 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
         ContainerHelper.loadAllItems(input, items);
         changes++;
         jobLevel = SettlementRules.clampLevel(input.getIntOr("job_level", SettlementRules.MIN_LEVEL));
-        settlementId = input.getIntOr("settlement", -1);
+        settlementId = input.getIntOr("settlement", Settlement.NO_SETTLEMENT);
         connected = input.getBooleanOr("connected", true);
     }
 
@@ -201,25 +202,26 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
         // corrected state with the chunk data, so no block update is sent here.
         if (level instanceof ServerLevel serverLevel) {
             SettlementData.get(serverLevel).unsettledAt(worldPosition).ifPresent(block -> {
-                settlementId = -1;
+                settlementId = Settlement.NO_SETTLEMENT;
                 connected = false;
-                if (block.level() != jobLevel) {
-                    BlockPos pos = worldPosition;
-                    int level = jobLevel;
-                    serverLevel.getServer().execute(() -> SettlementWorld.setLevel(serverLevel, pos, level));
-                }
+                syncRegisteredLevel(serverLevel, block.level());
             });
             JobBlockSite.at(serverLevel, worldPosition).ifPresent(site -> {
                 settlementId = site.settlement().id();
                 connected = site.block().connected();
-                // Placement registers with the default level before the block entity exists; sync the real level.
-                if (site.level() != jobLevel) {
-                    // Deferred: onLoad may run during chunk loading, where other blocks must not be touched.
-                    BlockPos pos = worldPosition;
-                    int level = jobLevel;
-                    serverLevel.getServer().execute(() -> SettlementWorld.setLevel(serverLevel, pos, level));
-                }
+                syncRegisteredLevel(serverLevel, site.level());
             });
+        }
+    }
+
+    /**
+     * Placement registers with the default level before the block entity exists; this syncs the real level. Deferred:
+     * onLoad may run during chunk loading, where other blocks must not be touched.
+     */
+    private void syncRegisteredLevel(ServerLevel serverLevel, int registered) {
+        if (registered != jobLevel) {
+            int target = jobLevel;
+            serverLevel.getServer().execute(() -> SettlementWorld.setLevel(serverLevel, worldPosition, target));
         }
     }
 

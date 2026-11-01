@@ -199,7 +199,7 @@ final class WorkersTabView implements JobBlockTabView {
             lines.add(Component.translatable("civmod.gui.job_block.help.open_settler"));
         }
         if (info.inSettlement() && !info.connected()) {
-            lines.add(Component.translatable(info.required() == 0 ? "civmod.gui.job_block.help.no_center" : "civmod.gui.job_block.help.connect"));
+            lines.add(Component.translatable(info.nothingToReach() ? "civmod.gui.job_block.help.no_center" : "civmod.gui.job_block.help.connect"));
         }
         if (!info.inSettlement()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.no_settlement"));

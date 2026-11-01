@@ -163,7 +163,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         if (!info.inSettlement()) {
             settlement = Component.translatable("civmod.gui.job_block.not_registered").withStyle(ChatFormatting.RED);
         } else if (!info.connected()) {
-            settlement = (info.required() == 0 ? Component.translatable("civmod.gui.job_block.no_center")
+            settlement = (info.nothingToReach() ? Component.translatable("civmod.gui.job_block.no_center")
                     : Component.translatable("civmod.gui.job_block.unconnected", info.required(), info.distance())).withStyle(ChatFormatting.RED);
         } else {
             settlement = info.settlementName();

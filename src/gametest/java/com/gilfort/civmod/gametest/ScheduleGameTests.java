@@ -72,7 +72,7 @@ public final class ScheduleGameTests {
     }
 
     private static Settlement settlementAt(SettlementData data, BlockPos pos) {
-        return TestSettlements.place(data, pos, ModJobs.LUMBERJACK.get(), 1).settlement();
+        return TestSettlements.place(data, pos, ModJobs.LUMBERJACK.get(), 1).settlement().orElseThrow();
     }
 
     /** The nearest free bed is claimed, beds are never shared, a destroyed bed is released. */

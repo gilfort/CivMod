@@ -66,7 +66,7 @@ public final class Benchmark {
     private static final List<Item> CRAFTED = List.of(Items.STONE_PICKAXE, Items.TORCH, Items.STICK, Items.OAK_PLANKS);
     /** Settlers spawned: one per Resource Collection JobBlock, the two Clerks, the Deliverymen and the Craftspersons. */
     public static final int SETTLERS = SIZE + 2 + DELIVERYMEN + CRAFTSPERSONS + DELIVERY_CRAFTSPERSONS;
-    /** JobBlocks built: the Resource Collection ones, the two Clerks and the Craftspersons. */
+    /** JobBlocks built: the Resource Collection ones, the two Clerks, the Center Block and the Craftspersons. */
     public static final int JOB_BLOCKS = SIZE + 3 + CRAFTSPERSONS + DELIVERY_CRAFTSPERSONS;
     /** The second Clerk, relative to the origin: behind the Craftspersons, so it is no collecting job's Home Clerk. */
     public static final Vec3i SECOND_CLERK = new Vec3i(-3, 0, 22);

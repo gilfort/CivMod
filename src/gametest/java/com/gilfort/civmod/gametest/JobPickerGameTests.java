@@ -70,7 +70,7 @@ public final class JobPickerGameTests {
     }
 
     private static Settlement place(SettlementData data, BlockPos pos, Job jobType, int level) {
-        return TestSettlements.place(data, pos, jobType, level).settlement();
+        return TestSettlements.place(data, pos, jobType, level).settlement().orElseThrow();
     }
 
     private static SettlementBlock block(SettlementData data, BlockPos pos) {

@@ -125,7 +125,7 @@ public final class ScrollGameTests {
     /** Assignment rules: ok, occupied, duplicate, unconnected, other settlement. */
     private static void assignmentRules(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement settlement = place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get()).settlement();
+        Settlement settlement = place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get()).settlement().orElseThrow();
         BlockPos second = new BlockPos(5, 64, 0);
         place(data, second, ModJobs.LUMBERJACK.get());
         BlockPos unconnected = new BlockPos(40, 64, 0);
@@ -145,7 +145,7 @@ public final class ScrollGameTests {
     /** Unassign frees the block; removing an assigned JobBlock reports the settler that loses the job. */
     private static void unassignAndRemoval(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement settlement = place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get()).settlement();
+        Settlement settlement = place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get()).settlement().orElseThrow();
         BlockPos second = new BlockPos(5, 64, 0);
         place(data, second, ModJobs.MINER.get());
         TestAssignments.assign(data, JOB_BLOCK, ALICE, "Alice", settlement.id(), List.of());
@@ -176,7 +176,7 @@ public final class ScrollGameTests {
     /** Points and assignment survive a save / load round trip. */
     private static void pointsPersistence(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement settlement = place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get()).settlement();
+        Settlement settlement = place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get()).settlement().orElseThrow();
         JobAssignments.cyclePoint(data, JOB_BLOCK, new BlockPos(3, 64, 0), true, false);
         JobAssignments.cyclePoint(data, JOB_BLOCK, new BlockPos(2, 64, 2), false, true);
         JobAssignments.cyclePoint(data, JOB_BLOCK, new BlockPos(2, 64, 2), false, true);

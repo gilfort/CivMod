@@ -59,6 +59,13 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         MissionTab missionTab, BiomeInfo biome) {
 
     /**
+     * @return for an unconnected block: whether the settlement has no connected block to reach
+     */
+    public boolean nothingToReach() {
+        return required == 0;
+    }
+
+    /**
      * The biome bonuses of the JobBlock's Job (vault {@code Systems/JobBlock.md}, decisions on biome bonuses).
      *
      * @param biome    today's biome, empty while no biome is known

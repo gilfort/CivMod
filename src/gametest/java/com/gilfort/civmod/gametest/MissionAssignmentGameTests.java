@@ -224,7 +224,7 @@ public final class MissionAssignmentGameTests {
     private static void persistence(GameTestHelper helper) {
         SettlementData data = new SettlementData();
         BlockPos board = new BlockPos(0, 64, 0);
-        Settlement settlement = TestSettlements.place(data, board, ModJobs.ADVENTURER.get(), 2).settlement();
+        Settlement settlement = TestSettlements.place(data, board, ModJobs.ADVENTURER.get(), 2).settlement().orElseThrow();
         Job adventurer = ModJobs.ADVENTURER.get();
         TestAssignments.assign(data, board, ALICE, "Alice", settlement.id(), List.of());
         TestAssignments.assign(data, board, BOB, "Bob", settlement.id(), List.of());

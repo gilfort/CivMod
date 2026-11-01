@@ -46,8 +46,7 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 
 /**
  * GameTests for the Center Block (vault {@code Systems/Settlement.md}, decisions of 2026-10-31 and 2026-11-01): founding,
- * radii, the limit per race, JobBlocks without a settlement, the Administrator and the timer of a settlement without a
- * Center Block.
+ * radii, the limit per race, JobBlocks without a settlement, the Administrator and the Center grace.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class CenterBlockGameTests {
@@ -113,8 +112,8 @@ public final class CenterBlockGameTests {
         Placement first = SettlementManager.placeCenter(data, at(0), ModJobs.ADMINISTRATOR.get(), 1, Races.HUMAN, 1000L, RandomSource.create(0L),
                 SettlementManager.Listener.NONE);
         helper.assertTrue(first.outcome() == Outcome.FOUNDED, "Founded: " + first);
-        helper.assertTrue(first.settlement().settlersDue() == 1000L + SettlementManager.SETTLER_DELAY_TICKS, "Starting settlers on their way");
-        helper.assertTrue(first.settlement().hasCenter(Races.HUMAN), "The block is the settlement's Center Block");
+        helper.assertTrue(first.settlement().orElseThrow().settlersDue() == 1000L + SettlementManager.SETTLER_DELAY_TICKS, "Starting settlers on their way");
+        helper.assertTrue(first.settlement().orElseThrow().hasCenter(Races.HUMAN), "The block is the settlement's Center Block");
         helper.assertTrue(center(data, 151).outcome() == Outcome.FOUNDED && data.settlements().size() == 2, "Outside both zones: a second settlement");
         helper.succeed();
     }
@@ -160,9 +159,9 @@ public final class CenterBlockGameTests {
     /** A second Center Block of a race is refused anywhere in the settlement's zones; another race may join. */
     private static void onePerRace(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement settlement = center(data, 0).settlement();
+        Settlement settlement = center(data, 0).settlement().orElseThrow();
         Placement inJoin = center(data, 10);
-        helper.assertTrue(inJoin.outcome() == Outcome.REFUSED && inJoin.settlement() == settlement, "Refused inside the join radius");
+        helper.assertTrue(inJoin.outcome() == Outcome.REFUSED && inJoin.settlement().orElseThrow() == settlement, "Refused inside the join radius");
         helper.assertTrue(center(data, 60).outcome() == Outcome.REFUSED, "Refused inside the exclusion zone");
         helper.assertTrue(SettlementManager.wouldRefuse(data, at(60), Races.HUMAN), "Known before placing");
         helper.assertTrue(data.settlementAt(at(10)).isEmpty() && data.settlementAt(at(60)).isEmpty() && settlement.blocks().size() == 1,
@@ -170,7 +169,7 @@ public final class CenterBlockGameTests {
         helper.assertTrue(center(data, 0).outcome() == Outcome.JOINED && settlement.blocks().size() == 1, "The registered one stays as it is");
 
         Placement other = center(data, 10, OTHER_RACE);
-        helper.assertTrue(other.outcome() == Outcome.JOINED && other.settlement() == settlement, "Another race joins the settlement");
+        helper.assertTrue(other.outcome() == Outcome.JOINED && other.settlement().orElseThrow() == settlement, "Another race joins the settlement");
         helper.assertTrue(data.settlements().size() == 1, "No second settlement");
         helper.succeed();
     }
@@ -189,7 +188,7 @@ public final class CenterBlockGameTests {
         });
     }
 
-    /** The Center Block offers the Administrator, a Service job, and is upgraded like every JobBlock. */
+    /** The Center Block offers the Administrator, a Service job; {@code upgrade_item_center_block} tests its upgrade. */
     private static void offersAdministrator(GameTestHelper helper) {
         helper.assertTrue(ModBlocks.HUMAN_CENTER_BLOCK.get().getJobType() == ModJobs.ADMINISTRATOR.get(), "The block's job");
         helper.assertTrue(ModJobs.ADMINISTRATOR.getId().equals(CivMod.id("administrator")), "Job id");
@@ -205,7 +204,7 @@ public final class CenterBlockGameTests {
         Settler settler = CatchUpGameTests.lumberjack(helper, forced);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlement(settler.getSettlementId()).orElseThrow();
-        BlockPos center = settlement.blocks().stream().filter(block -> block.centerRace().isPresent()).map(SettlementBlock::pos).findFirst().orElseThrow();
+        BlockPos center = settlement.blocks().stream().filter(SettlementBlock::isCenter).map(SettlementBlock::pos).findFirst().orElseThrow();
         helper.assertTrue(SettlementWorld.assign(level, center, settler, ModJobs.ADMINISTRATOR.get()) == AssignResult.OK, "Assigned at the Center Block");
         SettlerJob lumberjack = settler.getJobs().stream().filter(job -> job.jobType() == ModJobs.LUMBERJACK.get()).findFirst().orElseThrow();
         SettlementWorld.setJobs(level, settler, List.of(new SettlerJob(ModJobs.ADMINISTRATOR.get(), center), lumberjack));
@@ -221,7 +220,7 @@ public final class CenterBlockGameTests {
     private static void jobBlockNeverFounds(GameTestHelper helper) {
         SettlementData data = new SettlementData();
         Placement placement = jobBlock(data, 0, 1);
-        helper.assertTrue(placement.outcome() == Outcome.UNSETTLED && placement.settlement() == null, "No settlement: " + placement);
+        helper.assertTrue(placement.outcome() == Outcome.UNSETTLED && placement.settlement().isEmpty(), "No settlement: " + placement);
         helper.assertTrue(data.settlements().isEmpty(), "Nothing founded");
         helper.assertTrue(data.unsettledAt(at(0)).isPresent(), "The block is known");
         SettlementManager.Status status = SettlementManager.status(data, at(0));
@@ -264,7 +263,7 @@ public final class CenterBlockGameTests {
             }
         };
         SettlementManager.place(data, at(20), ModJobs.LUMBERJACK.get(), 1, listener);
-        Settlement settlement = SettlementManager.placeCenter(data, at(0), ModJobs.ADMINISTRATOR.get(), 1, Races.HUMAN, 0L, RandomSource.create(0L), listener).settlement();
+        Settlement settlement = SettlementManager.placeCenter(data, at(0), ModJobs.ADMINISTRATOR.get(), 1, Races.HUMAN, 0L, RandomSource.create(0L), listener).settlement().orElseThrow();
         helper.assertTrue(data.settlementAt(at(20)).filter(found -> found == settlement).isPresent() && data.unsettled().isEmpty(),
                 "The founding reaches it");
 
@@ -299,7 +298,7 @@ public final class CenterBlockGameTests {
     /** Removed on day 10: the settlement stays for days 11 to 13 and dissolves on the morning of day 14. */
     private static void dissolvesOnFourthMorning(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement settlement = center(data, 0).settlement();
+        Settlement settlement = center(data, 0).settlement().orElseThrow();
         SettlementManager.remove(data, at(0), 10L, SettlementManager.Listener.NONE);
         helper.assertTrue(data.settlements().contains(settlement), "Removing the Center Block dissolves nothing");
         helper.assertTrue(settlement.centerGrace().orElseThrow().dissolveDay() == 14L, "Timer: " + settlement.centerGrace());
@@ -312,15 +311,15 @@ public final class CenterBlockGameTests {
         helper.succeed();
     }
 
-    /** A new Center Block in that time revives the settlement and stops the timer. */
+    /** A new Center Block in that time revives the settlement and ends the Center grace. */
     private static void revived(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement settlement = center(data, 0).settlement();
+        Settlement settlement = center(data, 0).settlement().orElseThrow();
         jobBlock(data, 20, 1);
         SettlementManager.remove(data, at(0), 0L, SettlementManager.Listener.NONE);
         helper.assertFalse(SettlementManager.wouldFound(data, at(10)), "No second settlement over the first");
         Placement again = center(data, 10);
-        helper.assertTrue(again.outcome() == Outcome.REVIVED && again.settlement() == settlement, "Revived: " + again);
+        helper.assertTrue(again.outcome() == Outcome.REVIVED && again.settlement().orElseThrow() == settlement, "Revived: " + again);
         helper.assertTrue(settlement.centerGrace().isEmpty(), "The timer stopped");
         SettlementManager.morning(data, 100L, SettlementManager.Listener.NONE);
         helper.assertTrue(data.settlements().contains(settlement), "It no longer dissolves");
@@ -330,15 +329,15 @@ public final class CenterBlockGameTests {
     /** With the last JobBlock gone the settlement still holds the place of its last Center Block. */
     private static void revivedAtEmptySite(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement settlement = center(data, 0).settlement();
+        Settlement settlement = center(data, 0).settlement().orElseThrow();
         SettlementManager.remove(data, at(0), 0L, SettlementManager.Listener.NONE);
         helper.assertTrue(settlement.isEmpty(), "No block left");
         Placement again = center(data, 0);
-        helper.assertTrue(again.outcome() == Outcome.REVIVED && again.settlement() == settlement && data.settlements().size() == 1, "Revived: " + again);
+        helper.assertTrue(again.outcome() == Outcome.REVIVED && again.settlement().orElseThrow() == settlement && data.settlements().size() == 1, "Revived: " + again);
         helper.succeed();
     }
 
-    /** The timer survives saving and the place stays held. */
+    /** The Center grace survives saving and the place stays held. */
     private static void timerPersists(GameTestHelper helper) {
         SettlementData data = new SettlementData();
         center(data, 0);
@@ -370,7 +369,7 @@ public final class CenterBlockGameTests {
     /** Removing the last JobBlock of a settlement dissolves nothing at once, also when it was no Center Block. */
     private static void lastJobBlock(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement settlement = center(data, 0).settlement();
+        Settlement settlement = center(data, 0).settlement().orElseThrow();
         jobBlock(data, 10, 1);
         SettlementManager.remove(data, at(10), 0L, SettlementManager.Listener.NONE);
         helper.assertTrue(settlement.centerGrace().isEmpty(), "The Center Block stands: no timer");
@@ -388,7 +387,7 @@ public final class CenterBlockGameTests {
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(pos).orElseThrow();
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 3), data, settlement);
-        BlockPos center = settlement.blocks().stream().filter(block -> block.centerRace().isPresent()).map(SettlementBlock::pos).findFirst().orElseThrow();
+        BlockPos center = settlement.blocks().stream().filter(SettlementBlock::isCenter).map(SettlementBlock::pos).findFirst().orElseThrow();
         long today = DayClock.day(level);
         level.destroyBlock(center, false);
         helper.assertTrue(settlement.centerGrace().filter(grace -> grace.dissolveDay() == today + 4).isPresent(), "The world counts settler days");

@@ -29,6 +29,9 @@ import net.minecraft.resources.Identifier;
  */
 public final class Settlement {
 
+    /** Settlement id of a JobBlock without a settlement. */
+    public static final int NO_SETTLEMENT = -1;
+
     /** Value of {@link #settlersDue()} once the starting settlers have arrived. */
     public static final long SETTLERS_ARRIVED = -1L;
 
@@ -228,7 +231,7 @@ public final class Settlement {
      * @return whether the settlement has any Center Block
      */
     public boolean hasCenter() {
-        return blocks.values().stream().anyMatch(block -> block.centerRace().isPresent());
+        return blocks.values().stream().anyMatch(SettlementBlock::isCenter);
     }
 
     /**

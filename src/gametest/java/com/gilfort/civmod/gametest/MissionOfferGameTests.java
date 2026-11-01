@@ -195,7 +195,7 @@ public final class MissionOfferGameTests {
 
     private static Settlement placeBoard(SettlementData data, BlockPos pos, int level) {
         return TestSettlements.place(data, pos, ModJobs.ADVENTURER.get(), level)
-                .settlement();
+                .settlement().orElseThrow();
     }
 
     private static List<MissionOffer.Entry> entries(SettlementData data, BlockPos board) {

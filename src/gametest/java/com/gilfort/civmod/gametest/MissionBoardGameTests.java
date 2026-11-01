@@ -83,7 +83,7 @@ public final class MissionBoardGameTests {
 
     private static Settlement placeBoard(SettlementData data, int level) {
         return TestSettlements.place(data, BOARD, ModJobs.ADVENTURER.get(), level)
-                .settlement();
+                .settlement().orElseThrow();
     }
 
     private static SettlementBlock block(SettlementData data, BlockPos pos) {

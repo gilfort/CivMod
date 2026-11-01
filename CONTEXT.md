@@ -136,7 +136,7 @@ The implicit lowest-priority fallback Job of every settler; not a Job Category a
 The block that offers a Base Job (and its Specializations) to one settler. Code: `JobBlock`, `JobBlockEntity`, created by the addon API's factory (`CivModApi.jobBlock`); upgraded one level at a time with the JobBlock Upgrade items (see below). Its window (`JobBlockMenu` / `JobBlockScreen`) is a list of tabs chosen by `JobBlockTabs`; each tab is one module: `JobBlockTab` (tab bar entry, menu buttons, synced `TabData`) and its client view `JobBlockTabView` (`StorageTab`, `WorkersTab` / `WorkersTabView`, `FoundTab`, `MissionsTab`, `StockTab` / `TasksTab`, `PatternsTab`, `StationTypesTab`, `FuelTab`).
 
 **Center Block**:
-The JobBlock of one race that founds a settlement and is its center: only it founds, outside every exclusion zone (`Outcome.FOUNDED`); a settlement holds at most one per race, a second one is refused (`Outcome.REFUSED`, `SettlementManager.wouldRefuse`). Its join radius 25 and exclusion radius 75 are fixed at every level; an upgrade has no effect yet. Code: `CenterBlock`, `ModBlocks.HUMAN_CENTER_BLOCK`, `SettlementBlock.centerRace()`, `SettlementManager.placeCenter`, radii through `SettlementRules.joinRadius(SettlementBlock)` / `exclusionRadius(SettlementBlock)`.
+The JobBlock of one race that founds a settlement and is its center: only it founds, outside every exclusion zone (`Outcome.FOUNDED`); a settlement holds at most one per race, a second one is refused (`Outcome.REFUSED`, `SettlementManager.wouldRefuse`). Its join radius 25 and exclusion radius 75 are fixed at every level; an upgrade has no effect yet and needs no settler at the skill cap (the Administrator gains no skill). Code: `CenterBlock`, `ModBlocks.HUMAN_CENTER_BLOCK`, `SettlementBlock.centerRace()`, `SettlementManager.placeCenter`, radii through `SettlementRules.joinRadius(SettlementBlock)` / `exclusionRadius(SettlementBlock)`.
 _Avoid_: Town hall, founding block, shrine, reading `joinRadius(block.level())` for a block of a settlement
 
 **Administrator**:
@@ -155,7 +155,7 @@ The time a settlement without a Center Block has left: it stays for 3 days and d
 _Avoid_: Decay, abandonment
 
 **JobBlock Upgrade item**:
-One of four items (JobBlock Upgrade Lv 2 / 3 / 4 / 5, crafted from the Scroll of Assignment – returned – and 8 iron / gold / diamonds / netherite) that raise any JobBlock by one level on right-click: the Lv N item only on a Lv N − 1 block, and only once a loaded settler assigned to that block has reached its skill cap in a Job it holds there. Code: `JobBlockUpgradeItem`, `ModItems.JOB_BLOCK_UPGRADE_2` … `_5`, rule in `JobBlockUpgrade` (called from `JobBlock.useItemOn`), recipes `civmod:job_block_upgrade_<n>`.
+One of four items (JobBlock Upgrade Lv 2 / 3 / 4 / 5, crafted from the Scroll of Assignment – returned – and 8 iron / gold / diamonds / netherite) that raise any JobBlock by one level on right-click: the Lv N item only on a Lv N − 1 block, and only once a loaded settler assigned to that block has reached its skill cap in a Job it holds there (a Center Block is exempt from that). Code: `JobBlockUpgradeItem`, `ModItems.JOB_BLOCK_UPGRADE_2` … `_5`, rule in `JobBlockUpgrade` (called from `JobBlock.useItemOn`), recipes `civmod:job_block_upgrade_<n>`.
 _Avoid_: upgrade costs, upgrade button
 
 **Starter tool**:

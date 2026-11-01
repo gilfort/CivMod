@@ -84,7 +84,7 @@ public final class SettlementManager {
          * A JobBlock's settlement or connection state changed.
          *
          * @param pos          the block position
-         * @param settlementId the settlement id, {@code -1} if none
+         * @param settlementId the settlement id, {@link Settlement#NO_SETTLEMENT} if none
          * @param connected    whether the block is connected
          */
         void blockChanged(BlockPos pos, int settlementId, boolean connected);
@@ -144,14 +144,21 @@ public final class SettlementManager {
     /**
      * Result of placing a JobBlock.
      *
-     * @param settlement the settlement the block belongs to; for {@link Outcome#REFUSED} the one that refused it, null for
-     *                   {@link Outcome#UNSETTLED}
+     * @param settlement the settlement the block belongs to; for {@link Outcome#REFUSED} the one that refused it, empty
+     *                   for {@link Outcome#UNSETTLED}
      * @param outcome    how it was integrated
      * @param distance   for {@link Outcome#UNCONNECTED}: horizontal distance to the nearest connected block
      * @param required   for {@link Outcome#UNCONNECTED}: the distance needed to connect to that block, {@code 0} if the
      *                   settlement has no connected block to reach
      */
-    public record Placement(@Nullable Settlement settlement, Outcome outcome, int distance, int required) {
+    public record Placement(Optional<Settlement> settlement, Outcome outcome, int distance, int required) {
+
+        /**
+         * @return for {@link Outcome#UNCONNECTED}: whether the settlement has no connected block to reach
+         */
+        public boolean nothingToReach() {
+            return required == 0;
+        }
     }
 
     /**
@@ -190,7 +197,7 @@ public final class SettlementManager {
             data.addBlock(join.settlement(), new SettlementBlock(pos, jobType, clamped, true));
             listener.blockChanged(pos, join.settlement().id(), true);
             connectChain(data, join.settlement(), listener);
-            return new Placement(join.settlement(), Outcome.JOINED, 0, 0);
+            return new Placement(Optional.of(join.settlement()), Outcome.JOINED, 0, 0);
         }
 
         Nearest exclusion = nearestInExclusion(data, pos);
@@ -198,17 +205,17 @@ public final class SettlementManager {
             data.addBlock(exclusion.settlement(), new SettlementBlock(pos, jobType, clamped, false));
             listener.blockChanged(pos, exclusion.settlement().id(), false);
             Status status = status(data, pos);
-            return new Placement(exclusion.settlement(), Outcome.UNCONNECTED, status.distance(), status.required());
+            return new Placement(Optional.of(exclusion.settlement()), Outcome.UNCONNECTED, status.distance(), status.required());
         }
 
         data.addUnsettled(new SettlementBlock(pos, jobType, clamped, false));
-        listener.blockChanged(pos, -1, false);
-        return new Placement(null, Outcome.UNSETTLED, 0, 0);
+        listener.blockChanged(pos, Settlement.NO_SETTLEMENT, false);
+        return new Placement(Optional.empty(), Outcome.UNSETTLED, 0, 0);
     }
 
     /**
      * Registers a placed Center Block: outside every exclusion zone it founds a settlement; in the zone of a settlement
-     * without a Center Block of its race it joins that settlement, connected, and stops the timer of one that had none;
+     * without a Center Block of its race it joins that settlement, connected, and ends the Center grace of one that had none;
      * otherwise it is refused and not registered. A position already registered as a Center Block stays as it is.
      *
      * @param data     the dimension's settlement data
@@ -223,9 +230,9 @@ public final class SettlementManager {
      */
     public static Placement placeCenter(SettlementData data, BlockPos pos, Job jobType, int level, Identifier race, long gameTime,
             RandomSource random, Listener listener) {
-        Optional<JobBlockSite> registered = JobBlockSite.at(data, pos).filter(site -> site.block().centerRace().isPresent());
+        Optional<JobBlockSite> registered = JobBlockSite.at(data, pos).filter(site -> site.block().isCenter());
         if (registered.isPresent()) {
-            return new Placement(registered.get().settlement(), Outcome.JOINED, 0, 0);
+            return new Placement(Optional.of(registered.get().settlement()), Outcome.JOINED, 0, 0);
         }
         data.removeBlock(pos);
         SettlementBlock center = SettlementBlock.center(pos, jobType, SettlementRules.clampLevel(level), race);
@@ -235,17 +242,17 @@ public final class SettlementManager {
             data.addBlock(settlement, center);
             listener.blockChanged(pos, settlement.id(), true);
             connectChain(data, settlement, listener);
-            return new Placement(settlement, Outcome.FOUNDED, 0, 0);
+            return new Placement(Optional.of(settlement), Outcome.FOUNDED, 0, 0);
         }
         if (owner.hasCenter(race)) {
-            return new Placement(owner, Outcome.REFUSED, 0, 0);
+            return new Placement(Optional.of(owner), Outcome.REFUSED, 0, 0);
         }
         boolean revived = !owner.hasCenter();
         owner.setCenterGrace(Optional.empty());
         data.addBlock(owner, center);
         listener.blockChanged(pos, owner.id(), true);
         recheck(data, owner, listener);
-        return new Placement(owner, revived ? Outcome.REVIVED : Outcome.JOINED, 0, 0);
+        return new Placement(Optional.of(owner), revived ? Outcome.REVIVED : Outcome.JOINED, 0, 0);
     }
 
     /**
@@ -295,8 +302,8 @@ public final class SettlementManager {
 
     /**
      * Unregisters a removed JobBlock and rechecks the connection from the center. A settlement left without a Center
-     * Block gets its timer: it stays for {@value SettlementRules#CENTERLESS_DAYS} days and dissolves on the morning after
-     * them ({@link #morning}).
+     * Block gets its Center grace: it stays for {@value SettlementRules#CENTERLESS_DAYS} days and dissolves on the morning
+     * after them ({@link #morning}).
      *
      * @param data     the dimension's settlement data
      * @param pos      the removed JobBlock position
@@ -339,7 +346,7 @@ public final class SettlementManager {
         for (SettlementBlock block : List.copyOf(settlement.blocks())) {
             data.removeBlock(block.pos());
             data.addUnsettled(new SettlementBlock(block.pos(), block.jobType(), block.level(), false));
-            listener.blockChanged(block.pos(), -1, false);
+            listener.blockChanged(block.pos(), Settlement.NO_SETTLEMENT, false);
         }
         data.dissolve(settlement);
         listener.dissolved(settlement);
@@ -388,7 +395,7 @@ public final class SettlementManager {
         Set<BlockPos> chained = new HashSet<>();
         Deque<SettlementBlock> open = new ArrayDeque<>();
         for (SettlementBlock block : settlement.blocks()) {
-            if (block.centerRace().isPresent()) {
+            if (block.isCenter()) {
                 chained.add(block.pos());
                 open.add(block);
             }
@@ -413,7 +420,7 @@ public final class SettlementManager {
             changed = false;
             List<SettlementBlock> waiting = new ArrayList<>(settlement.blocks().stream().filter(block -> !block.connected()).toList());
             for (SettlementBlock candidate : waiting) {
-                if (inReach(settlement, candidate)) {
+                if (JobAssignments.insideBorder(settlement, candidate.pos())) {
                     candidate.setConnected(true);
                     data.changed();
                     listener.blockChanged(candidate.pos(), settlement.id(), true);
@@ -422,7 +429,7 @@ public final class SettlementManager {
                 }
             }
             for (SettlementBlock candidate : List.copyOf(data.unsettled())) {
-                if (inReach(settlement, candidate)) {
+                if (JobAssignments.insideBorder(settlement, candidate.pos())) {
                     data.settle(settlement, candidate);
                     listener.blockChanged(candidate.pos(), settlement.id(), true);
                     listener.autoConnected(candidate.pos());
@@ -430,11 +437,6 @@ public final class SettlementManager {
                 }
             }
         }
-    }
-
-    private static boolean inReach(Settlement settlement, SettlementBlock candidate) {
-        return settlement.blocks().stream().anyMatch(other -> other.connected()
-                && SettlementRules.horizontalDistance(candidate.pos(), other.pos()) <= SettlementRules.joinRadius(other));
     }
 
     @FunctionalInterface
@@ -454,9 +456,9 @@ public final class SettlementManager {
     private static @Nullable Nearest nearest(SettlementData data, BlockPos pos, boolean allWithoutCenter, Reach reach) {
         Nearest best = null;
         for (Settlement settlement : data.settlements()) {
-            boolean all = allWithoutCenter && !settlement.hasCenter();
+            boolean everyBlock = allWithoutCenter && !settlement.hasCenter();
             for (SettlementBlock block : settlement.blocks()) {
-                if (!all && !block.connected()) {
+                if (!everyBlock && !block.connected()) {
                     continue;
                 }
                 double distance = SettlementRules.horizontalDistance(pos, block.pos());

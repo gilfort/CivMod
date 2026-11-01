@@ -87,7 +87,7 @@ public final class SettlementGameTests {
         Placement first = center(data, 0);
         helper.assertTrue(first.outcome() == Outcome.FOUNDED, "A Center Block should found a settlement");
         Placement second = SettlementManager.place(data, new BlockPos(20, 100, 0), ModJobs.MINER.get(), 1, SettlementManager.Listener.NONE);
-        helper.assertTrue(second.outcome() == Outcome.JOINED && second.settlement() == first.settlement(),
+        helper.assertTrue(second.outcome() == Outcome.JOINED && second.settlement().orElseThrow() == first.settlement().orElseThrow(),
                 "Block at horizontal distance 20 should join, regardless of height");
         helper.assertTrue(data.settlements().size() == 1, "Expected exactly one settlement");
         helper.succeed();
@@ -96,13 +96,13 @@ public final class SettlementGameTests {
     /** A block in reach of two settlements joins the one with the nearest JobBlock. */
     private static void nearestChoice(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement west = center(data, 0).settlement();
-        Settlement east = center(data, 100).settlement();
+        Settlement west = center(data, 0).settlement().orElseThrow();
+        Settlement east = center(data, 100).settlement().orElseThrow();
         helper.assertTrue(west != east, "Center Block at 100 is outside the exclusion radius of 75 and should found a second settlement");
         place(data, 24, 3, SettlementManager.Listener.NONE);
         place(data, 76, 3, SettlementManager.Listener.NONE);
         Placement between = place(data, 49, 1, SettlementManager.Listener.NONE);
-        helper.assertTrue(between.outcome() == Outcome.JOINED && between.settlement() == west,
+        helper.assertTrue(between.outcome() == Outcome.JOINED && between.settlement().orElseThrow() == west,
                 "Block at 49 is covered by both level 3 blocks and should join the nearer west settlement");
         helper.succeed();
     }
@@ -111,9 +111,9 @@ public final class SettlementGameTests {
     private static void unconnectedAndAutoConnect(GameTestHelper helper) {
         SettlementData data = new SettlementData();
         Recorder recorder = new Recorder();
-        Settlement settlement = center(data, 0).settlement();
+        Settlement settlement = center(data, 0).settlement().orElseThrow();
         Placement waiting = place(data, 40, 1, recorder);
-        helper.assertTrue(waiting.outcome() == Outcome.UNCONNECTED && waiting.settlement() == settlement,
+        helper.assertTrue(waiting.outcome() == Outcome.UNCONNECTED && waiting.settlement().orElseThrow() == settlement,
                 "Block at 40 is in the exclusion zone but out of reach");
         helper.assertTrue(waiting.distance() == 40 && waiting.required() == 25, "Unexpected distance info: " + waiting);
         helper.assertTrue(data.settlements().size() == 1, "No second settlement may be founded in the exclusion zone");
@@ -131,7 +131,7 @@ public final class SettlementGameTests {
     /** Removing blocks keeps the settlement and clears the position index; a waiting block stays unconnected. */
     private static void removalAndDissolution(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement settlement = center(data, 0).settlement();
+        Settlement settlement = center(data, 0).settlement().orElseThrow();
         place(data, 40, 1, SettlementManager.Listener.NONE);
         SettlementManager.remove(data, new BlockPos(0, 64, 0), 0L, SettlementManager.Listener.NONE);
         helper.assertTrue(data.settlements().size() == 1 && settlement.connectedCount() == 0,

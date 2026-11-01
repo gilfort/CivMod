@@ -24,7 +24,8 @@ import net.minecraft.world.item.ItemStack;
  * Upgrading a JobBlock with a JobBlock Upgrade item (vault {@code Systems/JobBlock.md}, decisions of 2026-10-29): the
  * Lv N item raises a block at Lv N − 1 by one level, but only once a settler currently assigned to the block has reached
  * the block's skill cap in a Job it holds there (Base Job or Specialization). Settlers at other blocks and former
- * workers do not count; settlers that are not loaded do not either.
+ * workers do not count; settlers that are not loaded do not either. A Center Block needs no such settler: the
+ * Administrator gains no skill (vault {@code Systems/Settlement.md}, decision of 2026-11-01).
  */
 public final class JobBlockUpgrade {
 
@@ -78,7 +79,7 @@ public final class JobBlockUpgrade {
             return Optional.of(Component.translatable("civmod.upgrade.needs_item", currentLevel + 1));
         }
         int cap = SettlementRules.skillCap(currentLevel);
-        if (!hasWorkerAtCap(level, pos, cap)) {
+        if (!(level.getBlockState(pos).getBlock() instanceof CenterBlock) && !hasWorkerAtCap(level, pos, cap)) {
             return Optional.of(Component.translatable("civmod.upgrade.needs_worker", cap));
         }
         return Optional.empty();

@@ -111,7 +111,7 @@ public final class ConnectionGameTests {
 
     /** The chain 1 (center) - 2 - 3 - 4 - 5 at x = 0, 20, 30, 40, 50, with level 1 JobBlocks reaching 10 blocks. */
     private static Settlement chain(GameTestHelper helper, SettlementData data) {
-        Settlement settlement = center(data, 0, SettlementManager.Listener.NONE).settlement();
+        Settlement settlement = center(data, 0, SettlementManager.Listener.NONE).settlement().orElseThrow();
         for (int x : new int[] {20, 30, 40, 50}) {
             helper.assertTrue(jobBlock(data, x, 1).outcome() == Outcome.JOINED, "Part of the chain: " + x);
         }
@@ -159,7 +159,7 @@ public final class ConnectionGameTests {
     }
 
     private static BlockPos centerOf(Settlement settlement) {
-        return settlement.blocks().stream().filter(block -> block.centerRace().isPresent()).map(SettlementBlock::pos).findFirst().orElseThrow();
+        return settlement.blocks().stream().filter(SettlementBlock::isCenter).map(SettlementBlock::pos).findFirst().orElseThrow();
     }
 
     /** At work when its block loses the center: the settler stops but keeps the job, and works again after the revival. */
@@ -264,7 +264,7 @@ public final class ConnectionGameTests {
     /** The zones of all its blocks still count, connected or not, also beyond the place of the last Center Block. */
     private static void exclusionWithoutCenter(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement settlement = center(data, 0, SettlementManager.Listener.NONE).settlement();
+        Settlement settlement = center(data, 0, SettlementManager.Listener.NONE).settlement().orElseThrow();
         jobBlock(data, 20, 1);
         jobBlock(data, 30, 2);
         remove(data, 0, SettlementManager.Listener.NONE);
@@ -272,8 +272,8 @@ public final class ConnectionGameTests {
         helper.assertFalse(SettlementManager.wouldFound(data, at(90)), "Exclusion over all blocks");
         helper.assertTrue(SettlementManager.wouldFound(data, at(91)), "Outside every zone");
         Placement waiting = jobBlock(data, 90, 1);
-        helper.assertTrue(waiting.outcome() == Outcome.UNCONNECTED && waiting.settlement() == settlement, "A JobBlock there waits: " + waiting);
-        helper.assertTrue(waiting.required() == 0, "With nothing to reach: " + waiting);
+        helper.assertTrue(waiting.outcome() == Outcome.UNCONNECTED && waiting.settlement().orElseThrow() == settlement, "A JobBlock there waits: " + waiting);
+        helper.assertTrue(waiting.nothingToReach(), "With nothing to reach: " + waiting);
         helper.assertTrue(data.settlements().size() == 1, "No second settlement");
         helper.succeed();
     }
@@ -287,7 +287,7 @@ public final class ConnectionGameTests {
         Recorder recorder = new Recorder();
         // Reaches 20 (and from it nothing), not 40 and 50.
         Placement again = center(data, 0, recorder);
-        helper.assertTrue(again.outcome() == Outcome.REVIVED && again.settlement() == settlement && data.settlements().size() == 1, "Revived: " + again);
+        helper.assertTrue(again.outcome() == Outcome.REVIVED && again.settlement().orElseThrow() == settlement && data.settlements().size() == 1, "Revived: " + again);
         helper.assertTrue(connected(settlement, 20) && !connected(settlement, 40) && !connected(settlement, 50), "Only what is in reach connects");
         helper.assertTrue(recorder.announced.equals(List.of(at(20))), "Announced: " + recorder.announced);
         helper.assertTrue(settlement.centerGrace().isEmpty(), "The timer stopped");
@@ -300,7 +300,7 @@ public final class ConnectionGameTests {
         Settlement settlement = TestSettlements.earlierVersion(data, at(20), at(60));
         helper.assertFalse(SettlementManager.wouldFound(data, at(0)), "It keeps its exclusion zone");
         Placement revived = center(data, 0, SettlementManager.Listener.NONE);
-        helper.assertTrue(revived.outcome() == Outcome.REVIVED && revived.settlement() == settlement, "Revived: " + revived);
+        helper.assertTrue(revived.outcome() == Outcome.REVIVED && revived.settlement().orElseThrow() == settlement, "Revived: " + revived);
         helper.assertTrue(connected(settlement, 20), "Chained to the new center");
         helper.assertFalse(connected(settlement, 60), "Out of its reach");
         helper.succeed();
