@@ -201,7 +201,7 @@ public final class CenterBlockGameTests {
     /** With the Administrator on top of its list a settler goes on to work its next job right away. */
     private static void administratorMovesOn(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        List<long[]> forced = new ArrayList<>();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         Settler settler = CatchUpGameTests.lumberjack(helper, forced);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlement(settler.getSettlementId()).orElseThrow();
