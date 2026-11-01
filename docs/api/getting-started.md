@@ -168,6 +168,17 @@ Packs can override a Job's balancing values per job id in `data/<namespace>/civm
 
 `unlock_item` overrides the builder's `unlockItem`. All values are optional; later packs override earlier ones per value. In `civmod_job_blocks`, a later `settlers` list replaces an earlier one.
 
+`xp` sets the XP (vanilla-style experience, independent of EXP) of the Job's actions. It replaces the Job's whole default, and a later file replaces the whole list:
+
+```json
+{ "xp": [
+  { "items": "#minecraft:logs", "amount": [1, 3], "chance": 0.5 },
+  { "amount": 1 }
+] }
+```
+
+`items` (an item id, a list or a `#tag`, optional) is matched against what the action produced; an entry without `items` counts for every action (a roll or a recipe execution). All matching entries add up, each one once per action. `amount` is `n` or `[min, max]`, `chance` defaults to 1. A mission file takes `"xp": { "amount": n | [min, max], "chance": 0–1 }` too, given only on success.
+
 ## Biome bonuses
 
 Biomes give Jobs bonuses, one datapack file per bonus at `data/<namespace>/civmod_biome_bonuses/<name>.json`:

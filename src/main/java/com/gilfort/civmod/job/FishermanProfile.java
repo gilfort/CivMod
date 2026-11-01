@@ -10,6 +10,7 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.api.SectionScan;
+import com.gilfort.civmod.api.XpGain;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -51,6 +52,8 @@ public final class FishermanProfile implements ResourceCollectionProfile {
     public static final int WATER_THRESHOLD = 50;
     private static final int AUTO_SEARCH_HORIZONTAL = 20;
     private static final int AUTO_SEARCH_VERTICAL = 15;
+    /** The XP of a catch, as vanilla fishing. */
+    static final XpGain CATCH_XP = XpGain.of(1, 6);
     private static final ResourceKey<LootTable> TREASURE = ResourceKey.create(Registries.LOOT_TABLE,
             Identifier.withDefaultNamespace("gameplay/fishing/treasure"));
 
@@ -241,7 +244,7 @@ public final class FishermanProfile implements ResourceCollectionProfile {
         Vec3 surface = Vec3.atCenterOf(context.poi()).add(0.0, 0.5, 0.0);
         level.sendParticles(ParticleTypes.SPLASH, surface.x, surface.y, surface.z, 12, 0.3, 0.0, 0.3, 0.1);
         level.playSound(null, context.poi(), SoundEvents.FISHING_BOBBER_RETRIEVE, SoundSource.NEUTRAL, 0.6F, 1.0F);
-        return Optional.of(new Produced(items, context.tool()));
+        return Optional.of(new Produced(items, context.tool(), CATCH_XP));
     }
 
     /** A fish type is the fish item itself. */

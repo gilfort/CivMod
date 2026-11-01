@@ -117,14 +117,15 @@ public final class Deliveries {
      * @param jobBlock   the producer's JobBlock
      * @param to         the producer's collect inventory
      * @param items      the inputs, by item
+     * @param reserved   whether taking the task reserves them (false: they stay usable until they are picked up)
      * @param gameTime   the game time now
      * @return the new task's id
      */
     public static UUID postInput(SettlementData data, Settlement settlement, BlockPos store, BlockPos jobBlock, BlockPos to,
-            Map<Item, Integer> items, long gameTime) {
+            Map<Item, Integer> items, boolean reserved, long gameTime) {
         UUID id = UUID.randomUUID();
         settlement.mutableDeliveries().add(new DeliveryTask(id, store.immutable(), jobBlock.immutable(), gameTime, false, Optional.empty(),
-                Optional.of(new DeliveryTask.Input(items, to.immutable(), Optional.empty())), Optional.empty()));
+                Optional.of(new DeliveryTask.Input(items, to.immutable(), Optional.empty(), reserved)), Optional.empty()));
         data.setDirty();
         return id;
     }
@@ -391,7 +392,8 @@ public final class Deliveries {
     }
 
     /**
-     * Locks a task to a Deliveryman; an input delivery reserves its inputs at its store.
+     * Locks a task to a Deliveryman; an input delivery reserves its inputs at its store (unless they stay usable for
+     * everyone, {@link DeliveryTask.Input#reserved()}).
      *
      * @param data       the dimension's settlement data
      * @param settlement the settlement
@@ -402,7 +404,7 @@ public final class Deliveries {
      */
     public static void take(SettlementData data, Settlement settlement, UUID id, UUID settler, String name, long day) {
         update(data, settlement, id, task -> task.withTaker(Optional.of(new DeliveryTask.Taker(settler, name, day))));
-        get(settlement, id).ifPresent(task -> task.input().ifPresent(input -> {
+        get(settlement, id).ifPresent(task -> task.input().filter(DeliveryTask.Input::reserved).ifPresent(input -> {
             Reservations.release(settlement, id);
             input.items().forEach((item, count) -> Reservations.reserve(settlement, task.source(), id, item, count, day));
         }));
@@ -499,10 +501,14 @@ public final class Deliveries {
         if (found.isEmpty()) {
             return new Reservations.Pickup(List.of(), true);
         }
+        DeliveryTask.Input input = found.get().input().get();
+        if (!input.reserved()) {
+            // Nothing was held back: the pickup takes what is there now, a shortfall ends like any other.
+            input.items().forEach((item, count) -> Reservations.reserve(settlement, found.get().source(), id, item, count, day));
+        }
         Reservations.Pickup pickup = Reservations.pickUp(data, settlement, found.get().source(), id, stock, day);
         if (!pickup.failed()) {
-            DeliveryTask.Input input = found.get().input().get();
-            update(data, settlement, id, task -> task.withInput(new DeliveryTask.Input(input.items(), input.to(), Optional.of(settler))));
+            update(data, settlement, id, task -> task.withInput(new DeliveryTask.Input(input.items(), input.to(), Optional.of(settler), input.reserved())));
         }
         return pickup;
     }

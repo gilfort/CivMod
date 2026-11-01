@@ -106,6 +106,7 @@ public class Settler extends PathfinderMob {
     private final SettlerWork work = new SettlerWork(this);
     private final SettlerFood food = new SettlerFood();
     private final com.gilfort.civmod.job.SettlerSkills skills = new com.gilfort.civmod.job.SettlerSkills();
+    private final com.gilfort.civmod.job.SettlerXp xp = new com.gilfort.civmod.job.SettlerXp();
     /** Looking around while sitting: the work goal holds the look of the main goals during a break. */
     private final GoalSelector sittingLook = new GoalSelector();
 
@@ -286,6 +287,13 @@ public class Settler extends PathfinderMob {
      */
     public com.gilfort.civmod.job.SettlerSkills getSkills() {
         return skills;
+    }
+
+    /**
+     * @return the XP counter
+     */
+    public com.gilfort.civmod.job.SettlerXp getXp() {
+        return xp;
     }
 
     /**
@@ -691,6 +699,7 @@ public class Settler extends PathfinderMob {
         ContainerHelper.saveAllItems(output, inventory.getItems());
         food.save(output);
         output.store("skills", com.gilfort.civmod.job.SettlerSkills.CODEC, skills.snapshot());
+        output.putInt("xp", xp.points());
         output.store("needs", com.gilfort.civmod.job.NeedState.CODEC, work.needState());
     }
 
@@ -708,6 +717,7 @@ public class Settler extends PathfinderMob {
         ContainerHelper.loadAllItems(input, inventory.getItems());
         food.load(input);
         input.read("skills", com.gilfort.civmod.job.SettlerSkills.CODEC).ifPresent(skills::restore);
+        xp.restore(input.getIntOr("xp", 0));
         input.read("needs", com.gilfort.civmod.job.NeedState.CODEC).ifPresent(work::restoreNeeds);
         setInvisible(isAway());
     }

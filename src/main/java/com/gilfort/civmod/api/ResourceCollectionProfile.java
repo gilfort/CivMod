@@ -452,8 +452,18 @@ public interface ResourceCollectionProfile extends CategoryProfile {
      *
      * @param stacks the produced items
      * @param worn   the tool that loses durability
+     * @param xp     the XP of this roll (vault {@code Systems/Settler XP.md}), none unless the profile names some; a pack's
+     *               {@code xp} list in {@code civmod_jobs/<job>.json} replaces it
      */
     @ApiStatus.Experimental
-    record Produced(List<ItemStack> stacks, ItemStack worn) {
+    record Produced(List<ItemStack> stacks, ItemStack worn, XpGain xp) {
+
+        /**
+         * @param stacks the produced items
+         * @param worn   the tool that loses durability
+         */
+        public Produced(List<ItemStack> stacks, ItemStack worn) {
+            this(stacks, worn, XpGain.NONE);
+        }
     }
 }

@@ -166,6 +166,12 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                 graphics.text(font, Component.translatable("civmod.gui.settler.food"), CivGui.PADDING, FOOD_Y, CivGui.LABEL_COLOR, false);
                 graphics.text(font, Component.translatable(SettlerFood.appetiteKey(info.food().appetite())), CivGui.PADDING, FOOD_Y + 12,
                         CivGui.HINT_COLOR, false);
+                Component xp = Component.translatable("civmod.gui.settler.xp", info.xp());
+                int xpX = imageWidth - CivGui.PADDING - font.width(xp);
+                graphics.text(font, xp, xpX, FOOD_Y, CivGui.NEED_MET_COLOR, false);
+                if (mouseX >= leftPos + xpX && mouseX < leftPos + xpX + font.width(xp) && mouseY >= topPos + FOOD_Y && mouseY < topPos + FOOD_Y + font.lineHeight) {
+                    graphics.setTooltipForNextFrame(font, Component.translatable("civmod.gui.settler.xp.tooltip"), mouseX, mouseY);
+                }
             }
             case SettlerMenu.TAB_JOBS -> {
                 if (switching >= 0 && switching < info.jobs().size()) {

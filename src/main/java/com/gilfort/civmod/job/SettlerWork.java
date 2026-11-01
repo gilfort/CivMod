@@ -20,6 +20,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
+import com.gilfort.civmod.api.XpGain;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.Schedule.Activity;
@@ -95,6 +96,8 @@ public final class SettlerWork {
     static final double REACH = 2.5;
     /** Players within this distance get the level-up message. */
     private static final double LEVEL_UP_RANGE = 32.0;
+    /** Particles when the XP counter passes a hundred. */
+    private static final int XP_BURST = 12;
 
     /** Start of the going-to-bed window (20:00); each settler goes to bed at its daily offset inside the window. */
     public static final long SLEEP_TIME = 14000;
@@ -2072,6 +2075,35 @@ public final class SettlerWork {
             return;
         }
         showLevelUp(level, job);
+    }
+
+    /**
+     * Collects new XP from an action (vault {@code Systems/Settler XP.md}): it repairs Mending tools, the rest goes into
+     * the counter. Catch-up adds the expected XP instead of rolling.
+     *
+     * @param level the level
+     * @param gains the gains of the action
+     * @param used  the tool the action used (empty: none)
+     */
+    void collectXp(ServerLevel level, List<XpGain> gains, ItemStack used) {
+        addXp(level, SettlerTools.mend(settler, used, settler.getXp().take(gains, level.getRandom(), quiet)));
+    }
+
+    /**
+     * Collects XP that repairs nothing: a mission's, no tool is used on a mission.
+     *
+     * @param level the level
+     * @param gain  the gain
+     */
+    void storeXp(ServerLevel level, XpGain gain) {
+        addXp(level, settler.getXp().take(List.of(gain), level.getRandom(), quiet));
+    }
+
+    private void addXp(ServerLevel level, int points) {
+        if (settler.getXp().store(points) && !quiet) {
+            level.sendParticles(net.minecraft.core.particles.ParticleTypes.COMPOSTER, settler.getX(), settler.getY() + 1.0, settler.getZ(),
+                    XP_BURST, 0.4, 0.5, 0.4, 0.0);
+        }
     }
 
     /**

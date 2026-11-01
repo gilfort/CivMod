@@ -53,7 +53,7 @@ import net.minecraft.world.level.block.Block;
  * <p>
  * Innate recipes ({@link InnateRecipes}) sit in the first slots of a Job's library, ordered by recipe id, as locked
  * patterns ({@link Pattern#innate()}): they are always usable (the profile's recipe types, filters and domain do not
- * apply), count towards the checkmark limit and only toggle their checkmark; edit, clear, overwrite and recipe viewer
+ * apply), count towards the checkmark limit and only toggle their checkmark and "Always produce"; edit, clear, overwrite and recipe viewer
  * transfers are refused. {@link #syncInnate} lays them out again whenever the library is used or the datapacks change.
  */
 public final class Patterns {
@@ -418,6 +418,53 @@ public final class Patterns {
     }
 
     /**
+     * Sets or clears "Always produce" of a pattern (vault {@code Systems/Producing Jobs.md}). Setting it also checks the
+     * pattern, so it needs a pattern its Job can use and, on an unchecked one, a free checkmark; clearing it keeps the
+     * checkmark. Every toggle ends the state line.
+     *
+     * @param level the level
+     * @param pos   the JobBlock
+     * @param job   the Producing Job whose library it is
+     * @param slot  the library slot
+     * @return whether the pattern is set to "Always produce" afterwards
+     */
+    public static boolean toggleAlways(ServerLevel level, BlockPos pos, Job job, int slot) {
+        SettlementData data = SettlementData.get(level);
+        Optional<SettlementBlock> found = block(level, pos, job);
+        Optional<Pattern> pattern = found.flatMap(block -> pattern(block, job, slot)).filter(Pattern::valid);
+        if (pattern.isEmpty()) {
+            return false;
+        }
+        SettlementBlock block = found.get();
+        SettlementBlock.Library library = block.library(job);
+        library.setNotice(Optional.empty());
+        Pattern current = pattern.get();
+        if (current.always()) {
+            replace(data, library, current.withAlways(false, current.atOnce()));
+            return false;
+        }
+        if (!allowed(level, profile(job), current) || (!current.checked() && usable(level, block, job).size() >= library.checkLimit())) {
+            return false;
+        }
+        replace(data, library, current.withChecked(true).withAlways(true, current.atOnce()));
+        return true;
+    }
+
+    /**
+     * Sets "Produce at once" of a pattern set to "Always produce".
+     *
+     * @param data   the dimension's settlement data
+     * @param pos    the JobBlock
+     * @param job    the Producing Job whose library it is
+     * @param slot   the library slot
+     * @param atOnce crafts per round (clamped to 1–{@value Pattern#MAX_AT_ONCE})
+     */
+    public static void setAtOnce(SettlementData data, BlockPos pos, Job job, int slot, int atOnce) {
+        block(data, pos, job).ifPresent(block -> pattern(block, job, slot).filter(Pattern::always)
+                .ifPresent(pattern -> replace(data, block.library(job), pattern.withAlways(true, atOnce))));
+    }
+
+    /**
      * Empties a library slot; an innate pattern stays.
      *
      * @param data the dimension's settlement data
@@ -606,7 +653,8 @@ public final class Patterns {
             if (old == null) {
                 fresh.add(slot);
             }
-            laidOut.add(InnateRecipes.pattern(slot, holder, old != null && old.checked()));
+            Pattern laid = InnateRecipes.pattern(slot, holder, old != null && old.checked());
+            laidOut.add(old != null ? laid.withAlways(old.always(), old.atOnce()) : laid);
         }
         boolean[] taken = new boolean[Pattern.SLOTS];
         for (int slot = 0; slot < innate; slot++) {
@@ -716,7 +764,7 @@ public final class Patterns {
 
     /**
      * Puts a pattern into its slot. Replacing a pattern that made something keeps its checkmark if the new one is
-     * usable; a new pattern (empty slot, or one that made nothing) is checked automatically if it is usable and a
+     * usable, and its "Always produce" settings with it; a new pattern (empty slot, or one that made nothing) is checked automatically if it is usable and a
      * checkmark is free (counted over the {@link #usable} patterns), at the limit it stays unchecked with the "masters
      * only n recipes" state line. Any other edit ends the state line.
      */
@@ -742,7 +790,8 @@ public final class Patterns {
         }
         boolean atLimit = replaced.isEmpty() && allowed && !checked;
         library.setNotice(atLimit ? Optional.of(new SettlementBlock.Notice.AtLimit(library.checkLimit())) : Optional.empty());
-        Pattern placed = pattern.withChecked(checked);
+        Pattern placed = replaced.filter(old -> allowed).map(old -> pattern.withAlways(old.always(), old.atOnce())).orElse(pattern)
+                .withChecked(checked);
         replace(data, library, placed);
 
         return Optional.of(placed);

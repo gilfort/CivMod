@@ -10,16 +10,20 @@ import com.gilfort.civmod.npc.Settler;
 
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.EnchantmentEffectComponents;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
 
 /**
  * Tools of a settler, a shared part used by the Job Category work loops (vault {@code Systems/Job Categories.md}):
- * the best tool on the belt, fetching tools (and the inputs of innate recipes) from a container, the belt's free slots
- * and tool wear.
+ * the best tool on the belt, fetching tools (and the inputs of innate recipes) from a container, the belt's free slots,
+ * tool wear and Mending.
  */
 final class SettlerTools {
 
     /** Tool restrictions by skill level are not active in the PoC (see the open topic in the vault). */
     private static final int TOOL_LEVEL = SkillRules.MAX_LEVEL;
+    /** Durability one XP repairs, as in vanilla. */
+    private static final int DURABILITY_PER_XP = 2;
 
     private SettlerTools() {
     }
@@ -166,5 +170,31 @@ final class SettlerTools {
         if (damage > 0) {
             tool.hurtAndBreak(damage, level, settler, item -> { });
         }
+    }
+
+    /**
+     * Repairs Mending tools from newly collected XP (vault {@code Systems/Settler XP.md}): first the tool the action used,
+     * then the others on the belt.
+     *
+     * @param settler the settler
+     * @param used    the tool the action used (empty: none)
+     * @param xp      the new XP
+     * @return the XP left
+     */
+    static int mend(Settler settler, ItemStack used, int xp) {
+        int rest = mend(used, xp);
+        for (int i = Settler.BELT_START; i < Settler.BELT_START + Settler.BELT_SIZE && rest > 0; i++) {
+            rest = mend(settler.getInventory().getItem(i), rest);
+        }
+        return rest;
+    }
+
+    private static int mend(ItemStack tool, int xp) {
+        if (xp <= 0 || !tool.isDamaged() || !EnchantmentHelper.has(tool, EnchantmentEffectComponents.REPAIR_WITH_XP)) {
+            return xp;
+        }
+        int repaired = (int) Math.min((long) xp * DURABILITY_PER_XP, tool.getDamageValue());
+        tool.setDamageValue(tool.getDamageValue() - repaired);
+        return xp - Math.ceilDiv(repaired, DURABILITY_PER_XP);
     }
 }

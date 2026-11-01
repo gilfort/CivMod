@@ -5,8 +5,10 @@ import java.util.Optional;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.ProducingProfile;
+import com.gilfort.civmod.api.XpGain;
 
 import net.minecraft.core.registries.Registries;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
@@ -77,6 +79,12 @@ public final class SmelterProfile implements ProducingProfile {
     @Override
     public double workTime(RecipeHolder<?> recipe) {
         return recipe.value() instanceof AbstractCookingRecipe cooking ? cooking.cookingTime() / TICKS_PER_OPERATION : 1.0;
+    }
+
+    /** The recipe's {@code experience}; the fraction is a chance for one more point, as at the vanilla furnace. */
+    @Override
+    public XpGain xp(ServerLevel level, RecipeHolder<?> recipe) {
+        return recipe.value() instanceof AbstractCookingRecipe cooking ? XpGain.fractional(cooking.experience()) : XpGain.NONE;
     }
 
     @Override

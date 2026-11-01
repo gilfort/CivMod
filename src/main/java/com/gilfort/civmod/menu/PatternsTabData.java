@@ -247,7 +247,11 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
         /** Empty the slot. */
         CLEAR,
         /** Fill from a recipe viewer's transfer button. */
-        TRANSFER;
+        TRANSFER,
+        /** Set or clear "Always produce". */
+        TOGGLE_ALWAYS,
+        /** Set "Produce at once". */
+        SET_AT_ONCE;
 
         /** Network codec. */
         public static final StreamCodec<ByteBuf, Op> STREAM_CODEC = ByteBufCodecs.idMapper(i -> values()[i], Op::ordinal);
@@ -283,7 +287,8 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
      * @param job         the Job whose library it is
      * @param op          what to do
      * @param slot        the library slot
-     * @param index       the grid cell ({@link Op#SET_INPUT}) or the direction ({@link Op#CYCLE})
+     * @param index       the grid cell ({@link Op#SET_INPUT}), the direction ({@link Op#CYCLE}) or the crafts per round
+     *                    ({@link Op#SET_AT_ONCE})
      * @param item        the item ({@link Op#SET_OUTPUT}, {@link Op#SET_INPUT}; {@link Items#AIR} empties a cell)
      * @param recipe      the recipe the viewer showed ({@link Op#TRANSFER})
      * @param grid        the items the viewer showed, row by row ({@link Op#TRANSFER})
@@ -368,6 +373,27 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
          */
         public static Edit toggleCheck(int containerId, Job job, int slot) {
             return new Edit(containerId, job, Op.TOGGLE_CHECK, slot, 0, Items.AIR, Optional.empty(), List.of());
+        }
+
+        /**
+         * @param containerId the menu's container id
+         * @param job         the Job whose library it is
+         * @param slot        the library slot
+         * @return the edit
+         */
+        public static Edit toggleAlways(int containerId, Job job, int slot) {
+            return new Edit(containerId, job, Op.TOGGLE_ALWAYS, slot, 0, Items.AIR, Optional.empty(), List.of());
+        }
+
+        /**
+         * @param containerId the menu's container id
+         * @param job         the Job whose library it is
+         * @param slot        the library slot
+         * @param atOnce      crafts per round
+         * @return the edit
+         */
+        public static Edit setAtOnce(int containerId, Job job, int slot, int atOnce) {
+            return new Edit(containerId, job, Op.SET_AT_ONCE, slot, atOnce, Items.AIR, Optional.empty(), List.of());
         }
 
         /**

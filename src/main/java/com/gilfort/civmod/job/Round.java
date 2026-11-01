@@ -18,7 +18,7 @@ import net.minecraft.world.level.block.Block;
 
 /**
  * One claimed part of one request, from fetching the inputs to the delivery (vault {@code Jobs/Craftsperson.md},
- * {@code Systems/Producing Jobs.md}).
+ * {@code Systems/Producing Jobs.md}), or the crafts of an always-produce pattern, without a request.
  * Kept in the {@link Workplace} of the Producing Job; not saved (a claim lost by unloading is released at the next
  * decision).
  */
@@ -27,7 +27,8 @@ final class Round {
     /** The step of a round; WAIT: input deliveries are on their way to the collect inventory. */
     enum Phase { WAIT, FETCH, CRAFT, DELIVER }
 
-    final UUID request;
+    /** The claimed request, empty for an always-produce pattern. */
+    final Optional<UUID> request;
     final Item item;
     final List<CraftPlan.Step> steps;
     /** Inputs still to take, by item. */
@@ -54,15 +55,15 @@ final class Round {
     int crafted;
 
     /**
-     * @param request the claimed request
-     * @param item    the requested item
+     * @param request the claimed request, empty for an always-produce pattern
+     * @param item    the item made
      * @param plan    how the claimed amount is made
      * @param takes   the inputs (and fuel) to fetch, by item
      * @param sources where the inputs are fetched (empty: everything is held already)
      * @param inputs  the input deliveries bringing inputs to the collect inventory first (empty: none)
      * @param tools   the tools of innate recipes to take at the collect inventory (empty: none)
      */
-    Round(UUID request, Item item, CraftPlan plan, Map<Item, Integer> takes, List<BlockPos> sources, List<UUID> inputs, List<Ingredient> tools) {
+    Round(Optional<UUID> request, Item item, CraftPlan plan, Map<Item, Integer> takes, List<BlockPos> sources, List<UUID> inputs, List<Ingredient> tools) {
         this.request = request;
         this.item = item;
         this.steps = plan.steps();
@@ -71,6 +72,13 @@ final class Round {
         this.inputs = List.copyOf(inputs);
         this.tools = List.copyOf(tools);
         this.phase = !inputs.isEmpty() ? Phase.WAIT : sources.isEmpty() ? Phase.CRAFT : Phase.FETCH;
+    }
+
+    /**
+     * @return whether it works an always-produce pattern instead of a request
+     */
+    boolean always() {
+        return request.isEmpty();
     }
 
     /**

@@ -129,6 +129,10 @@ final class Workplace {
     private @Nullable Round round;
     /** Requests a Producing Job skips until a time (live: game time, catch-up: the simulated clock; not saved). */
     private final Map<UUID, Long> skips = new HashMap<>();
+    /** Always-produce patterns a Producing Job skips until a time, by library slot (like {@link #skips}; not saved). */
+    private final Map<Integer, Long> alwaysSkips = new HashMap<>();
+    /** The library slot of the always-produce pattern worked last, -1 before the first (not saved). */
+    private int alwaysSlot = -1;
     /** A Producing Job takes its buffer to the drop-off before the next round (not saved). */
     private boolean dropOffPending;
 
@@ -176,6 +180,28 @@ final class Workplace {
      */
     Map<UUID, Long> skips() {
         return skips;
+    }
+
+    /**
+     * @return the always-produce patterns a Producing Job skips, by library slot, with the time until which they are
+     *         skipped (mutable)
+     */
+    Map<Integer, Long> alwaysSkips() {
+        return alwaysSkips;
+    }
+
+    /**
+     * @return the library slot of the always-produce pattern worked last, -1 before the first
+     */
+    int alwaysSlot() {
+        return alwaysSlot;
+    }
+
+    /**
+     * @param slot the library slot of the always-produce pattern worked now
+     */
+    void setAlwaysSlot(int slot) {
+        alwaysSlot = slot;
     }
 
     /**
@@ -630,6 +656,8 @@ final class Workplace {
     void clearSaved() {
         round = null;
         skips.clear();
+        alwaysSkips.clear();
+        alwaysSlot = -1;
         dropOffPending = false;
         // Its occupations were released by the Settler Shell.
         dayState = new Transient();

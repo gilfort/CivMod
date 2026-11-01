@@ -155,6 +155,11 @@ public final class PatternsTab extends JobBlockTab {
                 yield Optional.empty();
             }
             case TRANSFER -> Patterns.transfer(level, pos, job, edit.slot(), edit.recipe(), edit.grid(), edit.layout());
+            case TOGGLE_ALWAYS -> Optional.of(Patterns.toggleAlways(level, pos, job, edit.slot()));
+            case SET_AT_ONCE -> {
+                Patterns.setAtOnce(SettlementData.get(level), pos, job, edit.slot(), edit.index());
+                yield Optional.empty();
+            }
         };
         menu.syncSoon();
     }
