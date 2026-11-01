@@ -30,6 +30,7 @@ public static final DeferredHolder<Job, Job> SAND_DIGGER = JOBS.register("sand_d
 | `tool(itemTag, icon)` | the items that count as the Job's tool; the icon is shown in the "no tool" bubble (usually the starter tool) | none: the Job works bare-handed (no tool wear, never "No tool") |
 | `radius(level -> r)` | horizontal scan radius per JobBlock level (1–5) | 10 × level |
 | `minimumCount(n)` | how often a block type must be found to count | 1 |
+| `xp(gain)` | the XP of a roll that yields items (`XpGain`, independent of EXP) | none |
 | `productivity(total -> f)` | speed factor by the total number of counted blocks | 1 |
 | `whenNothingFound(reason)` | blocking reason when no block of the tag is in reach | "No work place" / "No resources" |
 
@@ -78,6 +79,8 @@ Implement `ResourceCollectionProfile` for a Job with its own scan or roll. Requi
 Optional hooks (`default` methods): `autoSearch(level, jobBlock, free)` (the search the loop calls: it must skip places that fail `free`, i.e. places occupied by another settler today; the default takes `autoSearch(level, jobBlock)` and gives up when that place is occupied, so override it to find the next free one), `scanCenter` (first work point, else the JobBlock; the builder uses the work place of the day), `scanRadius`, `needsResources`, `hasResources` (what counts as enough for "No resources"; by default anything found), `blockingReason`, `productivity`, `farmCount`, `needsTool`, `speed`, `canObtain`, `swings`, `reach`, `mainResources`, `dropped`, `droppedItems`, `leftOut`, `found`, `foundLines`, `count`, `weight` (both for innate recipes, see below).
 
 **Occupied work places:** the work place of the day is occupied by its settler for the day; no other settler uses it. The loop skips occupied scroll work points and passes `free` to the auto-search; none free → "No free work place". Your Job needs no code for this. Players are never kept from a Resource Collection work place.
+
+A roll can earn XP (vanilla-style experience, independent of EXP): name it as the third value, `new Produced(stacks, tool, XpGain.of(1, 6))`. The default is none. It repairs Mending tools on the belt, the rest goes into the settler's counter; a pack's `xp` list replaces it (see [getting started](getting-started.md)).
 
 Inside `produce`, call `leftOut(context, types)` for the types of the rolled group: it returns the types excluded at the JobBlock and those at their Max: every item `droppedItems(level, pos, type, tool)` names is at its Max (by default the one `dropped` item; override `droppedItems` when a type's loot gives several items, like a cow's beef and leather, so the type keeps rolling while one of them is still wanted). Keep the group roll as it is and spread the weights over the remaining types; a fully left-out group gives an empty roll (`new Produced(List.of(), context.tool())`), never a roll into another group.
 

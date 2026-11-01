@@ -13,6 +13,7 @@ import java.util.function.ToIntFunction;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.MissionProfile;
+import com.gilfort.civmod.api.XpGain;
 import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.SettlementRules;
@@ -344,6 +345,17 @@ public final class MissionRules {
     public static double nitwitChance(Mission.Villagers villagers, int recommended, int skill) {
         double chance = villagers.nitwitBase() - villagers.nitwitPerLevel() * (skill - recommended);
         return Math.clamp(chance, villagers.nitwitMin(), villagers.nitwitMax());
+    }
+
+    /**
+     * Mission XP (vault {@code Systems/Settler XP.md}).
+     *
+     * @param outcome the outcome
+     * @param mission the mission
+     * @return the mission's XP on success, none otherwise
+     */
+    public static XpGain xp(Outcome outcome, Mission mission) {
+        return outcome == Outcome.SUCCESS ? mission.xp() : XpGain.NONE;
     }
 
     /**

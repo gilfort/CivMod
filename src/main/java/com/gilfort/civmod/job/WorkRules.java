@@ -11,6 +11,7 @@ import com.gilfort.civmod.api.BiomeBonus;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
+import com.gilfort.civmod.api.XpGain;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
@@ -30,7 +31,7 @@ import net.minecraft.world.item.ItemStack;
  * The production rules of a Resource Collection Job (vault {@code Systems/Resource Collection Jobs.md},
  * {@code Systems/JobSkill Level.md}, catch-up "same rules as live play" in {@code Systems/Settlement.md}): advances a
  * job by a number of work ticks and reports what came out. Live play calls it every work tick, catch-up per simulated
- * hour; this is the only copy of speed × productivity × biome bonus, tool choice, tool wear, double drops and EXP.
+ * hour; this is the only copy of speed × productivity × biome bonus, tool choice, tool wear, double drops, EXP and XP.
  * <p>
  * Production runs one unit at a time: the job's fractional accumulator (kept in its {@link Workplace} between calls)
  * fills at speed × productivity per second; each full unit is one {@link ResourceCollectionProfile#produce} roll with the best tool
@@ -222,6 +223,10 @@ final class WorkRules {
                 }
                 // A lost double drop (negative chance) yields nothing, but counts as work like an empty roll.
                 List<ItemStack> stacks = crafted.isPresent() ? produced.get().stacks() : bonus.applyDoubleDrop(produced.get().stacks(), level.getRandom());
+                // A roll that yields nothing earns no profile XP. Read before the output takes the stacks; after the wear, so the tool
+                // can repair what this roll cost it.
+                settler.getWork().collectXp(level, SettlerXp.gains(JobBalancing.of(job.jobType()).xp(), stacks.isEmpty() ? XpGain.NONE : produced.get().xp(), stacks),
+                        crafted.isPresent() ? ItemStack.EMPTY : produced.get().worn());
                 // An empty roll (fully excluded group) yields nothing but earns the EXP of the activity.
                 boolean room = true;
                 if (!stacks.isEmpty()) {

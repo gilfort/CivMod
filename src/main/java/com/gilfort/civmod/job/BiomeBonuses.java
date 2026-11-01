@@ -60,7 +60,7 @@ public final class BiomeBonuses {
     private static final Identifier ID = CivMod.id("biome_bonuses");
 
     private static final FileToIdConverter FILES = FileToIdConverter.json("civmod_biome_bonuses");
-    private static final Codec<List<ExtraCodecs.TagOrElementLocation>> IDS_OR_TAGS = ExtraCodecs.compactListCodec(ExtraCodecs.TAG_OR_ELEMENT_ID,
+    static final Codec<List<ExtraCodecs.TagOrElementLocation>> IDS_OR_TAGS = ExtraCodecs.compactListCodec(ExtraCodecs.TAG_OR_ELEMENT_ID,
             ExtraCodecs.nonEmptyList(ExtraCodecs.TAG_OR_ELEMENT_ID.listOf()));
     private static final Codec<Double> FACTOR = Codec.doubleRange(0.1, 10.0);
     private static Map<Identifier, BonusFile> loaded = Map.of();

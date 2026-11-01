@@ -36,9 +36,10 @@ import net.minecraft.world.item.ItemStack;
  * @param food           food level, saturation and appetite
  * @param mission        the mission the settler is away on or waits to leave for (empty text if none)
  * @param needs          the needs shown in the Needs tab
+ * @param xp             the XP collected, in points
  */
 public record SettlerInfo(Component name, Component status, boolean homeless, Component settlementName, List<SettlerJob> jobs,
-        List<JobState> jobStates, Component bed, FoodInfo food, Component mission, NeedsReport needs) {
+        List<JobState> jobStates, Component bed, FoodInfo food, Component mission, NeedsReport needs, int xp) {
 
     /**
      * Food state shown in the overview.
@@ -161,6 +162,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
             FoodInfo.STREAM_CODEC, SettlerInfo::food,
             ComponentSerialization.STREAM_CODEC, SettlerInfo::mission,
             NeedsReport.STREAM_CODEC, SettlerInfo::needs,
+            ByteBufCodecs.VAR_INT, SettlerInfo::xp,
             SettlerInfo::new);
 
     /**
@@ -193,7 +195,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
         return new SettlerInfo(settler.getName(), settler.statusText(), settler.isHomeless(), settlementName, settler.getJobs(), states, bed,
                 new FoodInfo(food.level(), food.saturation(), appetite),
                 settler.getWork().missionStatus().orElse(Component.empty()),
-                settler.level() instanceof ServerLevel level ? settler.getWork().needsReport(level) : NeedsReport.NONE);
+                settler.level() instanceof ServerLevel level ? settler.getWork().needsReport(level) : NeedsReport.NONE, settler.getXp().points());
     }
 
     /**
@@ -219,7 +221,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
             return index >= 0 && index < jobStates.size() ? jobStates.get(index) : new JobState(JobStatus.IDLE, JobStatus.IDLE.displayName(), 0, 0, List.of(),
                     SkillInfo.NONE, List.of());
         }).toList();
-        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(jobs), states, bed, food, mission, needs);
+        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(jobs), states, bed, food, mission, needs, xp);
     }
 
     /**
@@ -235,6 +237,6 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
         if (index < states.size()) {
             states.set(index, states.get(index).switched(job, old.jobType()));
         }
-        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(switchedJobs), List.copyOf(states), bed, food, mission, needs);
+        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(switchedJobs), List.copyOf(states), bed, food, mission, needs, xp);
     }
 }

@@ -212,6 +212,8 @@
   "civmod.gui.settler.bed": "Bed: %s",
   "civmod.gui.settler.bed.none": "none yet",
   "civmod.gui.settler.bed.straw": "straw bed",
+  "civmod.gui.settler.xp": "XP %s",
+  "civmod.gui.settler.xp.tooltip": "Collected XP. The Enchanter will use it later.",
   "civmod.scroll.bed.assigned": "Bed assigned to %s",
   "civmod.scroll.bed.transferred": "Bed assigned to %s – taken from %s",
   "civmod.scroll.bed.released": "Bed released – will choose automatically",

@@ -79,6 +79,7 @@ public final class SimpleCollectionProfile implements DropPoolProfile {
     private final DoubleUnaryOperator productivity;
     private final Optional<BlockingReason> nothingFound;
     private final Optional<Identifier> dropPool;
+    private final XpGain xp;
 
     private SimpleCollectionProfile(Builder builder) {
         this.blocks = builder.blocks;
@@ -89,6 +90,7 @@ public final class SimpleCollectionProfile implements DropPoolProfile {
         this.productivity = builder.productivity;
         this.nothingFound = Optional.ofNullable(builder.nothingFound);
         this.dropPool = Optional.ofNullable(builder.dropPool);
+        this.xp = builder.xp;
     }
 
     @ApiStatus.Internal
@@ -235,7 +237,7 @@ public final class SimpleCollectionProfile implements DropPoolProfile {
             drops.addAll(Block.getDrops(state, context.level(), context.poi(), null, context.settler(), context.tool()));
         }
         drops.addAll(JobDrops.roll(context.level(), entries, context.tool(), context.atMax(), tools, new ItemStack(state.getBlock())));
-        return Optional.of(new Produced(drops, context.tool()));
+        return Optional.of(new Produced(drops, context.tool(), xp));
     }
 
     /** The tool harvests the block, or an entry of the Job's drop pool drops from it. */
@@ -271,6 +273,7 @@ public final class SimpleCollectionProfile implements DropPoolProfile {
         private @Nullable IntUnaryOperator radius;
         private int minimumCount = 1;
         private DoubleUnaryOperator productivity = total -> 1.0;
+        private XpGain xp = XpGain.NONE;
         private @Nullable BlockingReason nothingFound;
         private @Nullable Identifier dropPool;
 
@@ -338,6 +341,15 @@ public final class SimpleCollectionProfile implements DropPoolProfile {
         @ApiStatus.Internal
         public Builder dropPool(Identifier job) {
             this.dropPool = job;
+            return this;
+        }
+
+        /**
+         * @param xp the XP of a roll that yields items (default none)
+         * @return this builder
+         */
+        public Builder xp(XpGain xp) {
+            this.xp = xp;
             return this;
         }
 

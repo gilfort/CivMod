@@ -71,6 +71,7 @@ and the lang keys `job.<namespace>.<job>`, `job.<namespace>.<job>.indefinite` an
 | `checkLimit(skill)` | how many patterns can be checked at the settler's effective skill | 6 + 1 per 5 levels |
 | `workTime(recipe)` | operations one execution of a recipe takes (an operation lasts as long as the shared speed formula × job factor says) | 1 |
 | `execute(level, recipe, result, consumed)` | what one execution puts into the settler's buffer; the inputs are already taken out | the result plus the inputs' remainders (empty buckets, …); a `smithing_transform` result keeps the base item's components |
+| `xp(level, recipe)` | the XP one execution earns (`XpGain`, independent of EXP); it repairs Mending tools on the belt, the rest goes into the settler's counter; a pack's `xp` list replaces it | none |
 
 `ItemFilter.allow(tag)`, `ItemFilter.deny(tag)` and `ItemFilter.ANY` build filters. The Craftsperson is a profile with `crafting` and its crafting-table station, without filters: it crafts everything, slowly (job factor 0.3).
 
