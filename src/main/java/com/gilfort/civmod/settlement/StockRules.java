@@ -256,6 +256,22 @@ public final class StockRules {
      * @return the items at Max, empty without a Home Clerk, without Max rules there or while it is unloaded
      */
     public static Set<Item> atMax(ServerLevel level, JobBlockSite site) {
+        return atMax(level, site, false);
+    }
+
+    /**
+     * {@link #atMax(ServerLevel, JobBlockSite)} counting what is in delivery to the Home Clerk as well, for a producer
+     * whose results wait for a Deliveryman (vault {@code Systems/Producing Jobs.md}).
+     *
+     * @param level the level
+     * @param site  the JobBlock
+     * @return the items at Max
+     */
+    public static Set<Item> atMaxWithDeliveries(ServerLevel level, JobBlockSite site) {
+        return atMax(level, site, true);
+    }
+
+    private static Set<Item> atMax(ServerLevel level, JobBlockSite site, boolean deliveries) {
         Optional<SettlementBlock> clerk = site.block().homeClerk().flatMap(site.settlement()::block).filter(ClerkStorage::isClerk);
         if (clerk.isEmpty() || clerk.get().stockRules().stream().noneMatch(StockRule::hasMax) || !level.isLoaded(clerk.get().pos())) {
             return Set.of();
@@ -264,7 +280,8 @@ public final class StockRules {
         Set<Item> items = new HashSet<>();
         for (StockRule rule : clerk.get().stockRules()) {
             // A lookup in the Clerk's stock view per Max rule, no count of the whole store.
-            if (rule.hasMax() && rule.activeAt(clerk.get().level()) && stock.count(rule.item()) >= rule.max()) {
+            if (rule.hasMax() && rule.activeAt(clerk.get().level()) && stock.count(rule.item())
+                    + (deliveries ? Deliveries.inDelivery(site.settlement(), clerk.get().pos(), rule.item()) : 0) >= rule.max()) {
                 items.add(rule.item());
             }
         }

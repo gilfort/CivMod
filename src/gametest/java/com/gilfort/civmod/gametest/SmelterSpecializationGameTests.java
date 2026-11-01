@@ -73,6 +73,7 @@ public final class SmelterSpecializationGameTests {
             register(helper, "smelter_station_types", SmelterSpecializationGameTests::stationTypes);
             register(helper, "cook_fills_request", SmelterSpecializationGameTests::cookFillsRequest);
             register(helper, "founder_fills_request", SmelterSpecializationGameTests::founderFillsRequest);
+            register(helper, "cook_always_produce", SmelterSpecializationGameTests::cookAlwaysProduce);
             register(helper, "founder_parallel_stations", SmelterSpecializationGameTests::founderParallelStations);
             register(helper, "founder_faster_than_smelter", SmelterSpecializationGameTests::founderFaster);
         });
@@ -158,6 +159,30 @@ public final class SmelterSpecializationGameTests {
      */
     private static void cookFillsRequest(GameTestHelper helper) {
         fillsRequest(helper, cook(), Items.SMOKER, Blocks.SMOKER, "cooked_beef_from_smoking", Items.BEEF, Items.COOKED_BEEF);
+    }
+
+    /**
+     * An idle Cook works its always-produce patterns in turn, each round with its own amount (#146): both foods get
+     * their turn long before the raw beef runs out, and more beef than salmon comes out.
+     */
+    private static void cookAlwaysProduce(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Job job = cook();
+        Setup setup = setup(helper, job, Items.SMOKER, Blocks.SMOKER, "cooked_beef_from_smoking", Items.BEEF, List.of(new ItemStack(Items.BREAD, 32),
+                new ItemStack(Items.BEEF, 64), new ItemStack(Items.SALMON, 64), new ItemStack(Items.COAL, 16)));
+        ResourceKey<Recipe<?>> salmon = ResourceKey.create(Registries.RECIPE, Identifier.withDefaultNamespace("cooked_salmon_from_smoking"));
+        helper.assertTrue(Patterns.transfer(level, setup.block(), job, 1, Optional.of(salmon), List.of(Items.SALMON)).isPresent(), "Salmon pattern");
+        helper.assertTrue(Patterns.toggleAlways(level, setup.block(), job, 0) && Patterns.toggleAlways(level, setup.block(), job, 1), "Always produce");
+        Patterns.setAtOnce(setup.data(), setup.block(), job, 0, 4);
+        Patterns.setAtOnce(setup.data(), setup.block(), job, 1, 2);
+        Settler settler = worker(helper, setup, job);
+        CraftspersonGameTests.catchUp(level, settler, 6000L);
+        int beef = SmelterGameTests.count(level, setup.clerk(), Items.COOKED_BEEF);
+        int salmonCooked = SmelterGameTests.count(level, setup.clerk(), Items.COOKED_SALMON);
+        helper.assertTrue(salmonCooked > 0 && beef > salmonCooked, "Turns of 4 beef and 2 salmon: " + beef + " beef, " + salmonCooked + " salmon");
+        helper.assertTrue(SmelterGameTests.count(level, setup.clerk(), Items.BEEF) > 0, "The turns are not an effect of running out of beef");
+        cleanUp(setup, settler);
+        helper.succeed();
     }
 
     /**
