@@ -23,10 +23,13 @@ import com.gilfort.civmod.menu.TabData;
 import com.mojang.blaze3d.platform.InputConstants;
 
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -44,7 +47,7 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
  * The "Patterns" tabs of a JobBlock in the {@link JobBlockScreen} (vault {@code Systems/Producing Jobs.md}), one per
  * Producing Job with a library there; the client side of {@link PatternsTab}, one view for all of them. Two views: the library (54 pattern slots
  * with checkmarks) and the editor of one pattern (the layout of its recipe type ({@link PatternLayout}) with layout buttons
- * on top, output, recipe arrows, Check / Clear / Back; an innate recipe read only). Also the target
+ * on top, output, recipe arrows, "Always produce" with its amount, Check / Clear / Back; an innate recipe's inputs read only). Also the target
  * of recipe viewer transfers. Adds the delivery toggle (Self / Deliveryman) to the Workers tab.
  */
 final class PatternsTabView implements JobBlockTabView {
@@ -59,7 +62,16 @@ final class PatternsTabView implements JobBlockTabView {
     private static final int GRID_Y = 36;
     private static final int OUTPUT_X = 116;
     private static final int OUTPUT_Y = GRID_Y + 18;
-    private static final int PATTERN_BUTTONS_Y = 94;
+    /** "Always produce" and below it "Produce at once". */
+    private static final int ALWAYS_Y = 92;
+    private static final int ALWAYS_BOX = 11;
+    private static final int AT_ONCE_Y = 104;
+    private static final int AT_ONCE_ROW = 12;
+    private static final int AT_ONCE_X = 96;
+    private static final int AT_ONCE_BOX_WIDTH = 28;
+    private static final int PATTERN_BUTTONS_Y = 117;
+    /** The state line, on the row the library's second line uses. */
+    private static final int STATE_Y = 138;
     /** Ghost target ids of the editor (library slots are 0–53). */
     private static final int TARGET_CELL = 100;
     private static final int TARGET_OUTPUT = 200;
@@ -74,6 +86,9 @@ final class PatternsTabView implements JobBlockTabView {
     private @Nullable Button clearButton;
     private @Nullable Button previousButton;
     private @Nullable Button nextButton;
+    private @Nullable Button lessButton;
+    private @Nullable EditBox atOnceBox;
+    private @Nullable Button moreButton;
 
     /**
      * @param screen the screen showing the tab
@@ -146,6 +161,16 @@ final class PatternsTabView implements JobBlockTabView {
         Tooltip cycle = Tooltip.create(Component.translatable("civmod.gui.patterns.cycle"));
         previousButton.setTooltip(cycle);
         nextButton.setTooltip(cycle);
+        int atOnceY = screen.top() + AT_ONCE_Y;
+        int atOnceX = left + AT_ONCE_X;
+        lessButton = screen.addWidget(tabIndex, Button.builder(Component.literal("-"), button -> stepAtOnce(-1))
+                .bounds(atOnceX, atOnceY, 12, AT_ONCE_ROW).build());
+        atOnceBox = screen.addWidget(tabIndex, new EditBox(screen.getFont(), atOnceX + 13, atOnceY, AT_ONCE_BOX_WIDTH, AT_ONCE_ROW,
+                Component.translatable("civmod.gui.patterns.at_once")));
+        atOnceBox.setMaxLength(3);
+        atOnceBox.setResponder(text -> parseAtOnce(text).ifPresent(this::sendAtOnce));
+        moreButton = screen.addWidget(tabIndex, Button.builder(Component.literal("+"), button -> stepAtOnce(1))
+                .bounds(atOnceX + 14 + AT_ONCE_BOX_WIDTH, atOnceY, 12, AT_ONCE_ROW).build());
         update();
     }
 
@@ -157,7 +182,8 @@ final class PatternsTabView implements JobBlockTabView {
 
     /** Shows the edited pattern's state on the editor buttons. */
     private void update() {
-        if (checkButton == null || clearButton == null || previousButton == null || nextButton == null || editing < 0) {
+        if (checkButton == null || clearButton == null || previousButton == null || nextButton == null || lessButton == null || atOnceBox == null
+                || moreButton == null || editing < 0) {
             return;
         }
         PatternsTabData tab = tab();
@@ -171,6 +197,55 @@ final class PatternsTabView implements JobBlockTabView {
         boolean recipe = pattern.filter(found -> found.valid() && !found.exact() && !found.innate()).isPresent();
         previousButton.active = recipe;
         nextButton.active = recipe;
+        boolean atOnce = !tab.locked() && pattern.filter(Pattern::always).isPresent();
+        lessButton.active = atOnce;
+        moreButton.active = atOnce;
+        atOnceBox.setEditable(atOnce);
+        if (!atOnceBox.isFocused()) {
+            atOnceBox.setValue(pattern.map(found -> Integer.toString(found.atOnce())).orElse(""));
+        }
+    }
+
+    /** A typed "Produce at once"; anything that is no number is ignored. */
+    private static Optional<Integer> parseAtOnce(String text) {
+        try {
+            return Optional.of(Integer.parseInt(text.trim()));
+        } catch (NumberFormatException e) {
+            return Optional.empty();
+        }
+    }
+
+    /** − / +: steps of 1, Shift 10, Ctrl 64. */
+    private void stepAtOnce(int sign) {
+        Minecraft minecraft = Minecraft.getInstance();
+        int step = minecraft.hasControlDown() ? 64 : minecraft.hasShiftDown() ? 10 : 1;
+        tab().pattern(editing).ifPresent(pattern -> sendAtOnce(pattern.atOnce() + sign * step));
+    }
+
+    /** Sends a new "Produce at once" of the open pattern, if it is one. */
+    private void sendAtOnce(int value) {
+        int atOnce = Math.clamp(value, 1, Pattern.MAX_AT_ONCE);
+        tab().pattern(editing).filter(pattern -> pattern.always() && pattern.atOnce() != atOnce)
+                .ifPresent(pattern -> ClientPacketDistributor.sendToServer(PatternsTabData.Edit.setAtOnce(menu.containerId, job(), editing, atOnce)));
+    }
+
+    /** The clickable "Always produce" row of the editor, relative to the panel. */
+    private Rect2i alwaysRow() {
+        return new Rect2i(CivGui.PADDING, ALWAYS_Y, screen.panelWidth() - 2 * CivGui.PADDING, ALWAYS_BOX);
+    }
+
+    private boolean overAlways(double x, double y) {
+        return alwaysRow().contains((int) Math.floor(x - screen.left()), (int) Math.floor(y - screen.top()));
+    }
+
+    /** Typing into the amount must not trigger the inventory key or hotbar swaps. */
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        if (atOnceBox != null && atOnceBox.isFocused() && !event.isEscape()) {
+            atOnceBox.keyPressed(event);
+            return true;
+        }
+        return false;
     }
 
     private void showEditor(int slot) {
@@ -186,6 +261,9 @@ final class PatternsTabView implements JobBlockTabView {
         clearButton = null;
         previousButton = null;
         nextButton = null;
+        lessButton = null;
+        atOnceBox = null;
+        moreButton = null;
         screen.rebuild();
     }
 
@@ -271,6 +349,13 @@ final class PatternsTabView implements JobBlockTabView {
         if (tab.pattern(editing).isPresent()) {
             ClientPacketDistributor.sendToServer(PatternsTabData.Edit.clear(menu.containerId, job(), editing));
         }
+    }
+
+    /** Whether the box of the open pattern can change: setting it also checks the pattern, so it needs a free checkmark. */
+    private boolean alwaysSettable(PatternsTabData tab) {
+        Optional<Pattern> pattern = tab.pattern(editing).filter(Pattern::valid);
+        return !tab.locked() && pattern.isPresent() && (pattern.get().always()
+                || (!tab.unusable(editing) && (pattern.get().checked() || tab.checked() < tab.limit())));
     }
 
     /**
@@ -381,6 +466,12 @@ final class PatternsTabView implements JobBlockTabView {
                 chooseLayout(tab, tab.layouts().get(button));
                 return true;
             }
+            if (overAlways(event.x(), event.y())) {
+                if (alwaysSettable(tab)) {
+                    sendPattern(PatternsTabData.Edit.toggleAlways(menu.containerId, job(), editing));
+                }
+                return true;
+            }
         }
         int target = ghostTargetAt(event.x(), event.y());
         if (target < 0) {
@@ -456,13 +547,16 @@ final class PatternsTabView implements JobBlockTabView {
         if (editing >= 0) {
             PatternsTabData tab = tab();
             if (tab.innate(editing)) {
-                return List.of(Component.translatable("civmod.gui.patterns.help.innate", GuiIcons.inlineLock()));
+                return List.of(Component.translatable("civmod.gui.patterns.help.innate", GuiIcons.inlineLock()),
+                        Component.translatable("civmod.gui.patterns.help.always"), Component.translatable("civmod.gui.patterns.help.at_once"));
             }
             List<Component> lines = new ArrayList<>(List.of(Component.translatable("civmod.gui.patterns.help.cell"),
                     Component.translatable("civmod.gui.patterns.help.empty_cell")));
             if (!layoutButtons(tab).isEmpty()) {
                 lines.add(Component.translatable("civmod.gui.patterns.help.layout"));
             }
+            lines.add(Component.translatable("civmod.gui.patterns.help.always"));
+            lines.add(Component.translatable("civmod.gui.patterns.help.at_once"));
             return lines;
         }
         return List.of(Component.translatable("civmod.gui.patterns.help.click"), Component.translatable("civmod.gui.patterns.help.check"),
@@ -611,17 +705,23 @@ final class PatternsTabView implements JobBlockTabView {
         if (hovered == TARGET_OUTPUT) {
             CivGui.slotHover(graphics, OUTPUT_X, OUTPUT_Y);
         }
-        // Two short state lines between the buttons and the inventory label; what they mean is in the help.
+        boolean always = pattern.filter(Pattern::always).isPresent();
+        boolean settable = alwaysSettable(tab);
+        CivGui.checkbox(graphics, always, settable && overAlways(mouseX, mouseY), CivGui.PADDING, ALWAYS_Y, ALWAYS_BOX);
+        graphics.text(font, Component.translatable("civmod.gui.patterns.always"), CivGui.PADDING + ALWAYS_BOX + 3, ALWAYS_Y + 2,
+                settable ? CivGui.LABEL_COLOR : CivGui.HINT_COLOR, false);
+        graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.patterns.at_once"), AT_ONCE_X - CivGui.PADDING - 2), CivGui.PADDING,
+                AT_ONCE_Y + 2, always ? CivGui.LABEL_COLOR : CivGui.HINT_COLOR, false);
+        // One short state line between the buttons and the inventory label; what it means is in the help.
         boolean valid = pattern.filter(Pattern::valid).isPresent();
         Component mode = pattern.map(found -> Component.translatable(!found.valid() ? "civmod.gui.patterns.no_recipe"
                 : found.exact() ? "civmod.gui.patterns.exact" : "civmod.gui.patterns.recipe")).orElse(Component.translatable("civmod.gui.patterns.empty_slot"));
-        int y = PATTERN_BUTTONS_Y + 24;
         int width = screen.panelWidth() - 2 * CivGui.PADDING;
-        graphics.text(font, CivGui.fit(font, mode, width), CivGui.PADDING, y, pattern.isPresent() && !valid ? CivGui.ERROR_COLOR : CivGui.HINT_COLOR,
-                false);
         if (tab.unusable(editing)) {
-            graphics.text(font, CivGui.fit(font, unusableLine(tab, editing), width)
-, CivGui.PADDING, y + 10, CivGui.ERROR_COLOR, false);
+            graphics.text(font, CivGui.fit(font, unusableLine(tab, editing), width), CivGui.PADDING, STATE_Y, CivGui.ERROR_COLOR, false);
+        } else {
+            graphics.text(font, CivGui.fit(font, mode, width), CivGui.PADDING, STATE_Y, pattern.isPresent() && !valid ? CivGui.ERROR_COLOR : CivGui.HINT_COLOR,
+                    false);
         }
         if (hoveredButton >= 0) {
             PatternLayout offered = tab.layouts().get(hoveredButton);
