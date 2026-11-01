@@ -21,11 +21,15 @@ The specifics a Job fills into its category's work loop; must belong to the Job'
 _Avoid_: Job type, behaviour
 
 **XP**:
-A settler's vanilla-style experience, independent of EXP (skill progress per Job): collected per action from the Job's source (the profile's default, `XpGain`: `ResourceCollectionProfile.Produced.xp`, `ProducingProfile.xp`; or the `xp` list of `civmod_jobs/<job>.json`, `XpEntry`, `JobBalancing.xp`, which replaces it) or on a successful Mission (`Mission.xp`), expected instead of rolled in catch-up. New XP repairs Mending tools on the belt (`SettlerTools.mend`), the rest goes into the settler's counter (`SettlerXp`, saved with the settler; a mission's XP goes straight there). Stored XP never repairs. Code: `SettlerWork.collectXp`, `SettlerWork.storeXp`.
-_Avoid_: EXP for this (EXP is per Job), orbs, levels
+A settler's vanilla-style experience, independent of EXP (skill progress per Job): collected per action from the Job's source (the profile's default, `XpGain`: `ResourceCollectionProfile.Produced.xp`, `ProducingProfile.xp`; or the `xp` list of `civmod_jobs/<job>.json`, `XpEntry`, `JobBalancing.xp`, which replaces it) or on a successful Mission (`Mission.xp`), expected instead of rolled in catch-up. New XP repairs Mending tools on the belt (`SettlerTools.mend`), the rest goes into the settler's counter (`SettlerXp`, saved with the settler; a mission's XP goes straight there). Stored XP never repairs; it is for the Enchanter later. Code: `SettlerWork.collectXp`, `SettlerWork.storeXp`.
+_Avoid_: EXP for this (EXP is per Job), Settler EXP, orbs, levels
 
 **Settler Shell**:
 The part of a settler's behaviour shared by every Job Category (acting on the Schedule, walking, food, sleep, job priorities, EXP, catch-up). Code: `SettlerWork`; meals and rest are carried out by `SettlerMeals` and `SettlerRest`, which answer with Body steps; it hands control to the `CategoryLoop` of the active Job's category (`ResourceCollectionLoop`, `MissionLoop`). Shared parts the loops use: the job's Workplace, delivery and EXP in the shell, the Work rules, tools in `SettlerTools`, `Fatigue`.
+
+**EXP**:
+Skill progress of a settler in one Job; fills the JobSkill Level. Separate from XP.
+_Avoid_: XP, experience
 
 **Job step**:
 What a category loop tells the Settler Shell its job wants next: walk to a target (and work there), deliver, wait, blocked (a status or a Blocking reason), skip, pause / hold the decision, worked this tick, done. Only the shell changes the settler's activity, walking target, active job and the job's status, after the loop returned; a status outside a step goes through the job's Workplace. Code: `JobStep`, applied in `SettlerWork.apply`.
