@@ -142,6 +142,10 @@ The Job of the Center Block (`civmod:administrator`), of the Service category. I
 A JobBlock that belongs to no settlement: placed outside every exclusion zone, or left by a dissolved settlement. It shows as unconnected and joins, on JobBlock place and upgrade only, once a connected block's join radius reaches it. Code: `SettlementData.unsettled()`, `Outcome.UNSETTLED`, joined in `SettlementManager.connectChain`.
 _Avoid_: Unconnected (that block belongs to a settlement and waits in its exclusion zone)
 
+**Connection**:
+A settlement's JobBlock is connected while a chain of join radii leads to it from a Center Block. Rechecked from the center after every JobBlock removal and on a new Center Block; a block losing the chain stays in the settlement, unconnected, waiting in its zones, and a settler keeps its job there but does not work it, live or in catch-up (`JobStatus.UNCONNECTED`). A settlement without a Center Block has no connected block; its exclusion zones count over all its blocks. Code: `SettlementManager.recheck`, `SettlementBlock.connected`.
+_Avoid_: Reading `connected` as "belongs to a settlement"
+
 **Center grace**:
 The time a settlement without a Center Block has left: it stays for 3 days and dissolves on the morning of the fourth (06:00, removal day + 4), its last Center Block's place stays held, and a new Center Block there or in its zones revives it (`Outcome.REVIVED`). Saved; checked at every settler morning by day number, so missed mornings count. Code: `Settlement.CenterGrace`, `Settlement.centerGrace()`, `SettlementManager.morning`, `SettlementRules.CENTERLESS_DAYS`.
 _Avoid_: Decay, abandonment

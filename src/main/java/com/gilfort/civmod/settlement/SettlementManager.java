@@ -1,9 +1,13 @@
 package com.gilfort.civmod.settlement;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.jspecify.annotations.Nullable;
@@ -144,7 +148,8 @@ public final class SettlementManager {
      *                   {@link Outcome#UNSETTLED}
      * @param outcome    how it was integrated
      * @param distance   for {@link Outcome#UNCONNECTED}: horizontal distance to the nearest connected block
-     * @param required   for {@link Outcome#UNCONNECTED}: the distance needed to connect to that block
+     * @param required   for {@link Outcome#UNCONNECTED}: the distance needed to connect to that block, {@code 0} if the
+     *                   settlement has no connected block to reach
      */
     public record Placement(@Nullable Settlement settlement, Outcome outcome, int distance, int required) {
     }
@@ -155,7 +160,7 @@ public final class SettlementManager {
      * @param settlement the settlement, if any
      * @param connected  whether the block is connected
      * @param distance   distance to the nearest connected block of the settlement ({@code 0} if connected)
-     * @param required   distance needed to connect ({@code 0} if connected)
+     * @param required   distance needed to connect ({@code 0} if connected or if the settlement has no connected block)
      */
     public record Status(Optional<Settlement> settlement, boolean connected, int distance, int required) {
     }
@@ -188,7 +193,7 @@ public final class SettlementManager {
             return new Placement(join.settlement(), Outcome.JOINED, 0, 0);
         }
 
-        Nearest exclusion = nearestConnected(data, pos, (block, distance) -> distance <= SettlementRules.exclusionRadius(block));
+        Nearest exclusion = nearestInExclusion(data, pos);
         if (exclusion != null) {
             data.addBlock(exclusion.settlement(), new SettlementBlock(pos, jobType, clamped, false));
             listener.blockChanged(pos, exclusion.settlement().id(), false);
@@ -239,7 +244,7 @@ public final class SettlementManager {
         owner.setCenterGrace(Optional.empty());
         data.addBlock(owner, center);
         listener.blockChanged(pos, owner.id(), true);
-        connectChain(data, owner, listener);
+        recheck(data, owner, listener);
         return new Placement(owner, revived ? Outcome.REVIVED : Outcome.JOINED, 0, 0);
     }
 
@@ -250,7 +255,7 @@ public final class SettlementManager {
     private static @Nullable Settlement zoneOwner(SettlementData data, BlockPos pos) {
         Nearest nearest = nearestConnected(data, pos, (block, distance) -> distance <= SettlementRules.joinRadius(block));
         if (nearest == null) {
-            nearest = nearestConnected(data, pos, (block, distance) -> distance <= SettlementRules.exclusionRadius(block));
+            nearest = nearestInExclusion(data, pos);
         }
         if (nearest != null) {
             return nearest.settlement();
@@ -289,8 +294,9 @@ public final class SettlementManager {
     }
 
     /**
-     * Unregisters a removed JobBlock. A settlement left without a Center Block gets its timer: it stays for
-     * {@value SettlementRules#CENTERLESS_DAYS} days and dissolves on the morning after them ({@link #morning}).
+     * Unregisters a removed JobBlock and rechecks the connection from the center. A settlement left without a Center
+     * Block gets its timer: it stays for {@value SettlementRules#CENTERLESS_DAYS} days and dissolves on the morning after
+     * them ({@link #morning}).
      *
      * @param data     the dimension's settlement data
      * @param pos      the removed JobBlock position
@@ -308,6 +314,7 @@ public final class SettlementManager {
                 settlement.setCenterGrace(Optional.of(new Settlement.CenterGrace(pos.immutable(), day + SettlementRules.CENTERLESS_DAYS + 1)));
                 data.changed();
             }
+            recheck(data, settlement, listener);
         });
         return removed;
     }
@@ -361,6 +368,44 @@ public final class SettlementManager {
                 .orElse(new Status(settlement, false, 0, 0));
     }
 
+    /**
+     * Recomputes a settlement's connection from its Center Blocks with the join rule: blocks no longer chained to one
+     * become unconnected, blocks in reach connect. Blocks that stay connected are not reported.
+     */
+    private static void recheck(SettlementData data, Settlement settlement, Listener listener) {
+        Set<BlockPos> chained = chainedToCenter(settlement);
+        for (SettlementBlock block : settlement.blocks()) {
+            if (block.connected() && !chained.contains(block.pos())) {
+                block.setConnected(false);
+                data.changed();
+                listener.blockChanged(block.pos(), settlement.id(), false);
+            }
+        }
+        connectChain(data, settlement, listener);
+    }
+
+    private static Set<BlockPos> chainedToCenter(Settlement settlement) {
+        Set<BlockPos> chained = new HashSet<>();
+        Deque<SettlementBlock> open = new ArrayDeque<>();
+        for (SettlementBlock block : settlement.blocks()) {
+            if (block.centerRace().isPresent()) {
+                chained.add(block.pos());
+                open.add(block);
+            }
+        }
+        while (!open.isEmpty()) {
+            SettlementBlock reacher = open.poll();
+            for (SettlementBlock candidate : settlement.blocks()) {
+                if (!chained.contains(candidate.pos())
+                        && SettlementRules.horizontalDistance(candidate.pos(), reacher.pos()) <= SettlementRules.joinRadius(reacher)) {
+                    chained.add(candidate.pos());
+                    open.add(candidate);
+                }
+            }
+        }
+        return chained;
+    }
+
     /** Connects the waiting blocks of a settlement and the blocks without a settlement that its chain reaches. */
     private static void connectChain(SettlementData data, Settlement settlement, Listener listener) {
         boolean changed = true;
@@ -398,10 +443,20 @@ public final class SettlementManager {
     }
 
     private static @Nullable Nearest nearestConnected(SettlementData data, BlockPos pos, Reach reach) {
+        return nearest(data, pos, false, reach);
+    }
+
+    /** The nearest block whose exclusion zone covers a position: connected ones, and all of a settlement without a center. */
+    private static @Nullable Nearest nearestInExclusion(SettlementData data, BlockPos pos) {
+        return nearest(data, pos, true, (block, distance) -> distance <= SettlementRules.exclusionRadius(block));
+    }
+
+    private static @Nullable Nearest nearest(SettlementData data, BlockPos pos, boolean allWithoutCenter, Reach reach) {
         Nearest best = null;
         for (Settlement settlement : data.settlements()) {
+            boolean all = allWithoutCenter && !settlement.hasCenter();
             for (SettlementBlock block : settlement.blocks()) {
-                if (!block.connected()) {
+                if (!all && !block.connected()) {
                     continue;
                 }
                 double distance = SettlementRules.horizontalDistance(pos, block.pos());

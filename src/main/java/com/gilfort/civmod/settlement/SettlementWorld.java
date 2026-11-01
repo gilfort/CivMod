@@ -369,7 +369,8 @@ public final class SettlementWorld {
             case REFUSED -> Component.translatable("civmod.settlement.center_refused").withStyle(net.minecraft.ChatFormatting.RED);
             case JOINED -> Component.translatable("civmod.settlement.joined", placement.settlement().displayName());
             case UNSETTLED -> Component.translatable("civmod.settlement.unsettled").withStyle(net.minecraft.ChatFormatting.RED);
-            case UNCONNECTED -> Component.translatable("civmod.settlement.unconnected", placement.distance(), placement.required())
+            case UNCONNECTED -> (placement.required() == 0 ? Component.translatable("civmod.settlement.unconnected_no_center")
+                    : Component.translatable("civmod.settlement.unconnected", placement.distance(), placement.required()))
                     .withStyle(net.minecraft.ChatFormatting.RED);
         };
         player.sendOverlayMessage(message);

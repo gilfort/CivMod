@@ -837,7 +837,11 @@ public final class SettlerWork {
     private boolean jobStepHolds(ServerLevel level) {
         SettlerJob job = activeJob;
         CategoryLoop loop = job == null ? null : loop(job);
-        return activity == Activity.JOB && loop != null && apply(level, job, loop.holdsDecision(level, job));
+        return activity == Activity.JOB && loop != null && connected(level, job) && apply(level, job, loop.holdsDecision(level, job));
+    }
+
+    private static boolean connected(ServerLevel level, SettlerJob job) {
+        return JobBlockSite.blockAt(level, job.jobBlock()).filter(SettlementBlock::connected).isPresent();
     }
 
     // ---------------------------------------------------------------- thought bubbles and held item
@@ -1073,6 +1077,10 @@ public final class SettlerWork {
         CategoryLoop loop = loop(job);
         if (site.isEmpty() || loop == null) {
             return false;
+        }
+        if (!site.get().block().connected()) {
+            // Keeps the job, but does not work there until the block connects again.
+            return apply(level, job, new JobStep.Skip(Optional.of(JobStatus.UNCONNECTED), Optional.empty()));
         }
         return apply(level, job, loop.plan(level, job, site.get(), day, dayTime));
     }
@@ -1505,7 +1513,7 @@ public final class SettlerWork {
         for (SettlerJob job : settler.getJobs()) {
             Optional<JobBlockSite> site = JobBlockSite.at(level, job.jobBlock()).filter(found -> found.settlement() == settlement.get());
             CategoryLoop loop = loop(job);
-            if (site.isEmpty() || loop == null) {
+            if (site.isEmpty() || loop == null || !site.get().block().connected()) {
                 continue;
             }
             if (!loop.catchUpReady(level, job, site.get(), DayClock.day(clock), DayClock.dayTime(clock))) {
@@ -1600,7 +1608,7 @@ public final class SettlerWork {
         long work = Math.max(0, Math.min(to, workEndTick) - from);
 
         double share = Fatigue.expectedWorkShare();
-        double factor = settler.getJobs().stream().filter(job -> !catchUpEnded(job.jobBlock())).findFirst()
+        double factor = settler.getJobs().stream().filter(job -> !catchUpEnded(job.jobBlock()) && connected(level, job)).findFirst()
                 .map(job -> job.jobType().hungerFactor()).orElse(0.0);
         meals.exhaust(level, awake, work * share * factor);
 
@@ -1693,7 +1701,7 @@ public final class SettlerWork {
         int rolls = 0;
         double remaining = workTicks;
         for (SettlerJob job : settler.getJobs()) {
-            if (catchUpEnded(job.jobBlock()) || remaining <= 0.0) {
+            if (catchUpEnded(job.jobBlock()) || remaining <= 0.0 || !connected(level, job)) {
                 continue;
             }
             CategoryLoop loop = loop(job);

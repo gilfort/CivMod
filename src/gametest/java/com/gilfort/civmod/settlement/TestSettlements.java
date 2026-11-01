@@ -116,6 +116,21 @@ public final class TestSettlements {
         SettlementWorld.morning(level, DayClock.day(level) + SettlementRules.CENTERLESS_DAYS + 1);
     }
 
+    /**
+     * A settlement as an earlier version saved it: connected JobBlocks, no Center Block and no timer.
+     *
+     * @param data      the settlement data
+     * @param positions the JobBlock positions
+     * @return the settlement
+     */
+    public static Settlement earlierVersion(SettlementData data, BlockPos... positions) {
+        Settlement settlement = data.create(0L, SettlementColors.DEFAULT, Settlement.SETTLERS_ARRIVED);
+        for (BlockPos pos : positions) {
+            data.addBlock(settlement, new SettlementBlock(pos, ModJobs.LUMBERJACK.get(), SettlementRules.MIN_LEVEL, true));
+        }
+        return settlement;
+    }
+
     private static boolean reached(SettlementData data, BlockPos pos) {
         return data.settlements().stream().flatMap(settlement -> settlement.blocks().stream()).anyMatch(block -> block.connected()
                 && SettlementRules.horizontalDistance(pos, block.pos()) <= SettlementRules.joinRadius(block));
