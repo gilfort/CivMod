@@ -318,19 +318,21 @@ public final class SettlementBlock {
      * @param stationTypes the unlock items in the Station Types slots, by slot ({@link Items#AIR}: empty; slot 0 is the
      *                   Base Job's station and never read back)
      * @param found      the Found tab state per Resource Collection Job
+     * @param centerRace the race of a Center Block, empty for every other JobBlock
      */
     private record PlaceFields(List<Job> autoAssign, List<Identifier> legacyExcluded, Optional<SavedScan> legacyScan, List<Item> stationTypes,
-            List<SavedFound> found) {
+            List<SavedFound> found, Optional<Identifier> centerRace) {
 
         static final MapCodec<PlaceFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Job.CODEC.listOf().optionalFieldOf("auto_assign", List.of()).forGetter(PlaceFields::autoAssign),
                 Identifier.CODEC.listOf().optionalFieldOf("excluded", List.of()).forGetter(PlaceFields::legacyExcluded),
                 SavedScan.CODEC.optionalFieldOf("found_scan").forGetter(PlaceFields::legacyScan),
                 BuiltInRegistries.ITEM.byNameCodec().listOf().lenientOptionalFieldOf("station_types", List.of()).forGetter(PlaceFields::stationTypes),
-                SavedFound.CODEC.listOf().lenientOptionalFieldOf("found", List.of()).forGetter(PlaceFields::found)
+                SavedFound.CODEC.listOf().lenientOptionalFieldOf("found", List.of()).forGetter(PlaceFields::found),
+                Identifier.CODEC.optionalFieldOf("center_race").forGetter(PlaceFields::centerRace)
         ).apply(instance, PlaceFields::new));
 
-        static final PlaceFields NONE = new PlaceFields(List.of(), List.of(), Optional.empty(), List.of(), List.of());
+        static final PlaceFields NONE = new PlaceFields(List.of(), List.of(), Optional.empty(), List.of(), List.of(), Optional.empty());
     }
 
     /**
@@ -372,6 +374,8 @@ public final class SettlementBlock {
     private final Job jobType;
     private int level;
     private boolean connected;
+    /** The race of a Center Block, empty for every other JobBlock (vault {@code Systems/Settlement.md}). */
+    private Optional<Identifier> centerRace;
     private final List<BlockPos> workPoints = new ArrayList<>();
     private Optional<BlockPos> collect;
     private Optional<BlockPos> dropOff;
@@ -400,6 +404,19 @@ public final class SettlementBlock {
     public SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected) {
         this(pos, jobType, level, connected, List.of(), Optional.empty(), Optional.empty(), List.of(), Optional.empty(), Optional.empty(), false,
                 MissionOffer.EMPTY, ClerkFields.NONE, ProducingFields.NONE, Optional.empty(), PlaceFields.NONE);
+    }
+
+    /**
+     * @param pos     the block position
+     * @param jobType the offered job
+     * @param level   the JobBlock level
+     * @param race    the race of the Center Block
+     * @return a connected Center Block
+     */
+    static SettlementBlock center(BlockPos pos, Job jobType, int level, Identifier race) {
+        SettlementBlock block = new SettlementBlock(pos, jobType, level, true);
+        block.centerRace = Optional.of(race);
+        return block;
     }
 
     private SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected, List<BlockPos> workPoints,
@@ -435,6 +452,7 @@ public final class SettlementBlock {
         this.byDeliveryman = producing.byDeliveryman();
         this.fuel = producing.fuel().map(List::copyOf);
         this.autoAssign.addAll(place.autoAssign());
+        this.centerRace = place.centerRace();
         place.found().forEach(saved -> {
             FoundState state = foundState(saved.job());
             state.excluded.addAll(saved.excluded());
@@ -454,7 +472,7 @@ public final class SettlementBlock {
     private PlaceFields placeFields() {
         List<SavedFound> saved = found.entrySet().stream()
                 .map(entry -> new SavedFound(entry.getKey(), entry.getValue().excluded.stream().sorted().toList(), entry.getValue().scan)).toList();
-        return new PlaceFields(List.copyOf(autoAssign), List.of(), Optional.empty(), List.copyOf(stationTypes), saved);
+        return new PlaceFields(List.copyOf(autoAssign), List.of(), Optional.empty(), List.copyOf(stationTypes), saved, centerRace);
     }
 
     private FoundState foundState(Job job) {
@@ -743,6 +761,20 @@ public final class SettlementBlock {
      */
     public int level() {
         return level;
+    }
+
+    /**
+     * @return the race of a Center Block, empty for every other JobBlock
+     */
+    public Optional<Identifier> centerRace() {
+        return centerRace;
+    }
+
+    /**
+     * @return whether this is a Center Block
+     */
+    public boolean isCenter() {
+        return centerRace.isPresent();
     }
 
     /**

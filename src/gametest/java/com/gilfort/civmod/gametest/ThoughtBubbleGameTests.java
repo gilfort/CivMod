@@ -25,6 +25,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -137,7 +138,7 @@ public final class ThoughtBubbleGameTests {
             }
         }
         BlockPos relative = new BlockPos(1, 1, 1);
-        helper.setBlock(relative, ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, relative, ModBlocks.LUMBERJACK_BLOCK.get());
         BlockPos jobBlock = helper.absolutePos(relative);
         SettlementData data = SettlementData.get(helper.getLevel());
         Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
@@ -163,7 +164,7 @@ public final class ThoughtBubbleGameTests {
             }
         }
         BlockPos relative = new BlockPos(1, 1, 1);
-        helper.setBlock(relative, ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, relative, ModBlocks.LUMBERJACK_BLOCK.get());
         BlockPos jobBlock = helper.absolutePos(relative);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
@@ -201,7 +202,7 @@ public final class ThoughtBubbleGameTests {
             }
         }
         BlockPos relative = new BlockPos(1, 1, 1);
-        helper.setBlock(relative, ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, relative, ModBlocks.LUMBERJACK_BLOCK.get());
         BlockPos jobBlock = helper.absolutePos(relative);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(jobBlock).orElseThrow();

@@ -43,6 +43,8 @@ public final class ModItems {
     public static final DeferredItem<BlockItem> CRAFTSPERSON_BLOCK = jobBlockItem(ModBlocks.CRAFTSPERSON_BLOCK);
     /** Item of the {@link ModBlocks#SMELTER_BLOCK}. */
     public static final DeferredItem<BlockItem> SMELTER_BLOCK = jobBlockItem(ModBlocks.SMELTER_BLOCK);
+    /** Item of the {@link ModBlocks#HUMAN_CENTER_BLOCK}. */
+    public static final DeferredItem<BlockItem> HUMAN_CENTER_BLOCK = jobBlockItem(ModBlocks.HUMAN_CENTER_BLOCK);
     /** Item of the {@link ModBlocks#SCARECROW}. */
     public static final DeferredItem<BlockItem> SCARECROW = ITEMS.registerSimpleBlockItem(ModBlocks.SCARECROW);
 

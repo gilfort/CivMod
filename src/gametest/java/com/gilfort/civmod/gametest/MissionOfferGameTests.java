@@ -18,6 +18,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -193,8 +194,8 @@ public final class MissionOfferGameTests {
     }
 
     private static Settlement placeBoard(SettlementData data, BlockPos pos, int level) {
-        return SettlementManager.place(data, pos, ModJobs.ADVENTURER.get(), level, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE)
-                .settlement();
+        return TestSettlements.place(data, pos, ModJobs.ADVENTURER.get(), level)
+                .settlement().orElseThrow();
     }
 
     private static List<MissionOffer.Entry> entries(SettlementData data, BlockPos board) {
@@ -230,7 +231,7 @@ public final class MissionOfferGameTests {
                 "Unmarked entries are drawn again: " + nextDay);
 
         BlockPos lumberjack = new BlockPos(5, 64, 0);
-        SettlementManager.place(data, lumberjack, ModJobs.LUMBERJACK.get(), 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
+        TestSettlements.place(data, lumberjack, ModJobs.LUMBERJACK.get(), 1);
         helper.assertTrue(MissionOffers.refresh(data, lumberjack, 11L, pool, random).isEmpty(), "A Lumberjack block has no offer");
         helper.succeed();
     }

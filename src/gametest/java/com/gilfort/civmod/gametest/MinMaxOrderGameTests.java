@@ -26,6 +26,7 @@ import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.gilfort.civmod.settlement.Warehouses;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
@@ -84,7 +85,7 @@ public final class MinMaxOrderGameTests {
 
     /** A Clerk JobBlock at a relative position, level 1 (no settler). */
     private static BlockPos clerk(GameTestHelper helper, BlockPos relative) {
-        helper.setBlock(relative, ModBlocks.CLERK_BLOCK.get());
+        TestSettlements.setBlock(helper, relative, ModBlocks.CLERK_BLOCK.get());
         return helper.absolutePos(relative);
     }
 
@@ -139,7 +140,7 @@ public final class MinMaxOrderGameTests {
             }
         }
         BlockPos jobBlockRelative = new BlockPos(1, 1, 1);
-        helper.setBlock(jobBlockRelative, ModBlocks.MINER_BLOCK.get());
+        TestSettlements.setBlock(helper, jobBlockRelative, ModBlocks.MINER_BLOCK.get());
         for (int x = 4; x < 8; x++) {
             helper.setBlock(new BlockPos(x, 1, 5), Blocks.GRANITE);
         }

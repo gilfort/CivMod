@@ -21,6 +21,7 @@ import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.google.gson.JsonParser;
 
 import net.minecraft.core.BlockPos;
@@ -192,7 +193,7 @@ public final class FishermanGameTests {
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         pond(helper);
         BlockPos jobBlockRelative = new BlockPos(1, 3, 1);
-        helper.setBlock(jobBlockRelative, ModBlocks.FISHERMAN_BLOCK.get());
+        TestSettlements.setBlock(helper, jobBlockRelative, ModBlocks.FISHERMAN_BLOCK.get());
         BlockPos jobBlock = helper.absolutePos(jobBlockRelative);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(jobBlock).orElseThrow();

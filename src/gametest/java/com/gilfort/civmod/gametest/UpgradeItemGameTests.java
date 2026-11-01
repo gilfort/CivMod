@@ -19,6 +19,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -67,6 +68,7 @@ public final class UpgradeItemGameTests {
             register(helper, "upgrade_item_specialization", UpgradeItemGameTests::specialization);
             register(helper, "upgrade_item_other_block", UpgradeItemGameTests::otherBlock);
             register(helper, "upgrade_item_recipe", UpgradeItemGameTests::recipe);
+            register(helper, "upgrade_item_center_block", UpgradeItemGameTests::centerBlock);
         });
     }
 
@@ -76,13 +78,17 @@ public final class UpgradeItemGameTests {
 
     /** Places a JobBlock on a stone floor and returns its settlement. */
     private static Settlement jobBlock(GameTestHelper helper, BlockPos pos, Block block) {
+        floor(helper);
+        TestSettlements.setBlock(helper, pos, block);
+        return SettlementData.get(helper.getLevel()).settlementAt(helper.absolutePos(pos)).orElseThrow();
+    }
+
+    private static void floor(GameTestHelper helper) {
         for (int x = 0; x < 9; x++) {
             for (int z = 0; z < 5; z++) {
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
             }
         }
-        helper.setBlock(pos, block);
-        return SettlementData.get(helper.getLevel()).settlementAt(helper.absolutePos(pos)).orElseThrow();
     }
 
     /** A settler of the settlement working the JobBlock at {@code pos} as {@code job} with that skill level. */
@@ -133,6 +139,34 @@ public final class UpgradeItemGameTests {
 
     private static ItemStack upgrade(Item item) {
         return new ItemStack(item);
+    }
+
+    /**
+     * A Center Block needs no worker at the cap (the Administrator gains no skill), but keeps the order of the items and
+     * the highest level.
+     */
+    private static void centerBlock(GameTestHelper helper) {
+        floor(helper);
+        TestSettlements.centerAt(helper.getLevel(), helper.absolutePos(BLOCK));
+        Player player = helper.makeMockPlayer(GameType.SURVIVAL);
+        ItemStack skipped = upgrade(ModItems.JOB_BLOCK_UPGRADE_3.get());
+        click(helper, player, BLOCK, skipped);
+        helper.assertTrue(level(helper, BLOCK) == 1 && skipped.getCount() == 1, "The Lv 3 item does not skip Lv 2");
+
+        List<Item> items = List.of(ModItems.JOB_BLOCK_UPGRADE_2.get(), ModItems.JOB_BLOCK_UPGRADE_3.get(), ModItems.JOB_BLOCK_UPGRADE_4.get(),
+                ModItems.JOB_BLOCK_UPGRADE_5.get());
+        for (int step = 0; step < items.size(); step++) {
+            int target = step + 2;
+            ItemStack stack = upgrade(items.get(step));
+            click(helper, player, BLOCK, stack);
+            helper.assertTrue(level(helper, BLOCK) == target && settlementLevel(helper, BLOCK) == target && stack.isEmpty(),
+                    "No worker needed for Lv " + target + ": Lv " + level(helper, BLOCK));
+        }
+        ItemStack beyond = upgrade(ModItems.JOB_BLOCK_UPGRADE_5.get());
+        click(helper, player, BLOCK, beyond);
+        helper.assertTrue(level(helper, BLOCK) == SettlementRules.MAX_LEVEL && beyond.getCount() == 1, "Lv 5 is the end");
+        clear(helper, BLOCK);
+        helper.succeed();
     }
 
     /**
@@ -223,7 +257,7 @@ public final class UpgradeItemGameTests {
     /** A settler of the same Job at the cap at another JobBlock does not count. */
     private static void otherBlock(GameTestHelper helper) {
         Settlement settlement = jobBlock(helper, BLOCK, ModBlocks.MINER_BLOCK.get());
-        helper.setBlock(OTHER, ModBlocks.MINER_BLOCK.get());
+        TestSettlements.setBlock(helper, OTHER, ModBlocks.MINER_BLOCK.get());
         Settler expert = worker(helper, settlement, OTHER, ModJobs.MINER.get(), 20);
         Settler novice = worker(helper, settlement, BLOCK, ModJobs.MINER.get(), 5);
         Player player = helper.makeMockPlayer(GameType.SURVIVAL);

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:center_block_second_removed_in_world",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -17,13 +17,13 @@ import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -58,7 +58,7 @@ public final class ScrollGameTests {
     }
 
     private static SettlementManager.Placement place(SettlementData data, BlockPos pos, Job jobType) {
-        return SettlementManager.place(data, pos, jobType, 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
+        return TestSettlements.place(data, pos, jobType, 1);
     }
 
     private static SettlementBlock block(SettlementData data, BlockPos pos) {
@@ -125,11 +125,11 @@ public final class ScrollGameTests {
     /** Assignment rules: ok, occupied, duplicate, unconnected, other settlement. */
     private static void assignmentRules(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement settlement = place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get()).settlement();
+        Settlement settlement = place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get()).settlement().orElseThrow();
         BlockPos second = new BlockPos(5, 64, 0);
         place(data, second, ModJobs.LUMBERJACK.get());
-        BlockPos unconnected = new BlockPos(20, 64, 0);
-        place(data, unconnected, ModJobs.MINER.get());
+        BlockPos unconnected = new BlockPos(40, 64, 0);
+        SettlementManager.place(data, unconnected, ModJobs.MINER.get(), 1, SettlementManager.Listener.NONE);
 
         helper.assertTrue(TestAssignments.assign(data, JOB_BLOCK, ALICE, "Alice", settlement.id(), List.of()) == AssignResult.OK, "Alice assigned");
         helper.assertTrue(TestAssignments.assign(data, JOB_BLOCK, BOB, "Bob", settlement.id(), List.of()) == AssignResult.OCCUPIED, "Occupied");
@@ -145,7 +145,7 @@ public final class ScrollGameTests {
     /** Unassign frees the block; removing an assigned JobBlock reports the settler that loses the job. */
     private static void unassignAndRemoval(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement settlement = place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get()).settlement();
+        Settlement settlement = place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get()).settlement().orElseThrow();
         BlockPos second = new BlockPos(5, 64, 0);
         place(data, second, ModJobs.MINER.get());
         TestAssignments.assign(data, JOB_BLOCK, ALICE, "Alice", settlement.id(), List.of());
@@ -154,7 +154,7 @@ public final class ScrollGameTests {
 
         TestAssignments.assign(data, second, BOB, "Bob", settlement.id(), List.of());
         List<UUID> lostJob = new ArrayList<>();
-        SettlementManager.remove(data, second, new SettlementManager.Listener() {
+        SettlementManager.remove(data, second, 0L, new SettlementManager.Listener() {
             @Override
             public void blockChanged(BlockPos pos, int settlementId, boolean connected) {
             }
@@ -176,7 +176,7 @@ public final class ScrollGameTests {
     /** Points and assignment survive a save / load round trip. */
     private static void pointsPersistence(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement settlement = place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get()).settlement();
+        Settlement settlement = place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get()).settlement().orElseThrow();
         JobAssignments.cyclePoint(data, JOB_BLOCK, new BlockPos(3, 64, 0), true, false);
         JobAssignments.cyclePoint(data, JOB_BLOCK, new BlockPos(2, 64, 2), false, true);
         JobAssignments.cyclePoint(data, JOB_BLOCK, new BlockPos(2, 64, 2), false, true);

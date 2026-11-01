@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:center_block_founds_settlement",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -5,8 +5,10 @@ import java.util.function.Supplier;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.block.CenterBlock;
 import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.block.ScarecrowBlock;
+import com.gilfort.civmod.npc.Races;
 
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -53,6 +55,13 @@ public final class ModBlocks {
     public static final DeferredBlock<ScarecrowBlock> SCARECROW = BLOCKS.registerBlock("scarecrow", ScarecrowBlock::new,
             properties -> properties.mapColor(MapColor.COLOR_YELLOW).strength(1.0F).sound(SoundType.WOOD).noOcclusion().forceSolidOff()
                     .ignitedByLava());
+
+    /**
+     * The Center Block of the humans: founds a settlement. One block per race is planned (vault
+     * {@code Systems/Settlement.md}).
+     */
+    public static final DeferredBlock<JobBlock> HUMAN_CENTER_BLOCK = BLOCKS.registerBlock("human_center_block",
+            properties -> new CenterBlock(ModJobs.ADMINISTRATOR, Races.HUMAN, properties), ModBlocks::jobBlockProperties);
 
     private ModBlocks() {
     }

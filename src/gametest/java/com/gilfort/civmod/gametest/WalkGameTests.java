@@ -12,6 +12,7 @@ import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -50,7 +51,7 @@ public final class WalkGameTests {
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
             }
         }
-        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
         for (int y = 1; y <= 4; y++) {
             helper.setBlock(new BlockPos(42, y, 3), Blocks.OAK_LOG);
         }

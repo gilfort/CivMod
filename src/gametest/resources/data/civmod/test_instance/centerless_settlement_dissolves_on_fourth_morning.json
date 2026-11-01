@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:centerless_settlement_dissolves_on_fourth_morning",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

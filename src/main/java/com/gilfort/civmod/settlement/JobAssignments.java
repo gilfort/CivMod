@@ -271,7 +271,7 @@ public final class JobAssignments {
      */
     public static boolean insideBorder(Settlement settlement, BlockPos pos) {
         return settlement.blocks().stream().anyMatch(block -> block.connected()
-                && SettlementRules.horizontalDistance(pos, block.pos()) <= SettlementRules.joinRadius(block.level()));
+                && SettlementRules.horizontalDistance(pos, block.pos()) <= SettlementRules.joinRadius(block));
     }
 
     /**

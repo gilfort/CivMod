@@ -22,6 +22,7 @@ import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.google.gson.JsonParser;
 
 import net.minecraft.core.BlockPos;
@@ -192,7 +193,7 @@ public final class MinerGameTests {
             }
         }
         BlockPos jobBlockRelative = new BlockPos(1, 1, 1);
-        helper.setBlock(jobBlockRelative, ModBlocks.MINER_BLOCK.get());
+        TestSettlements.setBlock(helper, jobBlockRelative, ModBlocks.MINER_BLOCK.get());
         helper.setBlock(new BlockPos(5, 1, 5), Blocks.GRANITE);
         BlockPos jobBlock = helper.absolutePos(jobBlockRelative);
         SettlementData data = SettlementData.get(level);

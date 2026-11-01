@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "civmod:block/human_center_block"
+    }
+  }
+}

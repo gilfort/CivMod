@@ -25,6 +25,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.gilfort.civmod.settlement.Warehouses.LinkResult;
 import com.gilfort.civmod.settlement.Warehouses;
 
@@ -33,7 +34,6 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -73,13 +73,13 @@ public final class DeliverymanGameTests {
     /** Registers a JobBlock without a block in the world (pure settlement rules). */
     private static BlockPos place(GameTestHelper helper, BlockPos relative, Job job) {
         BlockPos pos = helper.absolutePos(relative);
-        SettlementManager.place(SettlementData.get(helper.getLevel()), pos, job, 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
+        TestSettlements.place(helper, pos, job, 1);
         return pos;
     }
 
     private static void remove(GameTestHelper helper, BlockPos... positions) {
         for (BlockPos pos : positions) {
-            SettlementManager.remove(SettlementData.get(helper.getLevel()), pos, SettlementManager.Listener.NONE);
+            SettlementManager.remove(SettlementData.get(helper.getLevel()), pos, 0L, SettlementManager.Listener.NONE);
         }
     }
 
@@ -179,8 +179,8 @@ public final class DeliverymanGameTests {
 
         ServerLevel level = helper.getLevel();
         SettlementData data = SettlementData.get(level);
-        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.CLERK_BLOCK.get());
-        helper.setBlock(new BlockPos(4, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.CLERK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(4, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
         helper.setBlock(new BlockPos(6, 1, 1), Blocks.CHEST);
         BlockPos clerk = helper.absolutePos(new BlockPos(1, 1, 1));
         BlockPos jobBlock = helper.absolutePos(new BlockPos(4, 1, 1));
@@ -303,7 +303,7 @@ public final class DeliverymanGameTests {
             own.setItem(i, new ItemStack(Items.COBBLESTONE, 64));
         }
         Container store = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
-        helper.setBlock(new BlockPos(1, 1, 7), ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 7), ModBlocks.LUMBERJACK_BLOCK.get());
         helper.setBlock(new BlockPos(3, 1, 7), Blocks.CHEST);
         BlockPos jobBlock = helper.absolutePos(new BlockPos(1, 1, 7));
         BlockPos chestPos = helper.absolutePos(new BlockPos(3, 1, 7));
@@ -342,13 +342,13 @@ public final class DeliverymanGameTests {
     private static void catchUp(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos warehouse = helper.absolutePos(new BlockPos(1, 1, 1));
-        level.setBlock(warehouse, ModBlocks.CLERK_BLOCK.get().defaultBlockState(), Block.UPDATE_ALL);
+        TestSettlements.setBlock(level, warehouse, ModBlocks.CLERK_BLOCK.get().defaultBlockState(), Block.UPDATE_ALL);
         SettlementData data = SettlementData.get(level);
         SettlementManager.setLevel(data, warehouse, SettlementRules.MAX_LEVEL, SettlementManager.Listener.NONE);
         // 45 blocks away: a trip takes 2 × 45 / 0.2 + 2 stops = 530 ticks, one per simulated hour.
         BlockPos jobBlock = warehouse.east(45);
         List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(47, 0, 2));
-        level.setBlock(jobBlock, ModBlocks.LUMBERJACK_BLOCK.get().defaultBlockState(), Block.UPDATE_ALL);
+        TestSettlements.setBlock(level, jobBlock, ModBlocks.LUMBERJACK_BLOCK.get().defaultBlockState(), Block.UPDATE_ALL);
         Container jobInventory = (Container) level.getBlockEntity(jobBlock);
         // The JobBlock is drop-off and collect inventory: the Lumberjack's spare axe stays there.
         jobInventory.setItem(0, new ItemStack(Items.STONE_AXE));

@@ -31,6 +31,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -223,8 +224,7 @@ public final class MissionAssignmentGameTests {
     private static void persistence(GameTestHelper helper) {
         SettlementData data = new SettlementData();
         BlockPos board = new BlockPos(0, 64, 0);
-        Settlement settlement = SettlementManager.place(data, board, ModJobs.ADVENTURER.get(), 2, 0L, RandomSource.create(0L),
-                SettlementManager.Listener.NONE).settlement();
+        Settlement settlement = TestSettlements.place(data, board, ModJobs.ADVENTURER.get(), 2).settlement().orElseThrow();
         Job adventurer = ModJobs.ADVENTURER.get();
         TestAssignments.assign(data, board, ALICE, "Alice", settlement.id(), List.of());
         TestAssignments.assign(data, board, BOB, "Bob", settlement.id(), List.of());

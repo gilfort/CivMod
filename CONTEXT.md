@@ -135,8 +135,27 @@ The implicit lowest-priority fallback Job of every settler; not a Job Category a
 **JobBlock**:
 The block that offers a Base Job (and its Specializations) to one settler. Code: `JobBlock`, `JobBlockEntity`, created by the addon API's factory (`CivModApi.jobBlock`); upgraded one level at a time with the JobBlock Upgrade items (see below). Its window (`JobBlockMenu` / `JobBlockScreen`) is a list of tabs chosen by `JobBlockTabs`; each tab is one module: `JobBlockTab` (tab bar entry, menu buttons, synced `TabData`) and its client view `JobBlockTabView` (`StorageTab`, `WorkersTab` / `WorkersTabView`, `FoundTab`, `MissionsTab`, `StockTab` / `TasksTab`, `PatternsTab`, `StationTypesTab`, `FuelTab`).
 
+**Center Block**:
+The JobBlock of one race that founds a settlement and is its center: only it founds, outside every exclusion zone (`Outcome.FOUNDED`); a settlement holds at most one per race, a second one is refused (`Outcome.REFUSED`, `SettlementManager.wouldRefuse`). Its join radius 25 and exclusion radius 75 are fixed at every level; an upgrade has no effect yet and needs no settler at the skill cap (the Administrator gains no skill). Code: `CenterBlock`, `ModBlocks.HUMAN_CENTER_BLOCK`, `SettlementBlock.centerRace()`, `SettlementManager.placeCenter`, radii through `SettlementRules.joinRadius(SettlementBlock)` / `exclusionRadius(SettlementBlock)`.
+_Avoid_: Town hall, founding block, shrine, reading `joinRadius(block.level())` for a block of a settlement
+
+**Administrator**:
+The Job of the Center Block (`civmod:administrator`), of the Service category. It has no work yet: Service has no loop, so a settler assigned to it moves on to its next job right away. Code: `ModJobs.ADMINISTRATOR`.
+
+**Unsettled JobBlock**:
+A JobBlock that belongs to no settlement: placed outside every exclusion zone, or left by a dissolved settlement. It shows as unconnected and joins, on JobBlock place and upgrade only, once a connected block's join radius reaches it. Code: `SettlementData.unsettled()`, `Outcome.UNSETTLED`, joined in `SettlementManager.connectChain`.
+_Avoid_: Unconnected (that block belongs to a settlement and waits in its exclusion zone)
+
+**Connection**:
+A settlement's JobBlock is connected while a chain of join radii leads to it from a Center Block. Rechecked from the center after every JobBlock removal and on a new Center Block; a block losing the chain stays in the settlement, unconnected, waiting in its zones, and a settler keeps its job there but does not work it, live or in catch-up (`JobStatus.UNCONNECTED`). A settlement without a Center Block has no connected block; its exclusion zones count over all its blocks. Code: `SettlementManager.recheck`, `SettlementBlock.connected`.
+_Avoid_: Reading `connected` as "belongs to a settlement"
+
+**Center grace**:
+The time a settlement without a Center Block has left: it stays for 3 days and dissolves on the morning of the fourth (06:00, removal day + 4), its last Center Block's place stays held, and a new Center Block there or in its zones revives it (`Outcome.REVIVED`). Saved; checked at every settler morning by day number, so missed mornings count. Code: `Settlement.CenterGrace`, `Settlement.centerGrace()`, `SettlementManager.morning`, `SettlementRules.CENTERLESS_DAYS`.
+_Avoid_: Decay, abandonment
+
 **JobBlock Upgrade item**:
-One of four items (JobBlock Upgrade Lv 2 / 3 / 4 / 5, crafted from the Scroll of Assignment – returned – and 8 iron / gold / diamonds / netherite) that raise any JobBlock by one level on right-click: the Lv N item only on a Lv N − 1 block, and only once a loaded settler assigned to that block has reached its skill cap in a Job it holds there. Code: `JobBlockUpgradeItem`, `ModItems.JOB_BLOCK_UPGRADE_2` … `_5`, rule in `JobBlockUpgrade` (called from `JobBlock.useItemOn`), recipes `civmod:job_block_upgrade_<n>`.
+One of four items (JobBlock Upgrade Lv 2 / 3 / 4 / 5, crafted from the Scroll of Assignment – returned – and 8 iron / gold / diamonds / netherite) that raise any JobBlock by one level on right-click: the Lv N item only on a Lv N − 1 block, and only once a loaded settler assigned to that block has reached its skill cap in a Job it holds there (a Center Block is exempt from that). Code: `JobBlockUpgradeItem`, `ModItems.JOB_BLOCK_UPGRADE_2` … `_5`, rule in `JobBlockUpgrade` (called from `JobBlock.useItemOn`), recipes `civmod:job_block_upgrade_<n>`.
 _Avoid_: upgrade costs, upgrade button
 
 **Starter tool**:

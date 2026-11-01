@@ -24,6 +24,7 @@ import com.gilfort.civmod.settlement.Reservations;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -82,8 +83,8 @@ public final class InputDeliveryGameTests {
                     }
                 }
             }
-            helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.CLERK_BLOCK.get());
-            helper.setBlock(new BlockPos(9, 1, 1), ModBlocks.CLERK_BLOCK.get());
+            TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.CLERK_BLOCK.get());
+            TestSettlements.setBlock(helper, new BlockPos(9, 1, 1), ModBlocks.CLERK_BLOCK.get());
             BlockPos home = helper.absolutePos(new BlockPos(1, 1, 1));
             BlockPos second = helper.absolutePos(new BlockPos(9, 1, 1));
             ((Container) level.getBlockEntity(home)).setItem(0, new ItemStack(Items.OAK_LOG, 1));

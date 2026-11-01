@@ -40,6 +40,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -186,6 +187,7 @@ public final class AddonApiGameTests {
         helper.assertTrue(block.defaultBlockState().getPistonPushReaction() == PushReaction.IMMOVEABLE, "Not pushable");
         ItemStack fresh = new ItemStack(item);
         helper.assertTrue(fresh.has(ModDataComponents.STARTER_TOOL.get()), "New item carries its starter tool");
+        com.gilfort.civmod.settlement.TestSettlements.center(helper.getLevel(), absolute);
         StarterToolGameTests.place(helper, helper.makeMockPlayer(GameType.SURVIVAL), fresh, pos);
         JobBlockEntity entity = helper.getBlockEntity(pos, JobBlockEntity.class);
         helper.assertTrue(StarterToolGameTests.contents(helper, pos).stream().anyMatch(stack -> stack.is(Items.STONE_SHOVEL)),
@@ -314,7 +316,7 @@ public final class AddonApiGameTests {
     private static void blockedGenericMarker(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos relative = new BlockPos(1, 1, 1);
-        helper.setBlock(relative, BuiltInRegistries.BLOCK.getValue(COLLECTOR_BLOCK));
+        TestSettlements.setBlock(helper, relative, BuiltInRegistries.BLOCK.getValue(COLLECTOR_BLOCK));
         BlockPos jobBlock = helper.absolutePos(relative);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(jobBlock).orElseThrow();

@@ -21,6 +21,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -55,11 +56,19 @@ public final class SettlementWorld {
      * @param pos     the JobBlock position
      * @param jobType the offered job
      * @param jobLevel the JobBlock level
+     * @param race     the race of a Center Block, empty for every other JobBlock
      * @return how the block was integrated
      */
-    public static SettlementManager.Placement place(ServerLevel level, BlockPos pos, Job jobType, int jobLevel) {
-        SettlementManager.Placement placement = SettlementManager.place(SettlementData.get(level), pos, jobType, jobLevel,
-                level.getGameTime(), level.getRandom(), listener(level));
+    public static SettlementManager.Placement place(ServerLevel level, BlockPos pos, Job jobType, int jobLevel, Optional<Identifier> race) {
+        SettlementData data = SettlementData.get(level);
+        SettlementManager.Placement placement = race
+                .map(center -> SettlementManager.placeCenter(data, pos, jobType, jobLevel, center, level.getGameTime(), level.getRandom(), listener(level)))
+                .orElseGet(() -> SettlementManager.place(data, pos, jobType, jobLevel, listener(level)));
+        if (placement.outcome() == SettlementManager.Outcome.REFUSED) {
+            // Only placement without a player gets here (commands, structures); a player's is cancelled in onPlace.
+            BlockPos refused = pos.immutable();
+            level.getServer().execute(() -> level.destroyBlock(refused, true));
+        }
         GlobalPos key = GlobalPos.of(level.dimension(), pos.immutable());
         UUID placer = PENDING_PLACERS.remove(key);
         ServerPlayer player = placer == null ? null : level.getServer().getPlayerList().getPlayer(placer);
@@ -328,13 +337,23 @@ public final class SettlementWorld {
     }
 
     /**
+     * Dissolves the settlements of a dimension whose time without a Center Block ran out; called at every 06:00.
+     *
+     * @param level the dimension
+     * @param day   the settler day that began
+     */
+    public static void morning(ServerLevel level, long day) {
+        SettlementManager.morning(SettlementData.get(level), day, listener(level));
+    }
+
+    /**
      * Unregisters a removed JobBlock.
      *
      * @param level the dimension
      * @param pos   the JobBlock position
      */
     public static void remove(ServerLevel level, BlockPos pos) {
-        SettlementManager.remove(SettlementData.get(level), pos, listener(level));
+        SettlementManager.remove(SettlementData.get(level), pos, DayClock.day(level), listener(level));
     }
 
     /**
@@ -346,8 +365,12 @@ public final class SettlementWorld {
     public static void notifyPlacement(ServerPlayer player, SettlementManager.Placement placement) {
         Component message = switch (placement.outcome()) {
             case FOUNDED -> Component.translatable("civmod.settlement.founded");
-            case JOINED -> Component.translatable("civmod.settlement.joined", placement.settlement().displayName());
-            case UNCONNECTED -> Component.translatable("civmod.settlement.unconnected", placement.distance(), placement.required())
+            case REVIVED -> Component.translatable("civmod.settlement.revived", placement.settlement().orElseThrow().displayName());
+            case REFUSED -> Component.translatable("civmod.settlement.center_refused").withStyle(net.minecraft.ChatFormatting.RED);
+            case JOINED -> Component.translatable("civmod.settlement.joined", placement.settlement().orElseThrow().displayName());
+            case UNSETTLED -> Component.translatable("civmod.settlement.unsettled").withStyle(net.minecraft.ChatFormatting.RED);
+            case UNCONNECTED -> (placement.nothingToReach() ? Component.translatable("civmod.settlement.unconnected_no_center")
+                    : Component.translatable("civmod.settlement.unconnected", placement.distance(), placement.required()))
                     .withStyle(net.minecraft.ChatFormatting.RED);
         };
         player.sendOverlayMessage(message);
@@ -395,19 +418,27 @@ public final class SettlementWorld {
     }
 
     /**
-     * Enforces the optional founding limit (one settlement per player per in-game day).
+     * Refuses a second Center Block of a race in a settlement and enforces the optional founding limit (one settlement
+     * per player per in-game day).
      *
      * @param event the block place event
      */
     @SubscribeEvent
     static void onPlace(BlockEvent.EntityPlaceEvent event) {
-        if (!CivModConfig.LIMIT_FOUNDING_PER_DAY.get() || !(event.getLevel() instanceof ServerLevel level)
-                || !(event.getEntity() instanceof ServerPlayer player) || !(event.getPlacedBlock().getBlock() instanceof JobBlock)) {
+        if (!(event.getLevel() instanceof ServerLevel level) || !(event.getEntity() instanceof ServerPlayer player)
+                || !(event.getPlacedBlock().getBlock() instanceof JobBlock block)) {
+            return;
+        }
+        Optional<Identifier> race = block.centerRace();
+        if (race.isEmpty()) {
             return;
         }
         // For player placement NeoForge defers onPlace until after this event, so the block is not registered yet.
         SettlementData data = SettlementData.get(level);
-        if (SettlementManager.wouldFound(data, event.getPos())
+        if (SettlementManager.wouldRefuse(data, event.getPos(), race.get())) {
+            event.setCanceled(true);
+            player.sendOverlayMessage(Component.translatable("civmod.settlement.center_refused").withStyle(net.minecraft.ChatFormatting.RED));
+        } else if (CivModConfig.LIMIT_FOUNDING_PER_DAY.get() && SettlementManager.wouldFound(data, event.getPos())
                 && data.lastFoundingDay(player.getUUID()).filter(day -> day == day(level)).isPresent()) {
             event.setCanceled(true);
             player.sendOverlayMessage(Component.translatable("civmod.settlement.founding_limit").withStyle(net.minecraft.ChatFormatting.RED));

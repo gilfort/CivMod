@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:connection_settler_pauses_live",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -19,6 +19,7 @@ import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -78,7 +79,7 @@ public final class BiomeBonusGuiGameTests {
             }
         }
         BlockPos jobBlockRelative = new BlockPos(1, 1, 1);
-        helper.setBlock(jobBlockRelative, ModBlocks.MINER_BLOCK.get());
+        TestSettlements.setBlock(helper, jobBlockRelative, ModBlocks.MINER_BLOCK.get());
         helper.setBlock(new BlockPos(5, 1, 5), Blocks.GRANITE);
         helper.setBlock(new BlockPos(6, 1, 6), Blocks.IRON_ORE);
         BlockPos jobBlock = helper.absolutePos(jobBlockRelative);
@@ -132,7 +133,7 @@ public final class BiomeBonusGuiGameTests {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(16, 0, 16));
         fillBiome(helper,new BlockPos(0, -4, 0), new BlockPos(16, 8, 16), Biomes.MUSHROOM_FIELDS);
-        helper.setBlock(new BlockPos(6, 1, 6), ModBlocks.CLERK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(6, 1, 6), ModBlocks.CLERK_BLOCK.get());
         BlockPos clerk = helper.absolutePos(new BlockPos(6, 1, 6));
         JobBlockInfo mushroom = JobBlockInfo.of(level, clerk, ModJobs.CLERK.get(), 1);
         helper.assertTrue(today(mushroom).equals(Optional.of("Mushroom Fields · Speed ×1.3")), "With an effect: " + today(mushroom));
@@ -141,7 +142,7 @@ public final class BiomeBonusGuiGameTests {
         fillBiome(helper,new BlockPos(0, -4, 0), new BlockPos(16, 8, 16), Biomes.SAVANNA);
         JobBlockInfo savanna = JobBlockInfo.of(level, clerk, ModJobs.CLERK.get(), 1);
         helper.assertTrue(today(savanna).equals(Optional.of("Savanna")), "The biome alone: " + today(savanna));
-        helper.setBlock(new BlockPos(10, 1, 10), ModBlocks.MINER_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(10, 1, 10), ModBlocks.MINER_BLOCK.get());
         BlockPos miner = helper.absolutePos(new BlockPos(10, 1, 10));
         helper.assertTrue(today(JobBlockInfo.of(level, miner, ModJobs.MINER.get(), 1)).isEmpty(), "No work place of the day, no biome");
         fillBiome(helper,new BlockPos(0, -4, 0), new BlockPos(16, 8, 16), Biomes.PLAINS);

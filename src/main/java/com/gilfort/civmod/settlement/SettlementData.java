@@ -37,7 +37,8 @@ public final class SettlementData extends SavedData {
             Codec.INT.optionalFieldOf("next_id", 1).forGetter(data -> data.nextId),
             Settlement.CODEC.listOf().optionalFieldOf("settlements", List.of()).forGetter(data -> List.copyOf(data.settlements.values())),
             Codec.unboundedMap(UUIDUtil.STRING_CODEC, Codec.LONG).optionalFieldOf("last_founding_day", Map.of())
-                    .forGetter(data -> Map.copyOf(data.lastFoundingDay))
+                    .forGetter(data -> Map.copyOf(data.lastFoundingDay)),
+            SettlementBlock.CODEC.listOf().optionalFieldOf("unsettled", List.of()).forGetter(data -> List.copyOf(data.unsettled.values()))
     ).apply(instance, SettlementData::new));
 
     /** Saved data type (one file per dimension). */
@@ -48,16 +49,18 @@ public final class SettlementData extends SavedData {
     private final Map<BlockPos, Settlement> byPos = new HashMap<>();
     private final Long2ObjectMap<Set<BlockPos>> byChunk = new Long2ObjectOpenHashMap<>();
     private final Map<UUID, Long> lastFoundingDay = new HashMap<>();
+    /** JobBlocks that belong to no settlement yet (placed outside every exclusion zone, or left by a dissolved one). */
+    private final Map<BlockPos, SettlementBlock> unsettled = new LinkedHashMap<>();
     private int revision;
 
     /**
      * Creates empty data.
      */
     public SettlementData() {
-        this(1, List.of(), Map.of());
+        this(1, List.of(), Map.of(), List.of());
     }
 
-    private SettlementData(int nextId, List<Settlement> settlements, Map<UUID, Long> lastFoundingDay) {
+    private SettlementData(int nextId, List<Settlement> settlements, Map<UUID, Long> lastFoundingDay, List<SettlementBlock> unsettled) {
         this.nextId = nextId;
         this.lastFoundingDay.putAll(lastFoundingDay);
         for (Settlement settlement : settlements) {
@@ -67,6 +70,7 @@ public final class SettlementData extends SavedData {
             settlement.blocks().stream().filter(block -> block.homeClerk().isEmpty())
                     .forEach(block -> Warehouses.assignHomeClerk(settlement, block));
         }
+        unsettled.forEach(this::addUnsettled);
     }
 
     /**
@@ -98,6 +102,21 @@ public final class SettlementData extends SavedData {
      */
     public Optional<Settlement> settlementAt(BlockPos pos) {
         return Optional.ofNullable(byPos.get(pos));
+    }
+
+    /**
+     * @return the JobBlocks that belong to no settlement (read-only)
+     */
+    public Collection<SettlementBlock> unsettled() {
+        return Collections.unmodifiableCollection(unsettled.values());
+    }
+
+    /**
+     * @param pos a position
+     * @return the JobBlock without a settlement at that position
+     */
+    public Optional<SettlementBlock> unsettledAt(BlockPos pos) {
+        return Optional.ofNullable(unsettled.get(pos));
     }
 
     /**
@@ -269,7 +288,25 @@ public final class SettlementData extends SavedData {
         changed();
     }
 
+    void addUnsettled(SettlementBlock block) {
+        unsettled.put(block.pos(), block);
+        byChunk.computeIfAbsent(ChunkPos.containing(block.pos()).pack(), key -> new HashSet<>()).add(block.pos());
+        changed();
+    }
+
+    /** A JobBlock without a settlement joins one, connected. */
+    void settle(Settlement settlement, SettlementBlock block) {
+        unsettled.remove(block.pos());
+        block.setConnected(true);
+        addBlock(settlement, block);
+    }
+
     Optional<Settlement> removeBlock(BlockPos pos) {
+        if (unsettled.remove(pos) != null) {
+            unindexChunk(pos);
+            changed();
+            return Optional.empty();
+        }
         Settlement settlement = byPos.remove(pos);
         if (settlement == null) {
             return Optional.empty();
@@ -278,6 +315,12 @@ public final class SettlementData extends SavedData {
         if (removed != null && Warehouses.isClerk(removed)) {
             Warehouses.assignHomeClerks(settlement);
         }
+        unindexChunk(pos);
+        changed();
+        return Optional.of(settlement);
+    }
+
+    private void unindexChunk(BlockPos pos) {
         long chunk = ChunkPos.containing(pos).pack();
         Set<BlockPos> positions = byChunk.get(chunk);
         if (positions != null) {
@@ -286,8 +329,6 @@ public final class SettlementData extends SavedData {
                 byChunk.remove(chunk);
             }
         }
-        changed();
-        return Optional.of(settlement);
     }
 
     void dissolve(Settlement settlement) {

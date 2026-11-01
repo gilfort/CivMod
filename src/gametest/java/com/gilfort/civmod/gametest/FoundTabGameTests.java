@@ -23,6 +23,7 @@ import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -244,7 +245,7 @@ public final class FoundTabGameTests {
             }
         }
         BlockPos jobBlockRelative = new BlockPos(1, 1, 1);
-        helper.setBlock(jobBlockRelative, ModBlocks.MINER_BLOCK.get());
+        TestSettlements.setBlock(helper, jobBlockRelative, ModBlocks.MINER_BLOCK.get());
         helper.setBlock(new BlockPos(5, 1, 5), Blocks.GRANITE);
         helper.setBlock(new BlockPos(6, 1, 6), Blocks.DIAMOND_ORE);
         BlockPos jobBlock = helper.absolutePos(jobBlockRelative);

@@ -19,6 +19,7 @@ import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementWorld;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 
@@ -74,7 +75,7 @@ public final class AutoAssignmentGameTests {
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
             }
         }
-        helper.setBlock(pos, block);
+        TestSettlements.setBlock(helper, pos, block);
         return SettlementData.get(helper.getLevel()).settlementAt(helper.absolutePos(pos)).orElseThrow();
     }
 
@@ -155,7 +156,7 @@ public final class AutoAssignmentGameTests {
      */
     private static void toggleOn(GameTestHelper helper) {
         Settlement settlement = jobBlock(helper, LUMBERJACK, ModBlocks.LUMBERJACK_BLOCK.get());
-        helper.setBlock(MINER, ModBlocks.MINER_BLOCK.get());
+        TestSettlements.setBlock(helper, MINER, ModBlocks.MINER_BLOCK.get());
         Settler idle = settler(helper, settlement, "Idle", new BlockPos(7, 1, 7));
         Settler miner = settler(helper, settlement, "Miner", new BlockPos(1, 1, 2));
         miner.getSkills().set(ModJobs.LUMBERJACK.get(), new SettlerSkills.Skill(10, 0));
@@ -178,7 +179,7 @@ public final class AutoAssignmentGameTests {
     private static void highestSkill(GameTestHelper helper) {
         Settlement settlement = jobBlock(helper, CLERK, ModBlocks.CLERK_BLOCK.get());
         level(helper, CLERK, 2);
-        helper.setBlock(LUMBERJACK, ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, LUMBERJACK, ModBlocks.LUMBERJACK_BLOCK.get());
         Job deliveryman = ModJobs.DELIVERYMAN.get();
         Job lumberjack = ModJobs.LUMBERJACK.get();
         Settler weak = settler(helper, settlement, "Weak", new BlockPos(1, 1, 6));
@@ -259,7 +260,7 @@ public final class AutoAssignmentGameTests {
      */
     private static void catchUp(GameTestHelper helper) {
         Settlement settlement = jobBlock(helper, LUMBERJACK, ModBlocks.LUMBERJACK_BLOCK.get());
-        helper.setBlock(MINER, ModBlocks.MINER_BLOCK.get());
+        TestSettlements.setBlock(helper, MINER, ModBlocks.MINER_BLOCK.get());
         Settler settler = settler(helper, settlement, "Settler", new BlockPos(4, 1, 4));
         Job lumberjack = ModJobs.LUMBERJACK.get();
         hire(helper, settler, MINER, ModJobs.MINER.get());

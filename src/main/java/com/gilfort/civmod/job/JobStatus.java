@@ -72,7 +72,9 @@ public enum JobStatus {
      * The Job's profile reports its own reason ({@link com.gilfort.civmod.api.BlockingReason}); the status text is the
      * reason. Checked again every 30 s.
      */
-    BLOCKED("blocked");
+    BLOCKED("blocked"),
+    /** The JobBlock is not connected to its settlement: the job waits until it connects again. */
+    UNCONNECTED("unconnected");
 
     /** Network codec. */
     public static final StreamCodec<ByteBuf, JobStatus> STREAM_CODEC = ByteBufCodecs.idMapper(i -> values()[i], JobStatus::ordinal);
@@ -89,7 +91,7 @@ public enum JobStatus {
     public boolean isBlocked() {
         // NO_REQUEST and MISSING_INPUTS do not block: the next decision tries again (vault Jobs/Craftsperson.md).
         return this == NO_TOOL || this == NO_WORK_PLACE || this == NO_FREE_WORK_PLACE || this == DROP_OFF_FULL || this == NO_RESOURCES || this == ALL_EXCLUDED || this == MAX_REACHED
-                || this == NOTHING_TO_PRODUCE || this == NO_MISSION || this == STORAGE_FULL || this == BLOCKED;
+                || this == NOTHING_TO_PRODUCE || this == NO_MISSION || this == STORAGE_FULL || this == BLOCKED || this == UNCONNECTED;
     }
 
     /**

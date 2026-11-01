@@ -20,6 +20,7 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
@@ -381,7 +382,7 @@ public final class SettlerXpGameTests {
         ServerLevel level = helper.getLevel();
         SettlementData data = SettlementData.get(level);
         BlockPos jobBlock = helper.absolutePos(new BlockPos(1, 1, 1));
-        SettlementManager.place(data, jobBlock, ModJobs.MINER.get(), 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
+        TestSettlements.place(helper, jobBlock, ModJobs.MINER.get(), 1);
         Settler settler = settler(helper);
         settler.joinSettlement(data, data.settlementAt(jobBlock).orElseThrow());
         SettlerJob job = new SettlerJob(ModJobs.MINER.get(), jobBlock);
@@ -396,7 +397,7 @@ public final class SettlerXpGameTests {
                 jobBlock, 3, WorkRules.ToolSupply.BELT, NOWHERE);
         helper.assertTrue(settler.getXp().points() == 2, "A roll that yields nothing earns no profile XP: " + settler.getXp().points());
         settler.discard();
-        SettlementManager.remove(data, jobBlock, SettlementManager.Listener.NONE);
+        SettlementManager.remove(data, jobBlock, 0L, SettlementManager.Listener.NONE);
         helper.succeed();
     }
 }

@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "B": "minecraft:barrel",
+    "I": "minecraft:bread",
+    "P": "#minecraft:planks",
+    "S": "civmod:scroll_of_assignment"
+  },
+  "pattern": [
+    " I ",
+    "PSP",
+    "PBP"
+  ],
+  "result": {
+    "id": "civmod:human_center_block"
+  }
+}

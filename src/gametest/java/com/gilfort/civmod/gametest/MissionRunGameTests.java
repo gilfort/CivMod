@@ -37,6 +37,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 
@@ -238,7 +239,7 @@ public final class MissionRunGameTests {
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
             }
         }
-        helper.setBlock(BOARD, ModBlocks.MISSION_BOARD.get());
+        TestSettlements.setBlock(helper, BOARD, ModBlocks.MISSION_BOARD.get());
         BlockPos board = helper.absolutePos(BOARD);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(board).orElseThrow();

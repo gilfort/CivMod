@@ -18,13 +18,13 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -144,7 +144,7 @@ public final class NeedLimitedWorkGameTests {
         ServerLevel level = helper.getLevel();
         SettlementData data = SettlementData.get(level);
         BlockPos jobBlock = helper.absolutePos(new BlockPos(1, 1, 1));
-        SettlementManager.place(data, jobBlock, ModJobs.FISHERMAN.get(), BLOCK_LEVEL, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
+        TestSettlements.place(data, jobBlock, ModJobs.FISHERMAN.get(), BLOCK_LEVEL);
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
         settler.snapTo(jobBlock.getX() + 0.5, jobBlock.getY(), jobBlock.getZ() + 0.5, 0.0F, 0.0F);
         settler.setNoAi(true);
@@ -164,7 +164,7 @@ public final class NeedLimitedWorkGameTests {
         helper.assertTrue(limited.rollLevels.stream().allMatch(used -> used == LIMIT), "Rolls at the limit: " + limited.rollLevels);
 
         settler.discard();
-        SettlementManager.remove(data, jobBlock, SettlementManager.Listener.NONE);
+        SettlementManager.remove(data, jobBlock, 0L, SettlementManager.Listener.NONE);
         helper.succeed();
     }
 

@@ -16,6 +16,7 @@ import com.gilfort.civmod.settlement.SettlementColors;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementWorld;
+import com.gilfort.civmod.settlement.SettlementRules;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -55,8 +56,8 @@ public final class SettlerGameTests {
     }
 
     private static Settlement found(SettlementData data, BlockPos pos, long gameTime) {
-        return SettlementManager.place(data, pos, ModJobs.LUMBERJACK.get(), 1, gameTime, RandomSource.create(1L), SettlementManager.Listener.NONE)
-                .settlement();
+        return SettlementManager.placeCenter(data, pos, ModJobs.ADMINISTRATOR.get(), 1, Races.HUMAN, gameTime, RandomSource.create(0L),
+                SettlementManager.Listener.NONE).settlement().orElseThrow();
     }
 
     /** Founding schedules settlers 600 ticks later; only missing settlers up to the target are spawned. */
@@ -142,7 +143,9 @@ public final class SettlerGameTests {
             helper.assertTrue(settlement.members().size() == 4 && settlement.settlersDue() == Settlement.SETTLERS_ARRIVED, "Membership or timer wrong");
             helper.assertTrue(SettlerSpawner.arrive(helper.getLevel(), data, settlement, anchor).isEmpty(), "Second arrival must not spawn more settlers");
 
-            SettlementManager.remove(data, anchor, SettlementWorld.listener(helper.getLevel()));
+            SettlementManager.remove(data, anchor, 0L, SettlementWorld.listener(helper.getLevel()));
+            helper.assertFalse(settlers.stream().anyMatch(Settler::isHomeless), "The settlement stays for a while without its Center Block");
+            SettlementManager.morning(data, SettlementRules.CENTERLESS_DAYS + 1L, SettlementWorld.listener(helper.getLevel()));
             helper.assertTrue(settlers.stream().allMatch(Settler::isHomeless), "Settlers of a dissolved settlement should be homeless");
             helper.succeed();
         } finally {

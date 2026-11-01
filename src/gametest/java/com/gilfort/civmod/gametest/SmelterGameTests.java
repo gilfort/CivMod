@@ -36,6 +36,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -489,7 +490,7 @@ public final class SmelterGameTests {
 
     /** Places a Smelter JobBlock. */
     static BlockPos smelterBlock(GameTestHelper helper, BlockPos relative) {
-        helper.setBlock(relative, ModBlocks.SMELTER_BLOCK.get());
+        TestSettlements.setBlock(helper, relative, ModBlocks.SMELTER_BLOCK.get());
         return helper.absolutePos(relative);
     }
 
