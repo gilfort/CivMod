@@ -139,14 +139,14 @@ public final class SettlerXpGameTests {
         helper.succeed();
     }
 
-    /** Smelter and Cook earn the recipe's experience; the Founder and everyone else nothing. */
+    /** Smelter, Cook and Founder earn the recipe's experience; everyone else nothing. */
     private static void producingDefaults(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         RecipeHolder<?> smelted = recipe(level, "iron_ingot_from_smelting_raw_iron");
         RecipeHolder<?> smoked = recipe(level, "cooked_beef_from_smoking");
         helper.assertTrue(near(SmelterProfile.smelter().xp(level, smelted).expected(), 0.7), "Smelter: the recipe's experience");
         helper.assertTrue(near(SmelterProfile.cook().xp(level, smoked).expected(), 0.35), "Cook: the recipe's experience");
-        helper.assertTrue(SmelterProfile.founder().xp(level, smelted).equals(XpGain.NONE), "Founder: none");
+        helper.assertTrue(near(SmelterProfile.founder().xp(level, recipe(level, "iron_ingot_from_blasting_raw_iron")).expected(), 0.7), "Founder: the recipe's experience");
         helper.assertTrue(new CraftspersonProfile().xp(level, smelted).equals(XpGain.NONE), "Craftsperson: none");
         helper.assertTrue(FishermanProfile.CATCH_XP.equals(XpGain.of(1, 6)), "Fisherman: 1–6 per catch");
         helper.assertTrue(new ResourceCollectionProfile.Produced(List.of(), ItemStack.EMPTY).xp().equals(XpGain.NONE), "Other collecting Jobs: none");

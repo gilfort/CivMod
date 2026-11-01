@@ -41,28 +41,25 @@ public final class SmelterProfile implements ProducingProfile {
 
     private final RecipeType<?> recipeType;
     private final TagKey<Block> station;
-    /** Whether a recipe's {@code experience} is earned (vault {@code Systems/Settler XP.md}: the Smelter and the Cook). */
-    private final boolean recipeXp;
 
-    private SmelterProfile(RecipeType<?> recipeType, TagKey<Block> station, boolean recipeXp) {
+    private SmelterProfile(RecipeType<?> recipeType, TagKey<Block> station) {
         this.recipeType = recipeType;
         this.station = station;
-        this.recipeXp = recipeXp;
     }
 
     /** @return the Smelter's profile: {@code smelting} at furnaces */
     public static SmelterProfile smelter() {
-        return new SmelterProfile(RecipeType.SMELTING, STATION, true);
+        return new SmelterProfile(RecipeType.SMELTING, STATION);
     }
 
     /** @return the Cook's profile: {@code smoking} at smokers */
     public static SmelterProfile cook() {
-        return new SmelterProfile(RecipeType.SMOKING, station("cook"), true);
+        return new SmelterProfile(RecipeType.SMOKING, station("cook"));
     }
 
     /** @return the Founder's profile: {@code blasting} at blast furnaces */
     public static SmelterProfile founder() {
-        return new SmelterProfile(RecipeType.BLASTING, station("founder"), false);
+        return new SmelterProfile(RecipeType.BLASTING, station("founder"));
     }
 
     private static TagKey<Block> station(String job) {
@@ -87,7 +84,7 @@ public final class SmelterProfile implements ProducingProfile {
     /** The recipe's {@code experience}; the fraction is a chance for one more point, as at the vanilla furnace. */
     @Override
     public XpGain xp(ServerLevel level, RecipeHolder<?> recipe) {
-        return recipeXp && recipe.value() instanceof AbstractCookingRecipe cooking ? XpGain.fractional(cooking.experience()) : XpGain.NONE;
+        return recipe.value() instanceof AbstractCookingRecipe cooking ? XpGain.fractional(cooking.experience()) : XpGain.NONE;
     }
 
     @Override
