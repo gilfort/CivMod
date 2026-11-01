@@ -27,6 +27,14 @@ _Avoid_: EXP for this (EXP is per Job), orbs, levels
 **Settler Shell**:
 The part of a settler's behaviour shared by every Job Category (acting on the Schedule, walking, food, sleep, job priorities, EXP, catch-up). Code: `SettlerWork`; meals and rest are carried out by `SettlerMeals` and `SettlerRest`, which answer with Body steps; it hands control to the `CategoryLoop` of the active Job's category (`ResourceCollectionLoop`, `MissionLoop`). Shared parts the loops use: the job's Workplace, delivery and EXP in the shell, the Work rules, tools in `SettlerTools`, `Fatigue`.
 
+**EXP**:
+Skill progress of a settler in one Job; fills the JobSkill Level. Separate from XP.
+_Avoid_: XP, experience
+
+**XP**:
+A settler's vanilla-style experience: a counter in the settler's data, collected from work; Mending repairs only from newly collected XP, the stored counter is for the Enchanter later. Independent of EXP.
+_Avoid_: Settler EXP, experience orbs
+
 **Job step**:
 What a category loop tells the Settler Shell its job wants next: walk to a target (and work there), deliver, wait, blocked (a status or a Blocking reason), skip, pause / hold the decision, worked this tick, done. Only the shell changes the settler's activity, walking target, active job and the job's status, after the loop returned; a status outside a step goes through the job's Workplace. Code: `JobStep`, applied in `SettlerWork.apply`.
 _Avoid_: Loops calling the shell to steer it (set the active job, start a walk, end a step)
