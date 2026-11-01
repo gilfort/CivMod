@@ -67,25 +67,40 @@ public record DeliveryTask(UUID id, BlockPos source, BlockPos jobBlock, long cre
 
     /**
      * What an input delivery carries: the inputs of a producer's round that its source store holds, reserved there while
-     * a Deliveryman has the task.
+     * a Deliveryman has the task. The inputs of a round without a request ("Always produce") are not: they stay usable
+     * for everyone until the Deliveryman picks them up.
      *
-     * @param items   the inputs, by item
-     * @param to      where they go: the producer's collect inventory
-     * @param carrier the Deliveryman carrying them, empty while they wait at the source (saved: the load is saved too)
+     * @param items    the inputs, by item
+     * @param to       where they go: the producer's collect inventory
+     * @param carrier  the Deliveryman carrying them, empty while they wait at the source (saved: the load is saved too)
+     * @param reserved whether a Deliveryman taking the task reserves the inputs
      */
-    public record Input(Map<Item, Integer> items, BlockPos to, Optional<UUID> carrier) {
+    public record Input(Map<Item, Integer> items, BlockPos to, Optional<UUID> carrier, boolean reserved) {
 
         /** Save codec. */
         public static final Codec<Input> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                 Codec.unboundedMap(BuiltInRegistries.ITEM.byNameCodec(), Codec.INT).fieldOf("items").forGetter(Input::items),
                 BlockPos.CODEC.fieldOf("to").forGetter(Input::to),
-                UUIDUtil.CODEC.optionalFieldOf("carrier").forGetter(Input::carrier)
+                UUIDUtil.CODEC.optionalFieldOf("carrier").forGetter(Input::carrier),
+                Codec.BOOL.optionalFieldOf("reserved", true).forGetter(Input::reserved)
         ).apply(instance, Input::new));
 
         /**
+         * Inputs reserved while a Deliveryman has the task.
+         *
          * @param items   the inputs, by item
          * @param to      the producer's collect inventory
          * @param carrier the Deliveryman carrying them
+         */
+        public Input(Map<Item, Integer> items, BlockPos to, Optional<UUID> carrier) {
+            this(items, to, carrier, true);
+        }
+
+        /**
+         * @param items    the inputs, by item
+         * @param to       the producer's collect inventory
+         * @param carrier  the Deliveryman carrying them
+         * @param reserved whether a Deliveryman taking the task reserves the inputs
          */
         public Input {
             items = Map.copyOf(items);
