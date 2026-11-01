@@ -51,7 +51,7 @@ public record Pattern(int slot, Item output, int count, List<Item> grid, Optiona
     /** Cells of the grid. */
     public static final int GRID = 9;
     /** "Produce at once" of a pattern that never set it. */
-    public static final int DEFAULT_AT_ONCE = 8;
+    public static final int DEFAULT_AT_ONCE = 1;
     /** The most "Produce at once" takes. */
     public static final int MAX_AT_ONCE = 999;
 
