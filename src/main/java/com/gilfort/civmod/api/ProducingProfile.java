@@ -140,6 +140,18 @@ public interface ProducingProfile extends CategoryProfile {
     }
 
     /**
+     * The XP one execution of a recipe earns (vault {@code Systems/Settler XP.md}); a pack's {@code xp} list in
+     * {@code civmod_jobs/<job>.json} replaces it.
+     *
+     * @param level  the level
+     * @param recipe the recipe
+     * @return the XP, by default none
+     */
+    default XpGain xp(ServerLevel level, RecipeHolder<?> recipe) {
+        return XpGain.NONE;
+    }
+
+    /**
      * Executes a recipe once in the settler's buffer: the consumed inputs are already taken out, the returned items go in.
      *
      * @param level    the level

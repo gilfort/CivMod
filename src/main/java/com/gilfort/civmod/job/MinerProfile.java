@@ -11,6 +11,7 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.api.SectionScan;
+import com.gilfort.civmod.api.XpGain;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -21,8 +22,11 @@ import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.DropExperienceBlock;
+import net.minecraft.world.level.block.RedStoneOreBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.common.Tags;
 
@@ -34,6 +38,8 @@ public final class MinerProfile implements ResourceCollectionProfile {
 
     private static final int AUTO_SEARCH_HORIZONTAL = 20;
     private static final int AUTO_SEARCH_VERTICAL = 30;
+    /** Redstone ore is no {@link DropExperienceBlock}; its range is fixed in vanilla. */
+    private static final XpGain REDSTONE_ORE_XP = XpGain.of(1, 5);
 
     @Override
     public Item toolIcon() {
@@ -128,7 +134,25 @@ public final class MinerProfile implements ResourceCollectionProfile {
         }
         BlockState state = BuiltInRegistries.BLOCK.getValue(rolled.get()).defaultBlockState();
         List<ItemStack> drops = Block.getDrops(state, level, context.poi(), null, context.settler(), context.tool());
-        return Optional.of(new Produced(drops, context.tool()));
+        return Optional.of(new Produced(drops, context.tool(), blockXp(level, state, context.tool())));
+    }
+
+    /**
+     * The block XP of vanilla mining (vault {@code Systems/Settler XP.md}).
+     *
+     * @param level the level
+     * @param state the mined block
+     * @param tool  the tool
+     * @return the XP range of an ore, none for other blocks and with Silk Touch
+     */
+    static XpGain blockXp(ServerLevel level, BlockState state, ItemStack tool) {
+        if (EnchantmentHelper.processBlockExperience(level, tool, 1) <= 0) {
+            return XpGain.NONE;
+        }
+        if (state.getBlock() instanceof DropExperienceBlock ore) {
+            return XpGain.of(ore.xpRange.minInclusive(), ore.xpRange.maxInclusive());
+        }
+        return state.getBlock() instanceof RedStoneOreBlock ? REDSTONE_ORE_XP : XpGain.NONE;
     }
 
     /** The first item of the block's loot with the tool: cobblestone for stone without Silk Touch, raw iron for iron ore. */

@@ -16,6 +16,7 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ProducingProfile;
+import com.gilfort.civmod.api.XpGain;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.CraftPlan;
 import com.gilfort.civmod.logistics.PatternRecipes;
@@ -959,6 +960,8 @@ final class ProducingLoop implements CategoryLoop {
         Pattern pattern = step.pattern();
         ItemStack result = new ItemStack(pattern.output(), pattern.count());
         Optional<RecipeHolder<?>> recipe = recipe(level, pattern);
+        // Read before the buffer takes the stacks.
+        List<XpGain> xp = SettlerXp.gains(JobBalancing.of(job.jobType()).xp(), recipe.map(holder -> profile(job).xp(level, holder)).orElse(XpGain.NONE), List.of(result));
         if (recipe.isPresent()) {
             profile(job).execute(level, recipe.get(), result, List.copyOf(consumed)).forEach(buffer::add);
         } else {
@@ -968,6 +971,7 @@ final class ProducingLoop implements CategoryLoop {
         }
         // 1 durability per execution, Unbreaking as usual (like a Resource Collection tool).
         worn.ifPresent(stack -> SettlerTools.wear(level, settler, stack));
+        shell.collectXp(level, xp, worn.orElse(ItemStack.EMPTY));
         shell.gainExp(level, job, job.jobType().baseExp() * site.level(), site.skillCap());
         if (++round.crafted >= step.crafts()) {
             round.step++;

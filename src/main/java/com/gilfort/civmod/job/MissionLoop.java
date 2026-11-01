@@ -303,7 +303,7 @@ final class MissionLoop implements CategoryLoop {
         return true;
     }
 
-    /** Rolls the outcome; a survivor gets its loot, EXP and a return message. */
+    /** Rolls the outcome; a survivor gets its loot, XP, EXP and a return message. */
     private MissionRules.Outcome finish(ServerLevel level, SettlerJob job, JobBlockSite site, Mission mission, boolean catchUp) {
         OutcomeRules rules = OutcomeRules.get();
         int cap = site.skillCap();
@@ -327,6 +327,7 @@ final class MissionLoop implements CategoryLoop {
                 loot.forEach(buffer::add);
             }
         }
+        shell.storeXp(level, MissionRules.xp(outcome, mission));
         shell.announce(level, message, RETURN_RANGE);
         shell.gainExp(level, job, MissionRules.exp(outcome, rules, job.jobType().baseExp(), site.level(), mission.recommendedLevel()), cap);
         return outcome;
