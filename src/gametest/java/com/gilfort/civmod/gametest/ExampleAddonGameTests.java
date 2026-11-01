@@ -39,6 +39,7 @@ import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -151,7 +152,7 @@ public final class ExampleAddonGameTests {
             }
         }
         BlockPos relative = new BlockPos(1, 1, 1);
-        helper.setBlock(relative, BuiltInRegistries.BLOCK.getValue(SAND_DIGGER_BLOCK));
+        TestSettlements.setBlock(helper, relative, BuiltInRegistries.BLOCK.getValue(SAND_DIGGER_BLOCK));
         int index = 0;
         for (int x = 4; x < 8; x++) {
             for (int z = 4; z < 8; z++) {

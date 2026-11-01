@@ -492,7 +492,7 @@ public class Settler extends PathfinderMob {
             return;
         }
         SettlementManager.nearestBlock(settlement, blockPosition())
-                .ifPresent(block -> setHomeTo(block.pos(), SettlementRules.joinRadius(block.level())));
+                .ifPresent(block -> setHomeTo(block.pos(), SettlementRules.joinRadius(block)));
     }
 
     @Override

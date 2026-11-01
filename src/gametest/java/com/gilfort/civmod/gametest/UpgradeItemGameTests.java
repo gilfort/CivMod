@@ -19,6 +19,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -81,7 +82,7 @@ public final class UpgradeItemGameTests {
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
             }
         }
-        helper.setBlock(pos, block);
+        TestSettlements.setBlock(helper, pos, block);
         return SettlementData.get(helper.getLevel()).settlementAt(helper.absolutePos(pos)).orElseThrow();
     }
 
@@ -223,7 +224,7 @@ public final class UpgradeItemGameTests {
     /** A settler of the same Job at the cap at another JobBlock does not count. */
     private static void otherBlock(GameTestHelper helper) {
         Settlement settlement = jobBlock(helper, BLOCK, ModBlocks.MINER_BLOCK.get());
-        helper.setBlock(OTHER, ModBlocks.MINER_BLOCK.get());
+        TestSettlements.setBlock(helper, OTHER, ModBlocks.MINER_BLOCK.get());
         Settler expert = worker(helper, settlement, OTHER, ModJobs.MINER.get(), 20);
         Settler novice = worker(helper, settlement, BLOCK, ModJobs.MINER.get(), 5);
         Player player = helper.makeMockPlayer(GameType.SURVIVAL);

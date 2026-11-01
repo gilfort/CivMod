@@ -6,6 +6,7 @@ import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.block.JobBlockEntity;
+import com.gilfort.civmod.npc.Races;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.registry.ModItems;
@@ -15,6 +16,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager.Outcome;
 import com.gilfort.civmod.settlement.SettlementManager.Placement;
 import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -71,32 +73,37 @@ public final class SettlementGameTests {
     }
 
     private static Placement place(SettlementData data, int x, int level, SettlementManager.Listener listener) {
-        return SettlementManager.place(data, new BlockPos(x, 64, 0), ModJobs.LUMBERJACK.get(), level, 0L, RandomSource.create(0L), listener);
+        return SettlementManager.place(data, new BlockPos(x, 64, 0), ModJobs.LUMBERJACK.get(), level, listener);
     }
 
-    /** A first JobBlock founds a settlement; a block within 10 × level joins it (height is ignored). */
+    private static Placement center(SettlementData data, int x) {
+        return SettlementManager.placeCenter(data, new BlockPos(x, 64, 0), ModJobs.ADMINISTRATOR.get(), 1, Races.HUMAN, 0L, RandomSource.create(0L),
+                SettlementManager.Listener.NONE);
+    }
+
+    /** A Center Block founds a settlement; a block in its join radius joins it (height is ignored). */
     private static void foundingAndJoining(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Placement first = place(data, 0, 1, SettlementManager.Listener.NONE);
-        helper.assertTrue(first.outcome() == Outcome.FOUNDED, "First block should found a settlement");
-        Placement second = SettlementManager.place(data, new BlockPos(10, 100, 0), ModJobs.MINER.get(), 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
+        Placement first = center(data, 0);
+        helper.assertTrue(first.outcome() == Outcome.FOUNDED, "A Center Block should found a settlement");
+        Placement second = SettlementManager.place(data, new BlockPos(20, 100, 0), ModJobs.MINER.get(), 1, SettlementManager.Listener.NONE);
         helper.assertTrue(second.outcome() == Outcome.JOINED && second.settlement() == first.settlement(),
-                "Block at horizontal distance 10 should join, regardless of height");
+                "Block at horizontal distance 20 should join, regardless of height");
         helper.assertTrue(data.settlements().size() == 1, "Expected exactly one settlement");
-        Placement far = place(data, 200, 1, SettlementManager.Listener.NONE);
-        helper.assertTrue(far.outcome() == Outcome.FOUNDED && data.settlements().size() == 2, "Block outside all zones founds a second settlement");
         helper.succeed();
     }
 
     /** A block in reach of two settlements joins the one with the nearest JobBlock. */
     private static void nearestChoice(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement west = place(data, 0, 1, SettlementManager.Listener.NONE).settlement();
-        Settlement east = place(data, 31, 3, SettlementManager.Listener.NONE).settlement();
-        helper.assertTrue(west != east, "Block at 31 is outside the exclusion radius of 30 and should found a second settlement");
-        Placement between = place(data, 9, 1, SettlementManager.Listener.NONE);
+        Settlement west = center(data, 0).settlement();
+        Settlement east = center(data, 100).settlement();
+        helper.assertTrue(west != east, "Center Block at 100 is outside the exclusion radius of 75 and should found a second settlement");
+        place(data, 24, 3, SettlementManager.Listener.NONE);
+        place(data, 76, 3, SettlementManager.Listener.NONE);
+        Placement between = place(data, 49, 1, SettlementManager.Listener.NONE);
         helper.assertTrue(between.outcome() == Outcome.JOINED && between.settlement() == west,
-                "Block at 9 is covered by west (radius 10) and east (radius 30) and should join the nearer west settlement");
+                "Block at 49 is covered by both level 3 blocks and should join the nearer west settlement");
         helper.succeed();
     }
 
@@ -104,42 +111,42 @@ public final class SettlementGameTests {
     private static void unconnectedAndAutoConnect(GameTestHelper helper) {
         SettlementData data = new SettlementData();
         Recorder recorder = new Recorder();
-        Settlement settlement = place(data, 0, 1, recorder).settlement();
-        Placement waiting = place(data, 20, 1, recorder);
+        Settlement settlement = center(data, 0).settlement();
+        Placement waiting = place(data, 40, 1, recorder);
         helper.assertTrue(waiting.outcome() == Outcome.UNCONNECTED && waiting.settlement() == settlement,
-                "Block at 20 is in the exclusion zone but out of reach");
-        helper.assertTrue(waiting.distance() == 20 && waiting.required() == 10, "Unexpected distance info: " + waiting);
+                "Block at 40 is in the exclusion zone but out of reach");
+        helper.assertTrue(waiting.distance() == 40 && waiting.required() == 25, "Unexpected distance info: " + waiting);
         helper.assertTrue(data.settlements().size() == 1, "No second settlement may be founded in the exclusion zone");
-        Placement highLevel = place(data, -25, 3, recorder);
-        helper.assertTrue(highLevel.outcome() == Outcome.UNCONNECTED && highLevel.required() == 10,
+        Placement highLevel = place(data, -35, 3, recorder);
+        helper.assertTrue(highLevel.outcome() == Outcome.UNCONNECTED && highLevel.required() == 25,
                 "A level-3 block outside the border must not connect via its own radius: " + highLevel);
 
-        Placement bridge = place(data, 10, 1, recorder);
+        Placement bridge = place(data, 25, 2, recorder);
         helper.assertTrue(bridge.outcome() == Outcome.JOINED, "Bridge block should join");
-        helper.assertTrue(recorder.autoConnected.equals(List.of(new BlockPos(20, 64, 0))), "Waiting block should auto-connect: " + recorder.autoConnected);
-        helper.assertTrue(settlement.connectedCount() == 3, "The three blocks at 0, 10 and 20 should be connected");
+        helper.assertTrue(recorder.autoConnected.equals(List.of(new BlockPos(40, 64, 0))), "Waiting block should auto-connect: " + recorder.autoConnected);
+        helper.assertTrue(settlement.connectedCount() == 3, "The three blocks at 0, 25 and 40 should be connected");
         helper.succeed();
     }
 
-    /** Removing blocks keeps the settlement; the last removal dissolves it; a lone unconnected block becomes the anchor. */
+    /** Removing blocks keeps the settlement and clears the position index; a waiting block stays unconnected. */
     private static void removalAndDissolution(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        Settlement settlement = place(data, 0, 1, SettlementManager.Listener.NONE).settlement();
-        place(data, 20, 1, SettlementManager.Listener.NONE);
-        SettlementManager.remove(data, new BlockPos(0, 64, 0), SettlementManager.Listener.NONE);
-        helper.assertTrue(data.settlements().size() == 1 && settlement.connectedCount() == 1,
-                "Remaining unconnected block should become the connected anchor");
-        SettlementManager.remove(data, new BlockPos(20, 64, 0), SettlementManager.Listener.NONE);
-        helper.assertTrue(data.settlements().isEmpty(), "Removing the last block should dissolve the settlement");
-        helper.assertTrue(data.settlementAt(new BlockPos(20, 64, 0)).isEmpty(), "Position index should be cleared");
+        Settlement settlement = center(data, 0).settlement();
+        place(data, 40, 1, SettlementManager.Listener.NONE);
+        SettlementManager.remove(data, new BlockPos(0, 64, 0), 0L, SettlementManager.Listener.NONE);
+        helper.assertTrue(data.settlements().size() == 1 && settlement.connectedCount() == 0,
+                "The waiting block stays unconnected until a Center Block returns");
+        SettlementManager.remove(data, new BlockPos(40, 64, 0), 0L, SettlementManager.Listener.NONE);
+        helper.assertTrue(data.settlements().size() == 1, "Removing the last block dissolves nothing at once");
+        helper.assertTrue(data.settlementAt(new BlockPos(40, 64, 0)).isEmpty(), "Position index should be cleared");
         helper.succeed();
     }
 
     /** Settlement data survives a save / load round trip. */
     private static void persistence(GameTestHelper helper) {
         SettlementData data = new SettlementData();
-        place(data, 0, 2, SettlementManager.Listener.NONE);
-        place(data, 45, 1, SettlementManager.Listener.NONE);
+        center(data, 0);
+        place(data, 45, 2, SettlementManager.Listener.NONE);
         var ops = helper.getLevel().registryAccess().createSerializationContext(JsonOps.INSTANCE);
         var json = SettlementData.CODEC.encodeStart(ops, data).getOrThrow();
         SettlementData loaded = SettlementData.CODEC.parse(ops, json).getOrThrow();
@@ -147,7 +154,8 @@ public final class SettlementGameTests {
         Settlement settlement = loaded.settlements().iterator().next();
         helper.assertTrue(settlement.blocks().size() == 2 && settlement.connectedCount() == 1, "Blocks or connection state lost");
         helper.assertTrue(loaded.settlementAt(new BlockPos(45, 64, 0)).isPresent(), "Position index not rebuilt after loading");
-        helper.assertTrue(settlement.block(new BlockPos(0, 64, 0)).map(block -> block.level() == 2).orElse(false), "Level lost");
+        helper.assertTrue(settlement.block(new BlockPos(45, 64, 0)).map(block -> block.level() == 2).orElse(false), "Level lost");
+        helper.assertTrue(settlement.hasCenter(Races.HUMAN), "Center Block lost");
         helper.succeed();
     }
 
@@ -155,7 +163,7 @@ public final class SettlementGameTests {
     private static void worldIntegration(GameTestHelper helper) {
         BlockPos relative = new BlockPos(1, 1, 1);
         BlockPos absolute = helper.absolutePos(relative);
-        helper.setBlock(relative, ModBlocks.MINER_BLOCK.get());
+        TestSettlements.setBlock(helper, relative, ModBlocks.MINER_BLOCK.get());
         ItemStack levelStack = new ItemStack(ModItems.MINER_BLOCK.get());
         levelStack.set(ModDataComponents.JOB_LEVEL.get(), 3);
         helper.getBlockEntity(relative, JobBlockEntity.class).applyComponentsFromItemStack(levelStack);

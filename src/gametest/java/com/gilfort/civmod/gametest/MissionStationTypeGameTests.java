@@ -29,6 +29,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StationTypes;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -75,7 +76,7 @@ public final class MissionStationTypeGameTests {
     }
 
     private static BlockPos board(GameTestHelper helper) {
-        helper.setBlock(BOARD, ModBlocks.MISSION_BOARD.get());
+        TestSettlements.setBlock(helper, BOARD, ModBlocks.MISSION_BOARD.get());
         return helper.absolutePos(BOARD);
     }
 

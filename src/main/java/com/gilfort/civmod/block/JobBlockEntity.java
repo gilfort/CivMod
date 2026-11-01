@@ -9,6 +9,7 @@ import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.registry.ModBlockEntityTypes;
 import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
@@ -107,10 +108,10 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     }
 
     /**
-     * @return whether the block is registered in a settlement but not connected to its chain
+     * @return whether the block is not connected to a settlement chain, also without a settlement
      */
     public boolean isUnconnected() {
-        return settlementId >= 0 && !connected;
+        return !connected;
     }
 
     /**
@@ -199,6 +200,15 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
         // The settlement may have changed while this chunk was unloaded (e.g. auto-connect); clients receive the
         // corrected state with the chunk data, so no block update is sent here.
         if (level instanceof ServerLevel serverLevel) {
+            SettlementData.get(serverLevel).unsettledAt(worldPosition).ifPresent(block -> {
+                settlementId = -1;
+                connected = false;
+                if (block.level() != jobLevel) {
+                    BlockPos pos = worldPosition;
+                    int level = jobLevel;
+                    serverLevel.getServer().execute(() -> SettlementWorld.setLevel(serverLevel, pos, level));
+                }
+            });
             JobBlockSite.at(serverLevel, worldPosition).ifPresent(site -> {
                 settlementId = site.settlement().id();
                 connected = site.block().connected();

@@ -21,6 +21,7 @@ import com.gilfort.civmod.settlement.Hearths;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -30,7 +31,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.block.BedBlock;
@@ -91,8 +91,7 @@ public final class HearthGameTests {
     /** Registers a JobBlock without a block in the world, in a settlement of its own. */
     private static BlockPos jobBlock(GameTestHelper helper, BlockPos relative) {
         BlockPos pos = helper.absolutePos(relative);
-        SettlementManager.place(SettlementData.get(helper.getLevel()), pos, ModJobs.LUMBERJACK.get(), 1, 0L, RandomSource.create(0L),
-                SettlementManager.Listener.NONE);
+        TestSettlements.place(helper, pos, ModJobs.LUMBERJACK.get(), 1);
         return pos;
     }
 
@@ -126,15 +125,14 @@ public final class HearthGameTests {
         for (Settler settler : settlers) {
             settler.discard();
         }
-        SettlementManager.remove(SettlementData.get(helper.getLevel()), jobBlock, SettlementManager.Listener.NONE);
+        SettlementManager.remove(SettlementData.get(helper.getLevel()), jobBlock, 0L, SettlementManager.Listener.NONE);
         helper.succeed();
     }
 
     /** A JobBlock of a higher level: the border reaches the far bed and the far hearth. */
     private static BlockPos wideJobBlock(GameTestHelper helper, BlockPos relative) {
         BlockPos pos = helper.absolutePos(relative);
-        SettlementManager.place(SettlementData.get(helper.getLevel()), pos, ModJobs.LUMBERJACK.get(), 4, 0L, RandomSource.create(0L),
-                SettlementManager.Listener.NONE);
+        TestSettlements.place(helper, pos, ModJobs.LUMBERJACK.get(), 4);
         return pos;
     }
 
@@ -341,7 +339,7 @@ public final class HearthGameTests {
         helper.setBlock(relative, Blocks.AIR);
         helper.assertTrue(Hearths.of(level, settlement).isEmpty(), "Broken: no hearth");
 
-        BlockPos outside = CENTER.east(16);
+        BlockPos outside = CENTER.east(30);
         helper.setBlock(outside.below(), Blocks.STONE);
         helper.setBlock(outside, Blocks.CAMPFIRE);
         helper.assertTrue(Hearths.of(level, settlement).isEmpty(), "Outside the border: not this settlement's");

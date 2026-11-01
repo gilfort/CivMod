@@ -25,6 +25,7 @@ import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -112,7 +113,7 @@ public final class PlantationFarmerGameTests {
         }
         helper.setBlock(new BlockPos(5, 3, 5), Blocks.SUGAR_CANE);
         BlockPos relative = new BlockPos(1, 2, 1);
-        helper.setBlock(relative, ModBlocks.GATHERER_BLOCK.get());
+        TestSettlements.setBlock(helper, relative, ModBlocks.GATHERER_BLOCK.get());
         StationTypeGameTests.setLevel(helper, relative, 2);
         BlockPos jobBlock = helper.absolutePos(relative);
         TestAssignments.setStationType(SettlementData.get(helper.getLevel()), jobBlock, 1, Items.BAMBOO);

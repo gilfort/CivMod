@@ -4,7 +4,6 @@ import java.util.List;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.settlement.SettlementOutline;
-import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -73,7 +72,7 @@ public final class SettlementOutlineRenderer {
             double playerX, double y, double playerZ) {
         double centerX = block.pos().getX() + 0.5;
         double centerZ = block.pos().getZ() + 0.5;
-        int radius = SettlementRules.joinRadius(block.level());
+        int radius = block.radius();
         int points = (int) Math.ceil(2 * Math.PI * radius);
         for (int i = 0; i < points; i++) {
             double angle = 2 * Math.PI * i / points;
@@ -95,7 +94,7 @@ public final class SettlementOutlineRenderer {
             }
             double dx = x - (other.pos().getX() + 0.5);
             double dz = z - (other.pos().getZ() + 0.5);
-            double radius = SettlementRules.joinRadius(other.level());
+            double radius = other.radius();
             if (dx * dx + dz * dz < radius * radius) {
                 return true;
             }

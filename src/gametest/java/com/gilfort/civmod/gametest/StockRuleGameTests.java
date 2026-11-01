@@ -319,7 +319,7 @@ public final class StockRuleGameTests {
         StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 1, 0));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         Request other = Requests.post(data, settlement, Items.STICK, 4, Optional.of(clerk), Optional.empty());
-        SettlementManager.remove(data, clerk, SettlementManager.Listener.NONE);
+        SettlementManager.remove(data, clerk, 0L, SettlementManager.Listener.NONE);
         helper.assertTrue(Requests.forRule(settlement, clerk, 0).isEmpty(), "Rule request withdrawn");
         helper.assertTrue(Requests.get(settlement, other.id()).map(Request::target).equals(Optional.of(Optional.empty())),
                 "Other request kept without a target (own drop-off): " + Requests.get(settlement, other.id()));

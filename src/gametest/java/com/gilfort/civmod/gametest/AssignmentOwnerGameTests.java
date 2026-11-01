@@ -12,6 +12,7 @@ import com.gilfort.civmod.settlement.JobAssignments.AssignResult;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementWorld;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -51,8 +52,8 @@ public final class AssignmentOwnerGameTests {
      */
     private static void owner(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
-        helper.setBlock(new BlockPos(4, 1, 1), ModBlocks.MINER_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(4, 1, 1), ModBlocks.MINER_BLOCK.get());
         BlockPos lumber = helper.absolutePos(new BlockPos(1, 1, 1));
         BlockPos miner = helper.absolutePos(new BlockPos(4, 1, 1));
         SettlementData data = SettlementData.get(level);

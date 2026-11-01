@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:center_block_one_per_race",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -22,6 +22,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TextColor;
+import net.minecraft.resources.Identifier;
 
 /**
  * A settlement: a chain of JobBlocks in one dimension with its settlers (vault {@code Systems/Settlement.md}).
@@ -50,8 +51,24 @@ public final class Settlement {
             Codec.unboundedMap(UUIDUtil.STRING_CODEC, BlockPos.CODEC).optionalFieldOf("bed_reservations", Map.of())
                     .forGetter(Settlement::bedReservations),
             BlockPos.CODEC.listOf().optionalFieldOf("hearths", List.of()).forGetter(settlement -> List.copyOf(settlement.hearths)),
-            Codec.INT.optionalFieldOf("hearth_border", NO_BORDER).forGetter(Settlement::hearthBorderHash)
+            Codec.INT.optionalFieldOf("hearth_border", NO_BORDER).forGetter(Settlement::hearthBorderHash),
+            CenterGrace.CODEC.optionalFieldOf("center_grace").forGetter(Settlement::centerGrace)
     ).apply(instance, Settlement::new));
+
+    /**
+     * The time a settlement without a Center Block has left (vault {@code Systems/Settlement.md}).
+     *
+     * @param lastCenter  where the last Center Block stood; its exclusion zone stays until the settlement dissolves, so a
+     *                    new Center Block there revives the settlement even if no JobBlock is left
+     * @param dissolveDay the settler day on whose morning the settlement dissolves
+     */
+    public record CenterGrace(BlockPos lastCenter, long dissolveDay) {
+
+        private static final Codec<CenterGrace> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                BlockPos.CODEC.fieldOf("last_center").forGetter(CenterGrace::lastCenter),
+                Codec.LONG.fieldOf("dissolve_day").forGetter(CenterGrace::dissolveDay)
+        ).apply(instance, CenterGrace::new));
+    }
 
     private final int id;
     private Optional<String> name;
@@ -75,6 +92,8 @@ public final class Settlement {
     private int hearthBorderHash;
     /** Goes up with every change of the hearths (not saved). */
     private int hearthRevision;
+    /** Set while the settlement has no Center Block. */
+    private Optional<CenterGrace> centerGrace;
 
     /**
      * @param id          the settlement id (unique per dimension)
@@ -87,12 +106,13 @@ public final class Settlement {
      */
     public Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
             List<SettlementBlock> blocks) {
-        this(id, name, foundedAt, color, settlersDue, members, blocks, Map.of(), List.of(), List.of(), Map.of(), List.of(), NO_BORDER);
+        this(id, name, foundedAt, color, settlersDue, members, blocks, Map.of(), List.of(), List.of(), Map.of(), List.of(), NO_BORDER, Optional.empty());
     }
 
     private Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
             List<SettlementBlock> blocks, Map<String, UUID> beds, List<Request> requests, List<DeliveryTask> deliveries,
-            Map<UUID, BlockPos> bedReservations, List<BlockPos> hearths, int hearthBorderHash) {
+            Map<UUID, BlockPos> bedReservations, List<BlockPos> hearths, int hearthBorderHash, Optional<CenterGrace> centerGrace) {
+        this.centerGrace = centerGrace;
         this.bedReservations.putAll(bedReservations);
         this.hearths.addAll(hearths);
         this.hearthBorderHash = hearthBorderHash;
@@ -194,6 +214,32 @@ public final class Settlement {
      */
     public long connectedCount() {
         return blocks.values().stream().filter(SettlementBlock::connected).count();
+    }
+
+    /**
+     * @param race a race
+     * @return whether the settlement has a Center Block of that race
+     */
+    public boolean hasCenter(Identifier race) {
+        return blocks.values().stream().anyMatch(block -> block.centerRace().filter(race::equals).isPresent());
+    }
+
+    /**
+     * @return whether the settlement has any Center Block
+     */
+    public boolean hasCenter() {
+        return blocks.values().stream().anyMatch(block -> block.centerRace().isPresent());
+    }
+
+    /**
+     * @return the time left to a settlement without a Center Block, empty while it has one
+     */
+    public Optional<CenterGrace> centerGrace() {
+        return centerGrace;
+    }
+
+    void setCenterGrace(Optional<CenterGrace> centerGrace) {
+        this.centerGrace = centerGrace;
     }
 
     /**

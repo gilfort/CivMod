@@ -13,6 +13,7 @@ import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -152,7 +153,7 @@ public final class WakeUpGameTests {
         ServerLevel level = helper.getLevel();
         floor(helper);
         LumberjackGameTests.forceChunks(helper);
-        helper.setBlock(BOARD, ModBlocks.MISSION_BOARD.get());
+        TestSettlements.setBlock(helper, BOARD, ModBlocks.MISSION_BOARD.get());
         BlockPos board = helper.absolutePos(BOARD);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(board).orElseThrow();

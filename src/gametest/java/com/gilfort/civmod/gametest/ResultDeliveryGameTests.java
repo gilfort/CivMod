@@ -23,6 +23,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.gilfort.civmod.settlement.Warehouses;
 
 import net.minecraft.core.BlockPos;
@@ -30,7 +31,6 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -70,8 +70,8 @@ public final class ResultDeliveryGameTests {
                     helper.setBlock(new BlockPos(x, 0, z), net.minecraft.world.level.block.Blocks.STONE);
                 }
             }
-            helper.setBlock(new BlockPos(1, 1, 1), com.gilfort.civmod.registry.ModBlocks.CLERK_BLOCK.get());
-            helper.setBlock(new BlockPos(9, 1, 1), com.gilfort.civmod.registry.ModBlocks.CLERK_BLOCK.get());
+            com.gilfort.civmod.settlement.TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), com.gilfort.civmod.registry.ModBlocks.CLERK_BLOCK.get());
+            com.gilfort.civmod.settlement.TestSettlements.setBlock(helper, new BlockPos(9, 1, 1), com.gilfort.civmod.registry.ModBlocks.CLERK_BLOCK.get());
             BlockPos home = helper.absolutePos(new BlockPos(1, 1, 1));
             BlockPos requesting = helper.absolutePos(new BlockPos(9, 1, 1));
             BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(3, 1, 7));
@@ -201,13 +201,13 @@ public final class ResultDeliveryGameTests {
     /** Registers a JobBlock without a block in the world (pure settlement rules). */
     private static BlockPos place(GameTestHelper helper, BlockPos relative, Job job) {
         BlockPos pos = helper.absolutePos(relative);
-        SettlementManager.place(SettlementData.get(helper.getLevel()), pos, job, 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
+        TestSettlements.place(helper, pos, job, 1);
         return pos;
     }
 
     private static void remove(GameTestHelper helper, BlockPos... positions) {
         for (BlockPos pos : positions) {
-            SettlementManager.remove(SettlementData.get(helper.getLevel()), pos, SettlementManager.Listener.NONE);
+            SettlementManager.remove(SettlementData.get(helper.getLevel()), pos, 0L, SettlementManager.Listener.NONE);
         }
     }
 

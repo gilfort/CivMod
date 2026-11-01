@@ -14,6 +14,7 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -147,9 +148,9 @@ public final class FoodGameTests {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         floor(helper);
-        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
         BlockPos clerkPos = helper.absolutePos(new BlockPos(6, 1, 6));
-        helper.setBlock(new BlockPos(6, 1, 6), ModBlocks.CLERK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(6, 1, 6), ModBlocks.CLERK_BLOCK.get());
         Container clerk = (Container) level.getBlockEntity(clerkPos);
         clerk.setItem(0, new ItemStack(Items.BREAD, 16));
         SettlementData data = SettlementData.get(level);
@@ -174,7 +175,7 @@ public final class FoodGameTests {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         floor(helper);
-        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(helper.absolutePos(new BlockPos(1, 1, 1))).orElseThrow();
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);

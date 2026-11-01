@@ -15,6 +15,7 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -22,7 +23,6 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.block.BedBlock;
@@ -72,7 +72,7 @@ public final class ScheduleGameTests {
     }
 
     private static Settlement settlementAt(SettlementData data, BlockPos pos) {
-        return SettlementManager.place(data, pos, ModJobs.LUMBERJACK.get(), 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE).settlement();
+        return TestSettlements.place(data, pos, ModJobs.LUMBERJACK.get(), 1).settlement();
     }
 
     /** The nearest free bed is claimed, beds are never shared, a destroyed bed is released. */

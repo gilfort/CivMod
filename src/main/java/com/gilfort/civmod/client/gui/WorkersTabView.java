@@ -201,6 +201,9 @@ final class WorkersTabView implements JobBlockTabView {
         if (info.inSettlement() && !info.connected()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.connect"));
         }
+        if (!info.inSettlement()) {
+            lines.add(Component.translatable("civmod.gui.job_block.help.no_settlement"));
+        }
         if (leavesToggle()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.leaves"));
         }

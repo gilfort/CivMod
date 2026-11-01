@@ -22,6 +22,7 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -78,7 +79,7 @@ public final class GathererGameTests {
             }
         }
         BlockPos relative = new BlockPos(1, 1, 1);
-        helper.setBlock(relative, ModBlocks.GATHERER_BLOCK.get());
+        TestSettlements.setBlock(helper, relative, ModBlocks.GATHERER_BLOCK.get());
         return relative;
     }
 

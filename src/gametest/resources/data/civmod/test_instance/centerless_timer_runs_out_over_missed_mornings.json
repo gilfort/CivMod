@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:centerless_timer_runs_out_over_missed_mornings",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

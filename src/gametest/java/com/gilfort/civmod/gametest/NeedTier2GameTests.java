@@ -22,6 +22,7 @@ import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -35,7 +36,6 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.ProblemReporter;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.DyeColor;
@@ -217,8 +217,7 @@ public final class NeedTier2GameTests {
     /** Registers a JobBlock without a block in the world, in a settlement of its own. */
     private static BlockPos jobBlock(GameTestHelper helper, BlockPos relative, int blockLevel) {
         BlockPos pos = helper.absolutePos(relative);
-        SettlementManager.place(SettlementData.get(helper.getLevel()), pos, ModJobs.LUMBERJACK.get(), blockLevel, 0L, RandomSource.create(0L),
-                SettlementManager.Listener.NONE);
+        TestSettlements.place(helper, pos, ModJobs.LUMBERJACK.get(), blockLevel);
         return pos;
     }
 
@@ -241,7 +240,7 @@ public final class NeedTier2GameTests {
 
     private static void end(GameTestHelper helper, BlockPos jobBlock, Settler settler) {
         settler.discard();
-        SettlementManager.remove(SettlementData.get(helper.getLevel()), jobBlock, SettlementManager.Listener.NONE);
+        SettlementManager.remove(SettlementData.get(helper.getLevel()), jobBlock, 0L, SettlementManager.Listener.NONE);
         helper.succeed();
     }
 
@@ -303,9 +302,9 @@ public final class NeedTier2GameTests {
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
             }
         }
-        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
         BlockPos clerkPos = helper.absolutePos(new BlockPos(6, 1, 6));
-        helper.setBlock(new BlockPos(6, 1, 6), ModBlocks.CLERK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(6, 1, 6), ModBlocks.CLERK_BLOCK.get());
         Container clerk = (Container) level.getBlockEntity(clerkPos);
         clerk.setItem(0, new ItemStack(Items.COOKED_BEEF, 16));
         clerk.setItem(1, new ItemStack(Items.BREAD, 4));

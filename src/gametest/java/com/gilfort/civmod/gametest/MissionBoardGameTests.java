@@ -23,6 +23,7 @@ import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.StationTypes;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -31,7 +32,6 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -82,7 +82,7 @@ public final class MissionBoardGameTests {
     }
 
     private static Settlement placeBoard(SettlementData data, int level) {
-        return SettlementManager.place(data, BOARD, ModJobs.ADVENTURER.get(), level, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE)
+        return TestSettlements.place(data, BOARD, ModJobs.ADVENTURER.get(), level)
                 .settlement();
     }
 
@@ -98,8 +98,8 @@ public final class MissionBoardGameTests {
     private static void joinsSettlement(GameTestHelper helper) {
         BlockPos lumberjack = new BlockPos(1, 1, 1);
         BlockPos board = new BlockPos(5, 1, 1);
-        helper.setBlock(lumberjack, ModBlocks.LUMBERJACK_BLOCK.get());
-        helper.setBlock(board, ModBlocks.MISSION_BOARD.get());
+        TestSettlements.setBlock(helper, lumberjack, ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, board, ModBlocks.MISSION_BOARD.get());
         SettlementData data = SettlementData.get(helper.getLevel());
         Settlement settlement = data.settlementAt(helper.absolutePos(lumberjack)).orElseThrow();
         helper.assertTrue(data.settlementAt(helper.absolutePos(board)).filter(settlement::equals).isPresent(), "Board joins the settlement");
@@ -136,7 +136,7 @@ public final class MissionBoardGameTests {
         SettlementData data = new SettlementData();
         Settlement settlement = placeBoard(data, 5);
         BlockPos second = new BlockPos(5, 64, 0);
-        SettlementManager.place(data, second, ModJobs.ADVENTURER.get(), 5, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
+        TestSettlements.place(data, second, ModJobs.ADVENTURER.get(), 5);
         helper.assertTrue(assign(data, settlement, 0, List.of(ModJobs.LUMBERJACK.get())) == AssignResult.OK, "A Lumberjack may join");
         helper.assertTrue(assign(data, settlement, 0, List.of(ModJobs.LUMBERJACK.get(), ModJobs.ADVENTURER.get())) == AssignResult.SAME_BLOCK,
                 "Already on this board");
@@ -153,7 +153,7 @@ public final class MissionBoardGameTests {
         SettlementData data = new SettlementData();
         Settlement settlement = placeBoard(data, 3);
         BlockPos anchor = new BlockPos(5, 64, 0);
-        SettlementManager.place(data, anchor, ModJobs.LUMBERJACK.get(), 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
+        TestSettlements.place(data, anchor, ModJobs.LUMBERJACK.get(), 1);
         for (int i = 0; i < 3; i++) {
             assign(data, settlement, i, List.of());
         }
@@ -162,7 +162,7 @@ public final class MissionBoardGameTests {
         helper.assertTrue(JobAssignments.isAssignee(data, BOARD, SETTLERS[0]) && JobAssignments.isAssignee(data, BOARD, SETTLERS[2]),
                 "The others stay");
         List<UUID> lostJob = new java.util.ArrayList<>();
-        SettlementManager.remove(data, BOARD, new SettlementManager.Listener() {
+        SettlementManager.remove(data, BOARD, 0L, new SettlementManager.Listener() {
             @Override
             public void blockChanged(BlockPos pos, int settlementId, boolean connected) {
             }
@@ -224,8 +224,8 @@ public final class MissionBoardGameTests {
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
             }
         }
-        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
-        helper.setBlock(new BlockPos(1, 1, 3), ModBlocks.MISSION_BOARD.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 3), ModBlocks.MISSION_BOARD.get());
         for (int x = 4; x < 8; x++) {
             for (int z = 0; z < 4; z++) {
                 for (int y = 1; y <= 3; y++) {

@@ -69,6 +69,10 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> BARD = JOBS.register("bard", () -> Job.builder(JobCategory.MISSION)
             .parent(ADVENTURER).icon(() -> Items.NOTE_BLOCK).bubbleIcon(() -> Items.NOTE_BLOCK).hungerFactor(1.0).baseExp(10)
             .unlockItem(() -> Items.NOTE_BLOCK).build());
+    /** See vault {@code Jobs/Administrator.md}; works at the Center Block, has no work yet: a settler moves on to its next job. */
+    public static final DeferredHolder<Job, Job> ADMINISTRATOR = JOBS.register("administrator", () -> Job.builder(JobCategory.SERVICE)
+            .icon(ModItems.HUMAN_CENTER_BLOCK).bubbleIcon(() -> Items.WRITABLE_BOOK).build());
+
     /** See vault {@code Jobs/Clerk.md}; the store and food point of the settlement, the first Logistics Job. */
     public static final DeferredHolder<Job, Job> CLERK = JOBS.register("clerk", () -> Job.builder(JobCategory.LOGISTICS)
             .icon(ModItems.CLERK_BLOCK).bubbleIcon(() -> Items.EMERALD).hungerFactor(0.5).baseExp(1).build());

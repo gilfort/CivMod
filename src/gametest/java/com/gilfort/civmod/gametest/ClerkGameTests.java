@@ -26,6 +26,7 @@ import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -133,7 +134,7 @@ public final class ClerkGameTests {
     private static void storageLimits(GameTestHelper helper) {
         SettlementData data = new SettlementData();
         BlockPos clerk = new BlockPos(0, 64, 0);
-        SettlementManager.place(data, clerk, ModJobs.CLERK.get(), 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
+        TestSettlements.place(data, clerk, ModJobs.CLERK.get(), 1);
         int[] limits = {2, 4, 8, 12, 16};
         int linked = 0;
         for (int level = 1; level <= 5; level++) {
@@ -154,7 +155,7 @@ public final class ClerkGameTests {
                 == PointResult.REMOVED && block.storage().size() == 15, "Clicking a linked container removes it");
 
         BlockPos other = new BlockPos(6, 64, 6);
-        SettlementManager.place(data, other, ModJobs.CLERK.get(), 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
+        TestSettlements.place(data, other, ModJobs.CLERK.get(), 1);
         helper.assertTrue(JobAssignments.cycleClerkPoint(data, other, new BlockPos(2, 64, 3), true, false, Direction.NORTH) == PointResult.TAKEN,
                 "A container belongs to one Clerk");
         helper.assertTrue(JobAssignments.storageOwner(data, new BlockPos(2, 64, 3)).map(SettlementBlock::pos).orElseThrow().equals(clerk),
@@ -189,7 +190,7 @@ public final class ClerkGameTests {
     private static void spotOfDay(GameTestHelper helper) {
         SettlementData data = new SettlementData();
         BlockPos clerk = new BlockPos(0, 64, 0);
-        SettlementManager.place(data, clerk, ModJobs.CLERK.get(), 1, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
+        TestSettlements.place(data, clerk, ModJobs.CLERK.get(), 1);
         RandomSource random = RandomSource.create(7L);
         helper.assertTrue(ClerkSpots.today(data, clerk, 3, MORNING, random).isEmpty(), "No spots: none");
         for (int i = 0; i < 3; i++) {
@@ -217,7 +218,7 @@ public final class ClerkGameTests {
     private static void foodPoints(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos near = clerkWithStorage(helper);
-        helper.setBlock(new BlockPos(7, 1, 7), ModBlocks.CLERK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(7, 1, 7), ModBlocks.CLERK_BLOCK.get());
         BlockPos far = helper.absolutePos(new BlockPos(7, 1, 7));
         BlockPos from = helper.absolutePos(new BlockPos(0, 1, 0));
         SettlementData data = SettlementData.get(level);
@@ -263,7 +264,7 @@ public final class ClerkGameTests {
                 return;
             }
             done[0] = true;
-            helper.setBlock(new BlockPos(1, 1, 6), ModBlocks.CLERK_BLOCK.get());
+            TestSettlements.setBlock(helper, new BlockPos(1, 1, 6), ModBlocks.CLERK_BLOCK.get());
             helper.setBlock(new BlockPos(3, 1, 6), Blocks.CHEST);
             BlockPos clerk = helper.absolutePos(new BlockPos(1, 1, 6));
             BlockPos chestPos = helper.absolutePos(new BlockPos(3, 1, 6));
@@ -499,7 +500,7 @@ public final class ClerkGameTests {
     /** Places a Clerk JobBlock at (1, 1, 1) with a chest at (4, 1, 1) linked as storage. */
     static BlockPos clerkWithStorage(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.CLERK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.CLERK_BLOCK.get());
         helper.setBlock(new BlockPos(4, 1, 1), Blocks.CHEST);
         BlockPos clerk = helper.absolutePos(new BlockPos(1, 1, 1));
         BlockPos chest = helper.absolutePos(new BlockPos(4, 1, 1));

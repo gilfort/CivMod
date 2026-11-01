@@ -171,6 +171,10 @@ public final class AutoAssignment {
         for (ServerLevel level : event.getServer().getAllLevels()) {
             long day = DayClock.day(level);
             Long last = LAST_DAY.put(level.dimension(), day);
+            if (last == null || day > last) {
+                // Also on the first tick after a start: a timer that ran out must not wait for the next morning.
+                SettlementWorld.morning(level, day);
+            }
             if (last != null && day > last) {
                 for (Settlement settlement : List.copyOf(SettlementData.get(level).settlements())) {
                     morning(level, settlement);

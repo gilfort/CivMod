@@ -28,6 +28,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.google.gson.JsonParser;
 
 import net.minecraft.core.BlockPos;
@@ -227,7 +228,7 @@ public final class BiomeBonusGameTests {
         // 3 before the boundary the JobBlock reads plains, 5 after it the work point mushroom fields (8 apart: inside the border).
         BlockPos jobBlockRelative = new BlockPos(boundary - 3, 1, 3);
         BlockPos poiRelative = new BlockPos(boundary + 5, 1, 3);
-        helper.setBlock(jobBlockRelative, ModBlocks.MINER_BLOCK.get());
+        TestSettlements.setBlock(helper, jobBlockRelative, ModBlocks.MINER_BLOCK.get());
         helper.setBlock(poiRelative, Blocks.GRANITE);
         BlockPos jobBlock = helper.absolutePos(jobBlockRelative);
         BlockPos poi = helper.absolutePos(poiRelative);
@@ -310,7 +311,7 @@ public final class BiomeBonusGameTests {
         BlockPos jobBlockRelative = new BlockPos(boundary - 3, 1, 3);
         BlockPos mushroomRelative = new BlockPos(boundary + 5, 1, 3);
         BlockPos plainsRelative = new BlockPos(boundary - 3, 1, 9);
-        helper.setBlock(jobBlockRelative, ModBlocks.MINER_BLOCK.get());
+        TestSettlements.setBlock(helper, jobBlockRelative, ModBlocks.MINER_BLOCK.get());
         helper.setBlock(mushroomRelative, Blocks.GRANITE);
         helper.setBlock(plainsRelative, Blocks.GRANITE);
         BlockPos jobBlock = helper.absolutePos(jobBlockRelative);
@@ -377,7 +378,7 @@ public final class BiomeBonusGameTests {
         FishermanGameTests.pond(helper);
         fillBiome(helper, new BlockPos(0, -4, 0), new BlockPos(14, 8, 14), Biomes.MUSHROOM_FIELDS);
         BlockPos jobBlockRelative = new BlockPos(1, 3, 1);
-        helper.setBlock(jobBlockRelative, ModBlocks.FISHERMAN_BLOCK.get());
+        TestSettlements.setBlock(helper, jobBlockRelative, ModBlocks.FISHERMAN_BLOCK.get());
         BlockPos jobBlock = helper.absolutePos(jobBlockRelative);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
@@ -416,7 +417,7 @@ public final class BiomeBonusGameTests {
         fillBiome(helper, new BlockPos(boundary, -4, 0), new BlockPos(28, 8, 16), Biomes.MUSHROOM_FIELDS);
         BlockPos clerk = StockRuleGameTests.workingClerk(helper);
         // A second JobBlock widens the settlement border to the far station.
-        helper.setBlock(new BlockPos(10, 1, 5), ModBlocks.MINER_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(10, 1, 5), ModBlocks.MINER_BLOCK.get());
         SettlementData data = SettlementData.get(level);
         Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
         chest.setItem(0, new ItemStack(Items.OAK_LOG, 1));

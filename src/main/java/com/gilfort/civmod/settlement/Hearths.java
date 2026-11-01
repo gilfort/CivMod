@@ -184,7 +184,7 @@ public final class Hearths {
             if (!block.connected()) {
                 continue;
             }
-            int radius = SettlementRules.joinRadius(block.level());
+            int radius = SettlementRules.joinRadius(block);
             int minX = SectionPos.blockToSectionCoord(block.pos().getX() - radius);
             int maxX = SectionPos.blockToSectionCoord(block.pos().getX() + radius);
             int minZ = SectionPos.blockToSectionCoord(block.pos().getZ() - radius);

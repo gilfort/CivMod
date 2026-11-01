@@ -19,6 +19,7 @@ import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -104,7 +105,7 @@ public final class CatchUpGameTests {
             }
         }
         BlockPos jobBlockRelative = new BlockPos(1, 1, 1);
-        helper.setBlock(jobBlockRelative, ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, jobBlockRelative, ModBlocks.LUMBERJACK_BLOCK.get());
         for (int x = 4; x < 8; x++) {
             for (int z = 0; z < 4; z++) {
                 for (int y = 1; y <= 3; y++) {
@@ -203,7 +204,7 @@ public final class CatchUpGameTests {
     /** Without any food a hungry settler forages through the missed days (+5 each). */
     private static void foraging(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.MINER_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.MINER_BLOCK.get());
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(helper.absolutePos(new BlockPos(1, 1, 1))).orElseThrow();
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);

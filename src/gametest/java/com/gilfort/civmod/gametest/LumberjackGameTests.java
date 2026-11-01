@@ -29,6 +29,7 @@ import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
@@ -236,7 +237,7 @@ public final class LumberjackGameTests {
             }
         }
         BlockPos jobBlockRelative = new BlockPos(1, 1, 1);
-        helper.setBlock(jobBlockRelative, ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, jobBlockRelative, ModBlocks.LUMBERJACK_BLOCK.get());
         for (int x = 4; x < 8; x++) {
             for (int z = 0; z < 4; z++) {
                 for (int y = 1; y <= 3; y++) {
@@ -295,7 +296,7 @@ public final class LumberjackGameTests {
             }
         }
         BlockPos jobBlockRelative = new BlockPos(1, 1, 1);
-        helper.setBlock(jobBlockRelative, ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, jobBlockRelative, ModBlocks.LUMBERJACK_BLOCK.get());
         for (int x = 4; x < 8; x++) {
             for (int z = 0; z < 4; z++) {
                 for (int y = 1; y <= 3; y++) {
@@ -507,8 +508,8 @@ public final class LumberjackGameTests {
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
             }
         }
-        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
-        helper.setBlock(new BlockPos(1, 1, 5), ModBlocks.MINER_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 5), ModBlocks.MINER_BLOCK.get());
         helper.setBlock(new BlockPos(5, 1, 5), Blocks.GRANITE);
         for (int y = 1; y <= 3; y++) {
             helper.setBlock(new BlockPos(7, y, 1), Blocks.OAK_LOG);

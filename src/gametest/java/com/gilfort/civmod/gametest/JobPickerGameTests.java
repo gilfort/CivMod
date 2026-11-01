@@ -18,6 +18,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 
@@ -26,7 +27,6 @@ import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.Items;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -70,7 +70,7 @@ public final class JobPickerGameTests {
     }
 
     private static Settlement place(SettlementData data, BlockPos pos, Job jobType, int level) {
-        return SettlementManager.place(data, pos, jobType, level, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE).settlement();
+        return TestSettlements.place(data, pos, jobType, level).settlement();
     }
 
     private static SettlementBlock block(SettlementData data, BlockPos pos) {

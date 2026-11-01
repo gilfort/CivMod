@@ -1,5 +1,6 @@
 package com.gilfort.civmod.block;
 
+import java.util.Optional;
 import java.util.function.Supplier;
 
 import org.jspecify.annotations.Nullable;
@@ -10,6 +11,7 @@ import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Containers;
@@ -56,6 +58,13 @@ public class JobBlock extends BaseEntityBlock {
     }
 
     /**
+     * @return the race of a Center Block, empty for every other JobBlock
+     */
+    public Optional<Identifier> centerRace() {
+        return Optional.empty();
+    }
+
+    /**
      * A JobBlock Upgrade item upgrades the block or names why not; either way the click is consumed, so the window does
      * not open and nothing is placed ({@link JobBlockUpgrade}). Only the server knows whether it upgrades: the arm swings
      * from there on an upgrade ({@link InteractionResult#SUCCESS_SERVER}, the client does not predict a swing) and not on
@@ -90,7 +99,7 @@ public class JobBlock extends BaseEntityBlock {
         if (level instanceof ServerLevel serverLevel && !oldState.is(this)) {
             // For commands / structures the block entity does not exist yet; its level is synced in onLoad.
             int jobLevel = level.getBlockEntity(pos) instanceof JobBlockEntity jobBlock ? jobBlock.getJobLevel() : SettlementRules.MIN_LEVEL;
-            SettlementWorld.place(serverLevel, pos, getJobType(), jobLevel);
+            SettlementWorld.place(serverLevel, pos, getJobType(), jobLevel, centerRace());
         }
     }
 

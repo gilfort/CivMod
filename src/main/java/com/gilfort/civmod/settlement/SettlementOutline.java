@@ -55,15 +55,15 @@ public final class SettlementOutline {
     /**
      * A connected JobBlock for the outline.
      *
-     * @param pos   the position
-     * @param level the JobBlock level
+     * @param pos    the position
+     * @param radius the join radius around it
      */
-    public record OutlineBlock(BlockPos pos, int level) {
+    public record OutlineBlock(BlockPos pos, int radius) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, OutlineBlock> STREAM_CODEC = StreamCodec.composite(
                 BlockPos.STREAM_CODEC, OutlineBlock::pos,
-                ByteBufCodecs.VAR_INT, OutlineBlock::level,
+                ByteBufCodecs.VAR_INT, OutlineBlock::radius,
                 OutlineBlock::new);
     }
 
@@ -167,7 +167,7 @@ public final class SettlementOutline {
         for (Settlement settlement : data.settlements()) {
             List<OutlineBlock> blocks = settlement.blocks().stream()
                     .filter(SettlementBlock::connected)
-                    .map(block -> new OutlineBlock(block.pos(), block.level()))
+                    .map(block -> new OutlineBlock(block.pos(), SettlementRules.joinRadius(block)))
                     .toList();
             boolean near = blocks.stream().anyMatch(block -> SettlementRules.horizontalDistance(block.pos(), center) <= RANGE);
             if (near) {

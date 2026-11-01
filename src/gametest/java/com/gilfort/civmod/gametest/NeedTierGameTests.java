@@ -19,6 +19,7 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -31,7 +32,6 @@ import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.ProblemReporter;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Item;
@@ -83,7 +83,7 @@ public final class NeedTierGameTests {
     /** Registers a JobBlock of a level without a block in the world (pure settlement rules). */
     private static BlockPos place(GameTestHelper helper, BlockPos relative, Job job, int level) {
         BlockPos pos = helper.absolutePos(relative);
-        SettlementManager.place(SettlementData.get(helper.getLevel()), pos, job, level, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
+        TestSettlements.place(helper, pos, job, level);
         return pos;
     }
 
@@ -108,7 +108,7 @@ public final class NeedTierGameTests {
     private static void end(GameTestHelper helper, Settler settler, BlockPos... jobBlocks) {
         settler.discard();
         for (BlockPos pos : jobBlocks) {
-            SettlementManager.remove(SettlementData.get(helper.getLevel()), pos, SettlementManager.Listener.NONE);
+            SettlementManager.remove(SettlementData.get(helper.getLevel()), pos, 0L, SettlementManager.Listener.NONE);
         }
         helper.succeed();
     }

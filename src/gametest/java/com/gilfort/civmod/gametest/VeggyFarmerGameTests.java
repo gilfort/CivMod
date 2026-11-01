@@ -27,6 +27,7 @@ import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -98,7 +99,7 @@ public final class VeggyFarmerGameTests {
             }
         }
         BlockPos relative = new BlockPos(1, 1, 1);
-        helper.setBlock(relative, ModBlocks.GATHERER_BLOCK.get());
+        TestSettlements.setBlock(helper, relative, ModBlocks.GATHERER_BLOCK.get());
         StationTypeGameTests.setLevel(helper, relative, 2);
         BlockPos jobBlock = helper.absolutePos(relative);
         TestAssignments.setStationType(SettlementData.get(helper.getLevel()), jobBlock, 1, Items.COMPOSTER);
@@ -231,7 +232,7 @@ public final class VeggyFarmerGameTests {
             }
         }
         BlockPos relative = new BlockPos(1, 1, 1);
-        helper.setBlock(relative, ModBlocks.GATHERER_BLOCK.get());
+        TestSettlements.setBlock(helper, relative, ModBlocks.GATHERER_BLOCK.get());
         StationTypeGameTests.setLevel(helper, relative, 2);
         BlockPos jobBlock = helper.absolutePos(relative);
         SettlementData data = SettlementData.get(level);
@@ -317,7 +318,7 @@ public final class VeggyFarmerGameTests {
         helper.assertTrue(recipe.isPresent(), "Scarecrow recipe");
         BlockPos relative = new BlockPos(1, 1, 1);
         helper.setBlock(new BlockPos(1, 0, 1), Blocks.STONE);
-        helper.setBlock(relative, ModBlocks.GATHERER_BLOCK.get());
+        TestSettlements.setBlock(helper, relative, ModBlocks.GATHERER_BLOCK.get());
         StationTypeGameTests.setLevel(helper, relative, 2);
         BlockPos pos = helper.absolutePos(relative);
         helper.assertTrue(StationTypeGameTests.unlock(helper, pos, 1, Items.COMPOSTER), "Composter taken");

@@ -67,7 +67,7 @@ public final class Benchmark {
     /** Settlers spawned: one per Resource Collection JobBlock, the two Clerks, the Deliverymen and the Craftspersons. */
     public static final int SETTLERS = SIZE + 2 + DELIVERYMEN + CRAFTSPERSONS + DELIVERY_CRAFTSPERSONS;
     /** JobBlocks built: the Resource Collection ones, the two Clerks and the Craftspersons. */
-    public static final int JOB_BLOCKS = SIZE + 2 + CRAFTSPERSONS + DELIVERY_CRAFTSPERSONS;
+    public static final int JOB_BLOCKS = SIZE + 3 + CRAFTSPERSONS + DELIVERY_CRAFTSPERSONS;
     /** The second Clerk, relative to the origin: behind the Craftspersons, so it is no collecting job's Home Clerk. */
     public static final Vec3i SECOND_CLERK = new Vec3i(-3, 0, 22);
 
@@ -117,7 +117,9 @@ public final class Benchmark {
                 level.setBlock(origin.offset(x, -2, z), Blocks.WATER.defaultBlockState(), FLAGS);
             }
         }
-        // JobBlocks (the first one founds the settlement) and their work places.
+        // The Center Block founds the settlement.
+        level.setBlock(origin.offset(-6, 0, 0), ModBlocks.HUMAN_CENTER_BLOCK.get().defaultBlockState(), Block.UPDATE_ALL);
+        // JobBlocks and their work places.
         for (int i = 0; i < SIZE; i++) {
             BlockPos pos = origin.offset(i * SPACING, 0, 0);
             Scenario scenario = scenario(i);

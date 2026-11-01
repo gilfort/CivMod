@@ -19,6 +19,7 @@ import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -122,7 +123,7 @@ public final class OccupiedGameTests {
         BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
         SettlementManager.setLevel(SettlementData.get(level), craft, 3, SettlementManager.Listener.NONE);
         BlockPos table = CraftspersonGameTests.placeTable(helper, new BlockPos(3, 1, 5));
-        helper.setBlock(new BlockPos(1, 1, 12), ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 12), ModBlocks.LUMBERJACK_BLOCK.get());
         BlockPos other = helper.absolutePos(new BlockPos(1, 1, 12));
         helper.setBlock(new BlockPos(1, 1, 14), Blocks.OAK_LOG);
         BlockPos otherLog = helper.absolutePos(new BlockPos(1, 1, 14));

@@ -24,6 +24,7 @@ import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementWorld;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -75,7 +76,7 @@ public final class WorkersTabGameTests {
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
             }
         }
-        helper.setBlock(CLERK, ModBlocks.CLERK_BLOCK.get());
+        TestSettlements.setBlock(helper, CLERK, ModBlocks.CLERK_BLOCK.get());
         SettlementManager.setLevel(SettlementData.get(helper.getLevel()), helper.absolutePos(CLERK), 2, SettlementManager.Listener.NONE);
         return SettlementData.get(helper.getLevel()).settlementAt(helper.absolutePos(CLERK)).orElseThrow();
     }

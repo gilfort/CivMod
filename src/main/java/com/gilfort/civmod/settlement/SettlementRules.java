@@ -18,6 +18,12 @@ public final class SettlementRules {
     public static final int JOIN_RADIUS_PER_LEVEL = 10;
     /** Exclusion radius per JobBlock level in blocks. */
     public static final int EXCLUSION_RADIUS_PER_LEVEL = 30;
+    /** Join radius of a Center Block in blocks, at every level. */
+    public static final int CENTER_JOIN_RADIUS = 25;
+    /** Exclusion radius of a Center Block in blocks, at every level. */
+    public static final int CENTER_EXCLUSION_RADIUS = 75;
+    /** Whole days a settlement stays after losing its last Center Block; it dissolves on the morning after them. */
+    public static final int CENTERLESS_DAYS = 3;
     /** Maximum skill level per JobBlock level. */
     public static final int SKILL_CAP_PER_LEVEL = 20;
     /** The most settlers a JobBlock holds in one Job (with its Specializations), whatever its datapack file says. */
@@ -51,6 +57,22 @@ public final class SettlementRules {
      */
     public static int joinRadius(int level) {
         return JOIN_RADIUS_PER_LEVEL * level;
+    }
+
+    /**
+     * @param block a settlement's JobBlock
+     * @return the join radius around that block; fixed for a Center Block
+     */
+    public static int joinRadius(SettlementBlock block) {
+        return block.centerRace().isPresent() ? CENTER_JOIN_RADIUS : joinRadius(block.level());
+    }
+
+    /**
+     * @param block a settlement's JobBlock
+     * @return the exclusion radius around that block; fixed for a Center Block
+     */
+    public static int exclusionRadius(SettlementBlock block) {
+        return block.centerRace().isPresent() ? CENTER_EXCLUSION_RADIUS : exclusionRadius(block.level());
     }
 
     /**

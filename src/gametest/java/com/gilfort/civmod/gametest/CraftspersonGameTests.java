@@ -39,6 +39,7 @@ import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -761,7 +762,7 @@ public final class CraftspersonGameTests {
     }
 
     static BlockPos craftsperson(GameTestHelper helper, BlockPos relative) {
-        helper.setBlock(relative, ModBlocks.CRAFTSPERSON_BLOCK.get());
+        TestSettlements.setBlock(helper, relative, ModBlocks.CRAFTSPERSON_BLOCK.get());
         return helper.absolutePos(relative);
     }
 

@@ -26,6 +26,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.gilfort.civmod.settlement.Warehouses;
 
 import net.minecraft.core.BlockPos;
@@ -99,7 +100,7 @@ public final class ClerkTasksGameTests {
         helper.assertTrue(keys(tasks.get(1).details()).contains("civmod.gui.clerk.request.crafting"), "Producer in the tooltip");
 
         // A Lumberjack drop-off with a stack of logs: a pickup to this Clerk, without Deliveryman blocked.
-        helper.setBlock(new BlockPos(7, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(7, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
         helper.setBlock(new BlockPos(9, 1, 1), Blocks.CHEST);
         BlockPos lumberjack = helper.absolutePos(new BlockPos(7, 1, 1));
         BlockPos dropOff = helper.absolutePos(new BlockPos(9, 1, 1));
@@ -132,7 +133,7 @@ public final class ClerkTasksGameTests {
         SettlementData data = SettlementData.get(level);
         BlockPos clerk = StockRuleGameTests.workingClerk(helper);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        helper.setBlock(new BlockPos(7, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(7, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
         helper.setBlock(new BlockPos(9, 1, 1), Blocks.CHEST);
         BlockPos lumberjack = helper.absolutePos(new BlockPos(7, 1, 1));
         BlockPos dropOff = helper.absolutePos(new BlockPos(9, 1, 1));
@@ -164,7 +165,7 @@ public final class ClerkTasksGameTests {
         SettlementData data = SettlementData.get(level);
         BlockPos warehouse = StockRuleGameTests.workingClerk(helper);
         Settlement settlement = data.settlementAt(warehouse).orElseThrow();
-        helper.setBlock(new BlockPos(1, 1, 6), ModBlocks.CLERK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 6), ModBlocks.CLERK_BLOCK.get());
         BlockPos served = helper.absolutePos(new BlockPos(1, 1, 6));
         helper.assertTrue(TestAssignments.assign(data, served, SAM, "Sam", settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
                 "Served Clerk assigned");

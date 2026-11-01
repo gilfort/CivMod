@@ -11,6 +11,7 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.api.Job;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
 
 /**
@@ -30,10 +31,21 @@ public final class SettlementManager {
     /**
      * @param data the dimension's settlement data
      * @param pos  a position
-     * @return whether a JobBlock placed there would found a new settlement (outside every exclusion zone)
+     * @return whether a Center Block placed there would found a new settlement (outside every exclusion zone)
      */
     public static boolean wouldFound(SettlementData data, BlockPos pos) {
-        return nearestConnected(data, pos, (block, distance) -> distance <= SettlementRules.exclusionRadius(block.level())) == null;
+        return zoneOwner(data, pos) == null;
+    }
+
+    /**
+     * @param data the dimension's settlement data
+     * @param pos  a position
+     * @param race the race of a Center Block
+     * @return whether a Center Block placed there would be refused: the settlement there already has one of that race
+     */
+    public static boolean wouldRefuse(SettlementData data, BlockPos pos, Identifier race) {
+        Settlement owner = zoneOwner(data, pos);
+        return owner != null && owner.hasCenter(race);
     }
 
     /**
@@ -81,7 +93,7 @@ public final class SettlementManager {
         void autoConnected(BlockPos pos);
 
         /**
-         * A settlement was dissolved because its last JobBlock was removed; its NPCs become homeless.
+         * A settlement was dissolved because its time without a Center Block ran out; its NPCs become homeless.
          *
          * @param settlement the dissolved settlement
          */
@@ -111,23 +123,30 @@ public final class SettlementManager {
 
     /** How a placed JobBlock was integrated. */
     public enum Outcome {
-        /** The block founded a new settlement. */
+        /** The Center Block founded a new settlement. */
         FOUNDED,
+        /** The Center Block gave a settlement without one its Center Block back. */
+        REVIVED,
+        /** The Center Block was not registered: the settlement already has one of that race. */
+        REFUSED,
         /** The block joined an existing settlement. */
         JOINED,
         /** The block lies in an exclusion zone but out of reach; it waits unconnected. */
-        UNCONNECTED
+        UNCONNECTED,
+        /** The block lies outside every exclusion zone; it belongs to no settlement until one reaches it. */
+        UNSETTLED
     }
 
     /**
      * Result of placing a JobBlock.
      *
-     * @param settlement the settlement the block belongs to
+     * @param settlement the settlement the block belongs to; for {@link Outcome#REFUSED} the one that refused it, null for
+     *                   {@link Outcome#UNSETTLED}
      * @param outcome    how it was integrated
      * @param distance   for {@link Outcome#UNCONNECTED}: horizontal distance to the nearest connected block
      * @param required   for {@link Outcome#UNCONNECTED}: the distance needed to connect to that block
      */
-    public record Placement(Settlement settlement, Outcome outcome, int distance, int required) {
+    public record Placement(@Nullable Settlement settlement, Outcome outcome, int distance, int required) {
     }
 
     /**
@@ -147,24 +166,21 @@ public final class SettlementManager {
     /**
      * Registers a placed JobBlock: joins the settlement with the nearest connected JobBlock whose join radius covers
      * it (the new block's own level does not count), else waits
-     * unconnected inside the nearest exclusion zone, else founds a new settlement. Joining connects further
-     * waiting blocks of the same settlement that come into reach.
+     * unconnected inside the nearest exclusion zone, else stays without a settlement: only a Center Block founds one
+     * ({@link #placeCenter}). Joining connects further waiting blocks that come into reach.
      *
      * @param data     the dimension's settlement data
      * @param pos      the JobBlock position
      * @param jobType  the offered job
      * @param level    the JobBlock level
-     * @param gameTime the current game time
-     * @param random   random source for the colour of a new settlement
      * @param listener receives side effects
      * @return how the block was integrated
      */
-    public static Placement place(SettlementData data, BlockPos pos, Job jobType, int level, long gameTime, RandomSource random,
-            Listener listener) {
+    public static Placement place(SettlementData data, BlockPos pos, Job jobType, int level, Listener listener) {
         data.removeBlock(pos);
         int clamped = SettlementRules.clampLevel(level);
 
-        Nearest join = nearestConnected(data, pos, (block, distance) -> distance <= SettlementRules.joinRadius(block.level()));
+        Nearest join = nearestConnected(data, pos, (block, distance) -> distance <= SettlementRules.joinRadius(block));
         if (join != null) {
             data.addBlock(join.settlement(), new SettlementBlock(pos, jobType, clamped, true));
             listener.blockChanged(pos, join.settlement().id(), true);
@@ -172,7 +188,7 @@ public final class SettlementManager {
             return new Placement(join.settlement(), Outcome.JOINED, 0, 0);
         }
 
-        Nearest exclusion = nearestConnected(data, pos, (block, distance) -> distance <= SettlementRules.exclusionRadius(block.level()));
+        Nearest exclusion = nearestConnected(data, pos, (block, distance) -> distance <= SettlementRules.exclusionRadius(block));
         if (exclusion != null) {
             data.addBlock(exclusion.settlement(), new SettlementBlock(pos, jobType, clamped, false));
             listener.blockChanged(pos, exclusion.settlement().id(), false);
@@ -180,10 +196,70 @@ public final class SettlementManager {
             return new Placement(exclusion.settlement(), Outcome.UNCONNECTED, status.distance(), status.required());
         }
 
-        Settlement settlement = data.create(gameTime, SettlementColors.random(random), gameTime + SETTLER_DELAY_TICKS);
-        data.addBlock(settlement, new SettlementBlock(pos, jobType, clamped, true));
-        listener.blockChanged(pos, settlement.id(), true);
-        return new Placement(settlement, Outcome.FOUNDED, 0, 0);
+        data.addUnsettled(new SettlementBlock(pos, jobType, clamped, false));
+        listener.blockChanged(pos, -1, false);
+        return new Placement(null, Outcome.UNSETTLED, 0, 0);
+    }
+
+    /**
+     * Registers a placed Center Block: outside every exclusion zone it founds a settlement; in the zone of a settlement
+     * without a Center Block of its race it joins that settlement, connected, and stops the timer of one that had none;
+     * otherwise it is refused and not registered. A position already registered as a Center Block stays as it is.
+     *
+     * @param data     the dimension's settlement data
+     * @param pos      the Center Block position
+     * @param jobType  the offered job
+     * @param level    the JobBlock level
+     * @param race     the race of the Center Block
+     * @param gameTime the current game time
+     * @param random   random source for the colour of a new settlement
+     * @param listener receives side effects
+     * @return how the block was integrated
+     */
+    public static Placement placeCenter(SettlementData data, BlockPos pos, Job jobType, int level, Identifier race, long gameTime,
+            RandomSource random, Listener listener) {
+        Optional<JobBlockSite> registered = JobBlockSite.at(data, pos).filter(site -> site.block().centerRace().isPresent());
+        if (registered.isPresent()) {
+            return new Placement(registered.get().settlement(), Outcome.JOINED, 0, 0);
+        }
+        data.removeBlock(pos);
+        SettlementBlock center = SettlementBlock.center(pos, jobType, SettlementRules.clampLevel(level), race);
+        Settlement owner = zoneOwner(data, pos);
+        if (owner == null) {
+            Settlement settlement = data.create(gameTime, SettlementColors.random(random), gameTime + SETTLER_DELAY_TICKS);
+            data.addBlock(settlement, center);
+            listener.blockChanged(pos, settlement.id(), true);
+            connectChain(data, settlement, listener);
+            return new Placement(settlement, Outcome.FOUNDED, 0, 0);
+        }
+        if (owner.hasCenter(race)) {
+            return new Placement(owner, Outcome.REFUSED, 0, 0);
+        }
+        boolean revived = !owner.hasCenter();
+        owner.setCenterGrace(Optional.empty());
+        data.addBlock(owner, center);
+        listener.blockChanged(pos, owner.id(), true);
+        connectChain(data, owner, listener);
+        return new Placement(owner, revived ? Outcome.REVIVED : Outcome.JOINED, 0, 0);
+    }
+
+    /**
+     * The settlement whose zones cover a position, for a Center Block: the nearest join radius, else the nearest
+     * exclusion zone, else the zone a settlement keeps around its last Center Block while it has none.
+     */
+    private static @Nullable Settlement zoneOwner(SettlementData data, BlockPos pos) {
+        Nearest nearest = nearestConnected(data, pos, (block, distance) -> distance <= SettlementRules.joinRadius(block));
+        if (nearest == null) {
+            nearest = nearestConnected(data, pos, (block, distance) -> distance <= SettlementRules.exclusionRadius(block));
+        }
+        if (nearest != null) {
+            return nearest.settlement();
+        }
+        return data.settlements().stream()
+                .filter(settlement -> settlement.centerGrace().filter(grace -> SettlementRules.horizontalDistance(pos, grace.lastCenter())
+                        <= SettlementRules.CENTER_EXCLUSION_RADIUS).isPresent())
+                .min(Comparator.comparingDouble(settlement -> SettlementRules.horizontalDistance(pos, settlement.centerGrace().orElseThrow().lastCenter())))
+                .orElse(null);
     }
 
     /**
@@ -195,6 +271,10 @@ public final class SettlementManager {
      * @param listener receives side effects
      */
     public static void setLevel(SettlementData data, BlockPos pos, int level, Listener listener) {
+        data.unsettledAt(pos).ifPresent(block -> {
+            block.setLevel(level);
+            data.changed();
+        });
         JobBlockSite.at(data, pos).ifPresent(site -> {
             SettlementBlock block = site.block();
             if (block.level() == SettlementRules.clampLevel(level)) {
@@ -209,32 +289,53 @@ public final class SettlementManager {
     }
 
     /**
-     * Unregisters a removed JobBlock. An empty settlement is dissolved; if only unconnected blocks remain, the
-     * first one becomes the new anchor and pulls in all blocks in reach.
+     * Unregisters a removed JobBlock. A settlement left without a Center Block gets its timer: it stays for
+     * {@value SettlementRules#CENTERLESS_DAYS} days and dissolves on the morning after them ({@link #morning}).
      *
      * @param data     the dimension's settlement data
      * @param pos      the removed JobBlock position
+     * @param day      the current settler day
      * @param listener receives side effects
      * @return the settlement the block belonged to, if any
      */
-    public static Optional<Settlement> remove(SettlementData data, BlockPos pos, Listener listener) {
+    public static Optional<Settlement> remove(SettlementData data, BlockPos pos, long day, Listener listener) {
         List<SettlementBlock.Assignee> assignees = JobBlockSite.at(data, pos).map(site -> site.block().assignees())
                 .map(List::copyOf).orElse(List.of());
         Optional<Settlement> removed = data.removeBlock(pos);
         assignees.forEach(assignee -> listener.jobRemoved(assignee.id(), pos));
         removed.ifPresent(settlement -> {
-            if (settlement.isEmpty()) {
-                data.dissolve(settlement);
-                listener.dissolved(settlement);
-            } else if (settlement.connectedCount() == 0) {
-                SettlementBlock anchor = settlement.blocks().iterator().next();
-                anchor.setConnected(true);
+            if (!settlement.hasCenter() && settlement.centerGrace().isEmpty()) {
+                settlement.setCenterGrace(Optional.of(new Settlement.CenterGrace(pos.immutable(), day + SettlementRules.CENTERLESS_DAYS + 1)));
                 data.changed();
-                listener.blockChanged(anchor.pos(), settlement.id(), true);
-                connectChain(data, settlement, listener);
             }
         });
         return removed;
+    }
+
+    /**
+     * The morning check of a dimension: settlements whose time without a Center Block has run out dissolve, however
+     * many mornings passed. Their JobBlocks stay in the world without a settlement.
+     *
+     * @param data     the dimension's settlement data
+     * @param day      the settler day that began
+     * @param listener receives side effects
+     */
+    public static void morning(SettlementData data, long day, Listener listener) {
+        for (Settlement settlement : List.copyOf(data.settlements())) {
+            if (settlement.centerGrace().filter(grace -> day >= grace.dissolveDay()).isPresent()) {
+                dissolve(data, settlement, listener);
+            }
+        }
+    }
+
+    private static void dissolve(SettlementData data, Settlement settlement, Listener listener) {
+        for (SettlementBlock block : List.copyOf(settlement.blocks())) {
+            data.removeBlock(block.pos());
+            data.addUnsettled(new SettlementBlock(block.pos(), block.jobType(), block.level(), false));
+            listener.blockChanged(block.pos(), -1, false);
+        }
+        data.dissolve(settlement);
+        listener.dissolved(settlement);
     }
 
     /**
@@ -256,19 +357,18 @@ public final class SettlementManager {
                 .min(Comparator.comparingDouble(other -> SettlementRules.horizontalDistance(pos, other.pos())))
                 .map(nearest -> new Status(settlement, false,
                         (int) Math.ceil(SettlementRules.horizontalDistance(pos, nearest.pos())),
-                        SettlementRules.joinRadius(nearest.level())))
+                        SettlementRules.joinRadius(nearest)))
                 .orElse(new Status(settlement, false, 0, 0));
     }
 
+    /** Connects the waiting blocks of a settlement and the blocks without a settlement that its chain reaches. */
     private static void connectChain(SettlementData data, Settlement settlement, Listener listener) {
         boolean changed = true;
         while (changed) {
             changed = false;
             List<SettlementBlock> waiting = new ArrayList<>(settlement.blocks().stream().filter(block -> !block.connected()).toList());
             for (SettlementBlock candidate : waiting) {
-                boolean inReach = settlement.blocks().stream().anyMatch(other -> other.connected()
-                        && SettlementRules.horizontalDistance(candidate.pos(), other.pos()) <= SettlementRules.joinRadius(other.level()));
-                if (inReach) {
+                if (inReach(settlement, candidate)) {
                     candidate.setConnected(true);
                     data.changed();
                     listener.blockChanged(candidate.pos(), settlement.id(), true);
@@ -276,7 +376,20 @@ public final class SettlementManager {
                     changed = true;
                 }
             }
+            for (SettlementBlock candidate : List.copyOf(data.unsettled())) {
+                if (inReach(settlement, candidate)) {
+                    data.settle(settlement, candidate);
+                    listener.blockChanged(candidate.pos(), settlement.id(), true);
+                    listener.autoConnected(candidate.pos());
+                    changed = true;
+                }
+            }
         }
+    }
+
+    private static boolean inReach(Settlement settlement, SettlementBlock candidate) {
+        return settlement.blocks().stream().anyMatch(other -> other.connected()
+                && SettlementRules.horizontalDistance(candidate.pos(), other.pos()) <= SettlementRules.joinRadius(other));
     }
 
     @FunctionalInterface

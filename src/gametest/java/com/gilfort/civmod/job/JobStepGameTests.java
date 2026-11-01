@@ -13,6 +13,7 @@ import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -58,7 +59,7 @@ public final class JobStepGameTests {
     /** A Clerk on shift asks to walk to its counter (next to the JobBlock without stand spots); the shell applies it. */
     private static void clerkWalksToCounter(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.CLERK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.CLERK_BLOCK.get());
         BlockPos clerk = helper.absolutePos(new BlockPos(1, 1, 1));
         Settler settler = settler(helper, clerk, new BlockPos(5, 1, 5));
         SettlerJob job = new SettlerJob(ModJobs.CLERK.get(), clerk);
@@ -89,7 +90,7 @@ public final class JobStepGameTests {
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
             }
         }
-        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
         BlockPos jobBlock = helper.absolutePos(new BlockPos(1, 1, 1));
         Settler settler = settler(helper, jobBlock, new BlockPos(3, 1, 3));
         SettlerJob job = new SettlerJob(ModJobs.LUMBERJACK.get(), jobBlock);
@@ -115,7 +116,7 @@ public final class JobStepGameTests {
      */
     private static void adventurerWaitsForDeparture(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.MISSION_BOARD.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.MISSION_BOARD.get());
         BlockPos board = helper.absolutePos(new BlockPos(1, 1, 1));
         Settler settler = settler(helper, board, new BlockPos(3, 1, 3));
         SettlerJob job = new SettlerJob(ModJobs.ADVENTURER.get(), board);
@@ -137,7 +138,7 @@ public final class JobStepGameTests {
     /** A Deliveryman without delivery tasks answers "skip: no pickups"; the shell sets the status. */
     private static void deliverymanSkipsWithoutTasks(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.CLERK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.CLERK_BLOCK.get());
         BlockPos warehouse = helper.absolutePos(new BlockPos(1, 1, 1));
         Settler settler = settler(helper, warehouse, new BlockPos(3, 1, 3));
         SettlerJob job = new SettlerJob(ModJobs.DELIVERYMAN.get(), warehouse);
@@ -159,7 +160,7 @@ public final class JobStepGameTests {
     /** A Craftsperson without a crafting table nearby answers "blocked: no work place". */
     private static void craftspersonBlockedWithoutStation(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.CRAFTSPERSON_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.CRAFTSPERSON_BLOCK.get());
         BlockPos jobBlock = helper.absolutePos(new BlockPos(1, 1, 1));
         Settler settler = settler(helper, jobBlock, new BlockPos(3, 1, 3));
         SettlerJob job = new SettlerJob(ModJobs.CRAFTSPERSON.get(), jobBlock);
@@ -189,7 +190,7 @@ public final class JobStepGameTests {
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
             }
         }
-        helper.setBlock(new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
         BlockPos jobBlock = helper.absolutePos(new BlockPos(1, 1, 1));
         Settler settler = settler(helper, jobBlock, new BlockPos(1, 1, 3));
         SettlerJob job = new SettlerJob(ModJobs.LUMBERJACK.get(), jobBlock);

@@ -32,6 +32,7 @@ import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 
@@ -41,7 +42,6 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
@@ -116,7 +116,7 @@ public final class JobSwitcherGameTests {
         Job craftsperson = ModJobs.CRAFTSPERSON.get();
         for (int level = SettlementRules.MIN_LEVEL; level <= SettlementRules.MAX_LEVEL; level++) {
             SettlementData data = new SettlementData();
-            SettlementManager.place(data, BLOCK, craftsperson, level, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
+            TestSettlements.place(data, BLOCK, craftsperson, level);
             SettlementBlock block = data.settlementAt(BLOCK).flatMap(s -> s.block(BLOCK)).orElseThrow();
             int expected = new int[] {1, 1, 2, 2, 3}[level - 1];
             helper.assertTrue(JobPlaces.lines(block).equals(List.of(new JobPlaces.Line(craftsperson, 0, expected))),
@@ -194,7 +194,7 @@ public final class JobSwitcherGameTests {
         Settler settler = CraftspersonGameTests.craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
         settler.getSkills().set(craftsperson, new SettlerSkills.Skill(15, 0));
         settler.getSkills().set(stonecutter, new SettlerSkills.Skill(3, 0));
-        helper.setBlock(new BlockPos(6, 1, 8), ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(6, 1, 8), ModBlocks.LUMBERJACK_BLOCK.get());
         BlockPos lumber = helper.absolutePos(new BlockPos(6, 1, 8));
         helper.assertTrue(SettlementWorld.assign(level, lumber, settler, ModJobs.LUMBERJACK.get()) == AssignResult.OK, "Second job: Lumberjack");
 
@@ -236,7 +236,7 @@ public final class JobSwitcherGameTests {
         SettlementData boardData = new SettlementData();
         BlockPos board = new BlockPos(0, 64, 0);
         Job adventurer = ModJobs.ADVENTURER.get();
-        SettlementManager.place(boardData, board, adventurer, 2, 0L, RandomSource.create(0L), SettlementManager.Listener.NONE);
+        TestSettlements.place(boardData, board, adventurer, 2);
         Settlement boardSettlement = boardData.settlementAt(board).orElseThrow();
         TestAssignments.setStationType(boardData, board, 1, Items.BELL);
         UUID scout = UUID.randomUUID();

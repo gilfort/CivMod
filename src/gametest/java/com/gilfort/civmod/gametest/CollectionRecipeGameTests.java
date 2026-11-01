@@ -21,6 +21,7 @@ import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.SweetBerryBushBlock;
@@ -193,7 +194,7 @@ public final class CollectionRecipeGameTests {
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         BlockPos jobBlock = AnimalFarmerGameTests.pen(helper);
         BlockPos clerkRelative = new BlockPos(1, 1, 7);
-        helper.setBlock(clerkRelative, ModBlocks.CLERK_BLOCK.get());
+        TestSettlements.setBlock(helper, clerkRelative, ModBlocks.CLERK_BLOCK.get());
         BlockPos clerk = helper.absolutePos(clerkRelative);
         helper.assertValueEqual(JobBlockSite.blockAt(level, jobBlock).orElseThrow().homeClerk(), Optional.of(clerk), "Home Clerk");
         helper.assertTrue(StockRules.setRule(SettlementData.get(level), clerk, new StockRule(0, Items.MILK_BUCKET, 0, 1, 0, 0)), "Max rule set");

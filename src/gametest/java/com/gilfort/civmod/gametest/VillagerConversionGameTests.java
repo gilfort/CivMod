@@ -17,6 +17,7 @@ import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -128,7 +129,7 @@ public final class VillagerConversionGameTests {
      */
     private static Settlement settlement(GameTestHelper helper) {
         floor(helper);
-        helper.setBlock(JOB_BLOCK, ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, JOB_BLOCK, ModBlocks.LUMBERJACK_BLOCK.get());
         SettlementData data = SettlementData.get(helper.getLevel());
         Settlement settlement = data.settlementAt(helper.absolutePos(JOB_BLOCK)).orElseThrow();
         data.settlersArrived(settlement);
@@ -541,6 +542,7 @@ public final class VillagerConversionGameTests {
         Villager villager = villager(helper, VILLAGER);
         convert(helper, villager);
         helper.setBlock(JOB_BLOCK, Blocks.AIR);
+        TestSettlements.dissolve(helper.getLevel(), settlement);
         helper.assertTrue(SettlementData.get(helper.getLevel()).settlement(settlement.id()).isEmpty(), "Settlement dissolved");
         hurry(helper, villager);
         helper.runAfterDelay(5, () -> {

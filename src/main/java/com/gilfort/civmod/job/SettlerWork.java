@@ -1901,7 +1901,7 @@ public final class SettlerWork {
             double angle = level.getRandom().nextDouble() * Math.PI * 2.0;
             direction = new Vec3(Math.cos(angle), 0.0, Math.sin(angle));
         }
-        direction = direction.normalize().scale(SettlementRules.joinRadius(anchor.get().level()) + 4.0);
+        direction = direction.normalize().scale(SettlementRules.joinRadius(anchor.get()) + 4.0);
         BlockPos column = BlockPos.containing(center.x + direction.x, center.y, center.z + direction.z);
         if (!level.isLoaded(column)) {
             return settler.blockPosition();
