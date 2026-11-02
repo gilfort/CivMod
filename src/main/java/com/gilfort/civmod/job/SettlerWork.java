@@ -815,10 +815,23 @@ public final class SettlerWork {
     private SnapshotFacts liveFacts(ServerLevel level, boolean nightSkipped, boolean woke) {
         boolean sleeping = settler.isSleeping() && !woke;
         BooleanSupplier jobStepHolds = () -> jobStepHolds(level);
-        boolean deliveryPending = settler.getJobs().stream()
-                .anyMatch(job -> !buffer(job.jobBlock()).isEmpty() && !status(job.jobBlock()).waitsForRoom());
+        boolean deliveryPending = settler.getJobs().stream().anyMatch(this::deliveryDue);
         boolean noFood = false;
         return new SnapshotFacts(nightSkipped, sleeping, activity, jobStepHolds, deliveryPending, noFood);
+    }
+
+    /**
+     * @param job a job
+     * @return whether its buffer holds something that goes to the drop-off (not only what its loop keeps)
+     */
+    boolean deliverable(SettlerJob job) {
+        CategoryLoop loop = loop(job);
+        return buffer(job.jobBlock()).stacks().stream().anyMatch(stack -> loop == null || !loop.keeps(job, stack));
+    }
+
+    /** Whether a job has something to deliver after work: a drop-off that was full waits for the next day. */
+    private boolean deliveryDue(SettlerJob job) {
+        return deliverable(job) && !status(job.jobBlock()).waitsForRoom();
     }
 
     /**
@@ -981,13 +994,15 @@ public final class SettlerWork {
         SettlerJob delivery = null;
         if (decision.afterWork()) {
             endDay(level);
-            // Jobs show idle after work, except the first one with something to deliver.
+            // Jobs show idle after work, except the first one with something to deliver and a full drop-off.
             for (SettlerJob job : settler.getJobs()) {
-                if (!buffer(job.jobBlock()).isEmpty() && !status(job.jobBlock()).waitsForRoom()) {
+                if (deliveryDue(job)) {
                     delivery = job;
                     break;
                 }
-                setStatus(job.jobBlock(), JobStatus.IDLE);
+                if (!status(job.jobBlock()).waitsForRoom()) {
+                    setStatus(job.jobBlock(), JobStatus.IDLE);
+                }
             }
         } else {
             resting.clear();

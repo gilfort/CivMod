@@ -95,7 +95,8 @@ final class ResourceCollectionLoop implements CategoryLoop {
         Stock collect = ClerkStorage.stock(level, site.collect(), dayTime, !shell.counterUnreachable(level, site.collect()));
         Optional<WorkRules.MissingTool> missing = WorkRules.missingTool(settler, profile, site, collect);
         if (missing.isPresent()) {
-            return fetchTool(level, site, missing.get(), dayTime, JobStatus.FETCHING_TOOL);
+            // Delivered first: the tool may be in the buffer, and nothing else would deliver a small harvest.
+            return shell.deliverable(job) ? JobStep.DELIVER : fetchTool(level, site, missing.get(), dayTime, JobStatus.FETCHING_TOOL);
         }
         BlockPos poi = workplace.workPlaceOfDay(level, settler, profile, site, day);
         if (poi == null) {
