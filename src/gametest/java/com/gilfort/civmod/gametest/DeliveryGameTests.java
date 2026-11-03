@@ -57,6 +57,7 @@ public final class DeliveryGameTests {
             register(helper, "delivery_evening_every_job", DeliveryGameTests::eveningEveryJob);
             register(helper, "delivery_evening_full_drop_off", DeliveryGameTests::eveningFullDropOff);
             register(helper, "delivery_missing_tool_delivers_first", DeliveryGameTests::missingToolDeliversFirst);
+            register(helper, "delivery_missing_tool_from_buffer", DeliveryGameTests::missingToolFromBuffer);
         });
     }
 
@@ -157,10 +158,42 @@ public final class DeliveryGameTests {
                 .thenSucceed();
     }
 
-    /** A broken rod with fish and a rod in the buffer: everything is delivered, then the rod is fetched from there. */
+    /** A broken rod with fish in the buffer and a rod in the collect inventory: the fish are delivered, then the rod is fetched. */
     private static void missingToolDeliversFirst(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        Settler settler = brokenRod(helper);
+        BlockPos fisherman = settler.getJobs().getFirst().jobBlock();
+        ((Container) level.getBlockEntity(fisherman)).setItem(0, new ItemStack(Items.FISHING_ROD));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(settler.getInventory().countItem(Items.FISHING_ROD) == 1,
+                    "Rod fetched, got " + settler.getInventory().countItem(Items.FISHING_ROD) + " (" + settler.getWork().status(fisherman) + ")");
+            helper.assertTrue(count(helper, fisherman, Items.COD) == FISH && settler.getWork().buffer(fisherman).isEmpty(), "Fish delivered first");
+            settler.discard();
+            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+        });
+    }
+
+    /** A broken rod with fish and a rod it fished up in the buffer: the rod goes straight onto the belt, the fish stay. */
+    private static void missingToolFromBuffer(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        Settler settler = brokenRod(helper);
+        BlockPos fisherman = settler.getJobs().getFirst().jobBlock();
+        settler.getWork().buffer(fisherman).add(new ItemStack(Items.FISHING_ROD));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(settler.getInventory().countItem(Items.FISHING_ROD) == 1,
+                    "Rod taken from the buffer, got " + settler.getInventory().countItem(Items.FISHING_ROD) + " (" + settler.getWork().status(fisherman) + ")");
+            helper.assertTrue(settler.getWork().buffer(fisherman).count() >= FISH && count(helper, fisherman, Items.COD) == 0,
+                    "The fish stay in the buffer: " + settler.getWork().buffer(fisherman).count());
+            settler.discard();
+            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+        });
+    }
+
+    /** A Fisherman during work without a rod and with fish in its buffer. */
+    private static Settler brokenRod(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
         ground(helper);
         BlockPos fisherman = jobBlock(helper, new BlockPos(1, 1, 1), ModBlocks.FISHERMAN_BLOCK.get());
         Settler settler = settler(helper, fisherman);
@@ -169,13 +202,6 @@ public final class DeliveryGameTests {
         // The first decision creates the Workplace that holds the buffer.
         settler.getWork().decideNow(level);
         settler.getWork().buffer(fisherman).add(new ItemStack(Items.COD, FISH));
-        settler.getWork().buffer(fisherman).add(new ItemStack(Items.FISHING_ROD));
-        helper.succeedWhen(() -> {
-            helper.assertTrue(settler.getWork().buffer(fisherman).count() < FISH && settler.getInventory().countItem(Items.FISHING_ROD) == 1,
-                    "Rod fetched, got " + settler.getInventory().countItem(Items.FISHING_ROD) + " (" + settler.getWork().status(fisherman) + ")");
-            helper.assertTrue(count(helper, fisherman, Items.COD) == FISH, "Fish delivered first");
-            settler.discard();
-            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
-        });
+        return settler;
     }
 }
