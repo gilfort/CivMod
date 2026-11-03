@@ -1,7 +1,9 @@
 package com.gilfort.civmod.settlement;
 
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.block.JobBlockSettlers;
+import com.gilfort.civmod.registry.ModJobs;
 
 import net.minecraft.core.BlockPos;
 
@@ -38,6 +40,8 @@ public final class SettlementRules {
     public static final int MAX_STAND_SPOTS = 8;
     /** Ledgers a Clerk JobBlock takes at most (vault {@code Jobs/Clerk.md}). */
     public static final int MAX_LEDGERS = 3;
+    /** Slots a Pantry gains per JobBlock level above 1 (vault {@code Jobs/Tavern Host.md}). */
+    private static final int PANTRY_SLOTS_PER_LEVEL = 9;
 
     private SettlementRules() {
     }
@@ -117,6 +121,18 @@ public final class SettlementRules {
      */
     public static int clerkStorage(int level) {
         return CLERK_STORAGE[clampLevel(level) - MIN_LEVEL];
+    }
+
+    /**
+     * @param blockJob the Job a JobBlock was made for
+     * @param level    the JobBlock level
+     * @return the storage slots of the block: 27, a Pantry 27 + 9 per level above 1 (27 / 36 / 45 / 54 / 63)
+     */
+    public static int storageSlots(Job blockJob, int level) {
+        if (blockJob != ModJobs.TAVERN_HOST.get()) {
+            return JobBlockEntity.SLOTS;
+        }
+        return JobBlockEntity.SLOTS + PANTRY_SLOTS_PER_LEVEL * (clampLevel(level) - MIN_LEVEL);
     }
 
     /**

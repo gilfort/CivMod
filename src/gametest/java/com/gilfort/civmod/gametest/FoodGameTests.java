@@ -54,7 +54,7 @@ public final class FoodGameTests {
             register(helper, "food_choice_and_edibility", FoodGameTests::choiceAndEdibility);
             register(helper, "food_morning_plan", FoodGameTests::morningPlan);
             register(helper, "food_player_feeding", FoodGameTests::playerFeeding);
-            register(helper, "food_eats_at_clerk", FoodGameTests::eatsAtClerk);
+            register(helper, "food_eats_at_pantry", FoodGameTests::eatsAtPantry);
             register(helper, "food_forages_without_food", FoodGameTests::foragesWithoutFood);
         });
     }
@@ -143,14 +143,14 @@ public final class FoodGameTests {
         helper.succeed();
     }
 
-    /** In the world: a hungry settler walks to a Clerk JobBlock (no Clerk settler: its own slots), eats and takes provisions. */
-    private static void eatsAtClerk(GameTestHelper helper) {
+    /** In the world: a hungry settler walks to a Pantry (no Tavern Host: self-service), eats and takes provisions. */
+    private static void eatsAtPantry(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         floor(helper);
         TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
         BlockPos clerkPos = helper.absolutePos(new BlockPos(6, 1, 6));
-        TestSettlements.setBlock(helper, new BlockPos(6, 1, 6), ModBlocks.CLERK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(6, 1, 6), ModBlocks.PANTRY_BLOCK.get());
         Container clerk = (Container) level.getBlockEntity(clerkPos);
         clerk.setItem(0, new ItemStack(Items.BREAD, 16));
         SettlementData data = SettlementData.get(level);

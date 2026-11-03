@@ -264,7 +264,7 @@ public final class SettlerWork {
      *         settler back from a mission ended its work day on its return
      */
     public Schedule.DayTimes dayTimes(long day) {
-        boolean clerk = ownClerk().isPresent();
+        boolean clerk = hasCounterJob();
         Schedule.DayTimes times = Schedule.dayTimes(settler.getUUID(), day, clerk);
         if (clerk) {
             times = times.withWorkEnd(ClerkStorage.SHIFT_END);
@@ -335,7 +335,10 @@ public final class SettlerWork {
             return deliverymen;
         }
         if (job.jobType().category() == JobCategory.SERVICE) {
-            // The Administrator has no work; the Priest prays.
+            // The Administrator has no work; the Priest prays; the Tavern Host holds its counter like a Clerk.
+            if (job.jobType() == ModJobs.TAVERN_HOST.get()) {
+                return clerks;
+            }
             return job.jobType() == ModJobs.PRIEST.get() ? priests : null;
         }
         CategoryLoop loop = loops.get(job.jobType().category());
@@ -874,7 +877,7 @@ public final class SettlerWork {
         boolean noFood = facts.noFood();
         return new Schedule.Snapshot(day, dayTime, food.level(), meals.provisions(),
                 CivModConfig.PROVISION_NUTRITION.get(), !noFood && meals.hasPocketMeal(),
-                () -> !noFood && foodLookup.get().isPresent(), () -> meals.clerkToWaitAt(level).isPresent(), settler.isHomeless(),
+                () -> !noFood && foodLookup.get().isPresent(), () -> meals.pantryToWaitAt(level).isPresent(), settler.isHomeless(),
                 facts.sleeping(), food.forageDay(), facts.nightSkipped(), facts.activity(), facts.jobStepHolds(),
                 food.morningDay() == day, food.eatenDay() == day, meals.waitStart(day), facts.deliveryPending(), dayTimes(day));
     }
@@ -1550,9 +1553,13 @@ public final class SettlerWork {
             return false;
         }
         for (SettlementBlock block : settlement.get().blocks()) {
+            if (ClerkStorage.isPantry(block) && !level.isLoaded(block.pos())) {
+                // Food points must be loaded.
+                return false;
+            }
             if (ClerkStorage.isClerk(block) && (!level.isLoaded(block.pos())
                     || !ClerkStorage.activeStorage(block).stream().allMatch(level::isLoaded))) {
-                // Food points and their storage must be loaded.
+                // Clerks serve tools and inputs from their linked storage in catch-up.
                 return false;
             }
         }
@@ -1727,9 +1734,9 @@ public final class SettlerWork {
                         return Intent.FORAGE;
                     }
                     case WAIT_FOR_FOOD -> {
-                        // Waiting at a Clerk's queue: no work this hour (a Clerk waits at its own counter, at work);
+                        // Waiting at a Pantry's queue: no work this hour (a Tavern Host waits at its own counter, at work);
                         // the Schedule sends it foraging once the 2 hours are over.
-                        return ownClerk().isPresent() ? Intent.WORK : Intent.IDLE;
+                        return ownPantry().isPresent() ? Intent.WORK : Intent.IDLE;
                     }
                     default -> {
                         return decision.intent();
@@ -1865,7 +1872,7 @@ public final class SettlerWork {
      * @return the visit the settler makes
      */
     ClerkStorage.Visit reachableVisit(ServerLevel level, BlockPos pos, ClerkStorage.Visit visit) {
-        if (!visit.counter() || ownClerk().filter(pos::equals).isPresent()) {
+        if (!visit.counter() || ownPantry().filter(pos::equals).isPresent()) {
             return visit;
         }
         if (counterUnreachable(level, pos)) {
@@ -1904,11 +1911,18 @@ public final class SettlerWork {
     }
 
     /**
-     * @return the Clerk JobBlock this settler works as Clerk, if any (a Clerk eats from its own storage)
+     * @return the Pantry this settler works as Tavern Host, if any (a Tavern Host eats from its Pantry without queueing)
      */
-    Optional<BlockPos> ownClerk() {
-        return settler.getJobs().stream().filter(job -> job.jobType() == ModJobs.CLERK.get()).map(SettlerJob::jobBlock)
+    Optional<BlockPos> ownPantry() {
+        return settler.getJobs().stream().filter(job -> job.jobType() == ModJobs.TAVERN_HOST.get()).map(SettlerJob::jobBlock)
                 .findFirst();
+    }
+
+    /**
+     * @return whether this settler has a counter job (Clerk or Tavern Host): it wakes early and works until 18:30
+     */
+    private boolean hasCounterJob() {
+        return settler.getJobs().stream().anyMatch(job -> job.jobType() == ModJobs.CLERK.get() || job.jobType() == ModJobs.TAVERN_HOST.get());
     }
 
     /**

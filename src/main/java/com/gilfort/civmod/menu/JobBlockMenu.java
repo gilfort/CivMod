@@ -6,6 +6,7 @@ import java.util.Optional;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.registry.ModMenuTypes;
+import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -28,8 +29,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
 public class JobBlockMenu extends CivMenu {
 
     /**
-     * Panel height of the tall window (a grid of 45 / 54 slots, the Clerk's three-row stock rule editor and the player
-     * inventory).
+     * Panel height of the tall window (a grid of 45 / 54 slots, the Clerk's three-row stock rule editor, a Pantry's up
+     * to seven storage rows and the player inventory).
      */
     public static final int CLERK_HEIGHT = 262;
     /** Ticks between two checks whether a tab's synced data changed. */
@@ -46,6 +47,8 @@ public class JobBlockMenu extends CivMenu {
     }
 
     private final Container container;
+    /** The storage slots of the window: 27, a Pantry's grow with its level. */
+    private final int storageSlots;
     private final Player player;
     private final List<JobBlockTab> tabs;
     /** The tabs' synced data, each once, in tab order. */
@@ -61,7 +64,11 @@ public class JobBlockMenu extends CivMenu {
      * @param buffer      extra data written by the server
      */
     public JobBlockMenu(int containerId, Inventory inventory, RegistryFriendlyByteBuf buffer) {
-        this(containerId, inventory, new SimpleContainer(JobBlockEntity.SLOTS), JobBlockInfo.STREAM_CODEC.decode(buffer));
+        this(containerId, inventory, JobBlockInfo.STREAM_CODEC.decode(buffer));
+    }
+
+    private JobBlockMenu(int containerId, Inventory inventory, JobBlockInfo info) {
+        this(containerId, inventory, new SimpleContainer(SettlementRules.storageSlots(info.jobType(), info.level())), info);
     }
 
     /**
@@ -78,7 +85,8 @@ public class JobBlockMenu extends CivMenu {
 
     private JobBlockMenu(int containerId, Inventory inventory, Container container, JobBlockInfo info, List<JobBlockTab> tabs) {
         super(ModMenuTypes.JOB_BLOCK.get(), containerId, tabs.size());
-        checkContainerSize(container, JobBlockEntity.SLOTS);
+        this.storageSlots = SettlementRules.storageSlots(info.jobType(), info.level());
+        checkContainerSize(container, storageSlots);
         this.container = container;
         this.player = inventory.player;
         this.info = info;
@@ -94,10 +102,8 @@ public class JobBlockMenu extends CivMenu {
             throw new IllegalStateException("The tab buttons of a JobBlock window overlap its tab selection buttons: " + button);
         }
         int storage = tab(StorageTab.class).orElseThrow().index();
-        for (int row = 0; row < 3; row++) {
-            for (int column = 0; column < 9; column++) {
-                addTabSlot(container, column + row * 9, 8 + column * 18, 18 + row * 18, storage);
-            }
+        for (int slot = 0; slot < storageSlots; slot++) {
+            addTabSlot(container, slot, 8 + slot % 9 * 18, 18 + slot / 9 * 18, storage);
         }
         int[] inventoryTabs = this.tabs.stream().filter(JobBlockTab::showsInventory).mapToInt(JobBlockTab::index).toArray();
         addPlayerInventory(inventory, 8, isTall() ? CLERK_HEIGHT - 82 : 84, inventoryTabs);
@@ -223,9 +229,9 @@ public class JobBlockMenu extends CivMenu {
         }
         ItemStack stack = slot.getItem();
         ItemStack original = stack.copy();
-        boolean moved = slotIndex < JobBlockEntity.SLOTS
-                ? moveItemStackTo(stack, JobBlockEntity.SLOTS, slots.size(), true)
-                : moveItemStackTo(stack, 0, JobBlockEntity.SLOTS, false);
+        boolean moved = slotIndex < storageSlots
+                ? moveItemStackTo(stack, storageSlots, slots.size(), true)
+                : moveItemStackTo(stack, 0, storageSlots, false);
         if (!moved) {
             return ItemStack.EMPTY;
         }

@@ -39,6 +39,8 @@ final class SettlerMeals {
     private static final int EAT_TICKS = 30;
     /** Ticks a foraging settler walks before it vanishes. */
     private static final int FORAGE_WALK_TICKS = 600;
+    /** Food value gained per level of a working Tavern Host: +1 % (Lv 100: +100 %). */
+    private static final double MEAL_BONUS_PER_LEVEL = 0.01;
     /** Players within this distance get the hunger message. */
     private static final double COMPLAIN_RANGE = 32.0;
 
@@ -224,16 +226,16 @@ final class SettlerMeals {
 
     /**
      * @param level the level
-     * @return the Clerk JobBlock this settler waits at for food (its own as a Clerk, else the nearest), empty if the
+     * @return the Pantry this settler waits at for food (its own as a Tavern Host, else the nearest), empty if the
      *         settlement has none
      */
-    Optional<BlockPos> clerkToWaitAt(ServerLevel level) {
-        Optional<BlockPos> own = shell.ownClerk();
+    Optional<BlockPos> pantryToWaitAt(ServerLevel level) {
+        Optional<BlockPos> own = shell.ownPantry();
         if (own.isPresent()) {
             return own;
         }
         return SettlementData.get(level).settlement(settler.getSettlementId())
-                .flatMap(settlement -> ClerkStorage.nearestClerk(settlement, settler.blockPosition()));
+                .flatMap(settlement -> ClerkStorage.nearestPantry(settlement, settler.blockPosition()));
     }
 
     /**
@@ -277,8 +279,8 @@ final class SettlerMeals {
     private Optional<ClerkStorage.FoodPoint> foodPointWithFood(ServerLevel level, long dayTime) {
         SettlementData data = SettlementData.get(level);
         return data.settlement(settler.getSettlementId())
-                .flatMap(settlement -> ClerkStorage.nearestFood(level, settlement, settler.blockPosition(), dayTime, shell.ownClerk(),
-                        clerk -> !shell.counterUnreachable(level, clerk)));
+                .flatMap(settlement -> ClerkStorage.nearestFood(level, settlement, settler.blockPosition(), dayTime, shell.ownPantry(),
+                        pantry -> !shell.counterUnreachable(level, pantry)));
     }
 
     // ---------------------------------------------------------------- meal intents
@@ -352,7 +354,7 @@ final class SettlerMeals {
     BodyStep atFoodPoint(ServerLevel level) {
         ClerkStorage.FoodPoint point = foodPoint;
         if (point != null) {
-            boolean counter = point.visit().counter() && shell.ownClerk().filter(point.clerk()::equals).isEmpty();
+            boolean counter = point.visit().counter() && shell.ownPantry().filter(point.clerk()::equals).isEmpty();
             if (counter && !shell.waitAtCounter(level, point.clerk())) {
                 return BodyStep.STAY;
             }
@@ -374,10 +376,10 @@ final class SettlerMeals {
      * @return work (a Clerk), walk to the queue, or stand still without a Clerk JobBlock
      */
     BodyStep waitForFood(ServerLevel level) {
-        if (shell.ownClerk().isPresent()) {
+        if (shell.ownPantry().isPresent()) {
             return BodyStep.WORK;
         }
-        Optional<BlockPos> clerk = clerkToWaitAt(level);
+        Optional<BlockPos> clerk = pantryToWaitAt(level);
         if (clerk.isEmpty()) {
             return BodyStep.STOP;
         }
@@ -489,11 +491,14 @@ final class SettlerMeals {
      * @return whether a working Clerk handed something out (food from its whole storage at the counter)
      */
     private boolean visitFoodPoint(ServerLevel level, ClerkStorage.FoodPoint point, long day, long dayTime, boolean atCounter) {
-        boolean own = shell.ownClerk().filter(point.clerk()::equals).isPresent();
-        Stock stock = own ? ClerkStorage.stock(level, point.clerk(), true) : ClerkStorage.stock(level, point.clerk(), dayTime, atCounter);
+        boolean own = shell.ownPantry().filter(point.clerk()::equals).isPresent();
+        Stock stock = ClerkStorage.stock(level, point.clerk(), false);
         if (stock.isEmpty()) {
             return false;
         }
+        // A working Tavern Host serves at the counter; its meals carry the bonus, provisions do not.
+        boolean served = atCounter && !own && ClerkStorage.working(level, point.clerk(), dayTime);
+        double bonus = served ? 1.0 + MEAL_BONUS_PER_LEVEL * ClerkCounter.clerkSkill(level, point.clerk()) : 1.0;
         boolean handedOut = false;
         SettlerFood food = settler.getFood();
         for (int i = Settler.POCKETS_START; i < Settler.POCKETS_START + Settler.POCKETS_SIZE; i++) {
@@ -513,7 +518,7 @@ final class SettlerMeals {
                     break;
                 }
                 handedOut = true;
-                eatItem(level, item, stock, day);
+                eatItem(level, item, stock, day, bonus);
             }
         }
         int wanted = CivModConfig.PROVISION_NUTRITION.get();
@@ -537,7 +542,7 @@ final class SettlerMeals {
                 break;
             }
         }
-        return handedOut && stock.counter() && !own;
+        return handedOut && served;
     }
 
     /** The day meals are noted with outside catch-up: the day the needs are checked on. */
@@ -550,9 +555,20 @@ final class SettlerMeals {
     }
 
     private void eatItem(ServerLevel level, ItemStack item, @Nullable Stock stock, long day) {
+        eatItem(level, item, stock, day, 1.0);
+    }
+
+    /**
+     * @param bonus the factor on the food value (nutrition and saturation) of a meal at a working Tavern Host's counter
+     */
+    private void eatItem(ServerLevel level, ItemStack item, @Nullable Stock stock, long day, double bonus) {
         net.minecraft.world.food.FoodProperties properties = item.get(net.minecraft.core.component.DataComponents.FOOD);
         if (properties == null) {
             return;
+        }
+        if (bonus != 1.0) {
+            properties = new net.minecraft.world.food.FoodProperties((int) Math.round(properties.nutrition() * bonus),
+                    (float) (properties.saturation() * bonus), properties.canAlwaysEat());
         }
         settler.getFood().eat(properties);
         recordMeal(item, day);

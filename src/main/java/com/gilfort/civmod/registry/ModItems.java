@@ -39,6 +39,8 @@ public final class ModItems {
     public static final DeferredItem<BlockItem> MISSION_BOARD = jobBlockItem(ModBlocks.MISSION_BOARD);
     /** Item of the {@link ModBlocks#CLERK_BLOCK}. */
     public static final DeferredItem<BlockItem> CLERK_BLOCK = jobBlockItem(ModBlocks.CLERK_BLOCK);
+    /** Item of the {@link ModBlocks#PANTRY_BLOCK}. */
+    public static final DeferredItem<BlockItem> PANTRY_BLOCK = jobBlockItem(ModBlocks.PANTRY_BLOCK);
     /** Item of the {@link ModBlocks#CRAFTSPERSON_BLOCK}. */
     public static final DeferredItem<BlockItem> CRAFTSPERSON_BLOCK = jobBlockItem(ModBlocks.CRAFTSPERSON_BLOCK);
     /** Item of the {@link ModBlocks#SMELTER_BLOCK}. */

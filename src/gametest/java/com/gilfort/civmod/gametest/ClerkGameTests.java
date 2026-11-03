@@ -48,8 +48,8 @@ import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.registries.RegisterEvent;
 
 /**
- * GameTests for the Clerk and its storage (#55): access rule, storage limits, food points, Clerk as drop-off and
- * catch-up food.
+ * GameTests for the Clerk and its storage (#55): access rule, storage limits, stand spot, Clerk as drop-off and
+ * shift. Food points moved to the Pantry ({@link PantryGameTests}).
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class ClerkGameTests {
@@ -70,12 +70,8 @@ public final class ClerkGameTests {
             register(helper, "clerk_access_rule", ClerkGameTests::accessRule);
             register(helper, "clerk_storage_limits", ClerkGameTests::storageLimits);
             register(helper, "clerk_spot_of_day", ClerkGameTests::spotOfDay);
-            register(helper, "clerk_food_points", ClerkGameTests::foodPoints);
             register(helper, "clerk_as_drop_off", ClerkGameTests::asDropOff);
-            register(helper, "clerk_catch_up_food", ClerkGameTests::catchUpFood);
             register(helper, "clerk_shift", ClerkGameTests::shift);
-            register(helper, "clerk_catch_up_wait_for_food", ClerkGameTests::catchUpWaitForFood);
-            register(helper, "clerk_counter_service", ClerkGameTests::counterService);
         });
     }
 
@@ -212,43 +208,6 @@ public final class ClerkGameTests {
     }
 
     /**
-     * Food points: the nearest Clerk whose reachable storage has food, then the next; a settler's own Clerk first; a
-     * counter it cannot reach only offers the block slots.
-     */
-    private static void foodPoints(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos near = clerkWithStorage(helper);
-        TestSettlements.setBlock(helper, new BlockPos(7, 1, 7), ModBlocks.CLERK_BLOCK.get());
-        BlockPos far = helper.absolutePos(new BlockPos(7, 1, 7));
-        BlockPos from = helper.absolutePos(new BlockPos(0, 1, 0));
-        SettlementData data = SettlementData.get(level);
-        Settlement settlement = data.settlementAt(near).orElseThrow();
-        helper.assertTrue(data.settlementAt(far).filter(s -> s == settlement).isPresent(), "Both Clerks in one settlement");
-        helper.assertTrue(food(level, settlement, from, MORNING, Optional.empty(), pos -> true).isEmpty(), "No food anywhere");
-
-        ((Container) level.getBlockEntity(far)).setItem(0, new ItemStack(Items.BREAD, 3));
-        Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
-        chest.setItem(0, new ItemStack(Items.COOKED_BEEF, 3));
-        helper.assertTrue(food(level, settlement, from, MORNING, Optional.empty(), pos -> true).equals(Optional.of(far)),
-                "The near Clerk has food only in its linked storage and no settler: the far one");
-
-        helper.assertTrue(TestAssignments.assign(data, near, CLARA, "Clara", settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
-                "Clerk assigned");
-        Optional<ClerkStorage.FoodPoint> working = ClerkStorage.nearestFood(level, settlement, from, MORNING, Optional.empty(), pos -> true);
-        helper.assertTrue(working.map(ClerkStorage.FoodPoint::clerk).equals(Optional.of(near)), "Working Clerk: the near one");
-        helper.assertTrue(working.orElseThrow().visit().counter() && working.orElseThrow().visit().reach() == ClerkStorage.COUNTER_REACH,
-                "Served at the counter");
-        helper.assertTrue(food(level, settlement, from, MORNING, Optional.empty(), pos -> !pos.equals(near)).equals(Optional.of(far)),
-                "Counter not reachable: only the block slots, which are empty");
-        helper.assertTrue(food(level, settlement, from, EVENING, Optional.empty(), pos -> true).equals(Optional.of(far)),
-                "After the shift the linked storage is closed");
-        helper.assertTrue(food(level, settlement, helper.absolutePos(new BlockPos(8, 1, 8)), EVENING, Optional.of(near), pos -> true)
-                .equals(Optional.of(near)), "The Clerk eats from its own storage after the shift");
-        TestAssignments.unassign(data, near);
-        helper.succeed();
-    }
-
-    /**
      * A Clerk JobBlock as drop-off and collect point of a Lumberjack (catch-up): deliveries and tools follow the access
      * rule – without a Clerk settler only the full block slots (nothing fits, no tool), with one on shift the linked
      * storage.
@@ -304,111 +263,6 @@ public final class ClerkGameTests {
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
             helper.succeed();
-        });
-    }
-
-    /**
-     * Catch-up: a hungry settler takes food straight from the linked storage while the Clerk is on shift, and every
-     * hand-out gives the Clerk EXP; without a Clerk settler the linked storage stays closed and the settler forages.
-     */
-    private static void catchUpFood(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos clerkPos = clerkWithStorage(helper);
-        Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
-        chest.setItem(0, new ItemStack(Items.BREAD, 32));
-        SettlementData data = SettlementData.get(level);
-        Settlement settlement = data.settlementAt(clerkPos).orElseThrow();
-        Settler customer = settler(helper, new BlockPos(2, 1, 3), data, settlement);
-        Settler clerk = settler(helper, new BlockPos(3, 1, 3), data, settlement);
-        TestAssignments.assign(data, clerkPos, clerk.getUUID(), "Clerk", settlement.id(), List.of());
-        clerk.addJob(new SettlerJob(ModJobs.CLERK.get(), clerkPos));
-        customer.getFood().setLevel(4);
-        customer.getFood().setSaturation(0.0F);
-        long dayStart = Math.floorDiv(level.getOverworldClockTime(), 24000L) * 24000L;
-
-        customer.getWork().setCatchUp(dayStart - 24000L, dayStart);
-        CatchUp.runNow(level, List.of(customer));
-        int bread = chest.getItem(0).getCount();
-        helper.assertTrue(bread < 32, "Food taken from the linked storage, bread left " + bread);
-        helper.assertFalse(customer.getFood().isForaging(), "Fed, no foraging");
-        int exp = clerk.getSkills().get(ModJobs.CLERK.get()).exp() + 1000 * clerk.getSkills().get(ModJobs.CLERK.get()).level();
-        helper.assertTrue(exp > 1000, "Hand-outs give the Clerk EXP: " + clerk.getSkills().get(ModJobs.CLERK.get()));
-
-        TestAssignments.unassign(data, clerkPos);
-        clerk.removeJob(clerkPos);
-        customer.getFood().setLevel(4);
-        customer.getFood().setSaturation(0.0F);
-        for (int i = Settler.POCKETS_START; i < Settler.POCKETS_START + Settler.POCKETS_SIZE; i++) {
-            customer.getInventory().setItem(i, ItemStack.EMPTY);
-        }
-        customer.getWork().setCatchUp(dayStart - 24000L, dayStart);
-        CatchUp.runNow(level, List.of(customer));
-        helper.assertTrue(chest.getItem(0).getCount() == bread, "No Clerk settler: the linked storage stays closed");
-        customer.discard();
-        clerk.discard();
-        helper.succeed();
-    }
-
-    /**
-     * Catch-up: a hungry settler without food waits at the (empty) Clerk for 2 hours, then it forages; the start of the
-     * wait is the per-day mark live play reads as well.
-     */
-    private static void catchUpWaitForFood(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos clerkPos = clerkWithStorage(helper);
-        SettlementData data = SettlementData.get(level);
-        Settlement settlement = data.settlementAt(clerkPos).orElseThrow();
-        Settler customer = settler(helper, new BlockPos(2, 1, 3), data, settlement);
-        customer.getFood().setLevel(4);
-        customer.getFood().setSaturation(0.0F);
-        for (int i = Settler.POCKETS_START; i < Settler.POCKETS_START + Settler.POCKETS_SIZE; i++) {
-            customer.getInventory().setItem(i, ItemStack.EMPTY);
-        }
-        long missedStart = Math.floorDiv(level.getOverworldClockTime(), 24000L) * 24000L - 24000L;
-        long missed = Math.floorDiv(missedStart, 24000L);
-
-        customer.getWork().setCatchUp(missedStart, missedStart + 1500L);
-        CatchUp.runNow(level, List.of(customer));
-        helper.assertFalse(customer.getFood().isForaging(), "07:30: still waiting at the Clerk");
-        helper.assertTrue(customer.getFood().waitDay() == missed && customer.getFood().waitTime() < 500L,
-                "The wait began at its waking time: " + customer.getFood().waitDay() + " / " + customer.getFood().waitTime());
-
-        customer.getWork().setCatchUp(missedStart + 1500L, missedStart + 3500L);
-        CatchUp.runNow(level, List.of(customer));
-        helper.assertTrue(customer.getFood().forageDay() == missed, "09:30: foraging after 2 hours without food");
-        customer.discard();
-        helper.succeed();
-    }
-
-    /** In the world: a hungry settler is served at a working Clerk's counter from the linked storage; the Clerk gains EXP. */
-    private static void counterService(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
-        for (int x = 0; x < 9; x++) {
-            for (int z = 0; z < 9; z++) {
-                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
-            }
-        }
-        BlockPos clerkPos = clerkWithStorage(helper);
-        Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
-        chest.setItem(0, new ItemStack(Items.BREAD, 16));
-        SettlementData data = SettlementData.get(level);
-        Settlement settlement = data.settlementAt(clerkPos).orElseThrow();
-        Settler clerk = settler(helper, new BlockPos(1, 1, 3), data, settlement);
-        TestAssignments.assign(data, clerkPos, clerk.getUUID(), "Clerk", settlement.id(), List.of());
-        clerk.addJob(new SettlerJob(ModJobs.CLERK.get(), clerkPos));
-        Settler customer = settler(helper, new BlockPos(7, 1, 7), data, settlement);
-        customer.setNoAi(false);
-        customer.getFood().setLevel(5);
-        helper.succeedWhen(() -> {
-            helper.assertTrue(customer.getFood().level() >= 15, "Not served yet: " + customer.getFood().level() + " ("
-                    + customer.statusText().getString() + ")");
-            helper.assertTrue(chest.getItem(0).getCount() < 16, "Served from the linked storage");
-            helper.assertTrue(clerk.getSkills().get(ModJobs.CLERK.get()).exp() > 0, "The Clerk gains EXP per hand-out");
-            TestAssignments.unassign(data, clerkPos);
-            customer.discard();
-            clerk.discard();
-            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });
     }
 
@@ -491,12 +345,6 @@ public final class ClerkGameTests {
         }
         return count;
     }
-
-    private static Optional<BlockPos> food(ServerLevel level, Settlement settlement, BlockPos from, long dayTime, Optional<BlockPos> own,
-            java.util.function.Predicate<BlockPos> reachable) {
-        return ClerkStorage.nearestFood(level, settlement, from, dayTime, own, reachable).map(ClerkStorage.FoodPoint::clerk);
-    }
-
     /** Places a Clerk JobBlock at (1, 1, 1) with a chest at (4, 1, 1) linked as storage. */
     static BlockPos clerkWithStorage(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();

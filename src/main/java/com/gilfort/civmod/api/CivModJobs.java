@@ -25,7 +25,9 @@ public final class CivModJobs {
     public static final DeferredHolder<Job, Job> PLANTATION_FARMER = job("plantation_farmer");
     /** Mission: the Base Job of the Mission Board and parent of every Mission Job. */
     public static final DeferredHolder<Job, Job> ADVENTURER = job("adventurer");
-    /** Logistics (internal): the store and food point of a settlement. */
+    /** Service: serves the food of a Pantry, the settlement's food point. */
+    public static final DeferredHolder<Job, Job> TAVERN_HOST = job("tavern_host");
+    /** Logistics (internal): the storage terminal of a settlement. */
     public static final DeferredHolder<Job, Job> CLERK = job("clerk");
     /** Logistics (internal): carries items between JobBlocks; works on the Clerk JobBlock. */
     public static final DeferredHolder<Job, Job> DELIVERYMAN = job("deliveryman");
