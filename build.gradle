@@ -62,6 +62,13 @@ neoForge {
         gameTestServer {
             type = "gameTestServer"
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            // JUnit-like XML report with the run time of every test (scripts/gametest.sh prints the slowest).
+            programArguments.addAll '--report', file('build/gametest-report.xml').absolutePath
+            // -Pgametests=<selector> runs only matching tests (namespaced ID with wildcards, e.g. civmod:delivery*).
+            def gametests = providers.gradleProperty('gametests').getOrNull()
+            if (gametests) {
+                programArguments.addAll '--tests', gametests
+            }
         }
 
         data {
