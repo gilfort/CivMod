@@ -171,6 +171,7 @@ final class WorkRules {
         int cap = site.skillCap();
         int skillLevel = settler.getWork().effectiveLevel(job);
         BiomeBonus bonus = workplace.biomeBonus(level, job.jobType());
+        double blessing = settler.getWork().blessingFactor(level);
         double accumulated = workplace.production();
         double ticks = workTicks;
         int rolls = 0;
@@ -180,7 +181,7 @@ final class WorkRules {
         boolean levelUp = false;
         End end = End.NONE;
         while (true) {
-            double perTick = profile.speed(skillLevel, tool.get()) * job.jobType().productivity(scan, site.level()) * bonus.speed().value() / 20.0;
+            double perTick = profile.speed(skillLevel, tool.get()) * job.jobType().productivity(scan, site.level()) * bonus.speed().value() * blessing / 20.0;
             if (perTick <= 0.0 || (1.0 - accumulated) / perTick > ticks) {
                 accumulated += Math.max(0.0, perTick) * ticks;
                 ticks = 0.0;

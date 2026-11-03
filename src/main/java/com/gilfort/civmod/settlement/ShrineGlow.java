@@ -17,7 +17,7 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
  * Shows the shrine's glow on the Center Block (vault {@code Jobs/Priest.md}): once per second per dimension each
  * settlement's loaded Center Block is compared with {@link Shrine#glowing} and its glow state synced when it changes.
  * When the glow starts, a solid block above the Center Block is checked once; without one a beam rises like a
- * beacon's, with one only sparks rise.
+ * beacon's, with one only sparks rise. While the settlement's blessing acts, green sparks surround the block as well.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class ShrineGlow {
@@ -42,6 +42,10 @@ public final class ShrineGlow {
             return;
         }
         long clock = level.getOverworldClockTime();
+        if (settlement.bonuses().remaining(Bonuses.Kind.WORK_SPEED, clock) > 0) {
+            // The blessing of a prayer: green sparks round the block while it acts.
+            level.sendParticles(ParticleTypes.HAPPY_VILLAGER, center.getX() + 0.5, center.getY() + 1.0, center.getZ() + 0.5, 3, 0.4, 0.3, 0.4, 0.0);
+        }
         boolean glowing = Shrine.glowing(settlement.id(), DayClock.day(clock), DayClock.dayTime(clock), clock, settlement.shrine());
         if (!glowing) {
             entity.setGlow(JobBlockEntity.GLOW_NONE);

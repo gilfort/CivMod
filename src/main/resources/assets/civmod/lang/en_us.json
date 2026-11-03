@@ -98,6 +98,7 @@
   "civmod.gui.job_block.not_registered": "No settlement",
   "civmod.gui.job_block.unconnected": "Not connected: %2$s blocks to the nearest JobBlock (max %1$s)",
   "civmod.gui.job_block.no_center": "Not connected: the settlement has no Center Block",
+  "civmod.gui.job_block.blessing": "Blessing: +20 %% work speed, %sh %sm left",
   "civmod.gui.job_block.help.connect": "Move this JobBlock closer to connect it",
   "civmod.gui.job_block.help.no_center": "A Center Block in reach reconnects this block",
   "civmod.gui.job_block.help.no_settlement": "A Center Block in reach connects this JobBlock",

@@ -35,6 +35,7 @@ import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.Bonuses;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.OccupiedPlaces;
@@ -180,6 +181,10 @@ public final class SettlerWork {
     private double cuDays;
     /** The day time of the hour being simulated in catch-up ({@link #catchUpDayTime}). */
     private long cuDayTime;
+    /** The clock span of the work being simulated in catch-up, {@link #NOT_SIMULATING} outside it. */
+    private long cuWorkFrom = NOT_SIMULATING;
+    private long cuWorkTo = NOT_SIMULATING;
+    private static final long NOT_SIMULATING = Long.MIN_VALUE;
 
     /**
      * @param settler the settler
@@ -1657,7 +1662,15 @@ public final class SettlerWork {
         // After the hour's hunger: a meal if hungry; starving stops the work.
         int rolls = 0;
         if (decideCatchUp(level, day, dayTime) == Intent.WORK && work > 0) {
-            rolls = simulateWork(level, day, work * share * CivModConfig.CATCH_UP_MULTIPLIER.get());
+            // The blessing counts where it falls into the simulated work time.
+            cuWorkFrom = from;
+            cuWorkTo = from + work;
+            try {
+                rolls = simulateWork(level, day, work * share * CivModConfig.CATCH_UP_MULTIPLIER.get());
+            } finally {
+                cuWorkFrom = NOT_SIMULATING;
+                cuWorkTo = NOT_SIMULATING;
+            }
         }
         if (to >= workEndTick) {
             endDay(level);
@@ -1756,6 +1769,23 @@ public final class SettlerWork {
             remaining = simulated.remaining();
         }
         return rolls;
+    }
+
+    /**
+     * The work speed factor of the settlement's blessing ({@link Bonuses}): live that of now, in catch-up the average over
+     * the simulated work time.
+     *
+     * @param level the level
+     * @return 1 without a blessing, else its factor
+     */
+    public double blessingFactor(ServerLevel level) {
+        return SettlementData.get(level).settlement(settler.getSettlementId()).map(settlement -> {
+            if (cuWorkFrom == NOT_SIMULATING) {
+                long clock = level.getOverworldClockTime();
+                return settlement.bonuses().remaining(Bonuses.Kind.WORK_SPEED, clock) > 0 ? Bonuses.Kind.WORK_SPEED.factor() : 1.0;
+            }
+            return settlement.bonuses().averageFactor(Bonuses.Kind.WORK_SPEED, cuWorkFrom, cuWorkTo);
+        }).orElse(1.0);
     }
 
     /**

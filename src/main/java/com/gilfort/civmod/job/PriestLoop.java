@@ -6,6 +6,7 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.SettlerSpawner;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.Bonuses;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Settlement;
@@ -24,6 +25,8 @@ import net.minecraft.world.phys.Vec3;
  * ({@link Shrine#glowing}); otherwise the shell moves on to its next job. A glowing shrine sends it to the block, where it
  * prays for {@value Shrine#PRAYER_TICKS} ticks and rolls for a new Settler ({@link #roll}); a success keeps the shrine
  * glowing for another hour and the Priest prays again, a failure ends the day's glow.
+ * <p>
+ * Every roll starts the settlement's work speed blessing ({@link Bonuses}) for three hours from its clock value.
  * <p>
  * Catch-up does not walk: {@link #catchUpDay} simulates the prayer chain of a missed day.
  */
@@ -120,6 +123,8 @@ public final class PriestLoop implements CategoryLoop {
         } else {
             data.setShrine(settlement, new Shrine.State(day, 0L));
         }
+        // Every prayer blesses the settlement; the last roll of the chain sets the end (a start never shortens it).
+        data.setBonuses(settlement, settlement.bonuses().start(Bonuses.Kind.WORK_SPEED, clock, clock + Bonuses.BLESSING_TICKS));
         return success;
     }
 
