@@ -137,7 +137,7 @@ final class ProducingLoop implements CategoryLoop {
         Patterns.enforceLimit(level, jobBlock, job.jobType(), settler.getUUID(), profile(job).checkLimit(shell.effectiveLevel(job)));
         Workplace workplace = shell.workplace(jobBlock);
         if (workplace.round() == null) {
-            if (workplace.dropOffPending() || (workplace.buffer().shouldDeliver() && deliverable(job, workplace.buffer()))) {
+            if (workplace.dropOffPending() || (workplace.buffer().shouldDeliver() && shell.deliverable(job))) {
                 workplace.setDropOffPending(false);
                 return JobStep.DELIVER;
             }
@@ -669,7 +669,7 @@ final class ProducingLoop implements CategoryLoop {
     /** Releases the claim; the fetched inputs go to the own drop-off before the next round. */
     private void releaseToDropOff(ServerLevel level, SettlerJob job) {
         Workplace workplace = shell.workplace(job.jobBlock());
-        if (release(level, job.jobBlock()) && deliverable(job, workplace.buffer())) {
+        if (release(level, job.jobBlock()) && shell.deliverable(job)) {
             workplace.setDropOffPending(true);
         }
     }
@@ -1331,7 +1331,7 @@ final class ProducingLoop implements CategoryLoop {
         int operations = 0;
         while (ticks > 0.0) {
             if (workplace.round() == null) {
-                if (workplace.dropOffPending() || (workplace.buffer().shouldDeliver() && deliverable(job, workplace.buffer()))) {
+                if (workplace.dropOffPending() || (workplace.buffer().shouldDeliver() && shell.deliverable(job))) {
                     workplace.setDropOffPending(false);
                     if (!deliverToDropOff(level, site)) {
                         shell.endCatchUpJob(jobBlock);
@@ -1444,11 +1444,6 @@ final class ProducingLoop implements CategoryLoop {
     @Override
     public boolean keeps(SettlerJob job, ItemStack stack) {
         return settler.level() instanceof ServerLevel level && Fuels.of(level, job.jobBlock()).contains(stack.getItem());
-    }
-
-    /** Whether the buffer holds anything that goes to the drop-off (not only fuel rests). */
-    private boolean deliverable(SettlerJob job, JobBuffer buffer) {
-        return buffer.stacks().stream().anyMatch(stack -> !keeps(job, stack));
     }
 
     // ---------------------------------------------------------------- state

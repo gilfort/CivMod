@@ -93,6 +93,27 @@ final class SettlerTools {
     }
 
     /**
+     * Takes a tool of a kind from a job's buffer onto a free belt slot: a tool the job collected itself.
+     *
+     * @param settler the settler
+     * @param buffer  the job's buffer
+     * @param kind    the kind of tool
+     * @return whether a tool was taken
+     */
+    static boolean takeFromBuffer(Settler settler, JobBuffer buffer, Predicate<ItemStack> kind) {
+        int freeSlot = freeBeltSlot(settler);
+        if (freeSlot < 0) {
+            return false;
+        }
+        ItemStack tool = buffer.takeOne(stack -> kind.test(stack) && ToolTiers.tier(stack) <= ToolTiers.maxAllowedTier(TOOL_LEVEL));
+        if (tool.isEmpty()) {
+            return false;
+        }
+        settler.getInventory().setItem(freeSlot, tool);
+        return true;
+    }
+
+    /**
      * Takes up to a stack of a kind (an innate recipe's input) from the collect inventory onto a free belt slot; what
      * does not fit one stack goes back, or drops at the settler when the inventory is full.
      *
