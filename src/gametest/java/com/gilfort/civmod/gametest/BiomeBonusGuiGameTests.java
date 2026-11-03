@@ -64,7 +64,7 @@ public final class BiomeBonusGuiGameTests {
     /**
      * A Miner working in the desert: the Found tab marks iron ore with two stars (an ore: rare chance; raw iron: double
      * drop of two files), stone with one (it drops cobblestone) and granite with none; each tooltip line names an
-     * effect and its file. The JobBlock window shows today's biome with all effects (raw iron's chances added).
+     * effect only, the chances of the files added, no source. The JobBlock window shows today's biome with all effects (raw iron's chances added).
      */
     private static void foundStars(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -101,12 +101,11 @@ public final class BiomeBonusGuiGameTests {
                     FoundTabData tab = FoundTabData.of(level, jobBlock);
                     FoundTabData.Entry iron = tab.entry(Identifier.withDefaultNamespace("iron_ore")).orElseThrow();
                     helper.assertTrue(iron.rareBonus() && iron.doubleBonus(), "Iron ore: two stars: " + iron);
-                    helper.assertTrue(strings(iron.bonusLines()).equals(List.of("Ore chance ×1.5 (biome bonus civmod:test_gui_miner_a)",
-                            "Raw Iron drops +50% (biome bonus civmod:test_gui_miner_a)", "Raw Iron drops +25% (biome bonus civmod:test_gui_miner_b)")),
+                    helper.assertTrue(strings(iron.bonusLines()).equals(List.of("Ore chance ×1.5", "Raw Iron drops +75%")),
                             "Iron ore tooltip: " + strings(iron.bonusLines()));
                     FoundTabData.Entry stone = tab.entry(Identifier.withDefaultNamespace("stone")).orElseThrow();
                     helper.assertTrue(!stone.rareBonus() && stone.doubleBonus(), "Stone: one star: " + stone);
-                    helper.assertTrue(strings(stone.bonusLines()).equals(List.of("Cobblestone drops +25% (biome bonus civmod:test_gui_miner_a)")),
+                    helper.assertTrue(strings(stone.bonusLines()).equals(List.of("Cobblestone drops +25%")),
                             "Stone tooltip: " + strings(stone.bonusLines()));
                     FoundTabData.Entry granite = tab.entry(Identifier.withDefaultNamespace("granite")).orElseThrow();
                     helper.assertTrue(!granite.rareBonus() && !granite.doubleBonus() && granite.bonusLines().isEmpty(), "Granite: no star: " + granite);
