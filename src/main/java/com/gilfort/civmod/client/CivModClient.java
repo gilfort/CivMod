@@ -9,11 +9,13 @@ import com.gilfort.civmod.client.gui.SettlerScreen;
 import com.gilfort.civmod.item.JobBlockUpgradeItem;
 import com.gilfort.civmod.item.JobPicker;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
+import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.StationTypesTabData;
 import com.gilfort.civmod.npc.VillagerConversion;
 import com.gilfort.civmod.registry.ModBlockEntityTypes;
 import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.registry.ModEntityTypes;
+import com.gilfort.civmod.registry.ModItems;
 import com.gilfort.civmod.registry.ModMenuTypes;
 import com.gilfort.civmod.settlement.JobPointsDisplay;
 import com.gilfort.civmod.settlement.SettlementOutline;
@@ -155,6 +157,14 @@ public final class CivModClient {
                 event.getToolTip().add(2, Component.translatable("civmod.tooltip.starter_tool", new ItemStack(starterTool).getHoverName())
                         .withStyle(ChatFormatting.GRAY));
             }
+            Integer ledgers = event.getItemStack().get(ModDataComponents.LEDGERS.get());
+            if (ledgers != null) {
+                event.getToolTip().add(2, Component.translatable("civmod.tooltip.ledgers", ledgers, StockRule.MAX_LEDGERS)
+                        .withStyle(ChatFormatting.GRAY));
+            }
+        }
+        if (event.getItemStack().is(ModItems.LEDGER.get())) {
+            event.getToolTip().add(1, Component.translatable("civmod.tooltip.ledger").withStyle(ChatFormatting.GRAY));
         }
     }
 }

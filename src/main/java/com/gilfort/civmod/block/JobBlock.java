@@ -7,6 +7,8 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.item.JobBlockUpgradeItem;
+import com.gilfort.civmod.registry.ModItems;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
@@ -68,11 +70,19 @@ public class JobBlock extends BaseEntityBlock {
      * A JobBlock Upgrade item upgrades the block or names why not; either way the click is consumed, so the window does
      * not open and nothing is placed ({@link JobBlockUpgrade}). Only the server knows whether it upgrades: the arm swings
      * from there on an upgrade ({@link InteractionResult#SUCCESS_SERVER}, the client does not predict a swing) and not on
-     * a refusal ({@link InteractionResult#CONSUME}). Sneaking skips this (vanilla), so the item does nothing then.
+     * a refusal ({@link InteractionResult#CONSUME}). Sneaking skips this (vanilla), so the item does nothing then. A
+     * Ledger on a Clerk JobBlock works the same way ({@link Ledgers}); other JobBlocks do not take it.
      */
     @Override
     protected InteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand,
             BlockHitResult hitResult) {
+        if (stack.is(ModItems.LEDGER.get()) && getJobType() == ModJobs.CLERK.get()) {
+            if (!(level instanceof ServerLevel serverLevel)) {
+                return InteractionResult.SUCCESS_SERVER;
+            }
+            boolean added = level.getBlockEntity(pos) instanceof JobBlockEntity jobBlock && Ledgers.use(serverLevel, pos, jobBlock, player, stack);
+            return added ? InteractionResult.SUCCESS_SERVER : InteractionResult.CONSUME;
+        }
         if (!(stack.getItem() instanceof JobBlockUpgradeItem upgrade)) {
             return super.useItemOn(stack, state, level, pos, player, hand, hitResult);
         }
@@ -100,6 +110,10 @@ public class JobBlock extends BaseEntityBlock {
             // For commands / structures the block entity does not exist yet; its level is synced in onLoad.
             int jobLevel = level.getBlockEntity(pos) instanceof JobBlockEntity jobBlock ? jobBlock.getJobLevel() : SettlementRules.MIN_LEVEL;
             SettlementWorld.place(serverLevel, pos, getJobType(), jobLevel, centerRace());
+            // A player's placement may run this after setPlacedBy: the entry gets the item's Ledgers here.
+            if (level.getBlockEntity(pos) instanceof JobBlockEntity jobBlock) {
+                SettlementWorld.setLedgers(serverLevel, pos, jobBlock.getLedgers());
+            }
         }
     }
 
@@ -112,6 +126,7 @@ public class JobBlock extends BaseEntityBlock {
             } else {
                 SettlementWorld.setLevel(serverLevel, pos, jobBlock.getJobLevel());
             }
+            SettlementWorld.setLedgers(serverLevel, pos, jobBlock.getLedgers());
         }
     }
 

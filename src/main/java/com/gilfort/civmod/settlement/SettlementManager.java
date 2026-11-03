@@ -301,6 +301,21 @@ public final class SettlementManager {
     }
 
     /**
+     * Sets the Ledgers of a registered Clerk JobBlock (vault {@code Jobs/Clerk.md}): each adds 9 active stock rule slots.
+     *
+     * @param data    the dimension settlement data
+     * @param pos     the JobBlock position
+     * @param ledgers the Ledgers on the block
+     */
+    public static void setLedgers(SettlementData data, BlockPos pos, int ledgers) {
+        data.unsettledAt(pos).or(() -> JobBlockSite.at(data, pos).map(JobBlockSite::block))
+                .filter(block -> block.ledgers() != ledgers).ifPresent(block -> {
+                    block.setLedgers(ledgers);
+                    data.changed();
+                });
+    }
+
+    /**
      * Unregisters a removed JobBlock and rechecks the connection from the center. A settlement left without a Center
      * Block gets its Center grace: it stays for {@value SettlementRules#CENTERLESS_DAYS} days and dissolves on the morning
      * after them ({@link #morning}).

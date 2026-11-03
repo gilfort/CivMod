@@ -34,7 +34,8 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 /**
  * The Clerk's "Stock" tab of the {@link JobBlockScreen} (vault {@code Jobs/Clerk.md}); the client side of
  * {@link StockTab}. Two views: the rule grid fills the space above the player inventory (8 rows of 9, 9 rules per
- * JobBlock level active; it scrolls like the Found tab when there are more slots); a click on a rule, or a new item in a
+ * JobBlock level and per Ledger active, rows open from the top; every locked row is grey with one lock icon in its
+ * middle; it scrolls like the Found tab when there are more slots); a click on a rule, or a new item in a
  * slot, opens the editor view of that rule (item and name on top, Min / Max / Order, Priority, delete and "◀ Back";
  * Escape returns too). The Workers tab gets the Warehouse line ({@link #workersLines}).
  */
@@ -46,9 +47,8 @@ final class StockTabView implements JobBlockTabView {
     private static final int GRID_ROWS = 8;
     private static final int COLUMNS = 9;
     private static final int SLOT = 18;
-    /** Slots the grid shows: at least 8 full rows, every rule slot of the highest level. */
-    private static final int GRID_SLOTS = Math.max(GRID_ROWS * COLUMNS,
-            (StockRule.slots(SettlementRules.MAX_LEVEL) + COLUMNS - 1) / COLUMNS * COLUMNS);
+    /** Slots the grid shows: at least 8 full rows, every rule slot of the highest level with every Ledger. */
+    private static final int GRID_SLOTS = Math.max(GRID_ROWS * COLUMNS, (StockRule.MAX_SLOTS + COLUMNS - 1) / COLUMNS * COLUMNS);
     /** Gap between the grid and its scrollbar. */
     private static final int SCROLLBAR_GAP = 4;
 
@@ -206,7 +206,7 @@ final class StockTabView implements JobBlockTabView {
             return;
         }
         Optional<StockRule> rule = selectedStockRule();
-        boolean editable = rule.isPresent() && rule.get().activeAt(clerk().level());
+        boolean editable = rule.isPresent() && rule.get().activeIn(clerk().slots());
         boolean min = rule.filter(StockRule::hasMin).isPresent();
         for (FieldWidgets widgets : fields) {
             boolean active = editable && (min || widgets.field() == Field.MIN || widgets.field() == Field.MAX);
@@ -255,7 +255,7 @@ final class StockTabView implements JobBlockTabView {
      * Max set is not sent.
      */
     private void editSelected(UnaryOperator<StockRule> change) {
-        selectedStockRule().filter(rule -> rule.activeAt(clerk().level())).ifPresent(rule -> {
+        selectedStockRule().filter(rule -> rule.activeIn(clerk().slots())).ifPresent(rule -> {
             StockRule changed = change.apply(rule);
             if (!changed.equals(rule) && changed.valid()) {
                 sendStockRule(rule.slot(), Optional.of(changed));
@@ -310,7 +310,7 @@ final class StockTabView implements JobBlockTabView {
      */
     @Override
     public boolean acceptGhost(int slot, ItemStack stack) {
-        if (stack.isEmpty() || slot < 0 || slot >= StockRule.slots(clerk().level())) {
+        if (stack.isEmpty() || slot < 0 || slot >= clerk().slots()) {
             return false;
         }
         StockRule rule = clerk().rule(slot)
@@ -340,7 +340,7 @@ final class StockTabView implements JobBlockTabView {
         if (editing()) {
             return targets;
         }
-        int active = StockRule.slots(clerk().level());
+        int active = clerk().slots();
         for (int row = 0; row < GRID_ROWS; row++) {
             for (int column = 0; column < columns(); column++) {
                 int slot = slotAt(row, column);
@@ -450,13 +450,13 @@ final class StockTabView implements JobBlockTabView {
     }
 
     /**
-     * The rule grid: rules in rows (9 per JobBlock level active, the rest greyed) with Min (or Max) as stack number; the
-     * hovered slot's rule as tooltip.
+     * The rule grid: rules in rows (9 per JobBlock level and per Ledger active; the locked rows greyed with one lock icon
+     * in their middle) with Min (or Max) as stack number; the hovered slot's rule as tooltip.
      */
     private void extractGrid(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         Font font = font();
         ClerkTabData tab = clerk();
-        int active = StockRule.slots(tab.level());
+        int active = tab.slots();
         int hovered = ghostTargetAt(mouseX, mouseY);
         for (int row = 0; row < GRID_ROWS; row++) {
             for (int column = 0; column < columns(); column++) {
@@ -476,14 +476,17 @@ final class StockTabView implements JobBlockTabView {
                 }
                 if (slot >= active) {
                     CivGui.slotInactive(graphics, x, y);
+                    if (column == columns() / 2) {
+                        CivGui.slotLocked(graphics, x, y);
+                    }
                 } else if (slot == hovered) {
                     CivGui.slotHover(graphics, x, y);
                 }
             }
         }
         scroller.extract(graphics, scrollbarX(), GRID_Y, GRID_ROWS * SLOT, maxOffset());
-        // Slots beyond the highest level never hold a rule: no tooltip.
-        if (hovered >= 0 && hovered < StockRule.slots(SettlementRules.MAX_LEVEL)) {
+        // Slots beyond the highest level with every Ledger never hold a rule: no tooltip.
+        if (hovered >= 0 && hovered < StockRule.MAX_SLOTS) {
             graphics.setComponentTooltipForNextFrame(font, stockTooltip(hovered, active), mouseX, mouseY);
         }
     }
@@ -510,9 +513,8 @@ final class StockTabView implements JobBlockTabView {
                 PRIORITY_X, EDIT_Y + 3, min ? CivGui.LABEL_COLOR : CivGui.HINT_COLOR, false);
         int y = STATE_Y;
         int width = screen.panelWidth() - 2 * CivGui.PADDING;
-        if (selectedSlot >= StockRule.slots(tab.level())) {
-            Component inactive = Component.translatable("civmod.gui.clerk.stock.inactive", selectedSlot / StockRule.RULES_PER_LEVEL + 1);
-            graphics.text(font, CivGui.fit(font, inactive, width), CivGui.PADDING, y, CivGui.ERROR_COLOR, false);
+        if (selectedSlot >= tab.slots()) {
+            graphics.text(font, CivGui.fit(font, locked(tab), width), CivGui.PADDING, y, CivGui.ERROR_COLOR, false);
             y += 11;
         }
         if (selected.isPresent() && tab.nowhere().contains(selectedSlot)) {
@@ -547,9 +549,20 @@ final class StockTabView implements JobBlockTabView {
             lines.add(Component.translatable("civmod.gui.clerk.stock.empty_slot"));
         }
         if (slot >= active) {
-            lines.add(Component.translatable("civmod.gui.clerk.stock.inactive", slot / StockRule.RULES_PER_LEVEL + 1).withStyle(ChatFormatting.RED));
+            lines.add(locked(clerk()).copy().withStyle(ChatFormatting.RED));
         }
         return lines;
+    }
+
+    /**
+     * Why a row is locked, naming only the ways still open: an upgrade and a Ledger, only a Ledger at Lv 5, only an
+     * upgrade with every Ledger used.
+     */
+    private static Component locked(ClerkTabData tab) {
+        boolean upgrade = tab.level() < SettlementRules.MAX_LEVEL;
+        boolean ledger = tab.ledgers() < StockRule.MAX_LEDGERS;
+        String way = upgrade && ledger ? "both" : ledger ? "ledger" : "upgrade";
+        return Component.translatable("civmod.gui.clerk.stock.locked." + way);
     }
 
     @Override

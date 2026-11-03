@@ -56,7 +56,7 @@ public final class GhostSlotGameTests {
         StockRules.setRule(data, clerk, StockRule.minimum(2, Items.TORCH, 4, 0));
         int next = ClerkTabData.of(level, clerk).nextEmptyGhostSlot();
         helper.assertTrue(next == 1, "The gap between the rules: " + next);
-        int slots = StockRule.slots(ClerkTabData.of(level, clerk).level());
+        int slots = ClerkTabData.of(level, clerk).slots();
         // One rule per item: a different item in every slot.
         List<Item> items = BuiltInRegistries.ITEM.stream().filter(item -> item != Items.AIR).limit(slots).toList();
         for (int slot = 0; slot < slots; slot++) {

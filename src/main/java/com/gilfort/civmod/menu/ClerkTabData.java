@@ -46,6 +46,7 @@ import net.minecraft.world.item.ItemStack;
  * open whenever it changed ({@link Sync}); the client edits rules with {@link Edit}.
  *
  * @param level    the Clerk JobBlock level (9 rules per level are active)
+ * @param ledgers  the Ledgers used on it (9 more active rules each)
  * @param rules    the stock rules
  * @param tasks    the tasks: blocked first, then in progress, then waiting; requests (highest priority first) before
  *                 Delivery tasks (in creation order) within each
@@ -53,15 +54,16 @@ import net.minecraft.world.item.ItemStack;
  * @param servedBy the Warehouse serving this Clerk, if any
  * @param nowhere  the slots of the rules whose surplus has nowhere to go ("Surplus: nowhere to go")
  */
-public record ClerkTabData(int level, List<StockRule> rules, List<TaskRow> tasks, List<Component> served, Optional<Component> servedBy,
+public record ClerkTabData(int level, int ledgers, List<StockRule> rules, List<TaskRow> tasks, List<Component> served, Optional<Component> servedBy,
         List<Integer> nowhere) {
 
     /** Nothing (any other JobBlock, or before the first sync). */
-    public static final ClerkTabData EMPTY = new ClerkTabData(1, List.of(), List.of(), List.of(), Optional.empty(), List.of());
+    public static final ClerkTabData EMPTY = new ClerkTabData(1, 0, List.of(), List.of(), List.of(), Optional.empty(), List.of());
 
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, ClerkTabData> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.VAR_INT, ClerkTabData::level,
+            ByteBufCodecs.VAR_INT, ClerkTabData::ledgers,
             StockRule.STREAM_CODEC.apply(ByteBufCodecs.list()), ClerkTabData::rules,
             TaskRow.STREAM_CODEC.apply(ByteBufCodecs.list()), ClerkTabData::tasks,
             ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), ClerkTabData::served,
@@ -71,6 +73,7 @@ public record ClerkTabData(int level, List<StockRule> rules, List<TaskRow> tasks
 
     /**
      * @param level    the Clerk JobBlock level
+     * @param ledgers  the Ledgers used on it
      * @param rules    the stock rules
      * @param tasks    the tasks
      * @param served   the Served Clerks
@@ -171,6 +174,13 @@ public record ClerkTabData(int level, List<StockRule> rules, List<TaskRow> tasks
     }
 
     /**
+     * @return the active rule slots: (level + Ledgers) × 9
+     */
+    public int slots() {
+        return StockRule.slots(level, ledgers);
+    }
+
+    /**
      * @param slot a rule slot
      * @return the rule in that slot
      */
@@ -184,7 +194,7 @@ public record ClerkTabData(int level, List<StockRule> rules, List<TaskRow> tasks
      * @return the first active rule slot without a rule, {@code -1} if every one holds a rule
      */
     public int nextEmptyGhostSlot() {
-        for (int slot = 0; slot < StockRule.slots(level); slot++) {
+        for (int slot = 0; slot < slots(); slot++) {
             if (rule(slot).isEmpty()) {
                 return slot;
             }
@@ -210,7 +220,7 @@ public record ClerkTabData(int level, List<StockRule> rules, List<TaskRow> tasks
         tasks.addAll(deliveries(level, settlement.get(), clerks));
         // A stable sort: requests stay before deliveries, each in its own order.
         tasks.sort(Comparator.comparingInt(row -> row.status().order()));
-        return new ClerkTabData(block.get().level(), block.get().stockRules(), tasks, served(settlement.get(), block.get()),
+        return new ClerkTabData(block.get().level(), block.get().ledgers(), block.get().stockRules(), tasks, served(settlement.get(), block.get()),
                 Warehouses.servedBy(settlement.get(), clerk).map(ClerkStorage::name), StockRules.surplusNowhere(level, clerk));
     }
 
