@@ -82,23 +82,25 @@ public final class MissionOfferGameTests {
     }
 
     /**
-     * Each Mission Job of the board has its own number of missions: the Adventurer level + 1, plus 1 per open Station
-     * Types slot without a Specialization; every unlocked Specialization as many as the board level.
+     * Each Mission Job of the board has its own number of missions: the Adventurer the board level plus 1 per open
+     * Station Types slot without a Specialization (an empty board: level + 1); every unlocked Specialization as many as
+     * the board level.
      */
     private static void offerSize(GameTestHelper helper) {
         Job adventurer = ModJobs.ADVENTURER.get();
         Job bard = ModJobs.BARD.get();
         Job other = specialization();
-        helper.assertTrue(MissionRules.quotas(List.of(adventurer), 1, 0).equals(Map.of(adventurer, 2)), "Level 1: 2 Adventurer missions");
-        helper.assertTrue(MissionRules.quotas(List.of(adventurer, bard), 2, 0).equals(Map.of(adventurer, 3, bard, 2)),
-                "Level 2 with the Bard: 3 + 2");
-        helper.assertTrue(MissionRules.quotas(List.of(adventurer), 2, 1).equals(Map.of(adventurer, 4)), "Level 2, empty slot: 4 Adventurer missions");
-        helper.assertTrue(MissionRules.quotas(List.of(adventurer, bard, other), 4, 1).equals(Map.of(adventurer, 6, bard, 4, other, 4)),
-                "Level 4, one slot empty: 5 + 1, 4 per Specialization");
-        helper.assertTrue(MissionRules.quotas(List.of(adventurer), 5, 4).equals(Map.of(adventurer, 10)), "Level 5 without Specializations: 10");
-        helper.assertTrue(MissionRules.quotas(List.of(adventurer, bard, other), 5, 2).values().stream().mapToInt(Integer::intValue).sum() == 18,
-                "Level 5, two Specializations: 6 + 2 + 5 + 5");
-        helper.assertTrue(MissionRules.MAX_OFFER_SIZE == 26, "Largest offer: 6 + 4 × 5");
+        helper.assertTrue(MissionRules.quotas(List.of(adventurer), 1, 1).equals(Map.of(adventurer, 2)), "Level 1, empty slot: 2 Adventurer missions");
+        helper.assertTrue(MissionRules.quotas(List.of(adventurer, bard), 1, 0).equals(Map.of(adventurer, 1, bard, 1)), "Level 1 with the Bard: 1 + 1");
+        helper.assertTrue(MissionRules.quotas(List.of(adventurer, bard), 2, 1).equals(Map.of(adventurer, 3, bard, 2)),
+                "Level 2 with the Bard, one slot empty: 3 + 2");
+        helper.assertTrue(MissionRules.quotas(List.of(adventurer), 2, 2).equals(Map.of(adventurer, 4)), "Level 2, empty slots: 4 Adventurer missions");
+        helper.assertTrue(MissionRules.quotas(List.of(adventurer, bard, other), 4, 2).equals(Map.of(adventurer, 6, bard, 4, other, 4)),
+                "Level 4, two slots empty: 4 + 2, 4 per Specialization");
+        helper.assertTrue(MissionRules.quotas(List.of(adventurer), 5, 5).equals(Map.of(adventurer, 10)), "Level 5 without Specializations: 10");
+        helper.assertTrue(MissionRules.quotas(List.of(adventurer, bard, other), 5, 3).values().stream().mapToInt(Integer::intValue).sum() == 18,
+                "Level 5, two Specializations: 5 + 3 + 5 + 5");
+        helper.assertTrue(MissionRules.MAX_OFFER_SIZE == 30, "Largest offer: 5 + 5 × 5");
         helper.succeed();
     }
 
@@ -159,7 +161,7 @@ public final class MissionOfferGameTests {
         BlockPos board = new BlockPos(0, 64, 0);
         placeBoard(data, board, 5);
         List<MissionOffer.Entry> locked = MissionOffers.refresh(data, board, 1L, pool, RandomSource.create(2L));
-        helper.assertTrue(count(locked, SPECIAL) == 0 && count(locked, COMMON) == 10, "Without Station Types only Adventurer missions (6 + 4 empty slots): " + locked);
+        helper.assertTrue(count(locked, SPECIAL) == 0 && count(locked, COMMON) == 10, "Without Station Types only Adventurer missions (5 + 5 empty slots): " + locked);
         TestAssignments.setStationType(data, board, 1, Items.BELL);
         List<MissionOffer.Entry> unlocked = MissionOffers.refresh(data, board, 2L, pool, RandomSource.create(2L));
         helper.assertTrue(count(unlocked, SPECIAL) > 0, "The bell adds Specialization missions: " + unlocked);

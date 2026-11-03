@@ -1,6 +1,5 @@
 package com.gilfort.civmod.menu;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,9 +25,8 @@ import net.minecraft.world.item.Items;
  * item. The server sends it while the menu is open whenever it changed ({@link Sync}); the client puts an item into a
  * slot with a menu button ({@link StationTypesTab#slotButtonId}).
  *
- * @param slots     the slots ({@value StationTypes#SLOTS} entries): the Base Job's station, then the unlock items
- *                  ({@link Items#AIR}: empty)
- * @param open      how many slots are in use at the JobBlock's level
+ * @param slots     the unlock items in the slots ({@value StationTypes#SLOTS} entries, {@link Items#AIR}: empty)
+ * @param open      how many slots are open at the JobBlock's level
  * @param unlocked  the Jobs of its Base Job the JobBlock offers (the Base Job first)
  * @param libraries the Jobs whose library holds a pattern (a locked one keeps its Patterns tab)
  * @param overview  every unlock item of the Base Job's Specializations with the Jobs it unlocks
@@ -56,7 +54,7 @@ public record StationTypesTabData(List<Item> slots, int open, List<Job> unlocked
 
     /**
      * @param slots     the slots
-     * @param open      how many slots are in use
+     * @param open      how many slots are open
      * @param unlocked  the Jobs the JobBlock offers
      * @param libraries the Jobs whose library holds a pattern
      * @param overview  every unlock item with its Jobs
@@ -79,9 +77,7 @@ public record StationTypesTabData(List<Item> slots, int open, List<Job> unlocked
             return EMPTY;
         }
         SettlementBlock block = found.get();
-        List<Item> slots = new ArrayList<>(block.stationTypes());
-        slots.set(0, StationTypes.baseStation(block.jobType()));
-        return new StationTypesTabData(slots, StationTypes.open(block.level()), StationTypes.unlocked(block), block.libraryJobs(),
+        return new StationTypesTabData(block.stationTypes(), StationTypes.open(block.level()), StationTypes.unlocked(block), block.libraryJobs(),
                 StationTypes.overview(block.jobType()));
     }
 

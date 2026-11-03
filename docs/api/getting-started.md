@@ -48,7 +48,7 @@ Builder values:
 |---|---|---|
 | `icon` | item shown in GUIs (usually the JobBlock) | required |
 | `parent` | parent Base Job; makes the Job a Specialization | none |
-| `unlockItem` | the item that unlocks the Specialization in a Station Types slot of its parent's JobBlock; for a Base Job its station, shown in the first slot | none (a Specialization without one is never unlocked) |
+| `unlockItem` | the item that unlocks the Specialization in a Station Types slot of its parent's JobBlock; for a Base Job its station, which is no unlock item at its own JobBlock | none (a Specialization without one is never unlocked) |
 | `hungerFactor` | how much hungrier work makes than standing around | 1.0 |
 | `baseExp` | base EXP per produced resource (per mission for Mission Jobs) | 1 |
 | `jobFactor` | factor on the shared speed formula | 1.0 |
@@ -61,7 +61,7 @@ Producing Jobs: see [producing.md](producing.md) (the profile is required).
 
 ## Station Types
 
-Every JobBlock whose Base Job has Specializations (except the Mission Board) gets a **Station Types** tab with 5 slots. Slot 1 shows the Base Job's station (its `unlockItem`, else its icon) and is locked; each JobBlock level above 1 opens one more slot. A player puts an unlock item into an open slot: it is consumed and unlocks **every** Specialization of that Base Job naming the item, at this JobBlock only. Items that unlock nothing (or nothing new) are refused. An item put into a filled slot replaces the old one: settlers working a Job that is no longer unlocked fall back to the Base Job, and its pattern library stays (greyed out) until the Job is unlocked again.
+Every JobBlock whose Base Job has Specializations (the Mission Board too) gets a **Station Types** tab with 5 slots. The Base Job holds no slot, the JobBlock always offers it; each JobBlock level opens one slot (level 1: the first, level 5: all 5), so a JobBlock has up to 5 Specializations. A player puts an unlock item into an open slot: it is consumed and unlocks **every** Specialization of that Base Job naming the item, at this JobBlock only. Items that unlock nothing (or nothing new) are refused. An item put into a filled slot replaces the old one: settlers working a Job that is no longer unlocked fall back to the Base Job, and its pattern library stays (greyed out) until the Job is unlocked again.
 
 The unlock item is not the work place: the Job still needs its station in the world (its station tag, the Scroll of Assignment's work points). Several addons may name the same item; the tab's "?" lists every unlock item with all Jobs it unlocks, one line each, using the lang key `job.<namespace>.<job>.description` (optional) as the Job's one-line description.
 

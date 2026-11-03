@@ -76,8 +76,8 @@ public final class PlantationFarmerGameTests {
     }
 
     /**
-     * The Gatherer JobBlock shows the Station Types tab; slot 1 holds its sweet berries and is locked; bamboo in the open
-     * slot of a level-2 JobBlock offers the Plantation Farmer.
+     * The Gatherer JobBlock shows the Station Types tab; its own sweet berries unlock nothing; bamboo in an open slot of a
+     * level-2 JobBlock offers the Plantation Farmer.
      */
     private static void bambooUnlocks(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -87,7 +87,7 @@ public final class PlantationFarmerGameTests {
         JobBlockMenu menu = StationTypeGameTests.menu(helper, helper.makeMockPlayer(GameType.SURVIVAL), pos);
         helper.assertTrue(menu.tab(StationTypesTab.class).filter(StationTypesTab::shown).isPresent(), "Station Types tab shown");
         helper.assertValueEqual(offered(level, pos), List.of(ModJobs.GATHERER.get()), "Only the Gatherer before an unlock");
-        helper.assertFalse(StationTypeGameTests.unlock(helper, pos, 0, Items.BAMBOO), "The sweet berry slot is locked");
+        helper.assertFalse(StationTypeGameTests.unlock(helper, pos, 0, Items.SWEET_BERRIES), "The Gatherer's sweet berries unlock nothing");
         helper.assertTrue(StationTypeGameTests.unlock(helper, pos, 1, Items.BAMBOO), "Bamboo taken");
         helper.assertTrue(offered(level, pos).contains(ModJobs.PLANTATION_FARMER.get()), "Plantation Farmer offered: " + offered(level, pos));
         helper.succeed();

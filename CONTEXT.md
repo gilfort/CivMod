@@ -106,7 +106,7 @@ A Job with a parent Base Job, unlocked per JobBlock by its unlock item in a Stat
 _Avoid_: Advanced job, sub-job
 
 **Station Types**:
-The 5 slots of a JobBlock whose Base Job has Specializations (the Mission Board too: slot 1 the Adventurer): slot 1 the Base Job's station (locked), one more open slot per level. An unlock item put into an open slot is consumed and unlocks every Specialization naming it at this JobBlock; put into a filled slot it replaces the old one, settlers of a Job no longer unlocked fall back to the Base Job (its library is kept, locked). Not the work place: the Job still needs its station in the world. Code: `StationTypes` (`put`, `unlocked`, `overview`), saved in `SettlementBlock.stationTypes()`; tab `StationTypesTab` (button `StationTypesTab.slotButtonId`, data `StationTypesTabData`), `StationTypesTabView`; offered Jobs `JobPlaces.offered(SettlementBlock)`.
+The 5 slots of a JobBlock whose Base Job has Specializations (the Mission Board too): one open slot per level (level 1: the first), the Base Job holds none and is always offered; its own station is no unlock item. An unlock item put into an open slot is consumed and unlocks every Specialization naming it at this JobBlock; put into a filled slot it replaces the old one, settlers of a Job no longer unlocked fall back to the Base Job (its library is kept, locked). Not the work place: the Job still needs its station in the world. Code: `StationTypes` (`put`, `unlocked`, `overview`), saved in `SettlementBlock.stationTypes()`; tab `StationTypesTab` (button `StationTypesTab.slotButtonId`, data `StationTypesTabData`), `StationTypesTabView`; offered Jobs `JobPlaces.offered(SettlementBlock)`.
 _Avoid_: Upgrade slot, unlock slot
 
 **Gatherer**:
@@ -198,7 +198,7 @@ A Mission whose result is vanilla Villagers instead of loot: its `villagers` blo
 _Avoid_: Settler (a Villager is always a vanilla Villager entity), recruits
 
 **Mission Offer**:
-The missions a Mission Board offers today; the player marks the ones to be done. Each Mission Job of the board has its own share: the Adventurer board level + 1, plus 1 per open Station Types slot without a Specialization; every unlocked Specialization as many as the board level (at most 26 on a level-5 board). Code: `MissionOffer` (entries + refill day) in `SettlementBlock.missionOffer()`, refilled and marked through `MissionOffers`; shares `MissionRules.quotas` (empty slots `StationTypes.emptySlots`), drawn by `MissionRules.refill`.
+The missions a Mission Board offers today; the player marks the ones to be done. Each Mission Job of the board has its own share: the Adventurer the board level plus 1 per open Station Types slot without a Specialization; every unlocked Specialization as many as the board level (at most 30 on a level-5 board). Code: `MissionOffer` (entries + refill day) in `SettlementBlock.missionOffer()`, refilled and marked through `MissionOffers`; shares `MissionRules.quotas` (empty slots `StationTypes.emptySlots`), drawn by `MissionRules.refill`.
 _Avoid_: Quest list, mission pool (the pool is all missions)
 
 **Mission Assignment**:
