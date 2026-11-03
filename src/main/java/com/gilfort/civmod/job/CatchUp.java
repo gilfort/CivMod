@@ -81,6 +81,12 @@ public final class CatchUp {
                     // 06:00 of the simulated day: automatic assignment, before anyone works.
                     morning = day;
                     AutoAssignment.catchUpMorning(level, settlers.stream().filter(settler -> !settler.isRemoved()).toList(), day);
+                    // The shrine's glow of that day: one prayer chain per assigned Priest, without walking.
+                    for (Settler settler : order(settlers, day)) {
+                        if (!settler.isRemoved() && day >= DayClock.day(settler.getWork().catchUpFrom())) {
+                            PriestLoop.catchUpDay(level, settler, day, settler.getWork().catchUpTo(), level.getRandom());
+                        }
+                    }
                 }
                 List<Settler> order = order(settlers, day);
                 while (hour < HOURS) {

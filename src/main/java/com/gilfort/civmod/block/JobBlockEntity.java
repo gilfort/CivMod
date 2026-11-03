@@ -44,6 +44,14 @@ import net.minecraft.world.level.storage.ValueOutput;
  */
 public class JobBlockEntity extends BaseContainerBlockEntity {
 
+    /** The shrine does not glow. */
+    public static final int GLOW_NONE = 0;
+    /** The shrine glows; a solid block above hides the beam, so only sparks rise. */
+    public static final int GLOW_SPARKS = 1;
+    /** The shrine glows and a beam rises like a beacon's. */
+    public static final int GLOW_BEAM = 2;
+
+
     /** Number of storage slots. */
     public static final int SLOTS = 27;
 
@@ -53,6 +61,8 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     private int ledgers;
     private int settlementId = Settlement.NO_SETTLEMENT;
     private boolean connected = true;
+    /** The shrine glow of a Center Block; client-visible, not saved. */
+    private int glow = GLOW_NONE;
     /** Counts every change of the slots (not saved): the Clerk stock view re-reads them when it moves. */
     private int changes;
 
@@ -129,6 +139,29 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     }
 
     /**
+     * @return how the Center Block's shrine glows: {@link #GLOW_NONE}, {@link #GLOW_SPARKS} or {@link #GLOW_BEAM}
+     */
+    public int getGlow() {
+        return glow;
+    }
+
+    /**
+     * Sets the shrine glow and syncs it (not saved: the glow is recomputed every second).
+     *
+     * @param glow {@link #GLOW_NONE}, {@link #GLOW_SPARKS} (glowing under a solid block) or {@link #GLOW_BEAM}
+     */
+    public void setGlow(int glow) {
+        if (this.glow == glow) {
+            return;
+        }
+        this.glow = glow;
+        if (level != null) {
+            BlockState state = getBlockState();
+            level.sendBlockUpdated(worldPosition, state, state, Block.UPDATE_CLIENTS);
+        }
+    }
+
+    /**
      * @return whether the block is not connected to a settlement chain, also without a settlement
      */
     public boolean isUnconnected() {
@@ -174,6 +207,7 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
         ledgers = Math.clamp(input.getIntOr("ledgers", 0), 0, SettlementRules.MAX_LEDGERS);
         settlementId = input.getIntOr("settlement", Settlement.NO_SETTLEMENT);
         connected = input.getBooleanOr("connected", true);
+        glow = input.getIntOr("glow", GLOW_NONE);
     }
 
     @Override
@@ -182,6 +216,7 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
         tag.putInt("job_level", jobLevel);
         tag.putInt("settlement", settlementId);
         tag.putBoolean("connected", connected);
+        tag.putInt("glow", glow);
         return tag;
     }
 

@@ -136,6 +136,7 @@ public final class SettlerWork {
     private final ClerkLoop clerks;
     /** The Deliveryman's loop: a second Logistics loop beside the Clerk's. */
     private final DeliverymanLoop deliverymen;
+    private final PriestLoop priests;
 
     private Activity activity = Activity.IDLE;
     /** Whether the last applied job step is a work break (the settler sits at the end of the decision). */
@@ -193,6 +194,7 @@ public final class SettlerWork {
         // The Craftsperson is the only Producing Job so far.
         loops.put(JobCategory.PRODUCING, new ProducingLoop(this));
         deliverymen = new DeliverymanLoop(this);
+        priests = new PriestLoop(this);
         thoughts = new SettlerThoughts(settler);
         meals = new SettlerMeals(this);
         resting = new SettlerRest(settler);
@@ -205,6 +207,7 @@ public final class SettlerWork {
     private List<CategoryLoop> allLoops() {
         List<CategoryLoop> all = new ArrayList<>(loops.values());
         all.add(deliverymen);
+        all.add(priests);
         return all;
     }
 
@@ -305,6 +308,13 @@ public final class SettlerWork {
     }
 
     /**
+     * @return the Priest's loop
+     */
+    PriestLoop priests() {
+        return priests;
+    }
+
+    /**
      * @return the settler
      */
     Settler settler() {
@@ -318,6 +328,10 @@ public final class SettlerWork {
     @Nullable CategoryLoop loop(SettlerJob job) {
         if (job.jobType() == ModJobs.DELIVERYMAN.get()) {
             return deliverymen;
+        }
+        if (job.jobType().category() == JobCategory.SERVICE) {
+            // The Administrator has no work; the Priest prays.
+            return job.jobType() == ModJobs.PRIEST.get() ? priests : null;
         }
         CategoryLoop loop = loops.get(job.jobType().category());
         // The Logistics category has two loops: the Clerk's (here) and the Deliveryman's (above).

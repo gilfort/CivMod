@@ -17,6 +17,7 @@ import com.gilfort.civmod.job.MinerProfile;
 import com.gilfort.civmod.job.SmelterProfile;
 import com.gilfort.civmod.job.SmithProfile;
 import com.gilfort.civmod.job.VeggyFarmerProfile;
+import com.gilfort.civmod.settlement.Shrine;
 
 import net.minecraft.core.Registry;
 import net.minecraft.world.item.Items;
@@ -72,6 +73,9 @@ public final class ModJobs {
     /** See vault {@code Jobs/Administrator.md}; works at the Center Block, has no work yet: a settler moves on to its next job. */
     public static final DeferredHolder<Job, Job> ADMINISTRATOR = JOBS.register("administrator", () -> Job.builder(JobCategory.SERVICE)
             .icon(ModItems.HUMAN_CENTER_BLOCK).bubbleIcon(() -> Items.WRITABLE_BOOK).build());
+    /** See vault {@code Jobs/Priest.md}; prays at the glowing Center Block (loop {@code PriestLoop}), otherwise it moves on to its next job. */
+    public static final DeferredHolder<Job, Job> PRIEST = JOBS.register("priest", () -> Job.builder(JobCategory.SERVICE)
+            .icon(ModItems.HUMAN_CENTER_BLOCK).bubbleIcon(() -> Items.BELL).hungerFactor(0.5).baseExp(Shrine.EXP_PER_LEVEL).build());
 
     /** See vault {@code Jobs/Clerk.md}; the store and food point of the settlement, the first Logistics Job. */
     public static final DeferredHolder<Job, Job> CLERK = JOBS.register("clerk", () -> Job.builder(JobCategory.LOGISTICS)
