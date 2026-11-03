@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:barrel",
+    "minecraft:bread"
+  ],
+  "result": {
+    "id": "civmod:pantry_block"
+  }
+}

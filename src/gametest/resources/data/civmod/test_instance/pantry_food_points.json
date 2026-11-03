@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "civmod:day",
-  "function": "civmod:clerk_catch_up_food",
+  "function": "civmod:pantry_food_points",
   "max_ticks": 1200,
   "structure": "minecraft:empty",
   "padding": 40

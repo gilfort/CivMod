@@ -114,11 +114,16 @@ final class ClerkCounter {
     }
 
     private static Optional<Settler> clerkSettler(ServerLevel level, BlockPos clerk) {
-        return JobBlockSite.blockAt(level, clerk).flatMap(block -> block.assignee(ModJobs.CLERK.get()))
+        return JobBlockSite.blockAt(level, clerk).flatMap(block -> block.assignee(block.jobType()))
                 .map(SettlementBlock.Assignee::id).map(level::getEntity).filter(Settler.class::isInstance).map(Settler.class::cast);
     }
 
-    private static int clerkSkill(ServerLevel level, BlockPos clerk) {
+    /**
+     * @param level the level
+     * @param clerk the Clerk JobBlock or Pantry
+     * @return the level its settler works at (the Tavern Host's level gives the Pantry's meal bonus), 1 without one
+     */
+    static int clerkSkill(ServerLevel level, BlockPos clerk) {
         return clerkSettler(level, clerk).flatMap(settler -> settler.getJobs().stream().filter(job -> job.jobBlock().equals(clerk)).findFirst()
                 .map(job -> settler.getWork().effectiveLevel(job))).orElse(1);
     }

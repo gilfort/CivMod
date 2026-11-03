@@ -27,7 +27,7 @@ public final class JobBlockTabs {
      * @return new tabs for its window, in tab order (Workers first, the tabs below the panel last)
      */
     public static List<JobBlockTab> of(Job jobType) {
-        List<JobBlockTab> tabs = new ArrayList<>(List.of(new WorkersTab(), new StorageTab()));
+        List<JobBlockTab> tabs = new ArrayList<>(List.of(new WorkersTab(), new StorageTab(jobType == ModJobs.TAVERN_HOST.get())));
         if (jobType == ModJobs.CLERK.get()) {
             TabData<ClerkTabData> clerk = StockTab.newData();
             tabs.addAll(List.of(new StockTab(clerk), new TasksTab(clerk)));

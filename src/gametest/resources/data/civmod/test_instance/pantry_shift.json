@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "civmod:day",
-  "function": "civmod:clerk_counter_service",
+  "function": "civmod:pantry_shift",
   "max_ticks": 1200,
   "structure": "minecraft:empty",
   "padding": 40

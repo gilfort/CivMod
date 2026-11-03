@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "civmod:day",
-  "function": "civmod:variety_clerk_prefers_new_food",
+  "function": "civmod:variety_pantry_prefers_new_food",
   "max_ticks": 1200,
   "structure": "minecraft:empty",
   "padding": 40

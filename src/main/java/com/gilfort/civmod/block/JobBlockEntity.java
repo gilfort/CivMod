@@ -3,11 +3,13 @@ package com.gilfort.civmod.block;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.registry.ModBlockEntityTypes;
 import com.gilfort.civmod.registry.ModDataComponents;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
@@ -72,6 +74,31 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
      */
     public JobBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntityTypes.JOB_BLOCK.get(), pos, state);
+        items = NonNullList.withSize(slotsFor(SettlementRules.MIN_LEVEL), ItemStack.EMPTY);
+    }
+
+    /** The slots a block of this Job has at a level: 27, a Pantry grows with its level. */
+    private int slotsFor(int jobLevel) {
+        return getBlockState().getBlock() instanceof JobBlock jobBlock ? SettlementRules.storageSlots(jobBlock.getJobType(), jobLevel) : SLOTS;
+    }
+
+    /** Adds the slots a level brings (a Pantry); slots are never taken away, so a downgrade loses no item. */
+    private void growSlots() {
+        int slots = slotsFor(jobLevel);
+        if (slots > items.size()) {
+            NonNullList<ItemStack> grown = NonNullList.withSize(slots, ItemStack.EMPTY);
+            for (int slot = 0; slot < items.size(); slot++) {
+                grown.set(slot, items.get(slot));
+            }
+            items = grown;
+        }
+    }
+
+    /** A Pantry takes food only (what settlers may eat), by hand and by hopper. */
+    @Override
+    public boolean canPlaceItem(int slot, ItemStack stack) {
+        boolean pantry = getBlockState().getBlock() instanceof JobBlock jobBlock && jobBlock.getJobType() == ModJobs.TAVERN_HOST.get();
+        return !pantry || SettlerFood.isEdible(stack);
     }
 
     /**
@@ -107,6 +134,7 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
      */
     public void setJobLevel(int jobLevel) {
         this.jobLevel = SettlementRules.clampLevel(jobLevel);
+        growSlots();
         setChanged();
         if (level != null) {
             BlockState state = getBlockState();
@@ -200,10 +228,10 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
-        items = NonNullList.withSize(getContainerSize(), ItemStack.EMPTY);
+        jobLevel = SettlementRules.clampLevel(input.getIntOr("job_level", SettlementRules.MIN_LEVEL));
+        items = NonNullList.withSize(slotsFor(jobLevel), ItemStack.EMPTY);
         ContainerHelper.loadAllItems(input, items);
         changes++;
-        jobLevel = SettlementRules.clampLevel(input.getIntOr("job_level", SettlementRules.MIN_LEVEL));
         ledgers = Math.clamp(input.getIntOr("ledgers", 0), 0, SettlementRules.MAX_LEDGERS);
         settlementId = input.getIntOr("settlement", Settlement.NO_SETTLEMENT);
         connected = input.getBooleanOr("connected", true);
@@ -229,6 +257,7 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     protected void applyImplicitComponents(DataComponentGetter components) {
         super.applyImplicitComponents(components);
         jobLevel = SettlementRules.clampLevel(components.getOrDefault(ModDataComponents.JOB_LEVEL.get(), SettlementRules.MIN_LEVEL));
+        growSlots();
         ledgers = Math.clamp(components.getOrDefault(ModDataComponents.LEDGERS.get(), 0), 0, SettlementRules.MAX_LEDGERS);
         // A new JobBlock item puts its starter tool into the inventory; it is never collected back, so it is used up.
         Holder<Item> starterTool = components.get(ModDataComponents.STARTER_TOOL.get());
@@ -309,7 +338,7 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
 
     @Override
     public int getContainerSize() {
-        return SLOTS;
+        return items.size();
     }
 
     @Override

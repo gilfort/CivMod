@@ -215,8 +215,9 @@ public class ScrollOfAssignmentItem extends Item {
         }
         ServerLevel level = player.level();
         Job jobType = block.get().jobType();
-        if (ClerkStorage.isClerk(block.get())) {
-            if (!target.equals(jobBlock) && JobBlockSite.blockAt(level, target).filter(ClerkStorage::isClerk).isPresent()) {
+        if (ClerkStorage.isClerk(block.get()) || ClerkStorage.isPantry(block.get())) {
+            if (ClerkStorage.isClerk(block.get()) && !target.equals(jobBlock)
+                    && JobBlockSite.blockAt(level, target).filter(ClerkStorage::isClerk).isPresent()) {
                 linkServedClerk(player, jobBlock, target);
             } else {
                 cycleClerkPoint(player, jobBlock, target);

@@ -28,7 +28,7 @@ import net.minecraft.world.item.Items;
 
 /**
  * Carries out the meal intents of the {@link Schedule} for the Settler Shell (vault {@code Systems/Needs.md}): eat from
- * the pockets, fetch food at a food point (Clerk JobBlock), wait for food, forage; plus hunger, a player feeding the
+ * the pockets, fetch food at a food point (Pantry), wait for food, forage; plus hunger, a player feeding the
  * settler and complaining. It keeps the running state of a meal and reads and writes the settler's
  * {@link SettlerFood}. It answers the shell with a {@link BodyStep}; only the shell moves the settler and sets its
  * activity. Catch-up eats through the same parts on the spot.
@@ -39,6 +39,8 @@ final class SettlerMeals {
     private static final int EAT_TICKS = 30;
     /** Ticks a foraging settler walks before it vanishes. */
     private static final int FORAGE_WALK_TICKS = 600;
+    /** Food value gained per level of a working Tavern Host: +1 % (Lv 100: +100 %). */
+    private static final double MEAL_BONUS_PER_LEVEL = 0.01;
     /** Players within this distance get the hunger message. */
     private static final double COMPLAIN_RANGE = 32.0;
 
@@ -224,16 +226,16 @@ final class SettlerMeals {
 
     /**
      * @param level the level
-     * @return the Clerk JobBlock this settler waits at for food (its own as a Clerk, else the nearest), empty if the
+     * @return the Pantry this settler waits at for food (its own as a Tavern Host, else the nearest), empty if the
      *         settlement has none
      */
-    Optional<BlockPos> clerkToWaitAt(ServerLevel level) {
-        Optional<BlockPos> own = shell.ownClerk();
+    Optional<BlockPos> pantryToWaitAt(ServerLevel level) {
+        Optional<BlockPos> own = shell.ownPantry();
         if (own.isPresent()) {
             return own;
         }
         return SettlementData.get(level).settlement(settler.getSettlementId())
-                .flatMap(settlement -> ClerkStorage.nearestClerk(settlement, settler.blockPosition()));
+                .flatMap(settlement -> ClerkStorage.nearestPantry(settlement, settler.blockPosition()));
     }
 
     /**
@@ -245,7 +247,7 @@ final class SettlerMeals {
         return new FoodLookup(level, dayTime);
     }
 
-    /** The nearest food point (Clerk JobBlock) with food, looked up once and only when asked. */
+    /** The nearest food point (Pantry) with food, looked up once and only when asked. */
     final class FoodLookup {
 
         private final ServerLevel level;
@@ -277,8 +279,8 @@ final class SettlerMeals {
     private Optional<ClerkStorage.FoodPoint> foodPointWithFood(ServerLevel level, long dayTime) {
         SettlementData data = SettlementData.get(level);
         return data.settlement(settler.getSettlementId())
-                .flatMap(settlement -> ClerkStorage.nearestFood(level, settlement, settler.blockPosition(), dayTime, shell.ownClerk(),
-                        clerk -> !shell.counterUnreachable(level, clerk)));
+                .flatMap(settlement -> ClerkStorage.nearestFood(level, settlement, settler.blockPosition(), dayTime, shell.ownPantry(),
+                        pantry -> !shell.counterUnreachable(level, pantry)));
     }
 
     // ---------------------------------------------------------------- meal intents
@@ -344,7 +346,7 @@ final class SettlerMeals {
     }
 
     /**
-     * At the food point: waits for its turn at a working Clerk's counter, then eats and takes provisions.
+     * At the food point: waits for its turn at a working Tavern Host's counter, then eats and takes provisions.
      *
      * @param level the level
      * @return stay while waiting at the counter, done after the visit
@@ -352,7 +354,7 @@ final class SettlerMeals {
     BodyStep atFoodPoint(ServerLevel level) {
         ClerkStorage.FoodPoint point = foodPoint;
         if (point != null) {
-            boolean counter = point.visit().counter() && shell.ownClerk().filter(point.clerk()::equals).isEmpty();
+            boolean counter = point.visit().counter() && shell.ownPantry().filter(point.clerk()::equals).isEmpty();
             if (counter && !shell.waitAtCounter(level, point.clerk())) {
                 return BodyStep.STAY;
             }
@@ -367,21 +369,21 @@ final class SettlerMeals {
     }
 
     /**
-     * Waits for food at the queue of the nearest Clerk JobBlock ({@link Intent#WAIT_FOR_FOOD}, where its counter is
-     * now). A Clerk waits at its own counter: it works its shift meanwhile.
+     * Waits for food at the queue of the nearest Pantry ({@link Intent#WAIT_FOR_FOOD}, where its counter is
+     * now). A Tavern Host waits at its own counter: it works its shift meanwhile.
      *
      * @param level the level
-     * @return work (a Clerk), walk to the queue, or stand still without a Clerk JobBlock
+     * @return work (a Tavern Host), walk to the queue, or stand still without a Pantry
      */
     BodyStep waitForFood(ServerLevel level) {
-        if (shell.ownClerk().isPresent()) {
+        if (shell.ownPantry().isPresent()) {
             return BodyStep.WORK;
         }
-        Optional<BlockPos> clerk = clerkToWaitAt(level);
-        if (clerk.isEmpty()) {
+        Optional<BlockPos> pantry = pantryToWaitAt(level);
+        if (pantry.isEmpty()) {
             return BodyStep.STOP;
         }
-        ClerkStorage.Visit visit = shell.reachableVisit(level, clerk.get(), ClerkStorage.visit(level, clerk.get(), DayClock.dayTime(level)));
+        ClerkStorage.Visit visit = shell.reachableVisit(level, pantry.get(), ClerkStorage.visit(level, pantry.get(), DayClock.dayTime(level)));
         return new BodyStep.Walk(Activity.WAIT_FOR_FOOD, visit.target(), visit.reach());
     }
 
@@ -486,14 +488,17 @@ final class SettlerMeals {
      *
      * @param day       the day of the meal
      * @param atCounter whether the settler is served at the counter of a working Clerk (catch-up: always)
-     * @return whether a working Clerk handed something out (food from its whole storage at the counter)
+     * @return whether a working Tavern Host handed something out (food from its whole storage at the counter)
      */
     private boolean visitFoodPoint(ServerLevel level, ClerkStorage.FoodPoint point, long day, long dayTime, boolean atCounter) {
-        boolean own = shell.ownClerk().filter(point.clerk()::equals).isPresent();
-        Stock stock = own ? ClerkStorage.stock(level, point.clerk(), true) : ClerkStorage.stock(level, point.clerk(), dayTime, atCounter);
+        boolean own = shell.ownPantry().filter(point.clerk()::equals).isPresent();
+        Stock stock = ClerkStorage.stock(level, point.clerk(), false);
         if (stock.isEmpty()) {
             return false;
         }
+        // A working Tavern Host serves at the counter; its meals carry the bonus, provisions do not.
+        boolean served = atCounter && !own && ClerkStorage.working(level, point.clerk(), dayTime);
+        double bonus = served ? 1.0 + MEAL_BONUS_PER_LEVEL * ClerkCounter.clerkSkill(level, point.clerk()) : 1.0;
         boolean handedOut = false;
         SettlerFood food = settler.getFood();
         for (int i = Settler.POCKETS_START; i < Settler.POCKETS_START + Settler.POCKETS_SIZE; i++) {
@@ -513,7 +518,7 @@ final class SettlerMeals {
                     break;
                 }
                 handedOut = true;
-                eatItem(level, item, stock, day);
+                eatItem(level, item, stock, day, bonus);
             }
         }
         int wanted = CivModConfig.PROVISION_NUTRITION.get();
@@ -537,7 +542,7 @@ final class SettlerMeals {
                 break;
             }
         }
-        return handedOut && stock.counter() && !own;
+        return handedOut && served;
     }
 
     /** The day meals are noted with outside catch-up: the day the needs are checked on. */
@@ -550,9 +555,20 @@ final class SettlerMeals {
     }
 
     private void eatItem(ServerLevel level, ItemStack item, @Nullable Stock stock, long day) {
+        eatItem(level, item, stock, day, 1.0);
+    }
+
+    /**
+     * @param bonus the factor on the food value (nutrition and saturation) of a meal at a working Tavern Host's counter
+     */
+    private void eatItem(ServerLevel level, ItemStack item, @Nullable Stock stock, long day, double bonus) {
         net.minecraft.world.food.FoodProperties properties = item.get(net.minecraft.core.component.DataComponents.FOOD);
         if (properties == null) {
             return;
+        }
+        if (bonus != 1.0) {
+            properties = new net.minecraft.world.food.FoodProperties((int) Math.round(properties.nutrition() * bonus),
+                    (float) (properties.saturation() * bonus), properties.canAlwaysEat());
         }
         settler.getFood().eat(properties);
         recordMeal(item, day);

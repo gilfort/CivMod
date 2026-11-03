@@ -77,7 +77,10 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> PRIEST = JOBS.register("priest", () -> Job.builder(JobCategory.SERVICE)
             .icon(ModItems.HUMAN_CENTER_BLOCK).bubbleIcon(() -> Items.BELL).hungerFactor(0.5).baseExp(Shrine.EXP_PER_LEVEL).build());
 
-    /** See vault {@code Jobs/Clerk.md}; the store and food point of the settlement, the first Logistics Job. */
+    /** See vault {@code Jobs/Tavern Host.md}; serves the food of its Pantry, the settlement's food point; a Service Job outside the Clerk tree. */
+    public static final DeferredHolder<Job, Job> TAVERN_HOST = JOBS.register("tavern_host", () -> Job.builder(JobCategory.SERVICE)
+            .icon(ModItems.PANTRY_BLOCK).bubbleIcon(() -> Items.BREAD).hungerFactor(0.5).baseExp(1).build());
+    /** See vault {@code Jobs/Clerk.md}; the storage terminal of the settlement, the first Logistics Job. */
     public static final DeferredHolder<Job, Job> CLERK = JOBS.register("clerk", () -> Job.builder(JobCategory.LOGISTICS)
             .icon(ModItems.CLERK_BLOCK).bubbleIcon(() -> Items.EMERALD).hungerFactor(0.5).baseExp(1).build());
     /** See vault {@code Jobs/Deliveryman.md}; its places are on the Clerk JobBlock ({@link com.gilfort.civmod.settlement.JobPlaces}). */

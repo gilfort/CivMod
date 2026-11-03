@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "civmod:day",
-  "function": "civmod:clerk_food_points",
+  "function": "civmod:pantry_slots_and_food_only",
   "max_ticks": 1200,
   "structure": "minecraft:empty",
   "padding": 40

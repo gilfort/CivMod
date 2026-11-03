@@ -2,6 +2,7 @@ package com.gilfort.civmod.menu;
 
 import net.minecraft.world.Container;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * A slot bound to one or more tabs of a {@link CivMenu}; it is inactive (hidden and not clickable) while another tab
@@ -24,6 +25,12 @@ public class CivSlot extends Slot {
         super(container, index, x, y);
         this.menu = menu;
         this.tabs = tabs.clone();
+    }
+
+    /** The container decides what it takes (a Pantry takes food only), as it does for hoppers. */
+    @Override
+    public boolean mayPlace(ItemStack stack) {
+        return container.canPlaceItem(getContainerSlot(), stack);
     }
 
     @Override

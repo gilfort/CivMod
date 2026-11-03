@@ -44,7 +44,7 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
  * is reachable only through a working Clerk at its counter. Hoppers and pipes use the block's item capability and see
  * the 27 slots only.
  * <p>
- * Every Clerk JobBlock is a food point: settlers take food from the nearest Clerk whose reachable storage has food
+ * Every Pantry is a food point: settlers take food from the nearest Pantry that has food
  * ({@link #nearestFood}).
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
@@ -87,6 +87,22 @@ public final class ClerkStorage {
      */
     public static boolean isClerk(SettlementBlock block) {
         return block.jobType() == ModJobs.CLERK.get();
+    }
+
+    /**
+     * @param block a JobBlock
+     * @return whether it is a Pantry (the JobBlock of the Tavern Host)
+     */
+    public static boolean isPantry(SettlementBlock block) {
+        return block.jobType() == ModJobs.TAVERN_HOST.get();
+    }
+
+    /**
+     * @param block a JobBlock
+     * @return whether a settler serves a counter at it: a Clerk JobBlock or a Pantry
+     */
+    private static boolean hasCounter(SettlementBlock block) {
+        return isClerk(block) || isPantry(block);
     }
 
     /**
@@ -134,10 +150,22 @@ public final class ClerkStorage {
      * @param clerk   a Clerk JobBlock
      * @param day     the day
      * @param dayTime the day time
-     * @return whether a Clerk settler works it now (assigned and on shift); only then is the linked storage reachable
+     * @return whether its settler works it now (assigned and on shift); only then is the linked storage reachable
      */
     public static boolean working(SettlementBlock clerk, long day, long dayTime) {
-        return isClerk(clerk) && clerk.assignee(ModJobs.CLERK.get()).filter(assignee -> inShift(assignee.id(), day, dayTime)).isPresent();
+        return hasCounter(clerk) && clerk.assignee(clerk.jobType()).filter(assignee -> inShift(assignee.id(), day, dayTime)).isPresent();
+    }
+
+    /**
+     * {@link #working(SettlementBlock, long, long)} for the JobBlock at a position, on the level's day.
+     *
+     * @param level   the level
+     * @param pos     a JobBlock position
+     * @param dayTime the day time
+     * @return whether a Clerk or Tavern Host works the JobBlock there now (a Pantry then serves at its counter)
+     */
+    public static boolean working(ServerLevel level, BlockPos pos, long dayTime) {
+        return JobBlockSite.blockAt(level, pos).filter(block -> working(level, block, dayTime)).isPresent();
     }
 
     /**
@@ -249,7 +277,7 @@ public final class ClerkStorage {
      * @return the visit
      */
     public static Visit visit(ServerLevel level, BlockPos pos, long dayTime) {
-        Optional<SettlementBlock> clerk = JobBlockSite.blockAt(level, pos).filter(ClerkStorage::isClerk);
+        Optional<SettlementBlock> clerk = JobBlockSite.blockAt(level, pos).filter(ClerkStorage::hasCounter);
         if (clerk.isEmpty() || !working(level, clerk.get(), dayTime)) {
             return new Visit(pos, BLOCK_REACH, false);
         }
@@ -275,45 +303,45 @@ public final class ClerkStorage {
     }
 
     /**
-     * The nearest food point for a settler: its own Clerk first (a Clerk eats from its own storage), then every
-     * Clerk JobBlock by distance whose reachable storage has edible food. Checked server-side, so no walk is wasted.
+     * The nearest food point for a settler: its own Pantry first (a Tavern Host eats from its Pantry), then every
+     * Pantry by distance that has edible food. Checked server-side, so no walk is wasted. At a Pantry whose Tavern Host
+     * works, the settler is served at the counter; otherwise it helps itself.
      *
      * @param level            the level
      * @param settlement       the settler's settlement
      * @param from             the settler position
      * @param dayTime          the day time
-     * @param ownClerk         the Clerk JobBlock the settler works as Clerk, if any
-     * @param counterReachable whether the settler reaches the counter of a Clerk (false: only its block slots)
-     * @return the food point, empty if no Clerk has food for the settler
+     * @param ownPantry        the Pantry the settler works as Tavern Host, if any
+     * @param counterReachable whether the settler reaches the counter of a Pantry (false: it takes from the block)
+     * @return the food point, empty if no Pantry has food for the settler
      */
     public static Optional<FoodPoint> nearestFood(ServerLevel level, Settlement settlement, BlockPos from, long dayTime,
-            Optional<BlockPos> ownClerk, Predicate<BlockPos> counterReachable) {
-        List<SettlementBlock> clerks = new ArrayList<>(settlement.blocks().stream().filter(ClerkStorage::isClerk).toList());
-        clerks.sort(Comparator.<SettlementBlock>comparingInt(block -> ownClerk.filter(block.pos()::equals).isPresent() ? 0 : 1)
+            Optional<BlockPos> ownPantry, Predicate<BlockPos> counterReachable) {
+        List<SettlementBlock> pantries = new ArrayList<>(settlement.blocks().stream().filter(ClerkStorage::isPantry).toList());
+        pantries.sort(Comparator.<SettlementBlock>comparingInt(block -> ownPantry.filter(block.pos()::equals).isPresent() ? 0 : 1)
                 .thenComparingDouble(block -> block.pos().distSqr(from)));
-        for (SettlementBlock clerk : clerks) {
-            boolean own = ownClerk.filter(clerk.pos()::equals).isPresent();
-            Visit visit = visit(level, clerk.pos(), dayTime);
-            boolean counter = visit.counter() && counterReachable.test(clerk.pos());
-            if (!own && visit.counter() && !counter) {
-                visit = new Visit(clerk.pos(), BLOCK_REACH, false);
+        for (SettlementBlock pantry : pantries) {
+            boolean own = ownPantry.filter(pantry.pos()::equals).isPresent();
+            Visit visit = visit(level, pantry.pos(), dayTime);
+            if (!own && visit.counter() && !counterReachable.test(pantry.pos())) {
+                visit = new Visit(pantry.pos(), BLOCK_REACH, false);
             }
-            if (stock(level, clerk.pos(), own || counter).contains(SettlerFood::isEdible)) {
-                return Optional.of(new FoodPoint(clerk.pos(), visit));
+            if (stock(level, pantry.pos(), false).contains(SettlerFood::isEdible)) {
+                return Optional.of(new FoodPoint(pantry.pos(), visit));
             }
         }
         return Optional.empty();
     }
 
     /**
-     * The Clerk JobBlock a hungry settler without food waits at (with food or not): the nearest one.
+     * The Pantry a hungry settler without food waits at (with food or not): the nearest one.
      *
      * @param settlement the settler's settlement
      * @param from       the settler position
-     * @return the Clerk JobBlock, empty if the settlement has none
+     * @return the Pantry, empty if the settlement has none
      */
-    public static Optional<BlockPos> nearestClerk(Settlement settlement, BlockPos from) {
-        return settlement.blocks().stream().filter(ClerkStorage::isClerk).map(SettlementBlock::pos)
+    public static Optional<BlockPos> nearestPantry(Settlement settlement, BlockPos from) {
+        return settlement.blocks().stream().filter(ClerkStorage::isPantry).map(SettlementBlock::pos)
                 .min(Comparator.comparingDouble(pos -> pos.distSqr(from)));
     }
 

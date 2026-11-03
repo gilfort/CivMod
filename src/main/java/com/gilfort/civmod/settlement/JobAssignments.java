@@ -208,7 +208,8 @@ public final class JobAssignments {
         if (!insideBorder(site.get().settlement(), pos)) {
             return PointResult.OUTSIDE;
         }
-        if (container) {
+        // A Pantry has no linked containers: only stand spots.
+        if (container && block.jobType() != ModJobs.TAVERN_HOST.get()) {
             if (data.settlementAt(pos).isPresent()) {
                 return PointResult.INVALID;
             }

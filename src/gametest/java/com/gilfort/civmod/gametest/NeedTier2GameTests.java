@@ -78,7 +78,7 @@ public final class NeedTier2GameTests {
             register(helper, "variety_old_save", NeedTier2GameTests::oldSave);
             register(helper, "variety_fed_row", NeedTier2GameTests::fedRow);
             register(helper, "variety_catch_up", NeedTier2GameTests::catchUp);
-            register(helper, "variety_clerk_prefers_new_food", NeedTier2GameTests::clerkPrefersNewFood);
+            register(helper, "variety_pantry_prefers_new_food", NeedTier2GameTests::pantryPrefersNewFood);
             register(helper, "bed_need_straw", NeedTier2GameTests::strawBedFails);
             register(helper, "bed_need_real", NeedTier2GameTests::realBedPasses);
             register(helper, "bed_need_far_bed", NeedTier2GameTests::farBedFails);
@@ -293,8 +293,8 @@ public final class NeedTier2GameTests {
         end(helper, jobBlock, settler);
     }
 
-    /** At the Clerk a settler short of variety eats the new foods first, the carrot too, which the old choice leaves. */
-    private static void clerkPrefersNewFood(GameTestHelper helper) {
+    /** At a Pantry a settler short of variety eats the new foods first, the carrot too, which the old choice leaves. */
+    private static void pantryPrefersNewFood(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         for (int x = 0; x < 12; x++) {
@@ -304,7 +304,7 @@ public final class NeedTier2GameTests {
         }
         TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
         BlockPos clerkPos = helper.absolutePos(new BlockPos(6, 1, 6));
-        TestSettlements.setBlock(helper, new BlockPos(6, 1, 6), ModBlocks.CLERK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(6, 1, 6), ModBlocks.PANTRY_BLOCK.get());
         Container clerk = (Container) level.getBlockEntity(clerkPos);
         clerk.setItem(0, new ItemStack(Items.COOKED_BEEF, 16));
         clerk.setItem(1, new ItemStack(Items.BREAD, 4));
