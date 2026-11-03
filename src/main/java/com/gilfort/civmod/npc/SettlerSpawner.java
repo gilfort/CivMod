@@ -5,11 +5,16 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.job.SettlerSkills;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
@@ -126,33 +131,33 @@ public final class SettlerSpawner {
      * @param center     the Center Block
      * @return the new Settler, empty if the settlement is full or has no free bed
      */
-    public static java.util.Optional<Settler> recruit(ServerLevel level, SettlementData data, Settlement settlement, BlockPos center) {
+    public static Optional<Settler> recruit(ServerLevel level, SettlementData data, Settlement settlement, BlockPos center) {
         if (isFull(settlement)) {
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
-        java.util.Optional<BlockPos> bed = SettlerBeds.freeBeds(level, settlement, center).stream().findFirst();
+        Optional<BlockPos> bed = SettlerBeds.freeBeds(level, settlement, center).stream().findFirst();
         if (bed.isEmpty()) {
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
-        Identifier race = level.getBlockState(center).getBlock() instanceof com.gilfort.civmod.block.JobBlock block
+        Identifier race = level.getBlockState(center).getBlock() instanceof JobBlock block
                 ? block.centerRace().orElse(Races.HUMAN) : Races.HUMAN;
         Settler settler = spawn(level, data, settlement, center, race, usedNames(level, settlement));
         if (settler == null) {
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
-        for (com.gilfort.civmod.api.Job job : com.gilfort.civmod.registry.ModJobs.REGISTRY) {
-            settler.getSkills().set(job, new com.gilfort.civmod.job.SettlerSkills.Skill(1, 0));
+        for (Job job : ModJobs.REGISTRY) {
+            settler.getSkills().set(job, new SettlerSkills.Skill(1, 0));
         }
         SettlerBeds.claim(level, data, settlement, settler.getUUID(), bed.get());
         announce(level, Vec3.atCenterOf(center), Component.translatable("civmod.conversion.joined", settler.getName(), settlement.displayName()));
-        return java.util.Optional.of(settler);
+        return Optional.of(settler);
     }
 
     /**
      * @param settlement a settlement
      * @return whether Settlers and running conversions reached {@code maxSettlersPerSettlement} (0 = unlimited)
      */
-    public static boolean isFull(Settlement settlement) {
+    static boolean isFull(Settlement settlement) {
         int max = CivModConfig.MAX_SETTLERS_PER_SETTLEMENT.get();
         return max > 0 && settlement.members().size() + settlement.bedReservations().size() >= max;
     }
