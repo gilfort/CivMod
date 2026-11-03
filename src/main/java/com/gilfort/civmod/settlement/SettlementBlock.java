@@ -131,19 +131,21 @@ public final class SettlementBlock {
      * @param spotOfDay  the stand spot of the current half day
      * @param stockRules the stock rules
      * @param served     the Served Clerks of a Warehouse, in linking order
+     * @param ledgers    the Ledgers used on the block (9 more rule slots each)
      */
     private record ClerkFields(List<BlockPos> storage, List<StandSpot> standSpots, SpotOfDay spotOfDay, List<StockRule> stockRules,
-            List<BlockPos> served) {
+            List<BlockPos> served, int ledgers) {
 
         static final MapCodec<ClerkFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 BlockPos.CODEC.listOf().optionalFieldOf("storage", List.of()).forGetter(ClerkFields::storage),
                 StandSpot.CODEC.listOf().optionalFieldOf("stand_spots", List.of()).forGetter(ClerkFields::standSpots),
                 SpotOfDay.CODEC.optionalFieldOf("spot_of_day", SpotOfDay.NONE).forGetter(ClerkFields::spotOfDay),
                 StockRule.CODEC.listOf().optionalFieldOf("stock_rules", List.of()).forGetter(ClerkFields::stockRules),
-                BlockPos.CODEC.listOf().optionalFieldOf("served_clerks", List.of()).forGetter(ClerkFields::served)
+                BlockPos.CODEC.listOf().optionalFieldOf("served_clerks", List.of()).forGetter(ClerkFields::served),
+                Codec.INT.optionalFieldOf("ledgers", 0).forGetter(ClerkFields::ledgers)
         ).apply(instance, ClerkFields::new));
 
-        static final ClerkFields NONE = new ClerkFields(List.of(), List.of(), SpotOfDay.NONE, List.of(), List.of());
+        static final ClerkFields NONE = new ClerkFields(List.of(), List.of(), SpotOfDay.NONE, List.of(), List.of(), 0);
     }
 
     /**
@@ -315,8 +317,7 @@ public final class SettlementBlock {
      * @param autoAssign the Jobs whose free places jobless settlers take by themselves
      * @param legacyExcluded the exclusions of an older save (read only)
      * @param legacyScan the scan of an older save (read only)
-     * @param stationTypes the unlock items in the Station Types slots, by slot ({@link Items#AIR}: empty; slot 0 is the
-     *                   Base Job's station and never read back)
+     * @param stationTypes the unlock items in the Station Types slots, by slot ({@link Items#AIR}: empty)
      * @param found      the Found tab state per Resource Collection Job
      * @param centerRace the race of a Center Block, empty for every other JobBlock
      */
@@ -386,6 +387,7 @@ public final class SettlementBlock {
     private final List<StandSpot> standSpots = new ArrayList<>();
     private SpotOfDay spotOfDay;
     private final List<StockRule> stockRules = new ArrayList<>();
+    private int ledgers;
     private final List<BlockPos> served = new ArrayList<>();
     private Optional<BlockPos> homeClerk;
     private final Map<Job, Library> libraries = new LinkedHashMap<>();
@@ -442,6 +444,7 @@ public final class SettlementBlock {
         Set<Item> ruled = new HashSet<>();
         clerk.stockRules().stream().filter(rule -> ruled.add(rule.item())).forEach(this.stockRules::add);
         this.served.addAll(clerk.served());
+        this.ledgers = Math.clamp(clerk.ledgers(), 0, SettlementRules.MAX_LEDGERS);
         this.homeClerk = homeClerk;
         producing.libraries().forEach(saved -> {
             Library library = library(saved.job());
@@ -463,8 +466,8 @@ public final class SettlementBlock {
             state.excluded.addAll(place.legacyExcluded());
             state.scan = place.legacyScan();
         }
-        // Slot 0 holds the Base Job's station; only the unlock items of the other slots are kept.
-        for (int slot = 1; slot < Math.min(StationTypes.SLOTS, place.stationTypes().size()); slot++) {
+        // Saves from before the first slot was free left it empty: it loads as an open, empty slot.
+        for (int slot = 0; slot < Math.min(StationTypes.SLOTS, place.stationTypes().size()); slot++) {
             this.stationTypes.set(slot, place.stationTypes().get(slot));
         }
     }
@@ -481,7 +484,7 @@ public final class SettlementBlock {
 
     /**
      * @return the unlock items in the Station Types slots, by slot (read-only, {@value StationTypes#SLOTS} entries,
-     *         {@link Items#AIR} for an empty slot; slot 0 stands for the Base Job's station, see {@link StationTypes})
+     *         {@link Items#AIR} for an empty slot, see {@link StationTypes})
      */
     public List<Item> stationTypes() {
         return Collections.unmodifiableList(stationTypes);
@@ -552,7 +555,7 @@ public final class SettlementBlock {
     }
 
     private ClerkFields clerkFields() {
-        return new ClerkFields(List.copyOf(storage), List.copyOf(standSpots), spotOfDay, List.copyOf(stockRules), List.copyOf(served));
+        return new ClerkFields(List.copyOf(storage), List.copyOf(standSpots), spotOfDay, List.copyOf(stockRules), List.copyOf(served), ledgers);
     }
 
     private ProducingFields producingFields() {
@@ -657,6 +660,24 @@ public final class SettlementBlock {
      */
     public Optional<StockRule> stockRule(int slot) {
         return stockRules.stream().filter(rule -> rule.slot() == slot).findFirst();
+    }
+
+    /**
+     * @return the Ledgers used on this Clerk JobBlock (0–{@value SettlementRules#MAX_LEDGERS}; always 0 for other blocks)
+     */
+    public int ledgers() {
+        return ledgers;
+    }
+
+    void setLedgers(int ledgers) {
+        this.ledgers = Math.clamp(ledgers, 0, SettlementRules.MAX_LEDGERS);
+    }
+
+    /**
+     * @return the active stock rule slots: (level + Ledgers) × 9 ({@link StockRule#slots(int, int)})
+     */
+    int stockSlots() {
+        return StockRule.slots(level, ledgers);
     }
 
     List<StockRule> mutableStockRules() {

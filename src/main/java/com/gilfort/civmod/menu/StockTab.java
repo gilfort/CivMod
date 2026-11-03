@@ -79,8 +79,8 @@ public final class StockTab extends JobBlockTab {
             return;
         }
         SettlementData settlements = SettlementData.get(site.get().level());
-        int level = site.get().jobBlock().getJobLevel();
-        boolean valid = rule.map(found -> found.slot() == slot && found.item() != Items.AIR && found.activeAt(level)).orElse(true);
+        // StockRules.setRule refuses inactive slots (the settlement entry's level and Ledgers).
+        boolean valid = rule.map(found -> found.slot() == slot && found.item() != Items.AIR).orElse(true);
         if (!valid) {
             return;
         }

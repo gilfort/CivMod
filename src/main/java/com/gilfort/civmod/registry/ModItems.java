@@ -61,6 +61,8 @@ public final class ModItems {
     public static final DeferredItem<JobBlockUpgradeItem> JOB_BLOCK_UPGRADE_4 = jobBlockUpgrade(4);
     /** JobBlock Upgrade Lv 5 (netherite). */
     public static final DeferredItem<JobBlockUpgradeItem> JOB_BLOCK_UPGRADE_5 = jobBlockUpgrade(5);
+    /** The Ledger: 9 more stock rule slots on a Clerk JobBlock, at most 3 per block (vault {@code Jobs/Clerk.md}). */
+    public static final DeferredItem<Item> LEDGER = ITEMS.registerSimpleItem("ledger");
 
     /** Render-only item for the red X above unconnected JobBlocks; not obtainable. */
     public static final DeferredItem<Item> UNCONNECTED_MARKER = ITEMS.registerSimpleItem("unconnected_marker");

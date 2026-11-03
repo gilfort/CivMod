@@ -67,7 +67,7 @@ public record FoundTabData(List<Section> sections) {
      * @param rareBonus   whether a biome bonus's rare chance acts on it (a star)
      * @param doubleBonus whether a biome bonus's double drop acts on its dropped item (a star; two offset stars with
      *                    {@code rareBonus})
-     * @param bonusLines  the tooltip of the stars: each effect with its source
+     * @param bonusLines  the tooltip of the stars: the effects acting on it, without sources
      * @param needsInput  for an innate recipe ({@code type} is the recipe id): the line of the input neither on the
      *                    working settler's belt nor in the collect inventory ("Needs: Bucket"; greyed out, left out of
      *                    the roll), empty when it has its inputs or for a found resource
@@ -247,11 +247,11 @@ public record FoundTabData(List<Section> sections) {
             // The dropped items only when needed: they roll the block's loot.
             boolean max = !atMax.isEmpty() && ResourceCollectionProfile.atMax(profile.droppedItems(level, pos, entry.type(), tool), atMax);
             boolean rare = rareActs && profile.inRareGroup(scan, entry.type());
-            List<BiomeBonus.DoubleDrop> drops = bonus.doubleDrops().isEmpty() ? List.of()
-                    : bonus.doubleDrops(new ItemStack(profile.dropped(level, pos, entry.type(), tool)));
+            ItemStack dropped = bonus.doubleDrops().isEmpty() ? ItemStack.EMPTY : new ItemStack(profile.dropped(level, pos, entry.type(), tool));
+            boolean doubled = !dropped.isEmpty() && !bonus.doubleDrops(dropped).isEmpty();
             return new Entry(entry.type(), entry.icon(), !entry.available(), excluded.contains(entry.type()),
-                    max ? clerk : Optional.empty(), rare, !drops.isEmpty(),
-                    BiomeBonusText.sourceLines(job, bonus, rare, drops), Optional.empty(),
+                    max ? clerk : Optional.empty(), rare, doubled,
+                    BiomeBonusText.effectLines(job, bonus, rare, dropped), Optional.empty(),
                     pooled.map(dropPool -> JobDrops.lines(dropPool.pool().ofType(entry.type(), dropPool.entityDrops()), atMax, tools)).orElse(List.of()));
         }).toList());
         // The innate recipes the scan offers, after the found resources (no biome bonus acts on them).

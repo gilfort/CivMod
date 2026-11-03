@@ -106,7 +106,7 @@ A Job with a parent Base Job, unlocked per JobBlock by its unlock item in a Stat
 _Avoid_: Advanced job, sub-job
 
 **Station Types**:
-The 5 slots of a JobBlock whose Base Job has Specializations (the Mission Board too: slot 1 the Adventurer): slot 1 the Base Job's station (locked), one more open slot per level. An unlock item put into an open slot is consumed and unlocks every Specialization naming it at this JobBlock; put into a filled slot it replaces the old one, settlers of a Job no longer unlocked fall back to the Base Job (its library is kept, locked). Not the work place: the Job still needs its station in the world. Code: `StationTypes` (`put`, `unlocked`, `overview`), saved in `SettlementBlock.stationTypes()`; tab `StationTypesTab` (button `StationTypesTab.slotButtonId`, data `StationTypesTabData`), `StationTypesTabView`; offered Jobs `JobPlaces.offered(SettlementBlock)`.
+The 5 slots of a JobBlock whose Base Job has Specializations (the Mission Board too): one open slot per level (level 1: the first), the Base Job holds none and is always offered; its own station is no unlock item. An unlock item put into an open slot is consumed and unlocks every Specialization naming it at this JobBlock; put into a filled slot it replaces the old one, settlers of a Job no longer unlocked fall back to the Base Job (its library is kept, locked). Not the work place: the Job still needs its station in the world. Code: `StationTypes` (`put`, `unlocked`, `overview`), saved in `SettlementBlock.stationTypes()`; tab `StationTypesTab` (button `StationTypesTab.slotButtonId`, data `StationTypesTabData`), `StationTypesTabView`; offered Jobs `JobPlaces.offered(SettlementBlock)`.
 _Avoid_: Upgrade slot, unlock slot
 
 **Gatherer**:
@@ -198,7 +198,7 @@ A Mission whose result is vanilla Villagers instead of loot: its `villagers` blo
 _Avoid_: Settler (a Villager is always a vanilla Villager entity), recruits
 
 **Mission Offer**:
-The missions a Mission Board offers today; the player marks the ones to be done. Each Mission Job of the board has its own share: the Adventurer board level + 1, plus 1 per open Station Types slot without a Specialization; every unlocked Specialization as many as the board level (at most 26 on a level-5 board). Code: `MissionOffer` (entries + refill day) in `SettlementBlock.missionOffer()`, refilled and marked through `MissionOffers`; shares `MissionRules.quotas` (empty slots `StationTypes.emptySlots`), drawn by `MissionRules.refill`.
+The missions a Mission Board offers today; the player marks the ones to be done. Each Mission Job of the board has its own share: the Adventurer the board level plus 1 per open Station Types slot without a Specialization; every unlocked Specialization as many as the board level (at most 30 on a level-5 board). Code: `MissionOffer` (entries + refill day) in `SettlementBlock.missionOffer()`, refilled and marked through `MissionOffers`; shares `MissionRules.quotas` (empty slots `StationTypes.emptySlots`), drawn by `MissionRules.refill`.
 _Avoid_: Quest list, mission pool (the pool is all missions)
 
 **Mission Assignment**:
@@ -227,8 +227,11 @@ Where a working Clerk serves: within 3 blocks of the stand spot of the day (or n
 A block a Clerk stands on, with a facing; up to 8 per Clerk JobBlock; one is picked each morning and at 12:00, never the same twice in a row. Code: `SettlementBlock.StandSpot`, `ClerkSpots.today`, saved as `SettlementBlock.spotOfDay()`.
 
 **Stock rule**:
-A Clerk's rule for one item with the optional fields **Min**, **Max** and **Order** (0 = not set, "—") and a priority (−100…+100, higher first); one rule per item and Clerk, at least one of Min / Max, Min ≤ Max, Order only with Min (Min = Max is "exact", both set a band). 9 per JobBlock level in rows of 9, extra ones after a downgrade kept but inactive. Requests (Min) are active only while a Clerk settler is on shift; checked every 30 s (staggered), right after a delivery into the Clerk and once per simulated hour in catch-up. Shown in the Clerk's "Stock" tab (`StockTab`, `StockTabView`; editor rows Min / Max / Order with − / text field / +, steps 1 / Shift 10 / Ctrl 64). Old saves: a Minimum rule's `amount` loads as Min. Code: `StockRule` (data, `target`, `withMin` / `withMax` clamp against each other), `StockRules` (edit, `check`, `checkSurplus`, `atMax`), saved in `SettlementBlock.stockRules()`.
+A Clerk's rule for one item with the optional fields **Min**, **Max** and **Order** (0 = not set, "—") and a priority (−100…+100, higher first); one rule per item and Clerk, at least one of Min / Max, Min ≤ Max, Order only with Min (Min = Max is "exact", both set a band). 9 per JobBlock level and per **Ledger** in rows of 9 (`StockRule.slots(level, ledgers)`, `SettlementBlock.stockSlots()`), extra ones after a downgrade kept but inactive; locked rows show a lock icon. Requests (Min) are active only while a Clerk settler is on shift; checked every 30 s (staggered), right after a delivery into the Clerk and once per simulated hour in catch-up. Shown in the Clerk's "Stock" tab (`StockTab`, `StockTabView`; editor rows Min / Max / Order with − / text field / +, steps 1 / Shift 10 / Ctrl 64). Old saves: a Minimum rule's `amount` loads as Min. Code: `StockRule` (data, `target`, `withMin` / `withMax` clamp against each other), `StockRules` (edit, `check`, `checkSurplus`, `atMax`), saved in `SettlementBlock.stockRules()`.
 _Avoid_: Threshold, mode, Minimum rule
+
+**Ledger**:
+An item that adds one row of 9 active stock rule slots to a Clerk JobBlock on right-click, at most 3 per block, used up (not in creative); kept on the dropped block item as the `civmod:ledgers` component. Code: `ModItems.LEDGER`, `block.Ledgers`, `JobBlockEntity.getLedgers()`, `SettlementBlock.ledgers()`.
 
 **Min**:
 A stock rule's lower bound: when the stock (plus results in delivery) falls below it, the rule opens one request; without Min the rule never requests.

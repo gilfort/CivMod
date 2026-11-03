@@ -85,8 +85,9 @@ public final class MissionStationTypeGameTests {
     }
 
     /**
-     * The board shows the Station Types tab after its Missions tab: slot 1 is the Adventurer (the board itself), locked;
-     * one more slot per level. A note block is refused in a closed slot and in the first one.
+     * The board shows the Station Types tab after its Missions tab: the Adventurer holds no slot, the first slot is open
+     * at level 1, one more per level. A note block in it unlocks the Bard at level 1; it is refused in a closed slot, and
+     * the board's own item unlocks nothing.
      */
     private static void tab(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -97,21 +98,19 @@ public final class MissionStationTypeGameTests {
         helper.assertTrue(stations.shown(), "The Mission Board shows the Station Types tab");
         helper.assertTrue(menu.tab(MissionsTab.class).orElseThrow().index() < stations.index(), "Station Types after the Missions tab");
         StationTypesTabData data = StationTypesTabData.of(level, pos);
-        helper.assertTrue(data.item(0) == ModItems.MISSION_BOARD.get() && data.open() == 1 && data.unlocked().equals(List.of(ModJobs.ADVENTURER.get())),
-                "Level 1: only the Adventurer slot: " + data);
+        helper.assertTrue(data.item(0) == Items.AIR && data.open() == 1 && data.isOpen(0) && data.unlocked().equals(List.of(ModJobs.ADVENTURER.get())),
+                "Level 1: the first slot is open, only the Adventurer: " + data);
 
         menu.setCarried(new ItemStack(Items.NOTE_BLOCK, 2));
         helper.assertFalse(menu.clickMenuButton(player, stations.slotButtonId(1)), "Level 1: slot 2 is closed");
         helper.assertTrue(menu.getCarried().getCount() == 2, "A refused note block is kept");
+        menu.setCarried(new ItemStack(ModItems.MISSION_BOARD.get(), 2));
+        helper.assertFalse(menu.clickMenuButton(player, stations.slotButtonId(0)), "The board's own item unlocks nothing");
+        helper.assertTrue(menu.getCarried().getCount() == 2, "The board item is kept");
 
-        // Level 2 only: a higher board level would exclude the neighbouring tests' JobBlocks from their settlements.
-        StationTypeGameTests.setLevel(helper, BOARD, 2);
-        helper.assertTrue(StationTypesTabData.of(level, pos).open() == 2, "Level 2 opens 2 slots");
-        menu = StationTypeGameTests.menu(helper, player, pos);
-        stations = menu.tab(StationTypesTab.class).orElseThrow();
-        menu.setCarried(new ItemStack(Items.NOTE_BLOCK, 2));
-        helper.assertFalse(menu.clickMenuButton(player, stations.slotButtonId(0)), "The Adventurer slot is locked");
-        helper.assertTrue(menu.getCarried().getCount() == 2, "Still both note blocks");
+        helper.assertTrue(StationTypeGameTests.unlock(helper, pos, 0, Items.NOTE_BLOCK), "Level 1: the note block is taken");
+        helper.assertTrue(StationTypesTabData.of(level, pos).unlocked().equals(List.of(ModJobs.ADVENTURER.get(), ModJobs.BARD.get())),
+                "Level 1: the Bard is unlocked: " + StationTypesTabData.of(level, pos));
         helper.succeed();
     }
 

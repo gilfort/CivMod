@@ -28,10 +28,11 @@ import net.minecraft.util.Util;
  */
 public final class MissionRules {
 
-    /** Specialization slots of a Mission Board (Station Types slots besides the Base Job's). */
-    private static final int SPECIALIZATION_SLOTS = StationTypes.SLOTS - 1;
-    /** The largest offer of any board: the Base Job's missions plus every Specialization slot filled, at the top level. */
-    public static final int MAX_OFFER_SIZE = SettlementRules.MAX_LEVEL + 1 + SPECIALIZATION_SLOTS * SettlementRules.MAX_LEVEL;
+    /**
+     * The largest offer of any board: the Base Job's missions plus every Station Types slot filled with a Specialization
+     * (the Base Job holds none), at the top level.
+     */
+    public static final int MAX_OFFER_SIZE = SettlementRules.MAX_LEVEL + StationTypes.SLOTS * SettlementRules.MAX_LEVEL;
     /** Skill levels above the recommendation per extra loot roll. */
     private static final int LEVELS_PER_EXTRA_ROLL = 20;
 
@@ -39,9 +40,9 @@ public final class MissionRules {
     }
 
     /**
-     * How many missions each Mission Job of a board gets in the daily offer: the Base Job (the Adventurer) board level + 1,
-     * plus 1 per open Station Types slot without a Specialization; every unlocked Specialization as many as the board
-     * level.
+     * How many missions each Mission Job of a board gets in the daily offer: the Base Job (the Adventurer) the board level
+     * plus 1 per open Station Types slot without a Specialization (an empty board: level + 1, as the first slot opens at
+     * level 1); every unlocked Specialization as many as the board level.
      *
      * @param unlocked   the Mission Jobs the board offers, its Base Job first ({@code StationTypes.unlocked})
      * @param boardLevel the Mission Board level
@@ -52,7 +53,7 @@ public final class MissionRules {
         int level = SettlementRules.clampLevel(boardLevel);
         Map<Job, Integer> quotas = new LinkedHashMap<>();
         for (int i = 0; i < unlocked.size(); i++) {
-            quotas.put(unlocked.get(i), i == 0 ? level + 1 + emptySlots : level);
+            quotas.put(unlocked.get(i), i == 0 ? level + emptySlots : level);
         }
         return quotas;
     }

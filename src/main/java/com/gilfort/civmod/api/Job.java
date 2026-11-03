@@ -163,7 +163,7 @@ public final class Job {
 
     /**
      * @return the item that unlocks this Specialization in a Station Types slot of its parent's JobBlock (datapack
-     *         override {@code unlock_item} or default); a Base Job's unlock item is its station, shown in the first slot
+     *         override {@code unlock_item} or default); a Base Job's unlock item is its station, which unlocks nothing at its own JobBlock
      */
     public Optional<Item> unlockItem() {
         Optional<Item> override = JobBalancing.of(this).unlockItem();
@@ -402,7 +402,7 @@ public final class Job {
         /**
          * @param unlockItem the item that unlocks this Specialization in a Station Types slot of its parent's JobBlock
          *                   (several Jobs may name the same item; datapacks override it with {@code unlock_item}); for a
-         *                   Base Job its station, shown in the first slot
+         *                   Base Job its station (no unlock item at its own JobBlock)
          * @return this builder
          */
         public Builder unlockItem(Supplier<? extends ItemLike> unlockItem) {

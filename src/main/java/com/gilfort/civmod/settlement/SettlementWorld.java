@@ -318,6 +318,17 @@ public final class SettlementWorld {
     }
 
     /**
+     * Applies the Ledgers of a Clerk JobBlock to its settlement entry.
+     *
+     * @param level   the dimension
+     * @param pos     the JobBlock position
+     * @param ledgers the Ledgers on the block
+     */
+    public static void setLedgers(ServerLevel level, BlockPos pos, int ledgers) {
+        SettlementManager.setLedgers(SettlementData.get(level), pos, ledgers);
+    }
+
+    /**
      * The current mission offer of a Mission Board, refilled on the first access of a settler day (the day starts at
      * 06:00 overworld time, like the settler schedule).
      *

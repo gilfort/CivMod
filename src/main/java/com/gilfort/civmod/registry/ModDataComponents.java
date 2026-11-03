@@ -4,6 +4,7 @@ import java.util.function.Supplier;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.item.ScrollBinding;
+import com.gilfort.civmod.settlement.SettlementRules;
 import com.mojang.serialization.Codec;
 
 import net.minecraft.core.Holder;
@@ -25,6 +26,10 @@ public final class ModDataComponents {
     /** Level of a JobBlock item; kept when the block is broken and re-placed. */
     public static final Supplier<DataComponentType<Integer>> JOB_LEVEL = DATA_COMPONENTS.registerComponentType("job_level",
             builder -> builder.persistent(Codec.intRange(1, 5)).networkSynchronized(ByteBufCodecs.VAR_INT));
+
+    /** Ledgers used on a Clerk JobBlock item (vault {@code Jobs/Clerk.md}); kept when the block is broken and re-placed. */
+    public static final Supplier<DataComponentType<Integer>> LEDGERS = DATA_COMPONENTS.registerComponentType("ledgers",
+            builder -> builder.persistent(Codec.intRange(0, SettlementRules.MAX_LEDGERS)).networkSynchronized(ByteBufCodecs.VAR_INT));
 
     /**
      * Starter tool of a new JobBlock item: put into the block's inventory on its first placement. A broken JobBlock

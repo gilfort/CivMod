@@ -2,6 +2,7 @@ package com.gilfort.civmod.logistics;
 
 import java.util.Optional;
 
+import com.gilfort.civmod.settlement.SettlementRules;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
@@ -18,7 +19,7 @@ import net.minecraft.world.item.Item;
  * opens a request up to its {@linkplain #target() target stock}; at Max collecting jobs stop producing the item and the
  * stock above it is surplus for the Warehouse. Min = Max is "exact", both set a band.
  *
- * @param slot     the rule's place in the Stock tab (rows of 9; 9 rules per JobBlock level are active)
+ * @param slot     the rule's place in the Stock tab (rows of 9; 9 rules per JobBlock level and per Ledger are active)
  * @param item     the item (a specific item, no tags)
  * @param min      below this stock a request opens ({@value #NOT_SET}: never a request)
  * @param max      the cap ({@value #NOT_SET}: none)
@@ -27,8 +28,10 @@ import net.minecraft.world.item.Item;
  */
 public record StockRule(int slot, Item item, int min, int max, int order, int priority) {
 
-    /** Rules per JobBlock level (one row). */
-    public static final int RULES_PER_LEVEL = 9;
+    /** Rules per row of the Stock tab: each JobBlock level and each Ledger activates one row. */
+    public static final int RULES_PER_ROW = 9;
+    /** Rule slots at the highest level with every Ledger. */
+    public static final int MAX_SLOTS = RULES_PER_ROW * (SettlementRules.MAX_LEVEL + SettlementRules.MAX_LEDGERS);
     /** Lowest priority. */
     public static final int MIN_PRIORITY = -100;
     /** Highest priority. */
@@ -169,18 +172,19 @@ public record StockRule(int slot, Item item, int min, int max, int order, int pr
     }
 
     /**
-     * @param level the Clerk JobBlock level
-     * @return how many rule slots are active at that level (9 / 18 / 27 / 36 / 45)
+     * @param level   the Clerk JobBlock level
+     * @param ledgers the Ledgers used on it (0–{@value SettlementRules#MAX_LEDGERS})
+     * @return how many rule slots are active: (level + Ledgers) × 9, so Lv 1 with 3 Ledgers has 36, Lv 5 with 3 has 72
      */
-    public static int slots(int level) {
-        return RULES_PER_LEVEL * level;
+    public static int slots(int level, int ledgers) {
+        return RULES_PER_ROW * (level + ledgers);
     }
 
     /**
-     * @param level the Clerk JobBlock level
-     * @return whether this rule is active at that level (extra rules after a downgrade are kept but inactive)
+     * @param slots the active rule slots of the Clerk JobBlock ({@link #slots(int, int)})
+     * @return whether this rule is active (extra rules after a downgrade are kept but inactive)
      */
-    public boolean activeAt(int level) {
-        return slot >= 0 && slot < slots(level);
+    public boolean activeIn(int slots) {
+        return slot >= 0 && slot < slots;
     }
 }

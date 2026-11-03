@@ -10,6 +10,7 @@ import com.gilfort.civmod.registry.ModBlockEntityTypes;
 import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Settlement;
+import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
@@ -38,7 +39,7 @@ import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 
 /**
- * Block entity of a {@link JobBlock}: 27-slot storage (default drop-off), JobBlock level and a client-visible copy
+ * Block entity of a {@link JobBlock}: 27-slot storage (default drop-off), JobBlock level, a Clerk's Ledgers and a client-visible copy
  * of the settlement connection state. The settlement data itself is authoritative.
  */
 public class JobBlockEntity extends BaseContainerBlockEntity {
@@ -48,6 +49,8 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
 
     private NonNullList<ItemStack> items = NonNullList.withSize(SLOTS, ItemStack.EMPTY);
     private int jobLevel = SettlementRules.MIN_LEVEL;
+    /** Ledgers used on a Clerk JobBlock (vault {@code Jobs/Clerk.md}); the settlement entry keeps a copy. */
+    private int ledgers;
     private int settlementId = Settlement.NO_SETTLEMENT;
     private boolean connected = true;
     /** Counts every change of the slots (not saved): the Clerk stock view re-reads them when it moves. */
@@ -102,6 +105,23 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     }
 
     /**
+     * @return the Ledgers used on this Clerk JobBlock (0 for any other JobBlock)
+     */
+    public int getLedgers() {
+        return ledgers;
+    }
+
+    /**
+     * Sets the Ledgers after one was used (the settlement entry is updated separately).
+     *
+     * @param ledgers the new count
+     */
+    void setLedgers(int ledgers) {
+        this.ledgers = Math.clamp(ledgers, 0, SettlementRules.MAX_LEDGERS);
+        setChanged();
+    }
+
+    /**
      * @return the settlement id, {@link Settlement#NO_SETTLEMENT} if not registered yet
      */
     public int getSettlementId() {
@@ -139,6 +159,7 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
         super.saveAdditional(output);
         ContainerHelper.saveAllItems(output, items);
         output.putInt("job_level", jobLevel);
+        output.putInt("ledgers", ledgers);
         output.putInt("settlement", settlementId);
         output.putBoolean("connected", connected);
     }
@@ -150,6 +171,7 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
         ContainerHelper.loadAllItems(input, items);
         changes++;
         jobLevel = SettlementRules.clampLevel(input.getIntOr("job_level", SettlementRules.MIN_LEVEL));
+        ledgers = Math.clamp(input.getIntOr("ledgers", 0), 0, SettlementRules.MAX_LEDGERS);
         settlementId = input.getIntOr("settlement", Settlement.NO_SETTLEMENT);
         connected = input.getBooleanOr("connected", true);
     }
@@ -172,6 +194,7 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     protected void applyImplicitComponents(DataComponentGetter components) {
         super.applyImplicitComponents(components);
         jobLevel = SettlementRules.clampLevel(components.getOrDefault(ModDataComponents.JOB_LEVEL.get(), SettlementRules.MIN_LEVEL));
+        ledgers = Math.clamp(components.getOrDefault(ModDataComponents.LEDGERS.get(), 0), 0, SettlementRules.MAX_LEDGERS);
         // A new JobBlock item puts its starter tool into the inventory; it is never collected back, so it is used up.
         Holder<Item> starterTool = components.get(ModDataComponents.STARTER_TOOL.get());
         if (starterTool != null) {
@@ -193,6 +216,10 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     protected void collectImplicitComponents(DataComponentMap.Builder components) {
         super.collectImplicitComponents(components);
         components.set(ModDataComponents.JOB_LEVEL.get(), jobLevel);
+        // Without Ledgers the item stays plain, so it stacks with new Clerk JobBlocks.
+        if (ledgers > 0) {
+            components.set(ModDataComponents.LEDGERS.get(), ledgers);
+        }
     }
 
     @Override
@@ -204,24 +231,28 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
             SettlementData.get(serverLevel).unsettledAt(worldPosition).ifPresent(block -> {
                 settlementId = Settlement.NO_SETTLEMENT;
                 connected = false;
-                syncRegisteredLevel(serverLevel, block.level());
+                syncRegistered(serverLevel, block);
             });
             JobBlockSite.at(serverLevel, worldPosition).ifPresent(site -> {
                 settlementId = site.settlement().id();
                 connected = site.block().connected();
-                syncRegisteredLevel(serverLevel, site.level());
+                syncRegistered(serverLevel, site.block());
             });
         }
     }
 
     /**
-     * Placement registers with the default level before the block entity exists; this syncs the real level. Deferred:
-     * onLoad may run during chunk loading, where other blocks must not be touched.
+     * Placement registers with the default level and no Ledgers before the block entity exists; this syncs the real
+     * ones. Deferred: onLoad may run during chunk loading, where other blocks must not be touched.
      */
-    private void syncRegisteredLevel(ServerLevel serverLevel, int registered) {
-        if (registered != jobLevel) {
+    private void syncRegistered(ServerLevel serverLevel, SettlementBlock registered) {
+        if (registered.level() != jobLevel) {
             int target = jobLevel;
             serverLevel.getServer().execute(() -> SettlementWorld.setLevel(serverLevel, worldPosition, target));
+        }
+        if (registered.ledgers() != ledgers) {
+            int target = ledgers;
+            serverLevel.getServer().execute(() -> SettlementWorld.setLedgers(serverLevel, worldPosition, target));
         }
     }
 
