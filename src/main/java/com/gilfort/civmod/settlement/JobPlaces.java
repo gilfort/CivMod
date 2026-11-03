@@ -16,7 +16,7 @@ import net.minecraft.network.codec.StreamCodec;
 
 /**
  * Which Jobs a JobBlock offers and how many places each has (vault {@code Systems/JobBlock.md}). A JobBlock offers
- * its own Base Job and, on a Clerk JobBlock, the Deliveryman; its Base Job brings the Specializations its Station Types
+ * its own Base Job and, on a Clerk JobBlock, the Deliveryman, on a Center Block the Priest; its Base Job brings the Specializations its Station Types
  * unlock ({@link StationTypes}), on the Mission Board its Mission Specializations.
  * A Base Job and its Specializations share the Base Job's places (the Mission Board's settlers, whatever Mission Job
  * they have). A downgrade keeps every assignee; a Job with more assignees than places stays full until enough leave.
@@ -68,7 +68,10 @@ public final class JobPlaces {
      * @return the Base Jobs with own places on that JobBlock, the block's Job first
      */
     static List<Job> baseJobs(Job blockJob) {
-        return blockJob == ModJobs.CLERK.get() ? List.of(blockJob, ModJobs.DELIVERYMAN.get()) : List.of(blockJob);
+        if (blockJob == ModJobs.CLERK.get()) {
+            return List.of(blockJob, ModJobs.DELIVERYMAN.get());
+        }
+        return blockJob == ModJobs.ADMINISTRATOR.get() ? List.of(blockJob, ModJobs.PRIEST.get()) : List.of(blockJob);
     }
 
     /**

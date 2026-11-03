@@ -5,11 +5,16 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.job.SettlerSkills;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
@@ -112,6 +117,49 @@ public final class SettlerSpawner {
         }
         data.settlersArrived(settlement);
         return spawned;
+    }
+
+    /**
+     * Recruits one Settler at a Center Block, as the shrine's prayer does (vault {@code Jobs/Priest.md}): only with
+     * room under {@code maxSettlersPerSettlement} (running conversions count) and a free bed, which the new Settler
+     * takes. The Settler has level 1 in every Job and 2 bread, appears with a cloud puff and sound, and nearby players
+     * are told.
+     *
+     * @param level      the dimension
+     * @param data       the dimension's settlement data
+     * @param settlement the settlement
+     * @param center     the Center Block
+     * @return the new Settler, empty if the settlement is full or has no free bed
+     */
+    public static Optional<Settler> recruit(ServerLevel level, SettlementData data, Settlement settlement, BlockPos center) {
+        if (isFull(settlement)) {
+            return Optional.empty();
+        }
+        Optional<BlockPos> bed = SettlerBeds.freeBeds(level, settlement, center).stream().findFirst();
+        if (bed.isEmpty()) {
+            return Optional.empty();
+        }
+        Identifier race = level.getBlockState(center).getBlock() instanceof JobBlock block
+                ? block.centerRace().orElse(Races.HUMAN) : Races.HUMAN;
+        Settler settler = spawn(level, data, settlement, center, race, usedNames(level, settlement));
+        if (settler == null) {
+            return Optional.empty();
+        }
+        for (Job job : ModJobs.REGISTRY) {
+            settler.getSkills().set(job, new SettlerSkills.Skill(1, 0));
+        }
+        SettlerBeds.claim(level, data, settlement, settler.getUUID(), bed.get());
+        announce(level, Vec3.atCenterOf(center), Component.translatable("civmod.conversion.joined", settler.getName(), settlement.displayName()));
+        return Optional.of(settler);
+    }
+
+    /**
+     * @param settlement a settlement
+     * @return whether Settlers and running conversions reached {@code maxSettlersPerSettlement} (0 = unlimited)
+     */
+    static boolean isFull(Settlement settlement) {
+        int max = CivModConfig.MAX_SETTLERS_PER_SETTLEMENT.get();
+        return max > 0 && settlement.members().size() + settlement.bedReservations().size() >= max;
     }
 
     private static Settler spawn(ServerLevel level, SettlementData data, Settlement settlement, BlockPos anchor, Identifier race,

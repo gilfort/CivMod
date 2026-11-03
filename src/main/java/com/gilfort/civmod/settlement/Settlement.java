@@ -55,7 +55,8 @@ public final class Settlement {
                     .forGetter(Settlement::bedReservations),
             BlockPos.CODEC.listOf().optionalFieldOf("hearths", List.of()).forGetter(settlement -> List.copyOf(settlement.hearths)),
             Codec.INT.optionalFieldOf("hearth_border", NO_BORDER).forGetter(Settlement::hearthBorderHash),
-            CenterGrace.CODEC.optionalFieldOf("center_grace").forGetter(Settlement::centerGrace)
+            CenterGrace.CODEC.optionalFieldOf("center_grace").forGetter(Settlement::centerGrace),
+            Shrine.State.CODEC.optionalFieldOf("shrine", Shrine.State.NONE).forGetter(Settlement::shrine)
     ).apply(instance, Settlement::new));
 
     /**
@@ -97,6 +98,8 @@ public final class Settlement {
     private int hearthRevision;
     /** Set while the settlement has no Center Block. */
     private Optional<CenterGrace> centerGrace;
+    /** The day-long glow state of the Center Block's shrine. */
+    private Shrine.State shrine;
 
     /**
      * @param id          the settlement id (unique per dimension)
@@ -109,13 +112,16 @@ public final class Settlement {
      */
     public Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
             List<SettlementBlock> blocks) {
-        this(id, name, foundedAt, color, settlersDue, members, blocks, Map.of(), List.of(), List.of(), Map.of(), List.of(), NO_BORDER, Optional.empty());
+        this(id, name, foundedAt, color, settlersDue, members, blocks, Map.of(), List.of(), List.of(), Map.of(), List.of(), NO_BORDER, Optional.empty(),
+                Shrine.State.NONE);
     }
 
     private Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
             List<SettlementBlock> blocks, Map<String, UUID> beds, List<Request> requests, List<DeliveryTask> deliveries,
-            Map<UUID, BlockPos> bedReservations, List<BlockPos> hearths, int hearthBorderHash, Optional<CenterGrace> centerGrace) {
+            Map<UUID, BlockPos> bedReservations, List<BlockPos> hearths, int hearthBorderHash, Optional<CenterGrace> centerGrace,
+            Shrine.State shrine) {
         this.centerGrace = centerGrace;
+        this.shrine = shrine;
         this.bedReservations.putAll(bedReservations);
         this.hearths.addAll(hearths);
         this.hearthBorderHash = hearthBorderHash;
@@ -239,6 +245,17 @@ public final class Settlement {
      */
     public Optional<CenterGrace> centerGrace() {
         return centerGrace;
+    }
+
+    /**
+     * @return what the settlement keeps of its shrine
+     */
+    public Shrine.State shrine() {
+        return shrine;
+    }
+
+    void setShrine(Shrine.State shrine) {
+        this.shrine = shrine;
     }
 
     void setCenterGrace(Optional<CenterGrace> centerGrace) {

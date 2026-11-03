@@ -337,6 +337,19 @@ public final class SettlementData extends SavedData {
     }
 
     /**
+     * Sets what a settlement keeps of its shrine.
+     *
+     * @param settlement the settlement
+     * @param state      the new state
+     */
+    public void setShrine(Settlement settlement, Shrine.State state) {
+        if (!settlement.shrine().equals(state)) {
+            settlement.setShrine(state);
+            changed();
+        }
+    }
+
+    /**
      * Marks the data as changed (saved and outline revision bumped).
      */
     void changed() {

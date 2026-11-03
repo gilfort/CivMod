@@ -200,17 +200,11 @@ public final class VillagerConversion {
         if (settlement.isEmpty()) {
             return Either.left(Refusal.OUTSIDE);
         }
-        if (isFull(settlement.get())) {
+        if (SettlerSpawner.isFull(settlement.get())) {
             return Either.left(Refusal.FULL);
         }
         return bedFor(level, settlement.get(), villager).<Either<Refusal, Target>>map(bed -> Either.right(new Target(settlement.get(), bed)))
                 .orElseGet(() -> Either.left(Refusal.NO_BED));
-    }
-
-    /** Settlers and running conversions count towards {@code maxSettlersPerSettlement} (0 = unlimited). */
-    private static boolean isFull(Settlement settlement) {
-        int max = CivModConfig.MAX_SETTLERS_PER_SETTLEMENT.get();
-        return max > 0 && settlement.members().size() + settlement.bedReservations().size() >= max;
     }
 
     /** The Villager's own bed if it is free, else the free bed closest to it. */

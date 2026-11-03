@@ -188,12 +188,12 @@ public final class CenterBlockGameTests {
         });
     }
 
-    /** The Center Block offers the Administrator, a Service job; {@code upgrade_item_center_block} tests its upgrade. */
+    /** The Center Block offers the Administrator, a Service job, and the Priest; {@code upgrade_item_center_block} tests its upgrade. */
     private static void offersAdministrator(GameTestHelper helper) {
         helper.assertTrue(ModBlocks.HUMAN_CENTER_BLOCK.get().getJobType() == ModJobs.ADMINISTRATOR.get(), "The block's job");
         helper.assertTrue(ModJobs.ADMINISTRATOR.getId().equals(CivMod.id("administrator")), "Job id");
         helper.assertTrue(ModJobs.ADMINISTRATOR.get().category() == JobCategory.SERVICE, "Service job");
-        helper.assertTrue(JobPlaces.offered(ModJobs.ADMINISTRATOR.get()).equals(List.of(ModJobs.ADMINISTRATOR.get())), "Offered Jobs");
+        helper.assertTrue(JobPlaces.offered(ModJobs.ADMINISTRATOR.get()).equals(List.of(ModJobs.ADMINISTRATOR.get(), ModJobs.PRIEST.get())), "Offered Jobs");
         helper.succeed();
     }
 

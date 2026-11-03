@@ -24,6 +24,8 @@ public enum JobStatus {
     DELIVERING("delivering"),
     /** On a fatigue break. */
     PAUSING("pausing"),
+    /** A Priest on its way to or at the glowing Center Block. */
+    PRAYING("praying"),
     /** No usable tool in the belt or the collect inventory. */
     NO_TOOL("no_tool"),
     /** No (reachable) work place. */
