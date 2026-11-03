@@ -63,11 +63,13 @@ public final class Pickups {
     /**
      * @param level the level
      * @param site  a JobBlock
-     * @return whether it is one of a Resource Collection Job and its drop-off gets pickups (it is not a Clerk JobBlock)
+     * @return whether it is one of a Resource Collection Job and its drop-off gets pickups (it is not a Clerk JobBlock or a
+     *         Pantry, whose food stays for the settlers)
      */
     static boolean collects(ServerLevel level, JobBlockSite site) {
         return site.block().jobType().category() == JobCategory.RESOURCE_COLLECTION
-                && JobBlockSite.blockAt(level, site.dropOff()).filter(ClerkStorage::isClerk).isEmpty();
+                && JobBlockSite.blockAt(level, site.dropOff()).filter(block -> ClerkStorage.isClerk(block) || ClerkStorage.isPantry(block))
+                        .isEmpty();
     }
 
     /**

@@ -44,7 +44,7 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
  * is reachable only through a working Clerk at its counter. Hoppers and pipes use the block's item capability and see
  * the 27 slots only.
  * <p>
- * Every Clerk JobBlock is a food point: settlers take food from the nearest Clerk whose reachable storage has food
+ * Every Pantry is a food point: settlers take food from the nearest Pantry that has food
  * ({@link #nearestFood}).
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
@@ -150,7 +150,7 @@ public final class ClerkStorage {
      * @param clerk   a Clerk JobBlock
      * @param day     the day
      * @param dayTime the day time
-     * @return whether a Clerk settler works it now (assigned and on shift); only then is the linked storage reachable
+     * @return whether its settler works it now (assigned and on shift); only then is the linked storage reachable
      */
     public static boolean working(SettlementBlock clerk, long day, long dayTime) {
         return hasCounter(clerk) && clerk.assignee(clerk.jobType()).filter(assignee -> inShift(assignee.id(), day, dayTime)).isPresent();

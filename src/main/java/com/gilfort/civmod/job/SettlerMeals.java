@@ -28,7 +28,7 @@ import net.minecraft.world.item.Items;
 
 /**
  * Carries out the meal intents of the {@link Schedule} for the Settler Shell (vault {@code Systems/Needs.md}): eat from
- * the pockets, fetch food at a food point (Clerk JobBlock), wait for food, forage; plus hunger, a player feeding the
+ * the pockets, fetch food at a food point (Pantry), wait for food, forage; plus hunger, a player feeding the
  * settler and complaining. It keeps the running state of a meal and reads and writes the settler's
  * {@link SettlerFood}. It answers the shell with a {@link BodyStep}; only the shell moves the settler and sets its
  * activity. Catch-up eats through the same parts on the spot.
@@ -247,7 +247,7 @@ final class SettlerMeals {
         return new FoodLookup(level, dayTime);
     }
 
-    /** The nearest food point (Clerk JobBlock) with food, looked up once and only when asked. */
+    /** The nearest food point (Pantry) with food, looked up once and only when asked. */
     final class FoodLookup {
 
         private final ServerLevel level;
@@ -346,7 +346,7 @@ final class SettlerMeals {
     }
 
     /**
-     * At the food point: waits for its turn at a working Clerk's counter, then eats and takes provisions.
+     * At the food point: waits for its turn at a working Tavern Host's counter, then eats and takes provisions.
      *
      * @param level the level
      * @return stay while waiting at the counter, done after the visit
@@ -369,21 +369,21 @@ final class SettlerMeals {
     }
 
     /**
-     * Waits for food at the queue of the nearest Clerk JobBlock ({@link Intent#WAIT_FOR_FOOD}, where its counter is
-     * now). A Clerk waits at its own counter: it works its shift meanwhile.
+     * Waits for food at the queue of the nearest Pantry ({@link Intent#WAIT_FOR_FOOD}, where its counter is
+     * now). A Tavern Host waits at its own counter: it works its shift meanwhile.
      *
      * @param level the level
-     * @return work (a Clerk), walk to the queue, or stand still without a Clerk JobBlock
+     * @return work (a Tavern Host), walk to the queue, or stand still without a Pantry
      */
     BodyStep waitForFood(ServerLevel level) {
         if (shell.ownPantry().isPresent()) {
             return BodyStep.WORK;
         }
-        Optional<BlockPos> clerk = pantryToWaitAt(level);
-        if (clerk.isEmpty()) {
+        Optional<BlockPos> pantry = pantryToWaitAt(level);
+        if (pantry.isEmpty()) {
             return BodyStep.STOP;
         }
-        ClerkStorage.Visit visit = shell.reachableVisit(level, clerk.get(), ClerkStorage.visit(level, clerk.get(), DayClock.dayTime(level)));
+        ClerkStorage.Visit visit = shell.reachableVisit(level, pantry.get(), ClerkStorage.visit(level, pantry.get(), DayClock.dayTime(level)));
         return new BodyStep.Walk(Activity.WAIT_FOR_FOOD, visit.target(), visit.reach());
     }
 
@@ -488,7 +488,7 @@ final class SettlerMeals {
      *
      * @param day       the day of the meal
      * @param atCounter whether the settler is served at the counter of a working Clerk (catch-up: always)
-     * @return whether a working Clerk handed something out (food from its whole storage at the counter)
+     * @return whether a working Tavern Host handed something out (food from its whole storage at the counter)
      */
     private boolean visitFoodPoint(ServerLevel level, ClerkStorage.FoodPoint point, long day, long dayTime, boolean atCounter) {
         boolean own = shell.ownPantry().filter(point.clerk()::equals).isPresent();
