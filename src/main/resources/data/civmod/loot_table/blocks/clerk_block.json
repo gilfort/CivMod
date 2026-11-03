@@ -11,7 +11,8 @@
           "modifier": {
             "type": "minecraft:copy_components",
             "include": [
-              "civmod:job_level"
+              "civmod:job_level",
+              "civmod:ledgers"
             ],
             "source": "block_entity"
           },

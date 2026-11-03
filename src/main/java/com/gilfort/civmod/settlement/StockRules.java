@@ -52,12 +52,12 @@ public final class StockRules {
      * @param data  the dimension's settlement data
      * @param clerk the Clerk JobBlock position
      * @param rule  the rule
-     * @return whether it was set (a Clerk JobBlock, a slot within the highest level, Min or Max set and no other rule
+     * @return whether it was set (a Clerk JobBlock, a slot within the highest level with every Ledger, Min or Max set and no other rule
      *         of the Clerk for that item)
      */
     public static boolean setRule(SettlementData data, BlockPos clerk, StockRule rule) {
         Optional<ClerkAt> found = clerkAt(data, clerk);
-        if (found.isEmpty() || !rule.valid() || rule.slot() < 0 || rule.slot() >= StockRule.slots(SettlementRules.MAX_LEVEL)) {
+        if (found.isEmpty() || !rule.valid() || rule.slot() < 0 || rule.slot() >= StockRule.MAX_SLOTS) {
             return false;
         }
         Settlement settlement = found.get().settlement();
@@ -120,7 +120,7 @@ public final class StockRules {
         Map<Item, Integer> stock = null;
         for (StockRule rule : block.stockRules()) {
             Optional<Request> request = Requests.forRule(settlement, clerk, rule.slot());
-            if (!working || !rule.activeAt(block.level())) {
+            if (!working || !rule.activeIn(block.stockSlots())) {
                 request.ifPresent(open -> Requests.withdraw(data, settlement, open.id()));
                 continue;
             }
@@ -170,7 +170,7 @@ public final class StockRules {
         Map<Item, Integer> stock = null;
         Set<Item> capped = new HashSet<>();
         for (StockRule rule : block.stockRules()) {
-            if (!rule.hasMax() || !rule.activeAt(block.level())) {
+            if (!rule.hasMax() || !rule.activeIn(block.stockSlots())) {
                 continue;
             }
             capped.add(rule.item());
@@ -215,7 +215,7 @@ public final class StockRules {
         long day = DayClock.day(level);
         List<Integer> slots = new ArrayList<>();
         for (StockRule rule : block.stockRules()) {
-            if (rule.hasMax() && rule.activeAt(block.level()) && stock.getOrDefault(rule.item(), 0) > rule.max()
+            if (rule.hasMax() && rule.activeIn(block.stockSlots()) && stock.getOrDefault(rule.item(), 0) > rule.max()
                     && (warehouse.isEmpty() || room(level, settlement, clerk, warehouse.get(), rule.item(), day) <= 0)) {
                 slots.add(rule.slot());
             }
@@ -235,7 +235,7 @@ public final class StockRules {
     private static int room(ServerLevel level, Settlement settlement, BlockPos clerk, BlockPos warehouse, Item item, long day) {
         Optional<SettlementBlock> block = settlement.block(warehouse);
         Optional<StockRule> rule = block.flatMap(found -> found.stockRules().stream()
-                .filter(candidate -> candidate.item() == item && candidate.hasMax() && candidate.activeAt(found.level())).findFirst());
+                .filter(candidate -> candidate.item() == item && candidate.hasMax() && candidate.activeIn(found.stockSlots())).findFirst());
         if (rule.isEmpty()) {
             return Integer.MAX_VALUE;
         }
@@ -280,7 +280,7 @@ public final class StockRules {
         Set<Item> items = new HashSet<>();
         for (StockRule rule : clerk.get().stockRules()) {
             // A lookup in the Clerk's stock view per Max rule, no count of the whole store.
-            if (rule.hasMax() && rule.activeAt(clerk.get().level()) && stock.count(rule.item())
+            if (rule.hasMax() && rule.activeIn(clerk.get().stockSlots()) && stock.count(rule.item())
                     + (deliveries ? Deliveries.inDelivery(site.settlement(), clerk.get().pos(), rule.item()) : 0) >= rule.max()) {
                 items.add(rule.item());
             }
@@ -311,7 +311,7 @@ public final class StockRules {
         grown.forEach((clerk, items) -> {
             Optional<ClerkAt> found = clerkAt(data, clerk);
             if (found.isPresent() && found.get().block().stockRules().stream()
-                    .anyMatch(rule -> rule.hasMax() && rule.activeAt(found.get().block().level()) && items.contains(rule.item()))) {
+                    .anyMatch(rule -> rule.hasMax() && rule.activeIn(found.get().block().stockSlots()) && items.contains(rule.item()))) {
                 checkSurplus(level, clerk);
             }
         });
