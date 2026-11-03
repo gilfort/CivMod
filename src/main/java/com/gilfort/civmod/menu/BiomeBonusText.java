@@ -193,29 +193,24 @@ public final class BiomeBonusText {
     }
 
     /**
-     * The tooltip of a Found tab star: one line per effect acting on a drop with its source file ("Ore chance ×1.5
-     * (biome bonus civmod:miner_mountains)").
+     * The tooltip of a Found tab star: the effects acting on a drop, as the mechanics roll them and without their
+     * sources ("Ore chance ×1.5", "Raw Iron drops +75%").
      *
-     * @param job   the Job the bonus was resolved for
-     * @param bonus a resolved bonus
-     * @param rare  whether the drop is in the Job's rare group (the rare chance acts on it)
-     * @param drops the bonus's double drop entries matching the drop
+     * @param job     the Job the bonus was resolved for
+     * @param bonus   a resolved bonus
+     * @param rare    whether the drop is in the Job's rare group (the rare chance acts on it)
+     * @param dropped the item the drop gives
      * @return the lines, rare chance first
      */
-    public static List<Component> sourceLines(Job job, BiomeBonus bonus, boolean rare, List<BiomeBonus.DoubleDrop> drops) {
+    public static List<Component> effectLines(Job job, BiomeBonus bonus, boolean rare, ItemStack dropped) {
         List<Component> lines = new ArrayList<>();
         if (rare) {
-            for (Identifier source : bonus.rareChance().sources()) {
-                Optional.ofNullable(BiomeBonuses.files().get(source)).flatMap(BiomeBonuses.BonusFile::rareChance).flatMap(value -> rareChance(job, value))
-                        .ifPresent(effect -> lines.add(withSource(effect, source)));
-            }
+            rareChance(job, bonus.rareChance().value()).ifPresent(lines::add);
         }
-        drops.forEach(drop -> lines.add(withSource(doubleDrop(drop.items(), drop.chance()), drop.source())));
+        if (!dropped.isEmpty() && !bonus.doubleDrops(dropped).isEmpty()) {
+            lines.add(Component.translatable("civmod.biome_bonus.double_drop", dropped.getHoverName(), percent(bonus.doubleDropChance(dropped))));
+        }
         return lines;
-    }
-
-    private static Component withSource(Component effect, Identifier source) {
-        return Component.translatable("civmod.gui.found.bonus", effect, Component.translatable("civmod.biome_bonus.source", source.toString()));
     }
 
     private static Component biome(ExtraCodecs.TagOrElementLocation biome) {
