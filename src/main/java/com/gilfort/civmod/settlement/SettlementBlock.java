@@ -315,8 +315,7 @@ public final class SettlementBlock {
      * @param autoAssign the Jobs whose free places jobless settlers take by themselves
      * @param legacyExcluded the exclusions of an older save (read only)
      * @param legacyScan the scan of an older save (read only)
-     * @param stationTypes the unlock items in the Station Types slots, by slot ({@link Items#AIR}: empty; slot 0 is the
-     *                   Base Job's station and never read back)
+     * @param stationTypes the unlock items in the Station Types slots, by slot ({@link Items#AIR}: empty)
      * @param found      the Found tab state per Resource Collection Job
      * @param centerRace the race of a Center Block, empty for every other JobBlock
      */
@@ -463,8 +462,8 @@ public final class SettlementBlock {
             state.excluded.addAll(place.legacyExcluded());
             state.scan = place.legacyScan();
         }
-        // Slot 0 holds the Base Job's station; only the unlock items of the other slots are kept.
-        for (int slot = 1; slot < Math.min(StationTypes.SLOTS, place.stationTypes().size()); slot++) {
+        // Saves from before the first slot was free left it empty: it loads as an open, empty slot.
+        for (int slot = 0; slot < Math.min(StationTypes.SLOTS, place.stationTypes().size()); slot++) {
             this.stationTypes.set(slot, place.stationTypes().get(slot));
         }
     }
@@ -481,7 +480,7 @@ public final class SettlementBlock {
 
     /**
      * @return the unlock items in the Station Types slots, by slot (read-only, {@value StationTypes#SLOTS} entries,
-     *         {@link Items#AIR} for an empty slot; slot 0 stands for the Base Job's station, see {@link StationTypes})
+     *         {@link Items#AIR} for an empty slot, see {@link StationTypes})
      */
     public List<Item> stationTypes() {
         return Collections.unmodifiableList(stationTypes);

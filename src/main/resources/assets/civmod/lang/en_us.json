@@ -506,7 +506,6 @@
   "civmod.gui.station_types.already": "%s is unlocked already",
   "civmod.gui.station_types.closed": "Opens at JobBlock level %s",
   "civmod.gui.station_types.empty": "Empty slot",
-  "civmod.gui.station_types.base": "Base Job: %s",
   "civmod.gui.station_types.unlocks": "Unlocks: %s",
   "civmod.gui.station_types.unlock": "%s: %s",
   "civmod.gui.station_types.unlock_described": "%s: %s – %s",

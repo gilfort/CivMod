@@ -111,8 +111,8 @@ public final class SmelterSpecializationGameTests {
         JobBlockMenu menu = StationTypeGameTests.menu(helper, player, pos);
         helper.assertTrue(menu.tab(StationTypesTab.class).map(StationTypesTab::shown).equals(Optional.of(true)), "The Smelter has a Station Types tab");
         helper.assertTrue(menu.patternJobs().containsAll(List.of(smelter, cook(), founder())), "Patterns tabs per Job: " + menu.patternJobs());
-        helper.assertTrue(StationTypesTabData.of(level, pos).item(0) == Items.FURNACE && StationTypesTabData.of(level, pos).open() == 1,
-                "Level 1: only the furnace slot");
+        helper.assertTrue(StationTypesTabData.of(level, pos).item(0) == Items.AIR && StationTypesTabData.of(level, pos).open() == 1,
+                "Level 1: one empty open slot");
 
         StationTypeGameTests.setLevel(helper, BLOCK, 2);
         helper.assertTrue(StationTypeGameTests.unlock(helper, pos, 1, Items.SMOKER), "A smoker unlocks the Cook");

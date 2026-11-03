@@ -23,8 +23,8 @@ import net.minecraft.world.item.Items;
 
 /**
  * The "Station Types" tab of a JobBlock in the {@link JobBlockScreen} (vault {@code Systems/JobBlock.md}); the client side
- * of {@link StationTypesTab}. Five slots in a row: the Base Job's station (locked), then the unlock items, one more open
- * slot per JobBlock level; below them the Jobs the JobBlock offers. The "?" lists every unlock item with its Jobs.
+ * of {@link StationTypesTab}. Five slots in a row for the unlock items, one open slot per JobBlock level; below them the
+ * Jobs the JobBlock offers (the Base Job first). The "?" lists every unlock item with its Jobs.
  */
 final class StationTypesTabView implements JobBlockTabView {
 
@@ -133,7 +133,7 @@ final class StationTypesTabView implements JobBlockTabView {
                 graphics.item(new ItemStack(item), x, SLOTS_Y);
             }
             if (!tab.isOpen(slot)) {
-                // The Base Job's station is fixed; closed slots open with the JobBlock level.
+                // Closed slots open with the JobBlock level.
                 CivGui.slotInactive(graphics, x, SLOTS_Y);
             }
             if (slot == hovered) {
@@ -163,9 +163,8 @@ final class StationTypesTabView implements JobBlockTabView {
             return lines;
         }
         lines.add(new ItemStack(item).getHoverName());
-        List<Job> jobs = slot == 0 ? tab.unlocked().stream().limit(1).toList() : tab.jobsOf(item);
-        lines.add(Component.translatable(slot == 0 ? "civmod.gui.station_types.base" : "civmod.gui.station_types.unlocks",
-                ComponentUtils.formatList(jobs, Job::displayName)).withStyle(ChatFormatting.GRAY));
+        lines.add(Component.translatable("civmod.gui.station_types.unlocks", ComponentUtils.formatList(tab.jobsOf(item), Job::displayName))
+                .withStyle(ChatFormatting.GRAY));
         return lines;
     }
 }

@@ -37,6 +37,7 @@ import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
@@ -82,6 +83,7 @@ public final class StationTypeGameTests {
         }
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "station_types_unlock", StationTypeGameTests::unlock);
+            register(helper, "station_types_fifth_slot", StationTypeGameTests::fifthSlot);
             register(helper, "station_types_item_unlocks_two_jobs", StationTypeGameTests::itemUnlocksTwoJobs);
             register(helper, "station_types_overwrite", StationTypeGameTests::overwrite);
             register(helper, "station_types_library_per_job", StationTypeGameTests::libraryPerJob);
@@ -133,16 +135,16 @@ public final class StationTypeGameTests {
     }
 
     /**
-     * A level-2 Craftsperson JobBlock offers only its Base Job until a stonecutter goes into the open Station Types slot:
-     * the item is consumed and the Stonecutter is unlocked (job picker, scroll work point). Closed and locked slots and
-     * items that unlock nothing are refused and keep the item.
+     * A level-1 Craftsperson JobBlock offers only its Base Job until a stonecutter goes into its one open Station Types
+     * slot, the first: the item is consumed and the Stonecutter is unlocked (job picker, scroll work point). The Base Job
+     * holds no slot. Closed slots, the Base Job's own station and items that unlock nothing are refused and keep the
+     * item.
      */
     private static void unlock(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Job craftsperson = ModJobs.CRAFTSPERSON.get();
         Job stonecutter = job(STONECUTTER);
         helper.assertTrue(stonecutter.unlockItem().equals(Optional.of(Items.STONECUTTER)), "The Stonecutter names its unlock item");
-        helper.assertTrue(craftsperson.unlockItem().equals(Optional.of(Items.CRAFTING_TABLE)), "The Craftsperson's station is the first slot");
         BlockPos relative = new BlockPos(1, 1, 1);
         BlockPos pos = CraftspersonGameTests.craftsperson(helper, relative);
         BlockPos cutter = helper.absolutePos(new BlockPos(3, 1, 1));
@@ -151,36 +153,75 @@ public final class StationTypeGameTests {
         JobBlockMenu menu = menu(helper, player, pos);
         helper.assertTrue(menu.getTabCount() > menu.tab(StationTypesTab.class).orElseThrow().index() && menu.patternJobs().contains(stonecutter),
                 "A Station Types tab and a Patterns tab for the Stonecutter: " + menu.patternJobs());
-        helper.assertTrue(StationTypesTabData.of(level, pos).item(0) == Items.CRAFTING_TABLE && StationTypesTabData.of(level, pos).open() == 1,
-                "Level 1: only the crafting table slot");
+        StationTypesTabData tab = StationTypesTabData.of(level, pos);
+        helper.assertTrue(tab.item(0) == Items.AIR && tab.open() == 1 && tab.isOpen(0) && !tab.isOpen(1),
+                "Level 1: the first slot is open and empty: " + tab);
+        helper.assertTrue(offered(level, pos).equals(List.of(craftsperson)), "Without Station Types: only the Base Job " + offered(level, pos));
+        helper.assertTrue(ScrollOfAssignmentItem.workPlaceJob(level, block(level, pos), cutter).isEmpty(), "No stonecutter work point yet");
 
         menu.setCarried(new ItemStack(Items.STONECUTTER, 2));
         helper.assertFalse(menu.clickMenuButton(player, menu.tab(StationTypesTab.class).orElseThrow().slotButtonId(1)), "Level 1: slot 2 is closed");
         helper.assertTrue(menu.getCarried().getCount() == 2, "A refused item is kept");
-
-        setLevel(helper, relative, 2);
-        helper.assertTrue(offered(level, pos).equals(List.of(craftsperson)), "Level 2 without Station Types: only the Base Job " + offered(level, pos));
-        helper.assertTrue(ScrollOfAssignmentItem.workPlaceJob(level, block(level, pos), cutter).isEmpty(), "No stonecutter work point yet");
-        menu = menu(helper, player, pos);
-        menu.setCarried(new ItemStack(Items.STONECUTTER, 2));
-        helper.assertFalse(menu.clickMenuButton(player, menu.tab(StationTypesTab.class).orElseThrow().slotButtonId(0)), "The first slot is locked");
+        menu.setCarried(new ItemStack(Items.CRAFTING_TABLE, 2));
+        helper.assertFalse(menu.clickMenuButton(player, menu.tab(StationTypesTab.class).orElseThrow().slotButtonId(0)),
+                "The Base Job's own station unlocks nothing");
+        helper.assertTrue(menu.getCarried().is(Items.CRAFTING_TABLE) && menu.getCarried().getCount() == 2, "The crafting table is kept");
         menu.setCarried(new ItemStack(Items.DIRT, 2));
-        helper.assertFalse(menu.clickMenuButton(player, menu.tab(StationTypesTab.class).orElseThrow().slotButtonId(1)), "Dirt unlocks nothing");
+        helper.assertFalse(menu.clickMenuButton(player, menu.tab(StationTypesTab.class).orElseThrow().slotButtonId(0)), "Dirt unlocks nothing");
         helper.assertTrue(menu.getCarried().is(Items.DIRT) && menu.getCarried().getCount() == 2, "Dirt is kept");
 
         menu.setCarried(new ItemStack(Items.STONECUTTER, 2));
-        helper.assertTrue(menu.clickMenuButton(player, menu.tab(StationTypesTab.class).orElseThrow().slotButtonId(1)), "The stonecutter is taken");
+        helper.assertTrue(menu.clickMenuButton(player, menu.tab(StationTypesTab.class).orElseThrow().slotButtonId(0)), "The stonecutter is taken");
         helper.assertTrue(menu.getCarried().getCount() == 1, "One stonecutter consumed: " + menu.getCarried());
-        helper.assertTrue(block(level, pos).stationTypes().get(1) == Items.STONECUTTER, "Slot 2 holds the stonecutter");
+        helper.assertTrue(block(level, pos).stationTypes().getFirst() == Items.STONECUTTER, "Slot 1 holds the stonecutter");
         helper.assertTrue(offered(level, pos).contains(stonecutter) && offered(level, pos).getFirst() == craftsperson,
                 "The job picker offers the Stonecutter: " + offered(level, pos));
-        helper.assertTrue(StationTypesTabData.of(level, pos).unlocked().contains(stonecutter) && StationTypesTabData.of(level, pos).open() == 2,
+        helper.assertTrue(StationTypesTabData.of(level, pos).unlocked().contains(stonecutter) && StationTypesTabData.of(level, pos).item(0) == Items.STONECUTTER,
                 "The tab shows it: " + StationTypesTabData.of(level, pos));
         // The stonecutter also unlocks CivMod's Stonemason, which works at stonecutters too: the point serves both.
         helper.assertTrue(ScrollOfAssignmentItem.workPlaceJob(level, block(level, pos), cutter).isPresent() && stonecutter.isValidWorkPlace(level, cutter),
                 "The unlock item is no work place: the stonecutter in the world is the Stonecutter's work point");
-        helper.assertFalse(menu.clickMenuButton(player, menu.tab(StationTypesTab.class).orElseThrow().slotButtonId(1)), "Unlocked already: refused");
+        helper.assertFalse(menu.clickMenuButton(player, menu.tab(StationTypesTab.class).orElseThrow().slotButtonId(0)), "Unlocked already: refused");
         helper.assertTrue(menu.getCarried().getCount() == 1, "Kept");
+        helper.succeed();
+    }
+
+    /**
+     * Every JobBlock level opens one more slot: a level-5 Craftsperson JobBlock takes 5 unlock items, the 5th in the last
+     * slot, and offers its Base Job plus every Job they unlock. The slots are saved, and a save without the first slot
+     * (before it was free) loads without a crash.
+     */
+    private static void fifthSlot(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos relative = new BlockPos(1, 1, 1);
+        BlockPos pos = CraftspersonGameTests.craftsperson(helper, relative);
+        setLevel(helper, relative, 5);
+        helper.assertTrue(StationTypesTabData.of(level, pos).open() == StationTypes.SLOTS && StationTypesTabData.of(level, pos).isOpen(4),
+                "Level 5: all 5 slots open");
+        List<Item> items = List.of(Items.STONECUTTER, Items.SMITHING_TABLE, Items.CRAFTER, Items.FLETCHING_TABLE, Items.LOOM);
+        for (int slot = 0; slot < items.size(); slot++) {
+            helper.assertTrue(unlock(helper, pos, slot, items.get(slot)), "Slot " + (slot + 1) + " takes " + items.get(slot));
+        }
+        SettlementBlock block = block(level, pos);
+        helper.assertTrue(block.stationTypes().equals(items), "5 unlock items: " + block.stationTypes());
+        List<Job> offered = offered(level, pos);
+        helper.assertTrue(offered.getFirst() == ModJobs.CRAFTSPERSON.get()
+                && offered.containsAll(List.of(job(SMITH), ModJobs.MECHANIC.get(), job(CivMod.id("fletcher")), job(CivMod.id("dyer")), job(STONECUTTER))),
+                "The Base Job and 5 Specializations (and every Job the stonecutter unlocks): " + offered);
+        helper.assertTrue(StationTypes.emptySlots(block) == 0, "No empty slot left");
+
+        Settlement settlement = SettlementData.get(level).settlementAt(pos).orElseThrow();
+        JsonElement json = Settlement.CODEC.encodeStart(JsonOps.INSTANCE, settlement).getOrThrow();
+        helper.assertTrue(Settlement.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow().block(pos).orElseThrow().stationTypes().equals(items),
+                "All 5 slots are saved");
+        JsonObject saved = blockJson(json, pos);
+        saved.add("station_types", JsonOps.INSTANCE.createList(Stream.of(Items.AIR, Items.SMITHING_TABLE)
+                .map(item -> BuiltInRegistries.ITEM.byNameCodec().encodeStart(JsonOps.INSTANCE, item).getOrThrow())));
+        SettlementBlock old = Settlement.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow().block(pos).orElseThrow();
+        helper.assertTrue(old.stationTypes().getFirst() == Items.AIR && old.stationTypes().get(1) == Items.SMITHING_TABLE
+                && old.stationTypes().size() == StationTypes.SLOTS, "An old save with an empty first slot loads: " + old.stationTypes());
+        // Back to level 1: a bigger block left in the settlement data would push later tests' blocks out.
+        setLevel(helper, relative, 1);
         helper.succeed();
     }
 
