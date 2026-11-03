@@ -815,10 +815,33 @@ public final class SettlerWork {
     private SnapshotFacts liveFacts(ServerLevel level, boolean nightSkipped, boolean woke) {
         boolean sleeping = settler.isSleeping() && !woke;
         BooleanSupplier jobStepHolds = () -> jobStepHolds(level);
-        boolean deliveryPending = settler.getJobs().stream()
-                .anyMatch(job -> !buffer(job.jobBlock()).isEmpty() && !status(job.jobBlock()).waitsForRoom());
+        long day = moment(level.getOverworldClockTime()).day();
+        boolean deliveryPending = settler.getJobs().stream().anyMatch(job -> deliveryDue(job, day));
         boolean noFood = false;
         return new SnapshotFacts(nightSkipped, sleeping, activity, jobStepHolds, deliveryPending, noFood);
+    }
+
+    /**
+     * @param job a job
+     * @return whether its buffer holds something that goes to the drop-off (not only what its loop keeps)
+     */
+    boolean deliverable(SettlerJob job) {
+        return buffer(job.jobBlock()).stacks().stream().anyMatch(stack -> !kept(job, stack));
+    }
+
+    /** Whether an item stays in the job's buffer when it is delivered ({@link CategoryLoop#keeps}). */
+    private boolean kept(SettlerJob job, ItemStack stack) {
+        CategoryLoop loop = loop(job);
+        return loop != null && loop.keeps(job, stack);
+    }
+
+    /**
+     * Whether a job has something to deliver after work: each drop-off is tried once, a full one waits for the next day.
+     *
+     * @param day the day
+     */
+    private boolean deliveryDue(SettlerJob job, long day) {
+        return deliverable(job) && existingWorkplace(job.jobBlock()).filter(workplace -> workplace.fullAfterWork(day)).isEmpty();
     }
 
     /**
@@ -981,13 +1004,15 @@ public final class SettlerWork {
         SettlerJob delivery = null;
         if (decision.afterWork()) {
             endDay(level);
-            // Jobs show idle after work, except the first one with something to deliver.
+            // Jobs show idle after work, except the first one with something to deliver and any with a full drop-off.
             for (SettlerJob job : settler.getJobs()) {
-                if (!buffer(job.jobBlock()).isEmpty() && !status(job.jobBlock()).waitsForRoom()) {
+                if (deliveryDue(job, day)) {
                     delivery = job;
                     break;
                 }
-                setStatus(job.jobBlock(), JobStatus.IDLE);
+                if (!status(job.jobBlock()).waitsForRoom()) {
+                    setStatus(job.jobBlock(), JobStatus.IDLE);
+                }
             }
         } else {
             resting.clear();
@@ -2180,12 +2205,16 @@ public final class SettlerWork {
             return;
         }
         if (activity == Activity.DELIVER) {
-            if (loop(activeJob) == deliverymen) {
-                if (!deliverymen.unload(level, activeJob)) {
-                    block(level, activeJob.jobBlock(), JobStatus.STORAGE_FULL);
+            SettlerJob job = activeJob;
+            if (loop(job) == deliverymen) {
+                if (!deliverymen.unload(level, job)) {
+                    block(level, job.jobBlock(), JobStatus.STORAGE_FULL);
                 }
             } else {
-                deliver(level, activeJob, deliveryVisit != null && deliveryVisit.counter());
+                deliver(level, job, deliveryVisit != null && deliveryVisit.counter());
+            }
+            if (status(job.jobBlock()).waitsForRoom()) {
+                markFullAfterWork(level, job);
             }
             activity = Activity.IDLE;
             deliveryVisit = null;
@@ -2200,6 +2229,14 @@ public final class SettlerWork {
         }
     }
 
+    /** A delivery after work that found the drop-off full is not tried again that evening. */
+    private void markFullAfterWork(ServerLevel level, SettlerJob job) {
+        Schedule.Moment now = moment(level.getOverworldClockTime());
+        if (now.dayTime() >= dayTimes(now.day()).workEnd()) {
+            workplace(job.jobBlock()).setFullAfterWork(now.day());
+        }
+    }
+
     /**
      * Delivers the buffer of a job into its drop-off, under the access rule if the drop-off is a Clerk.
      *
@@ -2208,13 +2245,12 @@ public final class SettlerWork {
      */
     private void deliver(ServerLevel level, SettlerJob job, boolean atCounter) {
         BlockPos jobBlock = job.jobBlock();
-        CategoryLoop loop = loop(job);
         JobBuffer buffer = buffer(jobBlock);
         Optional<JobBlockSite> site = JobBlockSite.at(level, jobBlock);
         BlockPos dropOff = site.map(JobBlockSite::dropOff).orElse(jobBlock);
         Stock stock = ClerkStorage.stock(level, dropOff, DayClock.dayTime(level), atCounter);
         boolean all = !stock.isEmpty() && buffer.deliver(stack -> stack.getCount() - stock.insert(stack).getCount(),
-                stack -> loop != null && loop.keeps(job, stack));
+                stack -> kept(job, stack));
         if (!all) {
             block(level, jobBlock, JobStatus.DROP_OFF_FULL);
         }
