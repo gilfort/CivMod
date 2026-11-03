@@ -56,7 +56,8 @@ public final class Settlement {
             BlockPos.CODEC.listOf().optionalFieldOf("hearths", List.of()).forGetter(settlement -> List.copyOf(settlement.hearths)),
             Codec.INT.optionalFieldOf("hearth_border", NO_BORDER).forGetter(Settlement::hearthBorderHash),
             CenterGrace.CODEC.optionalFieldOf("center_grace").forGetter(Settlement::centerGrace),
-            Shrine.State.CODEC.optionalFieldOf("shrine", Shrine.State.NONE).forGetter(Settlement::shrine)
+            Shrine.State.CODEC.optionalFieldOf("shrine", Shrine.State.NONE).forGetter(Settlement::shrine),
+            Bonuses.CODEC.optionalFieldOf("bonuses", Bonuses.NONE).forGetter(Settlement::bonuses)
     ).apply(instance, Settlement::new));
 
     /**
@@ -100,6 +101,8 @@ public final class Settlement {
     private Optional<CenterGrace> centerGrace;
     /** The day-long glow state of the Center Block's shrine. */
     private Shrine.State shrine;
+    /** The timed bonuses (a prayer's blessing). */
+    private Bonuses bonuses;
 
     /**
      * @param id          the settlement id (unique per dimension)
@@ -113,13 +116,14 @@ public final class Settlement {
     public Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
             List<SettlementBlock> blocks) {
         this(id, name, foundedAt, color, settlersDue, members, blocks, Map.of(), List.of(), List.of(), Map.of(), List.of(), NO_BORDER, Optional.empty(),
-                Shrine.State.NONE);
+                Shrine.State.NONE, Bonuses.NONE);
     }
 
     private Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
             List<SettlementBlock> blocks, Map<String, UUID> beds, List<Request> requests, List<DeliveryTask> deliveries,
             Map<UUID, BlockPos> bedReservations, List<BlockPos> hearths, int hearthBorderHash, Optional<CenterGrace> centerGrace,
-            Shrine.State shrine) {
+            Shrine.State shrine, Bonuses bonuses) {
+        this.bonuses = bonuses;
         this.centerGrace = centerGrace;
         this.shrine = shrine;
         this.bedReservations.putAll(bedReservations);
@@ -256,6 +260,17 @@ public final class Settlement {
 
     void setShrine(Shrine.State shrine) {
         this.shrine = shrine;
+    }
+
+    /**
+     * @return the settlement's timed bonuses
+     */
+    public Bonuses bonuses() {
+        return bonuses;
+    }
+
+    void setBonuses(Bonuses bonuses) {
+        this.bonuses = bonuses;
     }
 
     void setCenterGrace(Optional<CenterGrace> centerGrace) {

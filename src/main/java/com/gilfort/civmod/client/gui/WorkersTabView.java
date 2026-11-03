@@ -104,6 +104,12 @@ final class WorkersTabView implements JobBlockTabView {
     private List<WorkersLine> footer() {
         List<WorkersLine> lines = new ArrayList<>();
         screen.views().forEach(view -> lines.addAll(view.workersLines()));
+        long left = menu.getInfo().blessingLeft();
+        if (left > 0) {
+            // In-game minutes: 1000 ticks are an hour.
+            long minutes = Math.max(1L, left * 60L / 1000L);
+            lines.add(new WorkersLine(Component.translatable("civmod.gui.job_block.blessing", minutes / 60L, String.format("%02d", minutes % 60L)), List.of()));
+        }
         return lines;
     }
 

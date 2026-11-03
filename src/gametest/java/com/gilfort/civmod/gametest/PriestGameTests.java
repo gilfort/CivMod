@@ -14,6 +14,7 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.Bonuses;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobAssignments.AssignResult;
 import com.gilfort.civmod.settlement.JobPlaces;
@@ -72,6 +73,10 @@ public final class PriestGameTests {
             register(helper, "priest_catch_up_without_priest", PriestGameTests::withoutPriest);
             register(helper, "priest_catch_up_one_prayer_per_day", PriestGameTests::onePrayerPerDay);
             register(helper, "priest_prays_at_glowing_center_block", PriestGameTests::livePrayer);
+            register(helper, "priest_blessing_rules", PriestGameTests::blessingRules);
+            register(helper, "priest_blessing_after_prayer", PriestGameTests::blessingAfterPrayer);
+            register(helper, "priest_blessing_speed", PriestGameTests::blessingSpeed);
+            register(helper, "priest_blessing_saved", PriestGameTests::blessingSaved);
         });
     }
 
@@ -347,5 +352,68 @@ public final class PriestGameTests {
                     });
                     forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
                 }).thenSucceed();
+    }
+
+    /** A blessing lasts until its end, never stacks and never shortens; averaged over a span it weighs the overlap. */
+    private static void blessingRules(GameTestHelper helper) {
+        Bonuses.Kind kind = Bonuses.Kind.WORK_SPEED;
+        Bonuses blessed = Bonuses.NONE.start(kind, 5000L);
+        helper.assertTrue(blessed.remaining(kind, 2000L) == 3000L && blessed.remaining(kind, 5000L) == 0L, "Runs until its end");
+        helper.assertTrue(blessed.start(kind, 4000L).equals(blessed), "A shorter start changes nothing");
+        helper.assertTrue(blessed.start(kind, 6000L).remaining(kind, 2000L) == 4000L, "A later start renews it, no second bonus");
+        helper.assertTrue(Math.abs(kind.factor() - 1.2) < 1e-9, "+20 %");
+        helper.assertTrue(Math.abs(blessed.averageFactor(kind, 4000L, 5000L) - 1.2) < 1e-9, "Fully inside");
+        helper.assertTrue(Math.abs(blessed.averageFactor(kind, 5000L, 6000L) - 1.0) < 1e-9, "Fully after");
+        helper.assertTrue(Math.abs(blessed.averageFactor(kind, 4500L, 5500L) - 1.1) < 1e-9, "Half inside: " + blessed.averageFactor(kind, 4500L, 5500L));
+        helper.succeed();
+    }
+
+    /** Every prayer, a failed or a successful chain, blesses the settlement for 3 hours from its last roll. */
+    private static void blessingAfterPrayer(GameTestHelper helper) {
+        Settlement settlement = settlement(helper);
+        bed(helper, FIRST_BED);
+        Settler priest = priest(helper, settlement);
+        long clock = DAY * DayClock.DAY_TICKS + Shrine.glowStart(settlement.id(), DAY);
+        helper.assertTrue(settlement.bonuses().equals(Bonuses.NONE), "Not blessed before");
+        catchUp(helper, priest, DAY, false);
+        helper.assertTrue(settlement.bonuses().remaining(Bonuses.Kind.WORK_SPEED, clock) == Bonuses.BLESSING_TICKS, "A failed prayer blesses too");
+        catchUp(helper, priest, DAY + 1, true, false);
+        long second = (DAY + 1) * DayClock.DAY_TICKS + Shrine.glowStart(settlement.id(), DAY + 1) + Shrine.GLOW_TICKS;
+        helper.assertTrue(settlement.bonuses().remaining(Bonuses.Kind.WORK_SPEED, second) == Bonuses.BLESSING_TICKS,
+                "The end of the chain sets the end: " + settlement.bonuses().remaining(Bonuses.Kind.WORK_SPEED, second));
+        settlement.members().forEach(member -> {
+            if (helper.getLevel().getEntity(member) instanceof Settler settler) {
+                settler.discard();
+            }
+        });
+        helper.succeed();
+    }
+
+    /** The speed factor of a Settler is 1.2 while the blessing runs and 1 after; catch-up averages it over the work time. */
+    private static void blessingSpeed(GameTestHelper helper) {
+        Settlement settlement = settlement(helper);
+        Settler priest = priest(helper, settlement);
+        ServerLevel level = helper.getLevel();
+        SettlementData data = SettlementData.get(level);
+        long now = level.getOverworldClockTime();
+        helper.assertTrue(priest.getWork().blessingFactor(level) == 1.0, "No blessing, factor 1");
+        // The test clock stands still: the blessing's end is moved around now instead.
+        data.setBonuses(settlement, Bonuses.NONE.start(Bonuses.Kind.WORK_SPEED, now + 1L));
+        helper.assertTrue(Math.abs(priest.getWork().blessingFactor(level) - 1.2) < 1e-9, "Blessed, factor 1.2");
+        data.setBonuses(settlement, Bonuses.NONE.start(Bonuses.Kind.WORK_SPEED, now));
+        helper.assertTrue(priest.getWork().blessingFactor(level) == 1.0, "Ended with the blessing");
+        cleanUp(priest);
+        helper.succeed();
+    }
+
+    /** The blessing is part of the settlement's saved data. */
+    private static void blessingSaved(GameTestHelper helper) {
+        Settlement settlement = settlement(helper);
+        SettlementData.get(helper.getLevel()).setBonuses(settlement, Bonuses.NONE.start(Bonuses.Kind.WORK_SPEED, 123456L));
+        var encoded = Settlement.CODEC.encodeStart(com.mojang.serialization.JsonOps.INSTANCE, settlement).getOrThrow();
+        Settlement loaded = Settlement.CODEC.parse(com.mojang.serialization.JsonOps.INSTANCE, encoded).getOrThrow();
+        helper.assertTrue(loaded.bonuses().equals(settlement.bonuses()) && loaded.bonuses().remaining(Bonuses.Kind.WORK_SPEED, 0L) == 123456L,
+                "Survives save and reload");
+        helper.succeed();
     }
 }

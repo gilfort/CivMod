@@ -350,6 +350,19 @@ public final class SettlementData extends SavedData {
     }
 
     /**
+     * Sets a settlement's timed bonuses.
+     *
+     * @param settlement the settlement
+     * @param bonuses    the new bonuses
+     */
+    public void setBonuses(Settlement settlement, Bonuses bonuses) {
+        if (!settlement.bonuses().equals(bonuses)) {
+            settlement.setBonuses(bonuses);
+            changed();
+        }
+    }
+
+    /**
      * Marks the data as changed (saved and outline revision bumped).
      */
     void changed() {
