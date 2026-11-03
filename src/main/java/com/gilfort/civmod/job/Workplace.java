@@ -93,6 +93,8 @@ final class Workplace {
         private @Nullable FactorOfDay factorOfDay;
         /** Whether a station of an innate recipe's own tag stands near the JobBlock, until the next search. */
         private final Map<TagKey<Block>, StationSeen> recipeStations = new HashMap<>();
+        /** The day a delivery after work found the drop-off full: it is not tried again that evening. */
+        private long fullAfterWorkDay = -1L;
     }
 
     /** The last search for an innate recipe's station: whether one was found, and until when that counts. */
@@ -231,6 +233,21 @@ final class Workplace {
      */
     void setMissingFuel(Optional<Request.Missing> missing) {
         dayState.missingFuel = missing;
+    }
+
+    /**
+     * @param day the day
+     * @return whether a delivery after work found the drop-off full on that day
+     */
+    boolean fullAfterWork(long day) {
+        return dayState.fullAfterWorkDay == day;
+    }
+
+    /**
+     * @param day the day a delivery after work found the drop-off full
+     */
+    void setFullAfterWork(long day) {
+        dayState.fullAfterWorkDay = day;
     }
 
     /**
