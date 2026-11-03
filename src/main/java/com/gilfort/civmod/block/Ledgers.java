@@ -1,6 +1,6 @@
 package com.gilfort.civmod.block;
 
-import com.gilfort.civmod.logistics.StockRule;
+import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
 import net.minecraft.ChatFormatting;
@@ -14,7 +14,7 @@ import net.minecraft.world.item.ItemStack;
 
 /**
  * Using a Ledger on a Clerk JobBlock (vault {@code Jobs/Clerk.md}, decisions of 2026-11-02): each adds 9 active stock
- * rule slots, at most {@value StockRule#MAX_LEDGERS} per block, with no settler, skill or level condition.
+ * rule slots, at most {@value SettlementRules#MAX_LEDGERS} per block, with no settler, skill or level condition.
  */
 final class Ledgers {
 
@@ -34,8 +34,8 @@ final class Ledgers {
      */
     static boolean use(ServerLevel level, BlockPos pos, JobBlockEntity jobBlock, Player player, ItemStack stack) {
         int ledgers = jobBlock.getLedgers();
-        if (ledgers >= StockRule.MAX_LEDGERS) {
-            player.sendOverlayMessage(Component.translatable("civmod.ledger.max", StockRule.MAX_LEDGERS).withStyle(ChatFormatting.RED));
+        if (ledgers >= SettlementRules.MAX_LEDGERS) {
+            player.sendOverlayMessage(Component.translatable("civmod.ledger.max", SettlementRules.MAX_LEDGERS).withStyle(ChatFormatting.RED));
             return false;
         }
         if (!player.hasInfiniteMaterials()) {
@@ -44,7 +44,7 @@ final class Ledgers {
         jobBlock.setLedgers(ledgers + 1);
         SettlementWorld.setLedgers(level, pos, ledgers + 1);
         level.playSound(null, pos, SoundEvents.BOOK_PAGE_TURN, SoundSource.BLOCKS, 1.0F, 1.0F);
-        player.sendOverlayMessage(Component.translatable("civmod.ledger.done", ledgers + 1, StockRule.MAX_LEDGERS));
+        player.sendOverlayMessage(Component.translatable("civmod.ledger.done", ledgers + 1, SettlementRules.MAX_LEDGERS));
         return true;
     }
 }

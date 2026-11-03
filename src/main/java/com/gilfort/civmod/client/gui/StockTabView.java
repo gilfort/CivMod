@@ -560,9 +560,10 @@ final class StockTabView implements JobBlockTabView {
      */
     private static Component locked(ClerkTabData tab) {
         boolean upgrade = tab.level() < SettlementRules.MAX_LEVEL;
-        boolean ledger = tab.ledgers() < StockRule.MAX_LEDGERS;
-        String way = upgrade && ledger ? "both" : ledger ? "ledger" : "upgrade";
-        return Component.translatable("civmod.gui.clerk.stock.locked." + way);
+        boolean ledger = tab.ledgers() < SettlementRules.MAX_LEDGERS;
+        String key = upgrade && ledger ? "civmod.gui.clerk.stock.locked.both"
+                : ledger ? "civmod.gui.clerk.stock.locked.ledger" : "civmod.gui.clerk.stock.locked.upgrade";
+        return Component.translatable(key);
     }
 
     @Override

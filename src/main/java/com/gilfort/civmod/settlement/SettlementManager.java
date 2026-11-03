@@ -307,7 +307,7 @@ public final class SettlementManager {
      * @param pos     the JobBlock position
      * @param ledgers the Ledgers on the block
      */
-    public static void setLedgers(SettlementData data, BlockPos pos, int ledgers) {
+    static void setLedgers(SettlementData data, BlockPos pos, int ledgers) {
         data.unsettledAt(pos).or(() -> JobBlockSite.at(data, pos).map(JobBlockSite::block))
                 .filter(block -> block.ledgers() != ledgers).ifPresent(block -> {
                     block.setLedgers(ledgers);

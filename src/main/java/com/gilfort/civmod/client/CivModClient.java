@@ -9,7 +9,6 @@ import com.gilfort.civmod.client.gui.SettlerScreen;
 import com.gilfort.civmod.item.JobBlockUpgradeItem;
 import com.gilfort.civmod.item.JobPicker;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
-import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.StationTypesTabData;
 import com.gilfort.civmod.npc.VillagerConversion;
 import com.gilfort.civmod.registry.ModBlockEntityTypes;
@@ -159,7 +158,7 @@ public final class CivModClient {
             }
             Integer ledgers = event.getItemStack().get(ModDataComponents.LEDGERS.get());
             if (ledgers != null) {
-                event.getToolTip().add(2, Component.translatable("civmod.tooltip.ledgers", ledgers, StockRule.MAX_LEDGERS)
+                event.getToolTip().add(2, Component.translatable("civmod.tooltip.ledgers", ledgers, SettlementRules.MAX_LEDGERS)
                         .withStyle(ChatFormatting.GRAY));
             }
         }

@@ -66,7 +66,7 @@ public final class LedgerGameTests {
 
     /**
      * Each Ledger adds 9 active slots and is used up; the fourth is refused and kept; Lv 1 with 3 Ledgers has 36 slots,
-     * Lv 5 with 3 has 72. A rule in a Ledger slot is accepted; creative keeps the item.
+     * Lv 5 with 3 has 72. A rule in a Ledger slot is accepted, one beyond the active slots is not; creative keeps the item.
      */
     private static void slots(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -89,6 +89,7 @@ public final class LedgerGameTests {
         SettlementData data = SettlementData.get(level);
         helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(35, Items.BREAD, 4, 0)), "Slot 35 takes a rule");
         helper.assertTrue(ClerkTabData.of(level, clerk).nextEmptyGhostSlot() == 0, "Slot 0 still empty");
+        helper.assertFalse(StockRules.setRule(data, clerk, StockRule.minimum(36, Items.TORCH, 4, 0)), "Lv 1 with 3 Ledgers: slot 36 is inactive");
 
         StationTypeGameTests.setLevel(helper, CLERK, SettlementRules.MAX_LEVEL);
         helper.assertTrue(ClerkTabData.of(level, clerk).slots() == 72, "Lv 5 with 3 Ledgers: 72 slots");

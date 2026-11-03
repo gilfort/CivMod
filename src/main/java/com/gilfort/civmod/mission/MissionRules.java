@@ -28,10 +28,11 @@ import net.minecraft.util.Util;
  */
 public final class MissionRules {
 
-    /** Specialization slots of a Mission Board (all its Station Types slots; the Base Job holds none). */
-    private static final int SPECIALIZATION_SLOTS = StationTypes.SLOTS;
-    /** The largest offer of any board: the Base Job's missions plus every Specialization slot filled, at the top level. */
-    public static final int MAX_OFFER_SIZE = SettlementRules.MAX_LEVEL + SPECIALIZATION_SLOTS * SettlementRules.MAX_LEVEL;
+    /**
+     * The largest offer of any board: the Base Job's missions plus every Station Types slot filled with a Specialization
+     * (the Base Job holds none), at the top level.
+     */
+    public static final int MAX_OFFER_SIZE = SettlementRules.MAX_LEVEL + StationTypes.SLOTS * SettlementRules.MAX_LEVEL;
     /** Skill levels above the recommendation per extra loot roll. */
     private static final int LEVELS_PER_EXTRA_ROLL = 20;
 

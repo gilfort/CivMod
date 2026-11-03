@@ -59,7 +59,8 @@ import net.neoforged.neoforge.registries.RegisterEvent;
  * Craftsperson JobBlock unlock its Specializations there, each with its own pattern library.
  * <p>
  * On the GameTest server it registers one more Producing Specialization of the Craftsperson (crafting recipes):
- * {@code civmod:gametest_mason}, unlocked by a stonecutter like the example addon's Stonecutter. The smithing table
+ * {@code civmod:gametest_mason}, unlocked by a stonecutter like the example addon's Stonecutter, and
+ * {@code civmod:gametest_workbench}, naming the Craftsperson's own crafting table (so never unlocked). The smithing table
  * unlocks CivMod's Smith.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
@@ -67,6 +68,7 @@ public final class StationTypeGameTests {
 
     private static final Identifier STONECUTTER = Identifier.fromNamespaceAndPath("civmod_example", "stonecutter");
     private static final Identifier MASON = CivMod.id("gametest_mason");
+    private static final Identifier WORKBENCH = CivMod.id("gametest_workbench");
     private static final Identifier SMITH = CivMod.id("smith");
 
     private StationTypeGameTests() {
@@ -79,6 +81,9 @@ public final class StationTypeGameTests {
             event.register(ModJobs.KEY, helper -> {
                 helper.register(MASON, Job.builder(JobCategory.PRODUCING).parent(ModJobs.CRAFTSPERSON).unlockItem(() -> Items.STONECUTTER)
                         .icon(() -> Items.STONE_BRICKS).profile(CraftspersonProfile::new).build());
+                // Names the Base Job's own station: never unlockable, so never in the "?" overview.
+                helper.register(WORKBENCH, Job.builder(JobCategory.PRODUCING).parent(ModJobs.CRAFTSPERSON).unlockItem(() -> Items.CRAFTING_TABLE)
+                        .icon(() -> Items.CRAFTING_TABLE).profile(CraftspersonProfile::new).build());
             });
         }
         event.register(Registries.TEST_FUNCTION, helper -> {
@@ -227,7 +232,8 @@ public final class StationTypeGameTests {
 
     /**
      * One item unlocks every Job naming it: a stonecutter unlocks CivMod's Stonemason, the example addon's Stonecutter and
-     * the GameTest Mason; the "?" overview lists all three under the stonecutter. Datapacks override an unlock item
+     * the GameTest Mason; the "?" overview lists all three under the stonecutter and leaves out the Base Job's own
+     * station, even when a Specialization names it. Datapacks override an unlock item
      * ({@code unlock_item}).
      */
     private static void itemUnlocksTwoJobs(GameTestHelper helper) {
@@ -241,6 +247,9 @@ public final class StationTypeGameTests {
                 && unlock.jobs().containsAll(List.of(stonemason, stonecutter, mason)))
                 && overview.contains(new StationTypes.Unlock(Items.SMITHING_TABLE, List.of(smith))),
                 "\"?\": every unlock item with all Jobs it unlocks: " + overview);
+        helper.assertTrue(job(WORKBENCH).unlockItem().equals(Optional.of(Items.CRAFTING_TABLE))
+                && overview.stream().noneMatch(unlock -> unlock.item() == Items.CRAFTING_TABLE),
+                "\"?\" leaves out the Base Job's own station, which unlocks nothing: " + overview);
         helper.assertTrue(job(CivMod.id("gametest_dummy")).unlockItem().equals(Optional.of(Items.STICK)), "Datapack override of the unlock item");
         BlockPos relative = new BlockPos(1, 1, 1);
         BlockPos pos = CraftspersonGameTests.craftsperson(helper, relative);

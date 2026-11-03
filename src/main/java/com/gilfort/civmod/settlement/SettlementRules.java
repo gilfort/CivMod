@@ -36,6 +36,8 @@ public final class SettlementRules {
     private static final int[] CLERK_STORAGE = {2, 4, 8, 12, 16};
     /** Stand spots per Clerk JobBlock. */
     public static final int MAX_STAND_SPOTS = 8;
+    /** Ledgers a Clerk JobBlock takes at most (vault {@code Jobs/Clerk.md}). */
+    public static final int MAX_LEDGERS = 3;
 
     private SettlementRules() {
     }

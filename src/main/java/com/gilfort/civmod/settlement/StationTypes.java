@@ -90,12 +90,14 @@ public final class StationTypes {
 
     /**
      * @param base a Base Job
-     * @return the "?" overview: every unlock item of its Specializations with the Jobs it unlocks, in registry order
+     * @return the "?" overview: every unlock item of its Specializations with the Jobs it unlocks, in registry order;
+     *         without the Base Job's own station, which unlocks nothing ({@link #unlockedBy})
      */
     public static List<Unlock> overview(Job base) {
         Map<Item, List<Job>> byItem = new LinkedHashMap<>();
         for (Job job : specializations(base)) {
-            job.unlockItem().ifPresent(item -> byItem.computeIfAbsent(item, key -> new ArrayList<>()).add(job));
+            job.unlockItem().filter(item -> !unlockedBy(base, item).isEmpty())
+                    .ifPresent(item -> byItem.computeIfAbsent(item, key -> new ArrayList<>()).add(job));
         }
         return byItem.entrySet().stream().map(entry -> new Unlock(entry.getKey(), entry.getValue())).toList();
     }

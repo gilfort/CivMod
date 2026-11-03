@@ -151,8 +151,8 @@ public final class StockRuleGameTests {
     }
 
     /**
-     * Rules are active only while a Clerk settler is on shift and only in the 9 slots per JobBlock level; checks
-     * outside withdraw the requests. Catch-up checks the rules once per simulated hour.
+     * Rules are active only while a Clerk settler is on shift and only in the 9 slots per JobBlock level; an inactive
+     * slot takes no new rule, a rule left there after a downgrade stays inactive. Checks outside withdraw the requests. Catch-up checks the rules once per simulated hour.
      */
     private static void inactiveOffShift(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -160,7 +160,10 @@ public final class StockRuleGameTests {
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
         StockRules.setRule(data, clerk, StockRule.minimum(0, Items.BREAD, 10, 0));
-        StockRules.setRule(data, clerk, StockRule.minimum(9, Items.APPLE, 10, 0));
+        helper.assertFalse(StockRules.setRule(data, clerk, StockRule.minimum(9, Items.APPLE, 10, 0)), "Level 1: slot 9 is inactive and takes no rule");
+        SettlementManager.setLevel(data, clerk, 2, SettlementManager.Listener.NONE);
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(9, Items.APPLE, 10, 0)), "Level 2: slot 9 takes a rule");
+        SettlementManager.setLevel(data, clerk, 1, SettlementManager.Listener.NONE);
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "No Clerk settler: no request");
 

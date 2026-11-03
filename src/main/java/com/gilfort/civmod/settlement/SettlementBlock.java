@@ -444,7 +444,7 @@ public final class SettlementBlock {
         Set<Item> ruled = new HashSet<>();
         clerk.stockRules().stream().filter(rule -> ruled.add(rule.item())).forEach(this.stockRules::add);
         this.served.addAll(clerk.served());
-        this.ledgers = Math.clamp(clerk.ledgers(), 0, StockRule.MAX_LEDGERS);
+        this.ledgers = Math.clamp(clerk.ledgers(), 0, SettlementRules.MAX_LEDGERS);
         this.homeClerk = homeClerk;
         producing.libraries().forEach(saved -> {
             Library library = library(saved.job());
@@ -663,20 +663,20 @@ public final class SettlementBlock {
     }
 
     /**
-     * @return the Ledgers used on this Clerk JobBlock (0–{@value StockRule#MAX_LEDGERS}; always 0 for other blocks)
+     * @return the Ledgers used on this Clerk JobBlock (0–{@value SettlementRules#MAX_LEDGERS}; always 0 for other blocks)
      */
     public int ledgers() {
         return ledgers;
     }
 
     void setLedgers(int ledgers) {
-        this.ledgers = Math.clamp(ledgers, 0, StockRule.MAX_LEDGERS);
+        this.ledgers = Math.clamp(ledgers, 0, SettlementRules.MAX_LEDGERS);
     }
 
     /**
      * @return the active stock rule slots: (level + Ledgers) × 9 ({@link StockRule#slots(int, int)})
      */
-    public int stockSlots() {
+    int stockSlots() {
         return StockRule.slots(level, ledgers);
     }
 

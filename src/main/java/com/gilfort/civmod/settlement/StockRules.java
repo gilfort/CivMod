@@ -52,12 +52,12 @@ public final class StockRules {
      * @param data  the dimension's settlement data
      * @param clerk the Clerk JobBlock position
      * @param rule  the rule
-     * @return whether it was set (a Clerk JobBlock, a slot within the highest level with every Ledger, Min or Max set and no other rule
-     *         of the Clerk for that item)
+     * @return whether it was set (a Clerk JobBlock, an active slot at its level and Ledgers, Min or Max set and no other
+     *         rule of the Clerk for that item)
      */
     public static boolean setRule(SettlementData data, BlockPos clerk, StockRule rule) {
         Optional<ClerkAt> found = clerkAt(data, clerk);
-        if (found.isEmpty() || !rule.valid() || rule.slot() < 0 || rule.slot() >= StockRule.MAX_SLOTS) {
+        if (found.isEmpty() || !rule.valid() || !rule.activeIn(found.get().block().stockSlots())) {
             return false;
         }
         Settlement settlement = found.get().settlement();

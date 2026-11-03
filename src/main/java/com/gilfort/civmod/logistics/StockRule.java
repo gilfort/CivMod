@@ -28,12 +28,10 @@ import net.minecraft.world.item.Item;
  */
 public record StockRule(int slot, Item item, int min, int max, int order, int priority) {
 
-    /** Rules per JobBlock level and per Ledger (one row). */
-    public static final int RULES_PER_LEVEL = 9;
-    /** Ledgers a Clerk JobBlock takes at most. */
-    public static final int MAX_LEDGERS = 3;
+    /** Rules per row of the Stock tab: each JobBlock level and each Ledger activates one row. */
+    public static final int RULES_PER_ROW = 9;
     /** Rule slots at the highest level with every Ledger. */
-    public static final int MAX_SLOTS = RULES_PER_LEVEL * (SettlementRules.MAX_LEVEL + MAX_LEDGERS);
+    public static final int MAX_SLOTS = RULES_PER_ROW * (SettlementRules.MAX_LEVEL + SettlementRules.MAX_LEDGERS);
     /** Lowest priority. */
     public static final int MIN_PRIORITY = -100;
     /** Highest priority. */
@@ -175,11 +173,11 @@ public record StockRule(int slot, Item item, int min, int max, int order, int pr
 
     /**
      * @param level   the Clerk JobBlock level
-     * @param ledgers the Ledgers used on it (0–{@value #MAX_LEDGERS})
+     * @param ledgers the Ledgers used on it (0–{@value SettlementRules#MAX_LEDGERS})
      * @return how many rule slots are active: (level + Ledgers) × 9, so Lv 1 with 3 Ledgers has 36, Lv 5 with 3 has 72
      */
     public static int slots(int level, int ledgers) {
-        return RULES_PER_LEVEL * (level + ledgers);
+        return RULES_PER_ROW * (level + ledgers);
     }
 
     /**

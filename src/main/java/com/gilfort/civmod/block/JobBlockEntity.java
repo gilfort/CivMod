@@ -4,7 +4,6 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.logistics.ClerkStorage;
-import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.registry.ModBlockEntityTypes;
@@ -117,8 +116,8 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
      *
      * @param ledgers the new count
      */
-    public void setLedgers(int ledgers) {
-        this.ledgers = Math.clamp(ledgers, 0, StockRule.MAX_LEDGERS);
+    void setLedgers(int ledgers) {
+        this.ledgers = Math.clamp(ledgers, 0, SettlementRules.MAX_LEDGERS);
         setChanged();
     }
 
@@ -172,7 +171,7 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
         ContainerHelper.loadAllItems(input, items);
         changes++;
         jobLevel = SettlementRules.clampLevel(input.getIntOr("job_level", SettlementRules.MIN_LEVEL));
-        ledgers = Math.clamp(input.getIntOr("ledgers", 0), 0, StockRule.MAX_LEDGERS);
+        ledgers = Math.clamp(input.getIntOr("ledgers", 0), 0, SettlementRules.MAX_LEDGERS);
         settlementId = input.getIntOr("settlement", Settlement.NO_SETTLEMENT);
         connected = input.getBooleanOr("connected", true);
     }
@@ -195,7 +194,7 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     protected void applyImplicitComponents(DataComponentGetter components) {
         super.applyImplicitComponents(components);
         jobLevel = SettlementRules.clampLevel(components.getOrDefault(ModDataComponents.JOB_LEVEL.get(), SettlementRules.MIN_LEVEL));
-        ledgers = components.getOrDefault(ModDataComponents.LEDGERS.get(), 0);
+        ledgers = Math.clamp(components.getOrDefault(ModDataComponents.LEDGERS.get(), 0), 0, SettlementRules.MAX_LEDGERS);
         // A new JobBlock item puts its starter tool into the inventory; it is never collected back, so it is used up.
         Holder<Item> starterTool = components.get(ModDataComponents.STARTER_TOOL.get());
         if (starterTool != null) {
