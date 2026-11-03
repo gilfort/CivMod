@@ -124,7 +124,7 @@ public final class PriestLoop implements CategoryLoop {
             data.setShrine(settlement, new Shrine.State(day, 0L));
         }
         // Every prayer blesses the settlement; the last roll of the chain sets the end (a start never shortens it).
-        data.setBonuses(settlement, settlement.bonuses().start(Bonuses.Kind.WORK_SPEED, clock + Bonuses.BLESSING_TICKS));
+        data.setBonuses(settlement, settlement.bonuses().start(Bonuses.Kind.WORK_SPEED, clock, clock + Bonuses.BLESSING_TICKS));
         return success;
     }
 

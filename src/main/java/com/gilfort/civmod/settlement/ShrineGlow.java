@@ -43,7 +43,7 @@ public final class ShrineGlow {
         }
         long clock = level.getOverworldClockTime();
         if (settlement.bonuses().remaining(Bonuses.Kind.WORK_SPEED, clock) > 0) {
-            // The blessing of a prayer: golden sparks round the block while it acts.
+            // The blessing of a prayer: green sparks round the block while it acts.
             level.sendParticles(ParticleTypes.HAPPY_VILLAGER, center.getX() + 0.5, center.getY() + 1.0, center.getZ() + 0.5, 3, 0.4, 0.3, 0.4, 0.0);
         }
         boolean glowing = Shrine.glowing(settlement.id(), DayClock.day(clock), DayClock.dayTime(clock), clock, settlement.shrine());

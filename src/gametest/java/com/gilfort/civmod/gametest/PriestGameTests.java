@@ -357,10 +357,12 @@ public final class PriestGameTests {
     /** A blessing lasts until its end, never stacks and never shortens; averaged over a span it weighs the overlap. */
     private static void blessingRules(GameTestHelper helper) {
         Bonuses.Kind kind = Bonuses.Kind.WORK_SPEED;
-        Bonuses blessed = Bonuses.NONE.start(kind, 5000L);
-        helper.assertTrue(blessed.remaining(kind, 2000L) == 3000L && blessed.remaining(kind, 5000L) == 0L, "Runs until its end");
-        helper.assertTrue(blessed.start(kind, 4000L).equals(blessed), "A shorter start changes nothing");
-        helper.assertTrue(blessed.start(kind, 6000L).remaining(kind, 2000L) == 4000L, "A later start renews it, no second bonus");
+        Bonuses blessed = Bonuses.NONE.start(kind, 2000L, 5000L);
+        helper.assertTrue(blessed.remaining(kind, 1000L) == 0L, "Not before its start");
+        helper.assertTrue(blessed.remaining(kind, 3000L) == 2000L && blessed.remaining(kind, 5000L) == 0L, "Runs until its end");
+        helper.assertTrue(blessed.start(kind, 3000L, 4000L).equals(blessed), "A shorter start inside changes nothing");
+        helper.assertTrue(blessed.start(kind, 4000L, 6000L).remaining(kind, 3000L) == 3000L, "A touching start extends it, no second bonus");
+        helper.assertTrue(Math.abs(blessed.averageFactor(kind, 1000L, 2000L) - 1.0) < 1e-9, "Fully before");
         helper.assertTrue(Math.abs(kind.factor() - 1.2) < 1e-9, "+20 %");
         helper.assertTrue(Math.abs(blessed.averageFactor(kind, 4000L, 5000L) - 1.2) < 1e-9, "Fully inside");
         helper.assertTrue(Math.abs(blessed.averageFactor(kind, 5000L, 6000L) - 1.0) < 1e-9, "Fully after");
@@ -398,9 +400,9 @@ public final class PriestGameTests {
         long now = level.getOverworldClockTime();
         helper.assertTrue(priest.getWork().blessingFactor(level) == 1.0, "No blessing, factor 1");
         // The test clock stands still: the blessing's end is moved around now instead.
-        data.setBonuses(settlement, Bonuses.NONE.start(Bonuses.Kind.WORK_SPEED, now + 1L));
+        data.setBonuses(settlement, Bonuses.NONE.start(Bonuses.Kind.WORK_SPEED, now - 10L, now + 1L));
         helper.assertTrue(Math.abs(priest.getWork().blessingFactor(level) - 1.2) < 1e-9, "Blessed, factor 1.2");
-        data.setBonuses(settlement, Bonuses.NONE.start(Bonuses.Kind.WORK_SPEED, now));
+        data.setBonuses(settlement, Bonuses.NONE.start(Bonuses.Kind.WORK_SPEED, now - 10L, now));
         helper.assertTrue(priest.getWork().blessingFactor(level) == 1.0, "Ended with the blessing");
         cleanUp(priest);
         helper.succeed();
@@ -409,10 +411,10 @@ public final class PriestGameTests {
     /** The blessing is part of the settlement's saved data. */
     private static void blessingSaved(GameTestHelper helper) {
         Settlement settlement = settlement(helper);
-        SettlementData.get(helper.getLevel()).setBonuses(settlement, Bonuses.NONE.start(Bonuses.Kind.WORK_SPEED, 123456L));
+        SettlementData.get(helper.getLevel()).setBonuses(settlement, Bonuses.NONE.start(Bonuses.Kind.WORK_SPEED, 100000L, 123456L));
         var encoded = Settlement.CODEC.encodeStart(com.mojang.serialization.JsonOps.INSTANCE, settlement).getOrThrow();
         Settlement loaded = Settlement.CODEC.parse(com.mojang.serialization.JsonOps.INSTANCE, encoded).getOrThrow();
-        helper.assertTrue(loaded.bonuses().equals(settlement.bonuses()) && loaded.bonuses().remaining(Bonuses.Kind.WORK_SPEED, 0L) == 123456L,
+        helper.assertTrue(loaded.bonuses().equals(settlement.bonuses()) && loaded.bonuses().remaining(Bonuses.Kind.WORK_SPEED, 100000L) == 23456L,
                 "Survives save and reload");
         helper.succeed();
     }

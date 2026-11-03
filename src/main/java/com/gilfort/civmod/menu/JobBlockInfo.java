@@ -393,8 +393,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
                 block.map(SettlementBlock::collectLeaves).orElse(false), block.map(SettlementBlock::byDeliveryman).orElse(false),
                 new MissionTab(SettlementWorld.missionOffer(level, pos), taken, settlers, OutcomeRules.get()),
                 BiomeInfo.of(level, pos, jobType, assignees),
-                block.filter(SettlementBlock::isCenter).flatMap(unused -> settlement)
-                        .map(found -> found.bonuses().remaining(Bonuses.Kind.WORK_SPEED, now)).orElse(0L));
+                blessingLeft(settlement, block, now));
     }
 
     /**
@@ -470,6 +469,13 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public List<TakenMission> taken() {
         return missionTab.taken();
+    }
+
+    private static long blessingLeft(Optional<Settlement> settlement, Optional<SettlementBlock> block, long now) {
+        if (settlement.isPresent() && block.isPresent() && block.get().isCenter()) {
+            return settlement.get().bonuses().remaining(Bonuses.Kind.WORK_SPEED, now);
+        }
+        return 0L;
     }
 
     /**
