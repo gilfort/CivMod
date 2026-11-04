@@ -7,7 +7,10 @@ import com.gilfort.civmod.registry.ModItems;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.client.renderer.blockentity.BeaconRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
@@ -77,9 +80,31 @@ public class JobBlockRenderer implements BlockEntityRenderer<JobBlockEntity, Job
         poseStack.popPose();
     }
 
+    /**
+     * Widens the bounding box of a glowing block up to the build limit, so the beam is not culled when the block
+     * itself is out of view. Other JobBlocks keep the default one-block box.
+     */
+    @Override
+    public AABB getRenderBoundingBox(JobBlockEntity blockEntity) {
+        BlockPos pos = blockEntity.getBlockPos();
+        if (blockEntity.getGlow() != JobBlockEntity.GLOW_BEAM) {
+            return new AABB(pos);
+        }
+        return new AABB(pos.getX(), pos.getY(), pos.getZ(), pos.getX() + 1, BeaconRenderer.MAX_RENDER_Y,
+                pos.getZ() + 1);
+    }
+
+    /** Like a vanilla beacon, the beam is visible from the full render distance. */
     @Override
     public int getViewDistance() {
-        return VIEW_DISTANCE;
+        return Minecraft.getInstance().options.getEffectiveRenderDistance() * 16;
+    }
+
+    /** Only a glowing block is drawn from the beam distance; every other JobBlock keeps the short range. */
+    @Override
+    public boolean shouldRender(JobBlockEntity blockEntity, Vec3 cameraPosition) {
+        int range = blockEntity.getGlow() == JobBlockEntity.GLOW_BEAM ? getViewDistance() : VIEW_DISTANCE;
+        return Vec3.atCenterOf(blockEntity.getBlockPos()).closerThan(cameraPosition, range);
     }
 
     @Override
