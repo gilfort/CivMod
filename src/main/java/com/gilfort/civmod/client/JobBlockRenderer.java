@@ -103,10 +103,8 @@ public class JobBlockRenderer implements BlockEntityRenderer<JobBlockEntity, Job
     /** Only a glowing block is drawn from the beam distance; every other JobBlock keeps the short range. */
     @Override
     public boolean shouldRender(JobBlockEntity blockEntity, Vec3 cameraPosition) {
-        if (blockEntity.getGlow() == JobBlockEntity.GLOW_BEAM) {
-            return Vec3.atCenterOf(blockEntity.getBlockPos()).closerThan(cameraPosition, getViewDistance());
-        }
-        return Vec3.atCenterOf(blockEntity.getBlockPos()).closerThan(cameraPosition, VIEW_DISTANCE);
+        int range = blockEntity.getGlow() == JobBlockEntity.GLOW_BEAM ? getViewDistance() : VIEW_DISTANCE;
+        return Vec3.atCenterOf(blockEntity.getBlockPos()).closerThan(cameraPosition, range);
     }
 
     @Override
