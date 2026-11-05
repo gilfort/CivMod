@@ -3,6 +3,6 @@
   "textures": {
     "bottom": "minecraft:block/barrel_bottom",
     "side": "minecraft:block/barrel_side",
-    "top": "minecraft:block/sweet_berry_bush_stage3"
+    "top": "minecraft:block/moss_block"
   }
 }
