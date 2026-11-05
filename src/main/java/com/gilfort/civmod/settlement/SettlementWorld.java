@@ -272,6 +272,29 @@ public final class SettlementWorld {
     }
 
     /**
+     * Replaces a holder of a full Job with a settler in one step ({@link JobAssignments#replace}): the holder loses
+     * only this Job (its other Jobs stay), the settler takes the place, so automatic assignment cannot fill it between.
+     *
+     * @param level    the dimension
+     * @param jobBlock the JobBlock position
+     * @param settler  the settler taking the place
+     * @param job      the Job
+     * @param holder   the UUID of the settler to replace
+     * @return the result
+     */
+    public static JobAssignments.AssignResult replace(ServerLevel level, BlockPos jobBlock, Settler settler, Job job, UUID holder) {
+        JobAssignments.AssignResult result = JobAssignments.replace(SettlementData.get(level), jobBlock, settler.getUUID(),
+                settler.getName().getString(), settler.getSettlementId(), settler.getJobs().stream().map(SettlerJob::jobType).toList(), job, holder);
+        if (result == JobAssignments.AssignResult.OK) {
+            if (level.getEntity(holder) instanceof Settler replaced) {
+                replaced.removeJob(jobBlock);
+            }
+            settler.addJob(new SettlerJob(job, jobBlock));
+        }
+        return result;
+    }
+
+    /**
      * The job switcher's choices for one of a settler's Jobs ({@link JobAssignments#switchOptions}).
      *
      * @param level    the dimension

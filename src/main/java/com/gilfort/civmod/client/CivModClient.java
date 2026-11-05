@@ -4,6 +4,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.client.gui.DebugScreen;
 import com.gilfort.civmod.client.gui.JobBlockScreen;
 import com.gilfort.civmod.client.gui.JobPickerScreen;
+import com.gilfort.civmod.client.gui.JobReplaceScreen;
 import com.gilfort.civmod.menu.ClerkTabData;
 import com.gilfort.civmod.client.gui.SettlerScreen;
 import com.gilfort.civmod.item.JobBlockUpgradeItem;
@@ -123,6 +124,7 @@ public final class CivModClient {
         event.register(JobPointsDisplay.Sync.TYPE, JobPointsRenderer::handle);
         event.register(ClerkTabData.Sync.TYPE, JobBlockScreen::handleClerkTab);
         event.register(JobPicker.Open.TYPE, JobPickerScreen::handle);
+        event.register(JobPicker.OpenReplace.TYPE, JobReplaceScreen::handle);
         event.register(com.gilfort.civmod.menu.PatternsTabData.Sync.TYPE, JobBlockScreen::handlePatternTab);
         event.register(StationTypesTabData.Sync.TYPE, JobBlockScreen::handleStationTypeTab);
         event.register(com.gilfort.civmod.menu.FuelTabData.Sync.TYPE, JobBlockScreen::handleFuelTab);

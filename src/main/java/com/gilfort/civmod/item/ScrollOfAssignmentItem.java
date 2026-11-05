@@ -354,7 +354,34 @@ public class ScrollOfAssignmentItem extends Item {
             return;
         }
         JobAssignments.AssignResult result = SettlementWorld.assign(player.level(), jobBlock, settler, job);
+        if (result == JobAssignments.AssignResult.OCCUPIED || result == JobAssignments.AssignResult.FULL) {
+            JobPicker.openReplace(player, block.get(), settler, job);
+            return;
+        }
         player.sendOverlayMessage(message(result, block.get(), settler, job));
+    }
+
+    /**
+     * Replaces a holder of a full Job with the settler (replace window) and tells the player the result.
+     *
+     * @param player   the player
+     * @param jobBlock the JobBlock the scroll is bound to
+     * @param settler  the settler taking the place
+     * @param job      the Job
+     * @param holder   the UUID of the holder to replace
+     */
+    static void replace(ServerPlayer player, BlockPos jobBlock, Settler settler, Job job, java.util.UUID holder) {
+        Optional<SettlementBlock> block = JobBlockSite.blockAt(player.level(), jobBlock);
+        if (block.isEmpty()) {
+            player.sendOverlayMessage(Component.translatable("civmod.scroll.binding_lost").withStyle(ChatFormatting.RED));
+            return;
+        }
+        String holderName = JobPlaces.holders(block.get(), job).stream().filter(held -> held.id().equals(holder))
+                .findFirst().map(SettlementBlock.Assignee::name).orElse("?");
+        JobAssignments.AssignResult result = SettlementWorld.replace(player.level(), jobBlock, settler, job, holder);
+        player.sendOverlayMessage(result == JobAssignments.AssignResult.OK
+                ? Component.translatable("civmod.scroll.replaced", settler.getName(), holderName, job.displayName())
+                : message(result, block.get(), settler, job));
     }
 
     private static Component message(JobAssignments.AssignResult result, SettlementBlock block, Settler settler, Job job) {
@@ -373,6 +400,7 @@ public class ScrollOfAssignmentItem extends Item {
             case OTHER_SETTLEMENT -> Component.translatable("civmod.scroll.assign.other_settlement", settler.getName()).withStyle(ChatFormatting.RED);
             case DUPLICATE -> Component.translatable("civmod.scroll.assign.duplicate", settler.getName(), job.displayName())
                     .withStyle(ChatFormatting.RED);
+            case NOT_HOLDER -> Component.translatable("civmod.scroll.replace.not_holder", job.displayName()).withStyle(ChatFormatting.RED);
         };
     }
 
