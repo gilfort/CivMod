@@ -34,8 +34,7 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 /**
  * The Clerk's "Stock" tab of the {@link JobBlockScreen} (vault {@code Jobs/Clerk.md}); the client side of
  * {@link StockTab}. Two views: the rule grid fills the space above the player inventory (8 rows of 9, 9 rules per
- * JobBlock level and per Ledger active, rows open from the top; every locked row is grey with one lock icon in its
- * middle; it scrolls like the Found tab when there are more slots); a click on a rule, or a new item in a
+ * JobBlock level and per Ledger active, rows open from the top; every locked slot has its own lock icon; it scrolls like the Found tab when there are more slots); a click on a rule, or a new item in a
  * slot, opens the editor view of that rule (item and name on top, Min / Max / Order, Priority, delete and "◀ Back";
  * Escape returns too). The Workers tab gets the Warehouse line ({@link #workersLines}).
  */
@@ -450,8 +449,7 @@ final class StockTabView implements JobBlockTabView {
     }
 
     /**
-     * The rule grid: rules in rows (9 per JobBlock level and per Ledger active; the locked rows greyed with one lock icon
-     * in their middle) with Min (or Max) as stack number; the hovered slot's rule as tooltip.
+     * The rule grid: rules in rows (9 per JobBlock level and per Ledger active; every locked slot with its own lock icon) with Min (or Max) as stack number; the hovered slot's rule as tooltip.
      */
     private void extractGrid(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         Font font = font();
@@ -475,10 +473,7 @@ final class StockTabView implements JobBlockTabView {
                     graphics.itemDecorations(font, icon, x, y, Integer.toString(rule.get().hasMin() ? rule.get().min() : rule.get().max()));
                 }
                 if (slot >= active) {
-                    CivGui.slotInactive(graphics, x, y);
-                    if (column == columns() / 2) {
-                        CivGui.slotLocked(graphics, x, y);
-                    }
+                    CivGui.slotLocked(graphics, x, y);
                 } else if (slot == hovered) {
                     CivGui.slotHover(graphics, x, y);
                 }
