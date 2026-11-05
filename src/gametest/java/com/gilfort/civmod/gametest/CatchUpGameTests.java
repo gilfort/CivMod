@@ -189,7 +189,10 @@ public final class CatchUpGameTests {
             for (int i = 0; i < container.getContainerSize(); i++) {
                 container.setItem(i, new ItemStack(Items.COBBLESTONE, 64));
             }
-            settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.NETHERITE_AXE));
+            // A stone axe is the best a level 1 JobBlock allows (the staircase); it must outlast the six days.
+            ItemStack axe = new ItemStack(Items.STONE_AXE);
+            axe.set(net.minecraft.core.component.DataComponents.MAX_DAMAGE, 100000);
+            settler.getInventory().setItem(Settler.BELT_START, axe);
             long clock = level.getOverworldClockTime();
             settler.getWork().setCatchUp(clock - 6 * DAY, clock);
             CatchUp.runNow(level, List.of(settler));

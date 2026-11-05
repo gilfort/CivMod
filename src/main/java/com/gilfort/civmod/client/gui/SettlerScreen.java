@@ -7,6 +7,7 @@ import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.job.NeedState;
 import com.gilfort.civmod.job.NeedsReport;
+import com.gilfort.civmod.job.ToolTexts;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -33,6 +34,8 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
 
     private static final int ROW_HEIGHT = 22;
+    /** Extra height of a Jobs tab row that shows the tool line. */
+    private static final int TOOL_LINE = 10;
     private static final int BUFFER_Y = 78;
     private static final int LIMITED_COLOR = 0xFFD07000;
     private static final int EXP_BAR_Y = 56;
@@ -85,7 +88,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         }
         switching = -1;
         for (int i = 0; i < jobs.size(); i++) {
-            int y = topPos + 22 + i * ROW_HEIGHT;
+            int y = topPos + 22 + rowOffset(info, i);
             int index = i;
             if (state(info, i).filter(state -> !state.switchTo().isEmpty()).isPresent()) {
                 Button change = addTabWidget(SettlerMenu.TAB_JOBS, Button.builder(Component.literal("⇄"), b -> {
@@ -100,6 +103,24 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
             down.active = i < jobs.size() - 1;
             jobButton("✕", "civmod.gui.settler.job.remove", SettlerJobs.REMOVE + i, right - SMALL_BUTTON, y);
         }
+    }
+
+    /** The height of a Jobs tab row: a Job with tool progression has one more line. */
+    private static int rowHeight(SettlerInfo info, int index) {
+        return ROW_HEIGHT + (toolBand(info, index) > 0 ? TOOL_LINE : 0);
+    }
+
+    /** The distance of a Jobs tab row from the first one. */
+    private static int rowOffset(SettlerInfo info, int index) {
+        int offset = 0;
+        for (int i = 0; i < index; i++) {
+            offset += rowHeight(info, i);
+        }
+        return offset;
+    }
+
+    private static int toolBand(SettlerInfo info, int index) {
+        return index < info.jobStates().size() ? info.jobStates().get(index).toolBand() : 0;
     }
 
     /** The job switcher in the Jobs tab: one button per Job unlocked at the job's JobBlock, and Cancel. */
@@ -196,8 +217,17 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                         int buttons = state.switchTo().isEmpty() ? 3 * SMALL_BUTTON + 6 : 4 * SMALL_BUTTON + 8;
                         graphics.text(font, CivGui.fit(font, state.text(), imageWidth - 2 * CivGui.PADDING - buttons), CivGui.PADDING,
                                 rowY + 10, CivGui.HINT_COLOR, false);
+                        if (state.toolBand() > 0) {
+                            int width = imageWidth - 2 * CivGui.PADDING;
+                            graphics.text(font, CivGui.fit(font, ToolTexts.line(state.toolBand()), width), CivGui.PADDING, rowY + 20,
+                                    CivGui.HINT_COLOR, false);
+                            if (mouseX >= leftPos + CivGui.PADDING && mouseX < leftPos + CivGui.PADDING + width && mouseY >= topPos + rowY + 20
+                                    && mouseY < topPos + rowY + 20 + font.lineHeight) {
+                                graphics.setTooltipForNextFrame(font, ToolTexts.lineTooltip(), mouseX, mouseY);
+                            }
+                        }
                     });
-                    y += ROW_HEIGHT;
+                    y += rowHeight(info, i);
                 }
                 graphics.text(font, Component.translatable("civmod.gui.settler.laborer"), CivGui.PADDING, y, CivGui.HINT_COLOR, false);
             }
@@ -208,14 +238,14 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                 graphics.text(font, Component.translatable("civmod.gui.settler.pockets"), CivGui.PADDING, SettlerMenu.POCKETS_Y - 10,
                         CivGui.LABEL_COLOR, false);
             }
-            case SettlerMenu.TAB_NEEDS -> extractNeedsTab(graphics, info.needs());
+            case SettlerMenu.TAB_NEEDS -> extractNeedsTab(graphics, info.needs(), mouseX, mouseY);
             case SettlerMenu.TAB_MISSION -> extractMissionTab(graphics, info);
             default -> extractJobTab(graphics, info, tab - SettlerMenu.FIRST_JOB_TAB, mouseX, mouseY);
         }
     }
 
     /** One section per tier with visible needs: the tier the settler works in highlighted, higher tiers dimmed as preview. */
-    private void extractNeedsTab(GuiGraphicsExtractor graphics, NeedsReport needs) {
+    private void extractNeedsTab(GuiGraphicsExtractor graphics, NeedsReport needs, int mouseX, int mouseY) {
         int y = NEEDS_TOP;
         int width = imageWidth - 2 * CivGui.PADDING;
         for (int tier = 1; tier <= NeedState.MAX_TIER; tier++) {
@@ -240,6 +270,10 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                     }
                     graphics.item(icon, iconX, y + 2 * NEEDS_LINE);
                     iconX += NEED_ICON;
+                }
+                if (!row.tooltip().getString().isEmpty() && mouseX >= leftPos + CivGui.PADDING && mouseX < leftPos + imageWidth - CivGui.PADDING
+                        && mouseY >= topPos + y && mouseY < topPos + y + needRow(row)) {
+                    graphics.setTooltipForNextFrame(font, row.tooltip(), mouseX, mouseY);
                 }
                 y += needRow(row);
             }

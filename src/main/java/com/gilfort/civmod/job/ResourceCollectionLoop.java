@@ -93,10 +93,10 @@ final class ResourceCollectionLoop implements CategoryLoop {
         }
         ResourceCollectionProfile profile = found.get();
         Stock collect = ClerkStorage.stock(level, site.collect(), dayTime, !shell.counterUnreachable(level, site.collect()));
-        Optional<WorkRules.MissingTool> missing = WorkRules.missingTool(settler, profile, site, collect);
-        if (missing.isPresent() && SettlerTools.takeFromBuffer(settler, workplace.buffer(), missing.get().kind())) {
+        Optional<WorkRules.MissingTool> missing = WorkRules.missingTool(level, settler, job, profile, site, collect);
+        if (missing.isPresent() && SettlerTools.takeFromBuffer(settler, workplace.buffer(), missing.get().kind(), settler.getWork().toolRule(job, profile))) {
             // A tool the job collected itself goes straight onto the belt.
-            missing = WorkRules.missingTool(settler, profile, site, collect);
+            missing = WorkRules.missingTool(level, settler, job, profile, site, collect);
         }
         if (missing.isPresent()) {
             // Delivered first: nothing else would deliver a small harvest.
@@ -117,7 +117,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
         if (profile.needsResources() && workplace.noResources(profile)) {
             return JobStep.blocked(JobStatus.NO_RESOURCES);
         }
-        ItemStack tool = SettlerTools.best(settler, profile::isTool).orElse(ItemStack.EMPTY);
+        ItemStack tool = shell.tool(job, profile).orElse(ItemStack.EMPTY);
         Set<Item> atMax = StockRules.atMax(level, site);
         List<CollectionRecipes.Offer> offered = CollectionRecipes.offered(level, job.jobType(), profile, workplace.scan());
         Optional<JobStatus> paused = WorkRules.pause(level, job.jobType(), profile, workplace, site, tool, atMax, offered).pauseStatus();
@@ -131,7 +131,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
             return fetchTool(level, site, new WorkRules.MissingTool(input.get(), true), dayTime, JobStatus.FETCHING_INPUTS);
         }
         step = Step.WORK;
-        showTool(profile);
+        showTool(job, profile);
         return JobStep.walk(poi, profile.reach(), JobStatus.WORKING);
     }
 
@@ -204,7 +204,11 @@ final class ResourceCollectionLoop implements CategoryLoop {
                 return JobStep.STAY;
             }
             Stock stock = ClerkStorage.stock(level, collect, DayClock.dayTime(level), counter);
-            boolean taken = WorkRules.refill(settler, profile.get(), site.get(), stock);
+            boolean taken = WorkRules.refill(settler, job, profile.get(), site.get(), stock);
+            if (!taken) {
+                // Nothing better after all: the next search waits an hour.
+                shell.toolNeeds().searched(job, level.getGameTime());
+            }
             List<CollectionRecipes.Offer> offered = CollectionRecipes.offered(level, job.jobType(), profile.get(), shell.workplace(job.jobBlock()).scan());
             taken |= CollectionRecipes.refill(settler, CollectionRecipes.allowed(offered, site.get().block().excluded(job.jobType()),
                     StockRules.atMax(level, site.get())), stock);
@@ -217,8 +221,8 @@ final class ResourceCollectionLoop implements CategoryLoop {
     }
 
     /** Shows the best tool of the job in the hand. */
-    private void showTool(ResourceCollectionProfile profile) {
-        shell.hold(SettlerTools.best(settler, profile::isTool).map(ItemStack::copy).orElse(ItemStack.EMPTY));
+    private void showTool(SettlerJob job, ResourceCollectionProfile profile) {
+        shell.hold(shell.tool(job, profile).map(ItemStack::copy).orElse(ItemStack.EMPTY));
     }
 
     private void produce(ServerLevel level, SettlerJob job, BlockPos poi) {
@@ -245,7 +249,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
             shell.showLevelUp(level, job);
         }
         // A job that ended (no tool, buffer full, no resources) is re-planned at the next decision.
-        showTool(profile.get());
+        showTool(job, profile.get());
     }
 
     // ---------------------------------------------------------------- catch-up
@@ -271,6 +275,12 @@ final class ResourceCollectionLoop implements CategoryLoop {
         return true;
     }
 
+    /** The game time of the simulated moment of catch-up (the search throttle of the tools counts in game time). */
+    private long simulatedGameTime(ServerLevel level, long day) {
+        long simulated = day * DayClock.DAY_TICKS + shell.catchUpDayTime();
+        return level.getGameTime() - (level.getOverworldClockTime() - simulated);
+    }
+
     /**
      * Produces the output of some work ticks during catch-up through the {@link WorkRules}: directly into the
      * drop-off, then the buffer; missing tools are taken from the collect inventory.
@@ -289,7 +299,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
         JobBlockSite site = found.get();
         WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site, workplace, poi, workTicks,
                 WorkRules.ToolSupply.beltAnd(ClerkStorage.stock(level, site.collect(), shell.catchUpDayTime(), true),
-                        () -> ClerkCounter.handOut(level, site.collect(), false)), new BufferOutput(workplace.buffer(), stacks -> shell.deliverDirect(level, site, stacks)));
+                        () -> ClerkCounter.handOut(level, site.collect(), false), simulatedGameTime(level, day)), new BufferOutput(workplace.buffer(), stacks -> shell.deliverDirect(level, site, stacks)));
         if (result.end() == WorkRules.End.NONE) {
             return new SimulatedWork(result.rolls(), 0.0);
         }

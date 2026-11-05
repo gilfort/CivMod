@@ -70,7 +70,7 @@ public final class WorkRulesGameTests {
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         Settler settler = CatchUpGameTests.lumberjack(helper, forced);
         BlockPos jobBlock = settler.getJobs().get(0).jobBlock();
-        settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.NETHERITE_AXE));
+        settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_AXE));
         int cap = SettlementRules.skillCap(SettlementRules.MIN_LEVEL);
         settler.getSkills().set(ModJobs.LUMBERJACK.get(), new SettlerSkills.Skill(cap, 0));
         // Live window starts with the first produced item (the settler stands at its work place).
