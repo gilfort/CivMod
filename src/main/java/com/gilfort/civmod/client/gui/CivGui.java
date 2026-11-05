@@ -36,6 +36,7 @@ public final class CivGui {
 
     /** Lock icon of a locked slot. */
     private static final Identifier LOCK = CivMod.id("container/slot_lock");
+    private static final int LOCK_SIZE = 9;
 
     /** Vanilla HUD food sprites. */
     private static final Identifier FOOD_EMPTY = Identifier.withDefaultNamespace("hud/food_empty");
@@ -97,15 +98,16 @@ public final class CivGui {
     }
 
     /**
-     * Draws a lock icon on a slot that is locked (e.g. a Clerk's stock row above its active slots); drawn over
-     * {@link #slotInactive}.
+     * Draws a lock icon on a slot that is locked (e.g. a Clerk's stock row above its active slots); drawn small in the
+     * slot's bottom-left corner so a rule kept in the slot stays visible.
      *
      * @param graphics the graphics extractor
      * @param itemX    the x position of the item (slot position)
      * @param itemY    the y position of the item (slot position)
      */
     public static void slotLocked(GuiGraphicsExtractor graphics, int itemX, int itemY) {
-        graphics.blitSprite(RenderPipelines.GUI_TEXTURED, LOCK, itemX, itemY, 16, 16);
+        // Small, in the bottom-left corner: an item kept in the slot stays recognisable (its stack number sits bottom-right).
+        graphics.blitSprite(RenderPipelines.GUI_TEXTURED, LOCK, itemX, itemY + 16 - LOCK_SIZE, LOCK_SIZE, LOCK_SIZE);
     }
 
     /**
