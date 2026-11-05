@@ -36,6 +36,7 @@ public final class CivGui {
 
     /** Lock icon of a locked slot. */
     private static final Identifier LOCK = CivMod.id("container/slot_lock");
+    /** Edge length of the lock icon drawn on a locked slot. */
     private static final int LOCK_SIZE = 9;
 
     /** Vanilla HUD food sprites. */
@@ -106,7 +107,6 @@ public final class CivGui {
      * @param itemY    the y position of the item (slot position)
      */
     public static void slotLocked(GuiGraphicsExtractor graphics, int itemX, int itemY) {
-        // Small, in the bottom-left corner: an item kept in the slot stays recognisable (its stack number sits bottom-right).
         graphics.blitSprite(RenderPipelines.GUI_TEXTURED, LOCK, itemX, itemY + 16 - LOCK_SIZE, LOCK_SIZE, LOCK_SIZE);
     }
 

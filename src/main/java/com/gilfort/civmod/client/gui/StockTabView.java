@@ -34,8 +34,7 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 /**
  * The Clerk's "Stock" tab of the {@link JobBlockScreen} (vault {@code Jobs/Clerk.md}); the client side of
  * {@link StockTab}. Two views: the rule grid fills the space above the player inventory (8 rows of 9, 9 rules per
- * JobBlock level and per Ledger active, rows open from the top; every locked slot has its own lock icon, none is
- * dimmed; it scrolls like the Found tab when there are more slots); a click on a rule, or a new item in a
+ * JobBlock level and per Ledger active, rows open from the top; every locked slot has its own lock icon; it scrolls like the Found tab when there are more slots); a click on a rule, or a new item in a
  * slot, opens the editor view of that rule (item and name on top, Min / Max / Order, Priority, delete and "◀ Back";
  * Escape returns too). The Workers tab gets the Warehouse line ({@link #workersLines}).
  */
