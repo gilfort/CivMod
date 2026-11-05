@@ -110,6 +110,11 @@ public final class CivNetwork {
                 JobPicker.choose(player, payload);
             }
         });
+        registrar.playToServer(JobPicker.Replace.TYPE, JobPicker.Replace.STREAM_CODEC, (payload, context) -> {
+            if (context.player() instanceof ServerPlayer player) {
+                JobPicker.replace(player, payload);
+            }
+        });
         registrar.playToServer(SettlerMenu.SwitchJob.TYPE, SettlerMenu.SwitchJob.STREAM_CODEC,
                 (payload, context) -> {
                     if (context.player() instanceof ServerPlayer player) {
@@ -118,6 +123,7 @@ public final class CivNetwork {
                 });
         // Client handler is registered in CivModClient (RegisterClientPayloadHandlersEvent).
         registrar.playToClient(JobPicker.Open.TYPE, JobPicker.Open.STREAM_CODEC);
+        registrar.playToClient(JobPicker.OpenReplace.TYPE, JobPicker.OpenReplace.STREAM_CODEC);
         registrar.playToClient(PatternsTabData.Sync.TYPE, PatternsTabData.Sync.STREAM_CODEC);
         registrar.playToClient(StationTypesTabData.Sync.TYPE, StationTypesTabData.Sync.STREAM_CODEC);
         registrar.playToClient(FuelTabData.Sync.TYPE, FuelTabData.Sync.STREAM_CODEC);
