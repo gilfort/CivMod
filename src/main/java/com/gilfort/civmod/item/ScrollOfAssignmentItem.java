@@ -1,6 +1,7 @@
 package com.gilfort.civmod.item;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import com.gilfort.civmod.api.BiomePosition;
 import com.gilfort.civmod.api.CivModApi;
@@ -354,7 +355,9 @@ public class ScrollOfAssignmentItem extends Item {
             return;
         }
         JobAssignments.AssignResult result = SettlementWorld.assign(player.level(), jobBlock, settler, job);
-        if (result == JobAssignments.AssignResult.OCCUPIED || result == JobAssignments.AssignResult.FULL) {
+        boolean full = result == JobAssignments.AssignResult.OCCUPIED || result == JobAssignments.AssignResult.FULL;
+        // The Mission Board reports itself full without holders: nobody to replace, the error stays.
+        if (full && !JobPlaces.holders(block.get(), job).isEmpty()) {
             JobPicker.openReplace(player, block.get(), settler, job);
             return;
         }
@@ -370,7 +373,7 @@ public class ScrollOfAssignmentItem extends Item {
      * @param job      the Job
      * @param holder   the UUID of the holder to replace
      */
-    static void replace(ServerPlayer player, BlockPos jobBlock, Settler settler, Job job, java.util.UUID holder) {
+    static void replace(ServerPlayer player, BlockPos jobBlock, Settler settler, Job job, UUID holder) {
         Optional<SettlementBlock> block = JobBlockSite.blockAt(player.level(), jobBlock);
         if (block.isEmpty()) {
             player.sendOverlayMessage(Component.translatable("civmod.scroll.binding_lost").withStyle(ChatFormatting.RED));

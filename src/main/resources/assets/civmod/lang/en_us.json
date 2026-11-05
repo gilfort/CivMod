@@ -422,7 +422,7 @@
   "job.civmod.deliveryman.indefinite": "a Deliveryman",
   "civmod.gui.job_picker.title": "Job for %s",
   "civmod.gui.job_picker.line": "%s %s/%s",
-  "civmod.gui.job_picker.full": "All places taken – click to replace a settler",
+  "civmod.gui.job_picker.full": "All places taken",
   "civmod.gui.job_picker.help.choose": "Click a Job to assign it",
   "civmod.gui.job_picker.help.full": "A Job with all places taken lets you replace one of its settlers",
   "civmod.gui.job_replace.title": "Replace who as %2$s? (%1$s)",
