@@ -525,7 +525,7 @@ public final class LumberjackGameTests {
         level.addFreshEntity(settler);
         settler.joinSettlement(data, settlement);
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_AXE));
-        settler.getInventory().setItem(Settler.BELT_START + 1, new ItemStack(Items.NETHERITE_PICKAXE));
+        settler.getInventory().setItem(Settler.BELT_START + 1, new ItemStack(Items.STONE_PICKAXE));
         settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
         JobAssignments.cyclePoint(data, lumberjack, helper.absolutePos(new BlockPos(7, 1, 1)), true, false);
         JobAssignments.cyclePoint(data, miner, helper.absolutePos(new BlockPos(5, 1, 5)), true, false);

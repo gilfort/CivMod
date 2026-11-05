@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:tool_staircase_catch_up_no_swap",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

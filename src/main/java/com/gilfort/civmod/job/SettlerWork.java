@@ -1006,7 +1006,7 @@ public final class SettlerWork {
         }
         Optional<ResourceCollectionProfile> profile = type.profile(ResourceCollectionProfile.class);
         if (profile.isPresent()) {
-            return SettlerTools.best(settler, profile.get()::isTool).map(ItemStack::copy).orElse(ItemStack.EMPTY);
+            return SettlerTools.best(settler, profile.get()::isTool, toolRule(job, profile.get())).map(ItemStack::copy).orElse(ItemStack.EMPTY);
         }
         return type.displayItem().map(ItemStack::new).orElse(ItemStack.EMPTY);
     }
@@ -2021,7 +2021,7 @@ public final class SettlerWork {
     public Optional<ResourceCollectionProfile.Worker> worker(BlockPos jobBlock) {
         return settler.getJobs().stream().filter(job -> job.jobBlock().equals(jobBlock)).findFirst()
                 .flatMap(job -> job.jobType().profile(ResourceCollectionProfile.class).map(profile -> new ResourceCollectionProfile.Worker(
-                        SettlerTools.best(settler, profile::isTool).map(ItemStack::copy).orElse(ItemStack.EMPTY), effectiveLevel(job))));
+                        SettlerTools.best(settler, profile::isTool, toolRule(job, profile)).map(ItemStack::copy).orElse(ItemStack.EMPTY), effectiveLevel(job))));
     }
 
     /**
@@ -2051,7 +2051,57 @@ public final class SettlerWork {
      * @return the level the settler works at in that job (its skill, at most the JobBlock cap and what its needs allow)
      */
     public int effectiveLevel(SettlerJob job) {
-        return needs.limit(cappedLevel(job));
+        return needs.limit(job, cappedLevel(job));
+    }
+
+    /**
+     * @param job a job
+     * @return the level the settler's tool allows it to work at in that job: its capped level, lower while the tool need
+     *         of that job is unmet (the other needs are not part of it)
+     */
+    public int toolLevel(SettlerJob job) {
+        return needs.tools().limit(job, cappedLevel(job));
+    }
+
+    /**
+     * @param job     a job
+     * @param profile the job's profile
+     * @return what the settler's skill in that job allows and requires of its tool ({@link ToolStaircase.Rule#NONE} for a
+     *         job outside the staircase)
+     */
+    ToolStaircase.Rule toolRule(SettlerJob job, ResourceCollectionProfile profile) {
+        return ToolStaircase.rule(profile, cappedLevel(job));
+    }
+
+    /**
+     * @param job a job
+     * @return the best tool on the belt that the settler's skill in that job allows, empty if the job has no profile or
+     *         no such tool
+     */
+    public Optional<ItemStack> tool(SettlerJob job) {
+        return job.jobType().profile(ResourceCollectionProfile.class)
+                .flatMap(profile -> SettlerTools.best(settler, profile::isTool, toolRule(job, profile)));
+    }
+
+    /**
+     * @return the tool needs of the settler's tool jobs
+     */
+    ToolNeeds toolNeeds() {
+        return needs.tools();
+    }
+
+    /**
+     * @return the tool need states to save, one per tool job
+     */
+    public List<ToolNeeds.Saved> toolNeedStates() {
+        return needs.tools().snapshot();
+    }
+
+    /**
+     * @param saved the saved tool need states
+     */
+    public void restoreToolNeeds(List<ToolNeeds.Saved> saved) {
+        needs.tools().restore(saved);
     }
 
     /**

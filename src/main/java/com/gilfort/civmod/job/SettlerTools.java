@@ -1,5 +1,6 @@
 package com.gilfort.civmod.job;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -20,8 +21,6 @@ import net.minecraft.world.item.enchantment.EnchantmentHelper;
  */
 final class SettlerTools {
 
-    /** Tool restrictions by skill level are not active in the PoC (see the open topic in the vault). */
-    private static final int TOOL_LEVEL = SkillRules.MAX_LEVEL;
     /** Durability one XP repairs, as in vanilla. */
     private static final int DURABILITY_PER_XP = 2;
 
@@ -34,18 +33,29 @@ final class SettlerTools {
      * @return the best tool of that kind on the belt
      */
     static Optional<ItemStack> best(Settler settler, Predicate<ItemStack> kind) {
-        ItemStack best = ItemStack.EMPTY;
-        int maxTier = ToolTiers.maxAllowedTier(TOOL_LEVEL);
+        return best(settler, kind, ToolStaircase.Rule.NONE);
+    }
+
+    /**
+     * @param settler the settler
+     * @param kind    the kind of tool
+     * @param rule    what the Job skill allows; a tool above the allowed tier is ignored
+     * @return the best allowed tool of that kind on the belt: one that meets the requirement first, then the higher tier
+     */
+    static Optional<ItemStack> best(Settler settler, Predicate<ItemStack> kind, ToolStaircase.Rule rule) {
+        return ToolStaircase.best(belt(settler), rule, kind);
+    }
+
+    /**
+     * @param settler the settler
+     * @return the stacks of the belt
+     */
+    static List<ItemStack> belt(Settler settler) {
+        List<ItemStack> stacks = new ArrayList<>(Settler.BELT_SIZE);
         for (int i = Settler.BELT_START; i < Settler.BELT_START + Settler.BELT_SIZE; i++) {
-            ItemStack stack = settler.getInventory().getItem(i);
-            if (stack.isEmpty() || !kind.test(stack) || ToolTiers.tier(stack) > maxTier) {
-                continue;
-            }
-            if (best.isEmpty() || ToolTiers.tier(stack) > ToolTiers.tier(best)) {
-                best = stack;
-            }
+            stacks.add(settler.getInventory().getItem(i));
         }
-        return best.isEmpty() ? Optional.empty() : Optional.of(best);
+        return stacks;
     }
 
     /**
@@ -54,20 +64,40 @@ final class SettlerTools {
      * @return the index (in {@link Stock#contents()}) of the best tool of that kind
      */
     static Optional<Integer> find(Stock stock, Predicate<ItemStack> kind) {
+        return find(stock, kind, ToolStaircase.Rule.NONE);
+    }
+
+    /**
+     * @param stock what the settler reaches at its collect inventory
+     * @param kind  the kind of tool
+     * @param rule  what the Job skill allows
+     * @return the index (in {@link Stock#contents()}) of the best allowed tool of that kind
+     */
+    static Optional<Integer> find(Stock stock, Predicate<ItemStack> kind, ToolStaircase.Rule rule) {
         List<ItemStack> contents = stock.contents();
         int bestIndex = -1;
-        int bestTier = -1;
         for (int i = 0; i < contents.size(); i++) {
             ItemStack stack = contents.get(i);
-            if (stack.isEmpty()) {
+            if (stack.isEmpty() || !kind.test(stack) || !rule.allows(stack)) {
                 continue;
             }
-            if (kind.test(stack) && ToolTiers.tier(stack) <= ToolTiers.maxAllowedTier(TOOL_LEVEL) && ToolTiers.tier(stack) > bestTier) {
-                bestTier = ToolTiers.tier(stack);
+            if (bestIndex < 0 || rule.rank(stack) > rule.rank(contents.get(bestIndex))) {
                 bestIndex = i;
             }
         }
         return bestIndex < 0 ? Optional.empty() : Optional.of(bestIndex);
+    }
+
+    /**
+     * Takes the best tool of a kind (any tier) from the collect inventory onto a free belt slot.
+     *
+     * @param settler the settler
+     * @param stock   what the settler reaches at its collect inventory
+     * @param kind    the kind of tool
+     * @return whether a tool was taken
+     */
+    static boolean take(Settler settler, Stock stock, Predicate<ItemStack> kind) {
+        return take(settler, stock, kind, ToolStaircase.Rule.NONE);
     }
 
     /**
@@ -76,11 +106,12 @@ final class SettlerTools {
      * @param settler the settler
      * @param stock   what the settler reaches at its collect inventory
      * @param kind    the kind of tool
+     * @param rule   what the Job skill allows
      * @return whether a tool was taken
      */
-    static boolean take(Settler settler, Stock stock, Predicate<ItemStack> kind) {
+    static boolean take(Settler settler, Stock stock, Predicate<ItemStack> kind, ToolStaircase.Rule rule) {
         int freeSlot = freeBeltSlot(settler);
-        Optional<Integer> index = find(stock, kind);
+        Optional<Integer> index = find(stock, kind, rule);
         if (freeSlot < 0 || index.isEmpty()) {
             return false;
         }
@@ -93,19 +124,92 @@ final class SettlerTools {
     }
 
     /**
+     * Tool swap (vault {@code Systems/Needs.md}): when no tool of the kind on the belt meets the requirement, takes the
+     * best allowed one from the collect inventory if it is better than the belt's best. With a full belt it first puts
+     * the weakest tool of that kind back. Never swaps when the requirement is met.
+     *
+     * @param settler the settler
+     * @param stock   what the settler reaches at its collect inventory
+     * @param kind    the kind of tool
+     * @param rule    what the Job skill allows and requires
+     * @return whether a tool was taken
+     */
+    static boolean swap(Settler settler, Stock stock, Predicate<ItemStack> kind, ToolStaircase.Rule rule) {
+        Optional<ItemStack> belt = best(settler, kind, rule);
+        if (belt.isPresent() && rule.meets(belt.get())) {
+            return false;
+        }
+        if (!better(stock, kind, rule, belt)) {
+            return false;
+        }
+        int slot = freeBeltSlot(settler);
+        int weakest = -1;
+        if (slot < 0) {
+            weakest = weakestBeltSlot(settler, kind, rule);
+            if (weakest < 0) {
+                return false;
+            }
+        }
+        ItemStack tool = stock.takeOne(find(stock, kind, rule).orElseThrow());
+        if (tool.isEmpty()) {
+            return false;
+        }
+        if (weakest >= 0) {
+            if (!stock.insert(settler.getInventory().getItem(weakest).copy()).isEmpty()) {
+                // The collect inventory has no room for it: keep everything as it was.
+                stock.insert(tool);
+                return false;
+            }
+            slot = weakest;
+        }
+        settler.getInventory().setItem(slot, tool);
+        return true;
+    }
+
+    /**
+     * @param stock the collect inventory
+     * @param kind  the kind of tool
+     * @param rule  what the Job skill allows
+     * @param belt  the best allowed tool on the belt, if any
+     * @return whether the collect inventory has an allowed tool that beats the belt's best
+     */
+    static boolean better(Stock stock, Predicate<ItemStack> kind, ToolStaircase.Rule rule, Optional<ItemStack> belt) {
+        Optional<Integer> index = find(stock, kind, rule);
+        return index.isPresent() && (belt.isEmpty() || rule.rank(stock.contents().get(index.get())) > rule.rank(belt.get()));
+    }
+
+    /**
+     * @return the belt slot of the weakest tool of the kind, -1 if there is none
+     */
+    private static int weakestBeltSlot(Settler settler, Predicate<ItemStack> kind, ToolStaircase.Rule rule) {
+        int weakest = -1;
+        for (int i = Settler.BELT_START; i < Settler.BELT_START + Settler.BELT_SIZE; i++) {
+            ItemStack stack = settler.getInventory().getItem(i);
+            if (stack.isEmpty() || !kind.test(stack)) {
+                continue;
+            }
+            if (weakest < 0 || rule.rank(stack) < rule.rank(settler.getInventory().getItem(weakest))) {
+                weakest = i;
+            }
+        }
+        return weakest;
+    }
+
+    /**
      * Takes a tool of a kind from a job's buffer onto a free belt slot: a tool the job collected itself.
      *
      * @param settler the settler
      * @param buffer  the job's buffer
      * @param kind    the kind of tool
+     * @param rule    what the Job skill allows
      * @return whether a tool was taken
      */
-    static boolean takeFromBuffer(Settler settler, JobBuffer buffer, Predicate<ItemStack> kind) {
+    static boolean takeFromBuffer(Settler settler, JobBuffer buffer, Predicate<ItemStack> kind, ToolStaircase.Rule rule) {
         int freeSlot = freeBeltSlot(settler);
         if (freeSlot < 0) {
             return false;
         }
-        ItemStack tool = buffer.takeOne(stack -> kind.test(stack) && ToolTiers.tier(stack) <= ToolTiers.maxAllowedTier(TOOL_LEVEL));
+        ItemStack tool = buffer.takeOne(stack -> kind.test(stack) && rule.allows(stack));
         if (tool.isEmpty()) {
             return false;
         }

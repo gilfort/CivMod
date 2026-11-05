@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:tool_staircase_table",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

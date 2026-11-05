@@ -161,7 +161,7 @@ final class WorkRules {
         if (scan != null && profile.blockingReason(scan).isPresent()) {
             return new Result(0, 0, 0, 0, false, End.BLOCKED, workTicks);
         }
-        Optional<ItemStack> tool = tool(level, settler, profile, site, supply);
+        Optional<ItemStack> tool = tool(level, settler, job, profile, site, supply, true);
         if (tool.isEmpty()) {
             return new Result(0, 0, 0, 0, false, End.NO_TOOL, workTicks);
         }
@@ -245,7 +245,7 @@ final class WorkRules {
                     break;
                 }
             }
-            tool = tool(level, settler, profile, site, supply);
+            tool = tool(level, settler, job, profile, site, supply, false);
             if (tool.isEmpty()) {
                 end = End.NO_TOOL;
                 break;
@@ -322,16 +322,21 @@ final class WorkRules {
      * The best tool of the job on the belt; with {@link ToolSupply#beltAnd} missing tools are taken from the collect
      * inventory first. A bare-handed job ({@link ResourceCollectionProfile#needsTool()}) works with an empty hand.
      */
-    private static Optional<ItemStack> tool(ServerLevel level, Settler settler, ResourceCollectionProfile profile, JobBlockSite site, ToolSupply supply) {
+    private static Optional<ItemStack> tool(ServerLevel level, Settler settler, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site,
+            ToolSupply supply, boolean search) {
         if (!profile.needsTool()) {
             return Optional.of(ItemStack.EMPTY);
         }
-        Optional<ItemStack> tool = SettlerTools.best(settler, profile::isTool);
-        if (tool.isEmpty() && supply.collect().isPresent()) {
-            if (refill(settler, profile, site, supply.collect().get()) && supply.collect().get().counter()) {
+        ToolStaircase.Rule rule = settler.getWork().toolRule(job, profile);
+        Optional<ItemStack> tool = SettlerTools.best(settler, profile::isTool, rule);
+        // Catch-up: a tool that is missing or below the requirement is swapped for the collect inventory's best. The
+        // inventory is searched when the batch starts (one simulated hour), after a roll only when no tool is left.
+        if (supply.collect().isPresent() && (search || tool.isEmpty()) && (tool.isEmpty() || !rule.meets(tool.get()))) {
+            if (refill(settler, job, profile, site, supply.collect().get()) && supply.collect().get().counter()) {
                 supply.handedOut().run();
             }
-            tool = SettlerTools.best(settler, profile::isTool);
+            settler.getWork().toolNeeds().recheck(job);
+            tool = SettlerTools.best(settler, profile::isTool, rule);
         }
         return tool;
     }
@@ -341,16 +346,35 @@ final class WorkRules {
      * job's tool when none is on the belt, else the secondary tool when the JobBlock settings want one, none is on the
      * belt and the collect inventory has one.
      *
+     * <p>
+     * A tool Job of the staircase ({@link ToolStaircase}) also fetches when the belt has a tool but none meets the
+     * requirement and the collect inventory has a better allowed one; that search runs at most once per in-game hour and
+     * settler ({@link ToolNeeds#SEARCH_INTERVAL}), and only while the requirement is unmet.
+     *
+     * @param level   the level
      * @param settler the settler
+     * @param job     the job
      * @param profile the job's profile
      * @param site    the job's JobBlock site
      * @param collect what the settler reaches at its collect inventory
      * @return the missing tool, empty if the belt is ready
      */
-    static Optional<MissingTool> missingTool(Settler settler, ResourceCollectionProfile profile, JobBlockSite site, Stock collect) {
-        if (profile.needsTool() && SettlerTools.best(settler, profile::isTool).isEmpty()) {
+    static Optional<MissingTool> missingTool(ServerLevel level, Settler settler, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site,
+            Stock collect) {
+        if (profile.needsTool()) {
+            ToolStaircase.Rule rule = settler.getWork().toolRule(job, profile);
+            Optional<ItemStack> belt = SettlerTools.best(settler, profile::isTool, rule);
             Predicate<ItemStack> kind = profile::isTool;
-            return Optional.of(new MissingTool(kind, SettlerTools.find(collect, kind).isPresent()));
+            if (belt.isEmpty()) {
+                return Optional.of(new MissingTool(kind, SettlerTools.find(collect, kind, rule).isPresent()));
+            }
+            ToolNeeds tools = settler.getWork().toolNeeds();
+            if (!rule.meets(belt.get()) && tools.searchDue(job, level.getGameTime())) {
+                if (SettlerTools.better(collect, kind, rule, belt)) {
+                    return Optional.of(new MissingTool(kind, true));
+                }
+                tools.searched(job, level.getGameTime());
+            }
         }
         return secondaryTool(profile, site.block()).filter(kind -> SettlerTools.best(settler, kind).isEmpty()
                 && SettlerTools.find(collect, kind).isPresent()).map(kind -> new MissingTool(kind, true));
@@ -379,16 +403,19 @@ final class WorkRules {
      * Takes the job's tool and its secondary tool (if the JobBlock settings want one) from the collect inventory onto
      * the belt, each only if none is on the belt yet.
      *
+     * The job's tool is swapped ({@link SettlerTools#swap}) when none on the belt meets the staircase requirement.
+     *
      * @param settler the settler
+     * @param job     the job
      * @param profile the job's profile
      * @param site    the job's JobBlock site
      * @param collect what the settler reaches at its collect inventory
      * @return whether a tool was taken
      */
-    static boolean refill(Settler settler, ResourceCollectionProfile profile, JobBlockSite site, Stock collect) {
+    static boolean refill(Settler settler, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site, Stock collect) {
         boolean taken = false;
-        if (profile.needsTool() && SettlerTools.best(settler, profile::isTool).isEmpty()) {
-            taken |= SettlerTools.take(settler, collect, profile::isTool);
+        if (profile.needsTool()) {
+            taken |= SettlerTools.swap(settler, collect, profile::isTool, settler.getWork().toolRule(job, profile));
         }
         Optional<Predicate<ItemStack>> secondary = secondaryTool(profile, site.block());
         if (secondary.isPresent() && SettlerTools.best(settler, secondary.get()).isEmpty()) {

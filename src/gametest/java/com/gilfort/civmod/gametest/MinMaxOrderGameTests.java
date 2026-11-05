@@ -151,7 +151,7 @@ public final class MinMaxOrderGameTests {
         StockRules.setRule(data, clerk, new StockRule(0, Items.COBBLESTONE, 0, 1, 0, 0));
         ((Container) level.getBlockEntity(clerk)).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(3, 1, 3), data, settlement);
-        settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.IRON_PICKAXE));
+        settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_PICKAXE));
         settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
         JobAssignments.cyclePoint(data, jobBlock, helper.absolutePos(new BlockPos(5, 1, 5)), true, false);
         helper.assertTrue(TestAssignments.assign(data, jobBlock, settler.getUUID(), "Digger", settlement.id(), List.of())

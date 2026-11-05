@@ -60,15 +60,4 @@ public final class ToolTiers {
     public static double multiplier(int tier) {
         return MULTIPLIERS[Math.max(0, Math.min(MAX_TIER, tier))];
     }
-
-    /**
-     * The highest tool tier a settler may use. Allows everything in the PoC; the restriction by skill level is an
-     * open topic (vault {@code Systems/Resource Collection Jobs.md}).
-     *
-     * @param skillLevel the job skill level
-     * @return the highest allowed tier
-     */
-    public static int maxAllowedTier(int skillLevel) {
-        return MAX_TIER;
-    }
 }
