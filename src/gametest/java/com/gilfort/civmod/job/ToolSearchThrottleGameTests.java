@@ -31,6 +31,16 @@ public final class ToolSearchThrottleGameTests {
     private ToolSearchThrottleGameTests() {
     }
 
+    /**
+     * Lets the settler's next search of the collect inventory run: a test that drives catch-up over a past window while
+     * the live settler already searched in vain at the current game time would otherwise be throttled.
+     *
+     * @param settler the settler
+     */
+    public static void forgetSearches(com.gilfort.civmod.npc.Settler settler) {
+        settler.getJobs().forEach(job -> settler.getWork().toolNeeds().searched(job, Long.MIN_VALUE / 2));
+    }
+
     @SubscribeEvent
     static void onRegister(RegisterEvent event) {
         event.register(Registries.TEST_FUNCTION, helper -> {

@@ -255,6 +255,7 @@ public final class ClerkGameTests {
                     && JobAssignments.cyclePoint(data, jobBlock, clerk, false, true) == PointResult.COLLECT, "Clerk as collect point");
             settler.getInventory().setItem(Settler.BELT_START, ItemStack.EMPTY);
             chest.setItem(26, new ItemStack(Items.STONE_AXE));
+            com.gilfort.civmod.job.ToolSearchThrottleGameTests.forgetSearches(settler);
             settler.getWork().setCatchUp(dayStart - 24000L, dayStart);
             CatchUp.runNow(level, List.of(settler));
             helper.assertTrue(settler.getInventory().getItem(Settler.BELT_START).is(Items.STONE_AXE) && chest.getItem(26).isEmpty(),
