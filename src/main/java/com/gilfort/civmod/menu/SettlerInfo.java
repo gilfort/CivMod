@@ -69,9 +69,10 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
      * @param preview  the buffered stacks (up to 18, a Deliveryman's whole load)
      * @param skill    level and EXP in this job
      * @param switchTo the Jobs the job switcher offers instead at the same JobBlock (empty: no switcher)
+     * @param toolBand the tool band of the skill in this job (1-5), 0 for a job without tool progression
      */
     public record JobState(JobStatus status, Component text, int carry, int buffered, List<ItemStack> preview,
-            SkillInfo skill, List<Job> switchTo) {
+            SkillInfo skill, List<Job> switchTo, int toolBand) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, JobState> STREAM_CODEC = StreamCodec.composite(
@@ -82,6 +83,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
                 ItemStack.OPTIONAL_STREAM_CODEC.apply(ByteBufCodecs.list()), JobState::preview,
                 SkillInfo.STREAM_CODEC, JobState::skill,
                 Job.STREAM_CODEC.apply(ByteBufCodecs.list()), JobState::switchTo,
+                ByteBufCodecs.VAR_INT, JobState::toolBand,
                 JobState::new);
 
         /**
@@ -92,6 +94,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
          * @param preview  the buffered stacks
          * @param skill    level and EXP in this job
          * @param switchTo the Jobs the job switcher offers instead
+         * @param toolBand the tool band, 0 for none
          */
         public JobState {
             preview = List.copyOf(preview);
@@ -106,7 +109,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
         JobState switched(Job job, Job old) {
             List<Job> options = new ArrayList<>(switchTo);
             options.replaceAll(option -> option == job ? old : option);
-            return new JobState(JobStatus.IDLE, JobStatus.IDLE.displayName(), 0, 0, List.of(), SkillInfo.NONE, options);
+            return new JobState(JobStatus.IDLE, JobStatus.IDLE.displayName(), 0, 0, List.of(), SkillInfo.NONE, options, 0);
         }
     }
 
@@ -187,7 +190,8 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
             int carry = settler.getWork().carryStacks(job);
             List<Job> switchTo = settler.level() instanceof ServerLevel level ? SettlementWorld.switchOptions(level, job.jobBlock(), settler) : List.of();
             return new JobState(settler.getWork().status(job.jobBlock()), settler.getWork().statusText(job.jobBlock()), carry, buffer.count(),
-                    buffer.stacks().stream().limit(Math.max(18, carry)).map(ItemStack::copy).toList(), skillInfo(settler, job), switchTo);
+                    buffer.stacks().stream().limit(Math.max(18, carry)).map(ItemStack::copy).toList(), skillInfo(settler, job), switchTo,
+                    settler.getWork().toolBand(job));
         }).toList();
         com.gilfort.civmod.food.SettlerFood food = settler.getFood();
         float appetite = food.appetite(settler.getRandom(), com.gilfort.civmod.config.CivModConfig.APPETITE_MIN.get(),
@@ -219,7 +223,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
         List<JobState> states = jobs.stream().map(job -> {
             int index = this.jobs.indexOf(job);
             return index >= 0 && index < jobStates.size() ? jobStates.get(index) : new JobState(JobStatus.IDLE, JobStatus.IDLE.displayName(), 0, 0, List.of(),
-                    SkillInfo.NONE, List.of());
+                    SkillInfo.NONE, List.of(), 0);
         }).toList();
         return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(jobs), states, bed, food, mission, needs, xp);
     }

@@ -977,6 +977,11 @@ public final class SettlerWork {
                     SettlerThoughts.problemIcon(ThoughtBubble.HUNGRY_NO_FOOD));
         }
         needs.missingIcon().ifPresent(icon -> on.put(ThoughtBubble.NEED_UNMET, icon));
+        if (activeJob != null && needs.tools().view(activeJob) == ToolNeeds.View.WEAK) {
+            // The tool need of the worked Job: its tool, while the need is unmet.
+            activeJob.jobType().profile(ResourceCollectionProfile.class)
+                    .ifPresent(profile -> on.put(ThoughtBubble.NEED_UNMET, profile.toolIcon()));
+        }
         return on;
     }
 
@@ -2081,6 +2086,21 @@ public final class SettlerWork {
     public Optional<ItemStack> tool(SettlerJob job) {
         return job.jobType().profile(ResourceCollectionProfile.class)
                 .flatMap(profile -> SettlerTools.best(settler, profile::isTool, toolRule(job, profile)));
+    }
+
+    /**
+     * @param job a job
+     * @return the tool band (1-5) of the settler's skill in that job if it follows the tool staircase, else 0
+     */
+    public int toolBand(SettlerJob job) {
+        return needs.tools().band(job);
+    }
+
+    /**
+     * @return the tool need rows of the Needs tab, one per tool job
+     */
+    public List<NeedsReport.Row> toolRows() {
+        return needs.tools().rows();
     }
 
     /**

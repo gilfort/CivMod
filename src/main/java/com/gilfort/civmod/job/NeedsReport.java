@@ -28,8 +28,9 @@ public record NeedsReport(int tier, List<Row> rows) {
      * @param met    whether it is met
      * @param detail the detail text
      * @param icons  items shown with the detail, may be empty
+     * @param tooltip the tooltip of the row, empty for none
      */
-    public record Row(int tier, Component name, boolean met, Component detail, List<ItemStack> icons) {
+    public record Row(int tier, Component name, boolean met, Component detail, List<ItemStack> icons, Component tooltip) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Row> STREAM_CODEC = StreamCodec.composite(
@@ -38,6 +39,7 @@ public record NeedsReport(int tier, List<Row> rows) {
                 ByteBufCodecs.BOOL, Row::met,
                 ComponentSerialization.STREAM_CODEC, Row::detail,
                 ItemStack.OPTIONAL_STREAM_CODEC.apply(ByteBufCodecs.list()), Row::icons,
+                ComponentSerialization.STREAM_CODEC, Row::tooltip,
                 Row::new);
 
         /**
@@ -46,9 +48,23 @@ public record NeedsReport(int tier, List<Row> rows) {
          * @param met    whether it is met
          * @param detail the detail text
          * @param icons  items shown with the detail, may be empty
+         * @param tooltip the tooltip of the row, empty for none
          */
         public Row {
             icons = List.copyOf(icons);
+        }
+
+        /**
+         * A row without a tooltip.
+         *
+         * @param tier   its tier
+         * @param name   its name
+         * @param met    whether it is met
+         * @param detail the detail text
+         * @param icons  items shown with the detail, may be empty
+         */
+        public Row(int tier, Component name, boolean met, Component detail, List<ItemStack> icons) {
+            this(tier, name, met, detail, icons, Component.empty());
         }
     }
 

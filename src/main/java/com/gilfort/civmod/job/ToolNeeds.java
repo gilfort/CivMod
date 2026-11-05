@@ -1,5 +1,6 @@
 package com.gilfort.civmod.job;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -150,6 +151,59 @@ public final class ToolNeeds {
      */
     void searched(SettlerJob job, long time) {
         entries.computeIfAbsent(job.jobBlock(), block -> new Entry()).searchAfter = time + SEARCH_INTERVAL;
+    }
+
+    /** How a tool Job's tool need looks to the player. */
+    public enum View {
+        /** The settler has a usable tool and the need is met. */
+        HAPPY,
+        /** It has a usable tool that is too weak for its skill: the need is unmet. */
+        WEAK,
+        /** It has no usable tool: the status "No tool" speaks, the tool need does not judge it. */
+        NONE
+    }
+
+    /**
+     * @param job a Job
+     * @return the tool band (1-{@value NeedState#MAX_TIER}) of the settler's skill in that Job if it is a tool Job, else 0
+     */
+    int band(SettlerJob job) {
+        return toolProfile(job).isPresent() ? NeedState.tierOf(shell.cappedLevel(job)) : 0;
+    }
+
+    /**
+     * @param job a tool Job
+     * @return whether its tool need is unmet: on a grace day, or the work level is lowered
+     */
+    boolean unmet(SettlerJob job) {
+        Entry entry = entries.get(job.jobBlock());
+        return entry != null && (entry.state.inGrace() || entry.state.workTier() < NeedState.MAX_TIER);
+    }
+
+    /**
+     * @param job a tool Job
+     * @return how the tool need shows
+     */
+    View view(SettlerJob job) {
+        if (shell.tool(job).isEmpty()) {
+            return View.NONE;
+        }
+        return unmet(job) ? View.WEAK : View.HAPPY;
+    }
+
+    /**
+     * @return the Needs tab rows: one per tool Job, in the tier of the Job's skill
+     */
+    List<NeedsReport.Row> rows() {
+        List<NeedsReport.Row> rows = new ArrayList<>();
+        for (SettlerJob job : settler.getJobs()) {
+            Optional<ResourceCollectionProfile> profile = toolProfile(job);
+            if (profile.isPresent()) {
+                rows.add(ToolTexts.row(NeedState.tierOf(shell.cappedLevel(job)), job.jobType().displayName(),
+                        new ItemStack(profile.get().toolIcon()), view(job)));
+            }
+        }
+        return rows;
     }
 
     /**
