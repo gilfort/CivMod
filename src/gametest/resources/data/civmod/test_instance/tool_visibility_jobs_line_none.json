@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:tool_visibility_jobs_line_none",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

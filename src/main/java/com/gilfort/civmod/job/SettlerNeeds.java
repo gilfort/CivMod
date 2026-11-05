@@ -1,5 +1,7 @@
 package com.gilfort.civmod.job;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 
@@ -111,10 +113,12 @@ final class SettlerNeeds {
      */
     NeedsReport report(ServerLevel level, long day, BooleanSupplier foodPoint) {
         Need.Context context = context(level, day, foodPoint);
-        return new NeedsReport(Math.min(state.workTier(), tier()), Needs.ALL.stream().map(need -> {
+        List<NeedsReport.Row> rows = new ArrayList<>(Needs.ALL.stream().map(need -> {
             Need.Check check = need.check(context);
             return new NeedsReport.Row(need.tier(), need.name(), check.met(), check.detail(), check.icons());
         }).toList());
+        rows.addAll(tools.rows());
+        return new NeedsReport(Math.min(state.workTier(), tier()), rows);
     }
 
     private Need.Context context(ServerLevel level, long day, BooleanSupplier foodPoint) {
