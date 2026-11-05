@@ -178,7 +178,7 @@ public final class FoundTabGameTests {
                     second[0].setCustomName(net.minecraft.network.chat.Component.literal("Second"));
                     level.addFreshEntity(second[0]);
                     second[0].joinSettlement(data, settlement);
-                    second[0].getInventory().setItem(Settler.BELT_START, new ItemStack(Items.NETHERITE_AXE));
+                    second[0].getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_AXE));
                     second[0].getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
                     helper.assertTrue(TestAssignments.assign(data, jobBlock, second[0].getUUID(), "Second", settlement.id(), List.of())
                             == JobAssignments.AssignResult.OK, "Second assignment failed");

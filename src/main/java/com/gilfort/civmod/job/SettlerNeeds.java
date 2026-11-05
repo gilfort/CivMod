@@ -6,6 +6,7 @@ import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerJob;
 
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -23,6 +24,7 @@ final class SettlerNeeds {
 
     private final SettlerWork shell;
     private final Settler settler;
+    private final ToolNeeds tools;
     private NeedState state = NeedState.START;
     /** The need the settler complains about (not saved: found again by the re-check of a grace day). */
     private @Nullable Need missing;
@@ -33,6 +35,14 @@ final class SettlerNeeds {
     SettlerNeeds(SettlerWork shell) {
         this.shell = shell;
         this.settler = shell.settler();
+        this.tools = new ToolNeeds(shell);
+    }
+
+    /**
+     * @return the tool needs, one per tool Job (judged with the skill of that Job)
+     */
+    ToolNeeds tools() {
+        return tools;
     }
 
     /**
@@ -46,6 +56,7 @@ final class SettlerNeeds {
         if (settler.isHomeless()) {
             return;
         }
+        tools.step(day);
         int tier = tier();
         boolean morning = day > state.checkedDay();
         if (!morning && state.settled(tier)) {
@@ -77,11 +88,12 @@ final class SettlerNeeds {
     }
 
     /**
-     * @param level a level
-     * @return the level the settler works at instead
+     * @param job   a Job
+     * @param level the capped target level of that Job
+     * @return the level the settler works at instead: lower with an unmet need, and in a tool Job with an unmet tool need
      */
-    int limit(int level) {
-        return state.limit(level);
+    int limit(SettlerJob job, int level) {
+        return tools.limit(job, state.limit(level));
     }
 
     /**

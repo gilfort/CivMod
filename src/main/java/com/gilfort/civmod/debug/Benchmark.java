@@ -72,9 +72,9 @@ public final class Benchmark {
     public static final Vec3i SECOND_CLERK = new Vec3i(-3, 0, 22);
 
     private static final Scenario LUMBERJACK = new Scenario(ModJobs.LUMBERJACK, ModBlocks.LUMBERJACK_BLOCK, new Vec3i(2, 0, 4),
-            Blocks.OAK_LOG, 5, Items.IRON_AXE);
+            Blocks.OAK_LOG, 5, Items.STONE_AXE);
     private static final Scenario MINER = new Scenario(ModJobs.MINER, ModBlocks.MINER_BLOCK, new Vec3i(2, 0, 3), Blocks.GRANITE, 1,
-            Items.IRON_PICKAXE);
+            Items.STONE_PICKAXE);
     private static final Scenario FISHERMAN = new Scenario(ModJobs.FISHERMAN, ModBlocks.FISHERMAN_BLOCK, new Vec3i(0, -1, 8), Blocks.WATER, 0,
             Items.FISHING_ROD);
 

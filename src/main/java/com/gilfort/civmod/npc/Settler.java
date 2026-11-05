@@ -701,6 +701,7 @@ public class Settler extends PathfinderMob {
         output.store("skills", com.gilfort.civmod.job.SettlerSkills.CODEC, skills.snapshot());
         output.putInt("xp", xp.points());
         output.store("needs", com.gilfort.civmod.job.NeedState.CODEC, work.needState());
+        output.store("tool_needs", com.gilfort.civmod.job.ToolNeeds.Saved.LIST, work.toolNeedStates());
     }
 
     @Override
@@ -719,6 +720,7 @@ public class Settler extends PathfinderMob {
         input.read("skills", com.gilfort.civmod.job.SettlerSkills.CODEC).ifPresent(skills::restore);
         xp.restore(input.getIntOr("xp", 0));
         input.read("needs", com.gilfort.civmod.job.NeedState.CODEC).ifPresent(work::restoreNeeds);
+        input.read("tool_needs", com.gilfort.civmod.job.ToolNeeds.Saved.LIST).ifPresent(work::restoreToolNeeds);
         setInvisible(isAway());
     }
 }
