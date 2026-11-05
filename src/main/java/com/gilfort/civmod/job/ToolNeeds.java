@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.npc.Settler;
@@ -55,6 +56,7 @@ public final class ToolNeeds {
 
     private final Settler settler;
     private final SettlerWork shell;
+    /** Keyed by JobBlock: a settler holds at most one Job per JobBlock ({@link Settler#jobAt}). */
     private final Map<BlockPos, Entry> entries = new HashMap<>();
 
     /**
@@ -151,6 +153,26 @@ public final class ToolNeeds {
      */
     void searched(SettlerJob job, long time) {
         entries.computeIfAbsent(job.jobBlock(), block -> new Entry()).searchAfter = time + SEARCH_INTERVAL;
+    }
+
+    /**
+     * The one way to search the collect inventory for a tool: runs the search only if one is due, and records a fruitless
+     * search so the next waits an hour.
+     *
+     * @param job    the Job
+     * @param time   the game time
+     * @param search the search; answers whether it found (or took) a tool
+     * @return whether the search ran and found a tool
+     */
+    boolean search(SettlerJob job, long time, BooleanSupplier search) {
+        if (!searchDue(job, time)) {
+            return false;
+        }
+        boolean found = search.getAsBoolean();
+        if (!found) {
+            searched(job, time);
+        }
+        return found;
     }
 
     /** How a tool Job's tool need looks to the player. */
