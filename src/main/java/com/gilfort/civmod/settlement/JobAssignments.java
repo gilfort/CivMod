@@ -88,7 +88,9 @@ public final class JobAssignments {
         /** The settler belongs to another settlement or is homeless. */
         OTHER_SETTLEMENT,
         /** The settler already has this job. */
-        DUPLICATE
+        DUPLICATE,
+        /** The settler to be replaced does not hold the Job (any more). */
+        NOT_HOLDER
     }
 
     /**
@@ -338,13 +340,64 @@ public final class JobAssignments {
      */
     static AssignResult assign(SettlementData data, BlockPos jobBlock, UUID settler, String settlerName, int settlementId,
             Collection<Job> currentJobs, Job job) {
+        AssignResult refused = refusal(data, jobBlock, settler, settlementId, currentJobs, job);
+        if (refused != AssignResult.OK) {
+            return refused;
+        }
+        SettlementBlock block = JobBlockSite.blockAt(data, jobBlock).orElseThrow();
+        JobPlaces.Line line = JobPlaces.line(block, job).orElseThrow();
+        if (line.full()) {
+            // "Occupied by <name>" names the holder of a single place; the Mission Board always reports itself full.
+            return line.places() == 1 && job.category() != JobCategory.MISSION ? AssignResult.OCCUPIED : AssignResult.FULL;
+        }
+        add(data, jobBlock, block, settler, settlerName, job);
+        return AssignResult.OK;
+    }
+
+    /**
+     * Replaces a holder of a full Job with another settler in one step (the replace window of the Scroll of
+     * Assignment): the holder loses this Job place only, the settler takes it. Every refusal of
+     * {@link #assign(SettlementData, BlockPos, UUID, String, int, Collection, Job)} except a full Job still applies.
+     * <p>Edits only the JobBlock side: game code goes through {@link SettlementWorld}, which keeps the settlers' job
+     * lists and Workplaces in sync; GameTests that build settlement data without settler entities use {@code TestAssignments}.
+     *
+     * @param data         the dimension's settlement data
+     * @param jobBlock     the JobBlock position
+     * @param settler      the settler taking the place
+     * @param settlerName  the settler name (for display)
+     * @param settlementId the settler's settlement id ({@code -1} if homeless)
+     * @param currentJobs  the job types the settler already has
+     * @param job          the Job
+     * @param holder       the settler to replace
+     * @return {@link AssignResult#OK}, {@link AssignResult#NOT_HOLDER} if the holder does not hold the Job, or the reason
+     *         the settler cannot take it
+     */
+    static AssignResult replace(SettlementData data, BlockPos jobBlock, UUID settler, String settlerName, int settlementId,
+            Collection<Job> currentJobs, Job job, UUID holder) {
+        AssignResult refused = refusal(data, jobBlock, settler, settlementId, currentJobs, job);
+        if (refused != AssignResult.OK) {
+            return refused;
+        }
+        SettlementBlock block = JobBlockSite.blockAt(data, jobBlock).orElseThrow();
+        if (JobPlaces.holders(block, job).stream().noneMatch(held -> held.id().equals(holder))) {
+            return AssignResult.NOT_HOLDER;
+        }
+        // The holder goes first without a full check: after a JobBlock downgrade the Job may stay full without it.
+        block.removeAssignee(holder);
+        MissionOffers.removeAssignee(data, jobBlock, holder);
+        add(data, jobBlock, block, settler, settlerName, job);
+        return AssignResult.OK;
+    }
+
+    /** Every refusal of an assignment except a full Job. */
+    private static AssignResult refusal(SettlementData data, BlockPos jobBlock, UUID settler, int settlementId, Collection<Job> currentJobs,
+            Job job) {
         AssignResult checked = check(data, jobBlock, settler, settlementId);
         if (checked != AssignResult.OK) {
             return checked;
         }
         SettlementBlock block = JobBlockSite.blockAt(data, jobBlock).orElseThrow();
-        Optional<JobPlaces.Line> line = JobPlaces.line(block, job);
-        if (line.isEmpty()) {
+        if (JobPlaces.line(block, job).isEmpty()) {
             return AssignResult.NOT_OFFERED;
         }
         if (job.category() == JobCategory.MISSION && currentJobs.stream().anyMatch(current -> current.category() == JobCategory.MISSION)) {
@@ -353,10 +406,10 @@ public final class JobAssignments {
         if (currentJobs.contains(job)) {
             return AssignResult.DUPLICATE;
         }
-        if (line.get().full()) {
-            // "Occupied by <name>" names the holder of a single place; the Mission Board always reports itself full.
-            return line.get().places() == 1 && job.category() != JobCategory.MISSION ? AssignResult.OCCUPIED : AssignResult.FULL;
-        }
+        return AssignResult.OK;
+    }
+
+    private static void add(SettlementData data, BlockPos jobBlock, SettlementBlock block, UUID settler, String settlerName, Job job) {
         block.mutableAssignees().add(new SettlementBlock.Assignee(settler, settlerName, job));
         if (job == ModJobs.DELIVERYMAN.get()) {
             // A Clerk with own Deliverymen serves itself: it is no Served Clerk any more.
@@ -364,7 +417,6 @@ public final class JobAssignments {
                     .forEach(other -> other.mutableServed().remove(jobBlock)));
         }
         data.changed();
-        return AssignResult.OK;
     }
 
     /**

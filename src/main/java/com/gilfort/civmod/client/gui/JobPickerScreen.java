@@ -15,7 +15,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
  * The job picker (vault {@code Systems/Scroll of Assignment.md}): one button per Job of the JobBlock with taken /
- * places ("Deliveryman 2/4"); full Jobs are greyed out. A click assigns the Job and closes the window.
+ * places ("Deliveryman 2/4"); a click assigns the Job and closes the window; a full Job opens the replace window instead.
  */
 public class JobPickerScreen extends CivScreen {
 
@@ -52,7 +52,6 @@ public class JobPickerScreen extends CivScreen {
             JobPlaces.Line line = picker.lines().get(i);
             Button button = addRenderableWidget(Button.builder(label(line), b -> choose(line))
                     .bounds(x, topPos + TOP + i * ROW_HEIGHT, width, 20).build());
-            button.active = !line.full();
             if (line.full()) {
                 button.setTooltip(Tooltip.create(Component.translatable("civmod.gui.job_picker.full")));
             }
