@@ -138,6 +138,7 @@ public final class SettlerWork {
     /** The Deliveryman's loop: a second Logistics loop beside the Clerk's. */
     private final DeliverymanLoop deliverymen;
     private final PriestLoop priests;
+    private final Laborer laborer;
 
     private Activity activity = Activity.IDLE;
     /** Whether the last applied job step is a work break (the settler sits at the end of the decision). */
@@ -200,6 +201,7 @@ public final class SettlerWork {
         loops.put(JobCategory.PRODUCING, new ProducingLoop(this));
         deliverymen = new DeliverymanLoop(this);
         priests = new PriestLoop(this);
+        laborer = new Laborer(this);
         thoughts = new SettlerThoughts(settler);
         meals = new SettlerMeals(this);
         resting = new SettlerRest(settler);
@@ -249,12 +251,50 @@ public final class SettlerWork {
 
     /** Tells every loop that the settler's work day is over. */
     private void endDay(ServerLevel level) {
-        for (SettlerJob job : settler.getJobs()) {
+        for (SettlerJob job : workJobs(level)) {
             CategoryLoop loop = loop(job);
             if (loop != null) {
                 loop.dayEnded(level, job);
             }
         }
+        // The Laborer stops helping: tomorrow it chooses anew.
+        laborer.interrupt(level);
+    }
+
+    /**
+     * @param level the level
+     * @return the jobs the settler has work state for: its job list, then the block it helps as a Laborer and the blocks
+     *         it left a buffer at (delivered after work)
+     */
+    private List<SettlerJob> workJobs(ServerLevel level) {
+        List<SettlerJob> extra = laborer.extraJobs(level);
+        if (extra.isEmpty()) {
+            return settler.getJobs();
+        }
+        List<SettlerJob> all = new ArrayList<>(settler.getJobs());
+        all.addAll(extra);
+        return all;
+    }
+
+    /**
+     * @return the Laborer fallback of the settler
+     */
+    Laborer laborer() {
+        return laborer;
+    }
+
+    /**
+     * @return the block and Job the settler helps as a Laborer now, empty while it does not
+     */
+    public Optional<SettlerJob> helping() {
+        return laborer.helping();
+    }
+
+    /**
+     * @return the JobBlocks the settler has a Workplace for (its jobs, and the blocks it helped)
+     */
+    List<BlockPos> workplaceBlocks() {
+        return List.copyOf(jobWorkplaces.keySet());
     }
 
     /**
@@ -618,6 +658,7 @@ public final class SettlerWork {
      * @param jobBlock the JobBlock position
      */
     public void forget(BlockPos jobBlock) {
+        laborer.forgotten(jobBlock);
         // The loops first: they still see the Workplace (a Producing Job empties its buffer into the drop-off).
         allLoops().forEach(loop -> loop.forget(jobBlock));
         Workplace workplace = jobWorkplaces.remove(jobBlock);
@@ -838,7 +879,7 @@ public final class SettlerWork {
         boolean sleeping = settler.isSleeping() && !woke;
         BooleanSupplier jobStepHolds = () -> jobStepHolds(level);
         long day = moment(level.getOverworldClockTime()).day();
-        boolean deliveryPending = settler.getJobs().stream().anyMatch(job -> deliveryDue(job, day));
+        boolean deliveryPending = workJobs(level).stream().anyMatch(job -> deliveryDue(job, day));
         boolean noFood = false;
         return new SnapshotFacts(nightSkipped, sleeping, activity, jobStepHolds, deliveryPending, noFood);
     }
@@ -1032,7 +1073,7 @@ public final class SettlerWork {
         if (decision.afterWork()) {
             endDay(level);
             // Jobs show idle after work, except the first one with something to deliver and any with a full drop-off.
-            for (SettlerJob job : settler.getJobs()) {
+            for (SettlerJob job : workJobs(level)) {
                 if (deliveryDue(job, day)) {
                     delivery = job;
                     break;
@@ -1109,6 +1150,8 @@ public final class SettlerWork {
                 continue;
             }
             if (plan(level, job, day, dayTime)) {
+                // A Job of the list works: the Laborer steps back.
+                laborer.interrupt(level);
                 for (SettlerJob lower : jobs.subList(i + 1, jobs.size())) {
                     CategoryLoop loop = loop(lower);
                     if (loop != null) {
@@ -1118,8 +1161,10 @@ public final class SettlerWork {
                 return;
             }
         }
-        // No job can work: Laborer fallback (idle in the PoC).
-        stop();
+        // No job can work: the Laborer fallback helps at a Resource Collection JobBlock, else the settler idles.
+        if (!laborer.plan(level, day, dayTime)) {
+            stop();
+        }
     }
 
     /**
@@ -1127,7 +1172,7 @@ public final class SettlerWork {
      *
      * @return whether the job can work (the settler is busy with it)
      */
-    private boolean plan(ServerLevel level, SettlerJob job, long day, long dayTime) {
+    boolean plan(ServerLevel level, SettlerJob job, long day, long dayTime) {
         Optional<JobBlockSite> site = JobBlockSite.at(level, job.jobBlock());
         CategoryLoop loop = loop(job);
         if (site.isEmpty() || loop == null) {
@@ -1548,9 +1593,13 @@ public final class SettlerWork {
     }
 
     /**
-     * Whether all blocks the settler needs are loaded and a scan result exists (starts the scan otherwise).
+     * Whether all blocks the settler needs are loaded and a scan result exists (starts the scan otherwise). Public for
+     * tests, which call it until it holds before they run a catch-up.
+     *
+     * @param level the level
+     * @return whether the catch-up can run
      */
-    private boolean catchUpReady(ServerLevel level) {
+    public boolean catchUpReady(ServerLevel level) {
         SettlementData data = SettlementData.get(level);
         Optional<com.gilfort.civmod.settlement.Settlement> settlement = data.settlement(settler.getSettlementId());
         if (settlement.isEmpty()) {
@@ -1579,7 +1628,8 @@ public final class SettlerWork {
                 return false;
             }
         }
-        return true;
+        // A settler without a Job helps at a block: its scan must be ready as well.
+        return laborer.catchUpReady(level, DayClock.day(clock), DayClock.dayTime(clock));
     }
 
     /**
@@ -1608,6 +1658,8 @@ public final class SettlerWork {
         catchUpTo = -1;
         catchUpRegistered = false;
         quiet = false;
+        // Live play chooses anew.
+        laborer.interrupt(level);
         jobWorkplaces.values().stream().filter(Workplace::catchUpEnded).forEach(workplace -> {
             workplace.setStatus(JobStatus.DROP_OFF_FULL);
             workplace.setCatchUpEnded(false);
@@ -1779,6 +1831,10 @@ public final class SettlerWork {
             CategoryLoop.SimulatedWork simulated = loop.simulateWork(level, job, day, remaining);
             rolls += simulated.rolls();
             remaining = simulated.remaining();
+        }
+        if (remaining > 0.0) {
+            // No Job of the list can use the time left: the Laborer helps, at a fraction of the speed.
+            rolls += laborer.simulate(level, day, remaining);
         }
         return rolls;
     }

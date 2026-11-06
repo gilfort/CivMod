@@ -55,7 +55,8 @@ public final class GuiTextGameTests {
                 "civmod.gui.fuel.help.clear", "Right-click: empty",
                 "civmod.gui.patterns.at_limit", "All checkmarks used",
                 "civmod.gui.mission.chances.nobody", "No settler of this board would take it",
-                "civmod.gui.settler.laborer", "Laborer");
+                "civmod.gui.settler.laborer", "Laborer",
+                "civmod.gui.settler.laborer.helping", "Laborer: %s");
         texts.forEach((key, text) -> helper.assertTrue(text.equals(string(lang, key)), "Text of " + key + ": " + string(lang, key)));
         for (String key : new String[] {"civmod.gui.fuel.help.priority", "civmod.gui.fuel.help.rests", "civmod.gui.station_types.help.replace",
                 "civmod.gui.station_types.help.station", "civmod.gui.mission.help.marked", "civmod.gui.settler.help.switch_skill",

@@ -2,6 +2,7 @@ package com.gilfort.civmod.menu;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.job.JobBuffer;
@@ -37,9 +38,10 @@ import net.minecraft.world.item.ItemStack;
  * @param mission        the mission the settler is away on or waits to leave for (empty text if none)
  * @param needs          the needs shown in the Needs tab
  * @param xp             the XP collected, in points
+ * @param helping        the Job the settler helps with as a Laborer now (empty if it does not)
  */
 public record SettlerInfo(Component name, Component status, boolean homeless, Component settlementName, List<SettlerJob> jobs,
-        List<JobState> jobStates, Component bed, FoodInfo food, Component mission, NeedsReport needs, int xp) {
+        List<JobState> jobStates, Component bed, FoodInfo food, Component mission, NeedsReport needs, int xp, Optional<Job> helping) {
 
     /**
      * Food state shown in the overview.
@@ -166,6 +168,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
             ComponentSerialization.STREAM_CODEC, SettlerInfo::mission,
             NeedsReport.STREAM_CODEC, SettlerInfo::needs,
             ByteBufCodecs.VAR_INT, SettlerInfo::xp,
+            ByteBufCodecs.optional(Job.STREAM_CODEC), SettlerInfo::helping,
             SettlerInfo::new);
 
     /**
@@ -199,7 +202,8 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
         return new SettlerInfo(settler.getName(), settler.statusText(), settler.isHomeless(), settlementName, settler.getJobs(), states, bed,
                 new FoodInfo(food.level(), food.saturation(), appetite),
                 settler.getWork().missionStatus().orElse(Component.empty()),
-                settler.level() instanceof ServerLevel level ? settler.getWork().needsReport(level) : NeedsReport.NONE, settler.getXp().points());
+                settler.level() instanceof ServerLevel level ? settler.getWork().needsReport(level) : NeedsReport.NONE, settler.getXp().points(),
+                settler.getWork().helping().map(SettlerJob::jobType));
     }
 
     /**
@@ -225,7 +229,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
             return index >= 0 && index < jobStates.size() ? jobStates.get(index) : new JobState(JobStatus.IDLE, JobStatus.IDLE.displayName(), 0, 0, List.of(),
                     SkillInfo.NONE, List.of(), 0);
         }).toList();
-        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(jobs), states, bed, food, mission, needs, xp);
+        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(jobs), states, bed, food, mission, needs, xp, helping);
     }
 
     /**
@@ -241,6 +245,6 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
         if (index < states.size()) {
             states.set(index, states.get(index).switched(job, old.jobType()));
         }
-        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(switchedJobs), List.copyOf(states), bed, food, mission, needs, xp);
+        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(switchedJobs), List.copyOf(states), bed, food, mission, needs, xp, helping);
     }
 }

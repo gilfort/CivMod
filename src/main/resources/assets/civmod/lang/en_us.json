@@ -140,6 +140,7 @@
   "civmod.gui.settler.settlement": "Settlement: %s",
   "civmod.gui.settler.no_settlement": "none",
   "civmod.gui.settler.laborer": "Laborer",
+  "civmod.gui.settler.laborer.helping": "Laborer: %s",
   "civmod.gui.settler.job.up": "Higher priority",
   "civmod.gui.settler.job.down": "Lower priority",
   "civmod.gui.settler.job.remove": "Remove job",

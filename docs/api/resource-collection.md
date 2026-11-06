@@ -142,3 +142,7 @@ CivMod's defaults: the Plantation Farmer gets a vine from vines (100 %), the Gat
 ## Biome bonuses
 
 The loop applies a biome bonus's `speed` to `speed × productivity` and its `double_drop` to the stacks `produce` returns. `rare_chance` needs the profile: a roll with a rare group (the Miner's ores, the Fisherman's treasure) overrides `rareGroup()` with the group's name and multiplies the group's chance with `context.rareChance(baseChance)` (capped at 1.0). Profiles without a rare group ignore `rare_chance`. A profile whose Found tab lists the rare group's types overrides `inRareGroup(scan, type)` too (the Miner: its ores), so the tab marks them with a bonus star. See the getting-started guide for the file format.
+
+## Laborers
+
+Settlers whose Jobs cannot work help at Resource Collection JobBlocks as Laborers, so your Job needs no code for it. A Laborer works the Job the block's employee does (the Base Job without an employee) at a quarter of an employee's speed, through the same loop: its skill in your Job, your profile's scan, tool, roll and drops, the JobBlock's exclusions and Stock Max rules, the collect inventory and the drop-off. It shares the work place of the day the employee chose (without an employee the first Laborer searches one with `autoSearch` or takes a scroll work point) and occupies nothing. It skips a block where the profile reports a blocking reason, a tool is missing or nothing can be produced. A block takes `laborers` Laborers (`civmod_job_blocks/<job>.json`, default 2), taken from the blocks without an employee first.

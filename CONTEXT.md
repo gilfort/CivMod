@@ -134,7 +134,7 @@ How a farming Resource Collection Job speeds up with the size of its farm: produ
 _Avoid_: Growth bonus, farm bonus
 
 **Laborer**:
-The implicit lowest-priority fallback Job of every settler; not a Job Category and never stored.
+The implicit lowest-priority fallback Job of every settler; not a Job Category and never stored. A settler none of whose Jobs can work helps at a Resource Collection JobBlock at 1/4 of an employee's speed, as the Job the block's employee does (else the Base Job). Code: `Laborer` (one per settler, the choice and the work place), `Laborers` (the **Crew** of Laborers per JobBlock kept in the `Settlement`, not saved), limit `"laborers"` in `civmod_job_blocks/<job>.json` (`JobBlockSettlers.laborers`).
 
 **JobBlock**:
 The block that offers a Base Job (and its Specializations) to one settler. Code: `JobBlock`, `JobBlockEntity`, created by the addon API's factory (`CivModApi.jobBlock`); upgraded one level at a time with the JobBlock Upgrade items (see below). Its window (`JobBlockMenu` / `JobBlockScreen`) is a list of tabs chosen by `JobBlockTabs`; each tab is one module: `JobBlockTab` (tab bar entry, menu buttons, synced `TabData`) and its client view `JobBlockTabView` (`StorageTab`, `WorkersTab` / `WorkersTabView`, `FoundTab`, `MissionsTab`, `StockTab` / `TasksTab`, `PatternsTab`, `StationTypesTab`, `FuelTab`).

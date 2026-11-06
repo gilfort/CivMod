@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:laborer_window_label",
+  "max_ticks": 600,
+  "structure": "minecraft:empty",
+  "padding": 120
+}

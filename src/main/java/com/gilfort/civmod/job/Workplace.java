@@ -474,6 +474,29 @@ final class Workplace {
     }
 
     /**
+     * Takes a work place of the day somebody else chose (a Laborer shares its JobBlock's place, it occupies nothing).
+     *
+     * @param place the work place, null if there is none
+     * @param day   the day
+     */
+    void adoptWorkPlace(@Nullable BlockPos place, long day) {
+        dayState.noFreeWorkPlace = false;
+        workPlaceOfDay = place;
+        workPlaceDay = place == null ? -1L : day;
+    }
+
+    /**
+     * Takes the scan the JobBlock kept of its Job (its employee's) when this Workplace has none yet and none runs.
+     *
+     * @param saved the kept scan
+     */
+    void adoptScan(SavedScan saved) {
+        if (scan == null && scanning == null) {
+            restoreScan(saved);
+        }
+    }
+
+    /**
      * The biome bonuses acting on the job today ({@link BiomeBonuses#today}). The biome of the Job's biome position is
      * read once per day and place and kept for that day: a biome change at the place or a data reload takes effect with
      * the next day's choice. A work place chosen anew during the day (the old one is no longer a work place) reads its
@@ -688,6 +711,16 @@ final class Workplace {
         scanning = null;
         scanRequest++;
         dropped.clear();
+    }
+
+    /**
+     * Forgets everything of the Job worked here but the buffer (a Laborer's block got another Job): the work place of
+     * the day, the scan and what came with them.
+     */
+    void forgetWork() {
+        JobBuffer kept = buffer;
+        clearSaved();
+        buffer = kept;
     }
 
     /**
