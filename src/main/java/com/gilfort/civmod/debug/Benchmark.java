@@ -149,6 +149,10 @@ public final class Benchmark {
         BlockPos second = origin.offset(SECOND_CLERK);
         level.setBlock(second, ModBlocks.CLERK_BLOCK.get().defaultBlockState(), Block.UPDATE_ALL);
         Warehouses.link(data, clerk, second);
+        // The Clerk JobBlock has no slots: the materials for the input deliveries lie in a chest linked to it.
+        BlockPos secondChest = second.offset(2, 0, 0);
+        level.setBlock(secondChest, Blocks.CHEST.defaultBlockState(), Block.UPDATE_ALL);
+        JobAssignments.cycleClerkPoint(data, second, secondChest, true, false, net.minecraft.core.Direction.EAST);
         // Craftspersons with their crafting tables and materials, crafting for the stock rules; the last ones leave their
         // results to the Deliverymen.
         List<BlockPos> craftspersons = new java.util.ArrayList<>();
@@ -156,8 +160,8 @@ public final class Benchmark {
             BlockPos craft = origin.offset(-3, 0, 6 + 4 * i);
             level.setBlock(craft, ModBlocks.CRAFTSPERSON_BLOCK.get().defaultBlockState(), Block.UPDATE_ALL);
             level.setBlock(craft.offset(-2, 0, 0), Blocks.CRAFTING_TABLE.defaultBlockState(), FLAGS);
-            // On "Deliveryman" the materials lie in the second Clerk: input deliveries bring them.
-            if (level.getBlockEntity(i < CRAFTSPERSONS ? craft : second) instanceof Container store) {
+            // On "Deliveryman" the materials lie in the second Clerk's chest: input deliveries bring them.
+            if (level.getBlockEntity(i < CRAFTSPERSONS ? craft : secondChest) instanceof Container store) {
                 int first = i < CRAFTSPERSONS ? 0 : 4 * (i - CRAFTSPERSONS);
                 store.setItem(first, new ItemStack(Items.OAK_LOG, 64));
                 store.setItem(first + 1, new ItemStack(Items.COBBLESTONE, 64));
