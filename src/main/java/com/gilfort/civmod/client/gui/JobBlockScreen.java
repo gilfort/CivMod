@@ -236,20 +236,6 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     }
 
     /**
-     * @return the left edge of the panel
-     */
-    int left() {
-        return leftPos;
-    }
-
-    /**
-     * @return the top edge of the panel
-     */
-    int top() {
-        return topPos;
-    }
-
-    /**
      * @return the panel width
      */
     int panelWidth() {

@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.ClerkTerminal;
 import com.gilfort.civmod.logistics.DeliveryTask;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.Stock;
@@ -111,7 +112,8 @@ public final class StockRules {
     public static void check(ServerLevel level, BlockPos clerk, long dayTime) {
         SettlementData data = SettlementData.get(level);
         Optional<ClerkAt> found = clerkAt(data, clerk);
-        if (found.isEmpty() || !level.isLoaded(clerk)) {
+        // An open Storage tab pauses the checks; closing it checks once (ClerkTerminal).
+        if (found.isEmpty() || !level.isLoaded(clerk) || ClerkTerminal.viewed(level, clerk)) {
             return;
         }
         Settlement settlement = found.get().settlement();
@@ -160,7 +162,7 @@ public final class StockRules {
     public static void checkSurplus(ServerLevel level, BlockPos clerk) {
         SettlementData data = SettlementData.get(level);
         Optional<ClerkAt> found = clerkAt(data, clerk);
-        if (found.isEmpty() || !level.isLoaded(clerk)) {
+        if (found.isEmpty() || !level.isLoaded(clerk) || ClerkTerminal.viewed(level, clerk)) {
             return;
         }
         Settlement settlement = found.get().settlement();

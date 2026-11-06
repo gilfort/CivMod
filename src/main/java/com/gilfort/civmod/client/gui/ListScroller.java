@@ -9,14 +9,14 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
  */
 final class ListScroller {
 
-    private final JobBlockScreen screen;
+    private final CivContainerScreen<?> screen;
     private int offset;
     private boolean dragging;
 
     /**
      * @param screen the screen the list is drawn on
      */
-    ListScroller(JobBlockScreen screen) {
+    ListScroller(CivContainerScreen<?> screen) {
         this.screen = screen;
     }
 
