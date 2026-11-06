@@ -14,10 +14,52 @@ public final class CivModClientConfig {
             .comment("Which thought bubbles appear above settlers: ALL, PROBLEMS_ONLY or OFF.")
             .defineEnum("showThoughtBubbles", ThoughtBubbles.ALL);
 
+    /** How the Clerk's Storage tab sorts its items (vault {@code Jobs/Clerk.md}, terminal). */
+    public static final ModConfigSpec.EnumValue<StorageSort> STORAGE_SORT = BUILDER
+            .comment("How the Clerk's Storage tab sorts its items: AMOUNT or NAME.")
+            .defineEnum("storageSort", StorageSort.AMOUNT);
+
     /** The client config spec. */
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     private CivModClientConfig() {
+    }
+
+    /** Sort orders of the Storage tab. */
+    public enum StorageSort {
+        /** Largest amount first. */
+        AMOUNT("#", "civmod.gui.storage.sort.amount"),
+        /** A–Z by name. */
+        NAME("A", "civmod.gui.storage.sort.name");
+
+        private final String label;
+        private final String tooltipKey;
+
+        StorageSort(String label, String tooltipKey) {
+            this.label = label;
+            this.tooltipKey = tooltipKey;
+        }
+
+        /**
+         * @return the text of the sort button
+         */
+        public String label() {
+            return label;
+        }
+
+        /**
+         * @return the lang key of the sort button's tooltip
+         */
+        public String tooltipKey() {
+            return tooltipKey;
+        }
+
+        /**
+         * @return the other sort order
+         */
+        public StorageSort next() {
+            return this == AMOUNT ? NAME : AMOUNT;
+        }
     }
 
     /** Values of "Show thought bubbles". */

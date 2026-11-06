@@ -211,8 +211,12 @@ _Avoid_: Reservation (a settler reserves the mission it picked)
 The first Logistics Job: the settlement's storage (no food point since the Pantry, see **Pantry**). Code: `ModJobs.CLERK` on `ModBlocks.CLERK_BLOCK`, work loop `ClerkLoop` (stands on the stand spot of the day during its shift from its own early waking time (05:30–06:00, before any other settler wakes) to 18:30, `ClerkStorage.inShift`, `ClerkStorage.shiftStart`, `ClerkStorage.SHIFT_END`; `SettlerWork.dayTimes`).
 
 **Clerk storage**:
-The Clerk JobBlock's own 27 slots plus the containers linked with the Scroll of Assignment (2 / 4 / 8 / 12 / 16 by level, `SettlementRules.clerkStorage`; extra ones after a downgrade are inactive, `ClerkStorage.activeStorage`). Code: `SettlementBlock.storage()`, linked through `JobAssignments.cycleClerkPoint`.
+The containers linked with the Scroll of Assignment (2 / 4 / 8 / 12 / 16 by level; the Clerk JobBlock has no slots of its own, `SettlementRules.clerkStorage`; extra ones after a downgrade are inactive, `ClerkStorage.activeStorage`). Code: `SettlementBlock.storage()`, linked through `JobAssignments.cycleClerkPoint`.
 _Avoid_: warehouse (that is a Clerk JobBlock with Deliverymen)
+
+**Storage terminal**:
+The first tab ("Storage") of the settler window of a settler with the Clerk job: the Clerk's whole storage as one item list a player can take from and store into during the Clerk's shift. While a player has it open the Clerk's stock rule and surplus checks are paused. Code: `StorageTerminal` (menu state and packets), `StorageTabView` (client view), `ClerkTerminal` (viewers).
+_Avoid_: chest GUI, inventory tab (that is the settler's own belt and pockets)
 
 **Access rule**:
 Without a working Clerk (no settler assigned, or outside the shift) only the 27 block slots are reachable; the linked storage only through a working Clerk at its counter. Hoppers and pipes see the 27 slots (the block's item capability). Code: `ClerkStorage.working`, `ClerkStorage.stock`.

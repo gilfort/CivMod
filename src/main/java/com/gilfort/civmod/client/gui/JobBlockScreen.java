@@ -168,8 +168,12 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         } else {
             settlement = info.settlementName();
         }
-        return List.of(settlement, Component.translatable("civmod.tooltip.job_level", info.level(), SettlementRules.MAX_LEVEL),
-                Component.translatable("civmod.gui.job_block.skill_cap", SettlementRules.skillCap(info.level())));
+        List<Component> lines = new ArrayList<>(List.of(settlement, Component.translatable("civmod.tooltip.job_level", info.level(), SettlementRules.MAX_LEVEL),
+                Component.translatable("civmod.gui.job_block.skill_cap", SettlementRules.skillCap(info.level()))));
+        if (info.storageUnlinked()) {
+            lines.add(Component.translatable("civmod.gui.job_block.link_storage").withStyle(ChatFormatting.RED));
+        }
+        return lines;
     }
 
     // ---------------------------------------------------------------- input
@@ -233,20 +237,6 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      */
     List<JobBlockTabView> views() {
         return distinct;
-    }
-
-    /**
-     * @return the left edge of the panel
-     */
-    int left() {
-        return leftPos;
-    }
-
-    /**
-     * @return the top edge of the panel
-     */
-    int top() {
-        return topPos;
     }
 
     /**

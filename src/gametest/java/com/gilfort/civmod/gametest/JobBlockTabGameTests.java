@@ -198,10 +198,13 @@ public final class JobBlockTabGameTests {
         helper.succeed();
     }
 
-    /** Clerk: Workers, Storage, Stock, Tasks in the tall panel (one Tasks tab replaces Requests and Deliveries, #142). */
+    /**
+     * Clerk: Workers, Stock, Tasks in the tall panel (one Tasks tab replaces Requests and Deliveries, #142); no Storage
+     * tab, the block has no slots (#176).
+     */
     private static void clerk(GameTestHelper helper) {
-        assertTabs(helper, ModJobs.CLERK.get(), List.of(WORKERS, STORAGE, STOCK, TASKS),
-                List.of(Items.NAME_TAG, Items.CHEST, Items.WRITABLE_BOOK, Items.PAPER), true, List.of(1, 2));
+        assertTabs(helper, ModJobs.CLERK.get(), List.of(WORKERS, STOCK, TASKS),
+                List.of(Items.NAME_TAG, Items.WRITABLE_BOOK, Items.PAPER), true, List.of(1));
         helper.succeed();
     }
 

@@ -22,7 +22,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Menu of a JobBlock: a window of tabs ({@link JobBlockTab}, chosen by {@link JobBlockTabs}). Every window has the
- * Storage tab (27 slots + player inventory) and the Workers tab; the other tabs depend on the Job Category. The menu gives
+ * Workers tab and, except for a Clerk (no slots of its own), the Storage tab (27 slots + player inventory); the other tabs depend on the Job Category. The menu gives
  * every tab its index and its range of menu button ids, shows the player inventory on the tabs that pick items from
  * it, sends the tabs' synced data ({@link TabData}) and otherwise only iterates over its tabs.
  */
@@ -101,10 +101,12 @@ public class JobBlockMenu extends CivMenu {
         if (button > tabButtonId(0)) {
             throw new IllegalStateException("The tab buttons of a JobBlock window overlap its tab selection buttons: " + button);
         }
-        int storage = tab(StorageTab.class).orElseThrow().index();
-        for (int slot = 0; slot < storageSlots; slot++) {
-            addTabSlot(container, slot, 8 + slot % 9 * 18, 18 + slot / 9 * 18, storage);
-        }
+        // A Clerk JobBlock has no slots and no Storage tab.
+        tab(StorageTab.class).ifPresent(storage -> {
+            for (int slot = 0; slot < storageSlots; slot++) {
+                addTabSlot(container, slot, 8 + slot % 9 * 18, 18 + slot / 9 * 18, storage.index());
+            }
+        });
         int[] inventoryTabs = this.tabs.stream().filter(JobBlockTab::showsInventory).mapToInt(JobBlockTab::index).toArray();
         addPlayerInventory(inventory, 8, isTall() ? CLERK_HEIGHT - 82 : 84, inventoryTabs);
     }

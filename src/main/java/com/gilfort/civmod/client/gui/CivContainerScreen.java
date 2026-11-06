@@ -49,12 +49,30 @@ public abstract class CivContainerScreen<T extends CivMenu> extends AbstractCont
         List<TabBar.Tab> bottom = bottomTabs();
         tabBar = tabs.isEmpty() && bottom.isEmpty() ? null : new TabBar(tabs, bottom, this::isTabShown, leftPos, topPos, imageHeight);
         if (tabBar != null && !tabBar.isShown(menu.getActiveTab())) {
-            // The selected tab disappeared (e.g. a job tab after removing the job).
-            menu.setActiveTab(0);
-            minecraft.gameMode.handleInventoryButtonClick(menu.containerId, CivMenu.tabButtonId(0));
+            // The selected tab disappeared (e.g. a job tab after removing the job): the first shown one.
+            int first = 0;
+            while (first < menu.getTabCount() - 1 && !tabBar.isShown(first)) {
+                first++;
+            }
+            menu.setActiveTab(first);
+            minecraft.gameMode.handleInventoryButtonClick(menu.containerId, CivMenu.tabButtonId(first));
         }
         initContent();
         updateTabVisibility();
+    }
+
+    /**
+     * @return the left edge of the panel
+     */
+    int left() {
+        return leftPos;
+    }
+
+    /**
+     * @return the top edge of the panel
+     */
+    int top() {
+        return topPos;
     }
 
     /**

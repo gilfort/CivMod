@@ -335,7 +335,7 @@ final class SettlerMeals {
      * @param level   the level
      * @param found   the food point
      * @param purpose why the settler fetches food
-     * @return walk to the food point (its block slots if this settler cannot reach the counter)
+     * @return walk to the food point
      */
     BodyStep fetchFood(ServerLevel level, ClerkStorage.FoodPoint found, MealPurpose purpose) {
         ClerkStorage.FoodPoint point = new ClerkStorage.FoodPoint(found.clerk(), shell.reachableVisit(level, found.clerk(), found.visit()));

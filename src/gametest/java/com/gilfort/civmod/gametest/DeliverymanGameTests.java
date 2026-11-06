@@ -221,7 +221,7 @@ public final class DeliverymanGameTests {
         // A Clerk JobBlock as drop-off gets no pickups.
         JobAssignments.cyclePoint(data, jobBlock, clerk, false, true);
         JobAssignments.cyclePoint(data, jobBlock, clerk, false, true);
-        ((Container) level.getBlockEntity(clerk)).setItem(0, new ItemStack(Items.OAK_LOG, 64));
+        ClerkGameTests.linkChest(helper, new BlockPos(1, 1, 1), new BlockPos(1, 1, 3)).setItem(0, new ItemStack(Items.OAK_LOG, 64));
         Pickups.delivered(level, JobBlockSite.at(level, jobBlock).orElseThrow(), true);
         helper.assertTrue(Deliveries.get(settlement, clerk).isEmpty(), "A Clerk drop-off gets no pickup");
         helper.succeed();
@@ -297,12 +297,7 @@ public final class DeliverymanGameTests {
             }
         }
         BlockPos warehouse = ClerkGameTests.clerkWithStorage(helper);
-        Container own = (Container) level.getBlockEntity(warehouse);
-        for (int i = 0; i < own.getContainerSize(); i++) {
-            // Full block slots: the delivery has to reach the linked chest.
-            own.setItem(i, new ItemStack(Items.COBBLESTONE, 64));
-        }
-        Container store = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
+        Container store =(Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
         TestSettlements.setBlock(helper, new BlockPos(1, 1, 7), ModBlocks.LUMBERJACK_BLOCK.get());
         helper.setBlock(new BlockPos(3, 1, 7), Blocks.CHEST);
         BlockPos jobBlock = helper.absolutePos(new BlockPos(1, 1, 7));
@@ -345,6 +340,11 @@ public final class DeliverymanGameTests {
         TestSettlements.setBlock(level, warehouse, ModBlocks.CLERK_BLOCK.get().defaultBlockState(), Block.UPDATE_ALL);
         SettlementData data = SettlementData.get(level);
         SettlementManager.setLevel(data, warehouse, SettlementRules.MAX_LEVEL, SettlementManager.Listener.NONE);
+        // The Warehouse's store is a linked chest (the Clerk JobBlock has no slots).
+        BlockPos storeChest = warehouse.south();
+        TestSettlements.setBlock(level, storeChest, Blocks.CHEST.defaultBlockState(), Block.UPDATE_ALL);
+        helper.assertTrue(JobAssignments.cycleClerkPoint(data, warehouse, storeChest, true, false, net.minecraft.core.Direction.NORTH)
+                == JobAssignments.PointResult.STORAGE, "Chest linked");
         // 45 blocks away: a trip takes 2 × 45 / 0.2 + 2 stops = 530 ticks, one per simulated hour.
         BlockPos jobBlock = warehouse.east(45);
         List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(47, 0, 2));
@@ -388,6 +388,7 @@ public final class DeliverymanGameTests {
         // The level-5 border must not reach JobBlocks of later tests.
         SettlementManager.setLevel(data, warehouse, SettlementRules.MIN_LEVEL, SettlementManager.Listener.NONE);
         level.setBlock(jobBlock, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        level.setBlock(storeChest, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
         level.setBlock(warehouse, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
         forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         helper.succeed();

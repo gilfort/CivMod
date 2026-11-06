@@ -1,8 +1,8 @@
 {
   "type": "minecraft:function",
   "environment": "civmod:day",
-  "function": "civmod:craftsperson_live_two_sources_off_shift",
-  "max_ticks": 2400,
+  "function": "civmod:storage_terminal_use",
+  "max_ticks": 1200,
   "structure": "minecraft:empty",
   "padding": 40
 }

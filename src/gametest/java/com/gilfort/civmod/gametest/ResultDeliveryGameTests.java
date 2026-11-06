@@ -74,6 +74,9 @@ public final class ResultDeliveryGameTests {
             com.gilfort.civmod.settlement.TestSettlements.setBlock(helper, new BlockPos(9, 1, 1), com.gilfort.civmod.registry.ModBlocks.CLERK_BLOCK.get());
             BlockPos home = helper.absolutePos(new BlockPos(1, 1, 1));
             BlockPos requesting = helper.absolutePos(new BlockPos(9, 1, 1));
+            // The Clerk JobBlocks have no slots: their stores are linked chests.
+            ClerkGameTests.linkChest(helper, new BlockPos(1, 1, 1), new BlockPos(1, 1, 2));
+            ClerkGameTests.linkChest(helper, new BlockPos(9, 1, 1), new BlockPos(9, 1, 2));
             BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(3, 1, 7));
             SettlementData data = SettlementData.get(level);
             Settlement settlement = data.settlementAt(home).orElseThrow();
@@ -86,6 +89,9 @@ public final class ResultDeliveryGameTests {
             Deliveries.postResult(data, settlement, craft, craft, Items.STONE_PICKAXE, 4, requesting, level.getGameTime());
             Settler dora = courier(helper, home, new BlockPos(2, 1, 3), "Dora");
             Settler eve = courier(helper, requesting, new BlockPos(8, 1, 3), "Eve");
+            // Eve is no staff of the Home Clerk: she is served at its counter, so a Clerk works there.
+            helper.assertTrue(TestAssignments.assign(data, home, java.util.UUID.fromString("00000000-0000-0000-0000-0000000000c1"), "Clara",
+                    settlement.id(), List.of()) == com.gilfort.civmod.settlement.JobAssignments.AssignResult.OK, "Clerk of the Home Clerk");
             return new Layout(home, requesting, craft, dora, eve, forced);
         }
 

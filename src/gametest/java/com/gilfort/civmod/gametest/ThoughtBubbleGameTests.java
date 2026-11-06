@@ -314,7 +314,7 @@ public final class ThoughtBubbleGameTests {
                 wrong.append(hand);
             }
         });
-        Container clerkSlots = (Container) level.getBlockEntity(clerk);
+        Container clerkSlots = ClerkGameTests.store(level, clerk);
         helper.succeedWhen(() -> {
             helper.assertTrue(clerkSlots.countItem(Items.STICK) == 4, "Sticks delivered; status " + settler.getWork().status(craft));
             helper.assertFalse(wrongHand.get(), "Fetching with an empty hand, not " + wrong);

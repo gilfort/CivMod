@@ -38,11 +38,10 @@ import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 
 /**
- * The Clerk's store (vault {@code Jobs/Clerk.md}): the Clerk JobBlock's own 27 slots plus the containers linked with the
- * Scroll of Assignment, and the access rule between them. Without a working Clerk (no settler assigned, or outside
- * its shift from its waking time to 18:30) only the 27 block slots are reachable – for customers and for deliveries; the linked storage
- * is reachable only through a working Clerk at its counter. Hoppers and pipes use the block's item capability and see
- * the 27 slots only.
+ * The Clerk's store (vault {@code Jobs/Clerk.md}): the containers linked with the Scroll of Assignment (the Clerk JobBlock has no
+ * slots of its own), and the access rule. Taking from it needs a working Clerk at its counter (a settler assigned, in its
+ * shift from its waking time to 18:30); the Deliverymen of its Warehouse reach all of it as staff, and settlers put items in
+ * at any time ({@link #dropOff}). Hoppers and pipes on the block see no slot.
  * <p>
  * Every Pantry is a food point: settlers take food from the nearest Pantry that has food
  * ({@link #nearestFood}).
@@ -54,7 +53,7 @@ public final class ClerkStorage {
     public static final long SHIFT_END = 12500L;
     /** Customers are served within this distance of the Clerk's counter. */
     public static final double COUNTER_REACH = 3.0;
-    /** Reach when walking to a closed Clerk JobBlock (its own slots), as for any container. */
+    /** Reach when walking to a Clerk JobBlock without its counter, as for any container. */
     private static final double BLOCK_REACH = 2.5;
     /** Service time at skill level 1 (2 s). */
     private static final double SERVICE_TICKS = 40.0;
@@ -216,10 +215,23 @@ public final class ClerkStorage {
     }
 
     /**
+     * Where a settler puts something into a Clerk or a container: a Clerk's linked containers at any time, on shift or
+     * not, because putting items in gives nothing away. A Clerk JobBlock without a linked container takes nothing
+     * ("Storage full").
+     *
+     * @param level the level
+     * @param pos   a Clerk JobBlock or any container
+     * @return the stock to insert into
+     */
+    public static Stock dropOff(ServerLevel level, BlockPos pos) {
+        return stock(level, pos, true);
+    }
+
+    /**
      * @param level  the level
      * @param pos    a Clerk JobBlock or any container
-     * @param linked whether the linked storage of a Clerk is reachable (its working Clerk serves the visitor)
-     * @return the reachable stock
+     * @param linked whether the linked storage of a Clerk is reachable (its working Clerk serves the visitor, or staff)
+     * @return the reachable stock: a Clerk JobBlock has no slots of its own, so nothing without the linked storage
      */
     public static Stock stock(ServerLevel level, BlockPos pos, boolean linked) {
         return stock(level, pos, linked, null);
@@ -287,7 +299,7 @@ public final class ClerkStorage {
 
     /**
      * @param pos a Clerk JobBlock or any container
-     * @return the visit of a visitor that does not reach the counter: at the block itself, its own slots only
+     * @return the visit of a visitor that does not reach the counter: at the block itself (a Clerk JobBlock gives nothing out there)
      */
     public static Visit blockVisit(BlockPos pos) {
         return new Visit(pos, BLOCK_REACH, false);

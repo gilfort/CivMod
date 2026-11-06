@@ -11,6 +11,7 @@ import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.npc.Settler;
 
 import com.gilfort.civmod.npc.SettlerJobs;
+import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.MissionOffers;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.registry.ModMenuTypes;
@@ -41,18 +42,20 @@ import net.minecraft.world.phys.Vec3;
  */
 public class SettlerMenu extends CivMenu {
 
+    /** Storage tab (the Clerk's storage terminal; hidden for settlers without the Clerk job). */
+    public static final int TAB_STORAGE = 0;
     /** Overview tab. */
-    public static final int TAB_OVERVIEW = 0;
+    public static final int TAB_OVERVIEW = 1;
     /** Jobs tab. */
-    public static final int TAB_JOBS = 1;
+    public static final int TAB_JOBS = 2;
     /** Inventory tab. */
-    public static final int TAB_INVENTORY = 2;
+    public static final int TAB_INVENTORY = 3;
     /** Needs tab. */
-    public static final int TAB_NEEDS = 3;
+    public static final int TAB_NEEDS = 4;
     /** Mission tab (last of the top tabs: it is hidden without a Mission Job). */
-    public static final int TAB_MISSION = 4;
+    public static final int TAB_MISSION = 5;
     /** First of the job tabs (one per job, shown below the panel). */
-    public static final int FIRST_JOB_TAB = 5;
+    public static final int FIRST_JOB_TAB = 6;
     /** Maximum number of job tabs. */
     public static final int MAX_JOB_TABS = 6;
 
@@ -79,6 +82,8 @@ public class SettlerMenu extends CivMenu {
     private final @Nullable Settler settler;
     /** The JobBlock the window was opened from (Workers tab), empty when opened at the settler. */
     private final Optional<BlockPos> anchor;
+    private final Player player;
+    private final StorageTerminal terminal;
     private SettlerInfo info;
 
     /**
@@ -124,6 +129,10 @@ public class SettlerMenu extends CivMenu {
         this.settler = settler;
         this.info = info;
         this.anchor = anchor;
+        this.player = inventory.player;
+        this.terminal = new StorageTerminal(StorageTerminal.clerkOf(info.jobs()).isPresent());
+        // A Clerk's window opens on its storage.
+        setActiveTab(terminal.available() ? TAB_STORAGE : TAB_OVERVIEW);
         for (int i = 0; i < Settler.BELT_SIZE; i++) {
             addSlot(new CivSlot(this, container, Settler.BELT_START + i, 8 + i * 18, BELT_Y, TAB_INVENTORY) {
                 @Override
@@ -141,7 +150,7 @@ public class SettlerMenu extends CivMenu {
         for (int i = 0; i < Settler.POCKETS_SIZE; i++) {
             addTabSlot(container, Settler.POCKETS_START + i, 8 + i * 18, POCKETS_Y, TAB_INVENTORY);
         }
-        addPlayerInventory(inventory, 8, IMAGE_HEIGHT - 82, TAB_INVENTORY);
+        addPlayerInventory(inventory, 8, IMAGE_HEIGHT - 82, TAB_INVENTORY, TAB_STORAGE);
     }
 
     /**
@@ -149,6 +158,43 @@ public class SettlerMenu extends CivMenu {
      */
     public SettlerInfo getInfo() {
         return info;
+    }
+
+    /**
+     * @return the Storage tab's state
+     */
+    public StorageTerminal terminal() {
+        return terminal;
+    }
+
+    @Override
+    public void broadcastChanges() {
+        super.broadcastChanges();
+        if (settler != null && player instanceof ServerPlayer serverPlayer) {
+            terminal.tick(serverPlayer, settler, getActiveTab() == TAB_STORAGE && stillValid(player), containerId,
+                    DayClock.dayTime(serverPlayer.level()));
+        }
+    }
+
+    @Override
+    public void removed(Player player) {
+        super.removed(player);
+        if (settler != null && settler.level() instanceof ServerLevel level && player instanceof ServerPlayer serverPlayer) {
+            terminal.stop(serverPlayer.getUUID());
+        }
+    }
+
+    /**
+     * Server: a click on the Storage tab ({@link StorageTerminal.Click}).
+     *
+     * @param player the player
+     * @param icon   the clicked resource, empty for free space
+     * @param action what the click does
+     */
+    void terminalClick(ServerPlayer player, ItemStack icon, StorageTerminal.Action action) {
+        if (settler != null && settler.level() instanceof ServerLevel level && getActiveTab() == TAB_STORAGE && stillValid(player)) {
+            terminal.click(player, level, DayClock.dayTime(level), icon, action);
+        }
     }
 
     @Override
@@ -241,6 +287,9 @@ public class SettlerMenu extends CivMenu {
         }
         ItemStack stack = slot.getItem();
         ItemStack original = stack.copy();
+        if (getActiveTab() == TAB_STORAGE) {
+            return storeFromInventory(slot, stack);
+        }
         boolean moved = slotIndex < SETTLER_SLOTS
                 ? moveItemStackTo(stack, SETTLER_SLOTS, slots.size(), true)
                 : moveItemStackTo(stack, 0, SETTLER_SLOTS, false);
@@ -253,6 +302,25 @@ public class SettlerMenu extends CivMenu {
             slot.setChanged();
         }
         return original;
+    }
+
+    /**
+     * Shift-click on the Storage tab stores a player inventory stack in the Clerk's storage (delivery order); what does
+     * not fit stays in the slot. The client leaves it to the server.
+     */
+    private ItemStack storeFromInventory(Slot slot, ItemStack stack) {
+        if (settler == null || !(settler.level() instanceof ServerLevel level)) {
+            return ItemStack.EMPTY;
+        }
+        terminal.usable(level, DayClock.dayTime(level)).ifPresent(stock -> {
+            ItemStack rest = stock.insert(stack);
+            if (rest.getCount() != stack.getCount()) {
+                slot.setByPlayer(rest);
+                terminal.syncSoon();
+            }
+        });
+        // Never loops: vanilla repeats a shift-click while the slot keeps the same item.
+        return ItemStack.EMPTY;
     }
 
     /**

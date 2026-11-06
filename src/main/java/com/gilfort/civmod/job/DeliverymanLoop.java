@@ -41,7 +41,7 @@ import net.neoforged.neoforge.capabilities.Capabilities;
  * decision a free Deliveryman picks the best task of its Warehouse (the Clerk JobBlock it has its place at) and adds
  * further tasks to the same store while its carry inventory has room ({@link Deliveries}); the tasks are locked to it.
  * It walks from source to source – a result waiting at a Clerk its Warehouse does not serve is picked up at the counter
- * under the access rule – then unloads into the whole store (block slots first, then the linked containers) as staff:
+ * under the access rule – then unloads into the whole store (the linked containers in linking order) as staff:
  * no counter, no working Clerk needed; inputs go into the producer's collect inventory. A full store keeps the rest in its
  * carry inventory ("Storage full", retry after 30 s).
  * <p>

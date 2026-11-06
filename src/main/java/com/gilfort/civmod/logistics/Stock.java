@@ -19,8 +19,8 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 /**
  * What a visitor reaches at one place: the containers it may take from and put into, seen as one list of slots
- * (vault {@code Jobs/Clerk.md}). At a Clerk JobBlock that is its own 27 slots plus, through a working Clerk at its
- * counter, the linked storage; anywhere else the one container. Built by {@link ClerkStorage#stock}.
+ * (vault {@code Jobs/Clerk.md}). At a Clerk JobBlock that is the linked storage, through a working Clerk at its
+ * counter or as staff (the block has no slots of its own); anywhere else the one container. Built by {@link ClerkStorage#stock}.
  * <p>
  * At a Clerk JobBlock the counts come from its stock view ({@link ClerkStock}): counted at most once per tick, kept
  * right by every transaction made through this Stock. Taking always works on the real containers and corrects the
@@ -28,8 +28,7 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
  * across ticks.
  * <p>
  * Items a Clerk reserved for a Delivery task ({@code Reservations}) are not reachable for anybody else: counts, slots
- * and takes leave them out, from what this Stock reaches (they are taken first, own slots first). A visitor reaching only
- * the block slots therefore sees them reduced by the whole reservation.
+ * and takes leave them out, from what this Stock reaches.
  */
 public final class Stock {
 
@@ -111,7 +110,7 @@ public final class Stock {
     }
 
     /**
-     * @param parts     the containers in order (the Clerk JobBlock's own slots first)
+     * @param parts     the containers in order (the linked containers of a Clerk in linking order)
      * @param summaries the stock view of all of them, null to count them on every access
      * @param counter   whether this is the whole storage of a working Clerk, served at its counter
      */
@@ -222,6 +221,93 @@ public final class Stock {
     }
 
     /**
+     * Reads the real containers once (for the Clerk's storage terminal). Stacks with different components stay apart.
+     * What is reserved for others is taken off the entries of that item, the entry without components first.
+     *
+     * @return how many of each resource are reachable, in no particular order
+     */
+    public Map<ItemResource, Long> entries() {
+        Map<ItemResource, Long> entries = new HashMap<>();
+        for (Part part : parts) {
+            ResourceHandler<ItemResource> handler = part.handler();
+            for (int i = 0; i < handler.size(); i++) {
+                ItemResource resource = handler.getResource(i);
+                if (!resource.isEmpty()) {
+                    entries.merge(resource, handler.getAmountAsLong(i), Long::sum);
+                }
+            }
+        }
+        reserved.forEach((item, count) -> {
+            long rest = count;
+            ItemResource plain = ItemResource.of(item);
+            rest = reduce(entries, plain, rest);
+            for (ItemResource resource : List.copyOf(entries.keySet())) {
+                if (rest <= 0) {
+                    break;
+                }
+                if (resource.getItem() == item) {
+                    rest = reduce(entries, resource, rest);
+                }
+            }
+        });
+        return entries;
+    }
+
+    /** Takes up to {@code rest} off one entry and returns what is left to take off. */
+    private static long reduce(Map<ItemResource, Long> entries, ItemResource resource, long rest) {
+        Long held = entries.get(resource);
+        if (held == null || rest <= 0) {
+            return rest;
+        }
+        long off = Math.min(held, rest);
+        if (held - off > 0) {
+            entries.put(resource, held - off);
+        } else {
+            entries.remove(resource);
+        }
+        return rest - off;
+    }
+
+    /**
+     * Takes up to {@code count} of one exact resource (item and components), container by container, leaving what is
+     * reserved for others.
+     *
+     * @param resource the resource
+     * @param count    how many at most
+     * @return the taken stack, empty if none
+     */
+    public ItemStack take(ItemResource resource, int count) {
+        Item item = resource.getItem();
+        int rest = reserved.containsKey(item) ? Math.min(count, available(item)) : count;
+        int total = 0;
+        for (Part part : parts) {
+            if (rest <= 0) {
+                break;
+            }
+            ResourceHandler<ItemResource> handler = part.handler();
+            for (int i = 0; i < handler.size() && rest > 0; i++) {
+                if (!handler.getResource(i).equals(resource)) {
+                    continue;
+                }
+                long mark = part.tracker().mark();
+                try (Transaction transaction = Transaction.openRoot()) {
+                    int extracted = handler.extract(i, resource, rest, transaction);
+                    transaction.commit();
+                    if (extracted > 0) {
+                        part.tracker().changed(mark, resource, -extracted);
+                        total += extracted;
+                        rest -= extracted;
+                    }
+                }
+            }
+            if (rest > 0) {
+                part.tracker().drained(item);
+            }
+        }
+        return total > 0 ? resource.toStack(total) : ItemStack.EMPTY;
+    }
+
+    /**
      * @param kind which items count
      * @return whether any of them is reachable
      */
@@ -308,7 +394,7 @@ public final class Stock {
     }
 
     /**
-     * Puts a stack in, container by container (the Clerk JobBlock's own slots first).
+     * Puts a stack in, container by container (a Clerk's linked containers in linking order).
      *
      * @param stack the stack
      * @return what did not fit

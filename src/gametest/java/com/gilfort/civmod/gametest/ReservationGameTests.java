@@ -55,9 +55,8 @@ public final class ReservationGameTests {
     private static void hidden(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos clerk = ClerkGameTests.clerkWithStorage(helper);
-        Container own = (Container) level.getBlockEntity(clerk);
         Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
-        own.setItem(0, new ItemStack(Items.BREAD, 2));
+        chest.setItem(5, new ItemStack(Items.BREAD, 2));
         chest.setItem(0, new ItemStack(Items.BREAD, 8));
         chest.setItem(1, new ItemStack(Items.APPLE, 3));
         DeliveryTask task = takenTask(helper, clerk, DayClock.day(level));
@@ -68,7 +67,7 @@ public final class ReservationGameTests {
         helper.assertTrue(others.count(stack -> stack.is(Items.BREAD)) == 4, "Reserved bread is hidden: " + others.count(stack -> stack.is(Items.BREAD)));
         helper.assertTrue(others.counts().get(Items.BREAD) == 4 && others.counts().get(Items.APPLE) == 3, "Counts: " + others.counts());
         helper.assertTrue(ClerkStorage.stock(level, clerk, false).count(stack -> stack.is(Items.BREAD)) == 0,
-                "Block slots only: their 2 bread may be the reserved ones");
+                "Without access nothing is reachable");
         helper.assertTrue(ClerkStorage.stock(level, clerk, true, task.id()).count(stack -> stack.is(Items.BREAD)) == 10,
                 "The task holding the reservation sees all");
         int taken = others.take(Items.BREAD, 10).stream().mapToInt(ItemStack::getCount).sum();
@@ -77,8 +76,8 @@ public final class ReservationGameTests {
         Stock rest = ClerkStorage.stock(level, clerk, true);
         helper.assertTrue(!rest.contains(stack -> stack.is(Items.BREAD)) && rest.contains(stack -> stack.is(Items.APPLE)), "Nothing unreserved left");
         helper.assertTrue(rest.contents().stream().noneMatch(stack -> stack.is(Items.BREAD)), "Reserved slots are not offered");
-        helper.assertTrue(rest.takeOne(0).isEmpty() && rest.takeOne(27).isEmpty(), "A reserved slot gives nothing");
-        helper.assertTrue(bread(own) + bread(chest) == 6, "The reserved bread stays in the storage");
+        helper.assertTrue(rest.takeOne(0).isEmpty() && rest.takeOne(5).isEmpty(), "A reserved slot gives nothing");
+        helper.assertTrue(bread(chest) == 6, "The reserved bread stays in the storage");
         helper.succeed();
     }
 
@@ -145,8 +144,7 @@ public final class ReservationGameTests {
 
         Reservations.Pickup pickup = Reservations.pickUp(data, settlement, clerk, task.id(), ClerkStorage.stock(level, clerk, true, task.id()), day);
         helper.assertTrue(pickup.failed() && pickup.taken().isEmpty(), "The pickup fails: " + pickup);
-        Container own = (Container) level.getBlockEntity(clerk);
-        helper.assertTrue(bread(own) + bread(chest) == 3, "What was taken is back in the storage (own slots first): " + bread(own) + bread(chest));
+        helper.assertTrue(bread(chest) == 3, "What was taken is back in the storage: " + bread(chest));
         helper.assertTrue(Reservations.reserved(settlement, clerk, day, null).isEmpty(), "The reservation is released");
         DeliveryTask requeued = Deliveries.get(settlement, task.id()).orElseThrow();
         helper.assertTrue(requeued.takerOn(day).isEmpty(), "The task is open again for any Deliveryman");

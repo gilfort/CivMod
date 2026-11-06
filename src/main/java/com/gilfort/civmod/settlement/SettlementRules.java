@@ -126,9 +126,13 @@ public final class SettlementRules {
     /**
      * @param blockJob the Job a JobBlock was made for
      * @param level    the JobBlock level
-     * @return the storage slots of the block: 27, a Pantry 27 + 9 per level above 1 (27 / 36 / 45 / 54 / 63)
+     * @return the storage slots of the block: none for a Clerk (its storage is linked containers only), a Pantry
+     *         27 + 9 per level above 1 (27 / 36 / 45 / 54 / 63), 27 for every other Job
      */
     public static int storageSlots(Job blockJob, int level) {
+        if (blockJob == ModJobs.CLERK.get()) {
+            return 0;
+        }
         if (blockJob != ModJobs.TAVERN_HOST.get()) {
             return JobBlockEntity.SLOTS;
         }
