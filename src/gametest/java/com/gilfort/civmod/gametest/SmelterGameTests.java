@@ -402,9 +402,8 @@ public final class SmelterGameTests {
         }
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         Setup setup = setup(helper, List.of());
-        // No Clerk at work: the inputs lie in the Clerk block's own slots, open to everybody (like the Craftsperson's live round).
-        TestAssignments.unassign(setup.data(), setup.clerk());
-        Container slots = (Container) level.getBlockEntity(setup.clerk());
+        // The inputs lie in the linked chest of the working Clerk.
+        Container slots = ClerkGameTests.store(level, setup.clerk());
         slots.setItem(0, new ItemStack(Items.RAW_IRON, 4));
         slots.setItem(1, new ItemStack(Items.COAL, 2));
         StationTypeGameTests.setLevel(helper, BLOCK, 2);

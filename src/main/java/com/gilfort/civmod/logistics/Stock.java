@@ -19,8 +19,8 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
 
 /**
  * What a visitor reaches at one place: the containers it may take from and put into, seen as one list of slots
- * (vault {@code Jobs/Clerk.md}). At a Clerk JobBlock that is its own 27 slots plus, through a working Clerk at its
- * counter, the linked storage; anywhere else the one container. Built by {@link ClerkStorage#stock}.
+ * (vault {@code Jobs/Clerk.md}). At a Clerk JobBlock that is the linked storage, through a working Clerk at its
+ * counter or as staff (the block has no slots of its own); anywhere else the one container. Built by {@link ClerkStorage#stock}.
  * <p>
  * At a Clerk JobBlock the counts come from its stock view ({@link ClerkStock}): counted at most once per tick, kept
  * right by every transaction made through this Stock. Taking always works on the real containers and corrects the
@@ -28,8 +28,7 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
  * across ticks.
  * <p>
  * Items a Clerk reserved for a Delivery task ({@code Reservations}) are not reachable for anybody else: counts, slots
- * and takes leave them out, from what this Stock reaches (they are taken first, own slots first). A visitor reaching only
- * the block slots therefore sees them reduced by the whole reservation.
+ * and takes leave them out, from what this Stock reaches.
  */
 public final class Stock {
 
@@ -111,7 +110,7 @@ public final class Stock {
     }
 
     /**
-     * @param parts     the containers in order (the Clerk JobBlock's own slots first)
+     * @param parts     the containers in order (the linked containers of a Clerk in linking order)
      * @param summaries the stock view of all of them, null to count them on every access
      * @param counter   whether this is the whole storage of a working Clerk, served at its counter
      */
@@ -395,7 +394,7 @@ public final class Stock {
     }
 
     /**
-     * Puts a stack in, container by container (the Clerk JobBlock's own slots first).
+     * Puts a stack in, container by container (a Clerk's linked containers in linking order).
      *
      * @param stack the stack
      * @return what did not fit

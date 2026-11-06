@@ -83,7 +83,7 @@ public final class StockRuleGameTests {
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
         Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
         chest.setItem(0, new ItemStack(Items.STONE_PICKAXE, 1));
-        ((Container) level.getBlockEntity(clerk)).setItem(0, new ItemStack(Items.STONE_PICKAXE, 1));
+        chest.setItem(1, new ItemStack(Items.STONE_PICKAXE, 1));
 
         helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 5, 0)), "Rule set");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
@@ -281,14 +281,13 @@ public final class StockRuleGameTests {
         JobBlockEntity entity = (JobBlockEntity) level.getBlockEntity(clerk);
         JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), entity,
                 JobBlockInfo.of(level, clerk, ModJobs.CLERK.get(), entity.getJobLevel()));
-        helper.assertTrue(menu.getTabCount() == 4, "Storage, Workers, Stock, Tasks");
+        helper.assertTrue(menu.getTabCount() == 3, "Workers, Stock, Tasks");
         menu.setActiveTab(menu.tab(StockTab.class).orElseThrow().index());
-        helper.assertTrue(menu.slots.get(JobBlockEntity.SLOTS).isActive() && !menu.slots.get(0).isActive(),
-                "Stock tab: player inventory, no storage slots");
-        menu.slots.get(JobBlockEntity.SLOTS).set(new ItemStack(Items.TORCH, 3));
-        helper.assertTrue(menu.quickMoveStack(player, JobBlockEntity.SLOTS).isEmpty() && entity.isEmpty()
-                && menu.slots.get(JobBlockEntity.SLOTS).getItem().getCount() == 3, "Shift-click on the Stock tab moves nothing");
-        menu.slots.get(JobBlockEntity.SLOTS).set(ItemStack.EMPTY);
+        helper.assertTrue(menu.slots.get(0).isActive() && menu.slots.size() == 36, "Stock tab: only the player inventory, no storage slots");
+        menu.slots.get(0).set(new ItemStack(Items.TORCH, 3));
+        helper.assertTrue(menu.quickMoveStack(player, 0).isEmpty() && entity.isEmpty()
+                && menu.slots.get(0).getItem().getCount() == 3, "Shift-click on the Stock tab moves nothing");
+        menu.slots.get(0).set(ItemStack.EMPTY);
 
         menu.tab(StockTab.class).orElseThrow().editRule(9, Optional.of(StockRule.minimum(9, Items.TORCH, 8, 0)));
         helper.assertTrue(settlement.block(clerk).orElseThrow().stockRule(9).isEmpty(), "Level 1: slot 9 is inactive");

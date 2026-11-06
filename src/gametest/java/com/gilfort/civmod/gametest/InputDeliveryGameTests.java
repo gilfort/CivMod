@@ -67,7 +67,7 @@ public final class InputDeliveryGameTests {
 
     /**
      * The Craftsperson's Home Clerk (a Warehouse with Deliveryman Dora) holds a log, a second Clerk without a Clerk
-     * settler (block slots only, not served) holds 3 cobblestone; the Craftsperson on "Deliveryman" with patterns for a
+     * settler (not served) holds 3 cobblestone in its linked chest; the Craftsperson on "Deliveryman" with patterns for a
      * stone pickaxe and its intermediates has a request for one.
      */
     private record Layout(BlockPos home, BlockPos second, BlockPos craft, Settler cora, Settler dora, UUID request, List<long[]> forced) {
@@ -87,8 +87,8 @@ public final class InputDeliveryGameTests {
             TestSettlements.setBlock(helper, new BlockPos(9, 1, 1), ModBlocks.CLERK_BLOCK.get());
             BlockPos home = helper.absolutePos(new BlockPos(1, 1, 1));
             BlockPos second = helper.absolutePos(new BlockPos(9, 1, 1));
-            ((Container) level.getBlockEntity(home)).setItem(0, new ItemStack(Items.OAK_LOG, 1));
-            ((Container) level.getBlockEntity(second)).setItem(0, new ItemStack(Items.COBBLESTONE, 3));
+            ClerkGameTests.linkChest(helper, new BlockPos(1, 1, 1), new BlockPos(1, 1, 2)).setItem(0, new ItemStack(Items.OAK_LOG, 1));
+            ClerkGameTests.linkChest(helper, new BlockPos(9, 1, 1), new BlockPos(9, 1, 2)).setItem(0, new ItemStack(Items.COBBLESTONE, 3));
             BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(3, 1, 7));
             CraftspersonGameTests.placeTable(helper, new BlockPos(5, 1, 7));
             CraftspersonGameTests.define(helper, craft, 0, Items.STONE_PICKAXE);
@@ -106,6 +106,9 @@ public final class InputDeliveryGameTests {
             dora.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.BREAD, 16));
             ResultDeliveryGameTests.deliveryman(helper, home, dora.getUUID());
             dora.addJob(new SettlerJob(ModJobs.DELIVERYMAN.get(), home));
+            // The second Clerk has no Clerk settler: only the Deliverymen of a Warehouse reach its store, so the Home Clerk serves it.
+            helper.assertTrue(com.gilfort.civmod.settlement.Warehouses.link(data, home, second) == com.gilfort.civmod.settlement.Warehouses.LinkResult.LINKED,
+                    "The second Clerk is served by the Home Clerk's Warehouse");
             return new Layout(home, second, craft, cora, dora, request.id(), forced);
         }
 
@@ -167,7 +170,7 @@ public final class InputDeliveryGameTests {
             helper.assertTrue(layout.pickaxes(level) == 1, "Pickaxe not crafted yet: " + layout.settlement(level).deliveries() + ", Cora "
                     + layout.cora().getWork().statusText(layout.craft()).getString() + ", Dora "
                     + layout.dora().getWork().statusText(layout.home()).getString());
-            helper.assertTrue(layout.cobblestoneFor(level, false, null) == 0, "The second store gave its cobblestone");
+            helper.assertTrue(layout.cobblestoneFor(level, true, null) == 0, "The second store gave its cobblestone");
             helper.assertTrue(layout.inputs(level).isEmpty(), "Input deliveries done");
             layout.cleanUp(helper);
         });
@@ -179,14 +182,14 @@ public final class InputDeliveryGameTests {
         Layout layout = Layout.build(helper);
         layout.cora().getWork().decideNow(level);
         DeliveryTask task = layout.inputAt(level, layout.second());
-        helper.assertTrue(layout.cobblestoneFor(level, false, null) == 3, "Not reserved before a Deliveryman takes it");
+        helper.assertTrue(layout.cobblestoneFor(level, true, null) == 3, "Not reserved before a Deliveryman takes it");
         long day = DayClock.day(level);
         Settlement settlement = layout.settlement(level);
         Deliveries.take(SettlementData.get(level), settlement, task.id(), layout.dora().getUUID(), "Dora", day);
         helper.assertTrue(Reservations.reserved(settlement, layout.second(), day, null).equals(java.util.Map.of(Items.COBBLESTONE, 3)),
                 "Reserved at the store: " + Reservations.reserved(settlement, layout.second(), day, null));
-        helper.assertTrue(layout.cobblestoneFor(level, false, null) == 0, "Invisible to customers");
-        helper.assertTrue(layout.cobblestoneFor(level, false, task.id()) == 3, "The task sees its inputs");
+        helper.assertTrue(layout.cobblestoneFor(level, true, null) == 0, "Invisible to customers");
+        helper.assertTrue(layout.cobblestoneFor(level, true, task.id()) == 3, "The task sees its inputs");
         layout.cleanUp(helper);
         helper.succeed();
     }
@@ -204,14 +207,14 @@ public final class InputDeliveryGameTests {
         SettlementData data = SettlementData.get(level);
         Settlement settlement = layout.settlement(level);
         Deliveries.take(data, settlement, task.id(), layout.dora().getUUID(), "Dora", day);
-        ((Container) level.getBlockEntity(layout.second())).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
+        ClerkGameTests.store(level, layout.second()).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
 
         Reservations.Pickup pickup = Deliveries.pickUpInput(data, settlement, task.id(), layout.dora().getUUID(),
-                ClerkStorage.stock(level, layout.second(), false, task.id()), day);
+                ClerkStorage.stock(level, layout.second(), true, task.id()), day);
         helper.assertTrue(pickup.failed() && pickup.taken().isEmpty(), "The pickup fails: " + pickup);
         DeliveryTask requeued = Deliveries.get(settlement, task.id()).orElseThrow();
         helper.assertTrue(requeued.takerOn(day).isEmpty() && !requeued.carried(), "Requeued: free for another try " + requeued);
-        helper.assertTrue(layout.cobblestoneFor(level, false, null) == 1, "Nothing taken, nothing reserved");
+        helper.assertTrue(layout.cobblestoneFor(level, true, null) == 1, "Nothing taken, nothing reserved");
 
         layout.cora().getWork().decideNow(level);
         Request request = Requests.get(settlement, layout.request()).orElseThrow();
@@ -233,7 +236,7 @@ public final class InputDeliveryGameTests {
         CatchUp.runNow(level, List.of(layout.cora(), layout.dora()));
         helper.assertTrue(layout.pickaxes(level) == 1, "Crafted from delivered inputs: " + layout.settlement(level).deliveries() + ", "
                 + Requests.get(layout.settlement(level), layout.request()));
-        helper.assertTrue(layout.cobblestoneFor(level, false, null) == 0
+        helper.assertTrue(layout.cobblestoneFor(level, true, null) == 0
                 && ClerkStorage.stock(level, layout.home(), true).count(stack -> stack.is(Items.OAK_LOG)) == 0, "Both stores gave their inputs");
         helper.assertTrue(layout.inputs(level).isEmpty(), "Input deliveries done: " + layout.inputs(level));
         layout.cleanUp(helper);

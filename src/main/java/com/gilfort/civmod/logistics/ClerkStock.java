@@ -22,11 +22,10 @@ import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 
 /**
- * The stock view of one Clerk JobBlock (vault {@code Jobs/Clerk.md}, stock counting rework): what its own 27 slots and
- * its linked containers hold. Reads are lookups; nothing is counted more than once per tick unless it changed.
+ * The stock view of one Clerk JobBlock (vault {@code Jobs/Clerk.md}, stock counting rework): what its linked containers
+ * hold (the block has no slots of its own). Reads are lookups; nothing is counted more than once per tick unless it
+ * changed.
  * <ul>
- * <li>The own slots are re-read only after the block entity reports a change ({@link JobBlockEntity#changes()}), so a
- * change by a player or a hopper shows at once.</li>
  * <li>Linked containers are checked at most once per tick.</li>
  * <li>Linked containers cannot report changes (no listener for foreign handlers): each one is re-read after its
  * re-read interval, {@value #MIN_REREAD} ticks after a re-read that found a change, doubling up to
@@ -50,10 +49,6 @@ final class ClerkStock {
 
     private final ServerLevel level;
     private final JobBlockEntity block;
-    private final BlockCapabilityCache<ResourceHandler<ItemResource>, @Nullable Direction> ownCache;
-    private final StockSummary own = new StockSummary();
-    private final OwnTracker ownTracker = new OwnTracker();
-    private long ownChanges = Long.MIN_VALUE;
     private final StockSummary linkedTotal = new StockSummary();
     private List<Linked> linked = List.of();
     private long linkedTick = Long.MIN_VALUE;
@@ -62,8 +57,6 @@ final class ClerkStock {
     private ClerkStock(ServerLevel level, JobBlockEntity block) {
         this.level = level;
         this.block = block;
-        this.ownCache = BlockCapabilityCache.create(Capabilities.Item.BLOCK, level, block.getBlockPos(), null, () -> valid, () -> {
-        });
     }
 
     /**
@@ -124,7 +117,7 @@ final class ClerkStock {
         return grown == null ? Map.of() : grown;
     }
 
-    /** Notes an increase by a CivMod transaction (own slots or a linked container). */
+    /** Notes an increase by a CivMod transaction in a linked container. */
     private void grew(ItemResource resource, long delta) {
         if (delta > 0) {
             GROWN.computeIfAbsent(level, key -> new HashMap<>()).computeIfAbsent(block.getBlockPos().immutable(), key -> new HashSet<>())
@@ -133,24 +126,16 @@ final class ClerkStock {
     }
 
     /**
-     * @param storage the linked containers in use, empty for the own slots only
+     * @param storage the linked containers in use
      * @param linked  whether the linked storage is reachable
-     * @return the stock: the own slots, plus the loaded linked containers if reachable
+     * @return the stock: the loaded linked containers if reachable, otherwise nothing (the block has no slots)
      */
     Stock stock(List<BlockPos> storage, boolean linked) {
-        long tick = level.getGameTime();
-        ResourceHandler<ItemResource> ownHandler = ownCache.getCapability();
-        if (ownHandler == null) {
+        if (!linked) {
             return Stock.EMPTY;
         }
-        if (block.changes() != ownChanges) {
-            ownTracker.reread();
-        }
+        long tick = level.getGameTime();
         List<Stock.Part> parts = new ArrayList<>();
-        parts.add(new Stock.Part(ownHandler, ownTracker));
-        if (!linked) {
-            return new Stock(parts, List.of(own), false);
-        }
         if (linkedTick != tick) {
             linkedTick = tick;
             link(storage);
@@ -161,7 +146,7 @@ final class ClerkStock {
                 parts.add(new Stock.Part(container.handler, container));
             }
         }
-        return new Stock(parts, List.of(own, linkedTotal), true);
+        return new Stock(parts, List.of(linkedTotal), true);
     }
 
     /** Follows the linked containers in use, keeping the views of those still linked. */
@@ -193,45 +178,6 @@ final class ClerkStock {
             }
         }
         return true;
-    }
-
-    /** Write-through for the own slots: valid only if no foreign change came in since they were last read. */
-    private final class OwnTracker implements Stock.Tracker {
-
-        @Override
-        public long mark() {
-            return block.changes();
-        }
-
-        @Override
-        public void changed(long mark, ItemResource resource, long delta) {
-            grew(resource, delta);
-            if (mark != ownChanges) {
-                return;
-            }
-            if (!own.covers(resource, delta)) {
-                reread();
-                return;
-            }
-            own.add(resource, delta);
-            ownChanges = block.changes();
-        }
-
-        @Override
-        public void drained(Item item) {
-            if (own.contains(item)) {
-                reread();
-            }
-        }
-
-        @Override
-        public void reread() {
-            ResourceHandler<ItemResource> handler = ownCache.getCapability();
-            if (handler != null) {
-                own.read(handler, null);
-            }
-            ownChanges = block.changes();
-        }
     }
 
     /** One linked container: its capability cache, its view and when it is re-read next. */

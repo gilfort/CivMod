@@ -16,6 +16,8 @@ import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
+import com.gilfort.civmod.block.JobBlockEntity;
+import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.ClerkSpots;
@@ -23,6 +25,7 @@ import com.gilfort.civmod.settlement.JobAssignments.PointResult;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
+import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.TestAssignments;
@@ -30,6 +33,9 @@ import com.gilfort.civmod.settlement.TestSettlements;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -72,6 +78,8 @@ public final class ClerkGameTests {
             register(helper, "clerk_spot_of_day", ClerkGameTests::spotOfDay);
             register(helper, "clerk_as_drop_off", ClerkGameTests::asDropOff);
             register(helper, "clerk_shift", ClerkGameTests::shift);
+            register(helper, "clerk_old_save", ClerkGameTests::oldSave);
+            register(helper, "clerk_no_storage_hint", ClerkGameTests::noStorageHint);
         });
     }
 
@@ -79,7 +87,7 @@ public final class ClerkGameTests {
         helper.register(ResourceKey.create(Registries.TEST_FUNCTION, CivMod.id(name)), test);
     }
 
-    /** The Clerk is a Logistics Job offered by the Clerk JobBlock, whose 27 slots are its item capability. */
+    /** The Clerk is a Logistics Job offered by the Clerk JobBlock, which has no slots of its own (#176). */
     private static void registryAndBlock(GameTestHelper helper) {
         helper.assertTrue(ModJobs.CLERK.get().category() == JobCategory.LOGISTICS, "Clerk is a Logistics Job");
         helper.assertTrue(ModJobs.CLERK.get().id().equals(CivMod.id("clerk")), "Registered as civmod:clerk");
@@ -87,14 +95,15 @@ public final class ClerkGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos clerk = clerkWithStorage(helper);
         var handler = level.getCapability(Capabilities.Item.BLOCK, clerk, null);
-        helper.assertTrue(handler != null && handler.size() == 27, "Hoppers see the 27 block slots only");
+        helper.assertTrue(handler != null && handler.size() == 0, "Hoppers on the block see no slot");
+        helper.assertTrue(((Container) level.getBlockEntity(clerk)).getContainerSize() == 0, "The block has no slots");
         helper.assertTrue(SettlementData.get(level).settlementAt(clerk).isPresent(), "The Clerk JobBlock joins a settlement");
         helper.succeed();
     }
 
     /**
-     * Without a working Clerk only the 27 block slots are accessible; a Clerk settler on shift opens the linked storage
-     * at its counter.
+     * The block has no slots: without a working Clerk nobody takes anything from the linked storage; a Clerk settler on
+     * shift opens it at its counter. Putting items in works at any time.
      */
     private static void accessRule(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -103,22 +112,26 @@ public final class ClerkGameTests {
         chest.setItem(0, new ItemStack(Items.BREAD, 5));
 
         helper.assertTrue(count(ClerkStorage.stock(level, clerk, MORNING, true)) == 0, "No settler: linked storage is closed");
-        ((Container) level.getBlockEntity(clerk)).setItem(3, new ItemStack(Items.BREAD, 2));
-        helper.assertTrue(count(ClerkStorage.stock(level, clerk, MORNING, true)) == 2, "No settler: the block slots are open");
+        helper.assertTrue(count(ClerkStorage.stock(level, clerk, MORNING, false)) == 0, "No settler: the block has nothing");
+        helper.assertTrue(ClerkStorage.dropOff(level, clerk).insert(new ItemStack(Items.BREAD, 2)).isEmpty(),
+                "No settler: a drop-off still stores into the linked storage");
+        helper.assertTrue(count(ClerkStorage.stock(level, clerk, true)) == 7, "Staff reach the whole storage at any time");
 
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
         helper.assertTrue(TestAssignments.assign(data, clerk, CLARA, "Clara", settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
                 "Clerk assigned");
         helper.assertTrue(count(ClerkStorage.stock(level, clerk, MORNING, true)) == 7, "Working Clerk: linked storage at the counter");
-        helper.assertTrue(count(ClerkStorage.stock(level, clerk, MORNING, false)) == 2, "Not at the counter: block slots only");
-        helper.assertTrue(count(ClerkStorage.stock(level, clerk, EVENING, true)) == 2, "After the shift: block slots only");
+        helper.assertTrue(count(ClerkStorage.stock(level, clerk, MORNING, false)) == 0, "Not at the counter: nothing");
+        helper.assertTrue(count(ClerkStorage.stock(level, clerk, EVENING, true)) == 0, "After the shift: nothing");
+        helper.assertTrue(ClerkStorage.stock(level, clerk, EVENING, true).insert(new ItemStack(Items.STICK, 64)).getCount() == 64,
+                "Closed Clerk: nothing to hand out");
 
         Stock open = ClerkStorage.stock(level, clerk, MORNING, true);
         ItemStack rest = open.insert(new ItemStack(Items.COBBLESTONE, 64 * 27));
-        helper.assertTrue(rest.getCount() < 64 * 26, "A working Clerk fills the linked storage as well: rest " + rest.getCount());
-        Stock closed = ClerkStorage.stock(level, clerk, EVENING, true);
-        helper.assertTrue(closed.insert(new ItemStack(Items.STICK, 64)).getCount() == 64, "Closed Clerk with full block slots takes nothing");
+        helper.assertTrue(rest.getCount() < 64 * 27, "A working Clerk fills the linked storage: rest " + rest.getCount());
+        helper.assertTrue(ClerkStorage.dropOff(level, clerk).insert(new ItemStack(Items.STICK, 64)).getCount() == 64,
+                "A full linked storage takes nothing more: Storage full");
         TestAssignments.unassign(data, clerk);
         helper.succeed();
     }
@@ -230,10 +243,6 @@ public final class ClerkGameTests {
             SettlementData data = SettlementData.get(level);
             helper.assertTrue(JobAssignments.cycleClerkPoint(data, clerk, chestPos, true, false, Direction.NORTH) == PointResult.STORAGE,
                     "Chest linked");
-            Container block = (Container) level.getBlockEntity(clerk);
-            for (int i = 0; i < block.getContainerSize(); i++) {
-                block.setItem(i, new ItemStack(Items.COBBLESTONE, 64));
-            }
             helper.assertTrue(JobAssignments.cyclePoint(data, jobBlock, clerk, false, true) == PointResult.COLLECT, "A Clerk JobBlock is a container");
             helper.assertTrue(JobAssignments.cyclePoint(data, jobBlock, clerk, false, true) == PointResult.DROP_OFF, "Clerk as drop-off");
             Container chest = (Container) level.getBlockEntity(chestPos);
@@ -242,14 +251,10 @@ public final class ClerkGameTests {
 
             settler.getWork().setCatchUp(dayStart - 24000L, dayStart);
             CatchUp.runNow(level, List.of(settler));
-            helper.assertTrue(logs(chest) == 0, "No Clerk settler: nothing reaches the linked storage");
-            helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0, "The output waits in the buffer");
+            helper.assertTrue(logs(chest) > 0, "No Clerk settler: deliveries still go into the linked storage, got " + logs(chest));
 
             Settlement settlement = data.settlementAt(clerk).orElseThrow();
             TestAssignments.assign(data, clerk, CLARA, "Clara", settlement.id(), List.of());
-            settler.getWork().setCatchUp(dayStart - 24000L, dayStart);
-            CatchUp.runNow(level, List.of(settler));
-            helper.assertTrue(logs(chest) > 0, "Working Clerk: deliveries go into the linked storage, got " + logs(chest));
 
             helper.assertTrue(JobAssignments.cyclePoint(data, jobBlock, clerk, false, true) == PointResult.REMOVED
                     && JobAssignments.cyclePoint(data, jobBlock, clerk, false, true) == PointResult.COLLECT, "Clerk as collect point");
@@ -356,6 +361,62 @@ public final class ClerkGameTests {
         JobAssignments.PointResult linked = JobAssignments.cycleClerkPoint(SettlementData.get(level), clerk, chest, true, false, Direction.NORTH);
         helper.assertTrue(linked == JobAssignments.PointResult.STORAGE, "Chest linked as storage: " + linked);
         return clerk;
+    }
+
+    /** An old save with 27 stacks in a Clerk JobBlock loads without a crash; the items are gone, the block has no slots. */
+    private static void oldSave(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.CLERK_BLOCK.get());
+        TestSettlements.setBlock(helper, new BlockPos(3, 1, 1), ModBlocks.CRAFTSPERSON_BLOCK.get());
+        JobBlockEntity oldBlock = (JobBlockEntity) level.getBlockEntity(helper.absolutePos(new BlockPos(3, 1, 1)));
+        for (int slot = 0; slot < oldBlock.getContainerSize(); slot++) {
+            oldBlock.setItem(slot, new ItemStack(Items.COBBLESTONE, 64));
+        }
+        // 27 stacks in a Clerk JobBlock's tag, as a save of an earlier version wrote them.
+        CompoundTag saved = oldBlock.saveWithoutMetadata(level.registryAccess());
+        JobBlockEntity clerk = (JobBlockEntity) level.getBlockEntity(helper.absolutePos(new BlockPos(1, 1, 1)));
+        clerk.loadWithComponents(TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), saved));
+        helper.assertTrue(clerk.getContainerSize() == 0 && clerk.isEmpty(), "The block has no slots: " + clerk.getContainerSize());
+        helper.succeed();
+    }
+
+    /** A Clerk JobBlock without a linked container asks for one in its header; a linked chest takes the request away. */
+    private static void noStorageHint(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerk = clerkWithStorage(helper);
+        helper.assertFalse(JobBlockInfo.of(level, clerk, ModJobs.CLERK.get(), 1).storageUnlinked(), "A linked chest: no hint");
+        SettlementData data = SettlementData.get(level);
+        JobAssignments.cycleClerkPoint(data, clerk, helper.absolutePos(new BlockPos(4, 1, 1)), true, false, Direction.NORTH);
+        helper.assertTrue(JobBlockInfo.of(level, clerk, ModJobs.CLERK.get(), 1).storageUnlinked(), "The chest is unlinked: link a container");
+        helper.assertFalse(JobBlockInfo.of(level, helper.absolutePos(new BlockPos(1, 1, 1)), ModJobs.CRAFTSPERSON.get(), 1).storageUnlinked(),
+                "Other JobBlocks never ask");
+        helper.succeed();
+    }
+
+    /**
+     * Places a chest and links it as storage to a Clerk JobBlock (the block has no slots of its own).
+     *
+     * @param helper the test helper
+     * @param clerk  the Clerk JobBlock (relative position)
+     * @param chest  where the chest goes (relative position)
+     * @return the chest
+     */
+    static Container linkChest(GameTestHelper helper, BlockPos clerk, BlockPos chest) {
+        helper.setBlock(chest, Blocks.CHEST);
+        PointResult linked = JobAssignments.cycleClerkPoint(SettlementData.get(helper.getLevel()), helper.absolutePos(clerk), helper.absolutePos(chest),
+                true, false, Direction.NORTH);
+        helper.assertTrue(linked == PointResult.STORAGE, "Chest linked as storage: " + linked);
+        return (Container) helper.getLevel().getBlockEntity(helper.absolutePos(chest));
+    }
+
+    /**
+     * @param level the level
+     * @param clerk a Clerk JobBlock with a linked container
+     * @return its first linked container (the block has no slots of its own)
+     */
+    static Container store(ServerLevel level, BlockPos clerk) {
+        SettlementBlock block = JobBlockSite.blockAt(level, clerk).orElseThrow();
+        return (Container) level.getBlockEntity(block.storage().getFirst());
     }
 
     private static int count(Stock stock) {

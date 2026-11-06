@@ -30,7 +30,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.registries.RegisterEvent;
 
 /**
- * GameTests for the Clerk stock view (#66): CivMod's own transactions and changes of the block's own slots are visible
+ * GameTests for the Clerk stock view (#66): CivMod's own transactions in the linked containers are visible
  * at once, foreign changes in linked containers after the re-read interval (at most 10 s).
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
@@ -57,14 +57,13 @@ public final class ClerkStockGameTests {
         helper.register(ResourceKey.create(Registries.TEST_FUNCTION, CivMod.id(name)), test);
     }
 
-    /** The counts match the real containers: the block's own slots plus the linked chest. */
+    /** The counts match the real container: the linked chest (the block has no slots). */
     private static void counts(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos clerk = ClerkGameTests.clerkWithStorage(helper);
-        Container own = (Container) level.getBlockEntity(clerk);
         Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
-        own.setItem(0, new ItemStack(Items.BREAD, 2));
-        own.setItem(5, new ItemStack(Items.COBBLESTONE, 64));
+        chest.setItem(1, new ItemStack(Items.BREAD, 2));
+        chest.setItem(5, new ItemStack(Items.COBBLESTONE, 64));
         chest.setItem(0, new ItemStack(Items.BREAD, 5));
         chest.setItem(3, new ItemStack(Items.APPLE, 3));
         chest.setItem(26, new ItemStack(Items.STONE_PICKAXE));
@@ -74,8 +73,7 @@ public final class ClerkStockGameTests {
                 "Counts of all containers: " + stock.counts());
         helper.assertTrue(stock.count(stack -> stack.is(Items.BREAD) || stack.is(Items.APPLE)) == 10, "Count of a kind");
         helper.assertTrue(stock.contains(stack -> stack.is(Items.APPLE)) && !stock.contains(stack -> stack.is(Items.DIAMOND)), "Contains");
-        Stock block = ClerkStorage.stock(level, clerk, false);
-        helper.assertTrue(block.counts().equals(Map.of(Items.BREAD, 2, Items.COBBLESTONE, 64)), "Block slots only: " + block.counts());
+        helper.assertTrue(ClerkStorage.stock(level, clerk, false).isEmpty(), "Without access the block has nothing");
         helper.succeed();
     }
 
@@ -83,11 +81,7 @@ public final class ClerkStockGameTests {
     private static void ownTransactions(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos clerk = ClerkGameTests.clerkWithStorage(helper);
-        Container own = (Container) level.getBlockEntity(clerk);
         Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
-        for (int i = 0; i < own.getContainerSize(); i++) {
-            own.setItem(i, new ItemStack(Items.COBBLESTONE, 64));
-        }
         helper.assertTrue(bread(level, clerk) == 0, "No bread at first");
 
         helper.assertTrue(ClerkStorage.stock(level, clerk, true).insert(new ItemStack(Items.BREAD, 10)).isEmpty(), "Delivered");
@@ -147,28 +141,25 @@ public final class ClerkStockGameTests {
     }
 
     /**
-     * A foreign change (player, hopper) in the block's own slots shows at once, one in a linked container
-     * after the re-read interval; after a re-read that found a change, the next one shows sooner.
+     * A foreign change (player, hopper) in a linked container shows after the re-read interval; after a re-read that
+     * found a change, the next one shows sooner.
      */
     private static void foreignChange(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos clerk = ClerkGameTests.clerkWithStorage(helper);
-        Container own = (Container) level.getBlockEntity(clerk);
         Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
         helper.assertTrue(bread(level, clerk) == 0, "Empty at first");
 
         chest.setItem(0, new ItemStack(Items.BREAD, 5));
-        own.setItem(0, new ItemStack(Items.BREAD, 2));
-        helper.assertTrue(bread(level, clerk) == 2, "Own slots: the change shows at once");
-        helper.runAfterDelay(1, () -> helper.assertTrue(bread(level, clerk) == 2, "Linked container: not re-read yet"));
-        helper.runAfterDelay(REREAD - 50, () -> helper.assertTrue(bread(level, clerk) == 2,
+        helper.runAfterDelay(1, () -> helper.assertTrue(bread(level, clerk) == 0, "Linked container: not re-read yet"));
+        helper.runAfterDelay(REREAD - 50, () -> helper.assertTrue(bread(level, clerk) == 0,
                 "Nothing changed at the first read: the interval is the longest one"));
         helper.runAfterDelay(REREAD, () -> {
-            helper.assertTrue(bread(level, clerk) == 7, "Linked container re-read after at most 10 s, got " + bread(level, clerk));
+            helper.assertTrue(bread(level, clerk) == 5, "Linked container re-read after at most 10 s, got " + bread(level, clerk));
             chest.setItem(1, new ItemStack(Items.BREAD, 3));
         });
         helper.runAfterDelay(REREAD + 100, () -> {
-            helper.assertTrue(bread(level, clerk) == 10, "After a change the re-read comes sooner, got " + bread(level, clerk));
+            helper.assertTrue(bread(level, clerk) == 8, "After a change the re-read comes sooner, got " + bread(level, clerk));
             helper.succeed();
         });
     }

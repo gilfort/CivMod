@@ -65,8 +65,6 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     private boolean connected = true;
     /** The shrine glow of a Center Block; client-visible, not saved. */
     private int glow = GLOW_NONE;
-    /** Counts every change of the slots (not saved): the Clerk stock view re-reads them when it moves. */
-    private int changes;
 
     /**
      * @param pos   the block position
@@ -77,7 +75,7 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
         items = NonNullList.withSize(slotsFor(SettlementRules.MIN_LEVEL), ItemStack.EMPTY);
     }
 
-    /** The slots a block of this Job has at a level: 27, a Pantry grows with its level. */
+    /** The slots a block of this Job has at a level: none for a Clerk, 27 for most, a Pantry grows with its level. */
     private int slotsFor(int jobLevel) {
         return getBlockState().getBlock() instanceof JobBlock jobBlock ? SettlementRules.storageSlots(jobBlock.getJobType(), jobLevel) : SLOTS;
     }
@@ -99,25 +97,6 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     public boolean canPlaceItem(int slot, ItemStack stack) {
         boolean pantry = getBlockState().getBlock() instanceof JobBlock jobBlock && jobBlock.getJobType() == ModJobs.TAVERN_HOST.get();
         return !pantry || SettlerFood.isEdible(stack);
-    }
-
-    /**
-     * @return a counter that moves on every change of the slots (and on other changes of the block entity)
-     */
-    public int changes() {
-        return changes;
-    }
-
-    @Override
-    public void setChanged() {
-        changes++;
-        super.setChanged();
-    }
-
-    @Override
-    public ItemStack removeItemNoUpdate(int slot) {
-        changes++;
-        return super.removeItemNoUpdate(slot);
     }
 
     /**
@@ -231,7 +210,6 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
         jobLevel = SettlementRules.clampLevel(input.getIntOr("job_level", SettlementRules.MIN_LEVEL));
         items = NonNullList.withSize(slotsFor(jobLevel), ItemStack.EMPTY);
         ContainerHelper.loadAllItems(input, items);
-        changes++;
         ledgers = Math.clamp(input.getIntOr("ledgers", 0), 0, SettlementRules.MAX_LEDGERS);
         settlementId = input.getIntOr("settlement", Settlement.NO_SETTLEMENT);
         connected = input.getBooleanOr("connected", true);
@@ -349,7 +327,6 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     @Override
     protected void setItems(NonNullList<ItemStack> items) {
         this.items = items;
-        changes++;
     }
 
     @Override

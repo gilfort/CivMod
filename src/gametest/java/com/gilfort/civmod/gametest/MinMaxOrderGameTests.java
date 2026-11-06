@@ -41,6 +41,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -84,8 +85,12 @@ public final class MinMaxOrderGameTests {
     }
 
     /** A Clerk JobBlock at a relative position, level 1 (no settler). */
+    /** A Clerk JobBlock with a chest south of it linked as storage (the block has no slots of its own). */
     private static BlockPos clerk(GameTestHelper helper, BlockPos relative) {
         TestSettlements.setBlock(helper, relative, ModBlocks.CLERK_BLOCK.get());
+        helper.setBlock(relative.south(), Blocks.CHEST);
+        helper.assertTrue(JobAssignments.cycleClerkPoint(SettlementData.get(helper.getLevel()), helper.absolutePos(relative),
+                helper.absolutePos(relative.south()), true, false, Direction.NORTH) == JobAssignments.PointResult.STORAGE, "Chest linked");
         return helper.absolutePos(relative);
     }
 
@@ -103,7 +108,7 @@ public final class MinMaxOrderGameTests {
         SettlementData data = SettlementData.get(level);
         helper.assertTrue(JobBlockSite.blockAt(level, jobBlock).orElseThrow().homeClerk().equals(Optional.of(clerk)), "Home Clerk");
         helper.assertTrue(StockRules.setRule(data, clerk, new StockRule(0, Items.OAK_LOG, 0, 4, 0, 0)), "Max rule set");
-        Container store = (Container) level.getBlockEntity(clerk);
+        Container store = ClerkGameTests.store(level, clerk);
         store.setItem(0, new ItemStack(Items.OAK_LOG, 4));
         int[] before = new int[1];
         helper.startSequence()
@@ -149,7 +154,7 @@ public final class MinMaxOrderGameTests {
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
         StockRules.setRule(data, clerk, new StockRule(0, Items.COBBLESTONE, 0, 1, 0, 0));
-        ((Container) level.getBlockEntity(clerk)).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
+        ClerkGameTests.store(level, clerk).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(3, 1, 3), data, settlement);
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_PICKAXE));
         settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
@@ -209,8 +214,8 @@ public final class MinMaxOrderGameTests {
         helper.assertTrue(Warehouses.link(data, warehouse, served) == Warehouses.LinkResult.LINKED, "Served Clerk linked");
 
         StockRules.setRule(data, served, new StockRule(0, Items.TORCH, 0, 10, 0, 0));
-        Container servedStore = (Container) level.getBlockEntity(served);
-        Container warehouseStore = (Container) level.getBlockEntity(warehouse);
+        Container servedStore = ClerkGameTests.store(level, served);
+        Container warehouseStore = ClerkGameTests.store(level, warehouse);
         servedStore.setItem(0, new ItemStack(Items.TORCH, 30));
         StockRules.check(level, served, ClerkGameTests.MORNING);
         helper.assertTrue(Deliveries.freeSurplus(settlement, served, Items.TORCH, DayClock.day(level))
@@ -226,13 +231,14 @@ public final class MinMaxOrderGameTests {
                     helper.assertTrue(settlement.deliveries().stream().noneMatch(task -> task.surplus()), "Surplus task done");
                     // The Warehouse is at its own Max: more surplus has nowhere to go.
                     StockRules.setRule(data, warehouse, new StockRule(0, Items.TORCH, 0, 20, 0, 0));
-                    servedStore.setItem(1, new ItemStack(Items.TORCH, 5));
+                    // Through CivMod's own transaction: a linked container is re-read only every few seconds.
+                    ClerkStorage.stock(level, served, true).insert(new ItemStack(Items.TORCH, 5));
                     StockRules.check(level, served, ClerkGameTests.MORNING);
                     helper.assertTrue(settlement.deliveries().stream().noneMatch(task -> task.surplus()), "No task into a Warehouse at Max");
                     helper.assertTrue(StockRules.surplusNowhere(level, served).equals(List.of(0)), "Surplus: nowhere to go");
                     helper.assertTrue(ClerkTabData.of(level, served).nowhere().equals(List.of(0)), "Shown in the Clerk's tab");
                     // The Warehouse keeps its own surplus.
-                    warehouseStore.setItem(5, new ItemStack(Items.TORCH, 3));
+                    ClerkStorage.stock(level, warehouse, true).insert(new ItemStack(Items.TORCH, 3));
                     StockRules.check(level, warehouse, ClerkGameTests.MORNING);
                     helper.assertTrue(settlement.deliveries().stream().noneMatch(task -> task.surplus()), "A Warehouse keeps its surplus");
                     helper.assertTrue(StockRules.surplusNowhere(level, warehouse).equals(List.of(0)), "Warehouse: nowhere to go");
