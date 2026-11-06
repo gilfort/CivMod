@@ -27,11 +27,13 @@ public final class JobBlockTabs {
      * @return new tabs for its window, in tab order (Workers first, the tabs below the panel last)
      */
     public static List<JobBlockTab> of(Job jobType) {
-        List<JobBlockTab> tabs = new ArrayList<>(List.of(new WorkersTab(), new StorageTab(jobType == ModJobs.TAVERN_HOST.get())));
+        List<JobBlockTab> tabs = new ArrayList<>(List.of(new WorkersTab()));
         if (jobType == ModJobs.CLERK.get()) {
+            // A Clerk JobBlock has no slots of its own: its storage is linked containers (the Storage tab of its settler).
             TabData<ClerkTabData> clerk = StockTab.newData();
             tabs.addAll(List.of(new StockTab(clerk), new TasksTab(clerk)));
         } else {
+            tabs.add(new StorageTab(jobType == ModJobs.TAVERN_HOST.get()));
             switch (jobType.category()) {
                 case RESOURCE_COLLECTION -> {
                     tabs.add(new FoundTab());

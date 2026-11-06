@@ -211,7 +211,7 @@ _Avoid_: Reservation (a settler reserves the mission it picked)
 The first Logistics Job: the settlement's storage (no food point since the Pantry, see **Pantry**). Code: `ModJobs.CLERK` on `ModBlocks.CLERK_BLOCK`, work loop `ClerkLoop` (stands on the stand spot of the day during its shift from its own early waking time (05:30–06:00, before any other settler wakes) to 18:30, `ClerkStorage.inShift`, `ClerkStorage.shiftStart`, `ClerkStorage.SHIFT_END`; `SettlerWork.dayTimes`).
 
 **Clerk storage**:
-The Clerk JobBlock's own 27 slots plus the containers linked with the Scroll of Assignment (2 / 4 / 8 / 12 / 16 by level, `SettlementRules.clerkStorage`; extra ones after a downgrade are inactive, `ClerkStorage.activeStorage`). Code: `SettlementBlock.storage()`, linked through `JobAssignments.cycleClerkPoint`.
+The containers linked with the Scroll of Assignment (2 / 4 / 8 / 12 / 16 by level; the Clerk JobBlock has no slots of its own, `SettlementRules.clerkStorage`; extra ones after a downgrade are inactive, `ClerkStorage.activeStorage`). Code: `SettlementBlock.storage()`, linked through `JobAssignments.cycleClerkPoint`.
 _Avoid_: warehouse (that is a Clerk JobBlock with Deliverymen)
 
 **Storage terminal**:

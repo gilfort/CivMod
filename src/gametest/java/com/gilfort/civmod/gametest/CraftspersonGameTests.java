@@ -85,8 +85,7 @@ public final class CraftspersonGameTests {
             register(helper, "craftsperson_live_linked_storage", CraftspersonGameTests::liveLinkedStorage);
             register(helper, "craftsperson_crafts_metal", CraftspersonGameTests::craftsMetal);
             register(helper, "craftsperson_live_linked_storage_far", CraftspersonGameTests::liveLinkedStorageFar);
-            register(helper, "craftsperson_live_two_sources_off_shift", test -> liveTwoSources(test, false));
-            register(helper, "craftsperson_live_two_sources_on_shift", test -> liveTwoSources(test, true));
+            register(helper, "craftsperson_live_two_sources_on_shift", CraftspersonGameTests::liveTwoSources);
             register(helper, "craftsperson_unreachable_inputs", CraftspersonGameTests::unreachableInputs);
             register(helper, "craftsperson_counter_check_in_air", CraftspersonGameTests::counterCheckInAir);
         });
@@ -408,7 +407,7 @@ public final class CraftspersonGameTests {
         BlockPos clerk = ClerkGameTests.clerkWithStorage(helper);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        Container clerkSlots = (Container) level.getBlockEntity(clerk);
+        Container clerkSlots = ClerkGameTests.store(level, clerk);
         for (int slot = 0; slot < clerkSlots.getContainerSize(); slot++) {
             clerkSlots.setItem(slot, new ItemStack(Items.DIRT, 64));
         }
@@ -425,7 +424,7 @@ public final class CraftspersonGameTests {
         Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
         catchUp(level, settler, 3000L);
         Container chest = (Container) level.getBlockEntity(dropOff);
-        helper.assertTrue(chest.countItem(Items.STICK) == 4, "Clerk full (no Clerk settler: block slots only): sticks in the own drop-off");
+        helper.assertTrue(chest.countItem(Items.STICK) == 4, "Clerk full: sticks in the own drop-off");
         helper.assertTrue(Requests.get(settlement, request.id()).isEmpty(), "Request done");
 
         for (int slot = 0; slot < chest.getContainerSize(); slot++) {
@@ -470,7 +469,7 @@ public final class CraftspersonGameTests {
         // Skilled up to the cap of a level 1 JobBlock (a bigger JobBlock would reach into the neighbouring tests).
         settler.getSkills().set(ModJobs.CRAFTSPERSON.get(), new com.gilfort.civmod.job.SettlerSkills.Skill(100, 0));
         settler.setNoAi(false);
-        Container clerkSlots = (Container) level.getBlockEntity(clerk);
+        Container clerkSlots = ClerkGameTests.store(level, clerk);
         helper.succeedWhen(() -> {
             helper.assertTrue(clerkSlots.countItem(Items.STICK) == 4, "Sticks delivered to the Clerk; status " + settler.getWork().status(craft)
                     + ", buffer " + settler.getWork().buffer(craft).stacks() + ", request " + Requests.get(settlement, request.id())
@@ -539,12 +538,10 @@ public final class CraftspersonGameTests {
     /**
      * Client test #54: 2 stone axes requested, the sticks lie in the Craftsperson's own JobBlock (collect), the
      * cobblestone at the Clerk. The Craftsperson takes the sticks, then the cobblestone at the Clerk, crafts and
-     * delivers both axes; while the request is open it never shows "No request".
-     *
-     * @param working whether a Clerk works the counter (the cobblestone lies in its linked chest; otherwise in its 27
-     *                block slots)
+     * delivers both axes; while the request is open it never shows "No request". The cobblestone lies in the linked chest
+     * of a working Clerk.
      */
-    private static void liveTwoSources(GameTestHelper helper, boolean working) {
+    private static void liveTwoSources(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         for (int x = 0; x < 9; x++) {
             for (int z = 0; z < 9; z++) {
@@ -555,25 +552,18 @@ public final class CraftspersonGameTests {
             }
         }
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
-        BlockPos clerk = working ? StockRuleGameTests.workingClerk(helper) : ClerkGameTests.clerkWithStorage(helper);
+        BlockPos clerk = StockRuleGameTests.workingClerk(helper);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        Container cobbleAt = working ? (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)))
-                : (Container) level.getBlockEntity(clerk);
-        cobbleAt.setItem(0, new ItemStack(Items.COBBLESTONE, 6));
+        ((Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)))).setItem(0, new ItemStack(Items.COBBLESTONE, 6));
         BlockPos craft = craftsperson(helper, new BlockPos(1, 1, 5));
         placeTable(helper, new BlockPos(4, 1, 6));
         define(helper, craft, 0, Items.STONE_AXE);
         ((Container) level.getBlockEntity(craft)).setItem(0, new ItemStack(Items.STICK, 4));
-        // On shift a stock rule posts the request; off shift it was posted earlier (rules only post on shift).
-        UUID request;
-        if (working) {
-            helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_AXE, 2, 0)), "Rule set");
-            StockRules.check(level, clerk, ClerkGameTests.MORNING);
-            request = Requests.forRule(settlement, clerk, 0).orElseThrow().id();
-        } else {
-            request = Requests.post(data, settlement, Items.STONE_AXE, 2, Optional.of(clerk), Optional.empty()).id();
-        }
+        // On shift a stock rule posts the request.
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_AXE, 2, 0)), "Rule set");
+        StockRules.check(level, clerk, ClerkGameTests.MORNING);
+        UUID request = Requests.forRule(settlement, clerk, 0).orElseThrow().id();
         Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
         settler.getSkills().set(ModJobs.CRAFTSPERSON.get(), new com.gilfort.civmod.job.SettlerSkills.Skill(100, 0));
         settler.setNoAi(false);
@@ -590,9 +580,7 @@ public final class CraftspersonGameTests {
                     "Two stone axes delivered; status " + settler.getWork().status(craft) + ", buffer " + settler.getWork().buffer(craft).stacks()
                             + ", request " + Requests.get(settlement, request) + ", at " + helper.relativePos(settler.blockPosition()));
             helper.assertTrue(Requests.get(settlement, request).isEmpty(), "Request done");
-            if (working) {
-                TestAssignments.unassign(data, clerk);
-            }
+            TestAssignments.unassign(data, clerk);
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });

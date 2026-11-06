@@ -21,6 +21,7 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.Bonuses;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
@@ -55,10 +56,11 @@ import net.minecraft.server.level.ServerLevel;
  * @param missionTab   the missions and Mission Job settlers (Mission Board only, else empty)
  * @param biome          today's biome bonus line and the "?" overview of the Job's biome bonuses
  * @param blessingLeft   at the Center Block: the ticks the settlement's work speed blessing still acts (0 = none)
+ * @param storageUnlinked whether this is a Clerk JobBlock without a linked container (the header asks to link one)
  */
 public record JobBlockInfo(Job jobType, int level, Component settlementName, boolean inSettlement, boolean connected,
         int distance, int required, List<Worker> workers, List<JobPlaces.Line> places, boolean collectLeaves, boolean byDeliveryman,
-        MissionTab missionTab, BiomeInfo biome, long blessingLeft) {
+        MissionTab missionTab, BiomeInfo biome, long blessingLeft, boolean storageUnlinked) {
 
     /**
      * @return for an unconnected block: whether the settlement has no connected block to reach
@@ -337,11 +339,11 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         List<JobPlaces.Line> changed = places.stream()
                 .map(line -> line.job() == job ? new JobPlaces.Line(line.job(), line.taken(), line.places(), on) : line).toList();
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, workers, changed, collectLeaves,
-                byDeliveryman, missionTab, biome, blessingLeft);
+                byDeliveryman, missionTab, biome, blessingLeft, storageUnlinked);
     }
 
-    /** Network codec. */
-    public static final StreamCodec<RegistryFriendlyByteBuf, JobBlockInfo> STREAM_CODEC = StreamCodec.composite(
+    /** The fields up to the Center Block's blessing: a composite codec holds at most 14 fields, the last flag follows it. */
+    private static final StreamCodec<RegistryFriendlyByteBuf, JobBlockInfo> BASE_CODEC = StreamCodec.composite(
             Job.STREAM_CODEC, JobBlockInfo::jobType,
             ByteBufCodecs.VAR_INT, JobBlockInfo::level,
             ComponentSerialization.STREAM_CODEC, JobBlockInfo::settlementName,
@@ -356,7 +358,23 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
             MissionTab.STREAM_CODEC, JobBlockInfo::missionTab,
             BiomeInfo.STREAM_CODEC, JobBlockInfo::biome,
             ByteBufCodecs.VAR_LONG, JobBlockInfo::blessingLeft,
-            JobBlockInfo::new);
+            (type, level, settlementName, inSettlement, connected, distance, required, workers, places, collectLeaves, byDeliveryman,
+                    missionTab, biome, blessingLeft) -> new JobBlockInfo(type, level, settlementName, inSettlement, connected, distance, required,
+                            workers, places, collectLeaves, byDeliveryman, missionTab, biome, blessingLeft, false));
+
+    /** Network codec. */
+    public static final StreamCodec<RegistryFriendlyByteBuf, JobBlockInfo> STREAM_CODEC = StreamCodec.of(
+            (buf, info) -> {
+                BASE_CODEC.encode(buf, info);
+                buf.writeBoolean(info.storageUnlinked());
+            },
+            buf -> {
+                JobBlockInfo base = BASE_CODEC.decode(buf);
+                boolean storageUnlinked = buf.readBoolean();
+                return new JobBlockInfo(base.jobType(), base.level(), base.settlementName(), base.inSettlement(), base.connected(), base.distance(),
+                        base.required(), base.workers(), base.places(), base.collectLeaves(), base.byDeliveryman(), base.missionTab(), base.biome(),
+                        base.blessingLeft(), storageUnlinked);
+            });
 
     /**
      * @param level    the dimension
@@ -393,7 +411,8 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
                 block.map(SettlementBlock::collectLeaves).orElse(false), block.map(SettlementBlock::byDeliveryman).orElse(false),
                 new MissionTab(SettlementWorld.missionOffer(level, pos), taken, settlers, OutcomeRules.get()),
                 BiomeInfo.of(level, pos, jobType, assignees),
-                blessingLeft(settlement, block, now));
+                blessingLeft(settlement, block, now),
+                jobType == ModJobs.CLERK.get() && block.map(found -> found.storage().isEmpty()).orElse(false));
     }
 
     /**
@@ -415,7 +434,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         List<MissionSettler> settlersLeft = missionTab.settlers().stream().filter(entry -> !entry.id().equals(settler)).toList();
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, left,
                 JobPlaces.lines(jobType, level, offeredJobs(), left.stream().map(Worker::assignee).toList(), autoJobs()), collectLeaves, byDeliveryman,
-                new MissionTab(missionTab.offer(), takenLeft, settlersLeft, missionTab.rules()), biome, blessingLeft);
+                new MissionTab(missionTab.offer(), takenLeft, settlersLeft, missionTab.rules()), biome, blessingLeft, storageUnlinked);
     }
 
     /**
@@ -423,7 +442,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withLeavesToggled() {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, workers, places, !collectLeaves,
-                byDeliveryman, missionTab, biome, blessingLeft);
+                byDeliveryman, missionTab, biome, blessingLeft, storageUnlinked);
     }
 
     /**
@@ -431,7 +450,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withDeliveryToggled() {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, workers, places, collectLeaves,
-                !byDeliveryman, missionTab, biome, blessingLeft);
+                !byDeliveryman, missionTab, biome, blessingLeft, storageUnlinked);
     }
 
     /**
@@ -454,7 +473,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
 
     private JobBlockInfo withMissionTab(MissionTab changed) {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, workers, places, collectLeaves, byDeliveryman,
-                changed, biome, blessingLeft);
+                changed, biome, blessingLeft, storageUnlinked);
     }
 
     /**
@@ -485,6 +504,6 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public static JobBlockInfo unknown(Job jobType, int jobLevel) {
         return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, List.of(), JobPlaces.lines(jobType, jobLevel, List.of()), false, false,
-                MissionTab.EMPTY, BiomeInfo.NONE, 0L);
+                MissionTab.EMPTY, BiomeInfo.NONE, 0L, false);
     }
 }

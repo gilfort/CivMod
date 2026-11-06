@@ -723,7 +723,7 @@ final class ProducingLoop implements CategoryLoop {
             }
             case CRAFT -> craft(level, job, site.get(), round, target);
             case DELIVER -> {
-                if (!deliver(level, job, round, visit != null && visit.counter(), dayTime)) {
+                if (!deliver(level, job, round, dayTime)) {
                     workplace.setDropOffPending(true);
                 }
                 visit = null;
@@ -985,13 +985,14 @@ final class ProducingLoop implements CategoryLoop {
     }
 
     /**
-     * Delivers the round's item to the posting Clerk (an always-produce round: the Home Clerk; under its access rule),
-     * ends the claim and lets the Clerk check its rules. On "Deliveryman" the item goes into the own drop-off instead, with a result delivery for the Clerk
+     * Delivers the round's item to the posting Clerk (an always-produce round: the Home Clerk),
+     * ends the claim and lets the Clerk check its rules (a Clerk takes the item into its linked containers at any time). On "Deliveryman" the item goes into the own drop-off instead, with a result delivery for the Clerk
      * (in delivery for its rules until a Deliveryman brought it).
      *
+     * @param dayTime the day time for the rule check afterwards (catch-up passes its simulated time)
      * @return whether everything fit (otherwise the rest waits in the buffer for the own drop-off)
      */
-    private boolean deliver(ServerLevel level, SettlerJob job, Round round, boolean atCounter, long dayTime) {
+    private boolean deliver(ServerLevel level, SettlerJob job, Round round, long dayTime) {
         Workplace workplace = shell.workplace(job.jobBlock());
         JobBuffer buffer = workplace.buffer();
         List<ItemStack> product = buffer.takeAll(stack -> stack.is(round.item));
@@ -1002,8 +1003,8 @@ final class ProducingLoop implements CategoryLoop {
         Optional<BlockPos> target = target(data, site, round);
         Optional<BlockPos> dropOff = target.isPresent() ? site.filter(found -> found.block().byDeliveryman()).map(JobBlockSite::dropOff)
                 : Optional.empty();
-        Stock stock = dropOff.map(pos -> ClerkStorage.stock(level, pos, dayTime, false))
-                .orElseGet(() -> target.map(clerk -> ClerkStorage.stock(level, clerk, dayTime, atCounter)).orElse(Stock.EMPTY));
+        Stock stock = dropOff.map(pos -> ClerkStorage.dropOff(level, pos))
+                .orElseGet(() -> target.map(clerk -> ClerkStorage.dropOff(level, clerk)).orElse(Stock.EMPTY));
         for (ItemStack stack : product) {
             ItemStack left = stock.insert(stack);
             if (!left.isEmpty()) {
@@ -1419,7 +1420,7 @@ final class ProducingLoop implements CategoryLoop {
                 }
             }
             if (workplace.round() == round && round.phase == Round.Phase.DELIVER
-                    && !deliver(level, job, round, true, DayClock.dayTime((long) clock))
+                    && !deliver(level, job, round, DayClock.dayTime((long) clock))
                     && !deliverToDropOff(level, site)) {
                 shell.endCatchUpJob(jobBlock);
                 return new SimulatedWork(operations, ticks);
@@ -1456,7 +1457,7 @@ final class ProducingLoop implements CategoryLoop {
     public void forget(BlockPos jobBlock) {
         if (settler.level() instanceof ServerLevel level && release(level, jobBlock)) {
             JobBlockSite.at(level, jobBlock).filter(site -> level.isLoaded(site.dropOff())).ifPresent(site -> {
-                Stock dropOff = ClerkStorage.stock(level, site.dropOff(), DayClock.dayTime(level), false);
+                Stock dropOff = ClerkStorage.dropOff(level, site.dropOff());
                 shell.workplace(jobBlock).buffer().deliver(stack -> stack.getCount() - dropOff.insert(stack).getCount());
             });
         }

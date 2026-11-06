@@ -198,7 +198,7 @@ public final class CollectionRecipeGameTests {
         BlockPos clerk = helper.absolutePos(clerkRelative);
         helper.assertValueEqual(JobBlockSite.blockAt(level, jobBlock).orElseThrow().homeClerk(), Optional.of(clerk), "Home Clerk");
         helper.assertTrue(StockRules.setRule(SettlementData.get(level), clerk, new StockRule(0, Items.MILK_BUCKET, 0, 1, 0, 0)), "Max rule set");
-        Container store = (Container) level.getBlockEntity(clerk);
+        Container store = ClerkGameTests.linkChest(helper, clerkRelative, clerkRelative.south());
         store.setItem(0, new ItemStack(Items.MILK_BUCKET, 1));
         Container collect = (Container) level.getBlockEntity(jobBlock);
         Settler settler = milkingFarmer(helper, jobBlock, 16);

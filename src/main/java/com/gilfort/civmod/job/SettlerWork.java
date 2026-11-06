@@ -157,7 +157,7 @@ public final class SettlerWork {
     private final SettlerNeeds needs;
     /** Where the settler delivers to (a Clerk drop-off takes at its counter). */
     private ClerkStorage.@Nullable Visit deliveryVisit;
-    /** Clerk JobBlocks whose counter this settler found unreachable, with the day (only their block slots that day). */
+    /** Clerk JobBlocks whose counter this settler found unreachable, with the day (a Clerk gives nothing out to it that day). */
     private final Map<BlockPos, Long> unreachableCounters = new HashMap<>();
     /** Reach of the current walking target (for a job step: the reach of its {@link JobStep.Walk}). */
     private double targetReach = REACH;
@@ -1833,8 +1833,8 @@ public final class SettlerWork {
      * @return false when the buffer is full as well (the job ends)
      */
     boolean deliverDirect(ServerLevel level, JobBlockSite site, List<ItemStack> stacks) {
-        // No walking in catch-up: the shift alone decides whether a Clerk drop-off takes into its linked storage.
-        Stock dropOff = ClerkStorage.stock(level, site.dropOff(), cuDayTime, true);
+        // No walking in catch-up; a Clerk drop-off takes into its linked storage at any time.
+        Stock dropOff = ClerkStorage.dropOff(level, site.dropOff());
         JobBuffer buffer = workplace(site.pos()).buffer();
         for (ItemStack stack : stacks) {
             ItemStack rest = dropOff.insert(stack);
@@ -1862,13 +1862,13 @@ public final class SettlerWork {
     /**
      * Counters further away than this are assumed reachable: a path search only ends conclusively well within the
      * follow range (32). Further away it is cut off (search range, node budget) and would make a reachable counter
-     * unreachable for the whole day, leaving only the Clerk's block slots. Loops that decide again on the way check
+     * unreachable for the whole day, leaving a Clerk giving nothing out. Loops that decide again on the way check
      * once the settler comes this close.
      */
     private static final double COUNTER_PATH_CHECK = 16.0;
 
     /**
-     * A visit as this settler can make it: a counter it cannot walk to only offers the Clerk's block slots (checked
+     * A visit as this settler can make it: a counter it cannot walk to offers nothing of a Clerk (checked
      * with one path search when the walk starts, remembered for the day).
      *
      * @param level the level
@@ -2347,7 +2347,7 @@ public final class SettlerWork {
                     block(level, job.jobBlock(), JobStatus.STORAGE_FULL);
                 }
             } else {
-                deliver(level, job, deliveryVisit != null && deliveryVisit.counter());
+                deliver(level, job);
             }
             if (status(job.jobBlock()).waitsForRoom()) {
                 markFullAfterWork(level, job);
@@ -2374,17 +2374,16 @@ public final class SettlerWork {
     }
 
     /**
-     * Delivers the buffer of a job into its drop-off, under the access rule if the drop-off is a Clerk.
+     * Delivers the buffer of a job into its drop-off (a Clerk takes it into its linked containers at any time).
      *
      * @param job       the job (what its loop keeps stays in the buffer)
-     * @param atCounter whether the settler stands at the counter of a working Clerk
      */
-    private void deliver(ServerLevel level, SettlerJob job, boolean atCounter) {
+    private void deliver(ServerLevel level, SettlerJob job) {
         BlockPos jobBlock = job.jobBlock();
         JobBuffer buffer = buffer(jobBlock);
         Optional<JobBlockSite> site = JobBlockSite.at(level, jobBlock);
         BlockPos dropOff = site.map(JobBlockSite::dropOff).orElse(jobBlock);
-        Stock stock = ClerkStorage.stock(level, dropOff, DayClock.dayTime(level), atCounter);
+        Stock stock = ClerkStorage.dropOff(level, dropOff);
         boolean all = !stock.isEmpty() && buffer.deliver(stack -> stack.getCount() - stock.insert(stack).getCount(),
                 stack -> kept(job, stack));
         if (!all) {

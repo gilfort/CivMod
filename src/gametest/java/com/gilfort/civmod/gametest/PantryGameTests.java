@@ -100,7 +100,8 @@ public final class PantryGameTests {
             helper.assertTrue(pantry.getContainerSize() == expected[jobLevel - 1] && handler != null && handler.size() == expected[jobLevel - 1],
                     "Pantry level " + jobLevel + " has " + expected[jobLevel - 1] + " slots, hoppers see them");
         }
-        helper.assertTrue(SettlementRules.storageSlots(ModJobs.CLERK.get(), 5) == 27, "Other JobBlocks keep 27 slots");
+        helper.assertTrue(SettlementRules.storageSlots(ModJobs.CLERK.get(), 5) == 0, "A Clerk JobBlock has no slots");
+        helper.assertTrue(SettlementRules.storageSlots(ModJobs.CRAFTSPERSON.get(), 5) == 27, "Other JobBlocks keep 27 slots");
 
         helper.assertTrue(pantry.canPlaceItem(0, new ItemStack(Items.BREAD)), "Bread by hand");
         helper.assertFalse(pantry.canPlaceItem(0, new ItemStack(Items.COBBLESTONE)), "No cobblestone by hand");
@@ -134,7 +135,10 @@ public final class PantryGameTests {
         helper.assertTrue(data.settlementAt(far).filter(s -> s == settlement).isPresent(), "Both Pantries in one settlement");
         helper.assertTrue(food(level, settlement, from, ClerkGameTests.MORNING, Optional.empty(), pos -> true).isEmpty(), "No food anywhere");
 
-        ((Container) level.getBlockEntity(clerk)).setItem(0, new ItemStack(Items.BREAD, 3));
+        helper.setBlock(new BlockPos(4, 1, 7), net.minecraft.world.level.block.Blocks.CHEST);
+        helper.assertTrue(JobAssignments.cycleClerkPoint(data, clerk, helper.absolutePos(new BlockPos(4, 1, 7)), true, false,
+                net.minecraft.core.Direction.NORTH) == JobAssignments.PointResult.STORAGE, "Chest linked to the Clerk");
+        ((Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 7)))).setItem(0, new ItemStack(Items.BREAD, 3));
         helper.assertTrue(food(level, settlement, from, ClerkGameTests.MORNING, Optional.empty(), pos -> true).isEmpty(),
                 "A Clerk is no food point any more");
 
