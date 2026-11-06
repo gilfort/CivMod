@@ -222,6 +222,93 @@ public final class Stock {
     }
 
     /**
+     * Reads the real containers once (for the Clerk's storage terminal). Stacks with different components stay apart.
+     * What is reserved for others is taken off the entries of that item, the entry without components first.
+     *
+     * @return how many of each resource are reachable, in no particular order
+     */
+    public Map<ItemResource, Long> entries() {
+        Map<ItemResource, Long> entries = new HashMap<>();
+        for (Part part : parts) {
+            ResourceHandler<ItemResource> handler = part.handler();
+            for (int i = 0; i < handler.size(); i++) {
+                ItemResource resource = handler.getResource(i);
+                if (!resource.isEmpty()) {
+                    entries.merge(resource, handler.getAmountAsLong(i), Long::sum);
+                }
+            }
+        }
+        reserved.forEach((item, count) -> {
+            long rest = count;
+            ItemResource plain = ItemResource.of(item);
+            rest = reduce(entries, plain, rest);
+            for (ItemResource resource : List.copyOf(entries.keySet())) {
+                if (rest <= 0) {
+                    break;
+                }
+                if (resource.getItem() == item) {
+                    rest = reduce(entries, resource, rest);
+                }
+            }
+        });
+        return entries;
+    }
+
+    /** Takes up to {@code rest} off one entry and returns what is left to take off. */
+    private static long reduce(Map<ItemResource, Long> entries, ItemResource resource, long rest) {
+        Long held = entries.get(resource);
+        if (held == null || rest <= 0) {
+            return rest;
+        }
+        long off = Math.min(held, rest);
+        if (held - off > 0) {
+            entries.put(resource, held - off);
+        } else {
+            entries.remove(resource);
+        }
+        return rest - off;
+    }
+
+    /**
+     * Takes up to {@code count} of one exact resource (item and components), container by container, leaving what is
+     * reserved for others.
+     *
+     * @param resource the resource
+     * @param count    how many at most
+     * @return the taken stack, empty if none
+     */
+    public ItemStack take(ItemResource resource, int count) {
+        Item item = resource.getItem();
+        int rest = reserved.containsKey(item) ? Math.min(count, available(item)) : count;
+        int total = 0;
+        for (Part part : parts) {
+            if (rest <= 0) {
+                break;
+            }
+            ResourceHandler<ItemResource> handler = part.handler();
+            for (int i = 0; i < handler.size() && rest > 0; i++) {
+                if (!handler.getResource(i).equals(resource)) {
+                    continue;
+                }
+                long mark = part.tracker().mark();
+                try (Transaction transaction = Transaction.openRoot()) {
+                    int extracted = handler.extract(i, resource, rest, transaction);
+                    transaction.commit();
+                    if (extracted > 0) {
+                        part.tracker().changed(mark, resource, -extracted);
+                        total += extracted;
+                        rest -= extracted;
+                    }
+                }
+            }
+            if (rest > 0) {
+                part.tracker().drained(item);
+            }
+        }
+        return total > 0 ? resource.toStack(total) : ItemStack.EMPTY;
+    }
+
+    /**
      * @param kind which items count
      * @return whether any of them is reachable
      */

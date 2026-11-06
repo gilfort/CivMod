@@ -10,13 +10,17 @@ import com.gilfort.civmod.job.NeedsReport;
 import com.gilfort.civmod.job.ToolTexts;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
+import com.gilfort.civmod.menu.StorageTerminal;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.SettlerJobs;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.ConfirmScreen;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -24,6 +28,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
  * Screen of a settler: Overview (name, status, settlement, dismiss when homeless), Jobs (priority list; "⇄" opens the
@@ -58,6 +63,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
 
     /** The job whose switcher the Jobs tab shows, -1 for the priority list. */
     private int switching = -1;
+    private final StorageTabView storage;
 
     /**
      * @param menu      the menu
@@ -66,15 +72,39 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
      */
     public SettlerScreen(SettlerMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, 176, SettlerMenu.IMAGE_HEIGHT, List.of(
+                new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.storage"), new ItemStack(Items.BARREL)),
                 new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.overview"), new ItemStack(Items.PLAYER_HEAD)),
                 new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.jobs"), new ItemStack(Items.IRON_PICKAXE)),
                 new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.inventory"), new ItemStack(Items.CHEST)),
                 new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.needs"), new ItemStack(Items.BREAD)),
                 new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.mission"), new ItemStack(Items.MAP))));
+        this.storage = new StorageTabView(this, menu);
+    }
+
+    /**
+     * Client handler of {@link StorageTerminal.Sync}: updates the open settler window's Storage tab.
+     *
+     * @param payload the payload
+     * @param context the payload context
+     */
+    public static void handleTerminal(StorageTerminal.Sync payload, IPayloadContext context) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player == null || !(minecraft.player.containerMenu instanceof SettlerMenu open)) {
+            return;
+        }
+        boolean shownChanged = payload.applyTo(open);
+        if (minecraft.gui.screen() instanceof SettlerScreen screen && screen.menu == open) {
+            screen.storage.dataChanged();
+            if (shownChanged) {
+                // The settler lost or got the Clerk job: the Storage tab goes or comes.
+                screen.rebuildWidgets();
+            }
+        }
     }
 
     @Override
     protected void initContent() {
+        storage.init(imageWidth);
         SettlerInfo info = menu.getInfo();
         if (info.homeless()) {
             addTabWidget(SettlerMenu.TAB_OVERVIEW, Button.builder(Component.translatable("civmod.gui.settler.dismiss"), button -> confirmDismiss())
@@ -175,6 +205,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
     protected void extractTabLabels(GuiGraphicsExtractor graphics, int tab, int mouseX, int mouseY) {
         SettlerInfo info = menu.getInfo();
         switch (tab) {
+            case SettlerMenu.TAB_STORAGE -> storage.extractLabels(graphics, mouseX, mouseY);
             case SettlerMenu.TAB_OVERVIEW -> {
                 graphics.text(font, Component.translatable("civmod.gui.settler.name", info.name()), CivGui.PADDING, 22, CivGui.LABEL_COLOR, false);
                 graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.settler.status", info.status()), imageWidth - 2 * CivGui.PADDING),
@@ -309,8 +340,41 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         return index >= 0 && index < info.jobStates().size() ? java.util.Optional.of(info.jobStates().get(index)) : java.util.Optional.empty();
     }
 
+    private boolean onStorageTab() {
+        return menu.getActiveTab() == SettlerMenu.TAB_STORAGE;
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        return onStorageTab() && storage.mouseClicked(event) || super.mouseClicked(event, doubleClick);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        return onStorageTab() && storage.mouseScrolled(scrollY) || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
+        return onStorageTab() && storage.mouseDragged(event) || super.mouseDragged(event, dx, dy);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        return storage.mouseReleased() || super.mouseReleased(event);
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        return onStorageTab() && storage.keyPressed(event) || super.keyPressed(event);
+    }
+
     @Override
     protected List<Component> helpLines(int tab) {
+        if (tab == SettlerMenu.TAB_STORAGE) {
+            return List.of(Component.translatable("civmod.gui.storage.help.take"), Component.translatable("civmod.gui.storage.help.store"),
+                    Component.translatable("civmod.gui.storage.help.shift"));
+        }
         if (tab >= SettlerMenu.FIRST_JOB_TAB) {
             return List.of(Component.translatable("civmod.gui.settler.help.cap"));
         }
@@ -323,9 +387,12 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         return List.of();
     }
 
-    /** The Mission tab only for settlers with a Mission Job (linked to a Mission Board). */
+    /** The Storage tab only for Clerks, the Mission tab only for settlers with a Mission Job (linked to a Mission Board). */
     @Override
     protected boolean isTabShown(int tab) {
+        if (tab == SettlerMenu.TAB_STORAGE) {
+            return menu.terminal().available();
+        }
         return tab != SettlerMenu.TAB_MISSION || menu.getInfo().missionJob().isPresent();
     }
 
@@ -337,6 +404,9 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
 
     @Override
     protected void extractTabBackground(GuiGraphicsExtractor graphics, int tab, int mouseX, int mouseY) {
+        if (tab == SettlerMenu.TAB_STORAGE) {
+            storage.extractBackground(graphics);
+        }
         if (tab == SettlerMenu.TAB_OVERVIEW) {
             int x = leftPos + CivGui.PADDING + font.width(Component.translatable("civmod.gui.settler.food")) + 4;
             CivGui.foodBar(graphics, x, topPos + FOOD_Y - 1, menu.getInfo().food().level(), menu.getInfo().food().saturation());

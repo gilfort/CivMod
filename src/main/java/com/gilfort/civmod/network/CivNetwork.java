@@ -14,6 +14,7 @@ import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.menu.SettlerMenu;
+import com.gilfort.civmod.menu.StorageTerminal;
 import com.gilfort.civmod.menu.StationTypesTabData;
 import com.gilfort.civmod.menu.StockTab;
 import com.gilfort.civmod.menu.WorkersTab;
@@ -121,6 +122,12 @@ public final class CivNetwork {
                         payload.handle(player);
                     }
                 });
+        registrar.playToServer(StorageTerminal.Click.TYPE, StorageTerminal.Click.STREAM_CODEC, (payload, context) -> {
+            if (context.player() instanceof ServerPlayer player) {
+                payload.handle(player);
+            }
+        });
+        registrar.playToClient(StorageTerminal.Sync.TYPE, StorageTerminal.Sync.STREAM_CODEC);
         // Client handler is registered in CivModClient (RegisterClientPayloadHandlersEvent).
         registrar.playToClient(JobPicker.Open.TYPE, JobPicker.Open.STREAM_CODEC);
         registrar.playToClient(JobPicker.OpenReplace.TYPE, JobPicker.OpenReplace.STREAM_CODEC);
