@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:laborer_limit_and_shared_place",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 120
+}

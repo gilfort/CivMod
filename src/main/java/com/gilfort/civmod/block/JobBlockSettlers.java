@@ -30,8 +30,9 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
  * How many settlers hold a Job at a JobBlock per level (vault {@code Systems/JobBlock.md}), from
  * {@code data/<namespace>/civmod_job_blocks/<job>.json} for the Base Job {@code <namespace>:<job>}:
  * {@code "settlers": [1, 1, 2, 2, 3]} (one number per level, 1 to {@value SettlementRules#MAX_SETTLERS}; the last pack
- * naming a list wins). A Job without a list has 1 place on every level. Other entries in the file (the upgrade costs of
- * the former {@code civmod_upgrades} files) are ignored.
+ * naming a list wins). A Job without a list has 1 place on every level. {@code "laborers": 2} sets how many Laborers
+ * help at a Resource Collection JobBlock of the Base Job ({@value #DEFAULT_LABORERS} without it). Other entries in the
+ * file (the upgrade costs of the former {@code civmod_upgrades} files) are ignored.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class JobBlockSettlers {
@@ -45,9 +46,42 @@ public final class JobBlockSettlers {
     /** Settlers per level: one entry per JobBlock level, each 1 to {@value SettlementRules#MAX_SETTLERS}. */
     private static final Codec<List<Integer>> SETTLERS_CODEC = Codec.intRange(1, SettlementRules.MAX_SETTLERS)
             .listOf(SettlementRules.MAX_LEVEL, SettlementRules.MAX_LEVEL);
-    private static Map<Job, List<Integer>> loaded = Map.of();
+    /** The key of the Laborers limit. */
+    private static final String LABORERS_KEY = "laborers";
+    /** Laborers a JobBlock takes without a value in a file (vault {@code Jobs/Laborer.md}). */
+    public static final int DEFAULT_LABORERS = 2;
+    /** What the files of one pack set say; later packs replace earlier values. */
+    private record Loaded(Map<Job, List<Integer>> settlers, Map<Job, Integer> laborers) {
+    }
+
+    private static Loaded loaded = new Loaded(Map.of(), Map.of());
 
     private JobBlockSettlers() {
+    }
+
+    /**
+     * @param baseJob a Base Job
+     * @return how many Laborers help at a JobBlock of that Base Job at most ({@code "laborers": 2} in its file;
+     *         {@value #DEFAULT_LABORERS} without one, 0 switches the help off)
+     */
+    public static int laborers(Job baseJob) {
+        return loaded.laborers().getOrDefault(baseJob, DEFAULT_LABORERS);
+    }
+
+    /**
+     * Merges the {@code laborers} values of one job's files in order (a later value replaces an earlier one).
+     *
+     * @param files parsed JSON files of one job, in pack order
+     * @return the Laborers limit, empty if no file names one
+     */
+    public static Optional<Integer> mergeLaborers(List<JsonElement> files) {
+        Optional<Integer> merged = Optional.empty();
+        for (JsonElement file : files) {
+            if (file.isJsonObject() && file.getAsJsonObject().has(LABORERS_KEY)) {
+                merged = Optional.of(Codec.intRange(0, SettlementRules.MAX_SETTLERS).parse(JsonOps.INSTANCE, file.getAsJsonObject().get(LABORERS_KEY)).getOrThrow());
+            }
+        }
+        return merged;
     }
 
     /**
@@ -56,7 +90,7 @@ public final class JobBlockSettlers {
      * @return how many settlers hold the Job at a JobBlock of that level
      */
     public static int settlers(Job job, int level) {
-        List<Integer> settlers = loaded.get(job);
+        List<Integer> settlers = loaded.settlers().get(job);
         return settlers == null ? 1 : settlers.get(SettlementRules.clampLevel(level) - SettlementRules.MIN_LEVEL);
     }
 
@@ -82,10 +116,10 @@ public final class JobBlockSettlers {
         event.addListener(ID, new Loader());
     }
 
-    private static final class Loader extends SimplePreparableReloadListener<Map<Job, List<Integer>>> {
+    private static final class Loader extends SimplePreparableReloadListener<Loaded> {
 
         @Override
-        protected Map<Job, List<Integer>> prepare(ResourceManager manager, ProfilerFiller profiler) {
+        protected Loaded prepare(ResourceManager manager, ProfilerFiller profiler) {
             Map<Job, List<JsonElement>> files = new HashMap<>();
             FILES.listMatchingResourceStacks(manager).entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
                 Job job = ModJobs.REGISTRY.getValue(FILES.fileToId(entry.getKey()));
@@ -102,6 +136,7 @@ public final class JobBlockSettlers {
                 }
             });
             Map<Job, List<Integer>> settlers = new HashMap<>();
+            Map<Job, Integer> laborers = new HashMap<>();
             files.forEach((job, list) -> {
                 try {
                     merge(list).ifPresent(perLevel -> settlers.put(job, perLevel));
@@ -109,12 +144,18 @@ public final class JobBlockSettlers {
                     CivMod.LOGGER.error("Invalid settlers for {} (a list of {} numbers from 1 to {}), its JobBlock holds 1", job,
                             SettlementRules.MAX_LEVEL, SettlementRules.MAX_SETTLERS, e);
                 }
+                try {
+                    mergeLaborers(list).ifPresent(limit -> laborers.put(job, limit));
+                } catch (Exception e) {
+                    CivMod.LOGGER.error("Invalid laborers for {} (a number from 0 to {}), its JobBlock takes {}", job,
+                            SettlementRules.MAX_SETTLERS, DEFAULT_LABORERS, e);
+                }
             });
-            return Map.copyOf(settlers);
+            return new Loaded(Map.copyOf(settlers), Map.copyOf(laborers));
         }
 
         @Override
-        protected void apply(Map<Job, List<Integer>> prepared, ResourceManager manager, ProfilerFiller profiler) {
+        protected void apply(Loaded prepared, ResourceManager manager, ProfilerFiller profiler) {
             loaded = prepared;
         }
     }

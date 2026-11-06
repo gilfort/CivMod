@@ -102,7 +102,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
             // Delivered first: nothing else would deliver a small harvest.
             return shell.deliverable(job) ? JobStep.DELIVER : fetchTool(level, site, missing.get(), dayTime, JobStatus.FETCHING_TOOL);
         }
-        BlockPos poi = workplace.workPlaceOfDay(level, settler, profile, site, day);
+        BlockPos poi = placeOfDay(level, job, profile, site, workplace, day);
         if (poi == null) {
             if (workplace.noFreeWorkPlace()) {
                 return JobStep.blocked(JobStatus.NO_FREE_WORK_PLACE);
@@ -133,6 +133,15 @@ final class ResourceCollectionLoop implements CategoryLoop {
         step = Step.WORK;
         showTool(job, profile);
         return JobStep.walk(poi, profile.reach(), JobStatus.WORKING);
+    }
+
+    /**
+     * The work place of the day: an employee chooses one and occupies it, a Laborer helping at the block shares the one
+     * its employee (or the first Laborer) chose ({@link Laborer#place}).
+     */
+    private @Nullable BlockPos placeOfDay(ServerLevel level, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site, Workplace workplace, long day) {
+        return shell.laborer().isHelper(job) ? shell.laborer().place(level, job, profile, site, workplace, day)
+                : workplace.workPlaceOfDay(level, settler, profile, site, day);
     }
 
     private JobStep fetchTool(ServerLevel level, JobBlockSite site, WorkRules.MissingTool tool, long dayTime, JobStatus status) {
@@ -240,7 +249,8 @@ final class ResourceCollectionLoop implements CategoryLoop {
             return;
         }
         JobBuffer buffer = shell.workplace(jobBlock).buffer();
-        WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site.get(), shell.workplace(jobBlock), poi, 1.0,
+        // A Laborer works a fraction of the tick: the rolls come slower, the rules stay the same.
+        WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site.get(), shell.workplace(jobBlock), poi, shell.laborer().speed(job),
                 WorkRules.ToolSupply.BELT, new BufferOutput(buffer, stacks -> {
                     stacks.forEach(buffer::add);
                     return !buffer.isFull();
@@ -265,7 +275,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
         }
         Workplace workplace = shell.workplace(job.jobBlock());
         if (workplace.scan() == null) {
-            BlockPos poi = workplace.workPlaceOfDay(level, settler, profile.get(), site, day);
+            BlockPos poi = placeOfDay(level, job, profile.get(), site, workplace, day);
             if (poi == null) {
                 return true;
             }
@@ -290,14 +300,20 @@ final class ResourceCollectionLoop implements CategoryLoop {
         Optional<JobBlockSite> found = JobBlockSite.at(level, job.jobBlock());
         Optional<ResourceCollectionProfile> profile = job.jobType().profile(ResourceCollectionProfile.class);
         Workplace workplace = shell.workplace(job.jobBlock());
+        if (found.isPresent() && profile.isPresent() && workplace.scan() == null && shell.laborer().isHelper(job)) {
+            // A Laborer takes the scan its JobBlock kept for the Job, along with the shared work place.
+            placeOfDay(level, job, profile.get(), found.get(), workplace, day);
+        }
         BlockPos poi = found.isEmpty() || profile.isEmpty() || workplace.scan() == null ? null
-                : workplace.workPlaceOfDay(level, settler, profile.get(), found.get(), day);
+                : placeOfDay(level, job, profile.get(), found.get(), workplace, day);
         if (poi == null) {
             shell.endCatchUpJob(job.jobBlock());
             return new SimulatedWork(0, workTicks);
         }
         JobBlockSite site = found.get();
-        WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site, workplace, poi, workTicks,
+        // A Laborer works at a fraction of the speed: the same time gives fewer work ticks.
+        double speed = shell.laborer().speed(job);
+        WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site, workplace, poi, workTicks * speed,
                 WorkRules.ToolSupply.beltAnd(ClerkStorage.stock(level, site.collect(), shell.catchUpDayTime(), true),
                         () -> ClerkCounter.handOut(level, site.collect(), false), simulatedGameTime(level, day)), new BufferOutput(workplace.buffer(), stacks -> shell.deliverDirect(level, site, stacks)));
         if (result.end() == WorkRules.End.NONE) {
@@ -305,6 +321,6 @@ final class ResourceCollectionLoop implements CategoryLoop {
         }
         shell.endCatchUpJob(job.jobBlock());
         // The next job takes over the rest of the time.
-        return new SimulatedWork(result.rolls(), result.ticksLeft());
+        return new SimulatedWork(result.rolls(), result.ticksLeft() / speed);
     }
 }

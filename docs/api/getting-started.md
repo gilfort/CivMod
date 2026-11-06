@@ -153,6 +153,7 @@ The window's tabs follow the category: Resource Collection → Storage, Info, Fo
 ```
 
 - settlers per level in `data/<namespace>/civmod_job_blocks/<job>.json`: `"settlers": [1, 1, 2, 2, 3]` (one number per JobBlock level 1–5, each 1–10). That many settlers hold the Base Job and its Specializations at the JobBlock, each in any Job unlocked there. Without the file or list the Job has 1 place on every level; other entries in the file are ignored. CivMod's values: Producing 1 / 1 / 2 / 2 / 3, Resource Collection 1, Mission Board (`adventurer`) 1 / 2 / 4 / 6 / 10, Clerk 1, Deliveryman (own places on the Clerk JobBlock) 1 / 2 / 4 / 6 / 8.
+- Laborers in the same file: `"laborers": 2` (0–10, default 2) is how many settlers without work help at a Resource Collection JobBlock of this Base Job, at a quarter of an employee's speed; 0 switches the help off at these blocks. See [Resource Collection](resource-collection.md#laborers).
 
 Your JobBlock needs no upgrade costs: every JobBlock, addon ones included, is upgraded with CivMod's four JobBlock Upgrade items (Lv 2–5, crafted around the Scroll of Assignment; their recipes `civmod:job_block_upgrade_2` … `_5` can be replaced by datapack). An Upgrade item works only when a settler at the block has reached its skill cap.
 
@@ -166,7 +167,7 @@ Packs can override a Job's balancing values per job id in `data/<namespace>/civm
 { "hunger_factor": 0.8, "base_exp": 10, "job_factor": 1.2, "unlock_item": "minecraft:stonecutter" }
 ```
 
-`unlock_item` overrides the builder's `unlockItem`. All values are optional; later packs override earlier ones per value. In `civmod_job_blocks`, a later `settlers` list replaces an earlier one.
+`unlock_item` overrides the builder's `unlockItem`. All values are optional; later packs override earlier ones per value. In `civmod_job_blocks`, a later `settlers` list or `laborers` value replaces an earlier one.
 
 `xp` sets the XP (vanilla-style experience, independent of EXP) of the Job's actions. It replaces the Job's whole default, and a later file replaces the whole list:
 

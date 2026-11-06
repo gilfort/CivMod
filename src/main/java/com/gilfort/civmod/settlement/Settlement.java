@@ -91,6 +91,8 @@ public final class Settlement {
     private final Map<BlockPos, List<Reservations.Reservation>> reservations = new HashMap<>();
     /** Occupied work place → who occupies it (not saved, see {@link OccupiedPlaces}). */
     private final Map<BlockPos, OccupiedPlaces.Occupation> occupied = new HashMap<>();
+    /** JobBlock → the Laborers helping there (not saved, see {@link Laborers}). */
+    private final Map<BlockPos, Laborers.Crew> crews = new HashMap<>();
     /** The hearths inside the border (see {@link Hearths}). */
     private final Set<BlockPos> hearths = new HashSet<>();
     /** The {@link #borderHash()} the hearths were looked for at. */
@@ -411,6 +413,10 @@ public final class Settlement {
         return occupied;
     }
 
+    Map<BlockPos, Laborers.Crew> mutableCrews() {
+        return crews;
+    }
+
     void setName(Optional<String> name) {
         this.name = name;
     }
@@ -445,6 +451,8 @@ public final class Settlement {
         reservations.remove(pos);
         // The work places its settlers occupied are free again.
         occupied.values().removeIf(occupation -> occupation.jobBlock().equals(pos));
+        // Its Laborers stop helping there.
+        crews.remove(pos);
         return blocks.remove(pos);
     }
 }
