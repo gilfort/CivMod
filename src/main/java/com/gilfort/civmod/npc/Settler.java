@@ -271,6 +271,8 @@ public class Settler extends PathfinderMob {
             com.gilfort.civmod.settlement.Deliveries.dropCarried(SettlementData.get(server), getUUID());
             // Its work places are free for the other settlers again.
             OccupiedPlaces.releaseAll(SettlementData.get(server), getUUID());
+            // It helps nowhere any more.
+            com.gilfort.civmod.settlement.Laborers.leave(SettlementData.get(server), getUUID());
         }
         super.remove(reason);
     }

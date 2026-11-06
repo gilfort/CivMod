@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:laborer_switches_to_higher_job",
+  "max_ticks": 1500,
+  "structure": "minecraft:empty",
+  "padding": 120
+}

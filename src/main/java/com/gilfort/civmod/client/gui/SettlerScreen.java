@@ -260,7 +260,9 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                     });
                     y += rowHeight(info, i);
                 }
-                graphics.text(font, Component.translatable("civmod.gui.settler.laborer"), CivGui.PADDING, y, CivGui.HINT_COLOR, false);
+                Component laborer = info.helping().map(job -> Component.translatable("civmod.gui.settler.laborer.helping", job.displayName()))
+                        .orElseGet(() -> Component.translatable("civmod.gui.settler.laborer"));
+                graphics.text(font, CivGui.fit(font, laborer, imageWidth - 2 * CivGui.PADDING), CivGui.PADDING, y, CivGui.HINT_COLOR, false);
             }
             case SettlerMenu.TAB_INVENTORY -> {
                 graphics.text(font, Component.translatable("civmod.gui.settler.tools"), CivGui.PADDING, SettlerMenu.BELT_Y - 10, CivGui.LABEL_COLOR, false);

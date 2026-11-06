@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:laborer_skips_block_without_tool",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 120
+}
