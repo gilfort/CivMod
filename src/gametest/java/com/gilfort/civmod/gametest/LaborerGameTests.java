@@ -14,6 +14,7 @@ import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
@@ -22,6 +23,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
@@ -69,6 +71,9 @@ public final class LaborerGameTests {
             register(helper, "laborer_works_and_levels", LaborerGameTests::worksAndLevels);
             register(helper, "laborer_speed_quarter", LaborerGameTests::speedQuarter);
             register(helper, "laborer_window_label", LaborerGameTests::windowLabel);
+            register(helper, "laborer_keeps_buffer_when_job_changes", LaborerGameTests::keepsBufferWhenJobChanges);
+            register(helper, "laborer_catch_up_with_jobs", LaborerGameTests::catchUpWithJobs);
+            register(helper, "laborer_limit_values", LaborerGameTests::limitValues);
         });
     }
 
@@ -246,6 +251,8 @@ public final class LaborerGameTests {
         helper.assertTrue(bare.getWork().helping().isEmpty(), "Skips the block: " + bare.getWork().helping());
         helper.assertTrue(bare.getWork().status(block) == JobStatus.NO_TOOL, "Why: " + bare.getWork().status(block));
         helper.assertTrue(Laborers.count(settlement(helper), block) == 0, "Not in the crew");
+        helper.assertTrue(bare.getWork().recentThoughts().stream().noneMatch(show -> show.bubble() == ThoughtBubble.NO_TOOL && show.on()),
+                "Problem bubbles stay with the settler's own Jobs: " + bare.getWork().recentThoughts());
         bare.discard();
         helper.succeed();
     }
@@ -360,6 +367,106 @@ public final class LaborerGameTests {
         settler.getWork().setCatchUp(from, from + WINDOW);
         CatchUp.runNow(level, List.of(settler));
         return settler.getWork().buffer(jobBlock).count() - before;
+    }
+
+    /**
+     * A Laborer helps the Job of a Gatherer block (the Base Job) and carries berries; an employee with a Specialization
+     * arrives, so the Job it helps changes. What it carries stays in its buffer, it is not dropped.
+     */
+    private static void keepsBufferWhenJobChanges(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos relative = GathererGameTests.gathererBlock(helper);
+        for (int x = 5; x < 8; x++) {
+            helper.setBlock(new BlockPos(x, 1, 5), GathererGameTests.bush(3));
+        }
+        StationTypeGameTests.setLevel(helper, relative, 2);
+        BlockPos block = helper.absolutePos(relative);
+        SettlementData data = SettlementData.get(level);
+        TestAssignments.setStationType(data, block, 1, Items.BAMBOO);
+        Settler settler = settler(helper, "Carrier", new BlockPos(2, 1, 2), false);
+        settler.getWork().decideNow(level);
+        helper.assertTrue(settler.getWork().helping().map(SettlerJob::jobType).equals(Optional.of(ModJobs.GATHERER.get())),
+                "Helps the Base Job: " + settler.getWork().helping());
+        settler.getWork().buffer(block).add(new ItemStack(Items.SWEET_BERRIES, 3));
+        TestAssignments.assign(data, block, java.util.UUID.randomUUID(), "Boss", settlement(helper).id(), List.of(), ModJobs.PLANTATION_FARMER.get());
+        settler.getWork().decideNow(level);
+        helper.assertTrue(settler.getWork().helping().map(SettlerJob::jobType).filter(ModJobs.GATHERER.get()::equals).isEmpty(),
+                "No longer the Base Job: " + settler.getWork().helping());
+        helper.assertTrue(settler.getWork().buffer(block).count() == 3, "The berries stay in its buffer: " + settler.getWork().buffer(block).count());
+        settler.discard();
+        helper.succeed();
+    }
+
+    /**
+     * A settler whose own Job cannot work still helps in a catch-up: with no scan kept anywhere it prepares one for the
+     * block it would help, and the same time gives a quarter of an employee's output.
+     */
+    private static void catchUpWithJobs(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        floor(helper);
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(8, 0, -24));
+        BlockPos free = lumberjackBlock(helper, A, new BlockPos(0, 0, -18));
+        // The worker's own Job: a Lumberjack block without any log in reach.
+        TestSettlements.setBlock(helper, B, ModBlocks.LUMBERJACK_BLOCK.get());
+        BlockPos own = helper.absolutePos(B);
+        Settler worker = settler(helper, "Worker", new BlockPos(2, 1, 5), false);
+        hire(helper, worker, own);
+        Settler boss = settler(helper, "Boss", new BlockPos(2, 1, 3), false);
+        int cap = SettlementRules.skillCap(SettlementRules.MIN_LEVEL);
+        List.of(worker, boss).forEach(settler -> {
+            settler.getSkills().set(ModJobs.LUMBERJACK.get(), new SettlerSkills.Skill(cap, 0));
+            ItemStack axe = new ItemStack(Items.STONE_AXE);
+            axe.set(net.minecraft.core.component.DataComponents.MAX_DAMAGE, 100000);
+            settler.getInventory().setItem(Settler.BELT_START, axe);
+        });
+        Container container = (Container) level.getBlockEntity(free);
+        for (int i = 0; i < container.getContainerSize(); i++) {
+            container.setItem(i, new ItemStack(Items.COBBLESTONE, 64));
+        }
+        int[] stage = {0};
+        int[] helped = new int[1];
+        helper.onEachTick(() -> {
+            if (stage[0] == 0 && worker.getWork().catchUpReady(level)) {
+                helped[0] = caughtUp(level, worker, free);
+                hire(helper, boss, free);
+                stage[0] = 1;
+            } else if (stage[0] == 1 && boss.getWork().catchUpReady(level)) {
+                stage[0] = 2;
+                int employed = caughtUp(level, boss, free);
+                helper.assertTrue(employed >= 20, "The employee produced too little to compare: " + employed);
+                double ratio = helped[0] / (double) employed;
+                helper.assertTrue(ratio > 0.12 && ratio < 0.45, "Worker's help " + helped[0] + " vs employee " + employed + " (ratio "
+                        + String.format(java.util.Locale.ROOT, "%.2f", ratio) + ", expected about 0.25)");
+                worker.discard();
+                boss.discard();
+                forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+                helper.succeed();
+            }
+        });
+    }
+
+    /** The Laborers limit of a JobBlock file: 0 to 10, a later pack replaces an earlier value, a file without it keeps it. */
+    private static void limitValues(GameTestHelper helper) {
+        helper.assertTrue(JobBlockSettlers.mergeLaborers(files("{\"laborers\": 4}", "{\"settlers\": [1, 1, 1, 1, 1]}")).equals(Optional.of(4)),
+                "A file without the value keeps it");
+        helper.assertTrue(JobBlockSettlers.mergeLaborers(files("{\"laborers\": 4}", "{\"laborers\": 0}")).equals(Optional.of(0)), "A later pack wins, 0 is allowed");
+        helper.assertTrue(JobBlockSettlers.mergeLaborers(files("{\"laborers\": 10}")).equals(Optional.of(10)), "10 is allowed");
+        helper.assertTrue(JobBlockSettlers.mergeLaborers(files("{\"settlers\": [1, 1, 1, 1, 1]}")).isEmpty(), "No value, no limit");
+        for (String invalid : List.of("{\"laborers\": 11}", "{\"laborers\": -1}", "{\"laborers\": \"two\"}")) {
+            boolean rejected = false;
+            try {
+                JobBlockSettlers.mergeLaborers(files(invalid));
+            } catch (RuntimeException e) {
+                rejected = true;
+            }
+            helper.assertTrue(rejected, invalid + " is rejected");
+        }
+        helper.assertTrue(JobBlockSettlers.laborers(ModJobs.MINER.get()) == 2, "Two Laborers without a value in a file");
+        helper.succeed();
+    }
+
+    private static List<com.google.gson.JsonElement> files(String... json) {
+        return java.util.Arrays.stream(json).map(com.google.gson.JsonParser::parseString).toList();
     }
 
     /** The settler window names the Job the Laborer helps with. */

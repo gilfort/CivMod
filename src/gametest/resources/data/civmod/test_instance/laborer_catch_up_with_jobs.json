@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:laborer_catch_up_with_jobs",
+  "max_ticks": 3000,
+  "structure": "minecraft:empty",
+  "padding": 120
+}

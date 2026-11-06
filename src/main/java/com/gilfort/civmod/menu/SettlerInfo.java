@@ -2,6 +2,7 @@ package com.gilfort.civmod.menu;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.job.JobBuffer;
@@ -40,7 +41,7 @@ import net.minecraft.world.item.ItemStack;
  * @param helping        the Job the settler helps with as a Laborer now (empty if it does not)
  */
 public record SettlerInfo(Component name, Component status, boolean homeless, Component settlementName, List<SettlerJob> jobs,
-        List<JobState> jobStates, Component bed, FoodInfo food, Component mission, NeedsReport needs, int xp, java.util.Optional<Job> helping) {
+        List<JobState> jobStates, Component bed, FoodInfo food, Component mission, NeedsReport needs, int xp, Optional<Job> helping) {
 
     /**
      * Food state shown in the overview.

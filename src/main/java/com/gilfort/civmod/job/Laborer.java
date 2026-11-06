@@ -131,28 +131,27 @@ final class Laborer {
         if (now < searchAfter) {
             return false;
         }
-        List<Candidate> candidates = candidates(level, false);
-        for (Candidate candidate : candidates.stream().limit(TRIES).toList()) {
+        // A block that fails waits 30 s at this Workplace, so the whole list is tried at most once per 30 s.
+        for (Candidate candidate : candidates(level, false)) {
             if (begin(level, candidate) && shell.plan(level, candidate.job(), day, dayTime)) {
                 return true;
             }
             stopHelping(level);
         }
-        // Blocks left over are tried at the next decision (the ones that failed wait 30 s), none left: wait as well.
-        searchAfter = candidates.size() > TRIES ? now : now + Workplace.BLOCKED_RETRY;
+        searchAfter = now + Workplace.BLOCKED_RETRY;
         return false;
     }
 
-    /** A Job of the settler's list works: the Laborer steps back, the next fall back chooses anew. */
+    /**
+     * The settler stops helping: a Job of its list works (the next fall back chooses anew), its work day is over or a
+     * catch-up run ended. What it carries stays in its buffer and is delivered after work.
+     *
+     * @param level the level
+     */
     void interrupt(ServerLevel level) {
         if (helping != null) {
             stopHelping(level);
         }
-    }
-
-    /** The work day is over (or a catch-up run): the settler stops helping; what it carries is delivered after work. */
-    void dayOver(ServerLevel level) {
-        interrupt(level);
     }
 
     /**
@@ -184,11 +183,15 @@ final class Laborer {
     @Nullable BlockPos place(ServerLevel level, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site, Workplace workplace, long day) {
         Predicate<BlockPos> workPlace = pos -> profile.isWorkPlace(level, pos);
         BlockPos chosen = Laborers.sharedPlace(site.settlement(), site.pos(), day).filter(workPlace).orElse(null);
-        if (chosen == null) {
+        long now = level.getGameTime();
+        if (chosen == null && Laborers.placeSearchDue(site.settlement(), site.pos(), now)) {
             List<BlockPos> points = site.block().workPoints().stream().filter(workPlace).toList();
             chosen = points.isEmpty() ? profile.autoSearch(level, site.pos(), pos -> true) : points.get(level.getRandom().nextInt(points.size()));
             if (chosen != null) {
                 Laborers.setPlace(site.settlement(), site.pos(), chosen, day);
+            } else {
+                // No Laborer of the block searches again for 30 s.
+                Laborers.placeSearchFailed(site.settlement(), site.pos(), now + Workplace.BLOCKED_RETRY);
             }
         }
         workplace.adoptWorkPlace(chosen, day);
@@ -199,7 +202,9 @@ final class Laborer {
     // ---------------------------------------------------------------- catch-up
 
     /**
-     * Prepares the help of a settler without any Job for a catch-up run: chooses its block and waits for the scan.
+     * Prepares the help for a catch-up run: a settler without any Job chooses its block and waits for the scan. A
+     * settler with Jobs may find none of them can work, so the best blocks it would help get their scan too (taken from
+     * the JobBlock when it kept one), without joining a crew.
      *
      * @param level   the level
      * @param day     the day
@@ -208,6 +213,12 @@ final class Laborer {
      */
     boolean catchUpReady(ServerLevel level, long day, long dayTime) {
         if (!settler.getJobs().isEmpty()) {
+            for (Candidate candidate : candidates(level, true).stream().limit(TRIES).toList()) {
+                CategoryLoop loop = shell.loop(candidate.job());
+                if (loop != null && !loop.catchUpReady(level, candidate.job(), candidate.site(), day, dayTime)) {
+                    return false;
+                }
+            }
             return true;
         }
         SettlerJob job = catchUpTarget(level);
@@ -285,7 +296,7 @@ final class Laborer {
             if (others >= JobBlockSettlers.laborers(block.jobType()) || helped(block).profile(ResourceCollectionProfile.class).isEmpty()) {
                 continue;
             }
-            boolean unavailable = catchUp ? !level.isLoaded(block.pos()) || shell.existingWorkplace(block.pos()).filter(Workplace::catchUpEnded).isPresent()
+            boolean unavailable = catchUp ? !loaded(level, block) || shell.existingWorkplace(block.pos()).filter(Workplace::catchUpEnded).isPresent()
                     : blocked(block.pos(), now);
             if (unavailable) {
                 continue;
@@ -335,18 +346,38 @@ final class Laborer {
 
     // ---------------------------------------------------------------- leaving
 
-    /** Leaves the crew; what the settler carries stays in its Workplace for the delivery after work. */
+    /** Leaves the crew of the block it helped; what the settler carries stays in its Workplace for the delivery after work. */
     private void stopHelping(ServerLevel level) {
+        SettlerJob old = helping;
         helping = null;
-        Laborers.leave(SettlementData.get(level), settler.getUUID());
+        if (old != null) {
+            site(level, old.jobBlock()).ifPresentOrElse(
+                    site -> Laborers.leave(site.settlement(), old.jobBlock(), settler.getUUID(), level.getGameTime()),
+                    () -> Laborers.leave(SettlementData.get(level), settler.getUUID()));
+        }
     }
 
-    /** The block cannot be helped any more (gone, a job there, another Job): the settler leaves and forgets it. */
+    /**
+     * The block cannot be helped any more: the settler leaves its crew. A new Job at the block keeps the Workplace as it
+     * is. If the block is still there (the Job it needs changed), what the settler carries stays in its buffer and is
+     * delivered after work, only the scan and work place of the old Job go. Of a block that is gone the buffer drops.
+     */
     private void release(ServerLevel level) {
         SettlerJob old = helping;
         stopHelping(level);
-        if (old != null && settler.jobAt(old.jobBlock()).isEmpty()) {
-            shell.forget(old.jobBlock());
+        if (old == null || settler.jobAt(old.jobBlock()).isPresent()) {
+            return;
         }
+        Workplace workplace = shell.workplace(old.jobBlock());
+        if (workplace.buffer().isEmpty() || site(level, old.jobBlock()).isEmpty()) {
+            shell.forget(old.jobBlock());
+        } else {
+            workplace.forgetWork();
+        }
+    }
+
+    /** Whether the JobBlock, its collect inventory and its drop-off are loaded (what a catch-up needs). */
+    private static boolean loaded(ServerLevel level, SettlementBlock block) {
+        return level.isLoaded(block.pos()) && level.isLoaded(block.collect().orElse(block.pos())) && level.isLoaded(block.dropOff().orElse(block.pos()));
     }
 }

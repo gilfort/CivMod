@@ -714,6 +714,16 @@ final class Workplace {
     }
 
     /**
+     * Forgets everything of the Job worked here but the buffer (a Laborer's block got another Job): the work place of
+     * the day, the scan and what came with them.
+     */
+    void forgetWork() {
+        JobBuffer kept = buffer;
+        clearSaved();
+        buffer = kept;
+    }
+
+    /**
      * @param saved the saved buffer
      */
     void restoreBuffer(JobBuffer saved) {

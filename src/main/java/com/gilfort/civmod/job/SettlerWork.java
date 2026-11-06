@@ -258,7 +258,7 @@ public final class SettlerWork {
             }
         }
         // The Laborer stops helping: tomorrow it chooses anew.
-        laborer.dayOver(level);
+        laborer.interrupt(level);
     }
 
     /**
@@ -1593,9 +1593,13 @@ public final class SettlerWork {
     }
 
     /**
-     * Whether all blocks the settler needs are loaded and a scan result exists (starts the scan otherwise).
+     * Whether all blocks the settler needs are loaded and a scan result exists (starts the scan otherwise). Public for
+     * tests, which call it until it holds before they run a catch-up.
+     *
+     * @param level the level
+     * @return whether the catch-up can run
      */
-    private boolean catchUpReady(ServerLevel level) {
+    public boolean catchUpReady(ServerLevel level) {
         SettlementData data = SettlementData.get(level);
         Optional<com.gilfort.civmod.settlement.Settlement> settlement = data.settlement(settler.getSettlementId());
         if (settlement.isEmpty()) {
@@ -1655,7 +1659,7 @@ public final class SettlerWork {
         catchUpRegistered = false;
         quiet = false;
         // Live play chooses anew.
-        laborer.dayOver(level);
+        laborer.interrupt(level);
         jobWorkplaces.values().stream().filter(Workplace::catchUpEnded).forEach(workplace -> {
             workplace.setStatus(JobStatus.DROP_OFF_FULL);
             workplace.setCatchUpEnded(false);
