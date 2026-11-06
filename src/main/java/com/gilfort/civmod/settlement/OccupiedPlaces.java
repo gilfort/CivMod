@@ -106,6 +106,18 @@ public final class OccupiedPlaces {
     }
 
     /**
+     * @param settlement the settlement of the JobBlock
+     * @param jobBlock   a JobBlock
+     * @param day        the day
+     * @return a work place its settlers occupy for the JobBlock that day, if any
+     */
+    public static Optional<BlockPos> placeOf(Settlement settlement, BlockPos jobBlock, long day) {
+        return settlement.mutableOccupied().entrySet().stream()
+                .filter(entry -> entry.getValue().jobBlock().equals(jobBlock) && entry.getValue().day() == day)
+                .map(Map.Entry::getKey).findFirst();
+    }
+
+    /**
      * @param data the dimension's settlement data
      * @param pos  a position
      * @param day  the day

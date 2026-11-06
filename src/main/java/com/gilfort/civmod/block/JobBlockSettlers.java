@@ -49,7 +49,7 @@ public final class JobBlockSettlers {
     /** The key of the Laborers limit. */
     private static final String LABORERS_KEY = "laborers";
     /** Laborers a JobBlock takes without a value in a file (vault {@code Jobs/Laborer.md}). */
-    public static final int DEFAULT_LABORERS = 2;
+    private static final int DEFAULT_LABORERS = 2;
     /** What the files of one pack set say; later packs replace earlier values. */
     private record Loaded(Map<Job, List<Integer>> settlers, Map<Job, Integer> laborers) {
     }

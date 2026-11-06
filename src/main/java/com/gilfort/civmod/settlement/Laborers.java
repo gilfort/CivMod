@@ -15,18 +15,20 @@ import net.minecraft.core.BlockPos;
  * the {@link Settlement}, one {@link Crew} per JobBlock, not saved: a Laborer chooses anew after a reload.
  * <p>
  * A Laborer leaves its crew when a higher Job takes over, when it stops helping, when it dies or is removed
- * ({@link #leave}) and when the JobBlock leaves the settlement.
+ * ({@link #leave}) and when the JobBlock leaves the settlement. A crew without Laborers is dropped, with the place it
+ * stored; one that remembers a failed search for a work place stays until that memory has run out.
  */
 public final class Laborers {
 
     private Laborers() {
     }
 
-    /** The Laborers of one JobBlock and the work place they share today. */
+    /** The Laborers of one JobBlock, the work place of the day they share, and when a failed search for one may be repeated. */
     static final class Crew {
         private final Set<UUID> laborers = new LinkedHashSet<>();
         private @Nullable BlockPos place;
         private long placeDay = -1L;
+        private long noPlaceUntil;
     }
 
     /**
@@ -65,7 +67,25 @@ public final class Laborers {
     }
 
     /**
-     * Takes a settler out of every crew (it stops helping, or it died or was removed).
+     * Takes a settler out of the crew of one JobBlock (it stops helping there).
+     *
+     * @param settlement the settlement of the JobBlock
+     * @param jobBlock   the JobBlock
+     * @param settler    the settler
+     * @param now        the game time (an empty crew goes, unless it still remembers a failed search for a work place)
+     */
+    public static void leave(Settlement settlement, BlockPos jobBlock, UUID settler, long now) {
+        Crew crew = settlement.mutableCrews().get(jobBlock);
+        if (crew != null) {
+            crew.laborers.remove(settler);
+            if (crew.laborers.isEmpty() && now >= crew.noPlaceUntil) {
+                settlement.mutableCrews().remove(jobBlock);
+            }
+        }
+    }
+
+    /**
+     * Takes a settler out of every crew (it died or was removed).
      *
      * @param data    the dimension's settlement data
      * @param settler the settler
@@ -73,7 +93,7 @@ public final class Laborers {
     public static void leave(SettlementData data, UUID settler) {
         for (Settlement settlement : data.settlements()) {
             settlement.mutableCrews().values().forEach(crew -> crew.laborers.remove(settler));
-            settlement.mutableCrews().values().removeIf(crew -> crew.laborers.isEmpty() && crew.place == null);
+            settlement.mutableCrews().values().removeIf(crew -> crew.laborers.isEmpty());
         }
     }
 
@@ -87,9 +107,7 @@ public final class Laborers {
      * @return the work place, empty if nobody chose one for that day
      */
     public static Optional<BlockPos> sharedPlace(Settlement settlement, BlockPos jobBlock, long day) {
-        Optional<BlockPos> employees = settlement.mutableOccupied().entrySet().stream()
-                .filter(entry -> entry.getValue().jobBlock().equals(jobBlock) && entry.getValue().day() == day)
-                .map(java.util.Map.Entry::getKey).findFirst();
+        Optional<BlockPos> employees = OccupiedPlaces.placeOf(settlement, jobBlock, day);
         if (employees.isPresent()) {
             return employees;
         }
@@ -109,5 +127,28 @@ public final class Laborers {
         Crew crew = settlement.mutableCrews().computeIfAbsent(jobBlock.immutable(), pos -> new Crew());
         crew.place = place.immutable();
         crew.placeDay = day;
+        crew.noPlaceUntil = 0L;
+    }
+
+    /**
+     * @param settlement the settlement of the JobBlock
+     * @param jobBlock   the JobBlock
+     * @param now        the game time
+     * @return whether a search for a work place may run: the last one found nothing less than 30 s ago if not
+     */
+    public static boolean placeSearchDue(Settlement settlement, BlockPos jobBlock, long now) {
+        Crew crew = settlement.mutableCrews().get(jobBlock);
+        return crew == null || now >= crew.noPlaceUntil;
+    }
+
+    /**
+     * Remembers that a search for a work place found nothing, so no Laborer of the JobBlock repeats it before a time.
+     *
+     * @param settlement the settlement of the JobBlock
+     * @param jobBlock   the JobBlock
+     * @param until      the game time from which a search may run again
+     */
+    public static void placeSearchFailed(Settlement settlement, BlockPos jobBlock, long until) {
+        settlement.mutableCrews().computeIfAbsent(jobBlock.immutable(), pos -> new Crew()).noPlaceUntil = until;
     }
 }
