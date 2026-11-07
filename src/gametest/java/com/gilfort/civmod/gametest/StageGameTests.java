@@ -61,7 +61,9 @@ import net.neoforged.neoforge.registries.RegisterEvent;
  * GameTests for the Stage and the Bard as a Service Job (spec "Service and Bard", story #210; vault
  * {@code Systems/Entertainment.md}, Bard, and {@code Jobs/Bard.md}): the numbers of the Bard, the Stage block, the stage act
  * with the Sound center, the Bard's hours and the flat catch-up point. The tests of the evening run in the environment
- * {@code civmod:evening} (17:36, the clock stands still).
+ * {@code civmod:evening} (17:36, the clock stands still). The hours test moves the clock of the whole level, so it has an
+ * environment and a batch of its own, {@code civmod:stage_hours}; in a shared batch it would end the work day of every
+ * long-running test next to it.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class StageGameTests {

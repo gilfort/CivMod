@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "civmod:day",
+  "environment": "civmod:stage_hours",
   "function": "civmod:stage_bard_hours",
   "max_ticks": 200,
   "structure": "minecraft:empty",
