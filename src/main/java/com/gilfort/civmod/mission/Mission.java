@@ -99,7 +99,7 @@ public record Mission(Component title, Component description, Optional<Holder<It
     }
 
     /**
-     * The result of a Villager mission (vault {@code Jobs/Bard.md}): how many vanilla Villagers come and of which biome
+     * The result of a Villager mission (vault {@code Jobs/Adventurer.md}): how many vanilla Villagers come and of which biome
      * type, and the nitwit chance per Villager ({@link MissionRules#nitwitChance}).
      *
      * @param count          the number of Villagers (the skill does not change it)

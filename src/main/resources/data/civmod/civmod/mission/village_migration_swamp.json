@@ -13,7 +13,7 @@
   "days": 3,
   "recommended_level": 40,
   "jobs": [
-    "civmod:bard"
+    "civmod:adventurer"
   ],
   "weight": 1,
   "max_per_offer": 1

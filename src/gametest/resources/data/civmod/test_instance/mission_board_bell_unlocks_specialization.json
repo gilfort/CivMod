@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
   "environment": "civmod:day",
-  "function": "civmod:mission_board_bard_falls_back",
+  "function": "civmod:mission_board_bell_unlocks_specialization",
   "max_ticks": 40,
   "structure": "minecraft:empty",
   "padding": 40

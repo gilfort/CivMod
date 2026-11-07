@@ -28,7 +28,7 @@ public final class ModAttachments {
             () -> AttachmentType.builder(() -> 0).serialize(Codec.INT.fieldOf("ticks"), heat -> heat > 0).build());
 
     /**
-     * The recommended level of the Villager mission a vanilla Villager came with (vault {@code Jobs/Bard.md}), kept on the
+     * The recommended level of the Villager mission a vanilla Villager came with (vault {@code Jobs/Adventurer.md}), kept on the
      * Villager for its conversion into a Settler; 0 for a Villager that did not come from a mission.
      */
     public static final Supplier<AttachmentType<Integer>> MISSION_LEVEL = ATTACHMENT_TYPES.register("mission_level",

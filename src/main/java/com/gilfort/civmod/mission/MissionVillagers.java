@@ -21,15 +21,15 @@ import net.minecraft.world.entity.npc.villager.VillagerProfession;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * The vanilla Villagers a Villager mission brings (vault {@code Jobs/Bard.md}): they arrive as unemployed adults of the
+ * The vanilla Villagers a Villager mission brings (vault {@code Jobs/Adventurer.md}): they arrive as unemployed adults of the
  * mission's biome type (or nitwits), remember the mission's level ({@link ModAttachments#MISSION_LEVEL}, read by the
- * conversion into a Settler) and walk with the Bard to the Mission Board; from then on they are plain vanilla Villagers.
+ * conversion into a Settler) and walk with the Adventurer to the Mission Board; from then on they are plain vanilla Villagers.
  */
 public final class MissionVillagers {
 
     /** Walking speed of an arriving Villager (vanilla Villagers stroll at 0.5, flee at 0.6). */
     private static final float SPEED = 0.6F;
-    /** How close a following Villager stays to the Bard. */
+    /** How close a following Villager stays to the Adventurer. */
     private static final int FOLLOW_DISTANCE = 2;
     /** How close a released Villager walks to the Mission Board. */
     private static final int BOARD_DISTANCE = 2;
@@ -44,9 +44,9 @@ public final class MissionVillagers {
      * {@link MissionRules#nitwitChance}.
      *
      * @param level       the level
-     * @param at      where they appear (the Bard's spot, or the Mission Board during catch-up)
+     * @param at      where they appear (the Adventurer's spot, or the Mission Board during catch-up)
      * @param mission the Villager mission
-     * @param skill   the Bard's effective Mission Job skill
+     * @param skill   the Adventurer's effective Mission Job skill
      * @param random  the random source
      * @return the Villagers that arrived (none for a loot mission)
      */
@@ -84,10 +84,10 @@ public final class MissionVillagers {
     }
 
     /**
-     * Lets the Villager walk after the Bard (its brain's walk target; renewed by the Bard while it leads).
+     * Lets the Villager walk after the Adventurer (its brain's walk target; renewed by the Adventurer while it leads).
      *
      * @param villager the Villager
-     * @param leader   the Bard
+     * @param leader   the Adventurer
      */
     public static void follow(Villager villager, Entity leader) {
         villager.getBrain().setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(leader, SPEED, FOLLOW_DISTANCE));
