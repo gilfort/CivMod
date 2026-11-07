@@ -43,6 +43,8 @@ final class SettlerSocial {
     static final int LOOK_TICKS = 30;
     /** How close the settler that rolled comes to its partner, in blocks. */
     static final double TALK_DISTANCE = 1.5;
+    /** How far the settler may still be from its partner when its path is over and the partner is not any closer, in blocks. */
+    static final double CLOSE_ENOUGH = 2.5;
     /** Ticks between two arm swings while talking; the two settlers swing in turn. */
     static final int SWING_TICKS = 40;
     /** Ticks between two speech bubbles while talking: the client shows one for 60 ticks. */
@@ -320,10 +322,15 @@ final class SettlerSocial {
         current.partner.getWork().conversationBubble();
     }
 
+    /**
+     * Whether the settler that walks is close enough to talk: within {@link #TALK_DISTANCE}, or within {@link #CLOSE_ENOUGH}
+     * once its path has ended (the pathfinder counts a spot about a block short of an occupied one as reached).
+     */
     private boolean arrived(Settler partner) {
         double dx = settler.getX() - partner.getX();
         double dz = settler.getZ() - partner.getZ();
-        return dx * dx + dz * dz <= TALK_DISTANCE * TALK_DISTANCE && Math.abs(settler.getY() - partner.getY()) <= TALK_DISTANCE;
+        double limit = settler.getNavigation().isDone() ? CLOSE_ENOUGH : TALK_DISTANCE;
+        return dx * dx + dz * dz <= limit * limit && Math.abs(settler.getY() - partner.getY()) <= TALK_DISTANCE;
     }
 
     /** Whether the conversation still holds for this settler: both alive and awake, both still in it, both where it left them. */
