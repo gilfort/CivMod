@@ -71,6 +71,16 @@ final class SettlerTavern {
     }
 
     /**
+     * @param pantry the Pantry
+     * @param day    the day of an evening
+     * @return whether this settler has booked a seat at that Pantry for that evening
+     */
+    boolean bookedAt(BlockPos pantry, long day) {
+        Booking current = booking;
+        return current != null && current.day() == day && current.pantry().equals(pantry);
+    }
+
+    /**
      * The Schedule's question: does this settler spend the evening in the Tavern? Yes if it holds a seat that is still
      * there and free of players; it keeps the seat until bedtime (the Schedule stops asking at night), also after the
      * Tavern Host's shift ended. Otherwise, in the Tavern evening and if its Entertainment is not full, it books the free

@@ -2,7 +2,9 @@ package com.gilfort.civmod.entertainment;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.job.SettlerWork;
@@ -31,7 +33,8 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
  * The Tavern evening (vault {@code Systems/Entertainment.md}): a Pantry whose Tavern Host is on shift, in the evening.
  * Once per in-game minute ({@link #COUNT_INTERVAL}) every such Pantry counts the settlers of its settlement within the
  * Tavern radius. If the crowd is big enough (condition A) or a jukebox that holds a disc stands near (condition B), each
- * of them who has not been paid this evening gets the points of {@link EntertainmentRules#tavernPoints}.
+ * guest who holds a seat at the Pantry, and the Tavern Host, gets the points of {@link EntertainmentRules#tavernPoints} once
+ * per evening.
  * <p>
  * The seats and the walk to them are in {@link TavernSeats} and {@code SettlerTavern}; this class holds the count, the
  * jukebox check and the catch-up of a missed evening.
@@ -117,8 +120,9 @@ public final class Tavern {
         }
         EntertainmentRules rules = EntertainmentRules.get();
         List<Settler> present = present(level, settlement, pantry.pos(), rules);
-        if (!present.stream().allMatch(settler -> settler.getWork().entertainment().tavernPaid(day))) {
-            pay(present, rules.tavernPoints(present.size(), jukeboxHoldsDisc(level, pantry.pos(), rules.jukeboxRadius())), day);
+        List<Settler> paid = paid(pantry, present, day);
+        if (!paid.stream().allMatch(settler -> settler.getWork().entertainment().tavernPaid(day))) {
+            pay(paid, rules.tavernPoints(present.size(), jukeboxHoldsDisc(level, pantry.pos(), rules.jukeboxRadius())), day);
         }
         recordBubbles(level, present, pantry.pos(), rules, day, gameTime);
     }
@@ -140,10 +144,10 @@ public final class Tavern {
 
     /**
      * Simulates the Tavern evening of a missed day for one settler, without seats and without walking (vault
-     * {@code Systems/Entertainment.md}, Catch-up). It needs a Pantry of the settlement with an assigned Tavern Host in a
-     * loaded chunk, the nearest to the settler. Every member of the settlement counts as present unless it is loaded and
-     * away on a Mission (the mission state of an unloaded settler cannot be read); the jukebox is read in loaded chunks
-     * only. The settler is paid once per day, with the same mark as the live count.
+     * {@code Systems/Entertainment.md}, Catch-up). It needs a Pantry of the settlement with an assigned Tavern Host, the
+     * nearest to the settler; its chunk does not have to be loaded. Every member of the settlement counts as present
+     * unless it is loaded and away on a Mission (the mission state of an unloaded settler cannot be read); the jukebox is
+     * read in loaded chunks only. The settler is paid once per day, with the same mark as the live count.
      *
      * @param level   the level
      * @param settler a settler whose catch-up covered the whole evening of that day (full Entertainment goes home)
@@ -155,7 +159,7 @@ public final class Tavern {
             return;
         }
         SettlementData.get(level).settlement(settler.getSettlementId()).flatMap(settlement -> settlement.blocks().stream()
-                .filter(block -> ClerkStorage.isPantry(block) && level.isLoaded(block.pos()) && block.assignee(block.jobType()).isPresent())
+                .filter(block -> ClerkStorage.isPantry(block) && block.assignee(block.jobType()).isPresent())
                 .min(Comparator.comparingDouble((SettlementBlock block) -> block.pos().distSqr(settler.blockPosition())))
                 .map(pantry -> new Hosted(settlement, pantry.pos()))).ifPresent(missed -> {
                     EntertainmentRules rules = EntertainmentRules.get();
@@ -191,6 +195,25 @@ public final class Tavern {
         double radius = rules.tavernRadius();
         return level.getEntitiesOfClass(Settler.class, AABB.ofSize(center, 2 * radius, 2 * radius, 2 * radius),
                 settler -> settlement.members().contains(settler.getUUID()) && !settler.isAway() && settler.position().distanceToSqr(center) <= radius * radius);
+    }
+
+    /**
+     * The settlers the Tavern pays: the guests who hold a seat at this Pantry for the evening and, with them, its Tavern
+     * Host. Settlers who only stand within the radius count for the crowd, not for the points; a Tavern without seats does
+     * nothing.
+     *
+     * @param pantry  the Pantry
+     * @param present the settlers present at it
+     * @param day     the day of the evening
+     * @return the settlers to pay, empty if nobody present holds a seat
+     */
+    private static List<Settler> paid(SettlementBlock pantry, List<Settler> present, long day) {
+        Predicate<Settler> guest = settler -> settler.getWork().holdsTavernSeat(pantry.pos(), day);
+        if (present.stream().noneMatch(guest)) {
+            return List.of();
+        }
+        Optional<UUID> host = pantry.assignee(pantry.jobType()).map(SettlementBlock.Assignee::id);
+        return present.stream().filter(settler -> guest.test(settler) || host.filter(settler.getUUID()::equals).isPresent()).toList();
     }
 
     /** Gives each settler who was not paid on the evening the points, and marks the evening paid. */

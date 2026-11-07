@@ -2011,6 +2011,15 @@ public final class SettlerWork {
     }
 
     /**
+     * @param pantry the Pantry
+     * @param day    the day of an evening
+     * @return whether this settler has booked a seat at that Pantry for that evening: only such guests are paid by its Tavern
+     */
+    public boolean holdsTavernSeat(BlockPos pantry, long day) {
+        return tavern.bookedAt(pantry, day);
+    }
+
+    /**
      * @param pantry   the Pantry whose count asks
      * @param day      the day of an evening
      * @param gameTime the game time
