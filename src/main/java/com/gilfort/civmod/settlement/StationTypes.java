@@ -27,7 +27,7 @@ import net.minecraft.world.item.Items;
  * The unlock item is not the work place: a Specialization still needs its station in the world.
  * <p>
  * Every JobBlock whose Base Job has Specializations has Station Types, the Mission Board included: its slots unlock the
- * Mission Specializations of the Adventurer (the Bard: note block).
+ * Mission Specializations of the Adventurer, if a mod registers any.
  */
 public final class StationTypes {
 
@@ -155,7 +155,8 @@ public final class StationTypes {
 
     /**
      * @param block a JobBlock
-     * @return how many of its open slots hold no unlock item
+     * @return how many of its open slots hold no unlock item; a Mission Board without any Mission Specialization still
+     *         counts every open slot (one per level), so the Adventurer's single pool offers 2 x level missions
      */
     public static int emptySlots(SettlementBlock block) {
         int open = open(block.level());

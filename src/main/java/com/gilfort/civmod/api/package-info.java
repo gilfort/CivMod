@@ -3,7 +3,8 @@
  * registration ({@link com.gilfort.civmod.api.Job}, {@link com.gilfort.civmod.api.CivModApi#jobs}), the category profiles
  * ({@link com.gilfort.civmod.api.ResourceCollectionProfile} with its builder
  * {@link com.gilfort.civmod.api.SimpleCollectionProfile}, {@link com.gilfort.civmod.api.ProducingProfile},
- * {@link com.gilfort.civmod.api.MissionProfile}) and the JobBlock factory
+ * {@link com.gilfort.civmod.api.MissionProfile}, {@link com.gilfort.civmod.api.ServiceProfile} with its
+ * {@link com.gilfort.civmod.api.ServiceAct}s and {@link com.gilfort.civmod.api.ServiceEffect}s) and the JobBlock factory
  * ({@link com.gilfort.civmod.api.CivModApi#jobBlock}). CivMod uses it for its own Jobs; addons compile against this
  * package only.
  * <p>

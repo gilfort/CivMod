@@ -12,6 +12,6 @@
   "recommended_level": 1,
   "rolls": 3,
   "jobs": ["civmod:adventurer"],
-  "weight": 3,
+  "weight": 30,
   "max_per_offer": 8
 }

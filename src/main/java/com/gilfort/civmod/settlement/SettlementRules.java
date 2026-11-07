@@ -38,6 +38,8 @@ public final class SettlementRules {
     private static final int[] CLERK_STORAGE = {2, 4, 8, 12, 16};
     /** Stand spots per Clerk JobBlock. */
     public static final int MAX_STAND_SPOTS = 8;
+    /** Blocks between a Stage and its Sound center at most (vault {@code Systems/Entertainment.md}). */
+    public static final int MAX_SOUND_DISTANCE = 24;
     /** Ledgers a Clerk JobBlock takes at most (vault {@code Jobs/Clerk.md}). */
     public static final int MAX_LEDGERS = 3;
     /** Slots a Pantry gains per JobBlock level above 1 (vault {@code Jobs/Tavern Host.md}). */

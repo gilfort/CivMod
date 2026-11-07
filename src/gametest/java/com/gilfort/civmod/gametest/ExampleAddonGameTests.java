@@ -10,6 +10,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.MissionProfile;
 import com.gilfort.civmod.api.ProducingProfile;
+import com.gilfort.civmod.api.ServiceProfile;
 import com.gilfort.civmod.api.SimpleCollectionProfile;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
@@ -49,7 +50,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -74,6 +77,8 @@ public final class ExampleAddonGameTests {
     private static final Identifier SCOUTING_TRIP = Identifier.fromNamespaceAndPath("civmod_example", "scouting_trip");
     private static final Identifier SAND_DIGGER = Identifier.fromNamespaceAndPath("civmod_example", "sand_digger");
     private static final Identifier SAND_DIGGER_BLOCK = Identifier.fromNamespaceAndPath("civmod_example", "sand_digger_block");
+    private static final Identifier BELL_RINGER = Identifier.fromNamespaceAndPath("civmod_example", "bell_ringer");
+    private static final Identifier BELL_RINGER_BLOCK = Identifier.fromNamespaceAndPath("civmod_example", "bell_ringer_block");
     private static final Identifier SAND = Identifier.withDefaultNamespace("sand");
     private static final Identifier RED_SAND = Identifier.withDefaultNamespace("red_sand");
     private static final long DAY = 24000L;
@@ -93,6 +98,7 @@ public final class ExampleAddonGameTests {
             register(helper, "example_stonecutter_work_point", ExampleAddonGameTests::stonecutterWorkPoint);
             register(helper, "example_recipe_viewer_transfer", ExampleAddonGameTests::recipeViewerTransfer);
             register(helper, "example_stonecutter_innate", ExampleAddonGameTests::stonecutterInnate);
+            register(helper, "example_bell_ringer_service", ExampleAddonGameTests::bellRingerService);
         });
     }
 
@@ -443,5 +449,69 @@ public final class ExampleAddonGameTests {
         helper.assertTrue(PatternsTabData.of(level, craft, stonecutter).pattern(2).isEmpty(), "Refused: the slot stays empty");
         TestAssignments.unassign(data, clerk);
         helper.succeed();
+    }
+
+    /**
+     * The Bell Ringer is a Service Job built with a {@link ServiceProfile}: next to its JobBlock inside the window of its
+     * act it rings the morning bell once. Settlers in the radius work faster ({@code WorkSpeed}), players in the radius get
+     * Haste ({@code MobEffect}); those outside the radius get nothing.
+     */
+    private static void bellRingerService(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Job ringer = job(BELL_RINGER);
+        helper.assertTrue(ringer != null && ringer.category() == JobCategory.SERVICE && ringer.profile(ServiceProfile.class).isPresent(),
+                "The Bell Ringer is a Service Job with a Service profile: " + ringer);
+        helper.assertTrue(ringer.displayName().getString().equals("Bell Ringer"), "Lang key: " + ringer.displayName().getString());
+        helper.assertValueEqual(JobBlockTabGameTests.keys(JobBlockTabs.of(ringer)), List.of("civmod.gui.job_block.tab.workers", "civmod.gui.job_block.tab.storage"),
+                "Workers, Storage");
+        for (int x = 0; x < 18; x++) {
+            for (int z = 0; z < 9; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(17, 0, 8));
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), BuiltInRegistries.BLOCK.getValue(BELL_RINGER_BLOCK));
+        BlockPos jobBlock = helper.absolutePos(new BlockPos(1, 1, 1));
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
+        Settler ringing = member(helper, settlement, new BlockPos(2, 1, 2), "Ringer");
+        Settler hearing = member(helper, settlement, new BlockPos(7, 1, 1), "Hearing");
+        Settler deaf = member(helper, settlement, new BlockPos(15, 1, 1), "Deaf");
+        // Frozen: a settler that strolls would walk in or out of the radius the test measures.
+        hearing.setNoAi(true);
+        deaf.setNoAi(true);
+        ServerPlayer near = TestPlayers.add(helper, Vec3.atBottomCenterOf(jobBlock).add(6.0, 0.0, 0.0));
+        ServerPlayer far = TestPlayers.add(helper, Vec3.atBottomCenterOf(jobBlock).add(14.0, 0.0, 0.0));
+        helper.assertTrue(SettlementWorld.assign(level, jobBlock, ringing, ringer) == JobAssignments.AssignResult.OK, "Bell Ringer assigned");
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(near.hasEffect(MobEffects.HASTE), "The bell has not rung yet"))
+                .thenExecute(() -> {
+                    helper.assertTrue(near.getEffect(MobEffects.HASTE).getDuration() > 1000, "Haste for a minute: " + near.getEffect(MobEffects.HASTE));
+                    helper.assertTrue(!far.hasEffect(MobEffects.HASTE), "No Haste outside the radius");
+                    helper.assertTrue(hearing.getWork().speedBoost().percent() == 10.0
+                            && hearing.getWork().speedBoost().until() - hearing.getWork().speedBoost().from() == 3000L,
+                            "Settlers in the radius work 10 % faster for three hours: " + hearing.getWork().speedBoost());
+                    helper.assertTrue(deaf.getWork().speedBoost().percent() == 0.0, "Settlers outside the radius do not");
+                    helper.assertTrue(ringing.getSkills().get(ringer).exp() == 5, "EXP for the act: " + ringing.getSkills().get(ringer).exp());
+                    TestPlayers.remove(near);
+                    TestPlayers.remove(far);
+                    ringing.discard();
+                    hearing.discard();
+                    deaf.discard();
+                    forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+                })
+                .thenSucceed();
+    }
+
+    private static Settler member(GameTestHelper helper, Settlement settlement, BlockPos relative, String name) {
+        ServerLevel level = helper.getLevel();
+        Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
+        Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(relative));
+        settler.snapTo(spawn.x, spawn.y, spawn.z, 0.0F, 0.0F);
+        settler.setCustomName(Component.literal(name));
+        level.addFreshEntity(settler);
+        settler.joinSettlement(SettlementData.get(level), settlement);
+        settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
+        return settler;
     }
 }

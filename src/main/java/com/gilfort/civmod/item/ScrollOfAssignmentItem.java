@@ -7,6 +7,7 @@ import com.gilfort.civmod.api.BiomePosition;
 import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.block.JobBlock;
+import com.gilfort.civmod.entertainment.Stage;
 import com.gilfort.civmod.job.BiomeBonuses;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.menu.BiomeBonusText;
@@ -225,6 +226,10 @@ public class ScrollOfAssignmentItem extends Item {
             }
             return;
         }
+        if (Stage.isStage(block.get())) {
+            cycleSoundCenter(player, jobBlock, target);
+            return;
+        }
         // A station of a Specialization offered here is a work point too; each Job then works only at its own stations.
         Optional<Job> workJob = workPlaceJob(level, block.get(), target);
         boolean container = isContainer(level, target);
@@ -239,7 +244,8 @@ public class ScrollOfAssignmentItem extends Item {
             case TOO_MANY -> Component.translatable("civmod.scroll.point.too_many", SettlementBlock.MAX_WORK_POINTS).withStyle(ChatFormatting.RED);
             case INVALID -> Component.translatable("civmod.scroll.point.invalid", jobType.displayName(),
                     jobType.workPlaceName()).withStyle(ChatFormatting.RED);
-            case STORAGE, STAND_SPOT, STORAGE_FULL, TOO_MANY_SPOTS, TAKEN -> throw new IllegalStateException("Clerk result for " + jobType);
+            case STORAGE, STAND_SPOT, STORAGE_FULL, TOO_MANY_SPOTS, TAKEN, SOUND_CENTER, TOO_FAR ->
+                    throw new IllegalStateException("Clerk or Stage result for " + jobType);
         };
         player.sendOverlayMessage(message);
     }
@@ -308,8 +314,24 @@ public class ScrollOfAssignmentItem extends Item {
                     .withStyle(ChatFormatting.RED);
             case TAKEN -> Component.translatable("civmod.scroll.point.taken", JobAssignments.storageOwner(data, target)
                     .map(ClerkStorage::name).orElse(Component.literal("?"))).withStyle(ChatFormatting.RED);
-            case INVALID, WORK, COLLECT, DROP_OFF, TOO_MANY -> Component.translatable("civmod.scroll.point.clerk_invalid")
+            case INVALID, WORK, COLLECT, DROP_OFF, TOO_MANY, SOUND_CENTER, TOO_FAR -> Component.translatable("civmod.scroll.point.clerk_invalid")
                     .withStyle(ChatFormatting.RED);
+        };
+        player.sendOverlayMessage(message);
+    }
+
+    /** Bound to a Stage: any block inside the settlement within reach of the Stage is its Sound center, a second click removes it. */
+    private static void cycleSoundCenter(ServerPlayer player, BlockPos stage, BlockPos target) {
+        JobAssignments.PointResult result = JobAssignments.cycleSoundCenter(SettlementData.get(player.level()), stage, target);
+        Component message = switch (result) {
+            case SOUND_CENTER -> Component.translatable("civmod.scroll.point.sound_center");
+            case REMOVED -> Component.translatable("civmod.scroll.point.removed");
+            case NO_JOB_BLOCK -> Component.translatable("civmod.scroll.binding_lost").withStyle(ChatFormatting.RED);
+            case OUTSIDE -> Component.translatable("civmod.scroll.point.outside").withStyle(ChatFormatting.RED);
+            case TOO_FAR -> Component.translatable("civmod.scroll.point.sound_center_far", SettlementRules.MAX_SOUND_DISTANCE)
+                    .withStyle(ChatFormatting.RED);
+            case WORK, COLLECT, DROP_OFF, INVALID, TOO_MANY, STORAGE, STAND_SPOT, STORAGE_FULL, TOO_MANY_SPOTS, TAKEN ->
+                    throw new IllegalStateException("Sound center result " + result);
         };
         player.sendOverlayMessage(message);
     }

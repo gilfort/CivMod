@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.function.BooleanSupplier;
 
@@ -16,14 +17,17 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.BiomeBonus;
 import com.gilfort.civmod.api.BlockingReason;
+import com.gilfort.civmod.api.Entertain;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
+import com.gilfort.civmod.api.ServiceProfile;
 import com.gilfort.civmod.api.XpGain;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.entertainment.Entertainment;
 import com.gilfort.civmod.entertainment.EntertainmentRules;
+import com.gilfort.civmod.entertainment.Stage;
 import com.gilfort.civmod.entertainment.Tavern;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.Schedule.Activity;
@@ -141,6 +145,9 @@ public final class SettlerWork {
     /** The Deliveryman's loop: a second Logistics loop beside the Clerk's. */
     private final DeliverymanLoop deliverymen;
     private final PriestLoop priests;
+    private final ServiceLoop services;
+    /** The timed speed boost from a {@code WorkSpeed} effect (saved with the settler). */
+    private SpeedBoost speedBoost = SpeedBoost.NONE;
     private final Laborer laborer;
 
     private Activity activity = Activity.IDLE;
@@ -206,6 +213,8 @@ public final class SettlerWork {
         loops.put(JobCategory.PRODUCING, new ProducingLoop(this));
         deliverymen = new DeliverymanLoop(this);
         priests = new PriestLoop(this);
+        services = new ServiceLoop(this);
+        loops.put(JobCategory.SERVICE, services);
         laborer = new Laborer(this);
         thoughts = new SettlerThoughts(settler);
         meals = new SettlerMeals(this);
@@ -315,6 +324,11 @@ public final class SettlerWork {
         if (shiftEnd.isPresent()) {
             times = times.withWorkEnd(shiftEnd.getAsLong());
         }
+        // A Service Job with a window after the usual end of work (the Bard's stage act) keeps its settler at work until then.
+        OptionalInt serviceEnd = serviceEnd();
+        if (serviceEnd.isPresent() && serviceEnd.getAsInt() > times.workEnd()) {
+            times = times.withWorkEnd(serviceEnd.getAsInt());
+        }
         OptionalLong returned = missions.returnedOn(day);
         if (returned.isPresent() && returned.getAsLong() < times.workEnd()) {
             times = times.withWorkEnd(returned.getAsLong());
@@ -381,11 +395,15 @@ public final class SettlerWork {
             return deliverymen;
         }
         if (job.jobType().category() == JobCategory.SERVICE) {
-            // The Administrator has no work; the Priest prays; the Tavern Host holds its counter like a Clerk.
+            // The Tavern Host holds its counter like a Clerk; the Priest prays; any other Service Job plays the acts of its
+            // profile; the Administrator has none and no work.
             if (ClerkStorage.shiftEnd(job.jobType()).isPresent()) {
                 return clerks;
             }
-            return job.jobType() == ModJobs.PRIEST.get() ? priests : null;
+            if (job.jobType() == ModJobs.PRIEST.get()) {
+                return priests;
+            }
+            return job.jobType().profile(ServiceProfile.class).isPresent() ? services : null;
         }
         CategoryLoop loop = loops.get(job.jobType().category());
         // The Logistics category has two loops: the Clerk's (here) and the Deliveryman's (above).
@@ -602,6 +620,13 @@ public final class SettlerWork {
      */
     public boolean isAway() {
         return missions.isAway();
+    }
+
+    /**
+     * @return whether the settler is on a job step, walking to its work or working (the Bard's round looks for such settlers)
+     */
+    public boolean atWork() {
+        return activity == Activity.JOB && activeJob != null;
     }
 
     /**
@@ -1001,6 +1026,7 @@ public final class SettlerWork {
                 case CRAFTING -> ThoughtBubble.CRAFTING;
                 case DELIVERING, UNLOADING -> ThoughtBubble.DROP_OFF;
                 case ON_MISSION -> ThoughtBubble.MISSION;
+                case PLAYING -> ThoughtBubble.PLAYING;
                 default -> null;
             };
             default -> null;
@@ -1066,6 +1092,10 @@ public final class SettlerWork {
         Optional<ResourceCollectionProfile> profile = type.profile(ResourceCollectionProfile.class);
         if (profile.isPresent()) {
             return tool(job, profile.get()).map(ItemStack::copy).orElse(ItemStack.EMPTY);
+        }
+        if (type.category() == JobCategory.SERVICE && status != JobStatus.PLAYING) {
+            // A performer holds its instrument only while it plays.
+            return ItemStack.EMPTY;
         }
         return type.displayItem().map(ItemStack::new).orElse(ItemStack.EMPTY);
     }
@@ -1758,6 +1788,8 @@ public final class SettlerWork {
         if (to >= day * DayClock.DAY_TICKS + ClerkStorage.TAVERN_SHIFT_END) {
             // The whole Tavern evening was missed (one that is still going on is lived and counted live).
             Tavern.catchUp(level, settler, day);
+            // The Bard's missed day: a flat point, nothing played.
+            Stage.catchUp(level, settler, day);
         }
         return rolls;
     }
@@ -1876,15 +1908,51 @@ public final class SettlerWork {
 
     /**
      * The factor every work speed is multiplied with: the one place where the speed bonuses add up. The blessing's share
-     * ({@link #blessingFactor}) and the 2 % per point of Entertainment ({@link EntertainmentRules#speedFactor}) are added,
-     * not multiplied. Live play and catch-up both read it; the value is the one of the day being worked, because the
+     * ({@link #blessingFactor}), the boost of a {@code WorkSpeed} effect ({@link #speedBoostShare}) and the 2 % per point of
+     * Entertainment ({@link EntertainmentRules#speedFactor}) are added, not multiplied. Live play and catch-up both read it; the value is the one of the day being worked, because the
      * decay is taken at wake-up before the work starts.
      *
      * @param level the level
      * @return 1 without any bonus, 1.4 with full Entertainment and a blessing
      */
     public double speedFactor(ServerLevel level) {
-        return EntertainmentRules.get().speedFactor(needs.entertainment().value(), blessingFactor(level));
+        return EntertainmentRules.get().speedFactor(needs.entertainment().value(), blessingFactor(level) + speedBoostShare(level));
+    }
+
+    /**
+     * The share a {@code WorkSpeed} effect of a Service act adds to the speed factor ({@link SpeedBoost}): live that of now,
+     * in catch-up the average over the simulated work time.
+     *
+     * @param level the level
+     * @return 0 without a boost, else its percent as a fraction
+     */
+    private double speedBoostShare(ServerLevel level) {
+        return cuWorkFrom == NOT_SIMULATING ? speedBoost.share(level.getOverworldClockTime()) : speedBoost.averageShare(cuWorkFrom, cuWorkTo);
+    }
+
+    /**
+     * Gives the settler a work speed boost ({@link SpeedBoost#start}).
+     *
+     * @param percent how much faster it works, in percent
+     * @param from    the clock value at which the boost begins
+     * @param end     the clock value at which it ends
+     */
+    public void startSpeedBoost(double percent, long from, long end) {
+        speedBoost = speedBoost.start(percent, from, end);
+    }
+
+    /**
+     * @return the settler's work speed boost (saved with it)
+     */
+    public SpeedBoost speedBoost() {
+        return speedBoost;
+    }
+
+    /**
+     * @param boost the boost to keep: loaded from a save
+     */
+    public void setSpeedBoost(SpeedBoost boost) {
+        speedBoost = boost;
     }
 
     /**
@@ -2057,6 +2125,14 @@ public final class SettlerWork {
      */
     private OptionalLong shiftEnd() {
         return settler.getJobs().stream().map(SettlerJob::jobType).flatMapToLong(type -> ClerkStorage.shiftEnd(type).stream()).max();
+    }
+
+    /**
+     * @return the end of the latest window of the acts of this settler's Service Jobs ({@link ServiceActs#windowEnd}), empty
+     *         without such a Job; it moves the end of work, not the waking time
+     */
+    private OptionalInt serviceEnd() {
+        return settler.getJobs().stream().map(SettlerJob::jobType).flatMapToInt(type -> ServiceActs.windowEnd(type).stream()).max();
     }
 
     /**
@@ -2310,6 +2386,17 @@ public final class SettlerWork {
      */
     public void setEntertainment(Entertainment entertainment) {
         needs.setEntertainment(entertainment);
+    }
+
+    /**
+     * Adds points of Entertainment from a Service act, once per day and kind of act ({@link Entertainment#addCapped}).
+     *
+     * @param points the points to add
+     * @param cap    the daily cap of the act's kind
+     * @param day    the settler day of the act
+     */
+    public void entertain(double points, Entertain.Cap cap, long day) {
+        setEntertainment(entertainment().addCapped(points, cap, day));
     }
 
     /**

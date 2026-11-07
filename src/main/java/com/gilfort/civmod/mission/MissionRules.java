@@ -42,7 +42,8 @@ public final class MissionRules {
     /**
      * How many missions each Mission Job of a board gets in the daily offer: the Base Job (the Adventurer) the board level
      * plus 1 per open Station Types slot without a Specialization (an empty board: level + 1, as the first slot opens at
-     * level 1); every unlocked Specialization as many as the board level.
+     * level 1); every unlocked Specialization as many as the board level. A board without Specializations offers the Adventurer
+     * 2 x the board level (every open slot is empty).
      *
      * @param unlocked   the Mission Jobs the board offers, its Base Job first ({@code StationTypes.unlocked})
      * @param boardLevel the Mission Board level
