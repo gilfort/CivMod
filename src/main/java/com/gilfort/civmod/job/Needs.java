@@ -158,7 +158,7 @@ final class Needs {
             EntertainmentRules rules = EntertainmentRules.get();
             Component detail = Component.translatable("civmod.need.entertainment.detail", Entertainment.format(entertainment.value()), Entertainment.format(EntertainmentRules.MAX));
             Component tooltip = Component.translatable("civmod.need.entertainment.tooltip", Entertainment.format(entertainment.pointsOn(context.day())),
-                    Entertainment.format(rules.speedBonus(entertainment.value()) * 100.0));
+                    Entertainment.format(entertainment.talk().pointsOn(context.day())), Entertainment.format(rules.speedBonus(entertainment.value()) * 100.0));
             return new Check(rules.met(entertainment.value(), tier), detail, List.of(), tooltip);
         }
     }

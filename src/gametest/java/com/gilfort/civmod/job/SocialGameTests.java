@@ -47,11 +47,11 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 public final class SocialGameTests {
 
     /** A roll in the greeting share (0.20 to 0.50). */
-    private static final double GREETING = 0.35;
+    static final double GREETING = 0.35;
     /** A roll in the conversation share (below 0.20). */
-    private static final double CONVERSATION = 0.1;
+    static final double CONVERSATION = 0.1;
     /** A roll in the share of nothing (0.50 and above). */
-    private static final double NOTHING = 0.75;
+    static final double NOTHING = 0.75;
 
     private SocialGameTests() {
     }
@@ -78,11 +78,11 @@ public final class SocialGameTests {
     }
 
     /** The scripted rolls of a settler: always the same number, counted. */
-    private static final class Rolls implements DoubleSupplier {
-        private double value;
-        private int calls;
+    static final class Rolls implements DoubleSupplier {
+        double value;
+        int calls;
 
-        private Rolls(double value) {
+        Rolls(double value) {
             this.value = value;
         }
 
@@ -94,7 +94,7 @@ public final class SocialGameTests {
     }
 
     /** A fed settler of the Pantry's settlement with its rolls scripted. */
-    private static Settler settler(GameTestHelper helper, BlockPos pantry, int x, int z, Rolls rolls) {
+    static Settler settler(GameTestHelper helper, BlockPos pantry, int x, int z, Rolls rolls) {
         Settler settler = TavernGameTests.settler(helper, pantry, new BlockPos(x, 1, z));
         settler.getFood().setLevel(SettlerFood.MAX);
         settler.getWork().social().script(rolls);
@@ -109,12 +109,12 @@ public final class SocialGameTests {
     private static void relax(Settler... settlers) {
         for (Settler settler : settlers) {
             for (int i = 0; i <= SettlerSocial.LOOK_TICKS; i++) {
-                settler.getWork().greetingLook();
+                settler.getWork().socialTick();
             }
         }
     }
 
-    private static void end(Settler... settlers) {
+    static void end(Settler... settlers) {
         for (Settler settler : settlers) {
             settler.discard();
         }
@@ -194,19 +194,20 @@ public final class SocialGameTests {
         helper.succeed();
     }
 
-    /** The conversation share does nothing in this story, nor does a roll for nothing. */
+    /** The shares of the roll: a conversation roll greets nobody (a player never talks), nothing is nothing, a greeting greets. */
     private static void rolls(GameTestHelper helper) {
         BlockPos pantry = TavernGameTests.pantry(helper);
         Rolls rolls = new Rolls(CONVERSATION);
         Settler a = settler(helper, pantry, 2, 4, rolls);
-        Settler b = settler(helper, pantry, 5, 4, rolls);
         Player player = player(helper, GameType.SURVIVAL, 3, 4);
         a.getWork().decideNow(helper.getLevel());
-        helper.assertTrue(rolls.calls == 2, "One roll per settler and player found: " + rolls.calls);
-        helper.assertTrue(a.getWork().social().looking().isEmpty() && !a.isSwinging(), "The conversation share greets nobody");
+        helper.assertTrue(rolls.calls == 1, "One roll for the player found: " + rolls.calls);
+        helper.assertTrue(a.getWork().social().looking().isEmpty() && !a.isSwinging() && !a.getWork().social().inConversation(),
+                "The conversation share greets nobody and never talks to a player");
         rolls.value = NOTHING;
         a.getWork().decideNow(helper.getLevel());
         helper.assertTrue(a.getWork().social().looking().isEmpty() && !a.isSwinging(), "Nothing is nothing");
+        Settler b = settler(helper, pantry, 5, 4, rolls);
         rolls.value = GREETING;
         a.getWork().decideNow(helper.getLevel());
         helper.assertTrue(a.getWork().social().looking().isPresent(), "The greeting share greets");
@@ -217,7 +218,7 @@ public final class SocialGameTests {
     }
 
     /** A mock player standing in the level at a position. */
-    private static Player player(GameTestHelper helper, GameType mode, int x, int z) {
+    static Player player(GameTestHelper helper, GameType mode, int x, int z) {
         Player player = helper.makeMockPlayer(mode);
         Vec3 spot = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(x, 1, z)));
         player.snapTo(spot.x, spot.y, spot.z, 0.0F, 0.0F);
