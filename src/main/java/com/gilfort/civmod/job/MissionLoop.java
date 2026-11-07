@@ -45,7 +45,7 @@ import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
  * leaves at the start of the workday: it walks out of the settlement (like a foraging settler) and vanishes at the
  * border or after {@value #LEAVE_WALK_TICKS} ticks, is away (invisible, no AI, no hunger) until the mission's return
  * time and reappears where it vanished in the evening, with loot in the job's buffer and EXP – also during catch-up.
- * A Bard back from a Villager mission brings vanilla Villagers instead of loot and leads them to the board (during
+ * An Adventurer back from a Villager mission brings vanilla Villagers instead of loot and leads them to the board (during
  * catch-up they appear there). A settler that dies on the mission does not reappear: it is removed with everything it
  * carried.
  */
@@ -57,7 +57,7 @@ final class MissionLoop implements CategoryLoop {
     private static final double RETURN_RANGE = 32.0;
     /** Ticks a departing settler walks out before it vanishes. */
     static final int LEAVE_WALK_TICKS = 600;
-    /** Ticks a Bard leads its Villagers before they walk on to the board alone. */
+    /** Ticks an Adventurer leads its Villagers before they walk on to the board alone. */
     static final int LEAD_TICKS = 1200;
 
     private final SettlerWork shell;
@@ -74,7 +74,7 @@ final class MissionLoop implements CategoryLoop {
     /** Outcome used instead of the roll (tests only, not saved). */
     private MissionRules.@Nullable Outcome forcedOutcome;
     /**
-     * The Villagers a Bard back from a Villager mission leads to its board, null when it leads none (not saved: after
+     * The Villagers an Adventurer back from a Villager mission leads to its board, null when it leads none (not saved: after
      * loading they stay where they are as vanilla Villagers).
      */
     private @Nullable Lead lead;
@@ -357,7 +357,7 @@ final class MissionLoop implements CategoryLoop {
     }
 
     /**
-     * The Villagers of a successful Villager mission arrive with the Bard and follow it to the board; during catch-up
+     * The Villagers of a successful Villager mission arrive with the Adventurer and follow it to the board; during catch-up
      * they arrive at the board.
      *
      * @return how many Villagers arrived
@@ -372,7 +372,7 @@ final class MissionLoop implements CategoryLoop {
     }
 
     /**
-     * The Mission Job of a Bard that leads Villagers, so the shell can start the lead outside a job step: the return
+     * The Mission Job of an Adventurer that leads Villagers, so the shell can start the lead outside a job step: the return
      * ends the work day, and the Schedule only asks a job step to hold the evening ({@link #holdsDecision}).
      *
      * @param level the level
@@ -391,7 +391,7 @@ final class MissionLoop implements CategoryLoop {
     }
 
     /**
-     * Leads the Villagers to the board: the Bard walks there and the Villagers follow it (renewed at every decision, so
+     * Leads the Villagers to the board: the Adventurer walks there and the Villagers follow it (renewed at every decision, so
      * their own strolling does not take over); after {@value #LEAD_TICKS} ticks they walk on alone.
      *
      * @param level the level
@@ -407,7 +407,7 @@ final class MissionLoop implements CategoryLoop {
         return JobStep.walk(current.board(), SettlerWork.REACH, JobStatus.BRINGING_VILLAGERS);
     }
 
-    /** The Villagers walk the last steps to the board on their own; the Bard leads no more. */
+    /** The Villagers walk the last steps to the board on their own; the Adventurer leads no more. */
     private void endLead(ServerLevel level) {
         Lead current = lead;
         if (current != null) {
@@ -464,7 +464,7 @@ final class MissionLoop implements CategoryLoop {
 
     /**
      * Walking out holds every decision (also the evening) until the settler vanishes; so does leading Villagers back to
-     * the board (a Bard returns at the end of its work day).
+     * the board (an Adventurer returns at the end of its work day).
      */
     @Override
     public JobStep holdsDecision(ServerLevel level, SettlerJob job) {

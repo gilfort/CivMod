@@ -286,7 +286,7 @@ public final class EntertainmentGameTests {
     private static void saved(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
-        Entertainment entertainment = new Entertainment(7.5, 12L, 3.0, 12L, 12L, 12L, new Entertainment.Talk(12L, 2, 5000L, 1.0));
+        Entertainment entertainment = new Entertainment(7.5, 12L, 3.0, 12L, 12L, 12L, 11L, 10L, new Entertainment.Talk(12L, 2, 5000L, 1.0));
         settler.getWork().setEntertainment(entertainment);
 
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());

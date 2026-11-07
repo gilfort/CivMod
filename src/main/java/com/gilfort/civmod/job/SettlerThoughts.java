@@ -163,6 +163,7 @@ final class SettlerThoughts {
             case MISSION -> Items.MAP;
             case RECORD -> Items.MUSIC_DISC_CAT;
             case CONVERSATION -> Items.PAPER;
+            case PLAYING -> Items.NOTE_BLOCK;
             case JOB, NO_TOOL, NO_WORK_PLACE, BLOCKED, NEED_UNMET -> throw new IllegalArgumentException("Icon depends on the job or need: " + activity);
         };
     }

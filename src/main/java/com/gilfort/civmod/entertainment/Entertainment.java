@@ -1,13 +1,14 @@
 package com.gilfort.civmod.entertainment;
 
+import com.gilfort.civmod.api.Entertain;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 /**
  * The Entertainment of one settler (vault {@code Systems/Entertainment.md}), saved with the settler: the value from 0 to
  * {@link EntertainmentRules#MAX}, the day the decay was taken for, the points of the latest day that gave any and the
- * last evening the Tavern paid, the last evening whose record bubble was settled and the marks of the conversations.
- * The arithmetic lives in {@link EntertainmentRules}.
+ * last evening the Tavern paid, the last evening whose record bubble was settled, the last days a round stop and a
+ * stage act of a Bard paid and the marks of the conversations. The arithmetic lives in {@link EntertainmentRules}.
  *
  * @param value      the value, 0 to {@link EntertainmentRules#MAX}
  * @param decayedDay the day the decay was last taken for, {@link #NO_DAY} if none
@@ -15,9 +16,12 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
  * @param todayDay   the day {@link #today} counts for, {@link #NO_DAY} if none
  * @param tavernDay  the day of the last Tavern evening that paid, {@link #NO_DAY} if none
  * @param recordDay  the day of the last Tavern evening whose record bubble was settled (shown, or not needed), {@link #NO_DAY} if none
+ * @param roundDay   the day of the last round stop that paid ({@link Entertain.Cap#ROUND_STOP}), {@link #NO_DAY} if none
+ * @param stageDay   the day of the last evening a stage act paid ({@link Entertain.Cap#STAGE_ACT}), {@link #NO_DAY} if none
  * @param talk       the marks of the conversations ({@link Talk#NONE} if none)
  */
-public record Entertainment(double value, long decayedDay, double today, long todayDay, long tavernDay, long recordDay, Talk talk) {
+public record Entertainment(double value, long decayedDay, double today, long todayDay, long tavernDay, long recordDay, long roundDay,
+        long stageDay, Talk talk) {
 
     /** Marks "no game tick" in {@link Talk#lastTick}. */
     static final long NO_TICK = Long.MIN_VALUE;
@@ -73,7 +77,7 @@ public record Entertainment(double value, long decayedDay, double today, long to
     /** Marks "no day". */
     static final long NO_DAY = Long.MIN_VALUE;
     /** A settler nothing has happened to: 0 points. */
-    public static final Entertainment START = new Entertainment(0.0, NO_DAY, 0.0, NO_DAY, NO_DAY, NO_DAY, Talk.NONE);
+    public static final Entertainment START = new Entertainment(0.0, NO_DAY, 0.0, NO_DAY, NO_DAY, NO_DAY, NO_DAY, NO_DAY, Talk.NONE);
 
     /** Save codec; a save without Entertainment starts at {@link #START}. */
     public static final Codec<Entertainment> CODEC = RecordCodecBuilder.create(instance -> instance.group(
@@ -83,6 +87,8 @@ public record Entertainment(double value, long decayedDay, double today, long to
             Codec.LONG.optionalFieldOf("today_day", NO_DAY).forGetter(Entertainment::todayDay),
             Codec.LONG.optionalFieldOf("tavern_day", NO_DAY).forGetter(Entertainment::tavernDay),
             Codec.LONG.optionalFieldOf("record_day", NO_DAY).forGetter(Entertainment::recordDay),
+            Codec.LONG.optionalFieldOf("round_day", NO_DAY).forGetter(Entertainment::roundDay),
+            Codec.LONG.optionalFieldOf("stage_day", NO_DAY).forGetter(Entertainment::stageDay),
             Talk.CODEC.optionalFieldOf("talk", Talk.NONE).forGetter(Entertainment::talk)
     ).apply(instance, Entertainment::new));
 
@@ -95,6 +101,8 @@ public record Entertainment(double value, long decayedDay, double today, long to
      * @param todayDay   the day {@code today} counts for
      * @param tavernDay  the day of the last Tavern evening that paid
      * @param recordDay  the day of the last Tavern evening whose record bubble was settled
+     * @param roundDay   the day of the last round stop that paid
+     * @param stageDay   the day of the last evening a stage act paid
      * @param talk       the marks of the conversations
      */
     public Entertainment {
@@ -106,7 +114,7 @@ public record Entertainment(double value, long decayedDay, double today, long to
      * @return an Entertainment with that value, no decay taken yet and no points today
      */
     public static Entertainment of(double value) {
-        return new Entertainment(value, NO_DAY, 0.0, NO_DAY, NO_DAY, NO_DAY, Talk.NONE);
+        return new Entertainment(value, NO_DAY, 0.0, NO_DAY, NO_DAY, NO_DAY, NO_DAY, NO_DAY, Talk.NONE);
     }
 
     /**
@@ -119,12 +127,12 @@ public record Entertainment(double value, long decayedDay, double today, long to
      */
     public Entertainment decayed(long day, EntertainmentRules rules) {
         if (decayedDay == NO_DAY) {
-            return new Entertainment(value, day, today, todayDay, tavernDay, recordDay, talk);
+            return new Entertainment(value, day, today, todayDay, tavernDay, recordDay, roundDay, stageDay, talk);
         }
         if (day <= decayedDay) {
             return this;
         }
-        return new Entertainment(rules.decayed(value, day - decayedDay), day, today, todayDay, tavernDay, recordDay, talk);
+        return new Entertainment(rules.decayed(value, day - decayedDay), day, today, todayDay, tavernDay, recordDay, roundDay, stageDay, talk);
     }
 
     /**
@@ -135,7 +143,7 @@ public record Entertainment(double value, long decayedDay, double today, long to
      */
     public Entertainment add(double points, long day) {
         double raised = EntertainmentRules.clamp(value + points);
-        return new Entertainment(raised, decayedDay, pointsOn(day) + (raised - value), day, tavernDay, recordDay, talk);
+        return new Entertainment(raised, decayedDay, pointsOn(day) + (raised - value), day, tavernDay, recordDay, roundDay, stageDay, talk);
     }
 
     /**
@@ -153,7 +161,42 @@ public record Entertainment(double value, long decayedDay, double today, long to
      */
     public Entertainment payTavern(double points, long day) {
         Entertainment added = add(points, day);
-        return new Entertainment(added.value, added.decayedDay, added.today, added.todayDay, day, recordDay, talk);
+        return new Entertainment(added.value, added.decayedDay, added.today, added.todayDay, day, recordDay, roundDay, stageDay, talk);
+    }
+
+    /**
+     * @param cap the kind of act
+     * @param day the day
+     * @return whether this settler already got the points of that kind of act on the day (never for {@link Entertain.Cap#NONE})
+     */
+    public boolean heard(Entertain.Cap cap, long day) {
+        return switch (cap) {
+            case NONE -> false;
+            case ROUND_STOP -> roundDay == day;
+            case STAGE_ACT -> stageDay == day;
+        };
+    }
+
+    /**
+     * Adds the points of an act once per day and kind of act, however many Bards reach the settler: the first one pays, the
+     * others find the day marked.
+     *
+     * @param points the points
+     * @param cap    the kind of act that gives them
+     * @param day    the day
+     * @return the Entertainment with the points added ({@link #add}) and the day marked for the kind; unchanged if the kind
+     *         paid on that day already
+     */
+    public Entertainment addCapped(double points, Entertain.Cap cap, long day) {
+        if (heard(cap, day)) {
+            return this;
+        }
+        Entertainment added = add(points, day);
+        return switch (cap) {
+            case NONE -> added;
+            case ROUND_STOP -> new Entertainment(added.value, added.decayedDay, added.today, added.todayDay, tavernDay, recordDay, day, stageDay, talk);
+            case STAGE_ACT -> new Entertainment(added.value, added.decayedDay, added.today, added.todayDay, tavernDay, recordDay, roundDay, day, talk);
+        };
     }
 
     /**
@@ -169,7 +212,7 @@ public record Entertainment(double value, long decayedDay, double today, long to
      * @return the Entertainment with the record bubble of that evening marked as settled
      */
     public Entertainment markRecord(long day) {
-        return new Entertainment(value, decayedDay, today, todayDay, tavernDay, day, talk);
+        return new Entertainment(value, decayedDay, today, todayDay, tavernDay, day, roundDay, stageDay, talk);
     }
 
     /**
@@ -185,7 +228,8 @@ public record Entertainment(double value, long decayedDay, double today, long to
         Entertainment added = add(points, day);
         double gained = added.value - value;
         Talk marks = new Talk(day, talk.on(day) + 1, now, talk.pointsOn(day) + gained);
-        return new Entertainment(added.value, added.decayedDay, added.today, added.todayDay, added.tavernDay, added.recordDay, marks);
+        return new Entertainment(added.value, added.decayedDay, added.today, added.todayDay, added.tavernDay, added.recordDay, added.roundDay,
+                added.stageDay, marks);
     }
 
     /**

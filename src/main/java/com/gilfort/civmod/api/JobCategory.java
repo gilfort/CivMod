@@ -8,7 +8,7 @@ import org.jetbrains.annotations.ApiStatus;
  * categories.
  * <p>
  * Public profiles: Resource Collection ({@link ResourceCollectionProfile}), Producing ({@link ProducingProfile}), Mission
- * ({@link MissionProfile}). Logistics stays internal; Guard and Service get their profile with their loop.
+ * ({@link MissionProfile}), Service ({@link ServiceProfile}). Logistics stays internal; Guard gets its profile with its loop.
  */
 @ApiStatus.Experimental
 public enum JobCategory {
@@ -23,6 +23,6 @@ public enum JobCategory {
     GUARD,
     /** Move items between containers; internal to CivMod (Clerk, Deliveryman). */
     LOGISTICS,
-    /** Stay at a POI and provide an effect to other settlers; not implemented yet. */
+    /** Stand at the JobBlock and provide effects to the listeners within a radius (vault {@code Systems/Job Categories.md}). */
     SERVICE
 }

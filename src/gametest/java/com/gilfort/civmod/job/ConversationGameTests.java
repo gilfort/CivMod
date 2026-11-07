@@ -119,7 +119,7 @@ public final class ConversationGameTests {
     private static void age(Settler settler, long ticks) {
         Entertainment e = settler.getWork().entertainment();
         Entertainment.Talk t = e.talk();
-        settler.getWork().setEntertainment(new Entertainment(e.value(), e.decayedDay(), e.today(), e.todayDay(), e.tavernDay(), e.recordDay(),
+        settler.getWork().setEntertainment(new Entertainment(e.value(), e.decayedDay(), e.today(), e.todayDay(), e.tavernDay(), e.recordDay(), e.roundDay(), e.stageDay(),
                 new Entertainment.Talk(t.day(), t.count(), t.lastTick() - ticks, t.points())));
     }
 
@@ -302,10 +302,10 @@ public final class ConversationGameTests {
 
         // The next day starts at 0 again.
         Entertainment e = a.getWork().entertainment();
-        a.getWork().setEntertainment(new Entertainment(e.value(), e.decayedDay(), e.today(), e.todayDay(), e.tavernDay(), e.recordDay(),
+        a.getWork().setEntertainment(new Entertainment(e.value(), e.decayedDay(), e.today(), e.todayDay(), e.tavernDay(), e.recordDay(), e.roundDay(), e.stageDay(),
                 new Entertainment.Talk(day - 1, 2, e.talk().lastTick() - 5000, e.talk().points())));
         Entertainment f = b.getWork().entertainment();
-        b.getWork().setEntertainment(new Entertainment(f.value(), f.decayedDay(), f.today(), f.todayDay(), f.tavernDay(), f.recordDay(),
+        b.getWork().setEntertainment(new Entertainment(f.value(), f.decayedDay(), f.today(), f.todayDay(), f.tavernDay(), f.recordDay(), f.roundDay(), f.stageDay(),
                 new Entertainment.Talk(day - 1, 2, f.talk().lastTick() - 5000, f.talk().points())));
         rolls.value = CONVERSATION;
         a.getWork().decideNow(level);

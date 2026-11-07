@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "condition": {
+        "type": "minecraft:survives_explosion"
+      },
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "modifier": [
+            {
+              "type": "minecraft:copy_components",
+              "include": [
+                "civmod:job_level"
+              ],
+              "source": "block_entity"
+            }
+          ],
+          "name": "civmod_example:bell_ringer_block"
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "civmod_example:blocks/bell_ringer_block"
+}

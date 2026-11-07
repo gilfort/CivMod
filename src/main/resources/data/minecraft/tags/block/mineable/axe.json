@@ -8,6 +8,7 @@
     "civmod:human_center_block",
     "civmod:craftsperson_block",
     "civmod:smelter_block",
+    "civmod:stage_block",
     "civmod:gatherer_block",
     "civmod:scarecrow"
   ]

@@ -320,9 +320,10 @@ public final class SettlementBlock {
      * @param stationTypes the unlock items in the Station Types slots, by slot ({@link Items#AIR}: empty)
      * @param found      the Found tab state per Resource Collection Job
      * @param centerRace the race of a Center Block, empty for every other JobBlock
+     * @param soundCenter the Sound center of a Stage, empty for every other JobBlock and while the Stage block is the center
      */
     private record PlaceFields(List<Job> autoAssign, List<Identifier> legacyExcluded, Optional<SavedScan> legacyScan, List<Item> stationTypes,
-            List<SavedFound> found, Optional<Identifier> centerRace) {
+            List<SavedFound> found, Optional<Identifier> centerRace, Optional<BlockPos> soundCenter) {
 
         static final MapCodec<PlaceFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Job.CODEC.listOf().optionalFieldOf("auto_assign", List.of()).forGetter(PlaceFields::autoAssign),
@@ -330,10 +331,11 @@ public final class SettlementBlock {
                 SavedScan.CODEC.optionalFieldOf("found_scan").forGetter(PlaceFields::legacyScan),
                 BuiltInRegistries.ITEM.byNameCodec().listOf().lenientOptionalFieldOf("station_types", List.of()).forGetter(PlaceFields::stationTypes),
                 SavedFound.CODEC.listOf().lenientOptionalFieldOf("found", List.of()).forGetter(PlaceFields::found),
-                Identifier.CODEC.optionalFieldOf("center_race").forGetter(PlaceFields::centerRace)
+                Identifier.CODEC.optionalFieldOf("center_race").forGetter(PlaceFields::centerRace),
+                BlockPos.CODEC.optionalFieldOf("sound_center").forGetter(PlaceFields::soundCenter)
         ).apply(instance, PlaceFields::new));
 
-        static final PlaceFields NONE = new PlaceFields(List.of(), List.of(), Optional.empty(), List.of(), List.of(), Optional.empty());
+        static final PlaceFields NONE = new PlaceFields(List.of(), List.of(), Optional.empty(), List.of(), List.of(), Optional.empty(), Optional.empty());
     }
 
     /**
@@ -377,6 +379,8 @@ public final class SettlementBlock {
     private boolean connected;
     /** The race of a Center Block, empty for every other JobBlock (vault {@code Systems/Settlement.md}). */
     private Optional<Identifier> centerRace;
+    /** The Sound center of a Stage (vault {@code Systems/Entertainment.md}); empty: the Stage block itself. */
+    private Optional<BlockPos> soundCenter;
     private final List<BlockPos> workPoints = new ArrayList<>();
     private Optional<BlockPos> collect;
     private Optional<BlockPos> dropOff;
@@ -456,6 +460,7 @@ public final class SettlementBlock {
         this.fuel = producing.fuel().map(List::copyOf);
         this.autoAssign.addAll(place.autoAssign());
         this.centerRace = place.centerRace();
+        this.soundCenter = place.soundCenter();
         place.found().forEach(saved -> {
             FoundState state = foundState(saved.job());
             state.excluded.addAll(saved.excluded());
@@ -475,7 +480,7 @@ public final class SettlementBlock {
     private PlaceFields placeFields() {
         List<SavedFound> saved = found.entrySet().stream()
                 .map(entry -> new SavedFound(entry.getKey(), entry.getValue().excluded.stream().sorted().toList(), entry.getValue().scan)).toList();
-        return new PlaceFields(List.copyOf(autoAssign), List.of(), Optional.empty(), List.copyOf(stationTypes), saved, centerRace);
+        return new PlaceFields(List.copyOf(autoAssign), List.of(), Optional.empty(), List.copyOf(stationTypes), saved, centerRace, soundCenter);
     }
 
     private FoundState foundState(Job job) {
@@ -789,6 +794,18 @@ public final class SettlementBlock {
      */
     public Optional<Identifier> centerRace() {
         return centerRace;
+    }
+
+    /**
+     * @return the Sound center of a Stage that the player set with the Scroll of Assignment; empty while the Stage block itself
+     *         is the center
+     */
+    public Optional<BlockPos> soundCenter() {
+        return soundCenter;
+    }
+
+    void setSoundCenter(Optional<BlockPos> soundCenter) {
+        this.soundCenter = soundCenter.map(BlockPos::immutable);
     }
 
     /**

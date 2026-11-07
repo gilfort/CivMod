@@ -34,6 +34,8 @@ public enum ThoughtBubble {
     RECORD(false),
     /** Two settlers talk: a sheet of paper, above both. An activity bubble without the red mark, hidden by "Problems only". */
     CONVERSATION(false),
+    /** A Bard starts a stop or a stage act: a note block. */
+    PLAYING(false),
     /** Problem: no usable tool (the needed tool). */
     NO_TOOL(true),
     /** Problem: the drop-off or the Deliveryman's store is full (the drop-off marker). */

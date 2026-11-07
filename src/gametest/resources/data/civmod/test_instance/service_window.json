@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:service_window",
+  "function": "civmod:service_window",
+  "max_ticks": 600,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
