@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "civmod:day",
+  "environment": "civmod:needs_early_day",
   "function": "civmod:entertainment_needs_row_early_day",
   "max_ticks": 100,
   "structure": "minecraft:empty",
