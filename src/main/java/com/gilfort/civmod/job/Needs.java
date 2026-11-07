@@ -6,6 +6,8 @@ import java.util.Optional;
 import java.util.OptionalInt;
 
 import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.entertainment.Entertainment;
+import com.gilfort.civmod.entertainment.EntertainmentRules;
 import com.gilfort.civmod.food.FoodVariety;
 
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -126,8 +128,49 @@ final class Needs {
         }
     };
 
+    /** The Entertainment need of a tier: more than the tier's threshold of {@link EntertainmentRules}. */
+    private static final class EntertainmentNeed implements Need {
+
+        private final int tier;
+
+        EntertainmentNeed(int tier) {
+            this.tier = tier;
+        }
+
+        @Override
+        public int tier() {
+            return tier;
+        }
+
+        @Override
+        public Component name() {
+            return Component.translatable("civmod.need.entertainment");
+        }
+
+        @Override
+        public Item icon() {
+            return Items.JUKEBOX;
+        }
+
+        @Override
+        public Check check(Context context) {
+            Entertainment entertainment = context.settler().getWork().entertainment();
+            EntertainmentRules rules = EntertainmentRules.get();
+            Component detail = Component.translatable("civmod.need.entertainment.detail", Entertainment.format(entertainment.value()), Entertainment.format(EntertainmentRules.MAX));
+            Component tooltip = Component.translatable("civmod.need.entertainment.tooltip", Entertainment.format(entertainment.pointsOn(context.day())),
+                    Entertainment.format(rules.speedBonus(entertainment.value()) * 100.0));
+            return new Check(rules.met(entertainment.value(), tier), detail, List.of(), tooltip);
+        }
+    }
+
+    /** The Entertainment need of tier 2. */
+    private static final Need ENTERTAINMENT_2 = new EntertainmentNeed(2);
+
+    /** The Entertainment need of tier 3. */
+    private static final Need ENTERTAINMENT_3 = new EntertainmentNeed(3);
+
     /** Every need, in the order of its rows in the Needs tab. */
-    static final List<Need> ALL = List.of(FOOD, FIRE, BED, FOOD_VARIETY);
+    static final List<Need> ALL = List.of(FOOD, FIRE, BED, FOOD_VARIETY, ENTERTAINMENT_2, ENTERTAINMENT_3);
 
     private Needs() {
     }

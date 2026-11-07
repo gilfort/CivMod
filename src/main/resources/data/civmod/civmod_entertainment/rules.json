@@ -1,0 +1,6 @@
+{
+  "decay": 1,
+  "tier_2_threshold": 5,
+  "tier_3_threshold": 8,
+  "speed_per_point": 0.02
+}
