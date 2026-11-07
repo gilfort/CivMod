@@ -42,7 +42,7 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 /**
  * GameTests for the Bard's day round (spec "Service and Bard", story #211; vault {@code Systems/Entertainment.md}, Bard): the
  * stops at working settlers, their number, the hours, the daily cap and the look of a performance. The tests run in the
- * environment {@code civmod:bard_round} (12:00, the clock stands still); stops are timed in game ticks, so a test that waits
+ * environment {@code civmod:bard_round} (12:00, the clock stands still; the test that moves the clock has its own batch, {@code civmod:bard_round_clock}); stops are timed in game ticks, so a test that waits
  * for stops takes up to a few thousand ticks.
  * <p>
  * A "working settler" is a settler of the settlement on a job step. The tests register a Service Job
@@ -269,7 +269,7 @@ public final class BardRoundGameTests {
                 .thenExecute(() -> helper.assertTrue(ServiceGameTests.exp(bard, scene.job()) == 0, "Not before a minute is over: " + (level.getGameTime() - started[0]) + " ticks"))
                 .thenWaitUntil(() -> helper.assertTrue(ServiceGameTests.exp(bard, scene.job()) > 0, "The Bard looks again and plays (status " + status(bard) + ")"))
                 .thenExecute(() -> {
-                    helper.assertTrue(level.getGameTime() - started[0] >= 1200, "After about a minute: " + (level.getGameTime() - started[0]));
+                    helper.assertTrue(level.getGameTime() - started[0] >= 1100, "After about a minute (the wait began with the Bard's first decision, a little before the test): " + (level.getGameTime() - started[0]));
                     helper.assertTrue(ServiceGameTests.near(ServiceGameTests.entertainment(worker[0]), 1.1), "The worker hears it");
                     ServiceGameTests.cleanUp(level, scene, worker[0]);
                 })
@@ -316,10 +316,12 @@ public final class BardRoundGameTests {
         helper.startSequence()
                 .thenExecute(() -> bard.getWork().decideNow(level))
                 .thenWaitUntil(() -> helper.assertTrue(playingBubbles(bard) == 2, "Two stops (bubbles " + playingBubbles(bard) + ", status " + status(bard) + ")"))
-                .thenIdle(STOP_TICKS + 400)
+                .thenIdle(STOP_TICKS)
+                .thenWaitUntil(() -> helper.assertTrue(status(bard) != JobStatus.PLAYING, "The stops are over (status " + status(bard) + ")"))
+                .thenIdle(400)
                 .thenExecute(() -> {
                     helper.assertTrue(playingBubbles(bard) == 2, "No third stop: " + playingBubbles(bard));
-                    helper.assertTrue(status(bard) != JobStatus.PLAYING && !holdsHorn(bard), "The stops are over: " + status(bard));
+                    helper.assertTrue(status(bard) != JobStatus.PLAYING && !holdsHorn(bard), "Nothing is played any more: " + status(bard));
                     helper.assertTrue(ServiceGameTests.near(ServiceGameTests.entertainment(worker), 1.1),
                             "+1 once a day however many stops: " + ServiceGameTests.entertainment(worker));
                     ServiceGameTests.cleanUp(level, scene, worker);
@@ -378,9 +380,10 @@ public final class BardRoundGameTests {
                     helper.assertTrue(bard.getWork().recentThoughts().stream().anyMatch(show -> show.bubble() == ThoughtBubble.PLAYING && show.icon() == Items.NOTE_BLOCK && show.on()),
                             "With the note block: " + bard.getWork().recentThoughts());
                 })
-                .thenIdle(STOP_TICKS + 20)
+                .thenIdle(STOP_TICKS)
+                .thenWaitUntil(() -> helper.assertTrue(status(bard) != JobStatus.PLAYING, "The stop is over (status " + status(bard) + ")"))
                 .thenExecute(() -> {
-                    helper.assertTrue(!holdsHorn(bard) && status(bard) != JobStatus.PLAYING, "The stop is over: no horn (status " + status(bard) + ")");
+                    helper.assertTrue(!holdsHorn(bard), "No horn after the stop");
                     helper.assertTrue(playingBubbles(bard) == 1, "No second bubble: " + playingBubbles(bard));
                     ServiceGameTests.cleanUp(level, scene, worker);
                 })

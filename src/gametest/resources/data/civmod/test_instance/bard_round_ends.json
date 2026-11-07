@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "civmod:bard_round",
+  "environment": "civmod:bard_round_clock",
   "function": "civmod:bard_round_ends",
   "max_ticks": 800,
   "structure": "minecraft:empty",
