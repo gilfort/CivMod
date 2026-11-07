@@ -213,11 +213,10 @@ public final class StageGameTests {
 
         // The recipe: note block on top, barrel in the middle, planks around.
         ItemStack planks = new ItemStack(Items.OAK_PLANKS);
-        CraftingInput stage = CraftingInput.of(3, 3, List.of(planks, new ItemStack(Items.NOTE_BLOCK), planks, planks, new ItemStack(Items.BARREL), planks,
-                planks, planks, planks));
+        // Two rows like the other JobBlocks: planks, note block, planks over planks, barrel, planks.
+        CraftingInput stage = CraftingInput.of(3, 2, List.of(planks, new ItemStack(Items.NOTE_BLOCK), planks, planks, new ItemStack(Items.BARREL), planks));
         helper.assertTrue(crafts(level, stage), "The Stage crafts from note block, barrel and planks");
-        CraftingInput swapped = CraftingInput.of(3, 3, List.of(planks, new ItemStack(Items.BARREL), planks, planks, new ItemStack(Items.NOTE_BLOCK), planks,
-                planks, planks, planks));
+        CraftingInput swapped = CraftingInput.of(3, 2, List.of(planks, new ItemStack(Items.BARREL), planks, planks, new ItemStack(Items.NOTE_BLOCK), planks));
         helper.assertTrue(!crafts(level, swapped), "Barrel and note block do not swap");
         helper.succeed();
     }
