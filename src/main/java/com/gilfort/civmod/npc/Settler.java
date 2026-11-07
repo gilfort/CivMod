@@ -705,6 +705,7 @@ public class Settler extends PathfinderMob {
         output.store("needs", com.gilfort.civmod.job.NeedState.CODEC, work.needState());
         output.store("tool_needs", com.gilfort.civmod.job.ToolNeeds.Saved.LIST, work.toolNeedStates());
         output.store("entertainment", com.gilfort.civmod.entertainment.Entertainment.CODEC, work.entertainment());
+        output.store("speed_boost", com.gilfort.civmod.job.SpeedBoost.CODEC, work.speedBoost());
     }
 
     @Override
@@ -725,6 +726,7 @@ public class Settler extends PathfinderMob {
         input.read("needs", com.gilfort.civmod.job.NeedState.CODEC).ifPresent(work::restoreNeeds);
         input.read("tool_needs", com.gilfort.civmod.job.ToolNeeds.Saved.LIST).ifPresent(work::restoreToolNeeds);
         input.read("entertainment", com.gilfort.civmod.entertainment.Entertainment.CODEC).ifPresent(work::setEntertainment);
+        input.read("speed_boost", com.gilfort.civmod.job.SpeedBoost.CODEC).ifPresent(work::setSpeedBoost);
         setInvisible(isAway());
     }
 }

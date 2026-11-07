@@ -20,6 +20,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
+import com.gilfort.civmod.api.ServiceProfile;
 import com.gilfort.civmod.api.XpGain;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.entertainment.Entertainment;
@@ -141,6 +142,9 @@ public final class SettlerWork {
     /** The Deliveryman's loop: a second Logistics loop beside the Clerk's. */
     private final DeliverymanLoop deliverymen;
     private final PriestLoop priests;
+    private final ServiceLoop services;
+    /** The timed speed boost from a {@code WorkSpeed} effect (saved with the settler). */
+    private SpeedBoost speedBoost = SpeedBoost.NONE;
     private final Laborer laborer;
 
     private Activity activity = Activity.IDLE;
@@ -206,6 +210,8 @@ public final class SettlerWork {
         loops.put(JobCategory.PRODUCING, new ProducingLoop(this));
         deliverymen = new DeliverymanLoop(this);
         priests = new PriestLoop(this);
+        services = new ServiceLoop(this);
+        loops.put(JobCategory.SERVICE, services);
         laborer = new Laborer(this);
         thoughts = new SettlerThoughts(settler);
         meals = new SettlerMeals(this);
@@ -381,11 +387,15 @@ public final class SettlerWork {
             return deliverymen;
         }
         if (job.jobType().category() == JobCategory.SERVICE) {
-            // The Administrator has no work; the Priest prays; the Tavern Host holds its counter like a Clerk.
+            // The Tavern Host holds its counter like a Clerk; the Priest prays; any other Service Job plays the acts of its
+            // profile; the Administrator has none and no work.
             if (ClerkStorage.shiftEnd(job.jobType()).isPresent()) {
                 return clerks;
             }
-            return job.jobType() == ModJobs.PRIEST.get() ? priests : null;
+            if (job.jobType() == ModJobs.PRIEST.get()) {
+                return priests;
+            }
+            return job.jobType().profile(ServiceProfile.class).isPresent() ? services : null;
         }
         CategoryLoop loop = loops.get(job.jobType().category());
         // The Logistics category has two loops: the Clerk's (here) and the Deliveryman's (above).
@@ -1876,15 +1886,51 @@ public final class SettlerWork {
 
     /**
      * The factor every work speed is multiplied with: the one place where the speed bonuses add up. The blessing's share
-     * ({@link #blessingFactor}) and the 2 % per point of Entertainment ({@link EntertainmentRules#speedFactor}) are added,
-     * not multiplied. Live play and catch-up both read it; the value is the one of the day being worked, because the
+     * ({@link #blessingFactor}), the boost of a {@code WorkSpeed} effect ({@link #speedBoostShare}) and the 2 % per point of
+     * Entertainment ({@link EntertainmentRules#speedFactor}) are added, not multiplied. Live play and catch-up both read it; the value is the one of the day being worked, because the
      * decay is taken at wake-up before the work starts.
      *
      * @param level the level
      * @return 1 without any bonus, 1.4 with full Entertainment and a blessing
      */
     public double speedFactor(ServerLevel level) {
-        return EntertainmentRules.get().speedFactor(needs.entertainment().value(), blessingFactor(level));
+        return EntertainmentRules.get().speedFactor(needs.entertainment().value(), blessingFactor(level) + speedBoostShare(level));
+    }
+
+    /**
+     * The share a {@code WorkSpeed} effect of a Service act adds to the speed factor ({@link SpeedBoost}): live that of now,
+     * in catch-up the average over the simulated work time.
+     *
+     * @param level the level
+     * @return 0 without a boost, else its percent as a fraction
+     */
+    public double speedBoostShare(ServerLevel level) {
+        return cuWorkFrom == NOT_SIMULATING ? speedBoost.share(level.getOverworldClockTime()) : speedBoost.averageShare(cuWorkFrom, cuWorkTo);
+    }
+
+    /**
+     * Gives the settler a work speed boost ({@link SpeedBoost#start}).
+     *
+     * @param percent how much faster it works, in percent
+     * @param from    the clock value at which the boost begins
+     * @param end     the clock value at which it ends
+     */
+    public void startSpeedBoost(double percent, long from, long end) {
+        speedBoost = speedBoost.start(percent, from, end);
+    }
+
+    /**
+     * @return the settler's work speed boost (saved with it)
+     */
+    public SpeedBoost speedBoost() {
+        return speedBoost;
+    }
+
+    /**
+     * @param boost the boost to keep: loaded from a save
+     */
+    public void setSpeedBoost(SpeedBoost boost) {
+        speedBoost = boost;
     }
 
     /**

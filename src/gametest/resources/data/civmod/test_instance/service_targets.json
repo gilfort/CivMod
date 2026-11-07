@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:service_open",
+  "function": "civmod:service_targets",
+  "max_ticks": 400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
