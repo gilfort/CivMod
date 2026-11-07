@@ -117,8 +117,11 @@ public final class BardRoundGameTests {
         return worker;
     }
 
+    /** A settler of the settlement standing at a spot, frozen there: with its AI on it would stroll in or out of the Bard's radius. */
     private static Settler idle(GameTestHelper helper, ServiceGameTests.Scene scene, BlockPos at, String name) {
-        return ServiceGameTests.settler(helper, scene.settlement(), Vec3.atBottomCenterOf(helper.absolutePos(at)), name, true);
+        Settler settler = ServiceGameTests.settler(helper, scene.settlement(), Vec3.atBottomCenterOf(helper.absolutePos(at)), name, true);
+        settler.setNoAi(true);
+        return settler;
     }
 
     private static JobStatus status(Settler bard) {
@@ -144,7 +147,7 @@ public final class BardRoundGameTests {
 
     /** The scripted rolls of the meeting check of one settler: the same number every time, counted. */
     private static final class Rolls implements DoubleSupplier {
-        private volatile double value = ServiceGameTests.QUIET_ROLL;
+        private volatile double value = QuietSocialLife.QUIET_ROLL;
         private volatile int calls;
 
         @Override
@@ -329,7 +332,9 @@ public final class BardRoundGameTests {
                         "The round is over: the Bard plays the stage act at the Stage (status " + status(bard) + ", at " + bard.position() + ")"))
                 .thenExecute(() -> {
                     Vec3 top = Vec3.atBottomCenterOf(helper.absolutePos(STAGE.above()));
-                    helper.assertTrue(Math.abs(bard.getX() - top.x) < 0.7 && Math.abs(bard.getZ() - top.z) < 0.7, "On the Stage: " + bard.position() + " instead of " + top);
+                    helper.assertTrue(Math.abs(bard.getX() - top.x) < 0.7 && Math.abs(bard.getZ() - top.z) < 0.7, "On the Stage: " + bard.position() + " instead of " + top
+                            + " (status " + status(bard) + ", hearer " + hearer.position() + " with " + ServiceGameTests.entertainment(hearer) + ", worker "
+                            + worker.position() + " with " + ServiceGameTests.entertainment(worker) + ")");
                     helper.assertTrue(playingBubbles(bard) == 2, "A bubble for the stop and one for the stage act: " + playingBubbles(bard));
                     ServiceGameTests.cleanUp(level, scene, worker, hearer);
                 })
@@ -467,7 +472,7 @@ public final class BardRoundGameTests {
                     workerRolls.value = GREETING;
                     worker.getWork().decideNow(level);
                     helper.assertTrue(bard.getWork().atWork() && status(bard) == JobStatus.PLAYING && holdsHorn(bard), "A greeting does not disturb the Bard");
-                    workerRolls.value = ServiceGameTests.QUIET_ROLL;
+                    workerRolls.value = QuietSocialLife.QUIET_ROLL;
                 })
                 .thenIdle(150)
                 .thenExecute(() -> {
@@ -500,7 +505,7 @@ public final class BardRoundGameTests {
                 .thenExecute(() -> {
                     bardRolls.value = CONVERSATION;
                     bard.getWork().decideNow(level);
-                    bardRolls.value = ServiceGameTests.QUIET_ROLL;
+                    bardRolls.value = QuietSocialLife.QUIET_ROLL;
                     helper.assertTrue(!bard.getWork().atWork() && !worker.getWork().atWork(), "Both stop for the conversation");
                 })
                 .thenWaitUntil(() -> helper.assertTrue(bard.getWork().atWork() && worker.getWork().atWork()
@@ -546,7 +551,7 @@ public final class BardRoundGameTests {
                     helper.assertTrue(bard.distanceTo(worker) <= 6.0, "Setup: the Bard is within the radius of the check: " + bard.distanceTo(worker));
                     workerRolls.value = CONVERSATION;
                     worker.getWork().decideNow(level);
-                    workerRolls.value = ServiceGameTests.QUIET_ROLL;
+                    workerRolls.value = QuietSocialLife.QUIET_ROLL;
                     helper.assertTrue(!worker.getWork().atWork(), "The worker stops to talk to the Bard");
                 })
                 .thenWaitUntil(() -> helper.assertTrue(worker.getWork().entertainment().talk().on(day) == 1, "The talk with the Bard is over (worker at work "
