@@ -3,6 +3,7 @@ package com.gilfort.civmod.gametest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
@@ -77,6 +78,8 @@ public final class TavernGameTests {
             register(helper, "tavern_catch_up_jukebox", TavernGameTests::catchUpJukebox);
             register(helper, "tavern_jukebox_unloaded_chunk", TavernGameTests::jukeboxUnloadedChunk);
             register(helper, "tavern_seat_taken_by_player", TavernGameTests::seatTakenByPlayer);
+            register(helper, "tavern_only_seated_guests_paid", TavernGameTests::onlySeatedGuestsPaid);
+            register(helper, "tavern_catch_up_unloaded_pantry", TavernGameTests::catchUpUnloadedPantry);
         });
     }
 
@@ -121,6 +124,31 @@ public final class TavernGameTests {
     private static void end(GameTestHelper helper, BlockPos pantry, List<Settler> settlers) {
         TestAssignments.unassign(SettlementData.get(helper.getLevel()), pantry);
         settlers.forEach(Settler::discard);
+        helper.getLevel().getEntitiesOfClass(Cushion.class, helper.getBounds()).forEach(Cushion::discard);
+    }
+
+    /**
+     * Gives each guest a Cushion of its own within the Tavern radius and lets it book one (the test runs in the evening, the
+     * Tavern Host must be assigned already). Only booked guests are paid by the Tavern.
+     */
+    static void seat(GameTestHelper helper, Settler... guests) {
+        for (Settler guest : guests) {
+            cushion(helper, new BlockPos(8, 1, 3 + helper.getLevel().getEntitiesOfClass(Cushion.class, helper.getBounds()).size()), 0.0F);
+            guest.getFood().setLevel(SettlerFood.MAX);
+            guest.getWork().decideNow(helper.getLevel());
+        }
+    }
+
+    /** Moves the frozen clock to the same time on the next day; the guests book again. Only for a test with an environment of its own. */
+    private static long nextEvening(GameTestHelper helper, Settler... guests) {
+        ServerLevel level = helper.getLevel();
+        long next = DayClock.day(level) + 1;
+        level.getServer().clockManager().setTotalTicks(level.registryAccess().getOrThrow(WorldClocks.OVERWORLD),
+                next * DayClock.DAY_TICKS + DayClock.dayTime(level));
+        for (Settler guest : guests) {
+            guest.getWork().decideNow(level);
+        }
+        return next;
     }
 
     /** The Tavern Host counts among the 4; three present give nothing; one far away is not present. */
@@ -134,11 +162,13 @@ public final class TavernGameTests {
         Settler b = settler(helper, pantry, new BlockPos(4, 1, 2));
         Settler far = settler(helper, pantry, new BlockPos(1, 1, 1 + 12 + 1));
         List<Settler> all = List.of(host, a, b, far);
+        seat(helper, a, b);
 
         Tavern.countAt(level, pantry, day, EVENING);
         helper.assertTrue(all.stream().allMatch(settler -> value(settler) == 0.0), "Three present, no jukebox: nothing");
 
         Settler c = settler(helper, pantry, new BlockPos(5, 1, 2));
+        seat(helper, c);
         Tavern.countAt(level, pantry, day, EVENING);
         helper.assertTrue(Math.abs(value(host) - 3.0) < EPSILON, "The Tavern Host counts and is paid: " + value(host));
         helper.assertTrue(Math.abs(value(a) - 3.0) < EPSILON && Math.abs(value(b) - 3.0) < EPSILON && Math.abs(value(c) - 3.0) < EPSILON,
@@ -156,6 +186,7 @@ public final class TavernGameTests {
         Settler host = settler(helper, pantry, new BlockPos(2, 1, 2));
         host(helper, pantry, host);
         Settler guest = settler(helper, pantry, new BlockPos(3, 1, 2));
+        seat(helper, guest);
 
         helper.setBlock(new BlockPos(5, 1, 1), Blocks.JUKEBOX);
         Tavern.countAt(level, pantry, day, EVENING);
@@ -183,6 +214,7 @@ public final class TavernGameTests {
         for (int i = 0; i < 3; i++) {
             all.add(settler(helper, pantry, new BlockPos(3 + i, 1, 2)));
         }
+        seat(helper, all.subList(1, 4).toArray(new Settler[0]));
         helper.setBlock(new BlockPos(5, 1, 4), Blocks.JUKEBOX.defaultBlockState().setValue(JukeboxBlock.HAS_RECORD, true));
         Tavern.countAt(level, pantry, day, EVENING);
         helper.assertTrue(all.stream().allMatch(settler -> Math.abs(value(settler) - 4.5) < EPSILON), "Both conditions: 3 × 1.5 = 4.5");
@@ -207,19 +239,26 @@ public final class TavernGameTests {
         for (int i = 0; i < 3; i++) {
             all.add(settler(helper, pantry, new BlockPos(3 + i, 1, 2)));
         }
+        seat(helper, all.subList(1, 4).toArray(new Settler[0]));
         Tavern.countAt(level, pantry, day, EVENING);
         Tavern.countAt(level, pantry, day, EVENING + 100);
         helper.assertTrue(all.stream().allMatch(settler -> Math.abs(value(settler) - 3.0) < EPSILON), "Two counts, one payment");
         Settler newcomer = settler(helper, pantry, new BlockPos(2, 1, 4));
+        seat(helper, newcomer);
         Tavern.countAt(level, pantry, day, EVENING + 200);
         helper.assertTrue(Math.abs(value(newcomer) - 3.0) < EPSILON && Math.abs(value(host) - 3.0) < EPSILON,
                 "A settler who comes later is paid at its first count, the others are not paid again");
         all.add(newcomer);
 
-        Tavern.countAt(level, pantry, day + 1, EVENING);
-        helper.assertTrue(all.stream().allMatch(settler -> Math.abs(value(settler) - 6.0) < EPSILON), "The next evening pays again");
+        Settler[] guests = all.subList(1, 5).toArray(new Settler[0]);
+        long next = nextEvening(helper, guests);
+        Tavern.countAt(level, pantry, next, EVENING);
+        // The guests took the decay of the new day when they decided again (1 point); the Tavern Host did not decide.
+        helper.assertTrue(Math.abs(value(host) - 6.0) < EPSILON && all.subList(1, 5).stream().allMatch(settler -> Math.abs(value(settler) - 5.0) < EPSILON),
+                "The next evening pays again: the host " + value(host) + ", a guest " + value(all.get(1)));
         all.get(1).getWork().setEntertainment(Entertainment.of(9.0));
-        Tavern.countAt(level, pantry, day + 2, EVENING);
+        long third = nextEvening(helper, guests);
+        Tavern.countAt(level, pantry, third, EVENING);
         helper.assertTrue(value(all.get(1)) == EntertainmentRules.MAX, "Never above 10");
         end(helper, pantry, all);
         helper.succeed();
@@ -238,6 +277,7 @@ public final class TavernGameTests {
         helper.assertTrue(all.stream().allMatch(settler -> value(settler) == 0.0), "No Tavern Host: nothing");
 
         host(helper, pantry, all.get(0));
+        seat(helper, all.subList(1, 4).toArray(new Settler[0]));
         Tavern.countAt(level, pantry, day, 14000L);
         helper.assertTrue(all.stream().allMatch(settler -> value(settler) == 0.0), "At 20:00 the host is off shift: nothing");
         Tavern.countAt(level, pantry, day, 11000L);
@@ -507,6 +547,69 @@ public final class TavernGameTests {
         helper.succeed();
     }
 
+    /**
+     * Only the Tavern Host and the guests who booked a seat at this Pantry are paid. Everybody within 12 blocks counts for the
+     * crowd, but a Tavern without seats does nothing, however many settlers rest nearby.
+     */
+    private static void onlySeatedGuestsPaid(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos pantry = pantry(helper);
+        long day = DayClock.day(level);
+        Settler host = settler(helper, pantry, new BlockPos(2, 1, 2));
+        host(helper, pantry, host);
+        Settler a = guest(helper, pantry, new BlockPos(3, 1, 2));
+        Settler b = guest(helper, pantry, new BlockPos(4, 1, 2));
+        Settler resting = guest(helper, pantry, new BlockPos(5, 1, 2));
+        List<Settler> all = List.of(host, a, b, resting);
+
+        decide(helper, a, b, resting);
+        Tavern.countAt(level, pantry, day, EVENING);
+        helper.assertTrue(all.stream().allMatch(settler -> value(settler) == 0.0), "No seats: the Tavern does nothing, not even for the Tavern Host");
+
+        seat(helper, a, b);
+        decide(helper, resting);
+        helper.assertTrue(a.getWork().tavernSeat(day).isPresent() && b.getWork().tavernSeat(day).isPresent() && resting.getWork().tavernSeat(day).isEmpty(),
+                "Two seats: two guests book, the third rests at home");
+        Tavern.countAt(level, pantry, day, EVENING);
+        helper.assertTrue(Math.abs(value(host) - 3.0) < EPSILON && Math.abs(value(a) - 3.0) < EPSILON && Math.abs(value(b) - 3.0) < EPSILON,
+                "The host and the booked guests are paid: four are present, the resting settler counts for the crowd");
+        helper.assertTrue(value(resting) == 0.0 && !resting.getWork().entertainment().tavernPaid(day), "The resting settler is not paid");
+        end(helper, pantry, all);
+        helper.succeed();
+    }
+
+    /**
+     * A Pantry whose chunk is not loaded still hosts the missed evening: only the jukebox needs a loaded chunk. The settlement
+     * stands in the data only, far away from the test.
+     */
+    private static void catchUpUnloadedPantry(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        SettlementData data = SettlementData.get(level);
+        BlockPos far = new BlockPos(29_999_000, 64, 29_999_000);
+        TestSettlements.place(data, far, ModJobs.TAVERN_HOST.get(), 1);
+        Settlement settlement = data.settlementAt(far).orElseThrow();
+        helper.assertFalse(level.hasChunkAt(far), "Nobody loaded the chunk of the Pantry");
+
+        List<Settler> members = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            members.add(ClerkGameTests.settler(helper, new BlockPos(2 + i, 1, 2), data, settlement));
+        }
+        Settler[] guests = members.toArray(new Settler[0]);
+        long missed = DayClock.day(level) - 1;
+
+        catchUpYesterday(helper, guests);
+        helper.assertTrue(members.stream().allMatch(settler -> value(settler) == 0.0), "No Tavern Host assigned: nothing");
+
+        TestAssignments.assign(data, far, UUID.randomUUID(), "Host", settlement.id(), List.of());
+        catchUpYesterday(helper, guests);
+        helper.assertTrue(members.stream().allMatch(settler -> Math.abs(value(settler) - 3.0) < EPSILON && settler.getWork().entertainment().tavernPaid(missed)),
+                "The Pantry is not loaded, its host is assigned: four members, +3 each, got " + value(members.get(0)));
+        helper.assertFalse(level.hasChunkAt(far), "And the catch-up did not load it");
+        TestAssignments.unassign(data, far);
+        members.forEach(Settler::discard);
+        helper.succeed();
+    }
+
     /** The server tick runs the count in the evening (environment civmod:evening) without any call from the test. */
     private static void minuteCount(GameTestHelper helper) {
         BlockPos pantry = pantry(helper);
@@ -516,6 +619,7 @@ public final class TavernGameTests {
         for (int i = 0; i < 3; i++) {
             all.add(settler(helper, pantry, new BlockPos(3 + i, 1, 2)));
         }
+        seat(helper, all.subList(1, 4).toArray(new Settler[0]));
         helper.succeedWhen(() -> {
             helper.assertTrue(all.stream().allMatch(settler -> Math.abs(value(settler) - 3.0) < EPSILON), "Paid by the tick, day time " + DayClock.dayTime(helper.getLevel()) + ", host value " + value(host));
             end(helper, pantry, all);

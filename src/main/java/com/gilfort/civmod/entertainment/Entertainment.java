@@ -76,10 +76,12 @@ public record Entertainment(double value, long decayedDay, double today, long to
     /**
      * @param points the points a source gives
      * @param day    the day
-     * @return the Entertainment with the points added (never above {@link EntertainmentRules#MAX}) and counted for that day
+     * @return the Entertainment with the points added (never above {@link EntertainmentRules#MAX}); the day counts the points
+     *         that were gained, so points above the cap are not listed
      */
     public Entertainment add(double points, long day) {
-        return new Entertainment(value + points, decayedDay, pointsOn(day) + points, day, tavernDay, recordDay);
+        double raised = EntertainmentRules.clamp(value + points);
+        return new Entertainment(raised, decayedDay, pointsOn(day) + (raised - value), day, tavernDay, recordDay);
     }
 
     /**
