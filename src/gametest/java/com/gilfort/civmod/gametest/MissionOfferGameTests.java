@@ -103,11 +103,15 @@ public final class MissionOfferGameTests {
         helper.assertTrue(MissionRules.quotas(List.of(adventurer, other, scout), 5, 3).values().stream().mapToInt(Integer::intValue).sum() == 18,
                 "Level 5, two Specializations: 5 + 3 + 5 + 5");
         helper.assertTrue(MissionRules.MAX_OFFER_SIZE == 30, "Largest offer: 5 + 5 × 5");
-        // The Bard is no Mission Specialization any more (#210): a board of CivMod alone has one pool and no slot to count.
-        helper.assertTrue(StationTypes.emptySlots(new SettlementBlock(BOARD, ModJobs.LUMBERJACK.get(), 3, true)) == 0,
-                "A JobBlock without Station Types has no empty slots");
-        helper.assertTrue(StationTypes.emptySlots(new SettlementBlock(BOARD, ModJobs.GATHERER.get(), 3, true)) == 3,
-                "A JobBlock with Station Types counts its open slots");
+        // The Bard is no Mission Specialization any more (#210): the Adventurer's single pool keeps the vault size, 2 x level.
+        Job alone = ModJobs.LUMBERJACK.get();
+        helper.assertFalse(StationTypes.hasStationTypes(alone), "The Lumberjack has no Specializations");
+        for (int level = 1; level <= 5; level++) {
+            int slots = StationTypes.emptySlots(new SettlementBlock(BOARD, alone, level, true));
+            helper.assertTrue(slots == level, "Level " + level + ": every open slot is empty: " + slots);
+            helper.assertTrue(MissionRules.quotas(List.of(alone), level, slots).equals(Map.of(alone, 2 * level)),
+                    "A pool without Specializations offers 2 x level at level " + level);
+        }
         helper.succeed();
     }
 

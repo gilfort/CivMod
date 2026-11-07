@@ -155,13 +155,10 @@ public final class StationTypes {
 
     /**
      * @param block a JobBlock
-     * @return how many of its open slots hold no unlock item; none for a JobBlock without Station Types (the Mission Board
-     *         has none while no Mission Specialization is registered, so its offer is one pool of the Base Job)
+     * @return how many of its open slots hold no unlock item; a Mission Board without any Mission Specialization still
+     *         counts every open slot (one per level), so the Adventurer's single pool offers 2 x level missions
      */
     public static int emptySlots(SettlementBlock block) {
-        if (!hasStationTypes(block.jobType())) {
-            return 0;
-        }
         int open = open(block.level());
         int empty = 0;
         for (int slot = 0; slot < open; slot++) {
