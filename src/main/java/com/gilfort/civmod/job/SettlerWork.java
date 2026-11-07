@@ -170,7 +170,7 @@ public final class SettlerWork {
     private final SettlerTavern tavern;
     /** Needs: the need tier and the limit it puts on the level the settler works at. */
     private final SettlerNeeds needs;
-    /** Social life: the meeting check and the greetings it leads to. */
+    /** Social life: the meeting check, the greetings and the conversations it leads to. */
     private final SettlerSocial social;
     /** Where the settler delivers to (a Clerk drop-off takes at its counter). */
     private ClerkStorage.@Nullable Visit deliveryVisit;
@@ -864,7 +864,7 @@ public final class SettlerWork {
             // Missed days first: catch-up checks them in their order.
             needs.step(level, day, foodLookup::hasFood);
         }
-        if (!social.holdsDecision() && catchUpFrom < 0 && !quiet) {
+        if (CivModConfig.SOCIAL_LIFE.get() && !social.holdsDecision() && catchUpFrom < 0 && !quiet) {
             // Live only: greetings and conversations are not simulated in catch-up. A seated Tavern guest never starts one.
             social.meet(level, interruptible(level), !tavern.sitsAtSeat(activity));
         }
@@ -879,9 +879,9 @@ public final class SettlerWork {
 
     /**
      * Whether the settler may be interrupted by company (vault {@code Systems/Entertainment.md}): awake and visible, and
-     * not away on a Mission, leading Villagers, serving a customer or eating. Walking, working, a work break and sitting
-     * (also a seated Tavern guest) can be interrupted. A new state that must not be interrupted is one more component of
-     * {@link SocialRules.Situation}.
+     * not away on a Mission, leading Villagers, serving a customer, eating or playing as a Bard. Walking, working (a Bard
+     * on its round included), a work break and sitting (also a seated Tavern guest) can be interrupted. A new state that
+     * must not be interrupted is one more component of {@link SocialRules.Situation}.
      *
      * @param level the level
      * @return whether the meeting check may run for this settler
@@ -890,7 +890,13 @@ public final class SettlerWork {
         boolean serving = settler.getJobs().stream().anyMatch(job -> loop(job) == clerks && ClerkCounter.busy(level, job.jobBlock()));
         return SocialRules.interruptible(new SocialRules.Situation(settler.isSleeping() || activity == Activity.SLEEP,
                 settler.isAway() || settler.isInvisible(), missions.departed(), missions.leading(), serving, activity == Activity.EATING,
-                social.inConversation()));
+                playing(), social.inConversation()));
+    }
+
+    /** Whether the settler is a Bard whose status says it plays now (at a stop of its round, or on its Stage). */
+    private boolean playing() {
+        SettlerJob job = activeJob;
+        return job != null && activity == Activity.JOB && status(job.jobBlock()) == JobStatus.PLAYING;
     }
 
     /**
