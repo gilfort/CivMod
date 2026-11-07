@@ -22,6 +22,8 @@ import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.api.XpGain;
 import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.entertainment.Entertainment;
+import com.gilfort.civmod.entertainment.EntertainmentRules;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.Schedule.Activity;
 import com.gilfort.civmod.job.Schedule.Decision;
@@ -1857,6 +1859,19 @@ public final class SettlerWork {
     }
 
     /**
+     * The factor every work speed is multiplied with: the one place where the speed bonuses add up. The blessing's share
+     * ({@link #blessingFactor}) and the 2 % per point of Entertainment ({@link EntertainmentRules#speedFactor}) are added,
+     * not multiplied. Live play and catch-up both read it; the value is the one of the day being worked, because the
+     * decay is taken at wake-up before the work starts.
+     *
+     * @param level the level
+     * @return 1 without any bonus, 1.4 with full Entertainment and a blessing
+     */
+    public double speedFactor(ServerLevel level) {
+        return EntertainmentRules.get().speedFactor(needs.entertainment().value(), blessingFactor(level));
+    }
+
+    /**
      * The day time of the hour being simulated in catch-up, at which Clerk access is checked. Catch-up starts every day
      * at 06:00 at the earliest, when every Clerk (up 05:30–06:00) is already on shift; this also makes the level's day
      * enough for {@link ClerkStorage#working}.
@@ -2223,6 +2238,20 @@ public final class SettlerWork {
      */
     public void restoreNeeds(NeedState saved) {
         needs.restore(saved);
+    }
+
+    /**
+     * @return the settler's Entertainment (saved with it)
+     */
+    public Entertainment entertainment() {
+        return needs.entertainment();
+    }
+
+    /**
+     * @param entertainment the Entertainment to keep: loaded from a save, or set by a source of Entertainment
+     */
+    public void setEntertainment(Entertainment entertainment) {
+        needs.setEntertainment(entertainment);
     }
 
     /**

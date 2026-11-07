@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:entertainment_tier_1_and_homeless",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

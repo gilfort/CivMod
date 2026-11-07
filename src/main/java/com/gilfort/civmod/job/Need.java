@@ -13,7 +13,8 @@ import net.minecraft.world.item.ItemStack;
 /**
  * One need of a need tier (vault {@code Systems/Needs.md}): a check per settler. A new need implements this and is
  * listed in {@link Needs#ALL}; tiers, grace day, downgrade, climbing back, complaints and the Needs tab follow from
- * there. Needs whose system does not exist yet are simply not listed: they count as met and are not shown.
+ * there. Needs whose system does not exist yet are simply not listed: they count as met and are not shown. A need that
+ * asks for a different amount in every tier (Entertainment) lists one {@link Need} per tier.
  * <p>
  * {@link #check} runs at wake-up, in the 5 s decision step of a settler that can climb and when a settler window opens:
  * it must stay cheap, without area scans.
@@ -39,8 +40,18 @@ interface Need {
      * @param met    whether the need is met
      * @param detail the detail text of its row in the Needs tab
      * @param icons  items shown with the detail, may be empty
+     * @param tooltip the tooltip of its row in the Needs tab, empty for none
      */
-    record Check(boolean met, Component detail, List<ItemStack> icons) {
+    record Check(boolean met, Component detail, List<ItemStack> icons, Component tooltip) {
+
+        /**
+         * @param met    whether the need is met
+         * @param detail the detail text of its row in the Needs tab
+         * @param icons  items shown with the detail, may be empty
+         */
+        Check(boolean met, Component detail, List<ItemStack> icons) {
+            this(met, detail, icons, Component.empty());
+        }
 
         /**
          * @param met    whether the need is met

@@ -43,6 +43,10 @@ _Avoid_: Meal or rest code starting walks or setting the activity
 Lv 1–20 / 21–40 / 41–60 / 61–80 / 81+. A settler's tier follows the highest capped target level of its current jobs; an unmet tier gives one grace day, then the settler works at the top of the lower tier in every job, and it climbs back at once when the needs are met. Code: `NeedState` (rules), `SettlerNeeds` (per settler); a new need is a `Need` listed in `Needs.ALL`.
 _Avoid_: Reading `SettlerSkills.effectiveLevel` for the level a settler works at (`SettlerWork.effectiveLevel` includes the need limit)
 
+**Entertainment**:
+A value from 0 to 10 per settler, starting at 0 and losing 1 point per in-game day (the decay is taken at the first need check of a day, so live play and catch-up take it the same way). It is a need of tier 2 (more than 5) and tier 3 (more than 8) and it speeds up work by 2 % per point at every tier, added to the Priest blessing's share (full Entertainment and a blessing: 1.4). Numbers come from `civmod_entertainment/rules.json`. Code: `Entertainment` (saved with the settler), `EntertainmentRules` (plain rules and datapack values), one `Need` per tier in `Needs.ALL`, `SettlerWork.speedFactor` (the one place where speed bonuses add up).
+_Avoid_: Multiplying the blessing factor with the Entertainment bonus; reading `blessingFactor` for a work speed
+
 **Food variety**:
 The tier 2 need of at least 3 distinct food items in the window: the last days (config, today included), but always at least the last 6 items eaten. Short of it, a settler at a food point prefers a food outside the window. Code: `FoodVariety` (the rule and the bounded list of meals, saved in `SettlerFood`), recorded by `SettlerMeals` with the simulated day in catch-up.
 

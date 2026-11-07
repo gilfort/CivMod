@@ -213,7 +213,8 @@ public final class ToolVisibilityGameTests {
         Settler fisher = settler(helper, fishing, ModJobs.FISHERMAN.get(), 50);
         fisher.getWork().checkNeedsNow(level, 100L);
         helper.assertTrue(toolRows(fisher).isEmpty(), "A settler without tool Jobs shows no tool row");
-        helper.assertTrue(SettlerInfo.of(fisher).needs().rows().stream().noneMatch(row -> row.tooltip().getString().length() > 0), "No row carries a Job tooltip");
+        helper.assertTrue(SettlerInfo.of(fisher).needs().rows().stream().noneMatch(row -> row.tooltip().getString().equals(ModJobs.FISHERMAN.get().displayName().getString())),
+                "No row carries a Job tooltip");
         end(helper, fisher, fishing);
     }
 
