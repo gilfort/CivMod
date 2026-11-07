@@ -281,7 +281,7 @@ public final class EntertainmentGameTests {
     private static void saved(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
-        Entertainment entertainment = new Entertainment(7.5, 12L, 3.0, 12L);
+        Entertainment entertainment = new Entertainment(7.5, 12L, 3.0, 12L, 12L);
         settler.getWork().setEntertainment(entertainment);
 
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
@@ -345,7 +345,17 @@ public final class EntertainmentGameTests {
         // datapack files: later values override, missing values keep the defaults
         helper.assertTrue(EntertainmentRules.merge(List.of()).equals(rules), "No file: the defaults");
         EntertainmentRules merged = EntertainmentRules.merge(List.of(json("{\"decay\": 2, \"tier_2_threshold\": 4}"), json("{\"decay\": 3, \"speed_per_point\": 0.05}")));
-        helper.assertTrue(merged.equals(new EntertainmentRules(3.0, 4.0, 8.0, 0.05)), "Merged in order: " + merged);
+        helper.assertTrue(merged.equals(new EntertainmentRules(3.0, 4.0, 8.0, 0.05, 3.0, 1.5, 4, 12, 8)), "Merged in order: " + merged);
+        EntertainmentRules tavern = EntertainmentRules.merge(List.of(json("{\"tavern_points\": 2, \"crowd_size\": 3, \"jukebox_radius\": 5}"),
+                json("{\"tavern_factor\": 2, \"tavern_radius\": 10}")));
+        helper.assertTrue(tavern.equals(new EntertainmentRules(1.0, 5.0, 8.0, 0.02, 2.0, 2.0, 3, 10, 5)), "The Tavern values merge: " + tavern);
+
+        // present settlers, jukebox with a disc, expected points per guest: A or B gives the base, both multiply it
+        double[][] evening = {{0, 0, 0}, {3, 0, 0}, {4, 0, 3}, {9, 0, 3}, {0, 1, 3}, {1, 1, 3}, {3, 1, 3}, {4, 1, 4.5}};
+        for (double[] row : evening) {
+            helper.assertTrue(near(rules.tavernPoints((int) row[0], row[1] == 1), row[2]),
+                    row[0] + " present, jukebox " + (row[1] == 1) + ": " + row[2] + ", got " + rules.tavernPoints((int) row[0], row[1] == 1));
+        }
         helper.succeed();
     }
 

@@ -47,6 +47,14 @@ _Avoid_: Reading `SettlerSkills.effectiveLevel` for the level a settler works at
 A value from 0 to 10 per settler, starting at 0 and losing 1 point per in-game day (the decay is taken at the first need check of a day, so live play and catch-up take it the same way). It is a need of tier 2 (more than 5) and tier 3 (more than 8) and it speeds up work by 2 % per point at every tier, added to the Priest blessing's share (full Entertainment and a blessing: 1.4). Numbers come from `civmod_entertainment/rules.json`. Code: `Entertainment` (saved with the settler), `EntertainmentRules` (plain rules and datapack values), one `Need` per tier in `Needs.ALL`, `SettlerWork.speedFactor` (the one place where speed bonuses add up).
 _Avoid_: Multiplying the blessing factor with the Entertainment bonus; reading `blessingFactor` for a work speed
 
+**Tavern**:
+A Pantry whose Tavern Host is on shift (until 20:00), in the evening from 17:30. Every 17 server ticks it counts the settlers within 12 blocks and pays each of them who was not paid that day 3 points (times 1.5 with both conditions) if 4 are present or a jukebox with a disc stands within 8 blocks. Code: `Tavern` (count, jukebox check, catch-up), `TavernSeats` (finds seats), `SettlerTavern` (a settler's booking, walk and sitting), the intent `GO_TO_TAVERN` of `Schedule`.
+_Avoid_: Paying outside `Tavern`; a second place that decides who sits where
+
+**Seat**:
+A vanilla Cushion or another entity of `civmod:seat_entities`, or a block of `civmod:seat_blocks`, within 12 blocks of a Pantry. A settler books one seat for an evening in its `SettlerTavern` (nothing saved), sits on it in the sitting pose and never rides it; a seat is taken while another settler has booked it or an entity rides it.
+_Avoid_: Saving seat reservations; letting settlers ride the seat entity
+
 **Food variety**:
 The tier 2 need of at least 3 distinct food items in the window: the last days (config, today included), but always at least the last 6 items eaten. Short of it, a settler at a food point prefers a food outside the window. Code: `FoodVariety` (the rule and the bounded list of meals, saved in `SettlerFood`), recorded by `SettlerMeals` with the simulated day in catch-up.
 

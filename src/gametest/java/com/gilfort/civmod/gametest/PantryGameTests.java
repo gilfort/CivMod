@@ -51,6 +51,8 @@ import net.neoforged.neoforge.transfer.transaction.Transaction;
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class PantryGameTests {
 
+    /** Day time 20:00, after the Tavern Host's shift. */
+    private static final long AFTER_SHIFT = 14000L;
     private static final UUID HOLLY = UUID.fromString("00000000-0000-0000-0000-0000000000a1");
 
     private PantryGameTests() {
@@ -159,10 +161,10 @@ public final class PantryGameTests {
                 "Working Tavern Host: served at the counter");
         helper.assertTrue(food(level, settlement, from, ClerkGameTests.MORNING, Optional.empty(), pos -> !pos.equals(near)).isPresent(),
                 "Counter not reachable: the block alone is a food point");
-        Optional<ClerkStorage.FoodPoint> evening = ClerkStorage.nearestFood(level, settlement, from, ClerkGameTests.EVENING, Optional.empty(),
+        Optional<ClerkStorage.FoodPoint> evening = ClerkStorage.nearestFood(level, settlement, from, AFTER_SHIFT, Optional.empty(),
                 pos -> true);
         helper.assertTrue(evening.isPresent() && !evening.get().visit().counter(), "After the shift: self-service");
-        helper.assertTrue(food(level, settlement, helper.absolutePos(new BlockPos(8, 1, 8)), ClerkGameTests.EVENING, Optional.of(near),
+        helper.assertTrue(food(level, settlement, helper.absolutePos(new BlockPos(8, 1, 8)), AFTER_SHIFT, Optional.of(near),
                 pos -> true).equals(Optional.of(near)), "The Tavern Host eats from its own Pantry first");
         TestAssignments.unassign(data, near);
         helper.succeed();
@@ -183,13 +185,20 @@ public final class PantryGameTests {
         helper.succeed();
     }
 
-    /** The Tavern Host works 05:30–18:30 like the Clerk and wakes early. */
+    /** The Tavern Host works 05:30–20:00 (a Clerk stops at 18:30) and wakes early. */
     private static void shift(GameTestHelper helper) {
         Settler host = ModEntityTypes.SETTLER.get().create(helper.getLevel(), EntitySpawnReason.EVENT);
         long day = 4L;
         helper.assertTrue(host.getWork().dayTimes(day).workEnd() < ClerkStorage.SHIFT_END, "Without the job: off before 18:30");
         host.addJob(new SettlerJob(ModJobs.TAVERN_HOST.get(), helper.absolutePos(new BlockPos(1, 1, 1))));
-        helper.assertTrue(host.getWork().dayTimes(day).workEnd() == ClerkStorage.SHIFT_END, "With the Tavern Host job: 18:30");
+        helper.assertTrue(host.getWork().dayTimes(day).workEnd() == 14000L, "With the Tavern Host job: 20:00");
+        UUID id = host.getUUID();
+        helper.assertTrue(ClerkStorage.inShift(id, day, 13999L, ModJobs.TAVERN_HOST.get()), "Open until 20:00");
+        helper.assertFalse(ClerkStorage.inShift(id, day, 14000L, ModJobs.TAVERN_HOST.get()), "Closed at 20:00");
+        helper.assertTrue(ClerkStorage.inShift(id, day, ClerkStorage.SHIFT_END, ModJobs.TAVERN_HOST.get()), "Still open at 18:30");
+        helper.assertFalse(ClerkStorage.inShift(id, day, ClerkStorage.SHIFT_END, ModJobs.CLERK.get()), "A Clerk closes at 18:30");
+        host.addJob(new SettlerJob(ModJobs.CLERK.get(), helper.absolutePos(new BlockPos(2, 1, 1))));
+        helper.assertTrue(host.getWork().dayTimes(day).workEnd() == 14000L, "Both counter jobs: the later end");
         long wake = host.getWork().dayTimes(day).wake();
         helper.assertTrue(wake < 0L && wake == com.gilfort.civmod.job.Schedule.dayTimes(host.getUUID(), day, true).wake(),
                 "Up 05:30–06:00 like a Clerk, got " + wake);

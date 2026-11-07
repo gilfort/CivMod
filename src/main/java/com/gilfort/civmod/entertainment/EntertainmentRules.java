@@ -32,27 +32,40 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
  * @param tier2Threshold tier 2 needs more than this much Entertainment
  * @param tier3Threshold tier 3 needs more than this much Entertainment
  * @param speedPerPoint  work speed gained per point (0.02: 2 %)
+ * @param tavernPoints   the base points a Tavern evening gives each guest
+ * @param tavernFactor   the factor on the base points when the crowd and the jukebox both hold (1.5)
+ * @param crowdSize      settlers present for condition A, the Tavern Host included
+ * @param tavernRadius   blocks around the Pantry that count as present and that seats may lie in
+ * @param jukeboxRadius  blocks around the Pantry in which a jukebox with a disc counts
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
-public record EntertainmentRules(double decay, double tier2Threshold, double tier3Threshold, double speedPerPoint) {
+public record EntertainmentRules(double decay, double tier2Threshold, double tier3Threshold, double speedPerPoint,
+        double tavernPoints, double tavernFactor, int crowdSize, int tavernRadius, int jukeboxRadius) {
 
     /** The highest value. */
     public static final double MAX = 10.0;
     /** Reload listener id. */
     public static final Identifier ID = CivMod.id("entertainment_rules");
     /** Values used when no file is loaded. */
-    public static final EntertainmentRules FALLBACK = new EntertainmentRules(1.0, 5.0, 8.0, 0.02);
+    public static final EntertainmentRules FALLBACK = new EntertainmentRules(1.0, 5.0, 8.0, 0.02, 3.0, 1.5, 4, 12, 8);
 
     private static final FileToIdConverter FILES = FileToIdConverter.json("civmod_entertainment");
     private static EntertainmentRules current = FALLBACK;
 
-    private record Part(Optional<Double> decay, Optional<Double> tier2Threshold, Optional<Double> tier3Threshold, Optional<Double> speedPerPoint) {
+    private record Part(Optional<Double> decay, Optional<Double> tier2Threshold, Optional<Double> tier3Threshold, Optional<Double> speedPerPoint,
+            Optional<Double> tavernPoints, Optional<Double> tavernFactor, Optional<Integer> crowdSize, Optional<Integer> tavernRadius,
+            Optional<Integer> jukeboxRadius) {
 
         static final Codec<Part> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                 Codec.doubleRange(0.0, MAX).optionalFieldOf("decay").forGetter(Part::decay),
                 Codec.doubleRange(0.0, MAX).optionalFieldOf("tier_2_threshold").forGetter(Part::tier2Threshold),
                 Codec.doubleRange(0.0, MAX).optionalFieldOf("tier_3_threshold").forGetter(Part::tier3Threshold),
-                Codec.doubleRange(0.0, 1.0).optionalFieldOf("speed_per_point").forGetter(Part::speedPerPoint)
+                Codec.doubleRange(0.0, 1.0).optionalFieldOf("speed_per_point").forGetter(Part::speedPerPoint),
+                Codec.doubleRange(0.0, MAX).optionalFieldOf("tavern_points").forGetter(Part::tavernPoints),
+                Codec.doubleRange(1.0, MAX).optionalFieldOf("tavern_factor").forGetter(Part::tavernFactor),
+                Codec.intRange(1, 64).optionalFieldOf("crowd_size").forGetter(Part::crowdSize),
+                Codec.intRange(1, 64).optionalFieldOf("tavern_radius").forGetter(Part::tavernRadius),
+                Codec.intRange(1, 64).optionalFieldOf("jukebox_radius").forGetter(Part::jukeboxRadius)
         ).apply(instance, Part::new));
     }
 
@@ -113,6 +126,22 @@ public record EntertainmentRules(double decay, double tier2Threshold, double tie
     }
 
     /**
+     * The points of one Tavern evening: the base points if the crowd (condition A) or the jukebox (condition B) holds,
+     * the base points times the factor if both hold. The factor applies to whatever the base value is.
+     *
+     * @param present settlers present at the Pantry, the Tavern Host included
+     * @param jukebox whether a jukebox that holds a disc stands near the Pantry
+     * @return the points each guest gets, 0 if neither condition holds
+     */
+    public double tavernPoints(int present, boolean jukebox) {
+        boolean crowd = present >= crowdSize;
+        if (crowd && jukebox) {
+            return tavernPoints * tavernFactor;
+        }
+        return crowd || jukebox ? tavernPoints : 0.0;
+    }
+
+    /**
      * Merges JSON files in order (later values override).
      *
      * @param files parsed JSON files
@@ -123,7 +152,10 @@ public record EntertainmentRules(double decay, double tier2Threshold, double tie
         for (JsonElement file : files) {
             Part part = Part.CODEC.parse(JsonOps.INSTANCE, file).getOrThrow();
             merged = new EntertainmentRules(part.decay().orElse(merged.decay()), part.tier2Threshold().orElse(merged.tier2Threshold()),
-                    part.tier3Threshold().orElse(merged.tier3Threshold()), part.speedPerPoint().orElse(merged.speedPerPoint()));
+                    part.tier3Threshold().orElse(merged.tier3Threshold()), part.speedPerPoint().orElse(merged.speedPerPoint()),
+                    part.tavernPoints().orElse(merged.tavernPoints()), part.tavernFactor().orElse(merged.tavernFactor()),
+                    part.crowdSize().orElse(merged.crowdSize()), part.tavernRadius().orElse(merged.tavernRadius()),
+                    part.jukeboxRadius().orElse(merged.jukeboxRadius()));
         }
         return merged;
     }

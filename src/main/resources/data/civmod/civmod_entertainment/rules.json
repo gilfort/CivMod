@@ -2,5 +2,10 @@
   "decay": 1,
   "tier_2_threshold": 5,
   "tier_3_threshold": 8,
-  "speed_per_point": 0.02
+  "speed_per_point": 0.02,
+  "tavern_points": 3,
+  "tavern_factor": 1.5,
+  "crowd_size": 4,
+  "tavern_radius": 12,
+  "jukebox_radius": 8
 }

@@ -203,3 +203,13 @@ Biomes give Jobs bonuses, one datapack file per bonus at `data/<namespace>/civmo
 The biome is read at the Job's biome position: `CategoryProfile.biomePosition()` defaults to the work place of the day for Resource Collection and Producing Jobs (the station of the day), the JobBlock for other categories and none for Mission Jobs. It is read once per day when the work place is chosen.
 
 `CivModApi.biomeBonus(settler, jobBlock)` returns the `BiomeBonus` acting on a settler's Job today (factors, double drop entries, the source file of each); `CivModApi.biomeBonusAt(level, job, pos)` previews a position.
+
+## Tavern seats and jukeboxes
+
+In the evening settlers spend time in a Tavern: a Pantry whose Tavern Host is on shift. Three tags tell the Tavern what counts as a seat and a jukebox, so furniture and music mods can join without code:
+
+- `civmod:seat_entities` (entity type tag): entities settlers sit on. Default: `minecraft:cushion`. A seat entity counts within 12 blocks of the Pantry; the settler sits on top of its hitbox and looks the way of its yaw.
+- `civmod:seat_blocks` (block tag): blocks settlers sit on. Empty by default. The settler sits at the height of the block's collision shape, looks the way of its `facing` property (south, yaw 0, without one) and walks to the block above it.
+- `civmod:jukeboxes` (block tag): blocks that count as a jukebox within 8 blocks of the Pantry. Default: `minecraft:jukebox`. A block holds a disc when its `has_record` block state property is true; a block without that property counts when its block entity is a vanilla jukebox that holds an item.
+
+A seat is taken while another settler has booked it for the evening or an entity (a player) rides it; settlers never ride a seat. The numbers of the evening (crowd of 4 settlers, 3 points, factor 1.5 when the crowd and a jukebox with a disc both hold, the radii of 12 and 8 blocks) are datapack values in `data/<namespace>/civmod_entertainment/rules.json`: `tavern_points`, `tavern_factor`, `crowd_size`, `tavern_radius`, `jukebox_radius`. Later packs override earlier ones per value.
