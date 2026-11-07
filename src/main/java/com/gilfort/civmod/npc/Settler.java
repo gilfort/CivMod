@@ -529,6 +529,7 @@ public class Settler extends PathfinderMob {
                 sittingLook.tickRunningGoals(false);
             }
         }
+        work.greetingLook();
         if ((tickCount + getId()) % CHECK_INTERVAL == 0) {
             long profile = com.gilfort.civmod.debug.CivProfiler.start();
             checkMembership(level);

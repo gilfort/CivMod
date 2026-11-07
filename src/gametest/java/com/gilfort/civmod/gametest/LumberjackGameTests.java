@@ -363,7 +363,7 @@ public final class LumberjackGameTests {
      * position costs a varying number of ticks: settlers stood still without a single decision for over 2000 ticks and
      * timed tests failed now and then. Loading synchronously makes the start independent of the machine's speed.
      */
-    static List<long[]> forceChunks(GameTestHelper helper, BlockPos corner) {
+    public static List<long[]> forceChunks(GameTestHelper helper, BlockPos corner) {
         ServerLevel level = helper.getLevel();
         BlockPos min = helper.absolutePos(BlockPos.ZERO);
         BlockPos max = helper.absolutePos(corner);
