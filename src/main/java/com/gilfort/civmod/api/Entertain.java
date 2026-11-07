@@ -76,7 +76,7 @@ public record Entertain(double points, double percentPerLevel, Cap cap) implemen
         double given = pointsFor(context.skill());
         for (Mob listener : context.settlers()) {
             if (listener instanceof Settler settler) {
-                settler.getWork().setEntertainment(settler.getWork().entertainment().addCapped(given, cap, day));
+                settler.getWork().entertain(given, cap, day);
             }
         }
     }

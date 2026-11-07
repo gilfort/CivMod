@@ -2,7 +2,7 @@
 
 A Service Job stands at its JobBlock and does something for the settlers and players around it. CivMod runs the loop for every Service Job with a `ServiceProfile`; the profile lists **Service acts**, and each act lists **effects**. Read [getting-started.md](getting-started.md) first.
 
-The Priest, the Tavern Host and the Administrator are Service Jobs without a profile. They keep their own handling, and a Service Job without a profile has no work (the settler moves on to its next job). CivMod's Bard is the one built-in Job that uses a profile: its Stage act is a stationary act with an `Entertain` effect.
+The Priest, the Tavern Host and the Administrator are Service Jobs without a profile. They keep their own handling, and a Service Job without a profile has no work (the settler moves on to its next job). CivMod's Bard is the one built-in Job that uses a profile. It has two acts, each with an `Entertain` effect: the day round (a `ROUND` act, 11:00 to 17:30) and the stage act (a stationary act, 17:30 to 20:00).
 
 ## Register a Service Job
 
@@ -27,10 +27,10 @@ An act has an `id`, a time window, a kind, a radius and a list of effects.
 
 - **Window.** Ticks of the day as in the game's own day time: 0 is 06:00, 6000 noon, a day has 24000 ticks. `ServiceAct.clock(hour, minute)` converts a time on the clock (`clock(11, 0)` is 5000, `clock(20, 0)` is 14000). The window starts at its first tick and ends before its last, and it stays inside one day. A settler works until the end of its work day, 17:30 to 18:00, unless a window of one of its Service Jobs ends later: then its work day ends with the latest such window (the Bard's stage act keeps it until 20:00). A window never makes the settler wake earlier.
 - **Kind.** `STATIONARY` acts are run by the Service loop: the settler walks to its JobBlock, stands next to it for the whole window and plays the act once a day. Outside every window the settler works its next job. `ROUND` acts (a settler that walks to working settlers) are run by the same loop: it picks a random settler at work (not a Bard, awake, not away), walks to within 3 blocks of it and, if a settler is within the act's radius of the performer on arrival, plays a stop of 30 seconds: one scan for the listeners, the effects in order, the EXP. An arrival that finds nobody does not use up the stop; after three empty tries, or when nobody works, the settler waits on its JobBlock for a minute. The number of stops a day is the level of the JobBlock; once they are used up the settler works its next job. A round ends with its window.
-- **Radius.** Blocks from the center of the act (the bottom center of the JobBlock), at most 64. A listener exactly on the edge counts.
+- **Radius.** Blocks from the center of the act, at most 64. A listener exactly on the edge counts. The center of a stationary act is the bottom center of the JobBlock, or, on a Stage, the Sound center the player set with the Scroll of Assignment (the Stage block itself without one). The center of a round act is the performer, where it stands when a stop begins.
 - **Effects.** Applied in order when the act is played.
 
-When an act is played, the loop scans for listeners once (the settlers of the settlement and the players within the radius, never the performer), applies the effects, and gives the settler the Job's base EXP times the JobBlock level. There is no per-tick scan. The first stationary act of the profile whose window is open is the one played, so acts of one Job should not overlap.
+When an act is played, the loop scans for listeners once (the settlers of the settlement and the players within the radius, never the performer), applies the effects, and gives the settler the Job's base EXP times the JobBlock level. There is no per-tick scan. The first stationary act of the profile whose window is open is the one played, and while one is open no round runs, so acts of one Job should not overlap. The acts a datapack changes are put together once per Job and again when the datapacks reload.
 
 ## Effects
 
@@ -86,4 +86,4 @@ All values are optional; later files override earlier ones per value. `effects` 
 
 ## Tests
 
-`ServiceGameTests` in the repository registers four Service Jobs the way an addon does and covers the window, the radius, the targets of each effect, a custom effect, the wrong-category failure and the numbers; `ExampleAddonGameTests` runs the Bell Ringer.
+`ServiceGameTests` in the repository registers Service Jobs the way an addon does and covers the window, the radius, the targets of each effect, a custom effect, the wrong-category failure, the numbers and their reload; `ExampleAddonGameTests` runs the Bell Ringer.

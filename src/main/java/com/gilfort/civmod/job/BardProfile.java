@@ -18,9 +18,9 @@ import com.gilfort.civmod.api.ServiceProfile;
 public final class BardProfile implements ServiceProfile {
 
     /** The radius of a round stop (around the Bard) and of a stage act (around the Sound center), in blocks. */
-    public static final double LISTEN_RADIUS = 8.0;
+    private static final double LISTEN_RADIUS = 8.0;
     /** The percent the Bard's points grow per skill level. */
-    public static final double PERCENT_PER_LEVEL = 1.0;
+    private static final double PERCENT_PER_LEVEL = 1.0;
 
     private static final List<ServiceAct> ACTS = List.of(
             ServiceAct.round("round", ServiceAct.clock(11, 0), ServiceAct.clock(17, 30), LISTEN_RADIUS,

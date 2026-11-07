@@ -17,6 +17,7 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.BiomeBonus;
 import com.gilfort.civmod.api.BlockingReason;
+import com.gilfort.civmod.api.Entertain;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
@@ -1925,7 +1926,7 @@ public final class SettlerWork {
      * @param level the level
      * @return 0 without a boost, else its percent as a fraction
      */
-    public double speedBoostShare(ServerLevel level) {
+    private double speedBoostShare(ServerLevel level) {
         return cuWorkFrom == NOT_SIMULATING ? speedBoost.share(level.getOverworldClockTime()) : speedBoost.averageShare(cuWorkFrom, cuWorkTo);
     }
 
@@ -2385,6 +2386,17 @@ public final class SettlerWork {
      */
     public void setEntertainment(Entertainment entertainment) {
         needs.setEntertainment(entertainment);
+    }
+
+    /**
+     * Adds points of Entertainment from a Service act, once per day and kind of act ({@link Entertainment#addCapped}).
+     *
+     * @param points the points to add
+     * @param cap    the daily cap of the act's kind
+     * @param day    the settler day of the act
+     */
+    public void entertain(double points, Entertain.Cap cap, long day) {
+        setEntertainment(entertainment().addCapped(points, cap, day));
     }
 
     /**

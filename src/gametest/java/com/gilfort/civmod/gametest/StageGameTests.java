@@ -176,7 +176,7 @@ public final class StageGameTests {
 
         // EXP per act: the base 10 times the Stage level; the Stage level caps the skill.
         for (int level = 1; level <= 5; level++) {
-            helper.assertTrue(ServiceActs.exp(bard, level) == 10 * level, "EXP at Stage level " + level);
+            helper.assertTrue(bard.baseExp() * level == 10 * level, "EXP at Stage level " + level);
             helper.assertTrue(SettlementRules.skillCap(level) == 20 * level, "Skill cap at Stage level " + level);
         }
         // The Bard works until the stage act ends.

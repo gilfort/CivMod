@@ -21,9 +21,6 @@ import net.minecraft.world.entity.Mob;
 @ApiStatus.Experimental
 public record WorkSpeed(double percent, double hours) implements ServiceEffect {
 
-    /** Ticks in an in-game hour. */
-    public static final int TICKS_PER_HOUR = 1000;
-
     private static final String PERCENT = "percent";
     private static final String HOURS = "hours";
 
@@ -40,7 +37,7 @@ public record WorkSpeed(double percent, double hours) implements ServiceEffect {
      * @return how long the boost lasts, in ticks
      */
     public long ticks() {
-        return Math.round(hours * TICKS_PER_HOUR);
+        return Math.round(hours * ServiceAct.TICKS_PER_HOUR);
     }
 
     @Override

@@ -35,7 +35,8 @@ public record ServiceAct(String id, Kind kind, int start, int end, double radius
     public static final double MAX_RADIUS = 64.0;
 
     private static final Pattern ID = Pattern.compile("[a-z0-9_]+");
-    private static final int TICKS_PER_HOUR = 1000;
+    /** Ticks in an in-game hour. */
+    static final int TICKS_PER_HOUR = 1000;
     private static final int MINUTES_PER_HOUR = 60;
     private static final int HOURS_PER_DAY = 24;
     /** The clock hour at which the day time is 0. */

@@ -1,5 +1,6 @@
 package com.gilfort.civmod.gametest;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -133,6 +134,7 @@ public final class ServiceGameTests {
             register(helper, "service_targets", ServiceGameTests::targets);
             register(helper, "service_wrong_category", ServiceGameTests::wrongCategory);
             register(helper, "service_builtin_jobs", ServiceGameTests::builtInJobs);
+            register(helper, "service_reload", ServiceGameTests::reload);
         });
     }
 
@@ -443,6 +445,33 @@ public final class ServiceGameTests {
     private static void builtInJobs(GameTestHelper helper) {
         for (Job job : List.of(ModJobs.PRIEST.get(), ModJobs.TAVERN_HOST.get(), ModJobs.ADMINISTRATOR.get())) {
             helper.assertTrue(job.category() == JobCategory.SERVICE && job.profile(ServiceProfile.class).isEmpty(), job + " has no Service profile");
+            // The hand shows a display item of a Service Job only while it plays; these have none, so their hand stays empty as before.
+            helper.assertTrue(job.displayItem().isEmpty(), job + " has no display item");
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The acts a Job plays with datapack numbers are put together once and kept; a datapack reload starts them anew, so no
+     * act of an earlier load stays in use.
+     */
+    private static void reload(GameTestHelper helper) {
+        Job bard = ModJobs.BARD.get();
+        Map<Job, JobBalancing> before = new HashMap<>();
+        ModJobs.REGISTRY.stream().forEach(job -> before.put(job, JobBalancing.of(job)));
+        try {
+            helper.assertTrue(ServiceActs.windowEnd(bard).orElse(-1) == 14000, "The stage act ends at 20:00 without a datapack");
+            for (int end : new int[] {15000, 16000}) {
+                Map<Job, JobBalancing> loaded = new HashMap<>(before);
+                loaded.put(bard, JobBalancing.merge(List.<JsonElement>of(JsonParser.parseString("{\"service_acts\": {\"stage\": {\"end\": " + end + "}}}"))));
+                JobBalancing.install(loaded);
+                helper.assertTrue(ServiceActs.windowEnd(bard).orElse(-1) == end, "A reload to " + end + " is used at once: " + ServiceActs.windowEnd(bard));
+                helper.assertTrue(ServiceActs.windowEnd(bard).orElse(-1) == end, "And again from the kept acts");
+            }
+            JobBalancing.install(before);
+            helper.assertTrue(ServiceActs.windowEnd(bard).orElse(-1) == 14000, "A reload without the file brings the declared acts back");
+        } finally {
+            JobBalancing.install(before);
         }
         helper.succeed();
     }
