@@ -201,10 +201,11 @@ final class SettlerTavern {
      */
     boolean recordDue(BlockPos pantry, long day, long gameTime) {
         Booking current = booking;
-        if (current != null && current.day() == day && !current.pantry().equals(pantry)) {
+        boolean booked = current != null && current.day() == day;
+        if (booked && !current.pantry().equals(pantry)) {
             return false;
         }
-        if (current == null || current.day() != day || !settler.isSitting() || settler.getWork().entertainment().recordSettled(day)) {
+        if (!booked || !settler.isSitting() || settler.getWork().entertainment().recordSettled(day)) {
             sitting = null;
             return false;
         }

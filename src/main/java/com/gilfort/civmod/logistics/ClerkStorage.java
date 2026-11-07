@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
@@ -104,7 +105,7 @@ public final class ClerkStorage {
      * @return whether a settler serves a counter at it: a Clerk JobBlock or a Pantry
      */
     private static boolean hasCounter(SettlementBlock block) {
-        return isClerk(block) || isPantry(block);
+        return shiftEnd(block.jobType()).isPresent();
     }
 
     /**
@@ -117,11 +118,16 @@ public final class ClerkStorage {
     }
 
     /**
-     * @param job a counter job
-     * @return the day time its shift ends: 20:00 for the Tavern Host, 18:30 for the Clerk
+     * The one place that says which jobs serve a counter and when their shift ends.
+     *
+     * @param job a job
+     * @return the day time its shift ends: 20:00 for the Tavern Host, 18:30 for the Clerk; empty for a job without a counter
      */
-    public static long shiftEnd(Job job) {
-        return job == ModJobs.TAVERN_HOST.get() ? TAVERN_SHIFT_END : SHIFT_END;
+    public static OptionalLong shiftEnd(Job job) {
+        if (job == ModJobs.CLERK.get()) {
+            return OptionalLong.of(SHIFT_END);
+        }
+        return job == ModJobs.TAVERN_HOST.get() ? OptionalLong.of(TAVERN_SHIFT_END) : OptionalLong.empty();
     }
 
     /**
@@ -130,10 +136,15 @@ public final class ClerkStorage {
      * @param dayTime the day time (0 = 06:00; negative before 06:00 on the Clerk's own day, {@link Schedule#moment})
      * @param job     the counter job ({@link #shiftEnd})
      * @return whether it lies within the shift: from its own waking time (05:30–06:00, counter jobs wake up early) to
-     *         the end of the job's shift. The shift of the clock's next day may already be open after 05:30.
+     *         the end of the job's shift. The shift of the clock's next day may already be open after 05:30. A job without
+     *         a counter has no shift.
      */
     public static boolean inShift(UUID clerk, long day, long dayTime, Job job) {
-        boolean today = dayTime >= shiftStart(clerk, day) && dayTime < shiftEnd(job);
+        OptionalLong end = shiftEnd(job);
+        if (end.isEmpty()) {
+            return false;
+        }
+        boolean today = dayTime >= shiftStart(clerk, day) && dayTime < end.getAsLong();
         return today || dayTime - DayClock.DAY_TICKS >= shiftStart(clerk, day + 1);
     }
 

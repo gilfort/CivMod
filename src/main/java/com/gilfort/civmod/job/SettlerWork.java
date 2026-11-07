@@ -382,7 +382,7 @@ public final class SettlerWork {
         }
         if (job.jobType().category() == JobCategory.SERVICE) {
             // The Administrator has no work; the Priest prays; the Tavern Host holds its counter like a Clerk.
-            if (job.jobType() == ModJobs.TAVERN_HOST.get()) {
+            if (ClerkStorage.shiftEnd(job.jobType()).isPresent()) {
                 return clerks;
             }
             return job.jobType() == ModJobs.PRIEST.get() ? priests : null;
@@ -2056,9 +2056,7 @@ public final class SettlerWork {
      *         until the end of the shift, the later one with both jobs ({@link ClerkStorage#shiftEnd}); empty without
      */
     private OptionalLong shiftEnd() {
-        return settler.getJobs().stream().map(SettlerJob::jobType)
-                .filter(type -> type == ModJobs.CLERK.get() || type == ModJobs.TAVERN_HOST.get())
-                .mapToLong(ClerkStorage::shiftEnd).max();
+        return settler.getJobs().stream().map(SettlerJob::jobType).flatMapToLong(type -> ClerkStorage.shiftEnd(type).stream()).max();
     }
 
     /**
