@@ -477,6 +477,9 @@ public final class ExampleAddonGameTests {
         Settler ringing = member(helper, settlement, new BlockPos(2, 1, 2), "Ringer");
         Settler hearing = member(helper, settlement, new BlockPos(7, 1, 1), "Hearing");
         Settler deaf = member(helper, settlement, new BlockPos(15, 1, 1), "Deaf");
+        // Frozen: a settler that strolls would walk in or out of the radius the test measures.
+        hearing.setNoAi(true);
+        deaf.setNoAi(true);
         ServerPlayer near = TestPlayers.add(helper, Vec3.atBottomCenterOf(jobBlock).add(6.0, 0.0, 0.0));
         ServerPlayer far = TestPlayers.add(helper, Vec3.atBottomCenterOf(jobBlock).add(14.0, 0.0, 0.0));
         helper.assertTrue(SettlementWorld.assign(level, jobBlock, ringing, ringer) == JobAssignments.AssignResult.OK, "Bell Ringer assigned");

@@ -198,8 +198,15 @@ public final class ServiceGameTests {
         return Vec3.atBottomCenterOf(helper.absolutePos(JOB_BLOCK));
     }
 
+    /**
+     * A settler of the settlement at a distance from the center of the act, frozen there. A listener with its AI on strolls
+     * around as soon as the act takes a few seconds to start (a loaded server), and then it can walk into or out of the
+     * radius the test measures.
+     */
     static Settler listener(GameTestHelper helper, Scene scene, double dx, String name) {
-        return settler(helper, scene.settlement(), center(helper).add(dx, 0.0, 0.0), name, true);
+        Settler listener = settler(helper, scene.settlement(), center(helper).add(dx, 0.0, 0.0), name, true);
+        listener.setNoAi(true);
+        return listener;
     }
 
     private static ServerPlayer player(GameTestHelper helper, Vec3 at) {
