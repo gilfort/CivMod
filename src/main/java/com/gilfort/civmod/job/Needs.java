@@ -9,6 +9,7 @@ import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.entertainment.Entertainment;
 import com.gilfort.civmod.entertainment.EntertainmentRules;
 import com.gilfort.civmod.food.FoodVariety;
+import com.gilfort.civmod.settlement.DayClock;
 
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -157,8 +158,11 @@ final class Needs {
             Entertainment entertainment = context.settler().getWork().entertainment();
             EntertainmentRules rules = EntertainmentRules.get();
             Component detail = Component.translatable("civmod.need.entertainment.detail", Entertainment.format(entertainment.value()), Entertainment.format(EntertainmentRules.MAX));
-            Component tooltip = Component.translatable("civmod.need.entertainment.tooltip", Entertainment.format(entertainment.pointsOn(context.day())),
-                    Entertainment.format(entertainment.talk().pointsOn(context.day())), Entertainment.format(rules.speedBonus(entertainment.value()) * 100.0));
+            // The marks are written with the calendar day (it changes at 06:00), not with the settler's own day, which a Clerk or
+            // Tavern Host starts at its early waking time.
+            long today = DayClock.day(context.level());
+            Component tooltip = Component.translatable("civmod.need.entertainment.tooltip", Entertainment.format(entertainment.pointsOn(today)),
+                    Entertainment.format(entertainment.talk().pointsOn(today)), Entertainment.format(rules.speedBonus(entertainment.value()) * 100.0));
             return new Check(rules.met(entertainment.value(), tier), detail, List.of(), tooltip);
         }
     }

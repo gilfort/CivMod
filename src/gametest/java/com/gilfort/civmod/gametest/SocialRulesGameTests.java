@@ -62,15 +62,15 @@ public final class SocialRulesGameTests {
             helper.assertTrue(rules.inRange(row[0]) == (row[1] == 1), "Squared distance " + row[0] + " in range is " + (row[1] == 1));
         }
 
-        // sleeping, away, onMission, leading, serving, eating, talking: every blocking state alone stops the check
-        boolean[][] situations = {{false, false, false, false, false, false, false, true}, {true, false, false, false, false, false, false, false},
-                {false, true, false, false, false, false, false, false}, {false, false, true, false, false, false, false, false},
-                {false, false, false, true, false, false, false, false}, {false, false, false, false, true, false, false, false},
-                {false, false, false, false, false, true, false, false}, {false, false, false, false, false, false, true, false},
-                {true, true, true, true, true, true, true, false}};
+        // sleeping, away, onMission, leading, serving, eating, playing, talking, expected: every blocking state alone stops the check
+        boolean[][] situations = {{false, false, false, false, false, false, false, false, true}, {true, false, false, false, false, false, false, false, false},
+                {false, true, false, false, false, false, false, false, false}, {false, false, true, false, false, false, false, false, false},
+                {false, false, false, true, false, false, false, false, false}, {false, false, false, false, true, false, false, false, false},
+                {false, false, false, false, false, true, false, false, false}, {false, false, false, false, false, false, true, false, false},
+                {false, false, false, false, false, false, false, true, false}, {true, true, true, true, true, true, true, true, false}};
         for (boolean[] row : situations) {
-            Situation situation = new Situation(row[0], row[1], row[2], row[3], row[4], row[5], row[6]);
-            helper.assertTrue(SocialRules.interruptible(situation) == row[7], situation + " is interruptible: " + row[7]);
+            Situation situation = new Situation(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7]);
+            helper.assertTrue(SocialRules.interruptible(situation) == row[8], situation + " is interruptible: " + row[8]);
         }
         helper.assertTrue(SocialRules.interruptible(Situation.FREE), "A free settler is interruptible");
 

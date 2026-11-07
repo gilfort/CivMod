@@ -8,8 +8,10 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.entertainment.Entertainment;
 import com.gilfort.civmod.gametest.LumberjackGameTests;
+import com.gilfort.civmod.gametest.MissionRunGameTests;
 import com.gilfort.civmod.gametest.TavernGameTests;
 import com.gilfort.civmod.job.SocialGameTests.Rolls;
+import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.ThoughtBubble;
@@ -28,6 +30,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.decoration.Cushion;
+import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Items;
@@ -37,6 +40,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.phys.AABB;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.registries.RegisterEvent;
@@ -68,6 +72,8 @@ public final class ConversationGameTests {
             register(helper, "conversation_cooldown_limit", ConversationGameTests::cooldownAndLimit);
             register(helper, "conversation_reserved", ConversationGameTests::reserved);
             register(helper, "conversation_not_interruptible", ConversationGameTests::notInterruptible);
+            register(helper, "conversation_tavern_host_serving", ConversationGameTests::tavernHostServing);
+            register(helper, "conversation_leading_villagers", ConversationGameTests::leadingVillagers);
             register(helper, "conversation_seated_guest_partner", ConversationGameTests::seatedGuestPartner);
             register(helper, "conversation_seated_guest_never_rolls", ConversationGameTests::seatedGuestNeverRolls);
             register(helper, "conversation_bard_stand_in", ConversationGameTests::heardThenTalked);
@@ -381,6 +387,60 @@ public final class ConversationGameTests {
         clerk.getWork().decideNow(level);
         helper.assertTrue(free(awake, clerk), "...and it talks to nobody");
         SocialGameTests.end(awake, clerk);
+        helper.succeed();
+    }
+
+    /** A Tavern Host with a customer at the counter is not stopped and stops nobody; without a customer it can talk. */
+    private static void tavernHostServing(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos pantry = TavernGameTests.pantry(helper);
+        Rolls rolls = new Rolls(CONVERSATION);
+        Settler host = SocialGameTests.settler(helper, pantry, 2, 4, rolls);
+        TavernGameTests.host(helper, pantry, host);
+        Settler guest = SocialGameTests.settler(helper, pantry, 4, 4, rolls);
+        helper.assertTrue(host.getWork().interruptible(level), "A Tavern Host without a customer can be interrupted");
+        ClerkCounter.serve(level, pantry, UUID.randomUUID());
+        helper.assertTrue(ClerkCounter.busy(level, pantry), "A customer is at the counter");
+        helper.assertFalse(host.getWork().interruptible(level), "A Tavern Host with a customer at the counter cannot be interrupted");
+        guest.getWork().decideNow(level);
+        helper.assertTrue(free(host, guest), "Nobody talks to a Tavern Host with a customer at the counter");
+        int before = rolls.calls;
+        host.getWork().decideNow(level);
+        helper.assertTrue(free(host, guest) && rolls.calls == before, "...and it talks to nobody (no roll)");
+        TestAssignments.unassign(SettlementData.get(level), pantry);
+        SocialGameTests.end(host, guest);
+        helper.succeed();
+    }
+
+    /** An Adventurer back from a Villager mission leads the Villagers to the Mission Board: nobody stops it, and it stops nobody. */
+    private static void leadingVillagers(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Rolls rolls = new Rolls(CONVERSATION);
+        Settler leader = MissionRunGameTests.missionSettler(helper, ModJobs.ADVENTURER.get(), "Leader",
+                mission -> mission.villagers().isPresent() && mission.recommendedLevel() <= MissionRunGameTests.SKILL);
+        leader.setNoAi(true);
+        leader.getWork().social().script(rolls);
+        leader.getWork().forceMissionOutcome(MissionRules.Outcome.SUCCESS);
+        BlockPos board = helper.absolutePos(MissionRunGameTests.BOARD);
+        BlockPos exit = helper.absolutePos(new BlockPos(4, 1, 4));
+        long day = Math.floorDiv(level.getOverworldClockTime(), DayClock.DAY_TICKS);
+        MissionTrip trip = new MissionTrip(board, CivMod.id("invite_villagers_plains"), MissionRules.returnTime(day, 1)).withExit(exit);
+        leader.getWork().restore(new SettlerWork.BuffersSnapshot(List.of(), List.of(), List.of(), SettlerWork.CatchUpState.NONE,
+                java.util.Optional.of(trip)));
+        helper.assertTrue(leader.getWork().isAway(), "Setup: away on the mission");
+        helper.assertTrue(leader.getWork().returnFromMission(level, trip.returnTime()), "The Adventurer is back");
+        helper.assertTrue(leader.getWork().missions().leading(), "It leads its Villagers");
+
+        Settler friend = SocialGameTests.settler(helper, board, 6, 4, rolls);
+        helper.assertFalse(leader.getWork().interruptible(level), "A settler leading Villagers cannot be interrupted");
+        friend.getWork().decideNow(level);
+        helper.assertTrue(free(leader, friend), "Nobody talks to a settler leading Villagers");
+        int before = rolls.calls;
+        leader.getWork().decideNow(level);
+        helper.assertTrue(free(leader, friend) && rolls.calls == before, "...and it talks to nobody (no roll)");
+
+        level.getEntitiesOfClass(Villager.class, new AABB(board).inflate(64)).forEach(Villager::discard);
+        SocialGameTests.end(leader, friend);
         helper.succeed();
     }
 

@@ -24,19 +24,20 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 
 /**
- * The rules of the meeting check and the conversations (vault {@code Systems/Entertainment.md}, Conversations and greetings) as plain functions
- * over plain values, with their numbers from {@code data/<namespace>/civmod_social/rules.json}; files of all packs are
- * merged, later values override, missing values keep the {@link #FALLBACK}. Nothing here touches the world.
+ * The rules of the meeting check and the conversations (vault {@code Systems/Entertainment.md}, Conversations and
+ * greetings) as plain functions over plain values, with their numbers from
+ * {@code data/<namespace>/civmod_social/rules.json}; files of all packs are merged, later values override, missing values
+ * keep the {@link #FALLBACK}. Nothing here touches the world.
  *
- * @param conversationChance the share of a roll that is a conversation (0.20)
- * @param greetingChance     the share of a roll that is a greeting (0.30), counted after the conversation share
- * @param radius             blocks around a settler in which it notices others
- * @param greetingCooldown   ticks before the same pair greets again (1200: 60 seconds)
- * @param conversationTicks  ticks two settlers talk (120: 6 seconds)
- * @param walkGiveUp         ticks the walk to the partner may take before the conversation is dropped (100: 5 seconds)
+ * @param conversationChance   the share of a roll that is a conversation (0.20)
+ * @param greetingChance       the share of a roll that is a greeting (0.30), counted after the conversation share
+ * @param radius               blocks around a settler in which it notices others
+ * @param greetingCooldown     ticks before the same pair greets again (1200: 60 seconds)
+ * @param conversationTicks    ticks two settlers talk (120: 6 seconds)
+ * @param walkGiveUp           ticks the walk to the partner may take before the conversation is dropped (100: 5 seconds)
  * @param conversationCooldown ticks before a settler talks again (2000)
- * @param dailyLimit         conversations a settler holds per day at most (2)
- * @param points             Entertainment points each of the two gets from a conversation (0.5)
+ * @param dailyLimit           conversations a settler holds per day at most (2)
+ * @param points               Entertainment points each of the two gets from a conversation (0.5)
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public record SocialRules(double conversationChance, double greetingChance, int radius, int greetingCooldown, int conversationTicks,
@@ -63,13 +64,14 @@ public record SocialRules(double conversationChance, double greetingChance, int 
      * @param leading   leads Villagers to the Mission Board
      * @param serving   a Tavern Host or Clerk with a customer at the counter
      * @param eating    eats at the food point
+     * @param playing   a Bard who plays, at a stop of its round or on its Stage
      * @param talking   is in a conversation already (also reserved for one)
      */
     public record Situation(boolean sleeping, boolean away, boolean onMission, boolean leading, boolean serving, boolean eating,
-            boolean talking) {
+            boolean playing, boolean talking) {
 
         /** A settler with none of the blocking states. */
-        public static final Situation FREE = new Situation(false, false, false, false, false, false, false);
+        public static final Situation FREE = new Situation(false, false, false, false, false, false, false, false);
     }
 
     /** Reload listener id. */
@@ -137,15 +139,14 @@ public record SocialRules(double conversationChance, double greetingChance, int 
 
     /**
      * Whether the meeting check may run for a settler: it is awake and visible and neither away on a Mission, nor leading
-     * Villagers, nor serving a customer, nor eating, nor in a conversation already. (The vault also names a Bard who is playing; that state comes with the
-     * Service loop.)
+     * Villagers, nor serving a customer, nor eating, nor playing as a Bard, nor in a conversation already.
      *
      * @param situation what the settler is doing
      * @return whether it can be interrupted
      */
     public static boolean interruptible(Situation situation) {
         return !(situation.sleeping() || situation.away() || situation.onMission() || situation.leading() || situation.serving()
-                || situation.eating() || situation.talking());
+                || situation.eating() || situation.playing() || situation.talking());
     }
 
     /**
