@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "civmod_example:block/bell_ringer_block"
+    }
+  }
+}

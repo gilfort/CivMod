@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "L": "minecraft:bell",
+    "B": "minecraft:barrel",
+    "P": "#minecraft:planks"
+  },
+  "pattern": [
+    "PLP",
+    "PBP",
+    "PPP"
+  ],
+  "result": {
+    "id": "civmod_example:bell_ringer_block"
+  }
+}

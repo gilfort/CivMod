@@ -12,5 +12,10 @@
   "job.civmod_example.stonecutter": "Stonecutter",
   "job.civmod_example.stonecutter.indefinite": "a Stonecutter",
   "job.civmod_example.stonecutter.description": "Cuts stone fast at a stonecutter",
-  "civmod_example.scroll.work_place.stonecutter": "a stonecutter"
+  "civmod_example.scroll.work_place.stonecutter": "a stonecutter",
+  "block.civmod_example.bell_ringer_block": "Bell Ringer Block",
+  "job.civmod_example.bell_ringer": "Bell Ringer",
+  "job.civmod_example.bell_ringer.indefinite": "a Bell Ringer",
+  "job.civmod_example.bell_ringer.description": "Rings the morning bell: settlers nearby work faster, players nearby get Haste",
+  "civmod_example.scroll.work_place.bell_ringer": "no work place (stands next to its block)"
 }

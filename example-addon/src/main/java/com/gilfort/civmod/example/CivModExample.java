@@ -6,10 +6,15 @@ import com.gilfort.civmod.api.CivModJobs;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.MissionProfile;
+import com.gilfort.civmod.api.MobEffect;
+import com.gilfort.civmod.api.ServiceAct;
+import com.gilfort.civmod.api.ServiceProfile;
 import com.gilfort.civmod.api.SimpleCollectionProfile;
+import com.gilfort.civmod.api.WorkSpeed;
 
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.ItemTags;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Items;
@@ -41,6 +46,11 @@ import net.neoforged.neoforge.registries.DeferredRegister;
  * JobBlock and produces its drops with a shovel, without digging the world away. Its JobBlock comes from the factory;
  * the addon ships its blockstate, models, recipe, loot table, settlers per level
  * ({@code data/civmod_example/civmod_job_blocks/sand_digger.json}) and lang keys.
+ * <p>
+ * The Bell Ringer is a Service Job: its {@link ServiceProfile} has one act, the morning bell. From 07:00 to 12:00 the Bell
+ * Ringer stands next to its JobBlock; once a day the settlers within 12 blocks work 10 % faster for three hours
+ * ({@link WorkSpeed}) and the players within 12 blocks get Haste for a minute ({@link MobEffect}). A datapack can change the
+ * numbers of the act in {@code data/civmod_example/civmod_jobs/bell_ringer.json}, not its effects.
  */
 @Mod(CivModExample.MOD_ID)
 public final class CivModExample {
@@ -78,6 +88,22 @@ public final class CivModExample {
                     .build())
             .build());
 
+    /** The Bell Ringer's JobBlock. */
+    public static final DeferredBlock<Block> BELL_RINGER_BLOCK = BLOCKS.registerBlock("bell_ringer_block",
+            properties -> CivModApi.jobBlock(CivModExample::bellRinger, properties),
+            properties -> properties.mapColor(MapColor.GOLD).strength(2.5F).sound(SoundType.WOOD));
+
+    /** The Bell Ringer's JobBlock item. */
+    public static final DeferredItem<BlockItem> BELL_RINGER_BLOCK_ITEM = ITEMS.registerItem("bell_ringer_block",
+            properties -> CivModApi.jobBlockItem(BELL_RINGER_BLOCK.get(), properties));
+
+    /** Rings the morning bell: faster work for settlers and Haste for players nearby, both within 12 blocks. */
+    public static final DeferredHolder<Job, Job> BELL_RINGER = JOBS.register("bell_ringer", () -> Job.builder(JobCategory.SERVICE)
+            .icon(BELL_RINGER_BLOCK_ITEM).bubbleIcon(() -> Items.BELL).hungerFactor(0.5).baseExp(5)
+            .profile(() -> ServiceProfile.of(ServiceAct.stationary("morning_bell", ServiceAct.clock(7, 0), ServiceAct.clock(12, 0), 12.0,
+                    new WorkSpeed(10.0, 3.0), new MobEffect(MobEffects.HASTE, 1200, 0))))
+            .build());
+
     /**
      * A Producing Specialization of the Craftsperson, unlocked at a Craftsperson JobBlock by a stonecutter in a Station
      * Types slot; it cuts stone at a stonecutter from {@code stonecutting} recipes ({@link StonecutterProfile}), four times
@@ -103,9 +129,14 @@ public final class CivModExample {
         return SAND_DIGGER.get();
     }
 
+    private static Job bellRinger() {
+        return BELL_RINGER.get();
+    }
+
     private static void addToCreativeTab(BuildCreativeModeTabContentsEvent event) {
         if (event.getTabKey() == CreativeModeTabs.FUNCTIONAL_BLOCKS) {
             event.accept(SAND_DIGGER_BLOCK_ITEM);
+            event.accept(BELL_RINGER_BLOCK_ITEM);
         }
     }
 
