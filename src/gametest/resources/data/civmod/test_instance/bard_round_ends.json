@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:bard_round",
+  "function": "civmod:bard_round_ends",
+  "max_ticks": 800,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

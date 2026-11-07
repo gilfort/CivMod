@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:bard_round",
+  "function": "civmod:bard_round_no_worker",
+  "max_ticks": 2200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

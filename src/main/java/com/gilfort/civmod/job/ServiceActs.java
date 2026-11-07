@@ -86,6 +86,15 @@ public final class ServiceActs {
     }
 
     /**
+     * @param acts    the acts to play
+     * @param dayTime a tick of the day
+     * @return the first round act whose window is open then
+     */
+    static Optional<ServiceAct> roundAt(List<ServiceAct> acts, long dayTime) {
+        return acts.stream().filter(act -> act.kind() == ServiceAct.Kind.ROUND && act.isOpen(dayTime)).findFirst();
+    }
+
+    /**
      * @param job a Job
      * @return the tick at which the last window of its acts ends (datapack numbers included); empty for a Job without a
      *         Service profile. A settler works until then if that is later than the usual end of work.

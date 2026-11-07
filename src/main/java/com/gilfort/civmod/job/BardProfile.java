@@ -12,8 +12,8 @@ import com.gilfort.civmod.api.ServiceProfile;
  * settler gets the points of a round stop once a day and those of a stage act once an evening, however many Bards reach
  * it ({@link Entertain.Cap}). The numbers are datapack values ({@code service_acts} in {@code civmod_jobs/bard.json}).
  * <p>
- * The round is walked by the Bard's round, which is not built yet; until then the round act does nothing and the Bard works
- * its next Job by day.
+ * The round walks to settlers at work and plays as many stops as the Stage level; the Bard looks and sounds like a performer
+ * while it plays ({@link BardShow}).
  */
 public final class BardProfile implements ServiceProfile {
 

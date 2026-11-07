@@ -76,7 +76,9 @@ public enum JobStatus {
      */
     BLOCKED("blocked"),
     /** The JobBlock is not connected to its settlement: the job waits until it connects again. */
-    UNCONNECTED("unconnected");
+    UNCONNECTED("unconnected"),
+    /** A Bard playing a stop of its round or its stage act: it holds its instrument. */
+    PLAYING("playing");
 
     /** Network codec. */
     public static final StreamCodec<ByteBuf, JobStatus> STREAM_CODEC = ByteBufCodecs.idMapper(i -> values()[i], JobStatus::ordinal);

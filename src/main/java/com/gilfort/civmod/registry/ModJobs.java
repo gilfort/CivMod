@@ -69,7 +69,8 @@ public final class ModJobs {
             .icon(ModItems.MISSION_BOARD).bubbleIcon(() -> Items.MAP).hungerFactor(1.0).baseExp(10).build());
     /** See vault {@code Jobs/Bard.md}; a Service Job on the Stage: it plays for the settlement's Entertainment. */
     public static final DeferredHolder<Job, Job> BARD = JOBS.register("bard", () -> Job.builder(JobCategory.SERVICE)
-            .icon(ModItems.STAGE_BLOCK).bubbleIcon(() -> Items.NOTE_BLOCK).hungerFactor(0.5).baseExp(10).profile(BardProfile::new).build());
+            .icon(ModItems.STAGE_BLOCK).bubbleIcon(() -> Items.NOTE_BLOCK).displayItem(() -> Items.GOAT_HORN).hungerFactor(0.5).baseExp(10)
+            .profile(BardProfile::new).build());
     /** See vault {@code Jobs/Administrator.md}; works at the Center Block, has no work yet: a settler moves on to its next job. */
     public static final DeferredHolder<Job, Job> ADMINISTRATOR = JOBS.register("administrator", () -> Job.builder(JobCategory.SERVICE)
             .icon(ModItems.HUMAN_CENTER_BLOCK).bubbleIcon(() -> Items.WRITABLE_BOOK).build());

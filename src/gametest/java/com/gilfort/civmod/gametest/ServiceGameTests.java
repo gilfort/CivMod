@@ -62,10 +62,10 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 
 /**
  * GameTests for the Service profile, the Service loop and the effects (spec "Service and Bard", vault
- * {@code Systems/Job Categories.md}). Registers four Service Jobs with a JobBlock each, the way an addon does:
+ * {@code Systems/Job Categories.md}). Registers three Service Jobs with a JobBlock each, the way an addon does:
  * {@code civmod:gametest_service_window} (one stationary act, 09:00 to 11:00), {@code civmod:gametest_service_radius}
  * (the same with one {@link Entertain}), {@code civmod:gametest_service_targets} (every built-in effect and a recorder
- * for each kind of target) and {@code civmod:gametest_service_round} (a round act only).
+ * for each kind of target).
  * <p>
  * The tests that move the clock have an environment of their own ({@code civmod:service_window}); the others share
  * {@code civmod:service_open}, where the window is open (10:00) and the clock stands still.
@@ -76,7 +76,6 @@ public final class ServiceGameTests {
     private static final Identifier WINDOW = CivMod.id("gametest_service_window");
     private static final Identifier RADIUS = CivMod.id("gametest_service_radius");
     private static final Identifier TARGETS = CivMod.id("gametest_service_targets");
-    private static final Identifier ROUND = CivMod.id("gametest_service_round");
 
     /** 09:00 to 11:00. */
     private static final int OPEN = ServiceAct.clock(9, 0);
@@ -121,30 +120,27 @@ public final class ServiceGameTests {
             helper.register(RADIUS, service(ServiceProfile.of(ServiceAct.stationary("listen", OPEN, CLOSE, 8.0, new Entertain(1.0)))));
             helper.register(TARGETS, service(ServiceProfile.of(ServiceAct.stationary("show", OPEN, CLOSE, 8.0, FOR_SETTLERS, FOR_PLAYERS, FOR_BOTH,
                     new Entertain(1.0), new WorkSpeed(50.0, 2.0), new MobEffect(MobEffects.SPEED, 200, 1)))));
-            helper.register(ROUND, service(ServiceProfile.of(ServiceAct.round("walk", OPEN, CLOSE, 8.0, new Entertain(1.0)))));
         });
         event.register(Registries.BLOCK, helper -> {
             block(helper, WINDOW);
             block(helper, RADIUS);
             block(helper, TARGETS);
-            block(helper, ROUND);
         });
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "service_table", ServiceGameTests::table);
             register(helper, "service_window", ServiceGameTests::window);
             register(helper, "service_radius", ServiceGameTests::radius);
             register(helper, "service_targets", ServiceGameTests::targets);
-            register(helper, "service_round_idle", ServiceGameTests::roundIdle);
             register(helper, "service_wrong_category", ServiceGameTests::wrongCategory);
             register(helper, "service_builtin_jobs", ServiceGameTests::builtInJobs);
         });
     }
 
-    private static Job service(ServiceProfile profile) {
+    static Job service(ServiceProfile profile) {
         return Job.builder(JobCategory.SERVICE).icon(() -> Items.BELL).baseExp(10).profile(() -> profile).build();
     }
 
-    private static void block(RegisterEvent.RegisterHelper<Block> helper, Identifier id) {
+    static void block(RegisterEvent.RegisterHelper<Block> helper, Identifier id) {
         helper.register(id, CivModApi.jobBlock(() -> ModJobs.REGISTRY.getValue(id),
                 BlockBehaviour.Properties.of().strength(2.5F).setId(ResourceKey.create(Registries.BLOCK, id))));
     }
@@ -421,23 +417,6 @@ public final class ServiceGameTests {
                     TestPlayers.remove(hearing);
                     TestPlayers.remove(deaf);
                     cleanUp(level, scene, near, far, out);
-                })
-                .thenSucceed();
-    }
-
-    /** A round act does nothing until the Bard's round is built: the settler does not work it and nobody is entertained. */
-    private static void roundIdle(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        Scene scene = scene(helper, ROUND);
-        Settler hearer = listener(helper, scene, 2.0, "Hearer");
-        Settler performer = scene.performer();
-        helper.startSequence()
-                .thenExecute(() -> performer.getWork().decideNow(level))
-                .thenIdle(60)
-                .thenExecute(() -> {
-                    helper.assertTrue(!works(performer, scene.job()), "A round act is not worked: " + performer.getWork().activeJob());
-                    helper.assertTrue(entertainment(hearer) == 0.0 && exp(performer, scene.job()) == 0, "Nothing happened");
-                    cleanUp(level, scene, hearer);
                 })
                 .thenSucceed();
     }

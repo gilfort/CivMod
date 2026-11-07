@@ -245,7 +245,8 @@ public final class StageGameTests {
                     Vec3 top = Vec3.atBottomCenterOf(helper.absolutePos(STAGE.above()));
                     helper.assertTrue(Math.abs(bard.getX() - top.x) < 0.7 && Math.abs(bard.getZ() - top.z) < 0.7 && bard.getY() > top.y - 0.2,
                             "The Bard stands on the Stage block: " + bard.position() + " instead of " + top);
-                    helper.assertTrue(bard.getWork().status(bard.getJobs().get(0).jobBlock()) == JobStatus.SERVING, "Serving");
+                    helper.assertTrue(bard.getWork().status(bard.getJobs().get(0).jobBlock()) == JobStatus.PLAYING, "Playing");
+                    helper.assertTrue(bard.getMainHandItem().is(Items.GOAT_HORN), "The horn in the hand while it plays");
                     helper.assertTrue(ServiceGameTests.exp(bard, scene.job()) == 30, "EXP: 10 times Stage level 3: " + ServiceGameTests.exp(bard, scene.job()));
                 })
                 .thenIdle(40)
@@ -314,8 +315,8 @@ public final class StageGameTests {
     }
 
     /**
-     * The Bard's hours: it does not work its Stage before 11:00 or by day while the round is not built, it stands on the Stage
-     * from 17:30 and goes back to its next job at 20:00. Its work ends at 20:00 without waking early.
+     * The Bard's hours: it does not work its Stage before 11:00, walks its round by day (and waits on the Stage when nobody
+     * works), stands on the Stage from 17:30 and goes back to its next job at 20:00. Its work ends at 20:00 without waking early.
      */
     private static void hours(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -327,7 +328,7 @@ public final class StageGameTests {
         helper.assertTrue(bard.getWork().dayTimes(day).wake() >= 0L, "No early wake like a counter job: " + bard.getWork().dayTimes(day));
         helper.assertTrue(other.getWork().dayTimes(day).workEnd() < ServiceAct.clock(20, 0), "Another settler stops at 17:30 to 18:00");
         long[] times = {ServiceAct.clock(8, 0), ServiceAct.clock(10, 59), ServiceAct.clock(12, 0), ServiceAct.clock(17, 36), ServiceAct.clock(19, 59), ServiceAct.clock(20, 0)};
-        boolean[] plays = {false, false, false, true, true, false};
+        boolean[] plays = {false, false, true, true, true, false};
         for (int i = 0; i < times.length; i++) {
             ServiceGameTests.setDayTime(level, times[i]);
             bard.getWork().decideNow(level);

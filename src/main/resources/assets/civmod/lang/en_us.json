@@ -211,6 +211,7 @@
   "civmod.job.status.delivering": "Delivering",
   "civmod.job.status.pausing": "Pausing",
   "civmod.job.status.praying": "Praying",
+  "civmod.job.status.playing": "Playing",
   "civmod.job.status.no_tool": "No tool",
   "civmod.job.status.no_work_place": "No work place",
   "civmod.job.status.unconnected": "JobBlock not connected",
