@@ -13,6 +13,7 @@ import com.gilfort.civmod.api.ServiceAct;
 import com.gilfort.civmod.api.ServiceContext;
 import com.gilfort.civmod.api.ServiceEffect;
 import com.gilfort.civmod.api.ServiceProfile;
+import com.gilfort.civmod.entertainment.Stage;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.DayClock;
@@ -31,15 +32,18 @@ import net.minecraft.world.phys.Vec3;
  * Job with a {@link ServiceProfile}. The Priest, the Tavern Host and the Administrator keep their own handling
  * ({@link SettlerWork#loop}).
  * <p>
- * A stationary act sends the settler to the Job's place, next to its JobBlock, for the whole window; outside every window
- * the loop skips, so the shell moves on to the settler's next job. When the settler has reached its place, the act plays
- * once a day: one scan for listeners (settlers of the settlement and players within the act's radius), the effects in
- * order, and the settler's EXP (the Job's base EXP times the JobBlock level). A round act is run by the Bard's round and
- * does nothing here.
+ * A stationary act sends the settler to the Job's place, next to its JobBlock (a Bard stands on its Stage block), for the
+ * whole window; outside every window the loop skips, so the shell moves on to the settler's next job. When the settler has
+ * reached its place, the act plays once a day: one scan for listeners (awake settlers of the settlement and players within
+ * the act's radius of its center: the JobBlock, or a Stage's Sound center), the effects in order, and the settler's EXP (the
+ * Job's base EXP times the JobBlock level). A round act is run by the Bard's round and does nothing here.
  * <p>
  * Catch-up plays no act; the hours of a stationary window are spent standing.
  */
 final class ServiceLoop implements CategoryLoop {
+
+    /** How close the Bard comes to the middle of its Stage block, in blocks. */
+    private static final double STAGE_REACH = 0.6;
 
     private final SettlerWork shell;
     private final Settler settler;
@@ -66,6 +70,11 @@ final class ServiceLoop implements CategoryLoop {
         if (act(job, dayTime).isEmpty()) {
             return JobStep.skip();
         }
+        // A Bard stands on top of its Stage (if there is room), any other settler next to its JobBlock.
+        BlockPos top = site.pos().above();
+        if (Stage.isStage(site.block()) && SettlerWork.canStand(level, top)) {
+            return JobStep.walk(top, STAGE_REACH, JobStatus.SERVING);
+        }
         return JobStep.walk(site.pos(), SettlerWork.REACH, JobStatus.SERVING);
     }
 
@@ -89,7 +98,7 @@ final class ServiceLoop implements CategoryLoop {
             played.put(job.jobBlock(), today);
         }
         if (today.acts().add(act.get().id())) {
-            play(level, job, act.get(), target, clock);
+            play(level, job, act.get(), clock);
         }
         return JobStep.WORK;
     }
@@ -100,12 +109,12 @@ final class ServiceLoop implements CategoryLoop {
     }
 
     /** Plays an act: one scan for the listeners, then the effects in order and the EXP. */
-    private void play(ServerLevel level, SettlerJob job, ServiceAct act, BlockPos place, long clock) {
+    private void play(ServerLevel level, SettlerJob job, ServiceAct act, long clock) {
         Optional<JobBlockSite> site = JobBlockSite.at(level, job.jobBlock());
         if (site.isEmpty()) {
             return;
         }
-        Vec3 center = Vec3.atBottomCenterOf(place);
+        Vec3 center = Stage.isStage(site.get().block()) ? Stage.soundCenter(site.get().block()) : Vec3.atBottomCenterOf(site.get().pos());
         List<Mob> settlers = listeningSettlers(level, site.get(), act, center);
         List<ServerPlayer> players = listeningPlayers(level, act, center);
         int skill = shell.effectiveLevel(job);
@@ -114,14 +123,15 @@ final class ServiceLoop implements CategoryLoop {
             effect.apply(new ServiceContext(level, act, center, settler, skill, clock, targets.settlers() ? settlers : List.of(),
                     targets.players() ? players : List.of()));
         }
-        shell.gainExp(level, job, job.jobType().baseExp() * site.get().level(), SettlementRules.skillCap(site.get().level()));
+        shell.gainExp(level, job, ServiceActs.exp(job.jobType(), site.get().level()), SettlementRules.skillCap(site.get().level()));
     }
 
     private List<Mob> listeningSettlers(ServerLevel level, JobBlockSite site, ServiceAct act, Vec3 center) {
         Set<UUID> members = site.settlement().members();
         AABB area = AABB.ofSize(center, 2.0 * act.radius(), 2.0 * act.radius(), 2.0 * act.radius());
         return List.copyOf(level.getEntitiesOfClass(Settler.class, area,
-                other -> other != settler && members.contains(other.getUUID()) && !other.isAway() && act.reaches(center, other.position())));
+                other -> other != settler && members.contains(other.getUUID()) && !other.isAway() && !other.isSleeping()
+                        && act.reaches(center, other.position())));
     }
 
     private static List<ServerPlayer> listeningPlayers(ServerLevel level, ServiceAct act, Vec3 center) {

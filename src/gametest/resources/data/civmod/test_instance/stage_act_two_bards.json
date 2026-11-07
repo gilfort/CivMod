@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:evening",
+  "function": "civmod:stage_act_two_bards",
+  "max_ticks": 900,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

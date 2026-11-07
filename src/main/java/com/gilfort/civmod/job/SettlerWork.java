@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.function.BooleanSupplier;
 
@@ -25,6 +26,7 @@ import com.gilfort.civmod.api.XpGain;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.entertainment.Entertainment;
 import com.gilfort.civmod.entertainment.EntertainmentRules;
+import com.gilfort.civmod.entertainment.Stage;
 import com.gilfort.civmod.entertainment.Tavern;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.Schedule.Activity;
@@ -320,6 +322,11 @@ public final class SettlerWork {
         Schedule.DayTimes times = Schedule.dayTimes(settler.getUUID(), day, shiftEnd.isPresent());
         if (shiftEnd.isPresent()) {
             times = times.withWorkEnd(shiftEnd.getAsLong());
+        }
+        // A Service Job with a window after the usual end of work (the Bard's stage act) keeps its settler at work until then.
+        OptionalInt serviceEnd = serviceEnd();
+        if (serviceEnd.isPresent() && serviceEnd.getAsInt() > times.workEnd()) {
+            times = times.withWorkEnd(serviceEnd.getAsInt());
         }
         OptionalLong returned = missions.returnedOn(day);
         if (returned.isPresent() && returned.getAsLong() < times.workEnd()) {
@@ -1768,6 +1775,8 @@ public final class SettlerWork {
         if (to >= day * DayClock.DAY_TICKS + ClerkStorage.TAVERN_SHIFT_END) {
             // The whole Tavern evening was missed (one that is still going on is lived and counted live).
             Tavern.catchUp(level, settler, day);
+            // The Bard's missed day: a flat point, nothing played.
+            Stage.catchUp(level, settler, day);
         }
         return rolls;
     }
@@ -2103,6 +2112,14 @@ public final class SettlerWork {
      */
     private OptionalLong shiftEnd() {
         return settler.getJobs().stream().map(SettlerJob::jobType).flatMapToLong(type -> ClerkStorage.shiftEnd(type).stream()).max();
+    }
+
+    /**
+     * @return the end of the latest window of the acts of this settler's Service Jobs ({@link ServiceActs#windowEnd}), empty
+     *         without such a Job; it moves the end of work, not the waking time
+     */
+    private OptionalInt serviceEnd() {
+        return settler.getJobs().stream().map(SettlerJob::jobType).flatMapToInt(type -> ServiceActs.windowEnd(type).stream()).max();
     }
 
     /**

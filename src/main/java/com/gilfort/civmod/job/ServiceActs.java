@@ -4,9 +4,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.ServiceAct;
 import com.gilfort.civmod.api.ServiceEffect;
 import com.gilfort.civmod.api.ServiceProfile;
@@ -81,6 +83,28 @@ public final class ServiceActs {
      */
     static Optional<ServiceAct> stationaryAt(List<ServiceAct> acts, long dayTime) {
         return acts.stream().filter(act -> act.kind() == ServiceAct.Kind.STATIONARY && act.isOpen(dayTime)).findFirst();
+    }
+
+    /**
+     * @param job a Job
+     * @return the tick at which the last window of its acts ends (datapack numbers included); empty for a Job without a
+     *         Service profile. A settler works until then if that is later than the usual end of work.
+     */
+    public static OptionalInt windowEnd(Job job) {
+        if (job.category() != JobCategory.SERVICE) {
+            return OptionalInt.empty();
+        }
+        return job.profile(ServiceProfile.class).map(profile -> of(job, profile).stream().mapToInt(ServiceAct::end).max())
+                .orElse(OptionalInt.empty());
+    }
+
+    /**
+     * @param job        a Service Job
+     * @param blockLevel the level of its JobBlock
+     * @return the EXP the settler gets for playing one act: the Job's base EXP times the JobBlock level
+     */
+    public static int exp(Job job, int blockLevel) {
+        return job.baseExp() * blockLevel;
     }
 
     /**
