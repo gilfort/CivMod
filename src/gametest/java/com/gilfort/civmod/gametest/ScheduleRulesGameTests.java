@@ -41,6 +41,7 @@ public final class ScheduleRulesGameTests {
             register(helper, "schedule_rules_morning", ScheduleRulesGameTests::morning);
             register(helper, "schedule_rules_hunger", ScheduleRulesGameTests::hunger);
             register(helper, "schedule_rules_evening", ScheduleRulesGameTests::evening);
+            register(helper, "schedule_rules_tavern", ScheduleRulesGameTests::tavern);
             register(helper, "schedule_rules_homeless", ScheduleRulesGameTests::homeless);
             register(helper, "schedule_rules_sleeping", ScheduleRulesGameTests::sleeping);
             register(helper, "schedule_rules_activity_in_progress", ScheduleRulesGameTests::activityInProgress);
@@ -340,6 +341,9 @@ public final class ScheduleRulesGameTests {
         boolean morningHandled = true;
         boolean eveningMealEaten;
         boolean deliveryPending;
+        /** Whether the settler goes to the Tavern this evening; asked only when a rule needs it. */
+        boolean tavern;
+        int tavernAsked;
         int foodPointAsked;
         /** The window starts (06:00, 17:30, 20:00) unless a test moves them. */
         Schedule.DayTimes times = new Schedule.DayTimes(0L, SettlerWork.WORK_END, SettlerWork.SLEEP_TIME);
@@ -352,7 +356,10 @@ public final class ScheduleRulesGameTests {
                 waitPointAsked++;
                 return waitPoint;
             }, homeless, sleeping, forageDay, nightSkipped, activity, () -> jobStepHolds, morningHandled, eveningMealEaten,
-                    waitStart, deliveryPending, times);
+                    waitStart, deliveryPending, () -> {
+                        tavernAsked++;
+                        return tavern;
+                    }, times);
         }
 
         Optional<Intent> wakeUp() {
@@ -453,6 +460,59 @@ public final class ScheduleRulesGameTests {
         decision = morning.next();
         expect(helper, decision, Intent.EAT_FROM_POCKETS, "Hungry morning with provisions eats them");
         helper.assertTrue(decision.morningHandled(), "The morning is still marked");
+        helper.succeed();
+    }
+
+    /**
+     * Tavern evening: after delivery and the meal a settler for whom the Tavern has a seat goes there instead of resting,
+     * stays seated while it keeps the seat, and goes to bed at its bedtime like everybody else.
+     */
+    private static void tavern(GameTestHelper helper) {
+        Situation visit = new Situation();
+        visit.dayTime = EVENING;
+        visit.eveningMealEaten = true;
+        visit.tavern = true;
+        Decision decision = visit.next();
+        expect(helper, decision, Intent.GO_TO_TAVERN, "The Tavern has a seat");
+        helper.assertTrue(decision.afterWork() && !decision.eveningMealHandled(), "Work is over: " + decision);
+
+        visit.activity = Activity.TAVERN;
+        expect(helper, visit.next(), Intent.GO_TO_TAVERN, "Seated or on the way: stays");
+
+        Situation home = new Situation();
+        home.dayTime = EVENING;
+        home.eveningMealEaten = true;
+        expect(helper, home.next(), Intent.REST, "No seat: goes home as before");
+
+        Situation meal = new Situation();
+        meal.dayTime = EVENING;
+        meal.food = 15;
+        meal.tavern = true;
+        expect(helper, meal.next(), Intent.FETCH_FOOD, "The meal comes first");
+        helper.assertTrue(meal.tavernAsked == 0, "The Tavern is not asked before the meal");
+        Situation delivery = new Situation();
+        delivery.dayTime = EVENING;
+        delivery.deliveryPending = true;
+        delivery.tavern = true;
+        expect(helper, delivery.next(), Intent.DELIVER, "Delivery comes first");
+
+        Situation bed = new Situation();
+        bed.dayTime = NIGHT;
+        bed.eveningMealEaten = true;
+        bed.activity = Activity.TAVERN;
+        bed.tavern = true;
+        expect(helper, bed.next(), Intent.GO_TO_BED, "Bedtime ends the Tavern evening");
+        helper.assertTrue(bed.tavernAsked == 0, "At night the Tavern is not asked");
+
+        Situation working = new Situation();
+        working.dayTime = 3000L;
+        working.tavern = true;
+        expect(helper, working.next(), Intent.WORK, "During work nobody goes to the Tavern");
+        Situation homeless = new Situation();
+        homeless.dayTime = EVENING;
+        homeless.homeless = true;
+        homeless.tavern = true;
+        helper.assertTrue(homeless.next().intent() != Intent.GO_TO_TAVERN && homeless.tavernAsked == 0, "Without a settlement: no Tavern");
         helper.succeed();
     }
 

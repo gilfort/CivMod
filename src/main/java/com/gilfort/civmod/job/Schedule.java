@@ -124,7 +124,7 @@ public final class Schedule {
     }
 
     /** What a settler is doing right now. {@code JOB} is a step of the active job's category loop. */
-    public enum Activity { IDLE, JOB, DELIVER, GO_TO_BED, SLEEP, FETCH_FOOD, EATING, FORAGE, WAIT_FOR_FOOD }
+    public enum Activity { IDLE, JOB, DELIVER, GO_TO_BED, SLEEP, FETCH_FOOD, EATING, FORAGE, WAIT_FOR_FOOD, TAVERN }
 
     /** Why a settler walks to a food point. */
     public enum MealPurpose { MORNING, HUNGRY, EVENING }
@@ -165,6 +165,8 @@ public final class Schedule {
         DELIVER,
         /** Rest near the rest place in the evening. */
         REST,
+        /** Walk to the seat booked at the Tavern and sit there until bedtime (the evening instead of {@link #REST}). */
+        GO_TO_TAVERN,
         /** Go to the rest place and sleep (from the settler's bedtime, 20:00–20:30). */
         GO_TO_BED,
         /** Work the first job of the priority list that can work (Laborer fallback: idle). */
@@ -196,12 +198,15 @@ public final class Schedule {
      * @param eveningMealEaten whether the evening meal was handled today
      * @param waitStart        the day time the settler began waiting for food today, {@link #NOT_WAITING} if it did not
      * @param deliveryPending  whether a job has items to deliver to a drop-off that is not full
+     * @param tavern           whether the settler goes to the Tavern this evening: its Entertainment is not full and a
+     *                         seat is booked for it (or it books one now); a world lookup, so it is asked only when the
+     *                         settler would rest
      * @param times            the settler's waking, end of work and bed times today ({@link #dayTimes})
      */
     public record Snapshot(long day, long dayTime, int food, int provisions, int provisionsWanted, boolean pocketMeal,
             BooleanSupplier foodPoint, BooleanSupplier waitPoint, boolean homeless, boolean sleeping, long forageDay,
             boolean nightSkipped, Activity activity, BooleanSupplier jobStepHolds, boolean morningHandled,
-            boolean eveningMealEaten, long waitStart, boolean deliveryPending, DayTimes times) {
+            boolean eveningMealEaten, long waitStart, boolean deliveryPending, BooleanSupplier tavern, DayTimes times) {
 
         /**
          * @return whether the settler is foraging (today, or still from an earlier day)
@@ -317,7 +322,10 @@ public final class Schedule {
         return day(Intent.START_FORAGING, null, false, true);
     }
 
-    /** After work: deliver what is left, eat, then rest near the rest place and sleep from its bedtime. */
+    /**
+     * After work: deliver what is left, eat, then go to the Tavern if it has a seat for the settler, else rest near the
+     * rest place; sleep from its bedtime.
+     */
     private static Decision afterWork(Snapshot snapshot) {
         if (snapshot.deliveryPending()) {
             return new Decision(Intent.DELIVER, null, false, false, false, true, false);
@@ -334,6 +342,9 @@ public final class Schedule {
             }
         }
         boolean complain = snapshot.food() < SettlerFood.HUNGRY && snapshot.provisions() == 0 && !snapshot.foodPoint().getAsBoolean();
+        if (!night && snapshot.tavern().getAsBoolean()) {
+            return new Decision(Intent.GO_TO_TAVERN, null, complain, false, meal, true, false);
+        }
         return new Decision(night ? Intent.GO_TO_BED : Intent.REST, null, complain, false, meal, true, false);
     }
 

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:after_work",
+  "function": "civmod:tavern_evening_choice",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
