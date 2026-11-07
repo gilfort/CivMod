@@ -230,11 +230,16 @@ public final class EntertainmentGameTests {
             helper.assertTrue(row.met() == (tier == 2), "6 is more than 5 but not more than 8, tier " + tier + ": " + row.met());
             helper.assertTrue(key(row.detail()).equals("civmod.need.entertainment.detail") && args(row.detail()).equals(List.of("6", "10")),
                     "The row reads 6/10: " + row.detail());
-            helper.assertTrue(key(row.tooltip()).equals("civmod.need.entertainment.tooltip") && args(row.tooltip()).equals(List.of("3", "12")),
-                    "The tooltip lists today's 3 points and 12 % speed: " + row.tooltip());
+            helper.assertTrue(key(row.tooltip()).equals("civmod.need.entertainment.tooltip") && args(row.tooltip()).equals(List.of("3", "0", "12")),
+                    "The tooltip lists today's 3 points, 0 from conversations and 12 % speed: " + row.tooltip());
         }
         helper.assertTrue(report.rows(1).stream().noneMatch(row -> isEntertainment(row)) && report.rows(4).isEmpty(),
                 "No Entertainment row in the other tiers");
+
+        // A conversation: its 0.5 count in today's points and have a line of their own.
+        settler.getWork().setEntertainment(Entertainment.of(3).add(3, today).talked(0.5, today, 1L));
+        helper.assertTrue(args(SettlerInfo.of(settler).needs().rows(2).stream().filter(row -> isEntertainment(row)).findFirst().orElseThrow().tooltip())
+                .equals(List.of("3.5", "0.5", "13")), "The tooltip lists 3.5 points today, 0.5 of them from conversations, and 13 % speed");
 
         // Another day: today's points are gone.
         settler.getWork().setEntertainment(Entertainment.of(3).add(3, today - 1));
@@ -281,7 +286,7 @@ public final class EntertainmentGameTests {
     private static void saved(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
-        Entertainment entertainment = new Entertainment(7.5, 12L, 3.0, 12L, 12L, 12L);
+        Entertainment entertainment = new Entertainment(7.5, 12L, 3.0, 12L, 12L, 12L, new Entertainment.Talk(12L, 2, 5000L, 1.0));
         settler.getWork().setEntertainment(entertainment);
 
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());

@@ -406,7 +406,7 @@
   "civmod.need.food_variety.detail": "%s / %s different foods in %s days",
   "civmod.need.entertainment": "Entertainment",
   "civmod.need.entertainment.detail": "%s/%s",
-  "civmod.need.entertainment.tooltip": "Today: +%s\nWork speed: +%s%%",
+  "civmod.need.entertainment.tooltip": "Today: +%s\nConversations: +%s\nWork speed: +%s%%",
   "civmod.gui.settler.mission.job": "Mission Job: %s",
   "civmod.gui.settler.mission.board": "Mission Board: %s",
   "civmod.gui.settler.mission.no_mission": "No mission taken",

@@ -123,8 +123,11 @@ public final class Schedule {
         return SettlerDay.pick(settler, day, salt, (int) WINDOW_TICKS);
     }
 
-    /** What a settler is doing right now. {@code JOB} is a step of the active job's category loop. */
-    public enum Activity { IDLE, JOB, DELIVER, GO_TO_BED, SLEEP, FETCH_FOOD, EATING, FORAGE, WAIT_FOR_FOOD, TAVERN }
+    /**
+     * What a settler is doing right now. {@code JOB} is a step of the active job's category loop; {@code TALK} is a
+     * conversation (it holds the decisions, see {@link SettlerSocial}).
+     */
+    public enum Activity { IDLE, JOB, DELIVER, GO_TO_BED, SLEEP, FETCH_FOOD, EATING, FORAGE, WAIT_FOR_FOOD, TAVERN, TALK }
 
     /** Why a settler walks to a food point. */
     public enum MealPurpose { MORNING, HUNGRY, EVENING }

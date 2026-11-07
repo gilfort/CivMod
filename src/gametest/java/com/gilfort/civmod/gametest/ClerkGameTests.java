@@ -339,6 +339,8 @@ public final class ClerkGameTests {
             settler.getInventory().setItem(i, ItemStack.EMPTY);
         }
         settler.getFood().setAppetite(1.0F);
+        // A chance conversation would stop the settler in the middle of a test; the social tests script their own rolls.
+        settler.getWork().scriptSocialRolls(() -> 0.99);
         return settler;
     }
 

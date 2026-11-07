@@ -32,6 +32,8 @@ public enum ThoughtBubble {
     MISSION(false),
     /** A guest in the Tavern misses music: a music disc, a hint that a jukebox with a disc improves the Tavern. */
     RECORD(false),
+    /** Two settlers talk: a sheet of paper, above both. An activity bubble without the red mark, hidden by "Problems only". */
+    CONVERSATION(false),
     /** Problem: no usable tool (the needed tool). */
     NO_TOOL(true),
     /** Problem: the drop-off or the Deliveryman's store is full (the drop-off marker). */
