@@ -1,8 +1,0 @@
-{
-  "type": "minecraft:function",
-  "environment": "civmod:service_open",
-  "function": "civmod:service_round_idle",
-  "max_ticks": 300,
-  "structure": "minecraft:empty",
-  "padding": 40
-}

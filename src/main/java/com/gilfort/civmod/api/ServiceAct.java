@@ -45,7 +45,7 @@ public record ServiceAct(String id, Kind kind, int start, int end, double radius
     public enum Kind {
         /** The settler stands at the Job's place of the day for the whole window. */
         STATIONARY,
-        /** The settler walks to working settlers and stops there; run by the Bard's round (vault {@code Systems/Entertainment.md}). */
+        /** The settler walks to working settlers and plays a stop of 30 seconds where one is within the radius (vault {@code Systems/Entertainment.md}, Bard). */
         ROUND
     }
 
@@ -86,7 +86,7 @@ public record ServiceAct(String id, Kind kind, int start, int end, double radius
      * @param end     the tick at which the window ends
      * @param radius  the listener radius in blocks
      * @param effects what happens to the listeners
-     * @return a round act; the round itself arrives with the Bard (until then it does nothing)
+     * @return a round act: the settler walks to settlers at work and plays stops there, as often a day as its JobBlock's level
      */
     public static ServiceAct round(String id, int start, int end, double radius, ServiceEffect... effects) {
         return new ServiceAct(id, Kind.ROUND, start, end, radius, List.of(effects));

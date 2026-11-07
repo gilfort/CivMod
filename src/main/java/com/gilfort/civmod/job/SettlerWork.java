@@ -622,6 +622,13 @@ public final class SettlerWork {
     }
 
     /**
+     * @return whether the settler is on a job step, walking to its work or working (the Bard's round looks for such settlers)
+     */
+    public boolean atWork() {
+        return activity == Activity.JOB && activeJob != null;
+    }
+
+    /**
      * @return the mission the settler is away on or waits to leave for, for the GUI
      */
     public Optional<net.minecraft.network.chat.Component> missionStatus() {
@@ -1018,6 +1025,7 @@ public final class SettlerWork {
                 case CRAFTING -> ThoughtBubble.CRAFTING;
                 case DELIVERING, UNLOADING -> ThoughtBubble.DROP_OFF;
                 case ON_MISSION -> ThoughtBubble.MISSION;
+                case PLAYING -> ThoughtBubble.PLAYING;
                 default -> null;
             };
             default -> null;
@@ -1083,6 +1091,10 @@ public final class SettlerWork {
         Optional<ResourceCollectionProfile> profile = type.profile(ResourceCollectionProfile.class);
         if (profile.isPresent()) {
             return tool(job, profile.get()).map(ItemStack::copy).orElse(ItemStack.EMPTY);
+        }
+        if (type.category() == JobCategory.SERVICE && status != JobStatus.PLAYING) {
+            // A performer holds its instrument only while it plays.
+            return ItemStack.EMPTY;
         }
         return type.displayItem().map(ItemStack::new).orElse(ItemStack.EMPTY);
     }
