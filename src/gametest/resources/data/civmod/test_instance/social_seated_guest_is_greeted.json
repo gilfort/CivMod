@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:after_work",
+  "function": "civmod:social_seated_guest_is_greeted",
+  "max_ticks": 700,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
