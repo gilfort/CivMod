@@ -64,7 +64,11 @@ public final class JobAssignments {
         /** Already {@value SettlementRules#MAX_STAND_SPOTS} stand spots. */
         TOO_MANY_SPOTS,
         /** The container is storage of another Clerk. */
-        TAKEN
+        TAKEN,
+        /** Set as the Sound center of a Stage (replaces a previous one). */
+        SOUND_CENTER,
+        /** More than {@value SettlementRules#MAX_SOUND_DISTANCE} blocks from the Stage. */
+        TOO_FAR
     }
 
     /** Result of assigning a JobBlock to a settler. */
@@ -237,6 +241,39 @@ public final class JobAssignments {
     }
 
     /**
+     * Sets or removes the Sound center of a Stage (vault {@code Systems/Entertainment.md}): a block inside the settlement and
+     * at most {@value SettlementRules#MAX_SOUND_DISTANCE} blocks from the Stage replaces the old center (a Stage has one);
+     * clicking the center again, or the Stage block itself, removes it, so the Stage block is the center again.
+     *
+     * @param data   the dimension's settlement data
+     * @param stage  the bound Stage
+     * @param target the clicked position
+     * @return {@link PointResult#SOUND_CENTER}, {@link PointResult#REMOVED}, or why the position does not work
+     */
+    public static PointResult cycleSoundCenter(SettlementData data, BlockPos stage, BlockPos target) {
+        Optional<JobBlockSite> site = JobBlockSite.at(data, stage);
+        if (site.isEmpty()) {
+            return PointResult.NO_JOB_BLOCK;
+        }
+        SettlementBlock block = site.get().block();
+        BlockPos pos = target.immutable();
+        if (pos.equals(block.pos()) || block.soundCenter().filter(pos::equals).isPresent()) {
+            block.setSoundCenter(Optional.empty());
+            data.changed();
+            return PointResult.REMOVED;
+        }
+        if (!insideBorder(site.get().settlement(), pos)) {
+            return PointResult.OUTSIDE;
+        }
+        if (pos.distSqr(block.pos()) > (double) SettlementRules.MAX_SOUND_DISTANCE * SettlementRules.MAX_SOUND_DISTANCE) {
+            return PointResult.TOO_FAR;
+        }
+        block.setSoundCenter(Optional.of(pos));
+        data.changed();
+        return PointResult.SOUND_CENTER;
+    }
+
+    /**
      * @param data      the dimension's settlement data
      * @param container a container position
      * @return the Clerk JobBlock the container is linked to as storage
@@ -247,7 +284,7 @@ public final class JobAssignments {
     }
 
     /**
-     * Removes a block that is gone as storage or stand spot of every Clerk.
+     * Removes a block that is gone as storage or stand spot of every Clerk and as Sound center of every Stage.
      *
      * @param data      the dimension's settlement data
      * @param container the container position
@@ -259,6 +296,10 @@ public final class JobAssignments {
             for (SettlementBlock block : settlement.blocks()) {
                 removed |= block.mutableStorage().remove(container);
                 removed |= block.mutableStandSpots().removeIf(spot -> spot.pos().equals(container));
+                if (block.soundCenter().filter(container::equals).isPresent()) {
+                    block.setSoundCenter(Optional.empty());
+                    removed = true;
+                }
             }
         }
         if (removed) {

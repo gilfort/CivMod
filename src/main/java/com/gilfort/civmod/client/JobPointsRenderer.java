@@ -39,7 +39,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  * <p>
  * Colours: work = blue (primary marked "1"), collect = turquoise, drop-off = orange, Clerk storage = purple (chest icon),
  * Clerk stand spots = blue, numbered, with a short line in the facing direction; Served Clerks of a Warehouse = gold
- * (Clerk block icon); beds neutral. Points of other
+ * (Clerk block icon); the Sound center of a Stage = pink (note block icon); beds neutral. Points of other
  * JobBlocks are dimmed while the scroll is bound.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID, value = Dist.CLIENT)
@@ -53,6 +53,7 @@ public final class JobPointsRenderer {
     private static final int BED_COLOR = 0xE8E8E8;
     private static final int STORAGE_COLOR = 0x9B59D0;
     private static final int SERVED_COLOR = 0xE0B020;
+    private static final int SOUND_COLOR = 0xD94F8C;
 
     private static List<JobPointsDisplay.JobPoints> points = List.of();
     private static Optional<BlockPos> bound = Optional.empty();
@@ -111,6 +112,8 @@ public final class JobPointsRenderer {
             for (BlockPos served : jobPoints.served()) {
                 markers.add(marker(minecraft, served, jobPoints.jobBlock(), SERVED_COLOR, dimmed, new ItemStack(ModItems.CLERK_BLOCK.get())));
             }
+            jobPoints.soundCenter().ifPresent(pos -> markers.add(marker(minecraft, pos, jobPoints.jobBlock(), SOUND_COLOR, dimmed,
+                    new ItemStack(Items.NOTE_BLOCK))));
             for (int i = 0; i < jobPoints.standSpots().size(); i++) {
                 SettlementBlock.StandSpot spot = jobPoints.standSpots().get(i);
                 markers.add(new Marker(spot.pos(), jobPoints.jobBlock(), WORK_COLOR, dimmed,

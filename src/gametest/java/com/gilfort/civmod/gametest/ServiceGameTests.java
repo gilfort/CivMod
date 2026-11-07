@@ -81,7 +81,7 @@ public final class ServiceGameTests {
     /** 09:00 to 11:00. */
     private static final int OPEN = ServiceAct.clock(9, 0);
     private static final int CLOSE = ServiceAct.clock(11, 0);
-    private static final BlockPos JOB_BLOCK = new BlockPos(1, 1, 1);
+    static final BlockPos JOB_BLOCK = new BlockPos(1, 1, 1);
 
     /** What a custom effect saw. An addon writes the same: the class uses {@code com.gilfort.civmod.api} only. */
     private static final class Recorder implements ServiceEffect {
@@ -156,11 +156,16 @@ public final class ServiceGameTests {
     // ---------------------------------------------------------------- fixtures
 
     /** The performer and the settlement of a test. */
-    private record Scene(Settlement settlement, Settler performer, Job job, List<long[]> forced) {
+    record Scene(Settlement settlement, Settler performer, Job job, List<long[]> forced) {
     }
 
     /** A JobBlock of the Job at (1, 1, 1) on a stone floor and a settler working it, with plenty of food. */
-    private static Scene scene(GameTestHelper helper, Identifier jobId) {
+    static Scene scene(GameTestHelper helper, Identifier jobId) {
+        return scene(helper, jobId, jobId);
+    }
+
+    /** {@link #scene(GameTestHelper, Identifier)} for a JobBlock whose id is not the Job's (the Stage of the Bard). */
+    static Scene scene(GameTestHelper helper, Identifier blockId, Identifier jobId) {
         ServerLevel level = helper.getLevel();
         for (int x = 0; x < 15; x++) {
             for (int z = 0; z < 9; z++) {
@@ -168,7 +173,7 @@ public final class ServiceGameTests {
             }
         }
         List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(14, 0, 8));
-        TestSettlements.setBlock(helper, JOB_BLOCK, BuiltInRegistries.BLOCK.getValue(jobId));
+        TestSettlements.setBlock(helper, JOB_BLOCK, BuiltInRegistries.BLOCK.getValue(blockId));
         BlockPos jobBlock = helper.absolutePos(JOB_BLOCK);
         Settlement settlement = SettlementData.get(level).settlementAt(jobBlock).orElseThrow();
         Job job = ModJobs.REGISTRY.getValue(jobId);
@@ -177,7 +182,7 @@ public final class ServiceGameTests {
         return new Scene(settlement, performer, job, forced);
     }
 
-    private static Settler settler(GameTestHelper helper, Settlement settlement, Vec3 at, String name, boolean member) {
+    static Settler settler(GameTestHelper helper, Settlement settlement, Vec3 at, String name, boolean member) {
         ServerLevel level = helper.getLevel();
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
         settler.snapTo(at.x, at.y, at.z, 0.0F, 0.0F);
@@ -191,11 +196,11 @@ public final class ServiceGameTests {
     }
 
     /** The center of an act at the JobBlock: the bottom center of the block. */
-    private static Vec3 center(GameTestHelper helper) {
+    static Vec3 center(GameTestHelper helper) {
         return Vec3.atBottomCenterOf(helper.absolutePos(JOB_BLOCK));
     }
 
-    private static Settler listener(GameTestHelper helper, Scene scene, double dx, String name) {
+    static Settler listener(GameTestHelper helper, Scene scene, double dx, String name) {
         return settler(helper, scene.settlement(), center(helper).add(dx, 0.0, 0.0), name, true);
     }
 
@@ -203,23 +208,23 @@ public final class ServiceGameTests {
         return TestPlayers.add(helper, at);
     }
 
-    private static double entertainment(Settler settler) {
+    static double entertainment(Settler settler) {
         return settler.getWork().entertainment().value();
     }
 
-    private static int exp(Settler settler, Job job) {
+    static int exp(Settler settler, Job job) {
         return settler.getSkills().get(job).exp();
     }
 
-    private static boolean works(Settler settler, Job job) {
+    static boolean works(Settler settler, Job job) {
         return settler.getWork().activeJob().filter(active -> active.jobType() == job).isPresent();
     }
 
-    private static void setDayTime(ServerLevel level, long dayTime) {
+    static void setDayTime(ServerLevel level, long dayTime) {
         level.getServer().clockManager().setTotalTicks(level.registryAccess().getOrThrow(WorldClocks.OVERWORLD), DayClock.day(level) * DayClock.DAY_TICKS + dayTime);
     }
 
-    private static void cleanUp(ServerLevel level, Scene scene, Settler... others) {
+    static void cleanUp(ServerLevel level, Scene scene, Settler... others) {
         scene.performer().discard();
         for (Settler other : others) {
             other.discard();
@@ -227,7 +232,7 @@ public final class ServiceGameTests {
         scene.forced().forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
     }
 
-    private static boolean near(double a, double b) {
+    static boolean near(double a, double b) {
         return Math.abs(a - b) < 1e-9;
     }
 

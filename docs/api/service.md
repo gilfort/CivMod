@@ -2,7 +2,7 @@
 
 A Service Job stands at its JobBlock and does something for the settlers and players around it. CivMod runs the loop for every Service Job with a `ServiceProfile`; the profile lists **Service acts**, and each act lists **effects**. Read [getting-started.md](getting-started.md) first.
 
-The Priest, the Tavern Host and the Administrator are Service Jobs without a profile. They keep their own handling, and a Service Job without a profile has no work (the settler moves on to its next job).
+The Priest, the Tavern Host and the Administrator are Service Jobs without a profile. They keep their own handling, and a Service Job without a profile has no work (the settler moves on to its next job). CivMod's Bard is the one built-in Job that uses a profile: its Stage act is a stationary act with an `Entertain` effect.
 
 ## Register a Service Job
 
@@ -25,7 +25,7 @@ A profile of another category fails at start-up with a message that names both c
 
 An act has an `id`, a time window, a kind, a radius and a list of effects.
 
-- **Window.** Ticks of the day as in the game's own day time: 0 is 06:00, 6000 noon, a day has 24000 ticks. `ServiceAct.clock(hour, minute)` converts a time on the clock (`clock(11, 0)` is 5000, `clock(20, 0)` is 14000). The window starts at its first tick and ends before its last, and it stays inside one day. A settler works only during its work hours, which end at 17:30, so a window beyond that is cut off.
+- **Window.** Ticks of the day as in the game's own day time: 0 is 06:00, 6000 noon, a day has 24000 ticks. `ServiceAct.clock(hour, minute)` converts a time on the clock (`clock(11, 0)` is 5000, `clock(20, 0)` is 14000). The window starts at its first tick and ends before its last, and it stays inside one day. A settler works until the end of its work day, 17:30 to 18:00, unless a window of one of its Service Jobs ends later: then its work day ends with the latest such window (the Bard's stage act keeps it until 20:00). A window never makes the settler wake earlier.
 - **Kind.** `STATIONARY` acts are run by the Service loop: the settler walks to its JobBlock, stands next to it for the whole window and plays the act once a day. Outside every window the settler works its next job. `ROUND` acts (a settler that walks to working settlers) exist in the profile but do nothing until a Job that uses them is built (the Bard); a round-only Job is not worked.
 - **Radius.** Blocks from the center of the act (the bottom center of the JobBlock), at most 64. A listener exactly on the edge counts.
 - **Effects.** Applied in order when the act is played.
@@ -38,7 +38,7 @@ Each effect names its targets, `SETTLERS`, `PLAYERS` or `BOTH`, and gets only th
 
 | Effect | Targets | Does | Datapack numbers |
 |--------|---------|------|------------------|
-| `Entertain(points)` | settlers | Adds points to their Entertainment (0 to 10). | `points` |
+| `Entertain(points, percentPerLevel, cap)` | settlers | Adds points to their Entertainment (0 to 10), multiplied by 1 plus `percentPerLevel` percent per skill level of the performer. The cap (`NONE`, `ROUND_STOP`, `STAGE_ACT`) lets one settler profit once per day from that kind of act however many performers reach it; `Entertain(points)` has no growth and no cap. | `points`, `percent_per_level` |
 | `WorkSpeed(percent, hours)` | settlers | A timed work speed bonus for `hours` in-game hours (1000 ticks each). It adds to the other speed bonuses (the Priest's blessing, Entertainment), never multiplies. A settler has one such boost at a time: a stronger one replaces a weaker one, an equal one extends it, a weaker one is ignored. | `percent`, `hours` |
 | `MobEffect(effect, duration, amplifier)` | players | A vanilla mob effect (`duration` in ticks, `amplifier` 0 for level I). Give it a fourth argument, `Targets.SETTLERS` or `Targets.BOTH`, to include settlers. | `duration`, `amplifier` |
 

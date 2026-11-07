@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "B": "minecraft:barrel",
+    "N": "minecraft:note_block",
+    "P": "#minecraft:planks"
+  },
+  "pattern": [
+    "PNP",
+    "PBP",
+    "PPP"
+  ],
+  "result": {
+    "id": "civmod:stage_block"
+  }
+}

@@ -10,7 +10,8 @@ import org.jetbrains.annotations.ApiStatus;
  * (the Administrator).
  * <p>
  * The Job's JobBlock is its place: a stationary act is played by the settler standing next to it, within the act's window
- * and the settler's work hours (the work day ends at 17:30). The settler gets the Job's base EXP times the JobBlock level
+ * and the settler's work hours (the work day ends at 17:30 to 18:00, or with the latest window of the Job's acts if that is
+ * later). The settler gets the Job's base EXP times the JobBlock level
  * for every act it plays. The Priest and the Tavern Host keep loops of their own and have no profile.
  */
 @ApiStatus.Experimental

@@ -6,6 +6,7 @@ import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.AnimalFarmerProfile;
+import com.gilfort.civmod.job.BardProfile;
 import com.gilfort.civmod.job.BeekeeperProfile;
 import com.gilfort.civmod.job.CraftspersonProfile;
 import com.gilfort.civmod.job.DomainProfile;
@@ -66,10 +67,9 @@ public final class ModJobs {
     /** See vault {@code Jobs/Adventurer.md}; the Base Job of the Mission Board. */
     public static final DeferredHolder<Job, Job> ADVENTURER = JOBS.register("adventurer", () -> Job.builder(JobCategory.MISSION)
             .icon(ModItems.MISSION_BOARD).bubbleIcon(() -> Items.MAP).hungerFactor(1.0).baseExp(10).build());
-    /** See vault {@code Jobs/Bard.md}; a Mission Specialization of the Adventurer, unlocked by a note block on the Mission Board. */
-    public static final DeferredHolder<Job, Job> BARD = JOBS.register("bard", () -> Job.builder(JobCategory.MISSION)
-            .parent(ADVENTURER).icon(() -> Items.NOTE_BLOCK).bubbleIcon(() -> Items.NOTE_BLOCK).hungerFactor(1.0).baseExp(10)
-            .unlockItem(() -> Items.NOTE_BLOCK).build());
+    /** See vault {@code Jobs/Bard.md}; a Service Job on the Stage: it plays for the settlement's Entertainment. */
+    public static final DeferredHolder<Job, Job> BARD = JOBS.register("bard", () -> Job.builder(JobCategory.SERVICE)
+            .icon(ModItems.STAGE_BLOCK).bubbleIcon(() -> Items.NOTE_BLOCK).hungerFactor(0.5).baseExp(10).profile(BardProfile::new).build());
     /** See vault {@code Jobs/Administrator.md}; works at the Center Block, has no work yet: a settler moves on to its next job. */
     public static final DeferredHolder<Job, Job> ADMINISTRATOR = JOBS.register("administrator", () -> Job.builder(JobCategory.SERVICE)
             .icon(ModItems.HUMAN_CENTER_BLOCK).bubbleIcon(() -> Items.WRITABLE_BOOK).build());

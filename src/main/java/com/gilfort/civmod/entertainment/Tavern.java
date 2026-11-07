@@ -32,9 +32,9 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
 /**
  * The Tavern evening (vault {@code Systems/Entertainment.md}): a Pantry whose Tavern Host is on shift, in the evening.
  * Once per in-game minute ({@link #COUNT_INTERVAL}) every such Pantry counts the settlers of its settlement within the
- * Tavern radius. If the crowd is big enough (condition A) or a jukebox that holds a disc stands near (condition B), each
- * guest who holds a seat at the Pantry, and the Tavern Host, gets the points of {@link EntertainmentRules#tavernPoints} once
- * per evening.
+ * Tavern radius (a Bard on its Stage does not count). If the crowd is big enough (condition A) or a jukebox that holds a
+ * disc stands near (condition B), each guest who holds a seat at the Pantry, and the Tavern Host, gets the points of
+ * {@link EntertainmentRules#tavernPoints} once per evening.
  * <p>
  * The seats and the walk to them are in {@link TavernSeats} and {@code SettlerTavern}; this class holds the count, the
  * jukebox check and the catch-up of a missed evening.
@@ -171,11 +171,11 @@ public final class Tavern {
     private record Hosted(Settlement settlement, BlockPos pantry) {
     }
 
-    /** Members of the settlement that are not known to be on a Mission. */
+    /** Members of the settlement that are not known to be on a Mission or to play the Bard. */
     private static int membersOnPlace(ServerLevel level, Settlement settlement) {
         int present = 0;
         for (UUID member : settlement.members()) {
-            if (!(level.getEntity(member) instanceof Settler settler) || !settler.getWork().isAway()) {
+            if (!(level.getEntity(member) instanceof Settler settler) || !settler.getWork().isAway() && !Stage.playsBard(settler)) {
                 present++;
             }
         }
@@ -188,13 +188,14 @@ public final class Tavern {
      * @param pantry     the Pantry
      * @param rules      the rules
      * @return the settlers of the settlement within the Tavern radius of the Pantry that are not away (Mission, foraging); the
-     *         Tavern Host is one of them
+     *         Tavern Host is one of them, a Bard playing on its Stage is not
      */
     static List<Settler> present(ServerLevel level, Settlement settlement, BlockPos pantry, EntertainmentRules rules) {
         Vec3 center = Vec3.atCenterOf(pantry);
         double radius = rules.tavernRadius();
         return level.getEntitiesOfClass(Settler.class, AABB.ofSize(center, 2 * radius, 2 * radius, 2 * radius),
-                settler -> settlement.members().contains(settler.getUUID()) && !settler.isAway() && settler.position().distanceToSqr(center) <= radius * radius);
+                settler -> settlement.members().contains(settler.getUUID()) && !settler.isAway() && !Stage.playsBard(settler)
+                        && settler.position().distanceToSqr(center) <= radius * radius);
     }
 
     /**
