@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:after_work",
+  "function": "civmod:tavern_walk_and_sit",
+  "max_ticks": 700,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

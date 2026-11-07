@@ -5,6 +5,8 @@ import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.entertainment.Entertainment;
+import com.gilfort.civmod.entertainment.EntertainmentRules;
 import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.job.NeedState;
 import com.gilfort.civmod.job.NeedsReport;
@@ -81,14 +83,14 @@ public final class NeedTierGameTests {
     private static final int BLOCK_LEVEL = 3;
 
     /** Registers a JobBlock of a level without a block in the world (pure settlement rules). */
-    private static BlockPos place(GameTestHelper helper, BlockPos relative, Job job, int level) {
+    static BlockPos place(GameTestHelper helper, BlockPos relative, Job job, int level) {
         BlockPos pos = helper.absolutePos(relative);
         TestSettlements.place(helper, pos, job, level);
         return pos;
     }
 
     /** A settler of the JobBlock's settlement that does not move, hungry without any food, with a job there. */
-    private static Settler hungry(GameTestHelper helper, BlockPos jobBlock, Job job, int skill) {
+    static Settler hungry(GameTestHelper helper, BlockPos jobBlock, Job job, int skill) {
         ServerLevel level = helper.getLevel();
         SettlementData data = SettlementData.get(level);
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
@@ -105,7 +107,7 @@ public final class NeedTierGameTests {
         return settler;
     }
 
-    private static void end(GameTestHelper helper, Settler settler, BlockPos... jobBlocks) {
+    static void end(GameTestHelper helper, Settler settler, BlockPos... jobBlocks) {
         settler.discard();
         for (BlockPos pos : jobBlocks) {
             SettlementManager.remove(SettlementData.get(helper.getLevel()), pos, 0L, SettlementManager.Listener.NONE);
@@ -163,9 +165,9 @@ public final class NeedTierGameTests {
         NeedsReport report = SettlerInfo.of(settler).needs();
         helper.assertTrue(report.tier() == 3, "Tier from its job: " + report);
         helper.assertTrue(report.rows(1).size() == 2 && !report.rows(1).get(0).met(), "Tier 1 holds food (unmet) and fire: " + report);
-        helper.assertTrue(report.rows(2).size() == 2, "Tier 2 holds bed and food variety: " + report);
-        // Tier 3 holds only the tool need of the Lumberjack (skill 45 is band 3).
-        helper.assertTrue(report.rows(3).size() == 1, "Tier 3 holds the tool row only: " + report);
+        helper.assertTrue(report.rows(2).size() == 3, "Tier 2 holds bed, food variety and Entertainment: " + report);
+        // Tier 3 holds the tool need of the Lumberjack (skill 45 is band 3) and Entertainment.
+        helper.assertTrue(report.rows(3).size() == 2, "Tier 3 holds the tool and Entertainment rows: " + report);
         for (int tier = 4; tier <= NeedState.MAX_TIER; tier++) {
             helper.assertTrue(report.rows(tier).isEmpty(), "Needs without a system are hidden, tier " + tier);
         }
@@ -226,6 +228,7 @@ public final class NeedTierGameTests {
         helper.assertTrue(settler.getWork().effectiveLevel(job) == 20, "Downgraded: " + settler.getWork().effectiveLevel(job));
 
         settler.getFood().setLevel(15);
+        settler.getWork().setEntertainment(Entertainment.of(EntertainmentRules.MAX));
         settler.getWork().decideNow(level);
         helper.assertTrue(settler.getWork().effectiveLevel(job) == 45, "Back at once: " + settler.getWork().effectiveLevel(job));
         helper.assertFalse(settler.getWork().needState().inGrace(), "No grace day left");

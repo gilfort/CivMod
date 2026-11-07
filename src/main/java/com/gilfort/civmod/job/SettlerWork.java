@@ -22,6 +22,9 @@ import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.api.XpGain;
 import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.entertainment.Entertainment;
+import com.gilfort.civmod.entertainment.EntertainmentRules;
+import com.gilfort.civmod.entertainment.Tavern;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.Schedule.Activity;
 import com.gilfort.civmod.job.Schedule.Decision;
@@ -154,6 +157,8 @@ public final class SettlerWork {
     private final SettlerMeals meals;
     /** Rest: carries out the rest intents of the Schedule. */
     private final SettlerRest resting;
+    /** Tavern: books a seat in the evening and sits there. */
+    private final SettlerTavern tavern;
     /** Needs: the need tier and the limit it puts on the level the settler works at. */
     private final SettlerNeeds needs;
     /** Where the settler delivers to (a Clerk drop-off takes at its counter). */
@@ -205,6 +210,7 @@ public final class SettlerWork {
         thoughts = new SettlerThoughts(settler);
         meals = new SettlerMeals(this);
         resting = new SettlerRest(settler);
+        tavern = new SettlerTavern(settler);
         needs = new SettlerNeeds(this);
     }
 
@@ -300,14 +306,14 @@ public final class SettlerWork {
     /**
      * @param day the day
      * @return this settler's waking, end of work and bed times on that day (daily offsets inside the Schedule windows);
-     *         a Clerk wakes early (05:30–06:00, its shift opens then) and its work ends with its shift at 18:30, a
+     *         a Clerk wakes early (05:30–06:00, its shift opens then) and its work ends with its shift at 18:30 (a Tavern Host: 20:00), a
      *         settler back from a mission ended its work day on its return
      */
     public Schedule.DayTimes dayTimes(long day) {
-        boolean clerk = hasCounterJob();
-        Schedule.DayTimes times = Schedule.dayTimes(settler.getUUID(), day, clerk);
-        if (clerk) {
-            times = times.withWorkEnd(ClerkStorage.SHIFT_END);
+        OptionalLong shiftEnd = shiftEnd();
+        Schedule.DayTimes times = Schedule.dayTimes(settler.getUUID(), day, shiftEnd.isPresent());
+        if (shiftEnd.isPresent()) {
+            times = times.withWorkEnd(shiftEnd.getAsLong());
         }
         OptionalLong returned = missions.returnedOn(day);
         if (returned.isPresent() && returned.getAsLong() < times.workEnd()) {
@@ -376,7 +382,7 @@ public final class SettlerWork {
         }
         if (job.jobType().category() == JobCategory.SERVICE) {
             // The Administrator has no work; the Priest prays; the Tavern Host holds its counter like a Clerk.
-            if (job.jobType() == ModJobs.TAVERN_HOST.get()) {
+            if (ClerkStorage.shiftEnd(job.jobType()).isPresent()) {
                 return clerks;
             }
             return job.jobType() == ModJobs.PRIEST.get() ? priests : null;
@@ -737,7 +743,9 @@ public final class SettlerWork {
      */
     void endDecision() {
         if (!breakApplied) {
-            endBreak();
+            if (!tavern.sitsAtSeat(activity)) {
+                endBreak();
+            }
         } else if (!breakStarted) {
             breakStarted = true;
             if (settler.onGround() && !settler.isInLiquid()) {
@@ -849,13 +857,15 @@ public final class SettlerWork {
      * @param deliveryPending whether a job has items to deliver to a drop-off that is not full
      * @param noFood          whether a meal just found nothing to take, so no food point or pocket food counts for
      *                        this decision
+     * @param tavern          whether the settler goes to the Tavern this evening
      */
     private record SnapshotFacts(boolean nightSkipped, boolean sleeping, Activity activity, BooleanSupplier jobStepHolds,
-            boolean deliveryPending, boolean noFood) {
+            boolean deliveryPending, boolean noFood, BooleanSupplier tavern) {
 
         /**
          * Catch-up: awake, no skipped night (catch-up runs whole hours of the day), idle, no job step holding the
-         * decision (work is simulated per hour), nothing left to deliver (output goes straight to the drop-off).
+         * decision (work is simulated per hour), nothing left to deliver (output goes straight to the drop-off), no walk
+         * to the Tavern (a missed Tavern evening is simulated apart, {@link Tavern#catchUp}).
          *
          * @param noFood whether a meal just found nothing to take
          */
@@ -865,7 +875,7 @@ public final class SettlerWork {
             Activity activity = Activity.IDLE;
             BooleanSupplier jobStepHolds = () -> false;
             boolean deliveryPending = false;
-            return new SnapshotFacts(nightSkipped, sleeping, activity, jobStepHolds, deliveryPending, noFood);
+            return new SnapshotFacts(nightSkipped, sleeping, activity, jobStepHolds, deliveryPending, noFood, () -> false);
         }
     }
 
@@ -878,10 +888,12 @@ public final class SettlerWork {
     private SnapshotFacts liveFacts(ServerLevel level, boolean nightSkipped, boolean woke) {
         boolean sleeping = settler.isSleeping() && !woke;
         BooleanSupplier jobStepHolds = () -> jobStepHolds(level);
-        long day = moment(level.getOverworldClockTime()).day();
+        Schedule.Moment now = moment(level.getOverworldClockTime());
+        long day = now.day();
         boolean deliveryPending = workJobs(level).stream().anyMatch(job -> deliveryDue(job, day));
         boolean noFood = false;
-        return new SnapshotFacts(nightSkipped, sleeping, activity, jobStepHolds, deliveryPending, noFood);
+        return new SnapshotFacts(nightSkipped, sleeping, activity, jobStepHolds, deliveryPending, noFood,
+                () -> tavern.attends(level, day, now.dayTime()));
     }
 
     /**
@@ -920,7 +932,8 @@ public final class SettlerWork {
                 CivModConfig.PROVISION_NUTRITION.get(), !noFood && meals.hasPocketMeal(),
                 () -> !noFood && foodLookup.get().isPresent(), () -> meals.pantryToWaitAt(level).isPresent(), settler.isHomeless(),
                 facts.sleeping(), food.forageDay(), facts.nightSkipped(), facts.activity(), facts.jobStepHolds(),
-                food.morningDay() == day, food.eatenDay() == day, meals.waitStart(day), facts.deliveryPending(), dayTimes(day));
+                food.morningDay() == day, food.eatenDay() == day, meals.waitStart(day), facts.deliveryPending(), facts.tavern(),
+                dayTimes(day));
     }
 
     private boolean jobStepHolds(ServerLevel level) {
@@ -1101,6 +1114,7 @@ public final class SettlerWork {
             }
             case DELIVER -> startDelivery(level, Objects.requireNonNull(delivery));
             case REST, GO_TO_BED -> go(level, resting.evening(level, day, decision.intent() == Intent.GO_TO_BED, activity));
+            case GO_TO_TAVERN -> go(level, tavern.evening(level));
             case WORK -> work(level, day, dayTime);
             default -> throw new IllegalStateException("Not a decision of Schedule.next: " + decision);
         }
@@ -1741,6 +1755,10 @@ public final class SettlerWork {
             // Work is over: the evening meal.
             decideCatchUp(level, day, Math.max(dayTime, workEndDayTime));
         }
+        if (to >= day * DayClock.DAY_TICKS + ClerkStorage.TAVERN_SHIFT_END) {
+            // The whole Tavern evening was missed (one that is still going on is lived and counted live).
+            Tavern.catchUp(level, settler, day);
+        }
         return rolls;
     }
 
@@ -1854,6 +1872,19 @@ public final class SettlerWork {
             }
             return settlement.bonuses().averageFactor(Bonuses.Kind.WORK_SPEED, cuWorkFrom, cuWorkTo);
         }).orElse(1.0);
+    }
+
+    /**
+     * The factor every work speed is multiplied with: the one place where the speed bonuses add up. The blessing's share
+     * ({@link #blessingFactor}) and the 2 % per point of Entertainment ({@link EntertainmentRules#speedFactor}) are added,
+     * not multiplied. Live play and catch-up both read it; the value is the one of the day being worked, because the
+     * decay is taken at wake-up before the work starts.
+     *
+     * @param level the level
+     * @return 1 without any bonus, 1.4 with full Entertainment and a blessing
+     */
+    public double speedFactor(ServerLevel level) {
+        return EntertainmentRules.get().speedFactor(needs.entertainment().value(), blessingFactor(level));
     }
 
     /**
@@ -1972,6 +2003,47 @@ public final class SettlerWork {
     }
 
     /**
+     * @param day the day of an evening
+     * @return the key of the Tavern seat this settler has booked that evening ({@link com.gilfort.civmod.entertainment.TavernSeats})
+     */
+    public Optional<String> tavernSeat(long day) {
+        return tavern.bookedSeat(day);
+    }
+
+    /**
+     * @param pantry the Pantry
+     * @param day    the day of an evening
+     * @return whether this settler has booked a seat at that Pantry for that evening: only such guests are paid by its Tavern
+     */
+    public boolean holdsTavernSeat(BlockPos pantry, long day) {
+        return tavern.bookedAt(pantry, day);
+    }
+
+    /**
+     * @param pantry   the Pantry whose count asks
+     * @param day      the day of an evening
+     * @param gameTime the game time
+     * @return whether this settler sits in the Tavern of that Pantry as a guest and its record bubble of that evening is due
+     */
+    public boolean recordBubbleDue(BlockPos pantry, long day, long gameTime) {
+        return tavern.recordDue(pantry, day, gameTime);
+    }
+
+    /**
+     * Settles the record bubble of an evening: marks it (saved with the settler's Entertainment) and, if there is no music,
+     * shows it. Nothing is sent while caught up.
+     *
+     * @param day  the day of the evening
+     * @param show whether the guest misses music and the bubble shows
+     */
+    public void settleRecordBubble(long day, boolean show) {
+        setEntertainment(entertainment().markRecord(day));
+        if (show) {
+            thoughts.record(!quiet);
+        }
+    }
+
+    /**
      * @return the Pantry this settler works as Tavern Host, if any (a Tavern Host eats from its Pantry without queueing)
      */
     Optional<BlockPos> ownPantry() {
@@ -1980,10 +2052,11 @@ public final class SettlerWork {
     }
 
     /**
-     * @return whether this settler has a counter job (Clerk or Tavern Host): it wakes early and works until 18:30
+     * @return the end of this settler's shift if it has a counter job (Clerk or Tavern Host): it wakes early and works
+     *         until the end of the shift, the later one with both jobs ({@link ClerkStorage#shiftEnd}); empty without
      */
-    private boolean hasCounterJob() {
-        return settler.getJobs().stream().anyMatch(job -> job.jobType() == ModJobs.CLERK.get() || job.jobType() == ModJobs.TAVERN_HOST.get());
+    private OptionalLong shiftEnd() {
+        return settler.getJobs().stream().map(SettlerJob::jobType).flatMapToLong(type -> ClerkStorage.shiftEnd(type).stream()).max();
     }
 
     /**
@@ -2226,6 +2299,20 @@ public final class SettlerWork {
     }
 
     /**
+     * @return the settler's Entertainment (saved with it)
+     */
+    public Entertainment entertainment() {
+        return needs.entertainment();
+    }
+
+    /**
+     * @param entertainment the Entertainment to keep: loaded from a save, or set by a source of Entertainment
+     */
+    public void setEntertainment(Entertainment entertainment) {
+        needs.setEntertainment(entertainment);
+    }
+
+    /**
      * @param level the level
      * @return the needs as the Needs tab shows them now
      */
@@ -2382,6 +2469,10 @@ public final class SettlerWork {
         }
         if (activity == Activity.FETCH_FOOD) {
             go(level, meals.atFoodPoint(level));
+            return;
+        }
+        if (activity == Activity.TAVERN) {
+            go(level, tavern.arrived(level));
             return;
         }
         if (activity == Activity.FORAGE) {

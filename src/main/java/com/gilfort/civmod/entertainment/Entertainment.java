@@ -1,0 +1,137 @@
+package com.gilfort.civmod.entertainment;
+
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+
+/**
+ * The Entertainment of one settler (vault {@code Systems/Entertainment.md}), saved with the settler: the value from 0 to
+ * {@link EntertainmentRules#MAX}, the day the decay was taken for, the points of the latest day that gave any and the
+ * last evening the Tavern paid and the last evening whose record bubble was settled. The arithmetic lives in
+ * {@link EntertainmentRules}.
+ *
+ * @param value      the value, 0 to {@link EntertainmentRules#MAX}
+ * @param decayedDay the day the decay was last taken for, {@link #NO_DAY} if none
+ * @param today      the points added on {@link #todayDay}
+ * @param todayDay   the day {@link #today} counts for, {@link #NO_DAY} if none
+ * @param tavernDay  the day of the last Tavern evening that paid, {@link #NO_DAY} if none
+ * @param recordDay  the day of the last Tavern evening whose record bubble was settled (shown, or not needed), {@link #NO_DAY} if none
+ */
+public record Entertainment(double value, long decayedDay, double today, long todayDay, long tavernDay, long recordDay) {
+
+    /** Marks "no day". */
+    static final long NO_DAY = Long.MIN_VALUE;
+    /** A settler nothing has happened to: 0 points. */
+    public static final Entertainment START = new Entertainment(0.0, NO_DAY, 0.0, NO_DAY, NO_DAY, NO_DAY);
+
+    /** Save codec; a save without Entertainment starts at {@link #START}. */
+    public static final Codec<Entertainment> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+            Codec.DOUBLE.optionalFieldOf("value", 0.0).forGetter(Entertainment::value),
+            Codec.LONG.optionalFieldOf("decayed_day", NO_DAY).forGetter(Entertainment::decayedDay),
+            Codec.DOUBLE.optionalFieldOf("today", 0.0).forGetter(Entertainment::today),
+            Codec.LONG.optionalFieldOf("today_day", NO_DAY).forGetter(Entertainment::todayDay),
+            Codec.LONG.optionalFieldOf("tavern_day", NO_DAY).forGetter(Entertainment::tavernDay),
+            Codec.LONG.optionalFieldOf("record_day", NO_DAY).forGetter(Entertainment::recordDay)
+    ).apply(instance, Entertainment::new));
+
+    /**
+     * Keeps the value in range.
+     *
+     * @param value      the value
+     * @param decayedDay the day the decay was last taken for
+     * @param today      the points added on {@code todayDay}
+     * @param todayDay   the day {@code today} counts for
+     * @param tavernDay  the day of the last Tavern evening that paid
+     * @param recordDay  the day of the last Tavern evening whose record bubble was settled
+     */
+    public Entertainment {
+        value = EntertainmentRules.clamp(value);
+    }
+
+    /**
+     * @param value a value
+     * @return an Entertainment with that value, no decay taken yet and no points today
+     */
+    public static Entertainment of(double value) {
+        return new Entertainment(value, NO_DAY, 0.0, NO_DAY, NO_DAY, NO_DAY);
+    }
+
+    /**
+     * Takes the decay of the days since the last time. The first call only marks the day; a day already marked changes
+     * nothing, so live play and catch-up can both call this at every check.
+     *
+     * @param day   the day
+     * @param rules the rules
+     * @return the Entertainment of that day
+     */
+    public Entertainment decayed(long day, EntertainmentRules rules) {
+        if (decayedDay == NO_DAY) {
+            return new Entertainment(value, day, today, todayDay, tavernDay, recordDay);
+        }
+        if (day <= decayedDay) {
+            return this;
+        }
+        return new Entertainment(rules.decayed(value, day - decayedDay), day, today, todayDay, tavernDay, recordDay);
+    }
+
+    /**
+     * @param points the points a source gives
+     * @param day    the day
+     * @return the Entertainment with the points added (never above {@link EntertainmentRules#MAX}); the day counts the points
+     *         that were gained, so points above the cap are not listed
+     */
+    public Entertainment add(double points, long day) {
+        double raised = EntertainmentRules.clamp(value + points);
+        return new Entertainment(raised, decayedDay, pointsOn(day) + (raised - value), day, tavernDay, recordDay);
+    }
+
+    /**
+     * @param day the day of an evening
+     * @return whether the Tavern paid this settler on that evening already
+     */
+    public boolean tavernPaid(long day) {
+        return tavernDay == day;
+    }
+
+    /**
+     * @param points the points of the Tavern evening
+     * @param day    the day of the evening
+     * @return the Entertainment with the points added ({@link #add}) and the evening marked as paid
+     */
+    public Entertainment payTavern(double points, long day) {
+        Entertainment added = add(points, day);
+        return new Entertainment(added.value, added.decayedDay, added.today, added.todayDay, day, recordDay);
+    }
+
+    /**
+     * @param day the day of an evening
+     * @return whether the record bubble of that evening is settled: it was shown, or a jukebox with a disc made it needless
+     */
+    public boolean recordSettled(long day) {
+        return recordDay == day;
+    }
+
+    /**
+     * @param day the day of the evening
+     * @return the Entertainment with the record bubble of that evening marked as settled
+     */
+    public Entertainment markRecord(long day) {
+        return new Entertainment(value, decayedDay, today, todayDay, tavernDay, day);
+    }
+
+    /**
+     * @param day a day
+     * @return the points added on that day (0 if the latest points are of another day)
+     */
+    public double pointsOn(long day) {
+        return todayDay == day ? today : 0.0;
+    }
+
+    /**
+     * @param number a value or a number of points
+     * @return the number as the Needs tab shows it: rounded to one decimal, a whole number without a decimal point
+     */
+    public static String format(double number) {
+        double tenths = Math.round(number * 10.0) / 10.0;
+        return tenths == Math.rint(tenths) ? Long.toString((long) tenths) : Double.toString(tenths);
+    }
+}

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:tavern_bedtime",
+  "function": "civmod:tavern_bedtime",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -195,23 +195,31 @@ public final class WorkersTabGameTests {
      * the settler, as long as the settler works there; one opened at the settler closes when the player walks away.
      */
     private static void settlerWindow(GameTestHelper helper) {
-        Settlement settlement = clerkBlock(helper);
-        Settler alice = settler(helper, settlement, "Alice", new BlockPos(3, 1, 3));
-        hire(helper, alice, ModJobs.DELIVERYMAN.get());
-        alice.snapTo(alice.getX() + 30, alice.getY(), alice.getZ());
-        Player player = player(helper);
-        BlockPos pos = helper.absolutePos(CLERK);
-        SettlerMenu fromBlock = new SettlerMenu(2, player.getInventory(), alice, SettlerInfo.of(alice), Optional.of(pos));
-        helper.assertTrue(fromBlock.stillValid(player), "Valid at the JobBlock, far from the settler");
-        SettlerMenu atSettler = new SettlerMenu(3, player.getInventory(), alice, SettlerInfo.of(alice), Optional.empty());
-        helper.assertFalse(atSettler.stillValid(player), "Opened at the settler: closes away from it");
-        SettlementWorld.unassign(helper.getLevel(), pos, alice.getUUID());
-        helper.assertFalse(fromBlock.stillValid(player), "No longer assigned to the JobBlock: the JobBlock stops counting");
-        hire(helper, alice, ModJobs.DELIVERYMAN.get());
-        player.snapTo(pos.getX() + 20.5, pos.getY() + 1, pos.getZ() + 0.5);
-        helper.assertFalse(fromBlock.stillValid(player), "Away from the JobBlock and the settler: closes");
-        alice.discard();
-        helper.succeed();
+        // The test position is random and its far side may not be loaded. A settler moved into an unloaded chunk is no
+        // longer found by its UUID, so the unassign would skip its job list.
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(40, 0, 8));
+        ServerLevel level = helper.getLevel();
+        try {
+            Settlement settlement = clerkBlock(helper);
+            Settler alice = settler(helper, settlement, "Alice", new BlockPos(3, 1, 3));
+            hire(helper, alice, ModJobs.DELIVERYMAN.get());
+            alice.snapTo(alice.getX() + 30, alice.getY(), alice.getZ());
+            Player player = player(helper);
+            BlockPos pos = helper.absolutePos(CLERK);
+            SettlerMenu fromBlock = new SettlerMenu(2, player.getInventory(), alice, SettlerInfo.of(alice), Optional.of(pos));
+            helper.assertTrue(fromBlock.stillValid(player), "Valid at the JobBlock, far from the settler");
+            SettlerMenu atSettler = new SettlerMenu(3, player.getInventory(), alice, SettlerInfo.of(alice), Optional.empty());
+            helper.assertFalse(atSettler.stillValid(player), "Opened at the settler: closes away from it");
+            SettlementWorld.unassign(level, pos, alice.getUUID());
+            helper.assertFalse(fromBlock.stillValid(player), "No longer assigned to the JobBlock: the JobBlock stops counting");
+            hire(helper, alice, ModJobs.DELIVERYMAN.get());
+            player.snapTo(pos.getX() + 20.5, pos.getY() + 1, pos.getZ() + 0.5);
+            helper.assertFalse(fromBlock.stillValid(player), "Away from the JobBlock and the settler: closes");
+            alice.discard();
+            helper.succeed();
+        } finally {
+            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+        }
     }
 
     /** "back in x d": whole days rounded up, at least 1. */

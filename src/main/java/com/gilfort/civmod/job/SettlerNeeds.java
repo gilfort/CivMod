@@ -7,6 +7,8 @@ import java.util.function.BooleanSupplier;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.entertainment.Entertainment;
+import com.gilfort.civmod.entertainment.EntertainmentRules;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 
@@ -28,6 +30,7 @@ final class SettlerNeeds {
     private final Settler settler;
     private final ToolNeeds tools;
     private NeedState state = NeedState.START;
+    private Entertainment entertainment = Entertainment.START;
     /** The need the settler complains about (not saved: found again by the re-check of a grace day). */
     private @Nullable Need missing;
 
@@ -58,6 +61,7 @@ final class SettlerNeeds {
         if (settler.isHomeless()) {
             return;
         }
+        entertainment = entertainment.decayed(day, EntertainmentRules.get());
         tools.step(day);
         int tier = tier();
         boolean morning = day > state.checkedDay();
@@ -115,7 +119,7 @@ final class SettlerNeeds {
         Need.Context context = context(level, day, foodPoint);
         List<NeedsReport.Row> rows = new ArrayList<>(Needs.ALL.stream().map(need -> {
             Need.Check check = need.check(context);
-            return new NeedsReport.Row(need.tier(), need.name(), check.met(), check.detail(), check.icons());
+            return new NeedsReport.Row(need.tier(), need.name(), check.met(), check.detail(), check.icons(), check.tooltip());
         }).toList());
         rows.addAll(tools.rows());
         return new NeedsReport(Math.min(state.workTier(), tier()), rows);
@@ -137,5 +141,19 @@ final class SettlerNeeds {
      */
     void restore(NeedState saved) {
         state = saved;
+    }
+
+    /**
+     * @return the settler's Entertainment (saved with it)
+     */
+    Entertainment entertainment() {
+        return entertainment;
+    }
+
+    /**
+     * @param entertainment the Entertainment to keep
+     */
+    void setEntertainment(Entertainment entertainment) {
+        this.entertainment = entertainment;
     }
 }

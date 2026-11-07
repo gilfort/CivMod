@@ -300,14 +300,14 @@ public final class ClerkGameTests {
         long wake = Schedule.dayTimes(late, day, true).wake();
         long dayBefore = day - 1;
         long clockDay = 24000L;
-        helper.assertTrue(ClerkStorage.inShift(late, day, 0L), "06:00: every Clerk's shift is open");
-        helper.assertFalse(ClerkStorage.inShift(late, day, wake - 1), "Closed just before its waking time");
-        helper.assertTrue(ClerkStorage.inShift(late, day, wake), "Open from its waking time");
-        helper.assertFalse(ClerkStorage.inShift(late, dayBefore, clockDay + wake - 1), "On the clock's day before: closed just before");
-        helper.assertTrue(ClerkStorage.inShift(late, dayBefore, clockDay + wake), "On the clock's day before: open from its waking time");
-        helper.assertFalse(ClerkStorage.inShift(late, dayBefore, 14000L), "Closed in the evening");
-        helper.assertTrue(ClerkStorage.inShift(late, day, ClerkStorage.SHIFT_END - 1), "Open until 18:30");
-        helper.assertFalse(ClerkStorage.inShift(late, day, ClerkStorage.SHIFT_END), "Closed at 18:30");
+        helper.assertTrue(ClerkStorage.inShift(late, day, 0L, ModJobs.CLERK.get()), "06:00: every Clerk's shift is open");
+        helper.assertFalse(ClerkStorage.inShift(late, day, wake - 1, ModJobs.CLERK.get()), "Closed just before its waking time");
+        helper.assertTrue(ClerkStorage.inShift(late, day, wake, ModJobs.CLERK.get()), "Open from its waking time");
+        helper.assertFalse(ClerkStorage.inShift(late, dayBefore, clockDay + wake - 1, ModJobs.CLERK.get()), "On the clock's day before: closed just before");
+        helper.assertTrue(ClerkStorage.inShift(late, dayBefore, clockDay + wake, ModJobs.CLERK.get()), "On the clock's day before: open from its waking time");
+        helper.assertFalse(ClerkStorage.inShift(late, dayBefore, 14000L, ModJobs.CLERK.get()), "Closed in the evening");
+        helper.assertTrue(ClerkStorage.inShift(late, day, ClerkStorage.SHIFT_END - 1, ModJobs.CLERK.get()), "Open until 18:30");
+        helper.assertFalse(ClerkStorage.inShift(late, day, ClerkStorage.SHIFT_END, ModJobs.CLERK.get()), "Closed at 18:30");
         helper.succeed();
     }
 
@@ -323,7 +323,7 @@ public final class ClerkGameTests {
 
     private static Schedule.Snapshot snapshot(long dayTime, long workEnd) {
         return new Schedule.Snapshot(3L, dayTime, 20, 10, 6, true, () -> true, () -> true, false, false, SettlerFood.NO_DAY, false,
-                Schedule.Activity.IDLE, () -> false, true, false, Schedule.NOT_WAITING, false,
+                Schedule.Activity.IDLE, () -> false, true, false, Schedule.NOT_WAITING, false, () -> false,
                 new Schedule.DayTimes(0L, workEnd, SettlerWork.SLEEP_TIME));
     }
 

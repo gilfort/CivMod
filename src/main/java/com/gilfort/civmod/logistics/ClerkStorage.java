@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
@@ -12,6 +13,7 @@ import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.Schedule;
@@ -40,7 +42,7 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
 /**
  * The Clerk's store (vault {@code Jobs/Clerk.md}): the containers linked with the Scroll of Assignment (the Clerk JobBlock has no
  * slots of its own), and the access rule. Taking from it needs a working Clerk at its counter (a settler assigned, in its
- * shift from its waking time to 18:30); the Deliverymen of its Warehouse reach all of it as staff, and settlers put items in
+ * shift from its waking time to 18:30, a Tavern Host to 20:00); the Deliverymen of its Warehouse reach all of it as staff, and settlers put items in
  * at any time ({@link #dropOff}). Hoppers and pipes on the block see no slot.
  * <p>
  * Every Pantry is a food point: settlers take food from the nearest Pantry that has food
@@ -51,6 +53,8 @@ public final class ClerkStorage {
 
     /** End of the Clerk's shift in day ticks (18:30; day time 0 = 06:00). */
     public static final long SHIFT_END = 12500L;
+    /** End of the Tavern Host's shift in day ticks (20:00): the Tavern evening runs until bedtime. */
+    public static final long TAVERN_SHIFT_END = 14000L;
     /** Customers are served within this distance of the Clerk's counter. */
     public static final double COUNTER_REACH = 3.0;
     /** Reach when walking to a Clerk JobBlock without its counter, as for any container. */
@@ -101,7 +105,7 @@ public final class ClerkStorage {
      * @return whether a settler serves a counter at it: a Clerk JobBlock or a Pantry
      */
     private static boolean hasCounter(SettlementBlock block) {
-        return isClerk(block) || isPantry(block);
+        return shiftEnd(block.jobType()).isPresent();
     }
 
     /**
@@ -114,14 +118,33 @@ public final class ClerkStorage {
     }
 
     /**
-     * @param clerk   the Clerk settler
+     * The one place that says which jobs serve a counter and when their shift ends.
+     *
+     * @param job a job
+     * @return the day time its shift ends: 20:00 for the Tavern Host, 18:30 for the Clerk; empty for a job without a counter
+     */
+    public static OptionalLong shiftEnd(Job job) {
+        if (job == ModJobs.CLERK.get()) {
+            return OptionalLong.of(SHIFT_END);
+        }
+        return job == ModJobs.TAVERN_HOST.get() ? OptionalLong.of(TAVERN_SHIFT_END) : OptionalLong.empty();
+    }
+
+    /**
+     * @param clerk   the Clerk or Tavern Host settler
      * @param day     the day
      * @param dayTime the day time (0 = 06:00; negative before 06:00 on the Clerk's own day, {@link Schedule#moment})
-     * @return whether it lies within the Clerk's shift: from its own waking time (05:30–06:00, Clerks wake up early) to
-     *         18:30. The shift of the clock's next day may already be open after 05:30.
+     * @param job     the counter job ({@link #shiftEnd})
+     * @return whether it lies within the shift: from its own waking time (05:30–06:00, counter jobs wake up early) to
+     *         the end of the job's shift. The shift of the clock's next day may already be open after 05:30. A job without
+     *         a counter has no shift.
      */
-    public static boolean inShift(UUID clerk, long day, long dayTime) {
-        boolean today = dayTime >= shiftStart(clerk, day) && dayTime < SHIFT_END;
+    public static boolean inShift(UUID clerk, long day, long dayTime, Job job) {
+        OptionalLong end = shiftEnd(job);
+        if (end.isEmpty()) {
+            return false;
+        }
+        boolean today = dayTime >= shiftStart(clerk, day) && dayTime < end.getAsLong();
         return today || dayTime - DayClock.DAY_TICKS >= shiftStart(clerk, day + 1);
     }
 
@@ -152,7 +175,7 @@ public final class ClerkStorage {
      * @return whether its settler works it now (assigned and on shift); only then is the linked storage reachable
      */
     public static boolean working(SettlementBlock clerk, long day, long dayTime) {
-        return hasCounter(clerk) && clerk.assignee(clerk.jobType()).filter(assignee -> inShift(assignee.id(), day, dayTime)).isPresent();
+        return hasCounter(clerk) && clerk.assignee(clerk.jobType()).filter(assignee -> inShift(assignee.id(), day, dayTime, clerk.jobType())).isPresent();
     }
 
     /**
