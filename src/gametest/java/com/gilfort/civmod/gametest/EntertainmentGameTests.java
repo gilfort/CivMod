@@ -356,6 +356,14 @@ public final class EntertainmentGameTests {
             helper.assertTrue(near(rules.tavernPoints((int) row[0], row[1] == 1), row[2]),
                     row[0] + " present, jukebox " + (row[1] == 1) + ": " + row[2] + ", got " + rules.tavernPoints((int) row[0], row[1] == 1));
         }
+
+        // start value, first points, second points, expected value, expected "today": today counts the points gained after the cap at 10
+        double[][] added = {{0, 3, 0, 3, 3}, {0, 4.5, 0, 4.5, 4.5}, {0, 3, 0.5, 3.5, 3.5}, {8, 3, 0, 10, 2}, {8, 3, 0.5, 10, 2}, {10, 3, 0, 10, 0}, {9.5, 1, 1, 10, 0.5}};
+        for (double[] row : added) {
+            Entertainment entertainment = Entertainment.of(row[0]).add(row[1], 7).add(row[2], 7);
+            helper.assertTrue(near(entertainment.value(), row[3]) && near(entertainment.pointsOn(7), row[4]),
+                    "Value " + row[0] + " plus " + row[1] + " and " + row[2] + ": value " + row[3] + ", today +" + row[4] + ", got " + entertainment);
+        }
         helper.succeed();
     }
 
