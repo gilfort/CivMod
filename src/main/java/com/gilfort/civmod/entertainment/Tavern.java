@@ -53,7 +53,7 @@ public final class Tavern {
     @SubscribeEvent
     static void onLevelTick(LevelTickEvent.Post event) {
         if (event.getLevel() instanceof ServerLevel level && level.getGameTime() % COUNT_INTERVAL == 0) {
-            count(level, DayClock.day(level), DayClock.dayTime(level));
+            count(level, DayClock.day(level), DayClock.dayTime(level), level.getGameTime());
         }
     }
 
@@ -69,17 +69,18 @@ public final class Tavern {
     /**
      * One count at every Pantry of the level whose Tavern Host is on shift (outside the evening nothing happens).
      *
-     * @param level   the level
-     * @param day     the day
-     * @param dayTime the day time
+     * @param level    the level
+     * @param day      the day
+     * @param dayTime  the day time
+     * @param gameTime the game time
      */
-    private static void count(ServerLevel level, long day, long dayTime) {
+    private static void count(ServerLevel level, long day, long dayTime, long gameTime) {
         if (!isEvening(dayTime)) {
             return;
         }
         for (Settlement settlement : List.copyOf(SettlementData.get(level).settlements())) {
             for (SettlementBlock pantry : List.copyOf(settlement.blocks())) {
-                count(level, settlement, pantry, day, dayTime);
+                count(level, settlement, pantry, day, dayTime, gameTime);
             }
         }
     }
@@ -93,11 +94,24 @@ public final class Tavern {
      * @param dayTime the day time
      */
     public static void countAt(ServerLevel level, BlockPos pantry, long day, long dayTime) {
-        SettlementData.get(level).settlementAt(pantry).ifPresent(settlement -> settlement.block(pantry)
-                .filter(block -> isEvening(dayTime)).ifPresent(block -> count(level, settlement, block, day, dayTime)));
+        countAt(level, pantry, day, dayTime, level.getGameTime());
     }
 
-    private static void count(ServerLevel level, Settlement settlement, SettlementBlock pantry, long day, long dayTime) {
+    /**
+     * {@link #countAt(ServerLevel, BlockPos, long, long)} at a given game time, which the guests' record bubbles wait on.
+     *
+     * @param level    the level
+     * @param pantry   a Pantry position
+     * @param day      the day
+     * @param dayTime  the day time
+     * @param gameTime the game time
+     */
+    public static void countAt(ServerLevel level, BlockPos pantry, long day, long dayTime, long gameTime) {
+        SettlementData.get(level).settlementAt(pantry).ifPresent(settlement -> settlement.block(pantry)
+                .filter(block -> isEvening(dayTime)).ifPresent(block -> count(level, settlement, block, day, dayTime, gameTime)));
+    }
+
+    private static void count(ServerLevel level, Settlement settlement, SettlementBlock pantry, long day, long dayTime, long gameTime) {
         if (!ClerkStorage.isPantry(pantry) || !level.isLoaded(pantry.pos()) || !ClerkStorage.working(pantry, day, dayTime)) {
             return;
         }
@@ -106,6 +120,22 @@ public final class Tavern {
         if (!present.stream().allMatch(settler -> settler.getWork().entertainment().tavernPaid(day))) {
             pay(present, rules.tavernPoints(present.size(), jukeboxHoldsDisc(level, pantry.pos(), rules.jukeboxRadius())), day);
         }
+        recordBubbles(level, present, pantry.pos(), rules, day, gameTime);
+    }
+
+    /**
+     * The record bubble (vault {@code Systems/Thought Bubbles.md}): each guest of this Pantry who sits at its seat and whose
+     * time has come gets the jukebox check of condition B. The guest shows the bubble if no jukebox holds a disc in range.
+     * The guest's evening is settled in both cases, so the surroundings are read once per count at most, and only when a
+     * guest is due. Catch-up never comes here.
+     */
+    private static void recordBubbles(ServerLevel level, List<Settler> present, BlockPos pantry, EntertainmentRules rules, long day, long gameTime) {
+        List<Settler> due = present.stream().filter(guest -> guest.getWork().recordBubbleDue(pantry, day, gameTime)).toList();
+        if (due.isEmpty()) {
+            return;
+        }
+        boolean music = jukeboxHoldsDisc(level, pantry, rules.jukeboxRadius());
+        due.forEach(guest -> guest.getWork().settleRecordBubble(day, !music));
     }
 
     /**

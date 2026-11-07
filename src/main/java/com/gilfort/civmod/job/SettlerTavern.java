@@ -14,6 +14,7 @@ import com.gilfort.civmod.entertainment.TavernSeats;
 import com.gilfort.civmod.job.Schedule.Activity;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerDay;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
@@ -34,15 +35,27 @@ import net.minecraft.world.entity.Entity;
 final class SettlerTavern {
 
     private static final double REACH = 2.0;
+    /** Ticks a guest sits before its record bubble may show at the earliest (10 seconds). */
+    private static final int RECORD_DELAY_MIN = 200;
+    /** The random part of that delay in ticks, so the bubble shows 10 to 60 seconds after sitting down. */
+    private static final int RECORD_DELAY_SPAN = 1000;
+    /** Tells the record delay apart from other values picked from the same settler and day (the ASCII letters of "record"). */
+    private static final long RECORD_SALT = 0x7265636F72640L;
 
     /** A seat booked for an evening. */
     private record Booking(String seat, BlockPos pantry, long day) {
+    }
+
+    /** The evening a guest was first seen sitting, and when. */
+    private record Sitting(long day, long since) {
     }
 
     private final Settler settler;
     private @Nullable Booking booking;
     /** The evening on which the settler lost its seat (taken, removed, host gone) and goes home instead. */
     private long lostDay = Long.MIN_VALUE;
+    /** When the guest sat down this evening, as far as the Tavern count saw; not saved. */
+    private @Nullable Sitting sitting;
 
     SettlerTavern(Settler settler) {
         this.settler = settler;
@@ -164,6 +177,33 @@ final class SettlerTavern {
             settler.sitDown(seat.get().position(), seat.get().facing());
         }
         return BodyStep.STAY;
+    }
+
+    /**
+     * The record bubble (vault {@code Systems/Thought Bubbles.md}): a guest who sits at its seat shows it once an evening, a
+     * random time after it was first seen sitting. The time is picked from the settler and the day, so it is the same on
+     * every look and nothing is saved; the evening's mark is the Entertainment's {@code recordDay}.
+     *
+     * @param pantry   the Pantry that counts: only the guests of this Pantry are asked
+     * @param day      the day of the evening
+     * @param gameTime the game time
+     * @return whether the settler is a guest of that Pantry whose record bubble is due and not yet settled
+     */
+    boolean recordDue(BlockPos pantry, long day, long gameTime) {
+        Booking current = booking;
+        if (current != null && current.day() == day && !current.pantry().equals(pantry)) {
+            return false;
+        }
+        if (current == null || current.day() != day || !settler.isSitting() || settler.getWork().entertainment().recordSettled(day)) {
+            sitting = null;
+            return false;
+        }
+        Sitting seated = sitting;
+        if (seated == null || seated.day() != day) {
+            sitting = new Sitting(day, gameTime);
+            return false;
+        }
+        return gameTime - seated.since() >= RECORD_DELAY_MIN + SettlerDay.pick(settler.getUUID(), day, RECORD_SALT, RECORD_DELAY_SPAN);
     }
 
     /**
