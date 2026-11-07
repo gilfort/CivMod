@@ -10,7 +10,6 @@ import java.util.function.DoubleSupplier;
 
 import org.jspecify.annotations.Nullable;
 
-import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.entertainment.Entertainment;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.DayClock;
@@ -163,16 +162,13 @@ final class SettlerSocial {
      * The meeting check: one roll per settler or player within the radius, the nearest first. A greeting needs line of
      * sight; a settler greets or starts a conversation once per step. A conversation needs two settlers that can be
      * interrupted and are below their daily limit and past their cooldown; a player never takes part, and a seated Tavern
-     * guest never starts one.
+     * guest never starts one. The caller has checked the {@code socialLife} switch.
      *
      * @param level         the level
      * @param interruptible whether the settler may be interrupted (awake, not away, not serving, ...)
      * @param mayStart      whether the settler may start a conversation (not a seated Tavern guest)
      */
     void meet(ServerLevel level, boolean interruptible, boolean mayStart) {
-        if (!CivModConfig.SOCIAL_LIFE.get()) {
-            return;
-        }
         SocialRules rules = SocialRules.get();
         long now = level.getGameTime();
         greeted.values().removeIf(at -> rules.greetingReady(now - at));
@@ -204,8 +200,8 @@ final class SettlerSocial {
     /** A settler of the same settlement that is awake and visible, or a player who plays. */
     private boolean noticeable(Entity other) {
         if (other instanceof Settler neighbour) {
-            return neighbour.isAlive() && neighbour.getSettlementId() >= 0 && neighbour.getSettlementId() == settler.getSettlementId()
-                    && !neighbour.isSleeping() && !neighbour.isAway();
+            return awakeAndVisible(neighbour) && neighbour.getSettlementId() >= 0
+                    && neighbour.getSettlementId() == settler.getSettlementId();
         }
         return other instanceof Player player && player.isAlive() && !player.isSpectator();
     }
@@ -233,7 +229,7 @@ final class SettlerSocial {
             neighbour.getWork().social().greeted.put(settler.getUUID(), now);
         }
         look = new Look(other);
-        settler.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+        swing(settler);
         faceTarget();
     }
 
@@ -292,8 +288,13 @@ final class SettlerSocial {
         } else if (current.ticks % BUBBLE_TICKS == 0) {
             bubbles(current);
         } else if (current.ticks % SWING_TICKS == 0) {
-            (current.ticks / SWING_TICKS % 2 == 0 ? settler : current.partner).swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+            swing(current.ticks / SWING_TICKS % 2 == 0 ? settler : current.partner);
         }
+    }
+
+    /** One arm swing, without a sound. */
+    private static void swing(Settler who) {
+        who.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
     }
 
     private void markTalking() {
@@ -309,8 +310,8 @@ final class SettlerSocial {
         if (current == null) {
             return;
         }
-        settler.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
-        current.partner.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+        swing(settler);
+        swing(current.partner);
         bubbles(current);
     }
 
@@ -332,8 +333,13 @@ final class SettlerSocial {
         return theirs != null && theirs.partner == settler && still(settler, mine) && still(partner, theirs);
     }
 
+    /** Whether the settler is there to be met: alive, in the world, awake and not away (invisible). */
+    private static boolean awakeAndVisible(Settler who) {
+        return who.isAlive() && !who.isRemoved() && !who.isSleeping() && !who.isAway();
+    }
+
     private static boolean still(Settler who, Conversation conversation) {
-        if (!who.isAlive() || who.isRemoved() || who.isSleeping() || who.isAway()) {
+        if (!awakeAndVisible(who)) {
             return false;
         }
         // A seated guest must still sit; anyone else must still be in the conversation's activity (not sent elsewhere).
@@ -375,7 +381,7 @@ final class SettlerSocial {
     }
 
     /** Every tick: keeps the head turned towards the one greeted until the time is up, then lets go. */
-    void tickLook() {
+    private void tickLook() {
         Look current = look;
         if (current == null) {
             return;
