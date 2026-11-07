@@ -80,7 +80,7 @@ final class ServiceLoop implements CategoryLoop {
     @Override
     public JobStep plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
         List<ServiceAct> acts = acts(job);
-        Optional<ServiceAct> stationary = ServiceActs.stationaryAt(acts, dayTime);
+        Optional<ServiceAct> stationary = ServiceActs.openAt(acts, ServiceAct.Kind.STATIONARY, dayTime);
         if (stationary.isPresent()) {
             Today today = today(job, day);
             // A round in progress ends with its window.
@@ -88,7 +88,7 @@ final class ServiceLoop implements CategoryLoop {
             boolean playing = plays(job) && today.acts().contains(stationary.get().id());
             return place(level, site, playing ? JobStatus.PLAYING : JobStatus.SERVING);
         }
-        if (ServiceActs.roundAt(acts, dayTime).isPresent()) {
+        if (ServiceActs.openAt(acts, ServiceAct.Kind.ROUND, dayTime).isPresent()) {
             return planRound(level, job, site, today(job, day).round());
         }
         return JobStep.skip(JobStatus.IDLE);
@@ -151,7 +151,7 @@ final class ServiceLoop implements CategoryLoop {
         Today today = days.get(job.jobBlock());
         long clock = level.getOverworldClockTime();
         if (today != null && today.day() == DayClock.day(clock) && today.round().playing(level.getGameTime())
-                && ServiceActs.roundAt(acts(job), DayClock.dayTime(clock)).isPresent()) {
+                && ServiceActs.openAt(acts(job), ServiceAct.Kind.ROUND, DayClock.dayTime(clock)).isPresent()) {
             return new JobStep.Hold(statusOfStop(job));
         }
         return JobStep.skip();
@@ -162,8 +162,8 @@ final class ServiceLoop implements CategoryLoop {
         long clock = level.getOverworldClockTime();
         long dayTime = DayClock.dayTime(clock);
         List<ServiceAct> acts = acts(job);
-        Optional<ServiceAct> stationary = ServiceActs.stationaryAt(acts, dayTime);
-        Optional<ServiceAct> round = ServiceActs.roundAt(acts, dayTime);
+        Optional<ServiceAct> stationary = ServiceActs.openAt(acts, ServiceAct.Kind.STATIONARY, dayTime);
+        Optional<ServiceAct> round = ServiceActs.openAt(acts, ServiceAct.Kind.ROUND, dayTime);
         if (stationary.isEmpty() && round.isEmpty()) {
             Today today = days.get(job.jobBlock());
             if (today != null) {
@@ -268,7 +268,8 @@ final class ServiceLoop implements CategoryLoop {
             effect.apply(new ServiceContext(level, act, center, settler, skill, clock, targets.settlers() ? settlers : List.of(),
                     targets.players() ? players : List.of()));
         }
-        shell.gainExp(level, job, ServiceActs.exp(job.jobType(), site.level()), SettlementRules.skillCap(site.level()));
+        // The EXP of one act: the Job's base EXP times the JobBlock level.
+        shell.gainExp(level, job, job.jobType().baseExp() * site.level(), SettlementRules.skillCap(site.level()));
     }
 
     private List<Mob> listeningSettlers(ServerLevel level, JobBlockSite site, ServiceAct act, Vec3 center) {
@@ -291,7 +292,7 @@ final class ServiceLoop implements CategoryLoop {
     @Override
     public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks) {
         // Standing through a window uses the work time; the acts and the round are not played in catch-up.
-        return new SimulatedWork(0, ServiceActs.stationaryAt(acts(job), shell.catchUpDayTime()).isPresent() ? 0.0 : workTicks);
+        return new SimulatedWork(0, ServiceActs.openAt(acts(job), ServiceAct.Kind.STATIONARY, shell.catchUpDayTime()).isPresent() ? 0.0 : workTicks);
     }
 
     @Override

@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.api.Job;
@@ -19,6 +20,9 @@ import com.gilfort.civmod.api.ServiceProfile;
  */
 public final class ServiceActs {
 
+    /** The acts with datapack numbers by Job; emptied when the datapacks reload ({@link #reloaded}). */
+    private static final Map<Job, List<ServiceAct>> RESOLVED = new ConcurrentHashMap<>();
+
     private ServiceActs() {
     }
 
@@ -28,10 +32,17 @@ public final class ServiceActs {
      * @return the acts of the profile with the datapack's numbers of that Job
      */
     static List<ServiceAct> of(Job job, ServiceProfile profile) {
-        Map<String, ServiceActNumbers> numbers = JobBalancing.of(job).serviceActs().orElse(Map.of());
-        // Checked every tick of a settler standing at its place: without datapack numbers nothing is copied.
-        return numbers.isEmpty() ? profile.acts() : resolve(profile.acts(), numbers, problem -> {
-        });
+        // Asked every tick of a settler standing at its place: the numbers are put in once per Job and reload.
+        if (JobBalancing.of(job).serviceActs().isEmpty()) {
+            return profile.acts();
+        }
+        return RESOLVED.computeIfAbsent(job, key -> resolve(profile.acts(), JobBalancing.of(key).serviceActs().orElseThrow(), problem -> {
+        }));
+    }
+
+    /** Forgets the acts put together so far: called when the datapack numbers of the Jobs were loaded anew. */
+    static void reloaded() {
+        RESOLVED.clear();
     }
 
     /**
@@ -78,20 +89,12 @@ public final class ServiceActs {
 
     /**
      * @param acts    the acts to play
+     * @param kind    the kind of act
      * @param dayTime a tick of the day
-     * @return the first stationary act whose window is open then
+     * @return the first act of that kind whose window is open then
      */
-    static Optional<ServiceAct> stationaryAt(List<ServiceAct> acts, long dayTime) {
-        return acts.stream().filter(act -> act.kind() == ServiceAct.Kind.STATIONARY && act.isOpen(dayTime)).findFirst();
-    }
-
-    /**
-     * @param acts    the acts to play
-     * @param dayTime a tick of the day
-     * @return the first round act whose window is open then
-     */
-    static Optional<ServiceAct> roundAt(List<ServiceAct> acts, long dayTime) {
-        return acts.stream().filter(act -> act.kind() == ServiceAct.Kind.ROUND && act.isOpen(dayTime)).findFirst();
+    static Optional<ServiceAct> openAt(List<ServiceAct> acts, ServiceAct.Kind kind, long dayTime) {
+        return acts.stream().filter(act -> act.kind() == kind && act.isOpen(dayTime)).findFirst();
     }
 
     /**
@@ -105,15 +108,6 @@ public final class ServiceActs {
         }
         return job.profile(ServiceProfile.class).map(profile -> of(job, profile).stream().mapToInt(ServiceAct::end).max())
                 .orElse(OptionalInt.empty());
-    }
-
-    /**
-     * @param job        a Service Job
-     * @param blockLevel the level of its JobBlock
-     * @return the EXP the settler gets for playing one act: the Job's base EXP times the JobBlock level
-     */
-    public static int exp(Job job, int blockLevel) {
-        return job.baseExp() * blockLevel;
     }
 
     /**

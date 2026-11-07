@@ -85,6 +85,17 @@ public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> base
     }
 
     /**
+     * Puts loaded overrides in place of the current ones, and makes what was derived from them ({@link ServiceActs}) start
+     * anew. The datapack reload calls it; GameTests use it to play a reload.
+     *
+     * @param loaded the overrides by job
+     */
+    public static void install(Map<Job, JobBalancing> loaded) {
+        current = Map.copyOf(loaded);
+        ServiceActs.reloaded();
+    }
+
+    /**
      * Merges the files of one job in order (later values override).
      *
      * @param files parsed JSON files
@@ -152,7 +163,7 @@ public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> base
 
         @Override
         protected void apply(Map<Job, JobBalancing> prepared, ResourceManager manager, ProfilerFiller profiler) {
-            current = Map.copyOf(prepared);
+            install(prepared);
         }
     }
 }
