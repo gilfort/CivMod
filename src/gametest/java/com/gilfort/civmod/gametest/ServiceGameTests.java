@@ -82,6 +82,8 @@ public final class ServiceGameTests {
     private static final int OPEN = ServiceAct.clock(9, 0);
     private static final int CLOSE = ServiceAct.clock(11, 0);
     static final BlockPos JOB_BLOCK = new BlockPos(1, 1, 1);
+    /** A roll of the meeting check that is neither a conversation nor a greeting. */
+    static final double QUIET_ROLL = 0.99;
 
     /** What a custom effect saw. An addon writes the same: the class uses {@code com.gilfort.civmod.api} only. */
     private static final class Recorder implements ServiceEffect {
@@ -190,6 +192,9 @@ public final class ServiceGameTests {
             settler.joinSettlement(SettlementData.get(level), settlement);
         }
         settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
+        // A chance conversation would stop a performer or a listener in the middle of a test and change the Entertainment the
+        // test counts; the tests that want one script their own rolls.
+        settler.getWork().scriptSocialRolls(() -> QUIET_ROLL);
         return settler;
     }
 
