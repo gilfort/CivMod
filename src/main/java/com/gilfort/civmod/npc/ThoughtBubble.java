@@ -32,6 +32,8 @@ public enum ThoughtBubble {
     MISSION(false),
     /** A guest in the Tavern misses music: a music disc, a hint that a jukebox with a disc improves the Tavern. */
     RECORD(false),
+    /** A Bard starts a stop or a stage act: a note block. */
+    PLAYING(false),
     /** Problem: no usable tool (the needed tool). */
     NO_TOOL(true),
     /** Problem: the drop-off or the Deliveryman's store is full (the drop-off marker). */

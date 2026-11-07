@@ -47,16 +47,19 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
  * @param farmCurve    the farm curve of a farming Resource Collection Job ({@code farm_curve}, see {@link FarmCurve})
  * @param xp           the XP of the Job's actions ({@code xp}): replaces the defaults of its profile, a later file replaces
  *                     the whole list
+ * @param serviceActs  the numbers of a Service Job's acts by act id ({@code service_acts}, see {@link ServiceActNumbers}); files
+ *                     merge per act and field
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> baseExp, Optional<Double> jobFactor, Optional<Item> unlockItem,
-        Optional<List<Integer>> parallelStations, Optional<List<StationExtra>> stationExtras, Optional<FarmCurve> farmCurve, Optional<List<XpEntry>> xp) {
+        Optional<List<Integer>> parallelStations, Optional<List<StationExtra>> stationExtras, Optional<FarmCurve> farmCurve, Optional<List<XpEntry>> xp,
+        Optional<Map<String, ServiceActNumbers>> serviceActs) {
 
     /** Reload listener id. */
     public static final Identifier ID = CivMod.id("job_balancing");
     /** No override. */
     public static final JobBalancing NONE = new JobBalancing(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-            Optional.empty(), Optional.empty(), Optional.empty());
+            Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
 
     private static final Codec<JobBalancing> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.doubleRange(0.0, 10.0).optionalFieldOf("hunger_factor").forGetter(JobBalancing::hungerFactor),
@@ -66,7 +69,8 @@ public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> base
             Codec.intRange(1, SettlementBlock.MAX_WORK_POINTS).listOf(1, 5).optionalFieldOf("parallel_stations").forGetter(JobBalancing::parallelStations),
             StationExtra.CODEC.listOf().optionalFieldOf("station_extras").forGetter(JobBalancing::stationExtras),
             FarmCurve.CODEC.optionalFieldOf("farm_curve").forGetter(JobBalancing::farmCurve),
-            XpEntry.CODEC.listOf().optionalFieldOf("xp").forGetter(JobBalancing::xp)
+            XpEntry.CODEC.listOf().optionalFieldOf("xp").forGetter(JobBalancing::xp),
+            Codec.unboundedMap(Codec.STRING, ServiceActNumbers.CODEC).optionalFieldOf("service_acts").forGetter(JobBalancing::serviceActs)
     ).apply(instance, JobBalancing::new));
 
     private static final FileToIdConverter FILES = FileToIdConverter.json("civmod_jobs");
@@ -78,6 +82,17 @@ public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> base
      */
     public static JobBalancing of(Job job) {
         return current.getOrDefault(job, NONE);
+    }
+
+    /**
+     * Puts loaded overrides in place of the current ones, and makes what was derived from them ({@link ServiceActs}) start
+     * anew. The datapack reload calls it; GameTests use it to play a reload.
+     *
+     * @param loaded the overrides by job
+     */
+    public static void install(Map<Job, JobBalancing> loaded) {
+        current = Map.copyOf(loaded);
+        ServiceActs.reloaded();
     }
 
     /**
@@ -93,9 +108,19 @@ public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> base
             merged = new JobBalancing(part.hungerFactor().or(merged::hungerFactor), part.baseExp().or(merged::baseExp),
                     part.jobFactor().or(merged::jobFactor), part.unlockItem().or(merged::unlockItem),
                     part.parallelStations().or(merged::parallelStations), part.stationExtras().or(merged::stationExtras),
-                    part.farmCurve().or(merged::farmCurve), part.xp().or(merged::xp));
+                    part.farmCurve().or(merged::farmCurve), part.xp().or(merged::xp), mergeActs(merged.serviceActs(), part.serviceActs()));
         }
         return merged;
+    }
+
+    private static Optional<Map<String, ServiceActNumbers>> mergeActs(Optional<Map<String, ServiceActNumbers>> earlier,
+            Optional<Map<String, ServiceActNumbers>> later) {
+        if (earlier.isEmpty() || later.isEmpty()) {
+            return later.or(() -> earlier);
+        }
+        Map<String, ServiceActNumbers> merged = new HashMap<>(earlier.get());
+        later.get().forEach((act, numbers) -> merged.merge(act, numbers, (before, now) -> now.over(before)));
+        return Optional.of(Map.copyOf(merged));
     }
 
     @SubscribeEvent
@@ -126,7 +151,9 @@ public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> base
             Map<Job, JobBalancing> result = new HashMap<>();
             files.forEach((job, list) -> {
                 try {
-                    result.put(job, merge(list));
+                    JobBalancing merged = merge(list);
+                    ServiceActs.validate(job, merged, problem -> CivMod.LOGGER.warn("Job balancing for {}: {}", job, problem));
+                    result.put(job, merged);
                 } catch (Exception e) {
                     CivMod.LOGGER.error("Invalid job balancing for {}, using its defaults", job, e);
                 }
@@ -136,7 +163,7 @@ public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> base
 
         @Override
         protected void apply(Map<Job, JobBalancing> prepared, ResourceManager manager, ProfilerFiller profiler) {
-            current = Map.copyOf(prepared);
+            install(prepared);
         }
     }
 }

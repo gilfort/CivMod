@@ -36,8 +36,8 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.registries.RegisterEvent;
 
 /**
- * GameTests for Villager missions (vault {@code Systems/Mission Jobs.md}, {@code Jobs/Bard.md}): the mission data, the
- * nitwit chance, and a Bard that brings Villagers back live or during catch-up.
+ * GameTests for Villager missions (vault {@code Systems/Mission Jobs.md}, {@code Jobs/Adventurer.md}): the mission data, the
+ * nitwit chance, and an Adventurer that brings Villagers back live or during catch-up.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class MissionVillagerGameTests {
@@ -70,7 +70,7 @@ public final class MissionVillagerGameTests {
     }
 
     private static DataResult<Mission> parse(GameTestHelper helper, String result) {
-        String json = "{\"title\":\"Test\",\"days\":2,\"recommended_level\":5,\"jobs\":[\"civmod:bard\"]," + result + "}";
+        String json = "{\"title\":\"Test\",\"days\":2,\"recommended_level\":5,\"jobs\":[\"civmod:adventurer\"]," + result + "}";
         var ops = helper.getLevel().registryAccess().createSerializationContext(JsonOps.INSTANCE);
         return Mission.CODEC.parse(ops, JsonParser.parseString(json));
     }
@@ -122,18 +122,24 @@ public final class MissionVillagerGameTests {
         helper.succeed();
     }
 
-    // ---------------------------------------------------------------- a Bard on a Villager mission
+    // ---------------------------------------------------------------- an Adventurer on a Villager mission
 
     /** The Villagers in the test area. */
     private static List<Villager> villagers(GameTestHelper helper) {
         return helper.getLevel().getEntitiesOfClass(Villager.class, new AABB(helper.absolutePos(MissionRunGameTests.BOARD)).inflate(64));
     }
 
-    /** The mission the Bard is away on; it must be a Villager mission. */
-    private static Mission awayMission(GameTestHelper helper, Settler bard) {
-        MissionTrip trip = bard.getWork().missionTrip().orElseThrow();
+    /** An Adventurer whose marked mission is a Villager mission it can take (the sample Villager missions of Lv 5 fit, those of Lv 40 do not). */
+    private static Settler villagerAdventurer(GameTestHelper helper) {
+        return MissionRunGameTests.missionSettler(helper, ModJobs.ADVENTURER.get(), "Adventurer",
+                mission -> mission.villagers().isPresent() && mission.recommendedLevel() <= MissionRunGameTests.SKILL);
+    }
+
+    /** The mission the Adventurer is away on; it must be a Villager mission. */
+    private static Mission awayMission(GameTestHelper helper, Settler adventurer) {
+        MissionTrip trip = adventurer.getWork().missionTrip().orElseThrow();
         Mission mission = Missions.get(helper.getLevel().registryAccess(), trip.mission()).orElseThrow();
-        helper.assertTrue(mission.villagers().isPresent(), "The Bard took a Villager mission: " + trip.mission());
+        helper.assertTrue(mission.villagers().isPresent(), "The Adventurer took a Villager mission: " + trip.mission());
         return mission;
     }
 
@@ -154,55 +160,55 @@ public final class MissionVillagerGameTests {
         }
     }
 
-    private static void cleanUp(GameTestHelper helper, Settler bard, List<long[]> forced) {
+    private static void cleanUp(GameTestHelper helper, Settler adventurer, List<long[]> forced) {
         villagers(helper).forEach(Villager::discard);
-        bard.discard();
+        adventurer.discard();
         forced.forEach(chunk -> helper.getLevel().setChunkForced((int) chunk[0], (int) chunk[1], false));
     }
 
     /**
-     * A successful Bard reappears with the mission's Villagers where it vanished; they follow it to the Mission Board.
+     * A successful Adventurer reappears with the mission's Villagers where it vanished; they follow it to the Mission Board.
      */
     private static void villagerReturn(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
-        Settler bard = MissionRunGameTests.missionSettler(helper, ModJobs.BARD.get(), "Bard");
-        bard.getWork().forceMissionOutcome(MissionRules.Outcome.SUCCESS);
+        Settler adventurer = villagerAdventurer(helper);
+        adventurer.getWork().forceMissionOutcome(MissionRules.Outcome.SUCCESS);
         BlockPos board = helper.absolutePos(MissionRunGameTests.BOARD);
         boolean[] returned = new boolean[1];
         helper.onEachTick(() -> {
-            if (returned[0] || !bard.getWork().isAway()) {
+            if (returned[0] || !adventurer.getWork().isAway()) {
                 return;
             }
-            Mission mission = awayMission(helper, bard);
-            MissionTrip trip = bard.getWork().missionTrip().orElseThrow();
+            Mission mission = awayMission(helper, adventurer);
+            MissionTrip trip = adventurer.getWork().missionTrip().orElseThrow();
             helper.assertTrue(villagers(helper).isEmpty(), "No Villagers before the return");
-            helper.assertTrue(bard.getWork().returnFromMission(level, trip.returnTime()), "Back at the return time");
+            helper.assertTrue(adventurer.getWork().returnFromMission(level, trip.returnTime()), "Back at the return time");
             returned[0] = true;
             List<Villager> arrived = villagers(helper);
             assertArrived(helper, arrived, mission);
             BlockPos exit = trip.exit().orElseThrow();
             helper.assertTrue(arrived.stream().allMatch(villager -> villager.blockPosition().closerThan(exit, 4.0)),
-                    "The Villagers appear with the Bard at " + exit);
+                    "The Villagers appear with the Adventurer at " + exit);
         });
         helper.succeedWhen(() -> {
-            helper.assertTrue(returned[0], "The Bard should return");
+            helper.assertTrue(returned[0], "The Adventurer should return");
             List<Villager> arrived = villagers(helper);
             helper.assertTrue(!arrived.isEmpty() && arrived.stream().allMatch(villager -> villager.blockPosition().closerThan(board, 6.0)),
-                    "The Villagers should follow the Bard to the board");
-            cleanUp(helper, bard, forced);
+                    "The Villagers should follow the Adventurer to the board");
+            cleanUp(helper, adventurer, forced);
         });
     }
 
     /**
-     * The real return time is the end of work (the clock stands at 17:36): the Bard, back from its trip, still leads its
+     * The real return time is the end of work (the clock stands at 17:36): the Adventurer, back from its trip, still leads its
      * Villagers to the board before its evening.
      */
     private static void eveningReturn(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(20, 0, 8));
-        Settler bard = MissionRunGameTests.missionSettler(helper, ModJobs.BARD.get(), "Bard");
-        bard.getWork().forceMissionOutcome(MissionRules.Outcome.SUCCESS);
+        Settler adventurer = villagerAdventurer(helper);
+        adventurer.getWork().forceMissionOutcome(MissionRules.Outcome.SUCCESS);
         for (int x = 9; x <= 20; x++) {
             for (int z = 0; z < 9; z++) {
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
@@ -210,21 +216,21 @@ public final class MissionVillagerGameTests {
         }
         BlockPos board = helper.absolutePos(MissionRunGameTests.BOARD);
         BlockPos exit = helper.absolutePos(new BlockPos(18, 1, 4));
-        bard.snapTo(exit.getX() + 0.5, exit.getY(), exit.getZ() + 0.5, 0.0F, 0.0F);
+        adventurer.snapTo(exit.getX() + 0.5, exit.getY(), exit.getZ() + 0.5, 0.0F, 0.0F);
         long day = Math.floorDiv(level.getOverworldClockTime(), DAY);
         MissionTrip trip = new MissionTrip(board, CivMod.id("invite_villagers_plains"), MissionRules.returnTime(day, 1))
                 .withExit(exit);
-        bard.getWork().restore(new SettlerWork.BuffersSnapshot(List.of(), List.of(), List.of(), SettlerWork.CatchUpState.NONE,
+        adventurer.getWork().restore(new SettlerWork.BuffersSnapshot(List.of(), List.of(), List.of(), SettlerWork.CatchUpState.NONE,
                 Optional.of(trip)));
         boolean[] leading = new boolean[1];
-        helper.onEachTick(() -> leading[0] |= bard.getWork().status(board) == JobStatus.BRINGING_VILLAGERS);
+        helper.onEachTick(() -> leading[0] |= adventurer.getWork().status(board) == JobStatus.BRINGING_VILLAGERS);
         helper.succeedWhen(() -> {
-            helper.assertFalse(bard.getWork().isAway(), "The Bard should be back");
-            helper.assertTrue(leading[0], "The Bard should lead its Villagers in the evening");
+            helper.assertFalse(adventurer.getWork().isAway(), "The Adventurer should be back");
+            helper.assertTrue(leading[0], "The Adventurer should lead its Villagers in the evening");
             List<Villager> arrived = villagers(helper);
             helper.assertTrue(arrived.size() == 1 && arrived.getFirst().blockPosition().closerThan(board, 6.0),
-                    "The Villager should follow the Bard to the board: " + arrived.stream().map(Villager::blockPosition).toList());
-            cleanUp(helper, bard, forced);
+                    "The Villager should follow the Adventurer to the board: " + arrived.stream().map(Villager::blockPosition).toList());
+            cleanUp(helper, adventurer, forced);
         });
     }
 
@@ -232,45 +238,45 @@ public final class MissionVillagerGameTests {
     private static void catchUp(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
-        Settler bard = MissionRunGameTests.missionSettler(helper, ModJobs.BARD.get(), "Bard");
-        bard.getWork().forceMissionOutcome(MissionRules.Outcome.SUCCESS);
+        Settler adventurer = villagerAdventurer(helper);
+        adventurer.getWork().forceMissionOutcome(MissionRules.Outcome.SUCCESS);
         BlockPos board = helper.absolutePos(MissionRunGameTests.BOARD);
         boolean[] done = new boolean[1];
         helper.onEachTick(() -> {
-            if (done[0] || !bard.getWork().isAway()) {
+            if (done[0] || !adventurer.getWork().isAway()) {
                 return;
             }
             done[0] = true;
-            Mission mission = awayMission(helper, bard);
-            MissionTrip trip = bard.getWork().missionTrip().orElseThrow();
-            bard.getWork().setCatchUp(level.getOverworldClockTime(), trip.returnTime() + 1000);
-            CatchUp.runNow(level, List.of(bard));
-            helper.assertFalse(bard.getWork().isAway(), "Returned during catch-up");
+            Mission mission = awayMission(helper, adventurer);
+            MissionTrip trip = adventurer.getWork().missionTrip().orElseThrow();
+            adventurer.getWork().setCatchUp(level.getOverworldClockTime(), trip.returnTime() + 1000);
+            CatchUp.runNow(level, List.of(adventurer));
+            helper.assertFalse(adventurer.getWork().isAway(), "Returned during catch-up");
             List<Villager> arrived = villagers(helper);
             assertArrived(helper, arrived, mission);
             helper.assertTrue(arrived.stream().allMatch(villager -> villager.blockPosition().closerThan(board, 3.0)),
                     "The Villagers appear at the board");
-            cleanUp(helper, bard, forced);
+            cleanUp(helper, adventurer, forced);
             helper.succeed();
         });
     }
 
-    /** A failed Bard comes back alone; a dead one does not come back, and no Villager does either. */
+    /** A failed Adventurer comes back alone; a dead one does not come back, and no Villager does either. */
     private static void nothingBack(GameTestHelper helper, MissionRules.Outcome outcome) {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
-        Settler bard = MissionRunGameTests.missionSettler(helper, ModJobs.BARD.get(), "Bard");
-        bard.getWork().forceMissionOutcome(outcome);
+        Settler adventurer = villagerAdventurer(helper);
+        adventurer.getWork().forceMissionOutcome(outcome);
         helper.onEachTick(() -> {
-            if (bard.isRemoved() || !bard.getWork().isAway()) {
+            if (adventurer.isRemoved() || !adventurer.getWork().isAway()) {
                 return;
             }
-            awayMission(helper, bard);
-            MissionTrip trip = bard.getWork().missionTrip().orElseThrow();
-            helper.assertTrue(bard.getWork().returnFromMission(level, trip.returnTime()), "The mission ends at the return time");
-            helper.assertTrue(bard.isRemoved() == (outcome == MissionRules.Outcome.DEATH), "Only a dead Bard stays away");
+            awayMission(helper, adventurer);
+            MissionTrip trip = adventurer.getWork().missionTrip().orElseThrow();
+            helper.assertTrue(adventurer.getWork().returnFromMission(level, trip.returnTime()), "The mission ends at the return time");
+            helper.assertTrue(adventurer.isRemoved() == (outcome == MissionRules.Outcome.DEATH), "Only a dead Adventurer stays away");
             helper.assertTrue(villagers(helper).isEmpty(), "No Villagers after " + outcome);
-            cleanUp(helper, bard, forced);
+            cleanUp(helper, adventurer, forced);
             helper.succeed();
         });
     }

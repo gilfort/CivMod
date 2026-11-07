@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:example_bell_ringer_service",
+  "max_ticks": 600,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

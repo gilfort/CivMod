@@ -48,6 +48,9 @@ public final class ModBlocks {
     /** JobBlock offering the Tavern Host: the Pantry, the settlement's food point. */
     public static final DeferredBlock<JobBlock> PANTRY_BLOCK = jobBlock("pantry_block", ModJobs.TAVERN_HOST);
 
+    /** JobBlock offering the Bard: the Stage the Bard plays on. */
+    public static final DeferredBlock<JobBlock> STAGE_BLOCK = jobBlock("stage_block", ModJobs.BARD);
+
     /** JobBlock offering the Craftsperson: the pattern library of the first Producing Job. */
     public static final DeferredBlock<JobBlock> CRAFTSPERSON_BLOCK = jobBlock("craftsperson_block", ModJobs.CRAFTSPERSON);
 

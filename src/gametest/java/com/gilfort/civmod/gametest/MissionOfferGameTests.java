@@ -15,8 +15,10 @@ import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.MissionOffers;
 import com.gilfort.civmod.settlement.Settlement;
+import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.StationTypes;
 import com.gilfort.civmod.settlement.TestAssignments;
 import com.gilfort.civmod.settlement.TestSettlements;
 import com.mojang.serialization.JsonOps;
@@ -88,19 +90,28 @@ public final class MissionOfferGameTests {
      */
     private static void offerSize(GameTestHelper helper) {
         Job adventurer = ModJobs.ADVENTURER.get();
-        Job bard = ModJobs.BARD.get();
         Job other = specialization();
+        Job scout = ModJobs.REGISTRY.getValue(Identifier.fromNamespaceAndPath("civmod_example", "scout"));
         helper.assertTrue(MissionRules.quotas(List.of(adventurer), 1, 1).equals(Map.of(adventurer, 2)), "Level 1, empty slot: 2 Adventurer missions");
-        helper.assertTrue(MissionRules.quotas(List.of(adventurer, bard), 1, 0).equals(Map.of(adventurer, 1, bard, 1)), "Level 1 with the Bard: 1 + 1");
-        helper.assertTrue(MissionRules.quotas(List.of(adventurer, bard), 2, 1).equals(Map.of(adventurer, 3, bard, 2)),
-                "Level 2 with the Bard, one slot empty: 3 + 2");
+        helper.assertTrue(MissionRules.quotas(List.of(adventurer, other), 1, 0).equals(Map.of(adventurer, 1, other, 1)), "Level 1 with a Specialization: 1 + 1");
+        helper.assertTrue(MissionRules.quotas(List.of(adventurer, other), 2, 1).equals(Map.of(adventurer, 3, other, 2)),
+                "Level 2 with a Specialization, one slot empty: 3 + 2");
         helper.assertTrue(MissionRules.quotas(List.of(adventurer), 2, 2).equals(Map.of(adventurer, 4)), "Level 2, empty slots: 4 Adventurer missions");
-        helper.assertTrue(MissionRules.quotas(List.of(adventurer, bard, other), 4, 2).equals(Map.of(adventurer, 6, bard, 4, other, 4)),
+        helper.assertTrue(MissionRules.quotas(List.of(adventurer, other, scout), 4, 2).equals(Map.of(adventurer, 6, other, 4, scout, 4)),
                 "Level 4, two slots empty: 4 + 2, 4 per Specialization");
         helper.assertTrue(MissionRules.quotas(List.of(adventurer), 5, 5).equals(Map.of(adventurer, 10)), "Level 5 without Specializations: 10");
-        helper.assertTrue(MissionRules.quotas(List.of(adventurer, bard, other), 5, 3).values().stream().mapToInt(Integer::intValue).sum() == 18,
+        helper.assertTrue(MissionRules.quotas(List.of(adventurer, other, scout), 5, 3).values().stream().mapToInt(Integer::intValue).sum() == 18,
                 "Level 5, two Specializations: 5 + 3 + 5 + 5");
         helper.assertTrue(MissionRules.MAX_OFFER_SIZE == 30, "Largest offer: 5 + 5 × 5");
+        // The Bard is no Mission Specialization any more (#210): the Adventurer's single pool keeps the vault size, 2 x level.
+        Job alone = ModJobs.LUMBERJACK.get();
+        helper.assertFalse(StationTypes.hasStationTypes(alone), "The Lumberjack has no Specializations");
+        for (int level = 1; level <= 5; level++) {
+            int slots = StationTypes.emptySlots(new SettlementBlock(BOARD, alone, level, true));
+            helper.assertTrue(slots == level, "Level " + level + ": every open slot is empty: " + slots);
+            helper.assertTrue(MissionRules.quotas(List.of(alone), level, slots).equals(Map.of(alone, 2 * level)),
+                    "A pool without Specializations offers 2 x level at level " + level);
+        }
         helper.succeed();
     }
 
@@ -271,7 +282,7 @@ public final class MissionOfferGameTests {
             helper.assertTrue(invite != null && migration != null, "Villager missions for " + type + " missing: " + missions.keySet());
             boolean rare = type.equals("jungle") || type.equals("swamp");
             for (Mission mission : List.of(invite, migration)) {
-                helper.assertTrue(mission.jobs().equals(List.of(ModJobs.BARD.get())), type + ": Bard only");
+                helper.assertTrue(mission.jobs().equals(List.of(ModJobs.ADVENTURER.get())), type + ": Adventurer only");
                 helper.assertTrue(mission.villagers().orElseThrow().type().is(Identifier.withDefaultNamespace(type)), type + ": biome type");
                 helper.assertTrue(rare ? mission.weight() < missions.get(CivMod.id("invite_villagers_plains")).weight()
                         : mission.weight() == missions.get(CivMod.id("invite_villagers_plains")).weight(), type + ": weight " + mission.weight());
@@ -281,6 +292,12 @@ public final class MissionOfferGameTests {
             helper.assertTrue(migration.recommendedLevel() == 40 && migration.days() == 3 && migration.villagers().orElseThrow().count() == 3,
                     "Village Migration: Lv 40, 3 days, 3 Villagers");
         }
+        // The Villager missions weigh 24 in total (2 each, 1 for jungle and swamp); the loot missions are ten times what they were.
+        int villagerWeight = missions.values().stream().filter(mission -> mission.villagers().isPresent()).mapToInt(Mission::weight).sum();
+        helper.assertTrue(villagerWeight == 24, "Villager missions weigh 24 in total: " + villagerWeight);
+        helper.assertTrue(missions.get(CivMod.id("village_heist")).weight() == 30 && missions.get(CivMod.id("dungeon_raid")).weight() == 20
+                && missions.get(CivMod.id("abandoned_mineshaft")).weight() == 20, "Loot weights 30, 20 and 20");
+        helper.assertTrue(missions.values().stream().noneMatch(mission -> mission.jobs().contains(ModJobs.BARD.get())), "No mission is for the Bard");
         Mission dungeon = missions.get(CivMod.id("dungeon_raid"));
         helper.assertTrue(dungeon.lootTables().equals(List.of(BuiltInLootTables.SIMPLE_DUNGEON)), "Dungeon Raid loot: " + dungeon.lootTables());
         SettlementData data = new SettlementData();

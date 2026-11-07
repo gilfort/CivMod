@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:bard_round",
+  "function": "civmod:bard_round_stops_per_level",
+  "max_ticks": 2400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
