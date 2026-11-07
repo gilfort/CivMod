@@ -2011,6 +2011,30 @@ public final class SettlerWork {
     }
 
     /**
+     * @param pantry   the Pantry whose count asks
+     * @param day      the day of an evening
+     * @param gameTime the game time
+     * @return whether this settler sits in the Tavern of that Pantry as a guest and its record bubble of that evening is due
+     */
+    public boolean recordBubbleDue(BlockPos pantry, long day, long gameTime) {
+        return tavern.recordDue(pantry, day, gameTime);
+    }
+
+    /**
+     * Settles the record bubble of an evening: marks it (saved with the settler's Entertainment) and, if there is no music,
+     * shows it. Nothing is sent while caught up.
+     *
+     * @param day  the day of the evening
+     * @param show whether the guest misses music and the bubble shows
+     */
+    public void settleRecordBubble(long day, boolean show) {
+        setEntertainment(entertainment().markRecord(day));
+        if (show) {
+            thoughts.record(!quiet);
+        }
+    }
+
+    /**
      * @return the Pantry this settler works as Tavern Host, if any (a Tavern Host eats from its Pantry without queueing)
      */
     Optional<BlockPos> ownPantry() {

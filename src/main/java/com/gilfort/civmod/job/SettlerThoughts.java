@@ -103,6 +103,15 @@ final class SettlerThoughts {
     }
 
     /**
+     * Shows the record bubble of a guest in the Tavern. It keeps no state; the Tavern count decides when.
+     *
+     * @param send false while caught up
+     */
+    void record(boolean send) {
+        emit(ThoughtBubble.RECORD, icon(ThoughtBubble.RECORD), true, send);
+    }
+
+    /**
      * Sends the problems that are on to a player that starts seeing the settler (it missed their "problem on").
      *
      * @param player the player
@@ -142,6 +151,7 @@ final class SettlerThoughts {
             case EATING, HUNGRY_NO_FOOD -> Items.BREAD;
             case BED -> ModItems.BED_ICON.get();
             case MISSION -> Items.MAP;
+            case RECORD -> Items.MUSIC_DISC_CAT;
             case JOB, NO_TOOL, NO_WORK_PLACE, BLOCKED, NEED_UNMET -> throw new IllegalArgumentException("Icon depends on the job or need: " + activity);
         };
     }

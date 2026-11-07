@@ -434,7 +434,7 @@ public final class TavernGameTests {
     }
 
     /** Catch-up of the missed day before the clock's day for the settlers, one at a time. */
-    private static void catchUpYesterday(GameTestHelper helper, Settler... settlers) {
+    static void catchUpYesterday(GameTestHelper helper, Settler... settlers) {
         ServerLevel level = helper.getLevel();
         long dayStart = Math.floorDiv(level.getOverworldClockTime(), DayClock.DAY_TICKS) * DayClock.DAY_TICKS;
         for (Settler settler : settlers) {

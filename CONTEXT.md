@@ -183,7 +183,7 @@ Why a Job cannot work, in its profile's own words ("No sand in reach"): the job 
 _Avoid_: custom status, status registry
 
 **Thought bubble**:
-A small icon bubble above a settler's name tag, sent when it starts something new (Job switch, drop-off, fetching, crafting, eating, bed, Mission); a red "!" marks a problem, which the client repeats while it is on. Code: `ThoughtBubble` (types and payload), `SettlerThoughts` (server), `ThoughtBubbleRenderer` (client).
+A small icon bubble above a settler's name tag, sent when it starts something new (Job switch, drop-off, fetching, crafting, eating, bed, Mission, a record in the Tavern); a red "!" marks a problem, which the client repeats while it is on. A guest who sits in the Tavern without a jukebox that holds a disc nearby shows the record bubble (a music disc) once an evening; `Tavern` decides, the evening is marked by `Entertainment.recordDay`. Code: `ThoughtBubble` (types and payload), `SettlerThoughts` (server), `ThoughtBubbleRenderer` (client).
 
 **Bubble icon**:
 The typical item of a Job shown in its thought bubble (Lumberjack axe, Fisherman raw cod, …); separate from the Job's GUI icon, which stays the JobBlock.
