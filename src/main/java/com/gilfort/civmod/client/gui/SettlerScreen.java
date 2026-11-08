@@ -358,7 +358,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
 
     @Override
     protected void extractBehindPanel(GuiGraphicsExtractor graphics, int tab) {
-        if (tab == SettlerMenu.TAB_STORAGE) {
+        if (onStorageTab()) {
             storage.extractStrip(graphics);
         }
     }

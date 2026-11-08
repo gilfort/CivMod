@@ -294,7 +294,7 @@ public final class StorageTerminal {
                 player.containerMenu.setCarried(stock.take(resource, count));
             }
             case TAKE_ONE -> {
-                if (icon.isEmpty() || !carried.isEmpty() && (!ItemStack.isSameItemSameComponents(carried, icon) || carried.getCount() >= carried.getMaxStackSize())) {
+                if (icon.isEmpty() || !canStackOne(carried, icon)) {
                     return;
                 }
                 ItemStack taken = stock.take(ItemResource.of(icon), 1);
@@ -320,6 +320,14 @@ public final class StorageTerminal {
             }
         }
         syncSoon();
+    }
+
+    /** Whether one more item of {@code icon} fits onto the cursor stack; an empty cursor takes anything. */
+    private static boolean canStackOne(ItemStack carried, ItemStack icon) {
+        if (carried.isEmpty()) {
+            return true;
+        }
+        return ItemStack.isSameItemSameComponents(carried, icon) && carried.getCount() < carried.getMaxStackSize();
     }
 
     // ---------------------------------------------------------------- client
