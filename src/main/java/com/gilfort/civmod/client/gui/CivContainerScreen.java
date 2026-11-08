@@ -76,6 +76,27 @@ public abstract class CivContainerScreen<T extends CivMenu> extends AbstractCont
     }
 
     /**
+     * @return the x position of the player inventory's label (relative to the panel)
+     */
+    int inventoryLabelX() {
+        return inventoryLabelX;
+    }
+
+    /**
+     * @return the y position of the player inventory's label (relative to the panel)
+     */
+    int inventoryLabelY() {
+        return inventoryLabelY;
+    }
+
+    /**
+     * @return the text of the player inventory's label
+     */
+    Component inventoryTitle() {
+        return playerInventoryTitle;
+    }
+
+    /**
      * Adds the widgets of the screen; called from {@link #init()} after the layout is known.
      */
     protected abstract void initContent();

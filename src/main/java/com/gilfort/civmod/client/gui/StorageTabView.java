@@ -39,8 +39,6 @@ final class StorageTabView {
     private static final int SCROLLBAR_X = GRID_X + COLUMNS * SLOT + 2;
     private static final int TOP_ROW_Y = 4;
     private static final int TOP_ROW_HEIGHT = 12;
-    /** The status line shares the row of the player inventory's label, right-aligned: the grid leaves no room below it. */
-    private static final int STATUS_Y = SettlerMenu.IMAGE_HEIGHT - 94;
     /** Gap between the "Inventory" label and the status line. */
     private static final int STATUS_GAP = 6;
 
@@ -220,12 +218,15 @@ final class StorageTabView {
         }
     }
 
-    /** Draws a status line below the grid, right-aligned next to the player inventory's label (panel coordinates). */
+    /**
+     * Draws a status line below the grid (panel coordinates). It shares the row of the player inventory's label,
+     * right-aligned: the grid leaves no room below it.
+     */
     private void status(GuiGraphicsExtractor graphics, Component text) {
-        int taken = GRID_X + font().width(Component.translatable("container.inventory")) + STATUS_GAP;
+        int taken = screen.inventoryLabelX() + font().width(screen.inventoryTitle()) + STATUS_GAP;
         int width = panelWidth - CivGui.PADDING - taken;
         Component fitted = CivGui.fit(font(), text, width);
-        graphics.text(font(), fitted, panelWidth - CivGui.PADDING - font().width(fitted), STATUS_Y, CivGui.HINT_COLOR, false);
+        graphics.text(font(), fitted, panelWidth - CivGui.PADDING - font().width(fitted), screen.inventoryLabelY(), CivGui.HINT_COLOR, false);
     }
 
     /**
