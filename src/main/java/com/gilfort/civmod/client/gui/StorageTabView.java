@@ -18,6 +18,7 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
@@ -30,23 +31,33 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
  */
 final class StorageTabView {
 
-    private static final int COLUMNS = 8;
-    private static final int ROWS = 3;
+    private static final int COLUMNS = 9;
+    private static final int ROWS = 6;
     private static final int SLOT = 18;
     private static final int GRID_X = CivGui.PADDING;
     private static final int GRID_Y = 18;
     private static final int SCROLLBAR_X = GRID_X + COLUMNS * SLOT + 2;
-    private static final int SEARCH_WIDTH = 64;
-    private static final int SORT_WIDTH = 14;
     private static final int TOP_ROW_Y = 4;
     private static final int TOP_ROW_HEIGHT = 12;
-    private static final int STATUS_Y = GRID_Y + ROWS * SLOT + 3;
+    /** Gap between the "Inventory" label and the status line. */
+    private static final int STATUS_GAP = 6;
+
+    /** The strip outside the left edge of the panel that carries the sort button. */
+    private static final int STRIP_WIDTH = 26;
+    private static final int STRIP_HEIGHT = 24;
+    private static final int STRIP_Y = GRID_Y - 4;
+    /** How far the strip reaches under the panel, so the panel's border covers the strip's right border. */
+    private static final int STRIP_OVERLAP = 4;
+    private static final int SORT_SIZE = 16;
+    /** Space between the strip's border and the sort button. */
+    private static final int STRIP_INSET = 3;
 
     private final SettlerScreen screen;
     private final SettlerMenu menu;
     private final ListScroller scroller;
     private EditBox search;
     private Button sort;
+    private int panelWidth;
     private String query = "";
     /** The shown resources, sorted and filtered; rebuilt when the list, the search or the sort changes. */
     private List<Row> shown = List.of();
@@ -69,20 +80,47 @@ final class StorageTabView {
     }
 
     /**
-     * Adds the search field and the sort button (on every rebuild of the screen).
+     * Adds the search field (the whole top row up to the help icon) and the sort button (on every rebuild of the screen).
      *
      * @param panelWidth the width of the panel
      */
     void init(int panelWidth) {
-        int right = screen.left() + panelWidth - CivGui.PADDING;
-        search = screen.addTabWidget(SettlerMenu.TAB_STORAGE, new EditBox(font(), right - SORT_WIDTH - 2 - SEARCH_WIDTH, screen.top() + TOP_ROW_Y,
-                SEARCH_WIDTH, TOP_ROW_HEIGHT, Component.translatable("civmod.gui.storage.search")));
+        this.panelWidth = panelWidth;
+        search = screen.addTabWidget(SettlerMenu.TAB_STORAGE, new EditBox(font(), screen.left() + GRID_X, screen.top() + TOP_ROW_Y,
+                panelWidth - CivGui.HELP_ROOM - GRID_X, TOP_ROW_HEIGHT, Component.translatable("civmod.gui.storage.search")));
         search.setValue(query);
         search.setHint(Component.translatable("civmod.gui.storage.search"));
         search.setResponder(text -> query = text);
         sort = screen.addTabWidget(SettlerMenu.TAB_STORAGE, Button.builder(sortLabel(), button -> toggleSort())
-                .bounds(right - SORT_WIDTH, screen.top() + TOP_ROW_Y, SORT_WIDTH, TOP_ROW_HEIGHT).build());
+                .bounds(screen.left() - STRIP_WIDTH + CivGui.INSET_PADDING + STRIP_INSET, screen.top() + GRID_Y, SORT_SIZE, SORT_SIZE).build());
         sort.setTooltip(Tooltip.create(sortTooltip()));
+    }
+
+    /**
+     * @return the area the strip with the sort button takes outside the panel's left edge (absolute), for the recipe
+     *         viewers' exclusion zones and the click check
+     */
+    Rect2i strip() {
+        return new Rect2i(screen.left() - STRIP_WIDTH, screen.top() + STRIP_Y, STRIP_WIDTH, STRIP_HEIGHT);
+    }
+
+    /**
+     * Draws the strip behind the panel, so the panel's border covers the strip's right border and the two join (absolute
+     * coordinates).
+     */
+    void extractStrip(GuiGraphicsExtractor graphics) {
+        Rect2i strip = strip();
+        CivGui.panel(graphics, strip.getX(), strip.getY(), strip.getWidth() + STRIP_OVERLAP, strip.getHeight());
+    }
+
+    /**
+     * @param mouseX the mouse x position (absolute)
+     * @param mouseY the mouse y position (absolute)
+     * @return whether the mouse is over the strip
+     */
+    boolean overStrip(double mouseX, double mouseY) {
+        Rect2i strip = strip();
+        return strip.contains((int) Math.floor(mouseX), (int) Math.floor(mouseY));
     }
 
     private static Component sortLabel() {
@@ -171,9 +209,9 @@ final class StorageTabView {
         }
         scroller.extract(graphics, SCROLLBAR_X, GRID_Y, ROWS * SLOT, maxOffset());
         if (!terminal.onShift()) {
-            graphics.text(font(), Component.translatable("civmod.gui.storage.closed"), GRID_X, STATUS_Y, CivGui.HINT_COLOR, false);
+            status(graphics, Component.translatable("civmod.gui.storage.closed"));
         } else if (terminal.entries().isEmpty()) {
-            graphics.text(font(), Component.translatable("civmod.gui.storage.empty"), GRID_X, STATUS_Y, CivGui.HINT_COLOR, false);
+            status(graphics, Component.translatable("civmod.gui.storage.empty"));
         }
         if (hovered >= 0 && hovered < entries.size() && menu.getCarried().isEmpty()) {
             graphics.setTooltipForNextFrame(font(), entries.get(hovered).resource().toStack(1), mouseX, mouseY);
@@ -181,8 +219,20 @@ final class StorageTabView {
     }
 
     /**
-     * A click on the grid: empty-handed left takes a stack, right half a stack, shift-click into the inventory; with an
-     * item on the cursor left stores it, right stores one.
+     * Draws a status line below the grid (panel coordinates). It shares the row of the player inventory's label,
+     * right-aligned: the grid leaves no room below it.
+     */
+    private void status(GuiGraphicsExtractor graphics, Component text) {
+        int taken = screen.inventoryLabelX() + font().width(screen.inventoryTitle()) + STATUS_GAP;
+        int width = panelWidth - CivGui.PADDING - taken;
+        Component fitted = CivGui.fit(font(), text, width);
+        graphics.text(font(), fitted, panelWidth - CivGui.PADDING - font().width(fitted), screen.inventoryLabelY(), CivGui.HINT_COLOR, false);
+    }
+
+    /**
+     * A click on the grid: empty-handed left takes a stack, right half a stack, shift-click into the inventory, Ctrl + left
+     * click one item (more of the same one with it already on the cursor); with an item on the cursor left stores it,
+     * right stores one.
      *
      * @param event the click
      * @return whether the click was taken
@@ -205,7 +255,9 @@ final class StorageTabView {
         }
         ItemStack icon = index < shown().size() ? shown().get(index).resource().toStack(1) : ItemStack.EMPTY;
         StorageTerminal.Action action;
-        if (!menu.getCarried().isEmpty()) {
+        if (!right && !icon.isEmpty() && event.hasControlDown() && !event.hasShiftDown()) {
+            action = StorageTerminal.Action.TAKE_ONE;
+        } else if (!menu.getCarried().isEmpty()) {
             action = right ? StorageTerminal.Action.STORE_ONE : StorageTerminal.Action.STORE;
         } else if (icon.isEmpty()) {
             return true;

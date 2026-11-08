@@ -54,7 +54,9 @@ public final class StorageTerminal {
         /** Stores the cursor stack (left click with an item). */
         STORE,
         /** Stores one item of the cursor stack (right click with an item). */
-        STORE_ONE
+        STORE_ONE,
+        /** Takes one item onto the cursor, or adds one to the same item already there (Ctrl + left click). */
+        TAKE_ONE
     }
 
     /**
@@ -291,6 +293,17 @@ public final class StorageTerminal {
                         : (int) ((Math.min(max, stock.entries().getOrDefault(resource, 0L)) + 1) / 2);
                 player.containerMenu.setCarried(stock.take(resource, count));
             }
+            case TAKE_ONE -> {
+                if (icon.isEmpty() || !canStackOne(carried, icon)) {
+                    return;
+                }
+                ItemStack taken = stock.take(ItemResource.of(icon), 1);
+                if (carried.isEmpty()) {
+                    player.containerMenu.setCarried(taken);
+                } else {
+                    carried.grow(taken.getCount());
+                }
+            }
             case TAKE_TO_INVENTORY -> {
                 if (icon.isEmpty()) {
                     return;
@@ -307,6 +320,14 @@ public final class StorageTerminal {
             }
         }
         syncSoon();
+    }
+
+    /** Whether one more item of {@code icon} fits onto the cursor stack; an empty cursor takes anything. */
+    private static boolean canStackOne(ItemStack carried, ItemStack icon) {
+        if (carried.isEmpty()) {
+            return true;
+        }
+        return ItemStack.isSameItemSameComponents(carried, icon) && carried.getCount() < carried.getMaxStackSize();
     }
 
     // ---------------------------------------------------------------- client

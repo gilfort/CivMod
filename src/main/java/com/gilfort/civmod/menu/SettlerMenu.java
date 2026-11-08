@@ -65,8 +65,10 @@ public class SettlerMenu extends CivMenu {
     /** Items accepted in the tool belt. */
     public static final TagKey<Item> SETTLER_TOOLS = TagKey.create(Registries.ITEM, CivMod.id("settler_tools"));
 
-    /** Panel height (taller than a chest to fit belt, pockets and player inventory). */
-    public static final int IMAGE_HEIGHT = 184;
+    /** Panel width, the same on every tab: a 9-column grid, the scrollbar next to it and the padding on both sides. */
+    public static final int IMAGE_WIDTH = 186;
+    /** Panel height, the same on every tab: the Storage tab's 6 grid rows above the player inventory (as high as a double chest). */
+    public static final int IMAGE_HEIGHT = 222;
     /** Y of the tool belt row. */
     public static final int BELT_Y = 28;
     /** Y of the pocket row. */

@@ -10,10 +10,15 @@ import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.ClerkTerminal;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.StorageTerminal;
+import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
+import com.gilfort.civmod.settlement.TestAssignments;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
@@ -49,6 +54,8 @@ public final class ClerkTerminalGameTests {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "storage_terminal_entries", ClerkTerminalGameTests::entries);
             register(helper, "storage_terminal_use", ClerkTerminalGameTests::use);
+            register(helper, "storage_terminal_take_one", ClerkTerminalGameTests::takeOne);
+            register(helper, "storage_terminal_take_one_no_exp", ClerkTerminalGameTests::takeOneNoExp);
             register(helper, "storage_terminal_closed", ClerkTerminalGameTests::closed);
             register(helper, "storage_terminal_pauses_checks", ClerkTerminalGameTests::pausesChecks);
             register(helper, "storage_terminal_delta", ClerkTerminalGameTests::delta);
@@ -130,6 +137,91 @@ public final class ClerkTerminalGameTests {
         helper.succeed();
     }
 
+    /** Take one: 1 on an empty cursor, 1 more of the same item, never above the maximum stack, never what is not there. */
+    private static void takeOne(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerk = StockRuleGameTests.workingClerk(helper);
+        Container chest = chest(helper);
+        chest.setItem(0, new ItemStack(Items.COBBLESTONE, 64));
+        chest.setItem(1, new ItemStack(Items.COBBLESTONE, 10));
+        chest.setItem(2, new ItemStack(Items.BREAD, 1));
+        chest.setItem(3, named("Wand", 5));
+        Player player = helper.makeMockPlayer(GameType.SURVIVAL);
+        StorageTerminal terminal = new StorageTerminal(true);
+        open(helper, terminal, clerk, ClerkGameTests.MORNING);
+        ItemStack cobble = new ItemStack(Items.COBBLESTONE);
+
+        terminal.click(player, level, ClerkGameTests.MORNING, cobble, StorageTerminal.Action.TAKE_ONE);
+        helper.assertTrue(player.containerMenu.getCarried().is(Items.COBBLESTONE) && player.containerMenu.getCarried().getCount() == 1,
+                "An empty cursor gets exactly 1: " + player.containerMenu.getCarried());
+        helper.assertTrue(count(chest, Items.COBBLESTONE) == 73, "The storage lost 1: " + count(chest, Items.COBBLESTONE));
+        terminal.click(player, level, ClerkGameTests.MORNING, cobble, StorageTerminal.Action.TAKE_ONE);
+        terminal.click(player, level, ClerkGameTests.MORNING, cobble, StorageTerminal.Action.TAKE_ONE);
+        helper.assertTrue(player.containerMenu.getCarried().getCount() == 3, "Each further click adds 1: " + player.containerMenu.getCarried());
+        helper.assertTrue(count(chest, Items.COBBLESTONE) == 71, "The storage lost 3 in all: " + count(chest, Items.COBBLESTONE));
+
+        // The maximum stack size stops it.
+        player.containerMenu.setCarried(new ItemStack(Items.COBBLESTONE, 63));
+        terminal.click(player, level, ClerkGameTests.MORNING, cobble, StorageTerminal.Action.TAKE_ONE);
+        helper.assertTrue(player.containerMenu.getCarried().getCount() == 64, "Up to the maximum stack: " + player.containerMenu.getCarried());
+        int before = count(chest, Items.COBBLESTONE);
+        terminal.click(player, level, ClerkGameTests.MORNING, cobble, StorageTerminal.Action.TAKE_ONE);
+        helper.assertTrue(player.containerMenu.getCarried().getCount() == 64 && count(chest, Items.COBBLESTONE) == before,
+                "A full cursor stack: nothing happens");
+
+        // A different item, or the same item with other components, does nothing.
+        player.containerMenu.setCarried(new ItemStack(Items.BREAD, 2));
+        terminal.click(player, level, ClerkGameTests.MORNING, cobble, StorageTerminal.Action.TAKE_ONE);
+        helper.assertTrue(player.containerMenu.getCarried().is(Items.BREAD) && player.containerMenu.getCarried().getCount() == 2
+                && count(chest, Items.COBBLESTONE) == before, "A different item on the cursor: nothing happens");
+        player.containerMenu.setCarried(new ItemStack(Items.STICK, 2));
+        terminal.click(player, level, ClerkGameTests.MORNING, named("Wand", 1), StorageTerminal.Action.TAKE_ONE);
+        helper.assertTrue(player.containerMenu.getCarried().getCount() == 2 && count(chest, Items.STICK) == 5,
+                "Same item, other components: nothing happens");
+
+        // Never more than the storage holds: the last bread goes, then the entry is gone.
+        player.containerMenu.setCarried(ItemStack.EMPTY);
+        ItemStack bread = new ItemStack(Items.BREAD);
+        terminal.click(player, level, ClerkGameTests.MORNING, bread, StorageTerminal.Action.TAKE_ONE);
+        terminal.click(player, level, ClerkGameTests.MORNING, bread, StorageTerminal.Action.TAKE_ONE);
+        helper.assertTrue(player.containerMenu.getCarried().getCount() == 1 && count(chest, Items.BREAD) == 0,
+                "Only what the storage holds: " + player.containerMenu.getCarried());
+
+        // An entry the storage no longer holds, and free space.
+        player.containerMenu.setCarried(ItemStack.EMPTY);
+        terminal.click(player, level, ClerkGameTests.MORNING, new ItemStack(Items.DIAMOND), StorageTerminal.Action.TAKE_ONE);
+        terminal.click(player, level, ClerkGameTests.MORNING, ItemStack.EMPTY, StorageTerminal.Action.TAKE_ONE);
+        helper.assertTrue(player.containerMenu.getCarried().isEmpty(), "A missing entry gives nothing: " + player.containerMenu.getCarried());
+        terminal.stop(VIEWER);
+        helper.succeed();
+    }
+
+    /** Taking through the terminal gives the Clerk no EXP, take one included. */
+    private static void takeOneNoExp(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerk = ClerkGameTests.clerkWithStorage(helper);
+        chest(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 10));
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(clerk).orElseThrow();
+        Settler clara = ClerkGameTests.settler(helper, new BlockPos(2, 1, 4), data, settlement);
+        helper.assertTrue(TestAssignments.assign(data, clerk, clara.getUUID(), "Clara", settlement.id(), List.of(), ModJobs.CLERK.get())
+                == JobAssignments.AssignResult.OK, "Clerk assigned");
+        clara.addJob(new SettlerJob(ModJobs.CLERK.get(), clerk));
+        int before = clara.getSkills().get(ModJobs.CLERK.get()).exp();
+        Player player = helper.makeMockPlayer(GameType.SURVIVAL);
+        StorageTerminal terminal = new StorageTerminal(true);
+        open(helper, terminal, clerk, ClerkGameTests.MORNING);
+        ItemStack cobble = new ItemStack(Items.COBBLESTONE);
+        terminal.click(player, level, ClerkGameTests.MORNING, cobble, StorageTerminal.Action.TAKE_ONE);
+        terminal.click(player, level, ClerkGameTests.MORNING, cobble, StorageTerminal.Action.TAKE_ONE);
+        helper.assertTrue(player.containerMenu.getCarried().getCount() == 2, "Two taken: " + player.containerMenu.getCarried());
+        helper.assertTrue(clara.getSkills().get(ModJobs.CLERK.get()).exp() == before && clara.getSkills().get(ModJobs.CLERK.get()).level() == 1,
+                "No EXP for the Clerk");
+        terminal.stop(VIEWER);
+        TestAssignments.unassign(data, clerk);
+        helper.succeed();
+    }
+
     /** Outside the Clerk's shift the list stays but is closed; clicks do nothing, and the flag flips when the shift ends. */
     private static void closed(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -147,6 +239,8 @@ public final class ClerkTerminalGameTests {
         helper.assertTrue(evening != null && !evening.open() && !terminal.onShift(), "The shift ended: the closed state is sent");
         terminal.click(player, level, ClerkGameTests.EVENING, new ItemStack(Items.BREAD), StorageTerminal.Action.TAKE_STACK);
         helper.assertTrue(player.containerMenu.getCarried().isEmpty() && count(chest(helper), Items.BREAD) == 5, "Closed: nothing is taken");
+        terminal.click(player, level, ClerkGameTests.EVENING, new ItemStack(Items.BREAD), StorageTerminal.Action.TAKE_ONE);
+        helper.assertTrue(player.containerMenu.getCarried().isEmpty() && count(chest(helper), Items.BREAD) == 5, "Closed: take one does nothing");
         helper.assertTrue(terminal.usable(level, ClerkGameTests.EVENING).isEmpty(), "Closed: no usable storage");
         terminal.stop(VIEWER);
         helper.succeed();
