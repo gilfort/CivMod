@@ -56,10 +56,20 @@ final class ListScroller {
      * @return whether the list scrolls (the wheel was taken)
      */
     boolean wheel(double scrollY, int maxOffset) {
+        return wheel(scrollY, maxOffset, 1);
+    }
+
+    /**
+     * @param scrollY   the wheel movement
+     * @param maxOffset the largest offset
+     * @param step      how far one wheel step moves the list (a list in pixels moves by a line, not by a pixel)
+     * @return whether the list scrolls (the wheel was taken)
+     */
+    boolean wheel(double scrollY, int maxOffset, int step) {
         if (maxOffset <= 0) {
             return false;
         }
-        offset = Math.clamp(offset - (int) Math.signum(scrollY), 0, maxOffset);
+        offset = Math.clamp(offset - (int) Math.signum(scrollY) * step, 0, maxOffset);
         return true;
     }
 

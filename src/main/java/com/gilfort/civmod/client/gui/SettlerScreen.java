@@ -9,11 +9,13 @@ import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.job.NeedState;
 import com.gilfort.civmod.job.NeedsReport;
 import com.gilfort.civmod.job.ToolTexts;
+import com.gilfort.civmod.menu.NeedsLayout;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.menu.StorageTerminal;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.SettlerJobs;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -35,8 +37,9 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 /**
  * Screen of a settler: Overview (name, status, settlement, dismiss when homeless), Jobs (priority list; "⇄" opens the
  * job switcher listing the other Jobs unlocked at that job's JobBlock), Inventory (tool belt, offhand, pockets), Needs
- * (per need tier, the tier the settler works in highlighted), Mission (the one Mission Job, chosen from those the
- * Mission Board offers; only for settlers with a Mission Job) and one tab per job below the panel (status and buffer).
+ * (per need tier, the tier the settler works in highlighted; scrolls when the list is longer than the window), Mission
+ * (the one Mission Job, chosen from those the Mission Board offers; only for settlers with a Mission Job) and one tab
+ * per job below the panel (status and buffer).
  */
 public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
 
@@ -57,15 +60,16 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
     private static final int SWITCH_ICON = 16;
     /** Y of the Needs tab's first line. */
     private static final int NEEDS_TOP = 22;
-    private static final int NEEDS_LINE = 10;
-    /** Size of an item icon in a need's row. */
-    private static final int NEED_ICON = 16;
-    /** Space between two tiers in the Needs tab. */
-    private static final int NEEDS_GAP = 4;
+    /** Top edge of the Needs list's window: where the highlight of the first tier starts. */
+    private static final int NEEDS_VIEW_TOP = NEEDS_TOP - 2;
+    /** Gap between the Needs list and its scrollbar. */
+    private static final int NEEDS_SCROLLBAR_GAP = 4;
 
     /** The job whose switcher the Jobs tab shows, -1 for the priority list. */
     private int switching = -1;
     private final StorageTabView storage;
+    /** The Needs tab's scroll position in pixels. */
+    private final ListScroller needsScroller = new ListScroller(this);
 
     /**
      * @param menu      the menu
@@ -279,51 +283,77 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         }
     }
 
-    /** One section per tier with visible needs: the tier the settler works in highlighted, higher tiers dimmed as preview. */
+    /** Bottom edge of the Needs list's window (panel coordinates): the panel's border. */
+    private int needsViewBottom() {
+        return imageHeight - CivGui.PADDING;
+    }
+
+    /** Height of the Needs list's window (panel coordinates), the scrollbar's height. */
+    private int needsViewHeight() {
+        return needsViewBottom() - NEEDS_VIEW_TOP;
+    }
+
+    /** How far the Needs list scrolls, in pixels: 0 while it fits the window. */
+    private int needsMaxOffset() {
+        return NeedsLayout.maxOffset(NeedsLayout.contentHeight(menu.getInfo().needs()), needsViewBottom() - NEEDS_TOP);
+    }
+
+    /** Right edge of the Needs list's content (panel coordinates): left of the scrollbar while the list scrolls. */
+    private int needsRight(int maxOffset) {
+        return imageWidth - CivGui.PADDING - (maxOffset > 0 ? CivGui.SCROLLBAR_WIDTH + NEEDS_SCROLLBAR_GAP : 0);
+    }
+
+    /** Left edge of the Needs list's scrollbar (panel coordinates). */
+    private int needsScrollbarX() {
+        return imageWidth - CivGui.PADDING - CivGui.SCROLLBAR_WIDTH;
+    }
+
+    /**
+     * One section per tier with visible needs: the tier the settler works in highlighted, higher tiers dimmed as preview.
+     * The list scrolls when it is longer than the window; what is scrolled out is clipped.
+     */
     private void extractNeedsTab(GuiGraphicsExtractor graphics, NeedsReport needs, int mouseX, int mouseY) {
-        int y = NEEDS_TOP;
-        int width = imageWidth - 2 * CivGui.PADDING;
+        int maxOffset = needsMaxOffset();
+        int offset = needsScroller.offset(maxOffset);
+        int right = needsRight(maxOffset);
+        int width = right - CivGui.PADDING;
+        boolean mouseInView = mouseY >= topPos + NEEDS_VIEW_TOP && mouseY < topPos + needsViewBottom();
+        graphics.enableScissor(CivGui.PADDING - 2, NEEDS_VIEW_TOP, right + 2, needsViewBottom());
         for (int tier = 1; tier <= NeedState.MAX_TIER; tier++) {
             List<NeedsReport.Row> rows = needs.rows(tier);
             if (rows.isEmpty()) {
                 continue;
             }
             boolean preview = tier > needs.tier();
+            int y = NEEDS_TOP - offset + NeedsLayout.sectionTop(needs, tier);
             graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.settler.needs.tier." + tier), width), CivGui.PADDING, y,
                     preview ? CivGui.HINT_COLOR : CivGui.LABEL_COLOR, false);
-            y += NEEDS_LINE;
+            y += NeedsLayout.LINE;
             for (NeedsReport.Row row : rows) {
                 Component mark = Component.literal(row.met() ? "✓" : "✗");
                 int nameX = CivGui.PADDING + font.width(mark) + 3;
                 graphics.text(font, mark, CivGui.PADDING, y, preview ? CivGui.HINT_COLOR : row.met() ? CivGui.NEED_MET_COLOR : CivGui.ERROR_COLOR, false);
                 graphics.text(font, row.name(), nameX, y, preview ? CivGui.HINT_COLOR : CivGui.LABEL_COLOR, false);
-                graphics.text(font, CivGui.fit(font, row.detail(), width - nameX + CivGui.PADDING), nameX, y + NEEDS_LINE, CivGui.HINT_COLOR, false);
+                graphics.text(font, CivGui.fit(font, row.detail(), width - nameX + CivGui.PADDING), nameX, y + NeedsLayout.LINE, CivGui.HINT_COLOR, false);
                 int iconX = nameX;
                 for (ItemStack icon : row.icons()) {
-                    if (iconX + NEED_ICON > imageWidth - CivGui.PADDING) {
+                    if (iconX + NeedsLayout.ICON > right) {
                         break;
                     }
-                    graphics.item(icon, iconX, y + 2 * NEEDS_LINE);
-                    iconX += NEED_ICON;
+                    graphics.item(icon, iconX, y + 2 * NeedsLayout.LINE);
+                    iconX += NeedsLayout.ICON;
                 }
-                if (!row.tooltip().getString().isEmpty() && mouseX >= leftPos + CivGui.PADDING && mouseX < leftPos + imageWidth - CivGui.PADDING
-                        && mouseY >= topPos + y && mouseY < topPos + y + needRow(row)) {
+                int rowHeight = NeedsLayout.rowHeight(row);
+                // Only a row that is shown has a tooltip: the mouse is inside the window and over the row.
+                if (!row.tooltip().getString().isEmpty() && mouseInView && mouseX >= leftPos + CivGui.PADDING && mouseX < leftPos + right
+                        && mouseY >= topPos + y && mouseY < topPos + y + rowHeight) {
                     graphics.setTooltipForNextFrame(font, row.tooltip(), mouseX, mouseY);
                 }
-                y += needRow(row);
+                y += rowHeight;
             }
-            y += NEEDS_GAP;
         }
-    }
-
-    /** The height of a tier's section in the Needs tab. */
-    private static int needsSection(List<NeedsReport.Row> rows) {
-        return NEEDS_LINE + rows.stream().mapToInt(SettlerScreen::needRow).sum();
-    }
-
-    /** The height of a need's row: name, detail and a line of icons if it has any. */
-    private static int needRow(NeedsReport.Row row) {
-        return 2 * NEEDS_LINE + (row.icons().isEmpty() ? 0 : NEED_ICON);
+        graphics.disableScissor();
+        needsScroller.extract(graphics, needsScrollbarX(), NEEDS_VIEW_TOP, needsViewHeight(), maxOffset);
     }
 
     private void extractMissionTab(GuiGraphicsExtractor graphics, SettlerInfo info) {
@@ -346,6 +376,16 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
 
     private boolean onStorageTab() {
         return menu.getActiveTab() == SettlerMenu.TAB_STORAGE;
+    }
+
+    private boolean onNeedsTab() {
+        return menu.getActiveTab() == SettlerMenu.TAB_NEEDS;
+    }
+
+    /** Back to the top of the Needs list whenever a tab is opened. */
+    @Override
+    protected void onTabChanged(int tab) {
+        needsScroller.reset();
     }
 
     /**
@@ -379,22 +419,29 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        return onStorageTab() && storage.mouseClicked(event) || super.mouseClicked(event, doubleClick);
+        return onStorageTab() && storage.mouseClicked(event)
+                || onNeedsTab() && event.button() == InputConstants.MOUSE_BUTTON_LEFT
+                        && needsScroller.press(event.x(), event.y(), needsScrollbarX(), NEEDS_VIEW_TOP, needsViewHeight(), needsMaxOffset())
+                || super.mouseClicked(event, doubleClick);
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        return onStorageTab() && storage.mouseScrolled(scrollY) || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        return onStorageTab() && storage.mouseScrolled(scrollY)
+                || onNeedsTab() && needsScroller.wheel(scrollY, needsMaxOffset(), NeedsLayout.LINE)
+                || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
-        return onStorageTab() && storage.mouseDragged(event) || super.mouseDragged(event, dx, dy);
+        return onStorageTab() && storage.mouseDragged(event)
+                || onNeedsTab() && needsScroller.drag(event.y(), NEEDS_VIEW_TOP, needsViewHeight(), needsMaxOffset())
+                || super.mouseDragged(event, dx, dy);
     }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        return storage.mouseReleased() || super.mouseReleased(event);
+        return storage.mouseReleased() || needsScroller.release() || super.mouseReleased(event);
     }
 
     @Override
@@ -448,16 +495,15 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         }
         if (tab == SettlerMenu.TAB_NEEDS) {
             NeedsReport needs = menu.getInfo().needs();
-            int y = topPos + NEEDS_TOP;
-            for (int tier = 1; tier <= NeedState.MAX_TIER; tier++) {
-                List<NeedsReport.Row> rows = needs.rows(tier);
-                if (rows.isEmpty()) {
-                    continue;
-                }
-                if (tier == needs.tier()) {
-                    CivGui.inset(graphics, leftPos + CivGui.PADDING - 2, y - 2, imageWidth - 2 * CivGui.PADDING + 4, needsSection(rows) + 2);
-                }
-                y += needsSection(rows) + NEEDS_GAP;
+            List<NeedsReport.Row> rows = needs.rows(needs.tier());
+            if (!rows.isEmpty()) {
+                // The highlight scrolls with the list and is clipped with it.
+                int maxOffset = needsMaxOffset();
+                int right = needsRight(maxOffset);
+                int y = topPos + NEEDS_TOP + NeedsLayout.sectionTop(needs, needs.tier()) - needsScroller.offset(maxOffset);
+                graphics.enableScissor(leftPos + CivGui.PADDING - 2, topPos + NEEDS_VIEW_TOP, leftPos + right + 2, topPos + needsViewBottom());
+                CivGui.inset(graphics, leftPos + CivGui.PADDING - 2, y - 2, right - CivGui.PADDING + 4, NeedsLayout.sectionHeight(rows) + 2);
+                graphics.disableScissor();
             }
         }
         if (tab >= SettlerMenu.FIRST_JOB_TAB) {
