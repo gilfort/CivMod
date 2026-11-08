@@ -406,7 +406,8 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
     protected List<Component> helpLines(int tab) {
         if (tab == SettlerMenu.TAB_STORAGE) {
             return List.of(Component.translatable("civmod.gui.storage.help.take"), Component.translatable("civmod.gui.storage.help.take_half"),
-                    Component.translatable("civmod.gui.storage.help.store"), Component.translatable("civmod.gui.storage.help.store_one"),
+                    Component.translatable("civmod.gui.storage.help.take_one"), Component.translatable("civmod.gui.storage.help.store"),
+                    Component.translatable("civmod.gui.storage.help.store_one"),
                     Component.translatable("civmod.gui.storage.help.shift"));
         }
         if (tab >= SettlerMenu.FIRST_JOB_TAB) {

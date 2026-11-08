@@ -229,8 +229,9 @@ final class StorageTabView {
     }
 
     /**
-     * A click on the grid: empty-handed left takes a stack, right half a stack, shift-click into the inventory; with an
-     * item on the cursor left stores it, right stores one.
+     * A click on the grid: empty-handed left takes a stack, right half a stack, shift-click into the inventory, Ctrl + left
+     * click one item (more of the same one with it already on the cursor); with an item on the cursor left stores it,
+     * right stores one.
      *
      * @param event the click
      * @return whether the click was taken
@@ -253,7 +254,9 @@ final class StorageTabView {
         }
         ItemStack icon = index < shown().size() ? shown().get(index).resource().toStack(1) : ItemStack.EMPTY;
         StorageTerminal.Action action;
-        if (!menu.getCarried().isEmpty()) {
+        if (!right && !icon.isEmpty() && event.hasControlDown() && !event.hasShiftDown()) {
+            action = StorageTerminal.Action.TAKE_ONE;
+        } else if (!menu.getCarried().isEmpty()) {
             action = right ? StorageTerminal.Action.STORE_ONE : StorageTerminal.Action.STORE;
         } else if (icon.isEmpty()) {
             return true;
