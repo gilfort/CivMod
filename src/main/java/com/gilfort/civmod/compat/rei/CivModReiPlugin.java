@@ -10,6 +10,7 @@ import java.util.stream.Stream;
 import com.gilfort.civmod.client.ClientInnateRecipes;
 import com.gilfort.civmod.client.ClientJobDrops;
 import com.gilfort.civmod.client.gui.JobBlockScreen;
+import com.gilfort.civmod.client.gui.SettlerScreen;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.PatternsTab;
@@ -28,6 +29,7 @@ import me.shedaniel.rei.api.client.registry.transfer.TransferHandlerRegistry;
 import me.shedaniel.rei.api.common.category.CategoryIdentifier;
 import me.shedaniel.rei.api.common.entry.EntryIngredient;
 import me.shedaniel.rei.api.common.util.EntryStacks;
+import me.shedaniel.math.Rectangle;
 import me.shedaniel.rei.forge.REIPluginClient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -81,6 +83,9 @@ public final class CivModReiPlugin implements REIClientPlugin {
     @Override
     public void registerScreens(ScreenRegistry registry) {
         registry.registerDraggableStackVisitor(new GhostSlots());
+        // Keeps REI's overlay off the strip with the Storage tab's sort button.
+        registry.exclusionZones().register(SettlerScreen.class,
+                screen -> screen.sortStrip().map(area -> new Rectangle(area.getX(), area.getY(), area.getWidth(), area.getHeight())).stream().toList());
     }
 
     @Override
