@@ -10,6 +10,7 @@ import com.gilfort.civmod.entertainment.EntertainmentRules;
 import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.job.NeedState;
 import com.gilfort.civmod.job.NeedsReport;
+import com.gilfort.civmod.job.Schedule;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
@@ -21,6 +22,7 @@ import com.gilfort.civmod.settlement.Bonuses;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.TestAssignments;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 
@@ -75,6 +77,7 @@ public final class EntertainmentGameTests {
             register(helper, "entertainment_saved", EntertainmentGameTests::saved);
             register(helper, "entertainment_speed", EntertainmentGameTests::speed);
             register(helper, "entertainment_needs_row", EntertainmentGameTests::needsRow);
+            register(helper, "entertainment_needs_row_early_day", EntertainmentGameTests::needsRowEarlyDay);
             register(helper, "entertainment_catch_up", EntertainmentGameTests::catchUp);
         });
     }
@@ -230,11 +233,16 @@ public final class EntertainmentGameTests {
             helper.assertTrue(row.met() == (tier == 2), "6 is more than 5 but not more than 8, tier " + tier + ": " + row.met());
             helper.assertTrue(key(row.detail()).equals("civmod.need.entertainment.detail") && args(row.detail()).equals(List.of("6", "10")),
                     "The row reads 6/10: " + row.detail());
-            helper.assertTrue(key(row.tooltip()).equals("civmod.need.entertainment.tooltip") && args(row.tooltip()).equals(List.of("3", "12")),
-                    "The tooltip lists today's 3 points and 12 % speed: " + row.tooltip());
+            helper.assertTrue(key(row.tooltip()).equals("civmod.need.entertainment.tooltip") && args(row.tooltip()).equals(List.of("3", "0", "12")),
+                    "The tooltip lists today's 3 points, 0 from conversations and 12 % speed: " + row.tooltip());
         }
         helper.assertTrue(report.rows(1).stream().noneMatch(row -> isEntertainment(row)) && report.rows(4).isEmpty(),
                 "No Entertainment row in the other tiers");
+
+        // A conversation: its 0.5 count in today's points and have a line of their own.
+        settler.getWork().setEntertainment(Entertainment.of(3).add(3, today).talked(0.5, today, 1L));
+        helper.assertTrue(args(SettlerInfo.of(settler).needs().rows(2).stream().filter(row -> isEntertainment(row)).findFirst().orElseThrow().tooltip())
+                .equals(List.of("3.5", "0.5", "13")), "The tooltip lists 3.5 points today, 0.5 of them from conversations, and 13 % speed");
 
         // Another day: today's points are gone.
         settler.getWork().setEntertainment(Entertainment.of(3).add(3, today - 1));
@@ -242,6 +250,31 @@ public final class EntertainmentGameTests {
         helper.assertTrue(args(tomorrow.rows(2).stream().filter(row -> isEntertainment(row)).findFirst().orElseThrow().tooltip()).get(0).equals("0"),
                 "Points of another day do not count as today's");
         NeedTierGameTests.end(helper, settler, jobBlock);
+    }
+
+    /**
+     * The marks of the points are written with the calendar day ({@link DayClock#day}), which changes at 06:00. A Tavern Host
+     * starts its own day at its early waking time before that. In between the tooltip must still count the points of the
+     * calendar day, or the conversations it just held would show as 0.
+     */
+    private static void needsRowEarlyDay(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos pantry = TavernGameTests.pantry(helper);
+        Settler host = TavernGameTests.settler(helper, pantry, new BlockPos(3, 1, 3));
+        TavernGameTests.host(helper, pantry, host);
+        // One tick before 06:00: the calendar day has not changed, the Host's day has begun.
+        ServiceGameTests.setDayTime(level, DayClock.DAY_TICKS - 1);
+        long calendar = DayClock.day(level);
+        Schedule.Moment moment = Schedule.moment(level.getOverworldClockTime(), host.getWork().dayTimes(calendar + 1));
+        helper.assertTrue(moment.day() == calendar + 1, "Setup: the Host's day (" + moment.day() + ") is ahead of the calendar day (" + calendar + ")");
+
+        host.getWork().setEntertainment(Entertainment.of(3).add(3, calendar).talked(0.5, calendar, 1L));
+        List<String> tooltip = args(SettlerInfo.of(host).needs().rows(2).stream().filter(row -> isEntertainment(row)).findFirst().orElseThrow().tooltip());
+        helper.assertTrue(tooltip.equals(List.of("3.5", "0.5", "13")),
+                "The tooltip counts the calendar day's points, 0.5 of them from conversations, though the Host's day has begun: " + tooltip);
+        TestAssignments.unassign(SettlementData.get(level), pantry);
+        host.discard();
+        helper.succeed();
     }
 
     private static boolean isEntertainment(NeedsReport.Row row) {
@@ -281,7 +314,7 @@ public final class EntertainmentGameTests {
     private static void saved(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
-        Entertainment entertainment = new Entertainment(7.5, 12L, 3.0, 12L, 12L, 12L, 11L, 10L);
+        Entertainment entertainment = new Entertainment(7.5, 12L, 3.0, 12L, 12L, 12L, 11L, 10L, new Entertainment.Talk(12L, 2, 5000L, 1.0));
         settler.getWork().setEntertainment(entertainment);
 
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());

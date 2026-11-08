@@ -112,6 +112,13 @@ final class MissionLoop implements CategoryLoop {
     }
 
     /**
+     * @return whether the settler leads Villagers to the Mission Board
+     */
+    boolean leading() {
+        return lead != null;
+    }
+
+    /**
      * @return whether the settler holds a reserved mission or is away on one
      */
     boolean hasTrip() {

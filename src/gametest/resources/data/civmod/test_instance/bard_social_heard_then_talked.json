@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:bard_round",
+  "function": "civmod:bard_social_heard_then_talked",
+  "max_ticks": 1500,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

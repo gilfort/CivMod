@@ -112,6 +112,16 @@ final class SettlerThoughts {
     }
 
     /**
+     * Shows the speech bubble of a conversation. It keeps no state; the conversation decides when, and sends it again
+     * while it lasts, because the client shows a bubble for only a few seconds.
+     *
+     * @param send false while caught up
+     */
+    void conversation(boolean send) {
+        emit(ThoughtBubble.CONVERSATION, icon(ThoughtBubble.CONVERSATION), true, send);
+    }
+
+    /**
      * Sends the problems that are on to a player that starts seeing the settler (it missed their "problem on").
      *
      * @param player the player
@@ -152,6 +162,7 @@ final class SettlerThoughts {
             case BED -> ModItems.BED_ICON.get();
             case MISSION -> Items.MAP;
             case RECORD -> Items.MUSIC_DISC_CAT;
+            case CONVERSATION -> Items.PAPER;
             case PLAYING -> Items.NOTE_BLOCK;
             case JOB, NO_TOOL, NO_WORK_PLACE, BLOCKED, NEED_UNMET -> throw new IllegalArgumentException("Icon depends on the job or need: " + activity);
         };

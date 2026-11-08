@@ -89,7 +89,7 @@ public final class TavernGameTests {
     }
 
     /** A stone floor under the whole test area. */
-    static void floor(GameTestHelper helper) {
+    public static void floor(GameTestHelper helper) {
         for (int x = -8; x < 16; x++) {
             for (int z = -8; z < 16; z++) {
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
@@ -98,20 +98,20 @@ public final class TavernGameTests {
     }
 
     /** A Pantry at (1, 1, 1) of a new settlement on a stone floor. */
-    static BlockPos pantry(GameTestHelper helper) {
+    public static BlockPos pantry(GameTestHelper helper) {
         floor(helper);
         TestSettlements.setBlock(helper, PANTRY, ModBlocks.PANTRY_BLOCK.get());
         return helper.absolutePos(PANTRY);
     }
 
     /** A settler of the Pantry's settlement at a position, holding no work. */
-    static Settler settler(GameTestHelper helper, BlockPos pantry, BlockPos relative) {
+    public static Settler settler(GameTestHelper helper, BlockPos pantry, BlockPos relative) {
         SettlementData data = SettlementData.get(helper.getLevel());
         return ClerkGameTests.settler(helper, relative, data, data.settlementAt(pantry).orElseThrow());
     }
 
     /** Assigns a settler as the Tavern Host of the Pantry. */
-    static void host(GameTestHelper helper, BlockPos pantry, Settler host) {
+    public static void host(GameTestHelper helper, BlockPos pantry, Settler host) {
         SettlementData data = SettlementData.get(helper.getLevel());
         Settlement settlement = data.settlementAt(pantry).orElseThrow();
         TestAssignments.assign(data, pantry, host.getUUID(), "Host", settlement.id(), List.of());
@@ -132,7 +132,7 @@ public final class TavernGameTests {
      * Gives each guest a Cushion of its own within the Tavern radius and lets it book one (the test runs in the evening, the
      * Tavern Host must be assigned already). Only booked guests are paid by the Tavern.
      */
-    static void seat(GameTestHelper helper, Settler... guests) {
+    public static void seat(GameTestHelper helper, Settler... guests) {
         for (Settler guest : guests) {
             cushion(helper, new BlockPos(8, 1, 3 + helper.getLevel().getEntitiesOfClass(Cushion.class, helper.getBounds()).size()), 0.0F);
             guest.getFood().setLevel(SettlerFood.MAX);
@@ -316,7 +316,7 @@ public final class TavernGameTests {
     }
 
     /** A Cushion standing on the floor at a position, looking the way of the yaw. */
-    static Cushion cushion(GameTestHelper helper, BlockPos relative, float yaw) {
+    public static Cushion cushion(GameTestHelper helper, BlockPos relative, float yaw) {
         Cushion cushion = EntityTypes.CUSHION.create(helper.getLevel(), EntitySpawnReason.SPAWN_ITEM_USE);
         Vec3 position = Vec3.atBottomCenterOf(helper.absolutePos(relative));
         cushion.snapTo(position, yaw, 0.0F);

@@ -1,0 +1,11 @@
+{
+  "conversation_chance": 0.2,
+  "greeting_chance": 0.3,
+  "radius": 6,
+  "greeting_cooldown_ticks": 1200,
+  "conversation_ticks": 120,
+  "walk_give_up_ticks": 100,
+  "conversation_cooldown_ticks": 2000,
+  "daily_limit": 2,
+  "points": 0.5
+}

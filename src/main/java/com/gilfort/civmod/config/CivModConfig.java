@@ -124,6 +124,12 @@ public final class CivModConfig {
             .comment("Lumberjack: logs in the scan area for full speed; below this the speed is found logs / this value.")
             .defineInRange("lumberjackFullLogs", 20, 1, 4096);
 
+    /** Switches the meeting check (greetings and conversations) off. */
+    public static final ModConfigSpec.BooleanValue SOCIAL_LIFE = BUILDER
+            .comment("If false, settlers neither greet nor talk: the meeting check in their decision step does not run.",
+                    "Cuts the cost of the check on large servers.")
+            .define("socialLife", true);
+
     /** The built config spec, registered in the mod constructor. */
     public static final ModConfigSpec SPEC = BUILDER.build();
 

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:after_work",
+  "function": "civmod:conversation_seated_guest_never_rolls",
+  "max_ticks": 700,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -3,6 +3,7 @@ package com.gilfort.civmod.gametest;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.DoubleSupplier;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.CivModApi;
@@ -11,6 +12,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ServiceAct;
 import com.gilfort.civmod.api.ServiceProfile;
 import com.gilfort.civmod.block.JobBlockEntity;
+import com.gilfort.civmod.entertainment.Entertainment;
 import com.gilfort.civmod.job.BardShow;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.job.ServiceRound;
@@ -19,6 +21,7 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
@@ -77,6 +80,9 @@ public final class BardRoundGameTests {
             register(helper, "bard_round_two_bards", BardRoundGameTests::twoBards);
             register(helper, "bard_round_look", BardRoundGameTests::look);
             register(helper, "bard_round_catch_up", BardRoundGameTests::catchUp);
+            register(helper, "bard_social_playing_not_interrupted", BardRoundGameTests::playingNotInterrupted);
+            register(helper, "bard_social_round_talk", BardRoundGameTests::roundTalk);
+            register(helper, "bard_social_heard_then_talked", BardRoundGameTests::heardThenTalked);
         });
     }
 
@@ -111,8 +117,11 @@ public final class BardRoundGameTests {
         return worker;
     }
 
+    /** A settler of the settlement standing at a spot, frozen there: with its AI on it would stroll in or out of the Bard's radius. */
     private static Settler idle(GameTestHelper helper, ServiceGameTests.Scene scene, BlockPos at, String name) {
-        return ServiceGameTests.settler(helper, scene.settlement(), Vec3.atBottomCenterOf(helper.absolutePos(at)), name, true);
+        Settler settler = ServiceGameTests.settler(helper, scene.settlement(), Vec3.atBottomCenterOf(helper.absolutePos(at)), name, true);
+        settler.setNoAi(true);
+        return settler;
     }
 
     private static JobStatus status(Settler bard) {
@@ -134,6 +143,29 @@ public final class BardRoundGameTests {
             }
         }
         return false;
+    }
+
+    /** The scripted rolls of the meeting check of one settler: the same number every time, counted. */
+    private static final class Rolls implements DoubleSupplier {
+        private volatile double value = QuietSocialLife.QUIET_ROLL;
+        private volatile int calls;
+
+        @Override
+        public double getAsDouble() {
+            calls++;
+            return value;
+        }
+    }
+
+    /** A roll in the conversation share (below 0.20). */
+    private static final double CONVERSATION = 0.1;
+    /** A roll in the greeting share (0.20 to 0.50). */
+    private static final double GREETING = 0.35;
+
+    private static Rolls script(Settler settler) {
+        Rolls rolls = new Rolls();
+        settler.getWork().scriptSocialRolls(rolls);
+        return rolls;
     }
 
     // ---------------------------------------------------------------- tests
@@ -300,7 +332,9 @@ public final class BardRoundGameTests {
                         "The round is over: the Bard plays the stage act at the Stage (status " + status(bard) + ", at " + bard.position() + ")"))
                 .thenExecute(() -> {
                     Vec3 top = Vec3.atBottomCenterOf(helper.absolutePos(STAGE.above()));
-                    helper.assertTrue(Math.abs(bard.getX() - top.x) < 0.7 && Math.abs(bard.getZ() - top.z) < 0.7, "On the Stage: " + bard.position() + " instead of " + top);
+                    helper.assertTrue(Math.abs(bard.getX() - top.x) < 0.7 && Math.abs(bard.getZ() - top.z) < 0.7, "On the Stage: " + bard.position() + " instead of " + top
+                            + " (status " + status(bard) + ", hearer " + hearer.position() + " with " + ServiceGameTests.entertainment(hearer) + ", worker "
+                            + worker.position() + " with " + ServiceGameTests.entertainment(worker) + ")");
                     helper.assertTrue(playingBubbles(bard) == 2, "A bubble for the stop and one for the stage act: " + playingBubbles(bard));
                     ServiceGameTests.cleanUp(level, scene, worker, hearer);
                 })
@@ -401,5 +435,136 @@ public final class BardRoundGameTests {
         helper.assertTrue(ServiceGameTests.near(ServiceGameTests.entertainment(worker), 1.0), "Only the flat +1: " + ServiceGameTests.entertainment(worker));
         ServiceGameTests.cleanUp(level, scene, worker);
         helper.succeed();
+    }
+
+    // ---------------------------------------------------------------- the Bard among the settlers
+
+    /**
+     * A Bard who is playing is never interrupted (vault {@code Systems/Entertainment.md}, Conversations and greetings): a
+     * settler at work next to it rolls a conversation and finds the Bard busy; the Bard itself does not even roll; a
+     * greeting changes nothing for it. Nobody is stopped, and the stop plays on.
+     */
+    private static void playingNotInterrupted(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        ServiceGameTests.Scene scene = scene(helper, 1);
+        Settler worker = worker(helper, scene, WORKER_BLOCK, WORKER_AT, "Worker");
+        Settler bard = scene.performer();
+        Rolls bardRolls = script(bard);
+        Rolls workerRolls = script(worker);
+        int[] bardCalls = new int[1];
+        helper.startSequence()
+                .thenExecute(() -> bard.getWork().decideNow(level))
+                .thenWaitUntil(() -> helper.assertTrue(status(bard) == JobStatus.PLAYING, "The stop starts (status " + status(bard) + ")"))
+                .thenExecute(() -> {
+                    helper.assertTrue(bard.distanceTo(worker) <= 6.0, "Setup: the worker is within the radius of the check: " + bard.distanceTo(worker));
+                    bardCalls[0] = bardRolls.calls;
+                    workerRolls.value = CONVERSATION;
+                    bardRolls.value = CONVERSATION;
+                    int before = workerRolls.calls;
+                    worker.getWork().decideNow(level);
+                    helper.assertTrue(workerRolls.calls == before + 1, "The worker rolls for the Bard: " + (workerRolls.calls - before));
+                    helper.assertTrue(worker.getWork().atWork(), "...but is not pulled away from its work");
+                    helper.assertTrue(bard.getWork().atWork() && status(bard) == JobStatus.PLAYING, "The Bard is not stopped: " + status(bard));
+                    bard.getWork().decideNow(level);
+                    helper.assertTrue(bardRolls.calls == bardCalls[0], "A playing Bard makes no roll: " + (bardRolls.calls - bardCalls[0]));
+                    helper.assertTrue(bard.getWork().atWork() && status(bard) == JobStatus.PLAYING, "...and stays at its stop");
+                    // A greeting does not touch it either.
+                    workerRolls.value = GREETING;
+                    worker.getWork().decideNow(level);
+                    helper.assertTrue(bard.getWork().atWork() && status(bard) == JobStatus.PLAYING && holdsHorn(bard), "A greeting does not disturb the Bard");
+                    workerRolls.value = QuietSocialLife.QUIET_ROLL;
+                })
+                .thenIdle(150)
+                .thenExecute(() -> {
+                    helper.assertTrue(status(bard) == JobStatus.PLAYING && holdsHorn(bard) && playingBubbles(bard) == 1, "The stop plays on: " + status(bard));
+                    helper.assertTrue(bard.getWork().entertainment().talk().equals(Entertainment.Talk.NONE)
+                            && worker.getWork().entertainment().talk().equals(Entertainment.Talk.NONE), "Nobody talked");
+                    ServiceGameTests.cleanUp(level, scene, worker);
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * The Bard is an ordinary settler on its walk: it meets a settler at work, they talk, and afterwards the round goes on as
+     * if nothing had happened (the walk, the stop, the points of the stop).
+     */
+    private static void roundTalk(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        ServiceGameTests.Scene scene = scene(helper, 1);
+        Settler worker = worker(helper, scene, WORKER_BLOCK, WORKER_AT, "Worker");
+        Settler bard = scene.performer();
+        Rolls bardRolls = script(bard);
+        script(worker);
+        long day = DayClock.day(level);
+        helper.startSequence()
+                .thenExecute(() -> bard.getWork().decideNow(level))
+                .thenWaitUntil(() -> {
+                    helper.assertTrue(bard.getWork().atWork() && status(bard) != JobStatus.PLAYING && bard.distanceTo(worker) <= 5.0,
+                            "The Bard walks its round towards the worker (status " + status(bard) + ", " + bard.distanceTo(worker) + " blocks away)");
+                })
+                .thenExecute(() -> {
+                    bardRolls.value = CONVERSATION;
+                    bard.getWork().decideNow(level);
+                    bardRolls.value = QuietSocialLife.QUIET_ROLL;
+                    helper.assertTrue(!bard.getWork().atWork() && !worker.getWork().atWork(), "Both stop for the conversation");
+                })
+                .thenWaitUntil(() -> helper.assertTrue(bard.getWork().atWork() && worker.getWork().atWork()
+                        && worker.getWork().entertainment().talk().on(day) == 1, "The talk is over and both are back on their steps"))
+                .thenExecute(() -> {
+                    helper.assertTrue(ServiceGameTests.near(ServiceGameTests.entertainment(worker), 0.5)
+                            && ServiceGameTests.near(ServiceGameTests.entertainment(bard), 0.5), "0.5 each from the talk: "
+                            + ServiceGameTests.entertainment(worker) + ", " + ServiceGameTests.entertainment(bard));
+                    helper.assertTrue(ServiceGameTests.exp(bard, scene.job()) == 0, "Nothing played yet");
+                })
+                .thenWaitUntil(() -> helper.assertTrue(ServiceGameTests.exp(bard, scene.job()) > 0,
+                        "The round goes on: the Bard plays its stop at the worker (status " + status(bard) + ", " + bard.distanceTo(worker) + " blocks away)"))
+                .thenExecute(() -> {
+                    helper.assertTrue(status(bard) == JobStatus.PLAYING && worker.getWork().atWork(), "Playing, and the worker keeps working");
+                    helper.assertTrue(ServiceGameTests.near(ServiceGameTests.entertainment(worker), 1.6),
+                            "The stop's 1.1 on top of the talk's 0.5: " + ServiceGameTests.entertainment(worker));
+                    ServiceGameTests.cleanUp(level, scene, worker);
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * A settler who heard the Bard (+1 for the skill-10 Bard: 1.1) and then talks to it (+0.5) has both: the two sources add
+     * up, the talk is not blocked by the stop it heard before.
+     */
+    private static void heardThenTalked(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        ServiceGameTests.Scene scene = scene(helper, 1);
+        Settler worker = worker(helper, scene, WORKER_BLOCK, WORKER_AT, "Worker");
+        Settler bard = scene.performer();
+        script(bard);
+        Rolls workerRolls = script(worker);
+        long day = DayClock.day(level);
+        double[] heard = new double[1];
+        helper.startSequence()
+                .thenExecute(() -> bard.getWork().decideNow(level))
+                .thenWaitUntil(() -> helper.assertTrue(ServiceGameTests.exp(bard, scene.job()) > 0, "The Bard plays its stop (status " + status(bard) + ")"))
+                .thenIdle(STOP_TICKS)
+                .thenWaitUntil(() -> helper.assertTrue(status(bard) != JobStatus.PLAYING, "The stop is over (status " + status(bard) + ")"))
+                .thenExecute(() -> {
+                    heard[0] = ServiceGameTests.entertainment(worker);
+                    helper.assertTrue(ServiceGameTests.near(heard[0], 1.1), "The worker heard the Bard: " + heard[0]);
+                    helper.assertTrue(bard.distanceTo(worker) <= 6.0, "Setup: the Bard is within the radius of the check: " + bard.distanceTo(worker));
+                    workerRolls.value = CONVERSATION;
+                    worker.getWork().decideNow(level);
+                    workerRolls.value = QuietSocialLife.QUIET_ROLL;
+                    helper.assertTrue(!worker.getWork().atWork(), "The worker stops to talk to the Bard");
+                })
+                .thenWaitUntil(() -> helper.assertTrue(worker.getWork().entertainment().talk().on(day) == 1, "The talk with the Bard is over (worker at work "
+                        + worker.getWork().atWork() + " at " + worker.position() + ", Bard " + status(bard) + " at " + bard.position() + ", worker value "
+                        + ServiceGameTests.entertainment(worker) + ")"))
+                .thenExecute(() -> {
+                    Entertainment after = worker.getWork().entertainment();
+                    helper.assertTrue(ServiceGameTests.near(after.value(), heard[0] + 0.5) && ServiceGameTests.near(after.talk().pointsOn(day), 0.5),
+                            "Heard (+1.1) then talked (+0.5): " + after);
+                    helper.assertTrue(ServiceGameTests.near(ServiceGameTests.entertainment(bard), 0.5), "The Bard gets its 0.5 from the talk too: "
+                            + ServiceGameTests.entertainment(bard));
+                    ServiceGameTests.cleanUp(level, scene, worker);
+                })
+                .thenSucceed();
     }
 }

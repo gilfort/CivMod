@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.function.BooleanSupplier;
+import java.util.function.DoubleSupplier;
 
 import org.jspecify.annotations.Nullable;
 
@@ -50,6 +51,7 @@ import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.StockRules;
+import com.gilfort.civmod.social.SocialRules;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
@@ -168,6 +170,8 @@ public final class SettlerWork {
     private final SettlerTavern tavern;
     /** Needs: the need tier and the limit it puts on the level the settler works at. */
     private final SettlerNeeds needs;
+    /** Social life: the meeting check, the greetings and the conversations it leads to. */
+    private final SettlerSocial social;
     /** Where the settler delivers to (a Clerk drop-off takes at its counter). */
     private ClerkStorage.@Nullable Visit deliveryVisit;
     /** Clerk JobBlocks whose counter this settler found unreachable, with the day (a Clerk gives nothing out to it that day). */
@@ -221,6 +225,7 @@ public final class SettlerWork {
         resting = new SettlerRest(settler);
         tavern = new SettlerTavern(settler);
         needs = new SettlerNeeds(this);
+        social = new SettlerSocial(settler);
     }
 
     /**
@@ -859,8 +864,141 @@ public final class SettlerWork {
             // Missed days first: catch-up checks them in their order.
             needs.step(level, day, foodLookup::hasFood);
         }
+        if (CivModConfig.SOCIAL_LIFE.get() && !social.holdsDecision() && catchUpFrom < 0 && !quiet) {
+            // Live only: greetings and conversations are not simulated in catch-up. A seated Tavern guest never starts one.
+            social.meet(level, interruptible(level), !tavern.sitsAtSeat(activity));
+        }
+        if (social.holdsDecision()) {
+            // In a conversation (also one that just began): nothing is decided until it ends, and then the settler goes
+            // back to its step.
+            return;
+        }
         Decision decision = Schedule.next(snapshot(level, day, dayTime, foodLookup, liveFacts(level, false, woke)));
         act(level, decision, foodLookup, day, dayTime);
+    }
+
+    /**
+     * Whether the settler may be interrupted by company (vault {@code Systems/Entertainment.md}): awake and visible, and
+     * not away on a Mission, leading Villagers, serving a customer, eating or playing as a Bard. Walking, working (a Bard
+     * on its round included), a work break and sitting (also a seated Tavern guest) can be interrupted. A new state that
+     * must not be interrupted is one more component of {@link SocialRules.Situation}.
+     *
+     * @param level the level
+     * @return whether the meeting check may run for this settler
+     */
+    boolean interruptible(ServerLevel level) {
+        boolean serving = settler.getJobs().stream().anyMatch(job -> loop(job) == clerks && ClerkCounter.busy(level, job.jobBlock()));
+        return SocialRules.interruptible(new SocialRules.Situation(settler.isSleeping() || activity == Activity.SLEEP,
+                settler.isAway() || settler.isInvisible(), missions.departed(), missions.leading(), serving, activity == Activity.EATING,
+                playing(), social.inConversation()));
+    }
+
+    /** Whether the settler is a Bard whose status says it plays now (at a stop of its round, or on its Stage). */
+    private boolean playing() {
+        SettlerJob job = activeJob;
+        return job != null && activity == Activity.JOB && status(job.jobBlock()) == JobStatus.PLAYING;
+    }
+
+    /**
+     * @return the social life of this settler
+     */
+    SettlerSocial social() {
+        return social;
+    }
+
+    /**
+     * Every tick: keeps the head turned towards the one just greeted and drives a conversation. Runs after the sitting
+     * look, which would take the head back.
+     */
+    public void socialTick() {
+        if (settler.level() instanceof ServerLevel level) {
+            social.tick(level);
+        }
+    }
+
+    /** What a settler did before a conversation stopped it: the step it goes back to afterwards. */
+    record Resume(Activity activity, @Nullable BlockPos target, double reach) {
+    }
+
+    /**
+     * A conversation stops the settler: a work break ends, the walk stops, and the activity is {@code TALK}, which
+     * nothing else changes until the conversation ends. The current job stays, so the carried item comes back with the
+     * step ({@link #stop} would lose it).
+     *
+     * @param level  the level
+     * @param walkTo where to walk to for the conversation, null to stand where it is
+     * @return what to go back to
+     */
+    Resume interruptForTalk(ServerLevel level, @Nullable BlockPos walkTo) {
+        Resume before = new Resume(activity, target, targetReach);
+        endBreak();
+        settler.getNavigation().stop();
+        if (walkTo == null) {
+            activity = Activity.TALK;
+            target = null;
+        } else {
+            moveTo(level, Activity.TALK, walkTo, SettlerSocial.TALK_DISTANCE);
+        }
+        return before;
+    }
+
+    /**
+     * The conversation is over (or dropped): the settler takes up its previous step again, walking back to its target if
+     * it is not there. Does nothing if something else has taken over the activity meanwhile.
+     *
+     * @param level  the level
+     * @param before what the settler did before
+     */
+    void resumeAfterTalk(ServerLevel level, Resume before) {
+        if (activity != Activity.TALK) {
+            return;
+        }
+        activity = before.activity();
+        target = before.target();
+        targetReach = before.reach();
+        bestDistance = Double.MAX_VALUE;
+        lastProgressTick = level.getGameTime();
+        settler.getNavigation().stop();
+        BlockPos back = target;
+        if (back != null && activity != Activity.SLEEP && !isAtTarget()) {
+            settler.getNavigation().moveTo(back.getX() + 0.5, back.getY(), back.getZ() + 0.5, 0.6);
+        }
+        observe();
+    }
+
+    /**
+     * Replaces the random rolls of the meeting check (tests).
+     *
+     * @param rolls the numbers to roll, null for random ones
+     */
+    public void scriptSocialRolls(@Nullable DoubleSupplier rolls) {
+        social.script(rolls);
+    }
+
+    /**
+     * @return what the settler is doing now
+     */
+    Activity activity() {
+        return activity;
+    }
+
+    /**
+     * @return whether the settler is in the activity of a conversation (stopped, or walking to its partner)
+     */
+    boolean talking() {
+        return activity == Activity.TALK;
+    }
+
+    /**
+     * @return whether the settler sits at its Tavern seat
+     */
+    boolean seatedGuest() {
+        return tavern.sitsAtSeat(activity);
+    }
+
+    /** Shows the speech bubble of a conversation above the settler. */
+    void conversationBubble() {
+        thoughts.conversation(!quiet);
     }
 
     /**
@@ -2539,6 +2677,10 @@ public final class SettlerWork {
     // ---------------------------------------------------------------- per-tick work
 
     private void workTick(ServerLevel level) {
+        if (activity == Activity.TALK) {
+            // The conversation moves and turns the settler (SettlerSocial.tick); no work meanwhile.
+            return;
+        }
         if (activity == Activity.EATING) {
             settler.getNavigation().stop();
             go(level, meals.eatTick(level));

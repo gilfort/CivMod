@@ -72,13 +72,13 @@ public final class MissionRunGameTests {
 
     private static final double EPSILON = 1.0E-9;
     private static final long DAY = 24000L;
-    static final BlockPos BOARD = new BlockPos(1, 1, 1);
+    public static final BlockPos BOARD = new BlockPos(1, 1, 1);
     /** Bed head of the settler in the death tests (only the settlement entry, no bed block). */
     private static final BlockPos BED = new BlockPos(7, 1, 7);
     /** Level of the test board (skill cap 40). */
     private static final int BOARD_LEVEL = 2;
     /** Mission Job skill of the test settler: the sample missions up to Lv 25 fit, below the board cap. */
-    static final int SKILL = 25;
+    public static final int SKILL = 25;
     /** Settler and random source of the pick rule test. */
     private static final UUID SETTLER = new UUID(0L, 1L);
     private static final RandomSource RANDOM = RandomSource.create(0L);
@@ -240,7 +240,7 @@ public final class MissionRunGameTests {
      * {@link #missionSettler(GameTestHelper, Job, String)}, marking the first offered mission the Job may take that also
      * fits {@code wanted} (the Adventurer takes loot and Villager missions alike).
      */
-    static Settler missionSettler(GameTestHelper helper, Job missionJob, String name, java.util.function.Predicate<Mission> wanted) {
+    public static Settler missionSettler(GameTestHelper helper, Job missionJob, String name, java.util.function.Predicate<Mission> wanted) {
         ServerLevel level = helper.getLevel();
         for (int x = 0; x < 9; x++) {
             for (int z = 0; z < 9; z++) {
