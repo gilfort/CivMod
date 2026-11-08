@@ -132,6 +132,7 @@
   "civmod.gui.storage.help.store": "Click with an item: store it",
   "civmod.gui.storage.help.store_one": "Right-click with an item: store one",
   "civmod.gui.storage.help.shift": "Shift-click: move to your inventory",
+  "civmod.gui.storage.help.take_one": "Ctrl-click: take one item",
   "civmod.gui.settler.tab.overview": "Overview",
   "civmod.gui.settler.tab.jobs": "Jobs",
   "civmod.gui.settler.tab.inventory": "Inventory",
