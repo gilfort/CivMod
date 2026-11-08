@@ -1,6 +1,7 @@
 package com.gilfort.civmod.client.gui;
 
 import java.util.List;
+import java.util.Optional;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.food.SettlerFood;
@@ -21,6 +22,7 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -71,7 +73,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
      * @param title     the title
      */
     public SettlerScreen(SettlerMenu menu, Inventory inventory, Component title) {
-        super(menu, inventory, title, 176, SettlerMenu.IMAGE_HEIGHT, List.of(
+        super(menu, inventory, title, SettlerMenu.IMAGE_WIDTH, SettlerMenu.IMAGE_HEIGHT, List.of(
                 new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.storage"), new ItemStack(Items.BARREL)),
                 new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.overview"), new ItemStack(Items.PLAYER_HEAD)),
                 new TabBar.Tab(Component.translatable("civmod.gui.settler.tab.jobs"), new ItemStack(Items.IRON_PICKAXE)),
@@ -344,6 +346,35 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
 
     private boolean onStorageTab() {
         return menu.getActiveTab() == SettlerMenu.TAB_STORAGE;
+    }
+
+    /**
+     * @return the strip with the sort button outside the panel's left edge (absolute), empty while another tab is shown;
+     *         the recipe viewers keep their overlays off it
+     */
+    public Optional<Rect2i> sortStrip() {
+        return onStorageTab() ? Optional.of(storage.strip()) : Optional.empty();
+    }
+
+    @Override
+    protected void extractBehindPanel(GuiGraphicsExtractor graphics, int tab) {
+        if (tab == SettlerMenu.TAB_STORAGE) {
+            storage.extractStrip(graphics);
+        }
+    }
+
+    /** The strip is part of the window: a click on it never counts as a click outside, which would drop the cursor item. */
+    @Override
+    protected boolean hasClickedOutside(double mouseX, double mouseY, int left, int top) {
+        return !(onStorageTab() && storage.overStrip(mouseX, mouseY)) && super.hasClickedOutside(mouseX, mouseY, left, top);
+    }
+
+    /** The Storage tab's search field takes the whole top row, so the settler's name stays on the other tabs. */
+    @Override
+    protected void extractTitle(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        if (!onStorageTab()) {
+            super.extractTitle(graphics, mouseX, mouseY);
+        }
     }
 
     @Override
