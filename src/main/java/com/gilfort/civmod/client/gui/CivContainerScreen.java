@@ -76,6 +76,27 @@ public abstract class CivContainerScreen<T extends CivMenu> extends AbstractCont
     }
 
     /**
+     * @return the x position of the player inventory's label (relative to the panel)
+     */
+    int inventoryLabelX() {
+        return inventoryLabelX;
+    }
+
+    /**
+     * @return the y position of the player inventory's label (relative to the panel)
+     */
+    int inventoryLabelY() {
+        return inventoryLabelY;
+    }
+
+    /**
+     * @return the text of the player inventory's label
+     */
+    Component inventoryTitle() {
+        return playerInventoryTitle;
+    }
+
+    /**
      * Adds the widgets of the screen; called from {@link #init()} after the layout is known.
      */
     protected abstract void initContent();
@@ -162,6 +183,7 @@ public abstract class CivContainerScreen<T extends CivMenu> extends AbstractCont
         if (tabBar != null) {
             tabBar.extractUnselected(graphics, menu.getActiveTab(), mouseX, mouseY);
         }
+        extractBehindPanel(graphics, menu.getActiveTab());
         CivGui.panel(graphics, leftPos, topPos, imageWidth, imageHeight);
         if (tabBar != null) {
             tabBar.extractSelected(graphics, menu.getActiveTab());
@@ -172,6 +194,16 @@ public abstract class CivContainerScreen<T extends CivMenu> extends AbstractCont
             }
         }
         extractTabBackground(graphics, menu.getActiveTab(), mouseX, mouseY);
+    }
+
+    /**
+     * Draws what sticks out from behind the panel, like the tabs do (absolute coordinates); the panel is drawn over its
+     * inner edge.
+     *
+     * @param graphics the graphics extractor
+     * @param tab      the selected tab
+     */
+    protected void extractBehindPanel(GuiGraphicsExtractor graphics, int tab) {
     }
 
     /**

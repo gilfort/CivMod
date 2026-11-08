@@ -11,6 +11,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.client.ClientInnateRecipes;
 import com.gilfort.civmod.client.ClientJobDrops;
 import com.gilfort.civmod.client.gui.JobBlockScreen;
+import com.gilfort.civmod.client.gui.SettlerScreen;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.PatternsTab;
@@ -20,6 +21,7 @@ import com.gilfort.civmod.settlement.Patterns;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.gui.handlers.IGhostIngredientHandler;
+import mezz.jei.api.gui.handlers.IGuiContainerHandler;
 import mezz.jei.api.gui.ingredient.IRecipeSlotView;
 import mezz.jei.api.gui.ingredient.IRecipeSlotsView;
 import mezz.jei.api.ingredients.ITypedIngredient;
@@ -85,6 +87,16 @@ public final class CivModJeiPlugin implements IModPlugin {
     @Override
     public void registerGuiHandlers(IGuiHandlerRegistration registration) {
         registration.addGhostIngredientHandler(JobBlockScreen.class, new GhostSlots());
+        registration.addGuiContainerHandler(SettlerScreen.class, new SortStrip());
+    }
+
+    /** Keeps JEI's overlays off the strip with the Storage tab's sort button. */
+    private static final class SortStrip implements IGuiContainerHandler<SettlerScreen> {
+
+        @Override
+        public List<Rect2i> getGuiExtraAreas(SettlerScreen screen) {
+            return screen.sortStrip().stream().toList();
+        }
     }
 
     @Override
