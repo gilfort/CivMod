@@ -31,10 +31,10 @@ import net.minecraft.world.item.Items;
  */
 public final class WorkersTab extends JobBlockTab {
 
-    /** Button: toggle leaf collection (Lumberjack). */
-    public static final int TOGGLE_LEAVES = 0;
+    /** Buttons: set leaf collection off / on (Lumberjack, {@link #leavesButtonId}). */
+    private static final int LEAVES = 0;
     /** Buttons from here: set the automatic assignment toggle of a Job line ({@link #autoButtonId}). */
-    private static final int AUTO_ASSIGN = 1;
+    private static final int AUTO_ASSIGN = LEAVES + 2;
     /** Most Job lines of a JobBlock with an automatic assignment toggle. */
     private static final int MAX_JOB_LINES = 16;
 
@@ -70,15 +70,29 @@ public final class WorkersTab extends JobBlockTab {
         return buttonId(AUTO_ASSIGN + 2 * line + (on ? 1 : 0));
     }
 
+    /**
+     * Like {@link #autoButtonId}, the leaf toggle carries the wanted state.
+     *
+     * @param on the wanted state of leaf collection
+     * @return the menu button id that sets it
+     */
+    public int leavesButtonId(boolean on) {
+        return buttonId(LEAVES + (on ? 1 : 0));
+    }
+
     @Override
     boolean clickButton(Player player, int button) {
-        JobBlockMenu menu = menu();
-        if (button == TOGGLE_LEAVES) {
-            menu.setInfo(menu.getInfo().withLeavesToggled());
-            menu.site().ifPresent(site -> JobAssignments.toggleLeaves(SettlementData.get(site.level()), site.pos()));
+        if (button < AUTO_ASSIGN) {
+            setLeaves(button - LEAVES == 1);
             return true;
         }
         return setAuto((button - AUTO_ASSIGN) / 2, (button - AUTO_ASSIGN) % 2 == 1);
+    }
+
+    private void setLeaves(boolean on) {
+        JobBlockMenu menu = menu();
+        menu.setInfo(menu.getInfo().withCollectLeaves(on));
+        menu.site().ifPresent(site -> JobAssignments.setLeaves(SettlementData.get(site.level()), site.pos(), on));
     }
 
     /** Sets the automatic assignment toggle of a Job line; switching it on may assign settlers at once (fresh snapshot). */

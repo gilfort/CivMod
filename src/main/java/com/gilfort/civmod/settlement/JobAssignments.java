@@ -573,16 +573,17 @@ public final class JobAssignments {
     }
 
     /**
-     * Toggles leaf collection of a Lumberjack Block.
+     * Sets leaf collection of a Lumberjack Block.
      *
      * @param data     the dimension's settlement data
      * @param jobBlock the JobBlock position
-     * @return the new state
+     * @param on       whether leaves are collected
+     * @return the state now: whether leaves are collected (false without a JobBlock there)
      */
-    public static boolean toggleLeaves(SettlementData data, BlockPos jobBlock) {
+    public static boolean setLeaves(SettlementData data, BlockPos jobBlock, boolean on) {
         Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
-        block.ifPresent(b -> {
-            b.setCollectLeaves(!b.collectLeaves());
+        block.filter(found -> found.collectLeaves() != on).ifPresent(found -> {
+            found.setCollectLeaves(on);
             data.changed();
         });
         return block.map(SettlementBlock::collectLeaves).orElse(false);
@@ -622,17 +623,18 @@ public final class JobAssignments {
     }
 
     /**
-     * Toggles who carries a Producing JobBlock's results: its settler itself or Deliverymen (vault
+     * Sets who carries a Producing JobBlock's results: its settler itself or Deliverymen (vault
      * {@code Jobs/Craftsperson.md}).
      *
-     * @param data     the dimension's settlement data
-     * @param jobBlock the JobBlock position
-     * @return the new state: whether Deliverymen carry them
+     * @param data          the dimension's settlement data
+     * @param jobBlock      the JobBlock position
+     * @param byDeliveryman whether Deliverymen carry them
+     * @return the state now: whether Deliverymen carry them (false for a JobBlock that is not producing)
      */
-    public static boolean toggleDelivery(SettlementData data, BlockPos jobBlock) {
+    public static boolean setDelivery(SettlementData data, BlockPos jobBlock, boolean byDeliveryman) {
         Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock).filter(Patterns::isProducing);
-        block.ifPresent(b -> {
-            b.setByDeliveryman(!b.byDeliveryman());
+        block.filter(found -> found.byDeliveryman() != byDeliveryman).ifPresent(found -> {
+            found.setByDeliveryman(byDeliveryman);
             data.changed();
         });
         return block.map(SettlementBlock::byDeliveryman).orElse(false);

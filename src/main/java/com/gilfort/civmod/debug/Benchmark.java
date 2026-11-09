@@ -173,7 +173,7 @@ public final class Benchmark {
                 Patterns.setOutput(level, craft, ModJobs.CRAFTSPERSON.get(), slot, CRAFTED.get(slot));
             }
             if (i >= CRAFTSPERSONS) {
-                JobAssignments.toggleDelivery(data, craft);
+                JobAssignments.setDelivery(data, craft, true);
             }
             craftspersons.add(craft);
         }
