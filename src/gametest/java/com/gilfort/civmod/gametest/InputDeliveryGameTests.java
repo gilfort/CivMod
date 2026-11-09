@@ -48,6 +48,11 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class InputDeliveryGameTests {
 
+    /** Day time of 07:00 (day time 0 = 06:00). */
+    private static final long SEVEN_O_CLOCK = 1000L;
+    /** A catch-up stretch shorter than a failed round's 30 s skip. */
+    private static final long SHORTER_THAN_SKIP_TICKS = 400L;
+
     private InputDeliveryGameTests() {
     }
 
@@ -58,6 +63,7 @@ public final class InputDeliveryGameTests {
             register(helper, "input_delivery_reserved", InputDeliveryGameTests::reserved);
             register(helper, "input_delivery_shortfall", InputDeliveryGameTests::shortfall);
             register(helper, "input_delivery_catch_up", InputDeliveryGameTests::catchUp);
+            register(helper, "input_delivery_catch_up_failed_skip", InputDeliveryGameTests::catchUpFailedSkip);
         });
     }
 
@@ -98,7 +104,7 @@ public final class InputDeliveryGameTests {
             Settlement settlement = data.settlementAt(home).orElseThrow();
             helper.assertTrue(data.settlementAt(second).filter(settlement::equals).isPresent()
                     && JobBlockSite.blockAt(level, craft).orElseThrow().homeClerk().equals(Optional.of(home)), "Layout");
-            helper.assertTrue(JobAssignments.toggleDelivery(data, craft), "Delivery: Deliveryman");
+            helper.assertTrue(JobAssignments.setDelivery(data, craft, true), "Delivery: Deliveryman");
             Request request = Requests.post(data, settlement, Items.STONE_PICKAXE, 1, Optional.of(home), Optional.empty());
             Settler cora = CraftspersonGameTests.craftsperson(helper, craft, new BlockPos(3, 1, 5), "Cora");
             Settler dora = ClerkGameTests.settler(helper, new BlockPos(2, 1, 3), data, settlement);
@@ -239,6 +245,32 @@ public final class InputDeliveryGameTests {
         helper.assertTrue(layout.cobblestoneFor(level, true, null) == 0
                 && ClerkStorage.stock(level, layout.home(), true).count(stack -> stack.is(Items.OAK_LOG)) == 0, "Both stores gave their inputs");
         helper.assertTrue(layout.inputs(level).isEmpty(), "Input deliveries done: " + layout.inputs(level));
+        layout.cleanUp(helper);
+        helper.succeed();
+    }
+
+    /**
+     * Catch-up: a round whose input deliveries vanished finds its collect inventory empty and fails. The skip runs on
+     * the simulated clock, so the same pass does not pick the request again and post new input deliveries.
+     */
+    private static void catchUpFailedSkip(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Layout layout = Layout.build(helper);
+        layout.cora().getWork().decideNow(level);
+        helper.assertTrue(layout.inputs(level).size() == 2, "Two input deliveries: " + layout.inputs(level));
+        SettlementData data = SettlementData.get(level);
+        // Gone without bringing anything: the round stops waiting and fetches at an empty collect inventory.
+        layout.inputs(level).forEach(task -> Deliveries.done(data, layout.settlement(level), task.id()));
+        // One awake stretch shorter than the 30 s skip, without Dora: nobody brings anything.
+        long yesterday = Math.floorDiv(level.getOverworldClockTime(), DayClock.DAY_TICKS) * DayClock.DAY_TICKS - DayClock.DAY_TICKS;
+        // From 07:00 (day time 1000, awake and at work) for 20 s, less than the 30 s skip.
+        long missed = yesterday + SEVEN_O_CLOCK;
+        layout.cora().getWork().setCatchUp(missed, missed + SHORTER_THAN_SKIP_TICKS);
+        CatchUp.runNow(level, List.of(layout.cora()));
+        Request request = Requests.get(layout.settlement(level), layout.request()).orElseThrow();
+        helper.assertTrue(!request.missing().isEmpty() && request.claims().isEmpty(), "The failed round marks the request missing: " + request
+                + ", status " + layout.cora().getWork().status(layout.craft()) + ", inputs " + layout.inputs(level));
+        helper.assertTrue(layout.inputs(level).isEmpty(), "The skipped request is not picked again in the same pass: " + layout.inputs(level));
         layout.cleanUp(helper);
         helper.succeed();
     }
