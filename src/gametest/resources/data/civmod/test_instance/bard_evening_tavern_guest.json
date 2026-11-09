@@ -1,7 +1,7 @@
 {
   "type": "minecraft:function",
-  "environment": "civmod:after_work",
-  "function": "civmod:tavern_bard_not_present",
+  "environment": "civmod:bard_evening_tavern",
+  "function": "civmod:bard_evening_tavern_guest",
   "max_ticks": 200,
   "structure": "minecraft:empty",
   "padding": 40

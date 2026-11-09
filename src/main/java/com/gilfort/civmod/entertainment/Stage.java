@@ -65,6 +65,16 @@ public final class Stage {
     }
 
     /**
+     * @param level   the level
+     * @param settler a settler
+     * @return whether it plays the Bard ({@link #playsBard}) and heads for its Stage or plays there now; until then it is an
+     *         ordinary guest of the Tavern evening
+     */
+    public static boolean performs(ServerLevel level, Settler settler) {
+        return playsBard(settler) && settler.getWork().atAppointment(level);
+    }
+
+    /**
      * The flat catch-up of a missed day (vault {@code Systems/Entertainment.md}, Catch-up): a settler of a settlement that has a
      * Bard assigned to a connected Stage gets {@link #CATCH_UP_POINTS}. Nothing is walked or played. The day counts as the
      * evening of a stage act, so a settler who heard the Bard that evening is not paid twice. Away settlers get nothing.

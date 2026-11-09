@@ -21,6 +21,7 @@ import com.gilfort.civmod.api.WorkSpeed;
 import com.gilfort.civmod.entertainment.EntertainmentRules;
 import com.gilfort.civmod.job.JobBalancing;
 import com.gilfort.civmod.job.JobStatus;
+import com.gilfort.civmod.job.Schedule;
 import com.gilfort.civmod.job.ServiceActNumbers;
 import com.gilfort.civmod.job.ServiceActs;
 import com.gilfort.civmod.job.SpeedBoost;
@@ -81,6 +82,8 @@ public final class ServiceGameTests {
     /** 09:00 to 11:00. */
     private static final int OPEN = ServiceAct.clock(9, 0);
     private static final int CLOSE = ServiceAct.clock(11, 0);
+    /** A settler's usual times (end of work 17:42) to fit the acts into. */
+    static final Schedule.DayTimes USUAL_TIMES = new Schedule.DayTimes(0L, 11700L, 14200L);
     static final BlockPos JOB_BLOCK = new BlockPos(1, 1, 1);
 
     /** What a custom effect saw. An addon writes the same: the class uses {@code com.gilfort.civmod.api} only. */
@@ -467,19 +470,32 @@ public final class ServiceGameTests {
         Map<Job, JobBalancing> before = new HashMap<>();
         ModJobs.REGISTRY.stream().forEach(job -> before.put(job, JobBalancing.of(job)));
         try {
-            helper.assertTrue(ServiceActs.windowEnd(bard).orElse(-1) == 14000, "The stage act ends at 20:00 without a datapack");
+            helper.assertTrue(appointmentEnd(bard) == 14000, "The stage act ends at 20:00 without a datapack");
             for (int end : new int[] {15000, 16000}) {
-                Map<Job, JobBalancing> loaded = new HashMap<>(before);
-                loaded.put(bard, JobBalancing.merge(List.<JsonElement>of(JsonParser.parseString("{\"service_acts\": {\"stage\": {\"end\": " + end + "}}}"))));
-                JobBalancing.install(loaded);
-                helper.assertTrue(ServiceActs.windowEnd(bard).orElse(-1) == end, "A reload to " + end + " is used at once: " + ServiceActs.windowEnd(bard));
-                helper.assertTrue(ServiceActs.windowEnd(bard).orElse(-1) == end, "And again from the kept acts");
+                install(before, bard, "{\"service_acts\": {\"stage\": {\"end\": " + end + "}}}");
+                helper.assertTrue(appointmentEnd(bard) == end, "A reload to " + end + " is used at once: " + appointmentEnd(bard));
+                helper.assertTrue(appointmentEnd(bard) == end, "And again from the kept acts");
             }
+            // A stationary window that opens before the end of work keeps the settler at work until it closes, as before.
+            install(before, bard, "{\"service_acts\": {\"stage\": {\"start\": 11000}}}");
+            Schedule.DayTimes early = ServiceActs.dayTimes(List.of(bard), USUAL_TIMES);
+            helper.assertTrue(early.workEnd() == 14000 && early.appointment().equals(Schedule.Appointment.NONE),
+                    "A stage act from 17:00 moves the end of work: " + early);
             JobBalancing.install(before);
-            helper.assertTrue(ServiceActs.windowEnd(bard).orElse(-1) == 14000, "A reload without the file brings the declared acts back");
+            helper.assertTrue(appointmentEnd(bard) == 14000, "A reload without the file brings the declared acts back");
         } finally {
             JobBalancing.install(before);
         }
         helper.succeed();
+    }
+
+    private static long appointmentEnd(Job job) {
+        return ServiceActs.dayTimes(List.of(job), USUAL_TIMES).appointment().end();
+    }
+
+    private static void install(Map<Job, JobBalancing> before, Job job, String file) {
+        Map<Job, JobBalancing> loaded = new HashMap<>(before);
+        loaded.put(job, JobBalancing.merge(List.<JsonElement>of(JsonParser.parseString(file))));
+        JobBalancing.install(loaded);
     }
 }

@@ -158,6 +158,12 @@ final class SettlerTavern {
                 .filter(found -> !TavernSeats.occupied(level, found));
     }
 
+    /** Gives up the booked seat, so another guest may book it (the settler leaves for its evening appointment). */
+    void leave() {
+        booking = null;
+        sitting = null;
+    }
+
     /**
      * Walks to the booked seat; once the settler sits there it stays.
      *
