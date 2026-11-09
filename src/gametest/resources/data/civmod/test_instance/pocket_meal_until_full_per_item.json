@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:pocket_meal_until_full_per_item",
+  "max_ticks": 20,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

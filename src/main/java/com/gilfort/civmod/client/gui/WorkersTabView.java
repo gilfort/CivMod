@@ -94,7 +94,7 @@ final class WorkersTabView implements JobBlockTabView {
         List<WorkersToggle> toggles = new ArrayList<>();
         if (leavesToggle()) {
             toggles.add(new WorkersToggle(Component.translatable(menu.getInfo().collectLeaves() ? "civmod.gui.job_block.leaves.on"
-                    : "civmod.gui.job_block.leaves.off"), tab.buttonId(WorkersTab.TOGGLE_LEAVES)));
+                    : "civmod.gui.job_block.leaves.off"), tab.leavesButtonId(!menu.getInfo().collectLeaves())));
         }
         screen.views().forEach(view -> view.workersToggle().ifPresent(toggles::add));
         return toggles;

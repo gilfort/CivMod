@@ -35,8 +35,8 @@ import net.minecraft.world.item.Items;
  */
 final class SettlerMeals {
 
-    /** Ticks a meal from the pockets takes. */
-    private static final int EAT_TICKS = 30;
+    /** Ticks one item of a meal from the pockets takes (5 s). */
+    private static final int EAT_TICKS = 100;
     /** Ticks a foraging settler walks before it vanishes. */
     private static final int FORAGE_WALK_TICKS = 600;
     /** Food value gained per level of a working Tavern Host: +1 % (Lv 100: +100 %). */

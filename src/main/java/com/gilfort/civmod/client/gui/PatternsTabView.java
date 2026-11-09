@@ -125,7 +125,7 @@ final class PatternsTabView implements JobBlockTabView {
         }
         PatternsTab base = menu.tab(PatternsTab.class).orElseThrow();
         return Optional.of(new WorkersToggle(Component.translatable(current.byDeliveryman() ? "civmod.gui.job_block.delivery.deliveryman"
-                : "civmod.gui.job_block.delivery.self"), base.buttonId(PatternsTab.TOGGLE_DELIVERY)));
+                : "civmod.gui.job_block.delivery.self"), base.deliveryButtonId(!current.byDeliveryman())));
     }
 
     /** Another tab: the editor closes. */

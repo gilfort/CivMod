@@ -438,19 +438,21 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
     }
 
     /**
-     * @return a copy with leaf collection toggled
+     * @param on whether leaves are collected
+     * @return a copy with that leaf collection
      */
-    public JobBlockInfo withLeavesToggled() {
-        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, workers, places, !collectLeaves,
+    public JobBlockInfo withCollectLeaves(boolean on) {
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, workers, places, on,
                 byDeliveryman, missionTab, biome, blessingLeft, storageUnlinked);
     }
 
     /**
-     * @return a copy with the Craftsperson's delivery toggled (Self / Deliveryman)
+     * @param deliveryman whether Deliverymen carry the results (Self / Deliveryman)
+     * @return a copy with that delivery
      */
-    public JobBlockInfo withDeliveryToggled() {
+    public JobBlockInfo withByDeliveryman(boolean deliveryman) {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, workers, places, collectLeaves,
-                !byDeliveryman, missionTab, biome, blessingLeft, storageUnlinked);
+                deliveryman, missionTab, biome, blessingLeft, storageUnlinked);
     }
 
     /**

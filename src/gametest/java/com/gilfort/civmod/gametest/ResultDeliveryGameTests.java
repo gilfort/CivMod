@@ -183,7 +183,7 @@ public final class ResultDeliveryGameTests {
         CraftspersonGameTests.define(helper, craft, 0, Items.STONE_PICKAXE);
         CraftspersonGameTests.define(helper, craft, 1, Items.STICK);
         CraftspersonGameTests.define(helper, craft, 2, Items.OAK_PLANKS);
-        helper.assertTrue(JobAssignments.toggleDelivery(data, craft), "Delivery: Deliveryman");
+        helper.assertTrue(JobAssignments.setDelivery(data, craft, true), "Delivery: Deliveryman");
         Settler settler = CraftspersonGameTests.craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
         CraftspersonGameTests.catchUp(level, settler, 4000L);
 
@@ -233,9 +233,10 @@ public final class ResultDeliveryGameTests {
         SettlementData data = SettlementData.get(helper.getLevel());
         BlockPos craft = place(helper, new BlockPos(1, 1, 1), ModJobs.CRAFTSPERSON.get());
         helper.assertFalse(block(helper, craft).byDeliveryman(), "Default: Self");
-        helper.assertTrue(JobAssignments.toggleDelivery(data, craft), "Toggled: Deliveryman");
+        helper.assertTrue(JobAssignments.setDelivery(data, craft, true), "Set: Deliveryman");
         helper.assertTrue(block(helper, craft).byDeliveryman(), "Stored");
-        helper.assertFalse(JobAssignments.toggleDelivery(data, craft), "Toggled back: Self");
+        helper.assertTrue(JobAssignments.setDelivery(data, craft, true), "Set again: stays Deliveryman");
+        helper.assertFalse(JobAssignments.setDelivery(data, craft, false), "Set back: Self");
         remove(helper, craft);
         helper.succeed();
     }

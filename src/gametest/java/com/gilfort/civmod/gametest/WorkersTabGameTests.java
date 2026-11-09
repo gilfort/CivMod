@@ -10,6 +10,7 @@ import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
+import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.menu.WorkersTab;
@@ -60,6 +61,7 @@ public final class WorkersTabGameTests {
             register(helper, "workers_tab_rows", WorkersTabGameTests::rows);
             register(helper, "workers_tab_unassign_one", WorkersTabGameTests::unassignOne);
             register(helper, "workers_tab_auto_toggle", WorkersTabGameTests::autoToggle);
+            register(helper, "workers_tab_wanted_state", WorkersTabGameTests::wantedState);
             register(helper, "workers_tab_settler_window", WorkersTabGameTests::settlerWindow);
             register(helper, "workers_tab_days_left", WorkersTabGameTests::daysLeft);
         });
@@ -96,10 +98,15 @@ public final class WorkersTabGameTests {
         SettlementWorld.assign(helper.getLevel(), helper.absolutePos(CLERK), settler, job);
     }
 
-    /** The JobBlock window as the server opens it for a player at the block. */
+    /** The Clerk JobBlock window as the server opens it for a player at the block. */
     private static JobBlockMenu menu(GameTestHelper helper, Player player) {
+        return menu(helper, player, CLERK);
+    }
+
+    /** The window of the JobBlock at a relative position as the server opens it for a player. */
+    private static JobBlockMenu menu(GameTestHelper helper, Player player, BlockPos relative) {
         ServerLevel level = helper.getLevel();
-        BlockPos pos = helper.absolutePos(CLERK);
+        BlockPos pos = helper.absolutePos(relative);
         JobBlockEntity entity = (JobBlockEntity) level.getBlockEntity(pos);
         SettlementBlock block = JobBlockSite.blockAt(level, pos).orElseThrow();
         return new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(level, pos, block.jobType(), block.level()));
@@ -187,6 +194,41 @@ public final class WorkersTabGameTests {
         helper.assertTrue(menu.clickMenuButton(player, tab.autoButtonId(line, false)), "Toggle off is taken");
         helper.assertFalse(menu.getInfo().places().get(line).auto(), "Automatic assignment off");
         idle.discard();
+        helper.succeed();
+    }
+
+    /**
+     * The leaf and delivery buttons send the wanted state: two players with the window of the same JobBlock open both
+     * switch it on, and the second click, made from a view that still shows it off, leaves it on.
+     */
+    private static void wantedState(GameTestHelper helper) {
+        clerkBlock(helper);
+        BlockPos lumberjack = new BlockPos(4, 1, 1);
+        BlockPos craft = new BlockPos(7, 1, 1);
+        TestSettlements.setBlock(helper, lumberjack, ModBlocks.LUMBERJACK_BLOCK.get());
+        TestSettlements.setBlock(helper, craft, ModBlocks.CRAFTSPERSON_BLOCK.get());
+        Player first = player(helper);
+        Player second = player(helper);
+
+        JobBlockMenu leavesOne = menu(helper, first, lumberjack);
+        JobBlockMenu leavesTwo = menu(helper, second, lumberjack);
+        boolean leaves = !leavesOne.getInfo().collectLeaves();
+        helper.assertTrue(leavesOne.clickMenuButton(first, leavesOne.tab(WorkersTab.class).orElseThrow().leavesButtonId(leaves)), "First leaf click");
+        helper.assertTrue(leavesTwo.clickMenuButton(second, leavesTwo.tab(WorkersTab.class).orElseThrow().leavesButtonId(leaves)), "Second leaf click");
+        helper.assertValueEqual(JobBlockSite.blockAt(helper.getLevel(), helper.absolutePos(lumberjack)).orElseThrow().collectLeaves(), leaves,
+                "Leaf collection after two clicks for the same state");
+        helper.assertValueEqual(leavesTwo.getInfo().collectLeaves(), leaves, "The second window shows the leaf state");
+
+        JobBlockMenu deliveryOne = menu(helper, first, craft);
+        JobBlockMenu deliveryTwo = menu(helper, second, craft);
+        helper.assertFalse(deliveryOne.getInfo().byDeliveryman(), "Default: Self");
+        PatternsTab baseOne = PatternsTab.of(deliveryOne, ModJobs.CRAFTSPERSON.get()).orElseThrow();
+        PatternsTab baseTwo = PatternsTab.of(deliveryTwo, ModJobs.CRAFTSPERSON.get()).orElseThrow();
+        helper.assertTrue(deliveryOne.clickMenuButton(first, baseOne.deliveryButtonId(true)), "First delivery click");
+        helper.assertTrue(deliveryTwo.clickMenuButton(second, baseTwo.deliveryButtonId(true)), "Second delivery click");
+        helper.assertTrue(JobBlockSite.blockAt(helper.getLevel(), helper.absolutePos(craft)).orElseThrow().byDeliveryman(),
+                "Deliveryman after two clicks for the same state");
+        helper.assertTrue(deliveryTwo.getInfo().byDeliveryman(), "The second window shows Deliveryman");
         helper.succeed();
     }
 

@@ -344,6 +344,7 @@ final class ProducingLoop implements CategoryLoop {
             for (Map.Entry<BlockPos, Map<Item, Integer>> store : supplies.stores().entrySet()) {
                 Map<Item, Integer> items = allot(rest, store.getValue());
                 if (!items.isEmpty()) {
+                    // Game time in catch-up too: Deliverymen rank tasks by how long they waited in game time.
                     inputs.add(Deliveries.postInput(data, site.settlement(), store.getKey(), job.jobBlock(), site.collect(), items, request.isPresent(),
                             level.getGameTime()));
                 }
@@ -717,7 +718,7 @@ final class ProducingLoop implements CategoryLoop {
                     // Waiting for the Clerk.
                     yield JobStep.STAY;
                 }
-                fetch(level, job, site.get(), round, source, ClerkStorage.stock(level, source, dayTime, counter), true);
+                fetch(level, job, site.get(), round, source, ClerkStorage.stock(level, source, dayTime, counter), Moment.live(level));
                 visit = null;
                 yield JobStep.DONE;
             }
@@ -732,8 +733,26 @@ final class ProducingLoop implements CategoryLoop {
         };
     }
 
+    /**
+     * When a step is made: the time a failed round's skip runs from, and whether the world shows it (furnaces lit,
+     * counter and hand effects).
+     *
+     * @param now  live: the game time; catch-up: the simulated clock
+     * @param live false in catch-up
+     */
+    private record Moment(long now, boolean live) {
+
+        static Moment live(ServerLevel level) {
+            return new Moment(level.getGameTime(), true);
+        }
+
+        static Moment simulated(double clock) {
+            return new Moment((long) clock, false);
+        }
+    }
+
     /** Takes the round's inputs from one source into the buffer; after the last source the craft starts. */
-    private void fetch(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, BlockPos source, Stock stock, boolean effects) {
+    private void fetch(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, BlockPos source, Stock stock, Moment moment) {
         JobBuffer buffer = shell.workplace(job.jobBlock()).buffer();
         boolean taken = false;
         for (Map.Entry<Item, Integer> entry : List.copyOf(round.toTake.entrySet())) {
@@ -748,7 +767,7 @@ final class ProducingLoop implements CategoryLoop {
             }
         }
         if (taken && stock.counter()) {
-            ClerkCounter.handOut(level, source, effects);
+            ClerkCounter.handOut(level, source, moment.live());
         }
         if (source.equals(site.collect())) {
             for (Ingredient tool : round.tools) {
@@ -767,7 +786,7 @@ final class ProducingLoop implements CategoryLoop {
             // The stock changed since the round started.
             List<Request.Missing> lacking = round.toTake.entrySet().stream()
                     .map(entry -> new Request.Missing(entry.getKey(), entry.getValue())).toList();
-            fail(level, job.jobBlock(), round, lacking, level.getGameTime());
+            fail(level, job.jobBlock(), round, lacking, moment.now());
         }
     }
 
@@ -793,7 +812,7 @@ final class ProducingLoop implements CategoryLoop {
         // The stations chosen at the last decision, while the settler stands at the first of them.
         List<BlockPos> stations = !round.chargeStations.isEmpty() && round.chargeStations.getFirst().equals(station) ? round.chargeStations
                 : List.of(station);
-        Worked worked = work(level, job, site, round, stations, 1.0, true);
+        Worked worked = work(level, job, site, round, stations, 1.0, Moment.live(level));
         return switch (worked.outcome()) {
             case CRAFTED -> {
                 round.phase = Round.Phase.DELIVER;
@@ -839,9 +858,10 @@ final class ProducingLoop implements CategoryLoop {
      *
      * @param stations the stations of the step (the one the settler stands at first)
      * @param ticks    the ticks worked
-     * @param live     whether the world shows it (furnaces lit, the result in the hand); false in catch-up
+     * @param moment   when it is worked (live or the end of a catch-up span)
      */
-    private Worked work(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, List<BlockPos> stations, double ticks, boolean live) {
+    private Worked work(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, List<BlockPos> stations, double ticks, Moment moment) {
+        boolean live = moment.live();
         for (BlockPos pos : List.copyOf(round.charges.keySet())) {
             if (!stations.contains(pos) || !isStation(level, job, pos)) {
                 round.charges.remove(pos);
@@ -866,7 +886,7 @@ final class ProducingLoop implements CategoryLoop {
             }
             round.charges.remove(charge.getKey());
             done.add(charge.getKey());
-            boolean ok = craftOne(level, job, site, round, live);
+            boolean ok = craftOne(level, job, site, round, moment);
             if (!ok || round.crafted()) {
                 if (live) {
                     done.forEach(pos -> Furnaces.light(level, pos, false));
@@ -935,7 +955,7 @@ final class ProducingLoop implements CategoryLoop {
      *
      * @return whether it was executed (false: inputs gone, the round failed; or the tool gone, the round released)
      */
-    private boolean craftOne(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, boolean effects) {
+    private boolean craftOne(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, Moment moment) {
         CraftPlan.Step step = round.steps.get(round.step);
         JobBuffer buffer = shell.workplace(job.jobBlock()).buffer();
         Optional<Ingredient> tool = InnateRecipes.tool(level, step.pattern());
@@ -952,7 +972,7 @@ final class ProducingLoop implements CategoryLoop {
             ItemStack one = buffer.takeOne(input);
             if (one.isEmpty()) {
                 consumed.forEach(buffer::add);
-                fail(level, job.jobBlock(), round, List.of(new Request.Missing(PatternRecipes.representative(input), 1)), level.getGameTime());
+                fail(level, job.jobBlock(), round, List.of(new Request.Missing(PatternRecipes.representative(input), 1)), moment.now());
                 return false;
             }
             consumed.add(one);
@@ -977,7 +997,7 @@ final class ProducingLoop implements CategoryLoop {
             round.step++;
             round.crafted = 0;
         }
-        if (effects) {
+        if (moment.live()) {
             shell.hold(new ItemStack(pattern.output()));
             handTimer = HAND_TICKS;
         }
@@ -1360,7 +1380,7 @@ final class ProducingLoop implements CategoryLoop {
                 workplace.setRound(round);
                 if (round.phase != Round.Phase.WAIT) {
                     for (BlockPos source : List.copyOf(round.sources)) {
-                        fetch(level, job, site, round, source, ClerkStorage.stock(level, source, DayClock.dayTime((long) clock), true), false);
+                        fetch(level, job, site, round, source, ClerkStorage.stock(level, source, DayClock.dayTime((long) clock), true), Moment.simulated(clock));
                     }
                 }
                 if (round.always() && workplace.round() == null) {
@@ -1382,7 +1402,7 @@ final class ProducingLoop implements CategoryLoop {
                 Optional<JobStatus> waiting = waitForInputs(level, site, round, DayClock.dayTime(now), now);
                 waiting.ifPresent(status -> shell.setStatus(jobBlock, status));
                 if (waiting.isEmpty()) {
-                    fetch(level, job, site, round, site.collect(), ClerkStorage.stock(level, site.collect(), DayClock.dayTime(now), true), false);
+                    fetch(level, job, site, round, site.collect(), ClerkStorage.stock(level, site.collect(), DayClock.dayTime(now), true), Moment.simulated(now));
                 } else if (workplace.round() != null) {
                     // The Deliverymen bring the inputs later: the next job takes the rest of the time.
                     return new SimulatedWork(operations, ticks);
@@ -1401,7 +1421,7 @@ final class ProducingLoop implements CategoryLoop {
                 // Up to the next finished charge (the one furthest on); none runs yet: they start first.
                 double furthest = round.charges.values().stream().mapToDouble(Double::doubleValue).max().orElse(Double.NaN);
                 double span = Double.isNaN(furthest) ? 0.0 : Math.min(ticks, Math.max(0.0, (workTime(level, job, round, stations.getFirst()) - furthest) / perTick));
-                Worked worked = work(level, job, site, round, stations, span, false);
+                Worked worked = work(level, job, site, round, stations, span, Moment.simulated(clock + span));
                 ticks -= span;
                 clock += span;
                 operations += worked.executed();

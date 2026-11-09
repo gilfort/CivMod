@@ -23,8 +23,8 @@ import net.minecraft.world.item.Items;
  */
 public final class PatternsTab extends JobBlockTab {
 
-    /** Button of the Base Job's tab: toggle who carries the results, Self / Deliveryman. */
-    public static final int TOGGLE_DELIVERY = 0;
+    /** Buttons of the Base Job's tab: set who carries the results, Self / Deliveryman ({@link #deliveryButtonId}). */
+    private static final int DELIVERY = 0;
 
     private final Job job;
     private final boolean base;
@@ -120,14 +120,26 @@ public final class PatternsTab extends JobBlockTab {
 
     @Override
     int buttons() {
-        return base ? 1 : 0;
+        return base ? 2 : 0;
+    }
+
+    /**
+     * The delivery toggle carries the wanted state instead of a toggle, so two players clicking it agree with what they
+     * see (like {@link WorkersTab#autoButtonId}).
+     *
+     * @param byDeliveryman the wanted state: whether Deliverymen carry the results
+     * @return the menu button id of the Base Job's tab that sets it
+     */
+    public int deliveryButtonId(boolean byDeliveryman) {
+        return buttonId(DELIVERY + (byDeliveryman ? 1 : 0));
     }
 
     @Override
     boolean clickButton(Player player, int button) {
+        boolean byDeliveryman = button - DELIVERY == 1;
         JobBlockMenu menu = menu();
-        menu.setInfo(menu.getInfo().withDeliveryToggled());
-        menu.site().ifPresent(site -> JobAssignments.toggleDelivery(SettlementData.get(site.level()), site.pos()));
+        menu.setInfo(menu.getInfo().withByDeliveryman(byDeliveryman));
+        menu.site().ifPresent(site -> JobAssignments.setDelivery(SettlementData.get(site.level()), site.pos(), byDeliveryman));
         return true;
     }
 
