@@ -42,6 +42,7 @@ public final class ScheduleRulesGameTests {
             register(helper, "schedule_rules_hunger", ScheduleRulesGameTests::hunger);
             register(helper, "schedule_rules_evening", ScheduleRulesGameTests::evening);
             register(helper, "schedule_rules_tavern", ScheduleRulesGameTests::tavern);
+            register(helper, "schedule_rules_appointment", ScheduleRulesGameTests::appointment);
             register(helper, "schedule_rules_homeless", ScheduleRulesGameTests::homeless);
             register(helper, "schedule_rules_sleeping", ScheduleRulesGameTests::sleeping);
             register(helper, "schedule_rules_activity_in_progress", ScheduleRulesGameTests::activityInProgress);
@@ -514,6 +515,82 @@ public final class ScheduleRulesGameTests {
         homeless.tavern = true;
         helper.assertTrue(homeless.next().intent() != Intent.GO_TO_TAVERN && homeless.tavernAsked == 0, "Without a settlement: no Tavern");
         helper.succeed();
+    }
+
+    /**
+     * The evening appointment (the Bard's stage act, 18:30 to 20:00): before it the settler lives the usual evening (delivery,
+     * meal, Tavern); while it is open the settler goes to it, after a meal or a delivery in progress, before an evening meal
+     * it has not started yet and instead of the Tavern; when it closes the evening goes on as usual.
+     */
+    private static void appointment(GameTestHelper helper) {
+        Situation before = atAppointment(12499L);
+        before.eveningMealEaten = true;
+        before.tavern = true;
+        expect(helper, before.next(), Intent.GO_TO_TAVERN, "18:29: an ordinary Tavern guest");
+
+        Situation meal = atAppointment(12000L);
+        meal.food = 15;
+        expect(helper, meal.next(), Intent.FETCH_FOOD, "18:00: the evening meal as usual");
+
+        Situation due = atAppointment(12500L);
+        due.eveningMealEaten = true;
+        due.tavern = true;
+        due.activity = Activity.TAVERN;
+        Decision decision = due.next();
+        expect(helper, decision, Intent.GO_TO_APPOINTMENT, "18:30: leaves the Tavern for the act");
+        helper.assertTrue(due.tavernAsked == 0 && !decision.afterWork(), "The Tavern is not asked, the act is work: " + decision);
+
+        Situation eating = atAppointment(12600L);
+        eating.activity = Activity.EATING;
+        expect(helper, eating.next(), Intent.CONTINUE, "Still eating at 18:30: the meal is finished first");
+
+        Situation delivering = atAppointment(12600L);
+        delivering.deliveryPending = true;
+        expect(helper, delivering.next(), Intent.DELIVER, "Still delivering at 18:30: the delivery is finished first");
+
+        Situation hungry = atAppointment(12600L);
+        hungry.food = 15;
+        expect(helper, hungry.next(), Intent.GO_TO_APPOINTMENT, "A meal not started yet waits until after the act");
+
+        Situation playing = atAppointment(13999L);
+        playing.eveningMealEaten = true;
+        playing.activity = Activity.JOB;
+        expect(helper, playing.next(), Intent.GO_TO_APPOINTMENT, "19:59: still at the act");
+
+        Situation over = atAppointment(14000L);
+        over.eveningMealEaten = true;
+        over.activity = Activity.JOB;
+        expect(helper, over.next(), Intent.REST, "20:00: the act is over, the evening goes on");
+
+        Situation lateMeal = atAppointment(14000L);
+        lateMeal.times = new Schedule.DayTimes(0L, SettlerWork.WORK_END, 14000L, new Schedule.Appointment(12500L, 14000L));
+        lateMeal.food = 15;
+        lateMeal.activity = Activity.JOB;
+        Decision late = lateMeal.next();
+        expect(helper, late, Intent.FETCH_FOOD, "Bedtime 20:00: the meal put off for the act is eaten first");
+        helper.assertTrue(late.eveningMealHandled(), "The late meal is the evening meal: " + late);
+        lateMeal.eveningMealEaten = true;
+        expect(helper, lateMeal.next(), Intent.GO_TO_BED, "Then to bed");
+
+        Situation noAct = new Situation();
+        noAct.dayTime = NIGHT;
+        noAct.food = 15;
+        expect(helper, noAct.next(), Intent.GO_TO_BED, "Without an appointment no meal at night, as before");
+
+        Situation none = new Situation();
+        none.dayTime = 12600L;
+        none.eveningMealEaten = true;
+        expect(helper, none.next(), Intent.REST, "Without an appointment: the usual evening");
+        helper.assertFalse(Schedule.Appointment.NONE.isOpen(12600L), "No appointment is never open");
+        helper.succeed();
+    }
+
+    /** A settler with the stage act (18:30 to 20:00) as its appointment and its bedtime at 20:18, at a day time. */
+    private static Situation atAppointment(long dayTime) {
+        Situation situation = new Situation();
+        situation.times = new Schedule.DayTimes(0L, SettlerWork.WORK_END, 14300L, new Schedule.Appointment(12500L, 14000L));
+        situation.dayTime = dayTime;
+        return situation;
     }
 
     /** Evening: deliver first, then the meal (food point before pockets), then rest near the rest place, bed from 20:00. */

@@ -65,7 +65,6 @@ public final class TavernGameTests {
     static void onRegister(RegisterEvent event) {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "tavern_crowd", TavernGameTests::crowd);
-            register(helper, "tavern_bard_not_present", TavernGameTests::bardNotPresent);
             register(helper, "tavern_jukebox", TavernGameTests::jukebox);
             register(helper, "tavern_both_conditions", TavernGameTests::bothConditions);
             register(helper, "tavern_one_payment", TavernGameTests::onePayment);
@@ -122,7 +121,7 @@ public final class TavernGameTests {
         return settler.getWork().entertainment().value();
     }
 
-    private static void end(GameTestHelper helper, BlockPos pantry, List<Settler> settlers) {
+    static void end(GameTestHelper helper, BlockPos pantry, List<Settler> settlers) {
         TestAssignments.unassign(SettlementData.get(helper.getLevel()), pantry);
         settlers.forEach(Settler::discard);
         helper.getLevel().getEntitiesOfClass(Cushion.class, helper.getBounds()).forEach(Cushion::discard);
@@ -176,32 +175,6 @@ public final class TavernGameTests {
                 "Four present: +3 each");
         helper.assertTrue(value(far) == 0.0, "13 blocks away is not present");
         end(helper, pantry, List.of(host, a, b, c, far));
-        helper.succeed();
-    }
-
-    /** A Bard on its Stage within the radius is no guest: three settlers and a Bard give nothing, a fourth settler does. */
-    private static void bardNotPresent(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        BlockPos pantry = pantry(helper);
-        long day = DayClock.day(level);
-        Settler host = settler(helper, pantry, new BlockPos(2, 1, 2));
-        host(helper, pantry, host);
-        Settler a = settler(helper, pantry, new BlockPos(3, 1, 2));
-        Settler b = settler(helper, pantry, new BlockPos(4, 1, 2));
-        Settler bard = settler(helper, pantry, new BlockPos(5, 1, 2));
-        bard.addJob(new SettlerJob(ModJobs.BARD.get(), helper.absolutePos(new BlockPos(6, 1, 1))));
-        List<Settler> all = List.of(host, a, b, bard);
-        seat(helper, a, b);
-
-        Tavern.countAt(level, pantry, day, EVENING);
-        helper.assertTrue(all.stream().allMatch(settler -> value(settler) == 0.0), "The Bard is not a guest: three present, nothing");
-
-        Settler c = settler(helper, pantry, new BlockPos(6, 1, 2));
-        seat(helper, c);
-        Tavern.countAt(level, pantry, day, EVENING);
-        helper.assertTrue(Math.abs(value(a) - 3.0) < EPSILON && Math.abs(value(c) - 3.0) < EPSILON, "A fourth settler makes four: +3");
-        helper.assertTrue(value(bard) == 0.0, "The Bard is not paid by the Tavern");
-        end(helper, pantry, List.of(host, a, b, bard, c));
         helper.succeed();
     }
 

@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.DoubleSupplier;
@@ -321,7 +320,8 @@ public final class SettlerWork {
      * @param day the day
      * @return this settler's waking, end of work and bed times on that day (daily offsets inside the Schedule windows);
      *         a Clerk wakes early (05:30–06:00, its shift opens then) and its work ends with its shift at 18:30 (a Tavern Host: 20:00), a
-     *         settler back from a mission ended its work day on its return
+     *         Bard has its stage act as the evening appointment ({@link ServiceActs#dayTimes}), a settler back from a mission
+     *         ended its work day on its return
      */
     public Schedule.DayTimes dayTimes(long day) {
         OptionalLong shiftEnd = shiftEnd();
@@ -329,11 +329,9 @@ public final class SettlerWork {
         if (shiftEnd.isPresent()) {
             times = times.withWorkEnd(shiftEnd.getAsLong());
         }
-        // A Service Job with a window after the usual end of work (the Bard's stage act) keeps its settler at work until then.
-        OptionalInt serviceEnd = serviceEnd();
-        if (serviceEnd.isPresent() && serviceEnd.getAsInt() > times.workEnd()) {
-            times = times.withWorkEnd(serviceEnd.getAsInt());
-        }
+        // A Service Job's windows: one that ends after the end of work keeps the settler at work, a stationary act that
+        // opens after it is the evening appointment (the Bard's stage act).
+        times = ServiceActs.dayTimes(settler.getJobs().stream().map(SettlerJob::jobType).toList(), times);
         OptionalLong returned = missions.returnedOn(day);
         if (returned.isPresent() && returned.getAsLong() < times.workEnd()) {
             times = times.withWorkEnd(returned.getAsLong());
@@ -1283,6 +1281,7 @@ public final class SettlerWork {
             case DELIVER -> startDelivery(level, Objects.requireNonNull(delivery));
             case REST, GO_TO_BED -> go(level, resting.evening(level, day, decision.intent() == Intent.GO_TO_BED, activity));
             case GO_TO_TAVERN -> go(level, tavern.evening(level));
+            case GO_TO_APPOINTMENT -> keepAppointment(level, day, dayTime);
             case WORK -> work(level, day, dayTime);
             default -> throw new IllegalStateException("Not a decision of Schedule.next: " + decision);
         }
@@ -1321,6 +1320,34 @@ public final class SettlerWork {
                 }
             }
         }
+    }
+
+    /**
+     * The evening appointment (vault {@code Systems/Entertainment.md}, Decisions of 2026-11-09): the seat booked at the
+     * Tavern is given up and the first job that plays Service acts works its open act (the Bard walks to its Stage).
+     * Other jobs stay idle: work is over.
+     */
+    private void keepAppointment(ServerLevel level, long day, long dayTime) {
+        tavern.leave();
+        for (SettlerJob job : settler.getJobs()) {
+            if (loop(job) == services && !workplace(job.jobBlock()).isBlocked(level.getGameTime()) && plan(level, job, day, dayTime)) {
+                return;
+            }
+        }
+        stop();
+    }
+
+    /**
+     * @param level the level
+     * @return whether the settler heads for its evening appointment or plays it now (a Bard on its way to the Stage or on
+     *         it); before that it is an ordinary settler of the evening
+     */
+    public boolean atAppointment(ServerLevel level) {
+        if (!atWork()) {
+            return false;
+        }
+        Schedule.Moment now = moment(level.getOverworldClockTime());
+        return dayTimes(now.day()).appointment().isOpen(now.dayTime());
     }
 
     /** Works the first job of the priority list that can work; lower jobs are told they were outranked. */
@@ -2263,14 +2290,6 @@ public final class SettlerWork {
      */
     private OptionalLong shiftEnd() {
         return settler.getJobs().stream().map(SettlerJob::jobType).flatMapToLong(type -> ClerkStorage.shiftEnd(type).stream()).max();
-    }
-
-    /**
-     * @return the end of the latest window of the acts of this settler's Service Jobs ({@link ServiceActs#windowEnd}), empty
-     *         without such a Job; it moves the end of work, not the waking time
-     */
-    private OptionalInt serviceEnd() {
-        return settler.getJobs().stream().map(SettlerJob::jobType).flatMapToInt(type -> ServiceActs.windowEnd(type).stream()).max();
     }
 
     /**

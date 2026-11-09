@@ -15,9 +15,11 @@ import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.entertainment.Entertainment;
 import com.gilfort.civmod.entertainment.Stage;
 import com.gilfort.civmod.entertainment.Tavern;
+import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.BardProfile;
 import com.gilfort.civmod.job.JobBalancing;
 import com.gilfort.civmod.job.JobStatus;
+import com.gilfort.civmod.job.Schedule;
 import com.gilfort.civmod.job.ServiceActs;
 import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.menu.JobBlockTabs;
@@ -61,7 +63,7 @@ import net.neoforged.neoforge.registries.RegisterEvent;
  * GameTests for the Stage and the Bard as a Service Job (spec "Service and Bard", story #210; vault
  * {@code Systems/Entertainment.md}, Bard, and {@code Jobs/Bard.md}): the numbers of the Bard, the Stage block, the stage act
  * with the Sound center, the Bard's hours and the flat catch-up point. The tests of the evening run in the environment
- * {@code civmod:evening} (17:36, the clock stands still). The hours test moves the clock of the whole level, so it has an
+ * {@code civmod:stage_act} (18:36, the clock stands still). The hours test moves the clock of the whole level, so it has an
  * environment and a batch of its own, {@code civmod:stage_hours}; in a shared batch it would end the work day of every
  * long-running test next to it.
  */
@@ -99,7 +101,7 @@ public final class StageGameTests {
     // ---------------------------------------------------------------- fixtures
 
     /** A level-3 Stage at (1, 1, 1) with its Bard (skill 10) on a stone floor. */
-    private static ServiceGameTests.Scene scene(GameTestHelper helper) {
+    static ServiceGameTests.Scene scene(GameTestHelper helper) {
         ServiceGameTests.Scene scene = ServiceGameTests.scene(helper, STAGE_BLOCK, BARD);
         raise(helper, STAGE);
         scene.performer().getSkills().set(scene.job(), new SettlerSkills.Skill(BARD_SKILL, 0));
@@ -125,14 +127,14 @@ public final class StageGameTests {
      */
     private static void table(GameTestHelper helper) {
         Job bard = ModJobs.BARD.get();
-        // The acts: the day round from 11:00 to 17:30, the stage act from 17:30 to 20:00, both 8 blocks around.
+        // The acts: the day round from 11:00 to 17:30, the stage act from 18:30 to 20:00, both 8 blocks around.
         List<ServiceAct> acts = new BardProfile().acts();
         helper.assertTrue(acts.size() == 2, "Two acts: " + acts);
         ServiceAct round = acts.get(0);
         ServiceAct stage = acts.get(1);
         helper.assertTrue(round.id().equals("round") && round.kind() == ServiceAct.Kind.ROUND && round.start() == 5000 && round.end() == 11500
                 && round.radius() == 8.0, "The round: " + round);
-        helper.assertTrue(stage.id().equals("stage") && stage.kind() == ServiceAct.Kind.STATIONARY && stage.start() == 11500 && stage.end() == 14000
+        helper.assertTrue(stage.id().equals("stage") && stage.kind() == ServiceAct.Kind.STATIONARY && stage.start() == 12500 && stage.end() == 14000
                 && stage.radius() == 8.0, "The stage act: " + stage);
         helper.assertTrue(round.effects().equals(List.of(new Entertain(1.0, 1.0, Entertain.Cap.ROUND_STOP)))
                 && stage.effects().equals(List.of(new Entertain(1.0, 1.0, Entertain.Cap.STAGE_ACT))), "+1, 1 % per level, one cap per kind of act");
@@ -179,9 +181,12 @@ public final class StageGameTests {
             helper.assertTrue(bard.baseExp() * level == 10 * level, "EXP at Stage level " + level);
             helper.assertTrue(SettlementRules.skillCap(level) == 20 * level, "Skill cap at Stage level " + level);
         }
-        // The Bard works until the stage act ends.
-        helper.assertTrue(ServiceActs.windowEnd(bard).orElse(-1) == 14000, "Work ends with the stage act at 20:00");
-        helper.assertTrue(ServiceActs.windowEnd(ModJobs.PRIEST.get()).isEmpty(), "A Service Job without a profile has no window");
+        // The Bard ends work at the usual time; the stage act is its evening appointment.
+        Schedule.DayTimes usual = ServiceGameTests.USUAL_TIMES;
+        Schedule.DayTimes times = ServiceActs.dayTimes(List.of(bard), usual);
+        helper.assertTrue(times.workEnd() == 11700L && times.appointment().equals(new Schedule.Appointment(12500L, 14000L)),
+                "Work ends as usual, the stage act is the appointment: " + times);
+        helper.assertTrue(ServiceActs.dayTimes(List.of(ModJobs.PRIEST.get()), usual).equals(usual), "A Service Job without a profile changes nothing");
         helper.succeed();
     }
 
@@ -222,7 +227,7 @@ public final class StageGameTests {
     }
 
     /**
-     * The stage act with the Sound center at the Stage block: at 17:36 the Bard stands on its Stage and plays once; the
+     * The stage act with the Sound center at the Stage block: at 18:36 the Bard stands on its Stage and plays once; the
      * listeners within 8 blocks of the block get the points with the skill multiplier, the Bard gets the EXP of a level-3
      * Stage.
      */
@@ -317,7 +322,8 @@ public final class StageGameTests {
 
     /**
      * The Bard's hours: it does not work its Stage before 11:00, walks its round by day (and waits on the Stage when nobody
-     * works), stands on the Stage from 17:30 and goes back to its next job at 20:00. Its work ends at 20:00 without waking early.
+     * works), ends its work at the usual time, is not at the Stage in the evening before 18:30, stands on it from 18:30 and
+     * leaves it at 20:00. It does not wake early like a counter job.
      */
     private static void hours(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -325,11 +331,13 @@ public final class StageGameTests {
         Settler other = ServiceGameTests.listener(helper, scene, 3.0, "Other");
         Settler bard = scene.performer();
         long day = DayClock.day(level);
-        helper.assertTrue(bard.getWork().dayTimes(day).workEnd() == ServiceAct.clock(20, 0), "Work ends at 20:00: " + bard.getWork().dayTimes(day));
+        helper.assertTrue(bard.getWork().dayTimes(day).workEnd() < ServiceAct.clock(18, 0), "Work ends as usual: " + bard.getWork().dayTimes(day));
         helper.assertTrue(bard.getWork().dayTimes(day).wake() >= 0L, "No early wake like a counter job: " + bard.getWork().dayTimes(day));
-        helper.assertTrue(other.getWork().dayTimes(day).workEnd() < ServiceAct.clock(20, 0), "Another settler stops at 17:30 to 18:00");
-        long[] times = {ServiceAct.clock(8, 0), ServiceAct.clock(10, 59), ServiceAct.clock(12, 0), ServiceAct.clock(17, 36), ServiceAct.clock(19, 59), ServiceAct.clock(20, 0)};
-        boolean[] plays = {false, false, true, true, true, false};
+        // Full: no evening meal holds the Bard up before the act.
+        bard.getFood().setLevel(SettlerFood.MAX);
+        long[] times = {ServiceAct.clock(8, 0), ServiceAct.clock(10, 59), ServiceAct.clock(12, 0), ServiceAct.clock(18, 15), ServiceAct.clock(18, 31),
+                ServiceAct.clock(19, 59), ServiceAct.clock(20, 0)};
+        boolean[] plays = {false, false, true, false, true, true, false};
         for (int i = 0; i < times.length; i++) {
             ServiceGameTests.setDayTime(level, times[i]);
             bard.getWork().decideNow(level);

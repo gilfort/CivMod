@@ -54,16 +54,71 @@ public final class Schedule {
      * @param wake    the day time the settler wakes and starts work (06:00–06:30; an early riser 05:30–06:00, a
      *                negative day time: its day begins before the clock's day does, see {@link #moment})
      * @param workEnd the day time its work ends (17:30–18:00; the Settler Shell may replace it, e.g. for a Clerk)
-     * @param bed     the day time it goes to bed (20:00–20:30)
+     * @param bed         the day time it goes to bed (20:00–20:30)
+     * @param appointment the act it is called to after work, {@link Appointment#NONE} without one
      */
-    public record DayTimes(long wake, long workEnd, long bed) {
+    public record DayTimes(long wake, long workEnd, long bed, Appointment appointment) {
+
+        /**
+         * Times without an evening appointment.
+         *
+         * @param wake    the day time the settler wakes
+         * @param workEnd the day time its work ends
+         * @param bed     the day time it goes to bed
+         */
+        public DayTimes(long wake, long workEnd, long bed) {
+            this(wake, workEnd, bed, Appointment.NONE);
+        }
 
         /**
          * @param end the day time work ends instead
          * @return these times with another end of work
          */
         public DayTimes withWorkEnd(long end) {
-            return new DayTimes(wake, end, bed);
+            return new DayTimes(wake, end, bed, appointment);
+        }
+
+        /**
+         * @param other an appointment of another Job
+         * @return these times with the appointment that opens first
+         */
+        public DayTimes withAppointment(Appointment other) {
+            boolean earlier = other.isSet() && (!appointment.isSet() || other.start() < appointment.start());
+            return earlier ? new DayTimes(wake, workEnd, bed, other) : this;
+        }
+    }
+
+    /**
+     * An act the settler is called to after its work ended (vault {@code Systems/Job Categories.md}, Decisions of
+     * 2026-11-09): a stationary Service act that opens after the usual end of work, like the Bard's stage act. Until it
+     * opens the settler lives the usual evening; while it is open the settler goes to it and plays.
+     *
+     * @param start the day time it opens
+     * @param end   the day time it closes
+     */
+    public record Appointment(long start, long end) {
+
+        /** No appointment: never open. */
+        public static final Appointment NONE = new Appointment(0L, 0L);
+
+        /**
+         * @param dayTime a day time
+         * @return whether the appointment is open then
+         */
+        public boolean isOpen(long dayTime) {
+            return dayTime >= start && dayTime < end;
+        }
+
+        /**
+         * @param dayTime a day time
+         * @return whether the appointment has closed by then (never without one)
+         */
+        public boolean isOver(long dayTime) {
+            return isSet() && dayTime >= end;
+        }
+
+        private boolean isSet() {
+            return start < end;
         }
     }
 
@@ -170,6 +225,11 @@ public final class Schedule {
         REST,
         /** Walk to the seat booked at the Tavern and sit there until bedtime (the evening instead of {@link #REST}). */
         GO_TO_TAVERN,
+        /**
+         * Go to the evening appointment and play it ({@link Appointment}, the Bard's stage act): the Service Job with the
+         * open act works until it closes.
+         */
+        GO_TO_APPOINTMENT,
         /** Go to the rest place and sleep (from the settler's bedtime, 20:00–20:30). */
         GO_TO_BED,
         /** Work the first job of the priority list that can work (Laborer fallback: idle). */
@@ -327,14 +387,22 @@ public final class Schedule {
 
     /**
      * After work: deliver what is left, eat, then go to the Tavern if it has a seat for the settler, else rest near the
-     * rest place; sleep from its bedtime.
+     * rest place; sleep from its bedtime. While an evening appointment is open the settler goes there once its delivery is
+     * done (a meal in progress is finished in {@link #next}); a meal it has not started waits until after the act and is
+     * eaten then, also past its bedtime.
      */
     private static Decision afterWork(Snapshot snapshot) {
         if (snapshot.deliveryPending()) {
             return new Decision(Intent.DELIVER, null, false, false, false, true, false);
         }
+        if (snapshot.times().appointment().isOpen(snapshot.dayTime())) {
+            // Work again: the Service Job plays its act, its status is not reset to idle.
+            return day(Intent.GO_TO_APPOINTMENT, null, false, false);
+        }
         boolean night = isNight(snapshot);
-        boolean meal = !night && !snapshot.eveningMealEaten();
+        // The act may end at the settler's bedtime: the evening meal it put off is not lost.
+        boolean mealTime = !night || snapshot.times().appointment().isOver(snapshot.dayTime());
+        boolean meal = mealTime && !snapshot.eveningMealEaten();
         if (meal && snapshot.food() < SettlerFood.MAX) {
             if (snapshot.foodPoint().getAsBoolean()) {
                 return new Decision(Intent.FETCH_FOOD, MealPurpose.EVENING, false, false, true, true, false);

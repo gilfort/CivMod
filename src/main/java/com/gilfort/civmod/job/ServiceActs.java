@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
@@ -98,16 +97,30 @@ public final class ServiceActs {
     }
 
     /**
-     * @param job a Job
-     * @return the tick at which the last window of its acts ends (datapack numbers included); empty for a Job without a
-     *         Service profile. A settler works until then if that is later than the usual end of work.
+     * Fits the acts of a settler's Jobs (datapack numbers included) into its day (vault {@code Systems/Job Categories.md},
+     * Decisions of 2026-11-07 and 2026-11-09). A stationary act that opens at or after the usual end of work is an evening
+     * appointment: work ends as usual and the settler is called to the act when it opens (the first one with several). Any
+     * other window that ends after the usual end of work keeps the settler at work until it closes.
+     *
+     * @param jobs  the settler's Jobs
+     * @param usual the settler's times without the acts
+     * @return the times with the acts fitted in; the same times without a Job with a Service profile
      */
-    public static OptionalInt windowEnd(Job job) {
-        if (job.category() != JobCategory.SERVICE) {
-            return OptionalInt.empty();
+    public static Schedule.DayTimes dayTimes(List<Job> jobs, Schedule.DayTimes usual) {
+        Schedule.DayTimes times = usual;
+        for (Job job : jobs) {
+            if (job.category() != JobCategory.SERVICE) {
+                continue;
+            }
+            for (ServiceAct act : job.profile(ServiceProfile.class).map(profile -> of(job, profile)).orElse(List.of())) {
+                if (act.kind() == ServiceAct.Kind.STATIONARY && act.start() >= usual.workEnd()) {
+                    times = times.withAppointment(new Schedule.Appointment(act.start(), act.end()));
+                } else if (act.end() > times.workEnd()) {
+                    times = times.withWorkEnd(act.end());
+                }
+            }
         }
-        return job.profile(ServiceProfile.class).map(profile -> of(job, profile).stream().mapToInt(ServiceAct::end).max())
-                .orElse(OptionalInt.empty());
+        return times;
     }
 
     /**

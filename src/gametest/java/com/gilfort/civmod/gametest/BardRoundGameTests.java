@@ -309,8 +309,8 @@ public final class BardRoundGameTests {
     }
 
     /**
-     * A stop in progress ends at 17:30: the Bard leaves the worker, goes to the Stage and plays the stage act for the settler
-     * there.
+     * A stop in progress ends with the round at 17:30; at 18:30 the Bard goes to the Stage and plays the stage act for the
+     * settler there.
      */
     private static void ends(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -326,7 +326,7 @@ public final class BardRoundGameTests {
                 .thenExecute(() -> {
                     helper.assertTrue(ServiceGameTests.entertainment(hearer) == 0.0, "The settler at the Stage is out of reach of the stop: " + hearer.position() + " bard " + bard.position());
                     helper.assertTrue(bard.distanceTo(hearer) > 8.0, "Setup: " + bard.distanceTo(hearer));
-                    ServiceGameTests.setDayTime(level, ServiceAct.clock(17, 31));
+                    ServiceGameTests.setDayTime(level, ServiceAct.clock(18, 31));
                 })
                 .thenWaitUntil(() -> helper.assertTrue(ServiceGameTests.entertainment(hearer) > 0.0,
                         "The round is over: the Bard plays the stage act at the Stage (status " + status(bard) + ", at " + bard.position() + ")"))

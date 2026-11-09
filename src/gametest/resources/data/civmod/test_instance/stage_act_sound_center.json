@@ -1,6 +1,6 @@
 {
   "type": "minecraft:function",
-  "environment": "civmod:evening",
+  "environment": "civmod:stage_act",
   "function": "civmod:stage_act_sound_center",
   "max_ticks": 900,
   "structure": "minecraft:empty",
