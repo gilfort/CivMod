@@ -25,15 +25,15 @@ A settler's vanilla-style experience, independent of EXP (skill progress per Job
 _Avoid_: EXP for this (EXP is per Job), Settler EXP, orbs, levels
 
 **Settler Shell**:
-The part of a settler's behaviour shared by every Job Category (acting on the Schedule, walking, food, sleep, job priorities, EXP, catch-up). Code: `SettlerWork`; meals and rest are carried out by `SettlerMeals` and `SettlerRest`, which answer with Body steps; it hands control to the `CategoryLoop` of the active Job's category (`ResourceCollectionLoop`, `MissionLoop`). Shared parts the loops use: the job's Workplace, delivery and EXP in the shell, the Work rules, tools in `SettlerTools`, `Fatigue`.
+The part of a settler's behaviour shared by every Job Category (acting on the Schedule, walking, food, sleep, job priorities, EXP, needs, catch-up, the social life, thought bubbles, the work speed). Code: `SettlerWork`. Its parts: meals and rest in `SettlerMeals` and `SettlerRest`, which answer with Body steps; needs in `SettlerNeeds`; the Tavern booking in `SettlerTavern`; the social life in `SettlerSocial`; thought bubbles in `SettlerThoughts`; the bonuses to the work speed in `SettlerWork.speedFactor`. It hands control to the `CategoryLoop` of the active Job's category (`ResourceCollectionLoop`, `ProducingLoop`, `MissionLoop`, `ClerkLoop`, `DeliverymanLoop`, `PriestLoop`, `ServiceLoop`). Shared parts the loops use: the job's Workplace, delivery and EXP in the shell, the Work rules, tools in `SettlerTools`, `Fatigue`.
 
 **EXP**:
 Skill progress of a settler in one Job; fills the JobSkill Level. Separate from XP.
 _Avoid_: XP, experience
 
 **Job step**:
-What a category loop tells the Settler Shell its job wants next: walk to a target (and work there), deliver, wait, blocked (a status or a Blocking reason), skip, pause / hold the decision, worked this tick, done. Only the shell changes the settler's activity, walking target, active job and the job's status, after the loop returned; a status outside a step goes through the job's Workplace. Code: `JobStep`, applied in `SettlerWork.apply`.
-_Avoid_: Loops calling the shell to steer it (set the active job, start a walk, end a step)
+What a category loop tells the Settler Shell its job wants next: walk to a target (and work there), deliver, wait, blocked (a status or a Blocking reason), skip, pause / hold the decision, worked this tick, done. Only the shell changes the settler's activity, walking target and active job, and it applies the status a step carries after the loop returned; a status outside a step goes through the job's Workplace (`SettlerWork.setStatus` passes it on). Besides returning a step and using the shared parts of the shell (EXP, delivery, tools), a loop makes three calls that reach beyond a step: `hold` (a display copy of a tool or an item in the settler's hand: `ResourceCollectionLoop`, `ProducingLoop`), `setStatus` (the status of its own job: `MissionLoop`, `ProducingLoop`) and `setAway` (`MissionLoop`, when the settler leaves for or returns from a Mission). Code: `JobStep`, applied in `SettlerWork.apply`.
+_Avoid_: Loops calling the shell to steer it beyond those calls (set the active job, start a walk, end a step)
 
 **Body step**:
 What the meal or rest module tells the Settler Shell a meal or rest intent wants next: stay, stop, eat from the pockets, work, done, walk to a target for an activity. Only the shell walks or teleports the settler and sets its activity. Code: `BodyStep`, applied in `SettlerWork.go`.
