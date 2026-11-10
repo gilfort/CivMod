@@ -19,7 +19,7 @@ log=build/gametest.log
 report=build/gametest-report.xml
 mkdir -p build
 rm -f "$report"
-./gradlew build runGameTestServer --console=plain ${selector:+"-Pgametests=$selector"} "$@" > "$log" 2>&1
+./gradlew build runGameTestServer --console=plain -PnoDevMods ${selector:+"-Pgametests=$selector"} "$@" > "$log" 2>&1
 code=$?
 
 # Compile errors (javac / Error Prone) and Gradle task failures.

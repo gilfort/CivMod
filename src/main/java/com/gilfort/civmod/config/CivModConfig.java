@@ -3,7 +3,8 @@ package com.gilfort.civmod.config;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
- * Server configuration of CivMod ({@code serverconfig/civmod-server.toml}, per world).
+ * Synced configuration of CivMod ({@code config/civmod-synced.toml}; a file of the same name in a world's
+ * {@code syncedconfig/} folder overrides it for that world). The server sends it to the clients.
  */
 public final class CivModConfig {
 

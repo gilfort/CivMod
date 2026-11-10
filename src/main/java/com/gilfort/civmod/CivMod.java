@@ -55,7 +55,7 @@ public final class CivMod {
         ModJobs.register(modEventBus);
         ModRecipes.register(modEventBus);
 
-        modContainer.registerConfig(ModConfig.Type.SERVER, CivModConfig.SPEC);
+        modContainer.registerConfig(ModConfig.Type.SYNCED, CivModConfig.SPEC);
 
         modEventBus.addListener(this::commonSetup);
     }
