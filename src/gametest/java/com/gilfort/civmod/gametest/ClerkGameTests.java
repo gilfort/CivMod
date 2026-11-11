@@ -137,14 +137,14 @@ public final class ClerkGameTests {
     }
 
     /**
-     * Storage 2 / 4 / 8 / 12 / 16 by level (extra containers kept but inactive after a downgrade), one Clerk per
+     * Storage 2 / 4 / 6 / 10 / 16 by level (extra containers kept but inactive after a downgrade), one Clerk per
      * container, no JobBlock as storage, 8 stand spots on standable blocks, inside the border only; points persist.
      */
     private static void storageLimits(GameTestHelper helper) {
         SettlementData data = new SettlementData();
         BlockPos clerk = new BlockPos(0, 64, 0);
         TestSettlements.place(data, clerk, ModJobs.CLERK.get(), 1);
-        int[] limits = {2, 4, 8, 12, 16};
+        int[] limits = {2, 4, 6, 10, 16};
         int linked = 0;
         for (int level = 1; level <= 5; level++) {
             SettlementManager.setLevel(data, clerk, level, SettlementManager.Listener.NONE);
@@ -272,12 +272,13 @@ public final class ClerkGameTests {
         });
     }
 
-    /** The Clerk works until 18:30, others until 17:30; service time 2 s at level 1 down to 1 s at level 100. */
+    /** The Clerk works until 18:00, others until 17:30–18:00; service time 2 s at level 1 down to 1 s at level 100. */
     private static void shift(GameTestHelper helper) {
         long sixPm = 12000L;
-        helper.assertTrue(Schedule.next(snapshot(sixPm, ClerkStorage.SHIFT_END)).intent() == Schedule.Intent.WORK, "18:00: the Clerk works");
-        helper.assertTrue(Schedule.next(snapshot(sixPm, SettlerWork.WORK_END)).afterWork(), "18:00: others are off");
-        helper.assertTrue(Schedule.next(snapshot(ClerkStorage.SHIFT_END, ClerkStorage.SHIFT_END)).afterWork(), "18:30: the Clerk is off");
+        helper.assertTrue(ClerkStorage.SHIFT_END == sixPm, "The Clerk's shift ends at 18:00: " + ClerkStorage.SHIFT_END);
+        helper.assertTrue(Schedule.next(snapshot(sixPm - 1, ClerkStorage.SHIFT_END)).intent() == Schedule.Intent.WORK, "17:59: the Clerk works");
+        helper.assertTrue(Schedule.next(snapshot(sixPm - 1, SettlerWork.WORK_END)).afterWork(), "17:59: others are off");
+        helper.assertTrue(Schedule.next(snapshot(sixPm, ClerkStorage.SHIFT_END)).afterWork(), "18:00: the Clerk is off");
         helper.assertTrue(ClerkStorage.serviceTicks(1) == 40 && ClerkStorage.serviceTicks(100) == 20,
                 "Service 40 → 20 ticks: " + ClerkStorage.serviceTicks(1) + ", " + ClerkStorage.serviceTicks(100));
         helper.assertTrue(ClerkStorage.serviceTicks(50) > 20 && ClerkStorage.serviceTicks(50) < 40, "Faster with skill");
@@ -288,7 +289,7 @@ public final class ClerkGameTests {
         helper.assertTrue(ownEnd >= SettlerWork.WORK_END && ownEnd < SettlerWork.WORK_END + Schedule.WINDOW_TICKS,
                 "Without the Clerk job: 17:30–18:00, got " + ownEnd);
         clerk.addJob(new SettlerJob(ModJobs.CLERK.get(), helper.absolutePos(new BlockPos(1, 1, 1))));
-        helper.assertTrue(clerk.getWork().dayTimes(day).workEnd() == ClerkStorage.SHIFT_END, "With the Clerk job: 18:30");
+        helper.assertTrue(clerk.getWork().dayTimes(day).workEnd() == ClerkStorage.SHIFT_END, "With the Clerk job: 18:00");
         // Clerks wake up early (05:30–06:00): they have a stall to take care of.
         long clerkWake = clerk.getWork().dayTimes(day).wake();
         helper.assertTrue(clerkWake >= -Schedule.WINDOW_TICKS && clerkWake < 0L, "With the Clerk job: up 05:30–06:00, got " + clerkWake);
@@ -306,8 +307,8 @@ public final class ClerkGameTests {
         helper.assertFalse(ClerkStorage.inShift(late, dayBefore, clockDay + wake - 1, ModJobs.CLERK.get()), "On the clock's day before: closed just before");
         helper.assertTrue(ClerkStorage.inShift(late, dayBefore, clockDay + wake, ModJobs.CLERK.get()), "On the clock's day before: open from its waking time");
         helper.assertFalse(ClerkStorage.inShift(late, dayBefore, 14000L, ModJobs.CLERK.get()), "Closed in the evening");
-        helper.assertTrue(ClerkStorage.inShift(late, day, ClerkStorage.SHIFT_END - 1, ModJobs.CLERK.get()), "Open until 18:30");
-        helper.assertFalse(ClerkStorage.inShift(late, day, ClerkStorage.SHIFT_END, ModJobs.CLERK.get()), "Closed at 18:30");
+        helper.assertTrue(ClerkStorage.inShift(late, day, ClerkStorage.SHIFT_END - 1, ModJobs.CLERK.get()), "Open until 18:00");
+        helper.assertFalse(ClerkStorage.inShift(late, day, ClerkStorage.SHIFT_END, ModJobs.CLERK.get()), "Closed at 18:00");
         helper.succeed();
     }
 

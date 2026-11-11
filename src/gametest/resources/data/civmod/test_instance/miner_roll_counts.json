@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:miner_roll_counts",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 24
+}
