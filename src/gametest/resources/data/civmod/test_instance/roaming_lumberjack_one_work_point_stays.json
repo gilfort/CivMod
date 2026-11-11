@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:roaming_lumberjack_one_work_point_stays",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

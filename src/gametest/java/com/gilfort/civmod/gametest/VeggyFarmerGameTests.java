@@ -117,7 +117,7 @@ public final class VeggyFarmerGameTests {
         return ((CropBlock) block).getStateForAge(age);
     }
 
-    private static Settler veggyFarmer(GameTestHelper helper, BlockPos jobBlock) {
+    static Settler veggyFarmer(GameTestHelper helper, BlockPos jobBlock) {
         SettlementData data = SettlementData.get(helper.getLevel());
         Settler settler = GathererGameTests.settler(helper, jobBlock, new BlockPos(3, 1, 3), "Farmer");
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_HOE));
