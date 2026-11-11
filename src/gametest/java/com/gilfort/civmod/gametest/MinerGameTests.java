@@ -72,6 +72,7 @@ public final class MinerGameTests {
             register(helper, "miner_palette_scan", MinerGameTests::paletteScan);
             register(helper, "miner_scan_edge_section", MinerGameTests::edgeSectionCountsWhole);
             register(helper, "miner_scan_codec", MinerGameTests::scanCodec);
+            register(helper, "miner_scan_codec_negative", MinerGameTests::scanCodecRejectsNegativeCount);
             register(helper, "miner_exposed_work_place", MinerGameTests::exposedWorkPlace);
             register(helper, "miner_works_in_world", MinerGameTests::worksInWorld);
         });
@@ -245,6 +246,15 @@ public final class MinerGameTests {
         var ops = helper.getLevel().registryAccess().createSerializationContext(JsonOps.INSTANCE);
         SavedScan saved = SavedScan.of(BlockPos.ZERO, BlockPos.ZERO, 10, -1L, scan).orElseThrow(() -> new AssertionError("Mine scan is saved"));
         helper.assertValueEqual(SavedScan.CODEC.parse(ops, SavedScan.CODEC.encodeStart(ops, saved).getOrThrow()).getOrThrow().result(), scan, "Saved");
+        helper.succeed();
+    }
+
+    /** A saved scan with a negative count does not load: the roll weight (square root of the count) would be NaN. */
+    private static void scanCodecRejectsNegativeCount(GameTestHelper helper) {
+        var ops = helper.getLevel().registryAccess().createSerializationContext(JsonOps.INSTANCE);
+        String saved = "{\"job_block\":[0,0,0],\"center\":[0,0,0],\"radius\":10,\"day\":-1,\"mine\":{\"stones\":{\"minecraft:stone\":%d},\"ores\":{}}}";
+        helper.assertTrue(SavedScan.CODEC.parse(ops, JsonParser.parseString(saved.formatted(5))).result().isPresent(), "A count of 5 loads");
+        helper.assertTrue(SavedScan.CODEC.parse(ops, JsonParser.parseString(saved.formatted(-5))).result().isEmpty(), "A count of -5 is rejected");
         helper.succeed();
     }
 
