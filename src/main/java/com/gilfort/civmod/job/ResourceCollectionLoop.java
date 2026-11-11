@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import org.jspecify.annotations.Nullable;
 
@@ -16,6 +17,7 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.OccupiedPlaces;
 import com.gilfort.civmod.settlement.StockRules;
 
 import net.minecraft.core.BlockPos;
@@ -31,8 +33,8 @@ import net.minecraft.world.phys.Vec3;
  * Work loop of the Resource Collection Job Category (vault {@code Systems/Resource Collection Jobs.md}); its contract
  * with the Job is the {@link ResourceCollectionProfile}. Per job: fetch the tool (and the inputs of its innate recipes,
  * {@link CollectionRecipes}), take the work place of the day and the scan from the
- * job's {@link Workplace}, walk there and produce into its buffer, which the shell delivers at ~80 % or at the end of
- * the day. Production (live every work tick, catch-up per simulated hour) goes through the {@link WorkRules}; this
+ * job's {@link Workplace}, walk there (a {@link Roaming} job walks on around it) and produce into its buffer, which the
+ * shell delivers at ~80 % or at the end of the day. Production (live every work tick, catch-up per simulated hour) goes through the {@link WorkRules}; this
  * loop only adds the live effects (swing, hit sound, level-up) and chooses where output goes.
  */
 final class ResourceCollectionLoop implements CategoryLoop {
@@ -132,7 +134,17 @@ final class ResourceCollectionLoop implements CategoryLoop {
         }
         step = Step.WORK;
         showTool(job, profile);
-        return JobStep.walk(poi, profile.reach(), JobStatus.WORKING);
+        return JobStep.walk(standTarget(level, profile, site, workplace, poi, day), profile.reach(), JobStatus.WORKING);
+    }
+
+    /**
+     * Where the settler stands to work: the work place of the day, or for a {@link RoamingProfile} where its
+     * {@link Roaming} has it now. The scan anchor and the {@link WorkRules} roll keep their own places.
+     */
+    private BlockPos standTarget(ServerLevel level, ResourceCollectionProfile profile, JobBlockSite site, Workplace workplace, BlockPos poi, long day) {
+        Supplier<Roaming> roaming = profile instanceof RoamingProfile roamingProfile
+                ? () -> roamingProfile.roaming(level, site, poi, level.getGameTime()) : () -> Roaming.standingAt(poi);
+        return workplace.roamingAt(poi, day, roaming).stand();
     }
 
     /**
@@ -178,9 +190,10 @@ final class ResourceCollectionLoop implements CategoryLoop {
         return switch (step) {
             case FETCH_TOOL -> fetchToolAt(level, job);
             case WORK -> {
+                Roaming roaming = shell.workplace(job.jobBlock()).roamingOrStanding(target);
                 if (++placeTimer >= SWING_INTERVAL) {
                     placeTimer = 0;
-                    if (!stillWorkPlace(level, job, target)) {
+                    if (!stillWorkPlace(level, job, roaming.anchor())) {
                         // Broken: the next decision picks a new free work place at once; the buffer stays.
                         yield JobStep.DONE;
                     }
@@ -188,10 +201,27 @@ final class ResourceCollectionLoop implements CategoryLoop {
                 if (fatigue.onBreak()) {
                     yield JobStep.STAY;
                 }
-                produce(level, job, target);
+                Optional<JobStep> moved = roaming.isDue(level, level.getGameTime()) ? moveOn(level, job, roaming) : Optional.empty();
+                if (moved.isPresent()) {
+                    yield moved.get();
+                }
+                produce(level, job, target, roaming.rollPlace());
                 yield JobStep.WORK;
             }
         };
+    }
+
+    /** Asks the roaming whether the settler moves on now; if so, the step walks to the new stand target. */
+    private Optional<JobStep> moveOn(ServerLevel level, SettlerJob job, Roaming roaming) {
+        Optional<ResourceCollectionProfile> profile = job.jobType().profile(ResourceCollectionProfile.class);
+        Optional<JobBlockSite> site = JobBlockSite.at(level, job.jobBlock());
+        if (profile.isEmpty() || site.isEmpty()) {
+            return Optional.empty();
+        }
+        long day = DayClock.day(level);
+        RoamingContext context = new RoamingContext(level, site.get(), settler.blockPosition(), level.getGameTime(),
+                pos -> OccupiedPlaces.isFreeFor(site.get().settlement(), pos, settler.getUUID(), day));
+        return roaming.moveOn(context).map(stand -> JobStep.walk(stand, profile.get().reach(), JobStatus.WORKING));
     }
 
     private static boolean stillWorkPlace(ServerLevel level, SettlerJob job, BlockPos target) {
@@ -234,14 +264,18 @@ final class ResourceCollectionLoop implements CategoryLoop {
         shell.hold(shell.tool(job, profile).map(ItemStack::copy).orElse(ItemStack.EMPTY));
     }
 
-    private void produce(ServerLevel level, SettlerJob job, BlockPos poi) {
+    /**
+     * @param stand     where the settler stands: it looks, swings and hits there
+     * @param rollPlace the place the roll names ({@link Roaming#rollPlace})
+     */
+    private void produce(ServerLevel level, SettlerJob job, BlockPos stand, BlockPos rollPlace) {
         BlockPos jobBlock = job.jobBlock();
-        settler.getLookControl().setLookAt(Vec3.atCenterOf(poi));
+        settler.getLookControl().setLookAt(Vec3.atCenterOf(stand));
         if (++swingTimer >= SWING_INTERVAL && job.jobType().profile(ResourceCollectionProfile.class).map(ResourceCollectionProfile::swings).orElse(true)) {
             swingTimer = 0;
             settler.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
-            BlockState state = level.getBlockState(poi);
-            level.playSound(null, poi, state.getSoundType().getHitSound(), net.minecraft.sounds.SoundSource.NEUTRAL, 0.5F, 1.0F);
+            BlockState state = level.getBlockState(stand);
+            level.playSound(null, stand, state.getSoundType().getHitSound(), net.minecraft.sounds.SoundSource.NEUTRAL, 0.5F, 1.0F);
         }
         Optional<ResourceCollectionProfile> profile = job.jobType().profile(ResourceCollectionProfile.class);
         Optional<JobBlockSite> site = JobBlockSite.at(level, jobBlock);
@@ -250,13 +284,17 @@ final class ResourceCollectionLoop implements CategoryLoop {
         }
         JobBuffer buffer = shell.workplace(jobBlock).buffer();
         // A Laborer works a fraction of the tick: the rolls come slower, the rules stay the same.
-        WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site.get(), shell.workplace(jobBlock), poi, shell.laborer().speed(job),
+        WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site.get(), shell.workplace(jobBlock), rollPlace, shell.laborer().speed(job),
                 WorkRules.ToolSupply.BELT, new BufferOutput(buffer, stacks -> {
                     stacks.forEach(buffer::add);
                     return !buffer.isFull();
                 }));
         if (result.levelUp()) {
             shell.showLevelUp(level, job);
+        }
+        // The line stays out while the job produces; a job that ended (no tool, buffer full) takes it in.
+        if (profile.get() instanceof FishingProfile && result.end() == WorkRules.End.NONE) {
+            settler.cast(stand);
         }
         // A job that ended (no tool, buffer full, no resources) is re-planned at the next decision.
         showTool(job, profile.get());

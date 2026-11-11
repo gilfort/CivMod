@@ -319,7 +319,7 @@ public final class SettlerWork {
     /**
      * @param day the day
      * @return this settler's waking, end of work and bed times on that day (daily offsets inside the Schedule windows);
-     *         a Clerk wakes early (05:30–06:00, its shift opens then) and its work ends with its shift at 18:30 (a Tavern Host: 20:00), a
+     *         a Clerk wakes early (05:30–06:00, its shift opens then) and its work ends with its shift at 18:00 (a Tavern Host: 20:00), a
      *         Bard has its stage act as the evening appointment ({@link ServiceActs#dayTimes}), a settler back from a mission
      *         ended its work day on its return
      */

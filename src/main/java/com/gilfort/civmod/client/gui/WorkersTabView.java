@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.gilfort.civmod.client.SettlerRenderer;
+import com.gilfort.civmod.job.FishermanProfile;
 import com.gilfort.civmod.job.LumberjackProfile;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
@@ -89,12 +90,22 @@ final class WorkersTabView implements JobBlockTabView {
         return info.jobType().profile(LumberjackProfile.class).isPresent() && info.inSettlement();
     }
 
-    /** The toggle buttons of the bottom row: the leaf toggle, then the other views' toggles. */
+    /** Whether the Fisherman's treasure toggle is shown. */
+    private boolean treasureToggle() {
+        JobBlockInfo info = menu.getInfo();
+        return info.jobType().profile(FishermanProfile.class).isPresent() && info.inSettlement();
+    }
+
+    /** The toggle buttons of the bottom row: the leaf toggle, the treasure toggle, then the other views' toggles. */
     private List<WorkersToggle> toggles() {
         List<WorkersToggle> toggles = new ArrayList<>();
         if (leavesToggle()) {
             toggles.add(new WorkersToggle(Component.translatable(menu.getInfo().collectLeaves() ? "civmod.gui.job_block.leaves.on"
                     : "civmod.gui.job_block.leaves.off"), tab.leavesButtonId(!menu.getInfo().collectLeaves())));
+        }
+        if (treasureToggle()) {
+            toggles.add(new WorkersToggle(Component.translatable(menu.getInfo().treasure() ? "civmod.gui.job_block.treasure.on"
+                    : "civmod.gui.job_block.treasure.off"), tab.treasureButtonId(!menu.getInfo().treasure())));
         }
         screen.views().forEach(view -> view.workersToggle().ifPresent(toggles::add));
         return toggles;
@@ -214,6 +225,9 @@ final class WorkersTabView implements JobBlockTabView {
         }
         if (leavesToggle()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.leaves"));
+        }
+        if (treasureToggle()) {
+            lines.add(Component.translatable("civmod.gui.job_block.help.treasure"));
         }
         // The biomes that change something for the Job, and that all others do not.
         lines.addAll(info.biome().overview());

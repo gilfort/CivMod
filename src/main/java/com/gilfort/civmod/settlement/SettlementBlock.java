@@ -321,9 +321,10 @@ public final class SettlementBlock {
      * @param found      the Found tab state per Resource Collection Job
      * @param centerRace the race of a Center Block, empty for every other JobBlock
      * @param soundCenter the Sound center of a Stage, empty for every other JobBlock and while the Stage block is the center
+     * @param treasure   whether a Fisherman may catch treasure
      */
     private record PlaceFields(List<Job> autoAssign, List<Identifier> legacyExcluded, Optional<SavedScan> legacyScan, List<Item> stationTypes,
-            List<SavedFound> found, Optional<Identifier> centerRace, Optional<BlockPos> soundCenter) {
+            List<SavedFound> found, Optional<Identifier> centerRace, Optional<BlockPos> soundCenter, boolean treasure) {
 
         static final MapCodec<PlaceFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Job.CODEC.listOf().optionalFieldOf("auto_assign", List.of()).forGetter(PlaceFields::autoAssign),
@@ -332,10 +333,11 @@ public final class SettlementBlock {
                 BuiltInRegistries.ITEM.byNameCodec().listOf().lenientOptionalFieldOf("station_types", List.of()).forGetter(PlaceFields::stationTypes),
                 SavedFound.CODEC.listOf().lenientOptionalFieldOf("found", List.of()).forGetter(PlaceFields::found),
                 Identifier.CODEC.optionalFieldOf("center_race").forGetter(PlaceFields::centerRace),
-                BlockPos.CODEC.optionalFieldOf("sound_center").forGetter(PlaceFields::soundCenter)
+                BlockPos.CODEC.optionalFieldOf("sound_center").forGetter(PlaceFields::soundCenter),
+                Codec.BOOL.optionalFieldOf("treasure", true).forGetter(PlaceFields::treasure)
         ).apply(instance, PlaceFields::new));
 
-        static final PlaceFields NONE = new PlaceFields(List.of(), List.of(), Optional.empty(), List.of(), List.of(), Optional.empty(), Optional.empty());
+        static final PlaceFields NONE = new PlaceFields(List.of(), List.of(), Optional.empty(), List.of(), List.of(), Optional.empty(), Optional.empty(), true);
     }
 
     /**
@@ -386,6 +388,7 @@ public final class SettlementBlock {
     private Optional<BlockPos> dropOff;
     private final List<Assignee> assignees = new ArrayList<>();
     private boolean collectLeaves;
+    private boolean treasure = true;
     private MissionOffer missionOffer;
     private final List<BlockPos> storage = new ArrayList<>();
     private final List<StandSpot> standSpots = new ArrayList<>();
@@ -461,6 +464,7 @@ public final class SettlementBlock {
         this.autoAssign.addAll(place.autoAssign());
         this.centerRace = place.centerRace();
         this.soundCenter = place.soundCenter();
+        this.treasure = place.treasure();
         place.found().forEach(saved -> {
             FoundState state = foundState(saved.job());
             state.excluded.addAll(saved.excluded());
@@ -480,7 +484,7 @@ public final class SettlementBlock {
     private PlaceFields placeFields() {
         List<SavedFound> saved = found.entrySet().stream()
                 .map(entry -> new SavedFound(entry.getKey(), entry.getValue().excluded.stream().sorted().toList(), entry.getValue().scan)).toList();
-        return new PlaceFields(List.copyOf(autoAssign), List.of(), Optional.empty(), List.copyOf(stationTypes), saved, centerRace, soundCenter);
+        return new PlaceFields(List.copyOf(autoAssign), List.of(), Optional.empty(), List.copyOf(stationTypes), saved, centerRace, soundCenter, treasure);
     }
 
     private FoundState foundState(Job job) {
@@ -766,6 +770,17 @@ public final class SettlementBlock {
 
     void setCollectLeaves(boolean collectLeaves) {
         this.collectLeaves = collectLeaves;
+    }
+
+    /**
+     * @return whether a Fisherman may catch treasure (on by default; off, every catch is a fish)
+     */
+    public boolean treasure() {
+        return treasure;
+    }
+
+    void setTreasure(boolean treasure) {
+        this.treasure = treasure;
     }
 
     /**

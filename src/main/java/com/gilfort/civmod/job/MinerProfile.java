@@ -1,10 +1,10 @@
 package com.gilfort.civmod.job;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
-import java.util.stream.Stream;
 
 import org.jspecify.annotations.Nullable;
 
@@ -14,6 +14,7 @@ import com.gilfort.civmod.api.SectionScan;
 import com.gilfort.civmod.api.XpGain;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -38,6 +39,11 @@ public final class MinerProfile implements ResourceCollectionProfile {
 
     private static final int AUTO_SEARCH_HORIZONTAL = 20;
     private static final int AUTO_SEARCH_VERTICAL = 30;
+    /** Below this chance (0.05 %) the Found tab shows the "below minimum" text instead of 0.0. */
+    private static final double MIN_SHOWN_CHANCE = 0.0005;
+    /** The Found tab rounds a chance to tenths of a percent: a chance of 1.0 is this many tenths. */
+    private static final double TENTHS_OF_PERCENT_PER_WHOLE = 1000.0;
+    private static final double TENTHS_PER_PERCENT = 10.0;
     /** Redstone ore is no {@link DropExperienceBlock}; its range is fixed in vanilla. */
     private static final XpGain REDSTONE_ORE_XP = XpGain.of(1, 5);
 
@@ -110,9 +116,41 @@ public final class MinerProfile implements ResourceCollectionProfile {
         return Optional.of(Component.translatable("civmod.rare_group.ore"));
     }
 
+    /**
+     * Each type named with its chance; the block counts stay out of the tab, so it is no soil sample. The chance is at
+     * the working settler's skill level and tool (skill 1 and no tool limit without a settler).
+     */
+    @Override
+    public List<Found> found(ScanResult scan, Optional<Worker> worker) {
+        List<Found> found = ResourceCollectionProfile.super.found(scan, worker);
+        if (!(scan instanceof MineScan.Result mined)) {
+            return found;
+        }
+        Map<Identifier, Double> chances = MinerOutput.chances(mined, type -> worker.map(working -> canObtain(working.tool(), type)).orElse(true),
+                worker.map(Worker::skillLevel).orElse(1), MinerWeights.get());
+        return found.stream().map(entry -> {
+            Double chance = chances.get(entry.type());
+            if (chance == null) {
+                return entry;
+            }
+            ItemStack icon = entry.icon().copy();
+            icon.set(DataComponents.ITEM_NAME, Component.translatable("civmod.gui.found.chance",
+                    BuiltInRegistries.BLOCK.getValue(entry.type()).getName(), chanceText(chance)));
+            return new Found(entry.type(), icon, entry.available());
+        }).toList();
+    }
+
+    /** A chance in percent with one decimal; the "below minimum" text below that. */
+    static Component chanceText(double chance) {
+        if (chance < MIN_SHOWN_CHANCE) {
+            return Component.translatable("civmod.gui.found.chance.below_minimum");
+        }
+        return Component.literal(Double.toString(Math.round(chance * TENTHS_OF_PERCENT_PER_WHOLE) / TENTHS_PER_PERCENT));
+    }
+
     @Override
     public boolean inRareGroup(ScanResult scan, Identifier type) {
-        return scan instanceof MineScan.Result result && result.ores().contains(type);
+        return scan instanceof MineScan.Result result && result.ores().containsKey(type);
     }
 
     @Override
@@ -122,7 +160,7 @@ public final class MinerProfile implements ResourceCollectionProfile {
         }
         ServerLevel level = context.level();
         Identifier poi = BuiltInRegistries.BLOCK.getKey(level.getBlockState(context.poi()).getBlock());
-        Set<Identifier> leftOut = leftOut(context, Stream.concat(scan.stones().stream(), scan.ores().stream()).toList());
+        Set<Identifier> leftOut = leftOut(context, scan.foundBlocks());
         MinerOutput.Roll roll = MinerOutput.roll(scan, poi, type -> canObtain(context.tool(), type), leftOut, context.skillLevel(),
                 MinerWeights.get(), context.rareChanceFactor(), level.getRandom());
         if (roll.emptyRoll()) {

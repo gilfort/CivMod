@@ -1,6 +1,8 @@
 package com.gilfort.civmod.job;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -12,9 +14,9 @@ import net.minecraft.util.RandomSource;
 
 /**
  * Miner roll (vault {@code Jobs/Miner.md}): stone group or ore pool by the level-based stone share, then a type by
- * weight among the types found by the scan; the work place type has double weight in its group. Excluded types leave
- * their group and the weights spread over the rest; a fully excluded group gives an empty roll, never one of the other
- * group (vault {@code Systems/Resource Collection Jobs.md}).
+ * weight among the types found by the scan (base weight times the square root of the block count); the work place type
+ * has double weight in its group. Excluded types leave their group and the weights spread over the rest; a fully
+ * excluded group gives an empty roll, never one of the other group (vault {@code Systems/Resource Collection Jobs.md}).
  */
 public final class MinerOutput {
 
@@ -55,7 +57,8 @@ public final class MinerOutput {
             stoneShare = 1.0 - BiomeBonus.cappedChance(1.0 - stoneShare, rareChance);
         }
         boolean stone = random.nextDouble() < stoneShare;
-        List<Identifier> found = (stone ? scan.stones() : scan.ores()).stream().filter(harvestable).sorted().toList();
+        Map<Identifier, Integer> counts = stone ? scan.stones() : scan.ores();
+        List<Identifier> found = counts.keySet().stream().filter(harvestable).sorted().toList();
         if (found.isEmpty()) {
             return Roll.NOTHING;
         }
@@ -65,11 +68,11 @@ public final class MinerOutput {
         }
         double total = 0.0;
         for (Identifier type : group) {
-            total += weight(type, stone, poi, weights);
+            total += weight(type, counts.get(type), stone, poi, weights);
         }
         double pick = random.nextDouble() * total;
         for (Identifier type : group) {
-            pick -= weight(type, stone, poi, weights);
+            pick -= weight(type, counts.get(type), stone, poi, weights);
             if (pick < 0.0) {
                 return new Roll(Optional.of(type), false);
             }
@@ -77,7 +80,41 @@ public final class MinerOutput {
         return new Roll(Optional.of(group.getLast()), false);
     }
 
-    private static double weight(Identifier type, boolean stone, Identifier poi, MinerWeights weights) {
-        return weights.weight(type, stone) * (type.equals(poi) ? 2.0 : 1.0);
+    /**
+     * The chance of each type to be rolled, for the Found tab: its group's share at the skill level times its weight
+     * among the types of its group that the tool can harvest. Exclusions, the work place bonus and biome bonuses are
+     * not part of it. A group without a harvestable type has no entries.
+     *
+     * @param scan        the scan result
+     * @param harvestable whether the tool can harvest a type
+     * @param skillLevel  the skill level
+     * @param weights     the weights
+     * @return the chance (0-1) per type
+     */
+    public static Map<Identifier, Double> chances(MineScan.Result scan, Predicate<Identifier> harvestable, int skillLevel, MinerWeights weights) {
+        double stoneShare = weights.stoneShare(skillLevel);
+        Map<Identifier, Double> chances = new HashMap<>();
+        addGroupChances(chances, scan.stones(), true, stoneShare, harvestable, weights);
+        addGroupChances(chances, scan.ores(), false, 1.0 - stoneShare, harvestable, weights);
+        return chances;
+    }
+
+    private static void addGroupChances(Map<Identifier, Double> chances, Map<Identifier, Integer> counts, boolean stone, double share,
+            Predicate<Identifier> harvestable, MinerWeights weights) {
+        double total = 0.0;
+        for (Map.Entry<Identifier, Integer> entry : counts.entrySet()) {
+            if (harvestable.test(entry.getKey())) {
+                total += weights.rollWeight(entry.getKey(), stone, entry.getValue());
+            }
+        }
+        for (Map.Entry<Identifier, Integer> entry : counts.entrySet()) {
+            if (harvestable.test(entry.getKey()) && total > 0.0) {
+                chances.put(entry.getKey(), share * weights.rollWeight(entry.getKey(), stone, entry.getValue()) / total);
+            }
+        }
+    }
+
+    private static double weight(Identifier type, int count, boolean stone, Identifier poi, MinerWeights weights) {
+        return weights.rollWeight(type, stone, count) * (type.equals(poi) ? 2.0 : 1.0);
     }
 }

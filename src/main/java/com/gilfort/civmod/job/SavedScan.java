@@ -3,7 +3,6 @@ package com.gilfort.civmod.job;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -39,10 +38,13 @@ public record SavedScan(BlockPos jobBlock, BlockPos center, int radius, long day
             Codec.unboundedMap(Identifier.CODEC, Codec.INT).fieldOf("leaves").forGetter(WoodScan.Result::leaves)
     ).apply(instance, (logs, leaves) -> new WoodScan.Result(Map.copyOf(logs), Map.copyOf(leaves))));
 
+    /** Block counts of a Miner scan; a negative count would make the roll weight (square root of the count) NaN. */
+    private static final Codec<Map<Identifier, Integer>> NON_NEGATIVE_COUNTS = Codec.unboundedMap(Identifier.CODEC, Codec.intRange(0, Integer.MAX_VALUE));
+
     private static final Codec<MineScan.Result> MINE = RecordCodecBuilder.create(instance -> instance.group(
-            Identifier.CODEC.listOf().fieldOf("stones").forGetter(result -> List.copyOf(result.stones())),
-            Identifier.CODEC.listOf().fieldOf("ores").forGetter(result -> List.copyOf(result.ores()))
-    ).apply(instance, (stones, ores) -> new MineScan.Result(Set.copyOf(stones), Set.copyOf(ores))));
+            NON_NEGATIVE_COUNTS.fieldOf("stones").forGetter(MineScan.Result::stones),
+            NON_NEGATIVE_COUNTS.fieldOf("ores").forGetter(MineScan.Result::ores)
+    ).apply(instance, (stones, ores) -> new MineScan.Result(Map.copyOf(stones), Map.copyOf(ores))));
 
     /**
      * A Beekeeper scan saved before it counted per honey level (now saved as block counts): loads as hives with honey,

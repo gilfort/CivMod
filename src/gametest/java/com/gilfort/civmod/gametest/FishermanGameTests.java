@@ -1,5 +1,6 @@
 package com.gilfort.civmod.gametest;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -8,10 +9,13 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.job.FishTable;
 import com.gilfort.civmod.job.FishermanProfile;
+import com.gilfort.civmod.job.TreasureOption;
 import com.gilfort.civmod.job.WaterScan;
 import com.gilfort.civmod.menu.FoundTabData;
+import com.gilfort.civmod.npc.FishingCast;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
@@ -64,6 +68,9 @@ public final class FishermanGameTests {
             register(helper, "fisherman_water_scan", FishermanGameTests::waterScan);
             register(helper, "fisherman_open_water_and_shore", FishermanGameTests::openWaterAndShore);
             register(helper, "fisherman_works_in_world", FishermanGameTests::worksInWorld);
+            register(helper, "fisherman_treasure_toggle", FishermanGameTests::treasureToggle);
+            register(helper, "fisherman_cast_timeline", FishermanGameTests::castTimeline);
+            register(helper, "fisherman_cast_expires", FishermanGameTests::castExpires);
         });
     }
 
@@ -213,12 +220,96 @@ public final class FishermanGameTests {
             helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0,
                     "Nothing caught yet (status " + settler.getWork().status(jobBlock) + ")");
             helper.assertFalse(settler.isInWater(), "The Fisherman stands on the shore");
+            helper.assertValueEqual(settler.castTarget(), Optional.of(helper.absolutePos(new BlockPos(6, 2, 6))), "The line is out at the work point");
             FoundTabData tab = FoundTabData.of(level, jobBlock);
             helper.assertTrue(tab.entries().stream().map(FoundTabData.Entry::type).toList().equals(FishTable.get().ids()),
                     "The Found tab lists the fish of the loot table: " + tab);
             helper.assertTrue(tab.lines().size() >= 2, "Water and treasure lines: " + tab.lines());
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+        });
+    }
+
+    /**
+     * With the treasure option off the treasure chance is not rolled: even at a 100 % chance every catch is a fish, and
+     * a roll with every fish excluded stays empty. With it on the same chance gives treasure only.
+     */
+    private static void treasureToggle(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
+        BlockPos poi = helper.absolutePos(new BlockPos(1, 1, 1));
+        settler.snapTo(poi.getX() + 0.5, poi.getY(), poi.getZ() + 0.5, 0.0F, 0.0F);
+        FishermanProfile profile = ModJobs.FISHERMAN.get().profile(FishermanProfile.class).orElseThrow();
+        ItemStack rod = new ItemStack(Items.FISHING_ROD);
+        Set<Item> fish = new HashSet<>();
+        FishTable.get().fish().forEach(entry -> fish.add(entry.item()));
+        ResourceCollectionProfile.Context sure = new ResourceCollectionProfile.Context(level, settler, null, poi, rod, Set.of(), 100, Set.of(),
+                type -> profile.droppedItems(level, poi, type, rod), 100.0, 1);
+        for (int i = 0; i < 100; i++) {
+            var treasure = profile.produce(sure, TreasureOption.ALLOWED).orElseThrow().stacks();
+            helper.assertTrue(!treasure.isEmpty() && treasure.stream().noneMatch(stack -> fish.contains(stack.getItem())), "Treasure on: " + treasure);
+            var food = profile.produce(sure, TreasureOption.FORBIDDEN).orElseThrow().stacks();
+            helper.assertTrue(!food.isEmpty() && food.stream().allMatch(stack -> fish.contains(stack.getItem())), "Treasure off: " + food);
+        }
+        ResourceCollectionProfile.Context noFish = new ResourceCollectionProfile.Context(level, settler, null, poi, rod, new HashSet<>(FishTable.get().ids()),
+                100, Set.of(), type -> profile.droppedItems(level, poi, type, rod), 100.0, 1);
+        helper.assertTrue(profile.produce(noFish, TreasureOption.FORBIDDEN).orElseThrow().stacks().isEmpty(), "Treasure off and every fish excluded: an empty roll");
+        helper.assertTrue(!profile.produce(noFish).orElseThrow().stacks().isEmpty(), "Treasure is on by default");
+        settler.discard();
+        helper.succeed();
+    }
+
+    /** The cast cycle as the client plays it: flight, floating bobber, dip at the catch, reel-in, a pause, the next cast. */
+    private static void castTimeline(GameTestHelper helper) {
+        FishingCast cast = new FishingCast();
+        helper.assertTrue(cast.pose(100.0F).phase() == FishingCast.Phase.HIDDEN, "No line before the first cast");
+        cast.start(100);
+        helper.assertTrue(cast.pose(100.0F).phase() == FishingCast.Phase.FLYING && cast.pose(100.0F).progress() == 0.0F, "The cast starts in the hand");
+        helper.assertTrue(cast.pose(100.0F + FishingCast.FLIGHT_TICKS / 2.0F).phase() == FishingCast.Phase.FLYING, "Mid-flight");
+        helper.assertTrue(cast.pose(100.0F + FishingCast.FLIGHT_TICKS + 30.0F).phase() == FishingCast.Phase.FLOATING, "The bobber floats until the catch");
+        cast.caught(300);
+        helper.assertTrue(cast.pose(299.0F).phase() == FishingCast.Phase.FLOATING, "Floating until the catch");
+        helper.assertTrue(cast.pose(300.0F + FishingCast.DIP_TICKS / 2.0F).phase() == FishingCast.Phase.DIPPING, "The bobber dips at the catch");
+        helper.assertTrue(cast.pose(300.0F + FishingCast.DIP_TICKS + FishingCast.REEL_TICKS / 2.0F).phase() == FishingCast.Phase.REELING,
+                "Then the line is reeled in");
+        float reeled = 300.0F + FishingCast.DIP_TICKS + FishingCast.REEL_TICKS;
+        helper.assertTrue(cast.pose(reeled + 1.0F).phase() == FishingCast.Phase.HIDDEN, "A pause without line");
+        helper.assertTrue(cast.pose(reeled + FishingCast.PAUSE_TICKS).phase() == FishingCast.Phase.FLYING, "The next cast follows the pause");
+
+        Vec3 hand = new Vec3(0.0, 1.0, 0.0);
+        Vec3 water = new Vec3(4.0, 0.0, 0.0);
+        helper.assertTrue(FishingCast.bobber(new FishingCast.Pose(FishingCast.Phase.HIDDEN, 0.0F), hand, water).isEmpty(), "Hidden: no bobber");
+        helper.assertTrue(FishingCast.bobber(new FishingCast.Pose(FishingCast.Phase.FLYING, 0.0F), hand, water).orElseThrow().distanceTo(hand) < 1.0E-6,
+                "Flight starts at the hand");
+        helper.assertTrue(FishingCast.bobber(new FishingCast.Pose(FishingCast.Phase.FLYING, 1.0F), hand, water).orElseThrow().distanceTo(water) < 1.0E-6,
+                "Flight ends on the water");
+        helper.assertTrue(FishingCast.bobber(new FishingCast.Pose(FishingCast.Phase.FLYING, 0.5F), hand, water).orElseThrow().y > 0.5,
+                "The flight arcs above the straight line");
+        Vec3 dipped = FishingCast.bobber(new FishingCast.Pose(FishingCast.Phase.DIPPING, 0.5F), hand, water).orElseThrow();
+        helper.assertTrue(dipped.y < water.y && Math.abs(dipped.x - water.x) < 1.0E-6, "The dip sinks the bobber at the same spot: " + dipped);
+        helper.assertTrue(FishingCast.bobber(new FishingCast.Pose(FishingCast.Phase.REELING, 1.0F), hand, water).orElseThrow().distanceTo(hand) < 1.0E-6,
+                "The reel-in ends at the hand");
+        helper.succeed();
+    }
+
+    /** A cast line stays out while the work refreshes it and is taken in a few ticks after the last refresh. */
+    private static void castExpires(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
+        Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(2, 2, 2)));
+        settler.snapTo(spawn.x, spawn.y, spawn.z, 0.0F, 0.0F);
+        level.addFreshEntity(settler);
+        BlockPos water = helper.absolutePos(new BlockPos(4, 1, 4));
+        helper.assertTrue(settler.castTarget().isEmpty(), "No line at the start");
+        settler.cast(water);
+        helper.assertValueEqual(settler.castTarget(), Optional.of(water), "The line goes to the water");
+        helper.runAfterDelay(2, () -> {
+            settler.cast(water);
+            helper.assertValueEqual(settler.castTarget(), Optional.of(water), "A refresh keeps the line out");
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(settler.castTarget().isEmpty(), "The line is taken in without refresh");
+            settler.discard();
         });
     }
 }

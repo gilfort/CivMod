@@ -25,7 +25,8 @@ import net.minecraft.world.item.Items;
 /**
  * The "Workers" tab of every JobBlock (vault {@code Systems/GUI.md}, "Info becomes Workers"): per offered Job its line
  * with the automatic assignment button, below it one row per settler with ✕ (unassigns it at once) and a click on head
- * or name that opens the settler window; plus the leaf collection toggle (Lumberjack). Its data is the window's
+ * or name that opens the settler window; plus the leaf collection toggle (Lumberjack) and the treasure toggle
+ * (Fisherman). Its data is the window's
  * {@link JobBlockInfo} ({@link JobBlockInfo#workers()}). JobBlocks are upgraded with the JobBlock Upgrade items, not here
  * ({@link com.gilfort.civmod.block.JobBlockUpgrade}).
  */
@@ -33,8 +34,10 @@ public final class WorkersTab extends JobBlockTab {
 
     /** Buttons: set leaf collection off / on (Lumberjack, {@link #leavesButtonId}). */
     private static final int LEAVES = 0;
+    /** Buttons: set the treasure option off / on (Fisherman, {@link #treasureButtonId}). */
+    private static final int TREASURE = LEAVES + 2;
     /** Buttons from here: set the automatic assignment toggle of a Job line ({@link #autoButtonId}). */
-    private static final int AUTO_ASSIGN = LEAVES + 2;
+    private static final int AUTO_ASSIGN = TREASURE + 2;
     /** Most Job lines of a JobBlock with an automatic assignment toggle. */
     private static final int MAX_JOB_LINES = 16;
 
@@ -80,10 +83,24 @@ public final class WorkersTab extends JobBlockTab {
         return buttonId(LEAVES + (on ? 1 : 0));
     }
 
+    /**
+     * Like {@link #autoButtonId}, the treasure toggle carries the wanted state.
+     *
+     * @param on the wanted state of the Fisherman's treasure
+     * @return the menu button id that sets it
+     */
+    public int treasureButtonId(boolean on) {
+        return buttonId(TREASURE + (on ? 1 : 0));
+    }
+
     @Override
     boolean clickButton(Player player, int button) {
-        if (button < AUTO_ASSIGN) {
+        if (button < TREASURE) {
             setLeaves(button - LEAVES == 1);
+            return true;
+        }
+        if (button < AUTO_ASSIGN) {
+            setTreasure(button - TREASURE == 1);
             return true;
         }
         return setAuto((button - AUTO_ASSIGN) / 2, (button - AUTO_ASSIGN) % 2 == 1);
@@ -93,6 +110,12 @@ public final class WorkersTab extends JobBlockTab {
         JobBlockMenu menu = menu();
         menu.setInfo(menu.getInfo().withCollectLeaves(on));
         menu.site().ifPresent(site -> JobAssignments.setLeaves(SettlementData.get(site.level()), site.pos(), on));
+    }
+
+    private void setTreasure(boolean on) {
+        JobBlockMenu menu = menu();
+        menu.setInfo(menu.getInfo().withTreasure(on));
+        menu.site().ifPresent(site -> JobAssignments.setTreasure(SettlementData.get(site.level()), site.pos(), on));
     }
 
     /** Sets the automatic assignment toggle of a Job line; switching it on may assign settlers at once (fresh snapshot). */
