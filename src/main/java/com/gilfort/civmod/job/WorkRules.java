@@ -209,17 +209,20 @@ final class WorkRules {
             }
             // An innate recipe ready on the belt competes with the found types; it wears no tool and is never doubled.
             Optional<ItemStack> crafted = CollectionRecipes.roll(settler, profile, context, allowed);
-            Optional<ResourceCollectionProfile.Produced> produced = crafted.isPresent()
-                    ? Optional.of(new ResourceCollectionProfile.Produced(List.of(crafted.get()), ItemStack.EMPTY))
-                    : profile instanceof SecondaryToolProfile withSecondary
-                            ? withSecondary.produce(context, withSecondary.secondaryTool(site.block()).flatMap(kind -> SettlerTools.best(settler, kind)))
-                            : profile instanceof FishingProfile fishing
-                                    ? fishing.produce(context, site.block().treasure())
-                                    : profile instanceof DropPoolProfile pooled
-                                            // Entries with their own tool use it from the collect inventory, read only when one asks.
-                                            ? pooled.produce(context, JobDrops.Tools.of(level, settler, () -> supply.collect()
-                                                    .orElseGet(() -> ClerkStorage.stock(level, site.collect(), DayClock.dayTime(level), true))))
-                                            : profile.produce(context);
+            Optional<ResourceCollectionProfile.Produced> produced;
+            if (crafted.isPresent()) {
+                produced = Optional.of(new ResourceCollectionProfile.Produced(List.of(crafted.get()), ItemStack.EMPTY));
+            } else if (profile instanceof SecondaryToolProfile withSecondary) {
+                produced = withSecondary.produce(context, withSecondary.secondaryTool(site.block()).flatMap(kind -> SettlerTools.best(settler, kind)));
+            } else if (profile instanceof FishingProfile fishing) {
+                produced = fishing.produce(context, TreasureOption.of(site.block().treasure()));
+            } else if (profile instanceof DropPoolProfile pooled) {
+                // Entries with their own tool use it from the collect inventory, read only when one asks.
+                produced = pooled.produce(context, JobDrops.Tools.of(level, settler, () -> supply.collect()
+                        .orElseGet(() -> ClerkStorage.stock(level, site.collect(), DayClock.dayTime(level), true))));
+            } else {
+                produced = profile.produce(context);
+            }
             rolls++;
             if (produced.isPresent()) {
                 if (crafted.isEmpty()) {

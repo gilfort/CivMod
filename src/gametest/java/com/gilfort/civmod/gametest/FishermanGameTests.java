@@ -12,6 +12,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.job.FishTable;
 import com.gilfort.civmod.job.FishermanProfile;
+import com.gilfort.civmod.job.TreasureOption;
 import com.gilfort.civmod.job.WaterScan;
 import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.npc.FishingCast;
@@ -245,14 +246,14 @@ public final class FishermanGameTests {
         ResourceCollectionProfile.Context sure = new ResourceCollectionProfile.Context(level, settler, null, poi, rod, Set.of(), 100, Set.of(),
                 type -> profile.droppedItems(level, poi, type, rod), 100.0, 1);
         for (int i = 0; i < 100; i++) {
-            var treasure = profile.produce(sure, true).orElseThrow().stacks();
+            var treasure = profile.produce(sure, TreasureOption.ALLOWED).orElseThrow().stacks();
             helper.assertTrue(!treasure.isEmpty() && treasure.stream().noneMatch(stack -> fish.contains(stack.getItem())), "Treasure on: " + treasure);
-            var food = profile.produce(sure, false).orElseThrow().stacks();
+            var food = profile.produce(sure, TreasureOption.FORBIDDEN).orElseThrow().stacks();
             helper.assertTrue(!food.isEmpty() && food.stream().allMatch(stack -> fish.contains(stack.getItem())), "Treasure off: " + food);
         }
         ResourceCollectionProfile.Context noFish = new ResourceCollectionProfile.Context(level, settler, null, poi, rod, new HashSet<>(FishTable.get().ids()),
                 100, Set.of(), type -> profile.droppedItems(level, poi, type, rod), 100.0, 1);
-        helper.assertTrue(profile.produce(noFish, false).orElseThrow().stacks().isEmpty(), "Treasure off and every fish excluded: an empty roll");
+        helper.assertTrue(profile.produce(noFish, TreasureOption.FORBIDDEN).orElseThrow().stacks().isEmpty(), "Treasure off and every fish excluded: an empty roll");
         helper.assertTrue(!profile.produce(noFish).orElseThrow().stacks().isEmpty(), "Treasure is on by default");
         settler.discard();
         helper.succeed();

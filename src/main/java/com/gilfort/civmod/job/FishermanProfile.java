@@ -223,10 +223,10 @@ public final class FishermanProfile implements FishingProfile {
     }
 
     @Override
-    public Optional<Produced> produce(Context context, boolean treasureOn) {
+    public Optional<Produced> produce(Context context, TreasureOption treasureOption) {
         ServerLevel level = context.level();
         // With the option off the chance is not rolled at all.
-        boolean treasure = treasureOn && level.getRandom().nextDouble()
+        boolean treasure = treasureOption == TreasureOption.ALLOWED && level.getRandom().nextDouble()
                 < context.rareChance(treasureChance(context.skillLevel(), enchantmentLevel(context.tool(), Enchantments.LUCK_OF_THE_SEA)));
         List<ItemStack> items;
         if (treasure) {
