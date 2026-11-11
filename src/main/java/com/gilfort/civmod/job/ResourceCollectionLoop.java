@@ -294,7 +294,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
         }
         // The line stays out while the job produces; a job that ended (no tool, buffer full) takes it in.
         if (profile.get() instanceof FishingProfile && result.end() == WorkRules.End.NONE) {
-            settler.cast(poi);
+            settler.cast(stand);
         }
         // A job that ended (no tool, buffer full, no resources) is re-planned at the next decision.
         showTool(job, profile.get());
