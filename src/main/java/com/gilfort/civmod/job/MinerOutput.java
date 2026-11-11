@@ -55,7 +55,7 @@ public final class MinerOutput {
             stoneShare = 1.0 - BiomeBonus.cappedChance(1.0 - stoneShare, rareChance);
         }
         boolean stone = random.nextDouble() < stoneShare;
-        List<Identifier> found = (stone ? scan.stones() : scan.ores()).stream().filter(harvestable).sorted().toList();
+        List<Identifier> found = (stone ? scan.stones() : scan.ores()).keySet().stream().filter(harvestable).sorted().toList();
         if (found.isEmpty()) {
             return Roll.NOTHING;
         }

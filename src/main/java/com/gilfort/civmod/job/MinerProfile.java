@@ -112,7 +112,7 @@ public final class MinerProfile implements ResourceCollectionProfile {
 
     @Override
     public boolean inRareGroup(ScanResult scan, Identifier type) {
-        return scan instanceof MineScan.Result result && result.ores().contains(type);
+        return scan instanceof MineScan.Result result && result.ores().containsKey(type);
     }
 
     @Override
@@ -122,7 +122,7 @@ public final class MinerProfile implements ResourceCollectionProfile {
         }
         ServerLevel level = context.level();
         Identifier poi = BuiltInRegistries.BLOCK.getKey(level.getBlockState(context.poi()).getBlock());
-        Set<Identifier> leftOut = leftOut(context, Stream.concat(scan.stones().stream(), scan.ores().stream()).toList());
+        Set<Identifier> leftOut = leftOut(context, scan.foundBlocks());
         MinerOutput.Roll roll = MinerOutput.roll(scan, poi, type -> canObtain(context.tool(), type), leftOut, context.skillLevel(),
                 MinerWeights.get(), context.rareChanceFactor(), level.getRandom());
         if (roll.emptyRoll()) {
