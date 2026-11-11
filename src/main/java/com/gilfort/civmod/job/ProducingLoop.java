@@ -1345,7 +1345,7 @@ final class ProducingLoop implements CategoryLoop {
             shell.setStatus(jobBlock, noStation(shell.workplace(jobBlock)));
             return new SimulatedWork(0, workTicks);
         }
-        // The time of day follows the simulated clock: a round crossing 18:30 no longer reaches the linked storage.
+        // The time of day follows the simulated clock: a round crossing 18:00 no longer reaches the linked storage.
         double clock = day * (double) DayClock.DAY_TICKS + shell.catchUpDayTime();
         Workplace workplace = shell.workplace(jobBlock);
         double ticks = workTicks;
