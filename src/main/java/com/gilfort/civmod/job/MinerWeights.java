@@ -90,6 +90,19 @@ public record MinerWeights(double stoneShareLevel1, double stoneSharePerLevel, M
     }
 
     /**
+     * The weight of a type in a roll: its base weight times the square root of the number of its blocks the scan
+     * counted, so a big vein weighs more than a single block, but not in proportion.
+     *
+     * @param block a block type
+     * @param stone whether it belongs to the stone group
+     * @param count how many blocks of it the scan counted
+     * @return its weight
+     */
+    public double rollWeight(Identifier block, boolean stone, int count) {
+        return weight(block, stone) * Math.sqrt(count);
+    }
+
+    /**
      * Merges JSON files in order (later ones override).
      *
      * @param files parsed JSON files

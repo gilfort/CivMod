@@ -3,7 +3,6 @@ package com.gilfort.civmod.job;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -40,9 +39,9 @@ public record SavedScan(BlockPos jobBlock, BlockPos center, int radius, long day
     ).apply(instance, (logs, leaves) -> new WoodScan.Result(Map.copyOf(logs), Map.copyOf(leaves))));
 
     private static final Codec<MineScan.Result> MINE = RecordCodecBuilder.create(instance -> instance.group(
-            Identifier.CODEC.listOf().fieldOf("stones").forGetter(result -> List.copyOf(result.stones())),
-            Identifier.CODEC.listOf().fieldOf("ores").forGetter(result -> List.copyOf(result.ores()))
-    ).apply(instance, (stones, ores) -> new MineScan.Result(Set.copyOf(stones), Set.copyOf(ores))));
+            Codec.unboundedMap(Identifier.CODEC, Codec.INT).fieldOf("stones").forGetter(MineScan.Result::stones),
+            Codec.unboundedMap(Identifier.CODEC, Codec.INT).fieldOf("ores").forGetter(MineScan.Result::ores)
+    ).apply(instance, (stones, ores) -> new MineScan.Result(Map.copyOf(stones), Map.copyOf(ores))));
 
     /**
      * A Beekeeper scan saved before it counted per honey level (now saved as block counts): loads as hives with honey,
