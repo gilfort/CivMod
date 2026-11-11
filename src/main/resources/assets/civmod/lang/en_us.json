@@ -633,6 +633,7 @@
   "civmod.scroll.work_place.animal_farmer": "a hay bale",
   "civmod.gui.found.animal": "%s: %s",
   "civmod.gui.found.chance": "%s: %s %%",
+  "civmod.gui.found.chance.below_minimum": "<0.1",
   "civmod.gui.found.animals": "Animals: %s",
   "job.civmod.beekeeper": "Beekeeper",
   "job.civmod.beekeeper.indefinite": "a Beekeeper",

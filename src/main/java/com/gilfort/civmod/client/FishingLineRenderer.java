@@ -2,8 +2,6 @@ package com.gilfort.civmod.client;
 
 import java.util.Optional;
 
-import org.jspecify.annotations.Nullable;
-
 import com.gilfort.civmod.npc.FishingCast;
 import com.gilfort.civmod.npc.Settler;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -40,6 +38,14 @@ final class FishingLineRenderer {
     private static final float BOBBER_SIZE = 0.5F;
     /** The line starts this far above the bobber's centre, at its top. */
     private static final float BOBBER_TOP = 0.25F;
+    /** Half the bobber quad: its vertices are centred on the origin. */
+    private static final float BOBBER_HALF = 0.5F;
+    /** The line's colour, opaque black (ARGB). */
+    private static final int LINE_COLOR = 0xFF000000;
+    /** The bobber texture is drawn untinted (opaque white, ARGB). */
+    private static final int BOBBER_TINT = 0xFFFFFFFF;
+    /** The sag of the line follows (t squared + t) / 2, vanilla's curve. */
+    private static final float SAG_HALF = 0.5F;
 
     /**
      * What one frame draws, relative to the settler's feet.
@@ -56,18 +62,18 @@ final class FishingLineRenderer {
     /**
      * @param settler     a settler
      * @param partialTick the partial tick of the frame
-     * @return the line to draw, null while the settler has none out or the bobber is hidden
+     * @return the line to draw, empty while the settler has none out or the bobber is hidden
      */
-    static @Nullable Line extract(Settler settler, float partialTick) {
+    static Optional<Line> extract(Settler settler, float partialTick) {
         Optional<BlockPos> target = settler.castTarget();
         if (target.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
         Vec3 feet = settler.getPosition(partialTick);
         Vec3 hand = hand(settler, partialTick);
         Vec3 water = Vec3.atBottomCenterOf(target.get()).add(0.0, WATER_SURFACE, 0.0).subtract(feet);
         FishingCast.Pose pose = settler.fishingCast().pose(settler.level().getGameTime() + partialTick);
-        return FishingCast.bobber(pose, hand, water).map(bobber -> new Line(hand, bobber)).orElse(null);
+        return FishingCast.bobber(pose, hand, water).map(bobber -> new Line(hand, bobber));
     }
 
     /** The hand as vanilla places it for a player in third person, relative to the settler's feet. */
@@ -118,8 +124,8 @@ final class FishingLineRenderer {
     }
 
     private static void bobberVertex(VertexConsumer buffer, PoseStack.Pose pose, int light, float x, int y, int u, int v) {
-        buffer.addVertex(pose, x - 0.5F, y - 0.5F, 0.0F)
-                .setColor(-1)
+        buffer.addVertex(pose, x - BOBBER_HALF, y - BOBBER_HALF, 0.0F)
+                .setColor(BOBBER_TINT)
                 .setUv(u, v)
                 .setOverlay(OverlayTexture.NO_OVERLAY)
                 .setLight(light)
@@ -129,12 +135,12 @@ final class FishingLineRenderer {
     /** One end of a line segment on the sagging curve from the bobber (at 0) to the hand (at 1), as vanilla draws it. */
     private static void lineVertex(Vec3 toHand, VertexConsumer buffer, PoseStack.Pose pose, float at, float next, float width) {
         float x = (float) toHand.x * at;
-        float y = (float) toHand.y * (at * at + at) * 0.5F + BOBBER_TOP;
+        float y = (float) toHand.y * (at * at + at) * SAG_HALF + BOBBER_TOP;
         float z = (float) toHand.z * at;
         float dx = (float) toHand.x * next - x;
-        float dy = (float) toHand.y * (next * next + next) * 0.5F + BOBBER_TOP - y;
+        float dy = (float) toHand.y * (next * next + next) * SAG_HALF + BOBBER_TOP - y;
         float dz = (float) toHand.z * next - z;
         float length = Mth.sqrt(dx * dx + dy * dy + dz * dz);
-        buffer.addVertex(pose, x, y, z).setColor(-16777216).setNormal(pose, dx / length, dy / length, dz / length).setLineWidth(width);
+        buffer.addVertex(pose, x, y, z).setColor(LINE_COLOR).setNormal(pose, dx / length, dy / length, dz / length).setLineWidth(width);
     }
 }

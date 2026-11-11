@@ -39,8 +39,11 @@ public final class MinerProfile implements ResourceCollectionProfile {
 
     private static final int AUTO_SEARCH_HORIZONTAL = 20;
     private static final int AUTO_SEARCH_VERTICAL = 30;
-    /** Below this chance (0.05 %) the Found tab shows "&lt;0.1" instead of 0.0. */
+    /** Below this chance (0.05 %) the Found tab shows the "below minimum" text instead of 0.0. */
     private static final double MIN_SHOWN_CHANCE = 0.0005;
+    /** The Found tab rounds a chance to tenths of a percent: a chance of 1.0 is this many tenths. */
+    private static final double TENTHS_OF_PERCENT_PER_WHOLE = 1000.0;
+    private static final double TENTHS_PER_PERCENT = 10.0;
     /** Redstone ore is no {@link DropExperienceBlock}; its range is fixed in vanilla. */
     private static final XpGain REDSTONE_ORE_XP = XpGain.of(1, 5);
 
@@ -137,9 +140,12 @@ public final class MinerProfile implements ResourceCollectionProfile {
         }).toList();
     }
 
-    /** A chance in percent with one decimal; "&lt;0.1" below that. */
-    static String chanceText(double chance) {
-        return chance < MIN_SHOWN_CHANCE ? "<0.1" : Double.toString(Math.round(chance * 1000) / 10.0);
+    /** A chance in percent with one decimal; the "below minimum" text below that. */
+    static Component chanceText(double chance) {
+        if (chance < MIN_SHOWN_CHANCE) {
+            return Component.translatable("civmod.gui.found.chance.below_minimum");
+        }
+        return Component.literal(Double.toString(Math.round(chance * TENTHS_OF_PERCENT_PER_WHOLE) / TENTHS_PER_PERCENT));
     }
 
     @Override

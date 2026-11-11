@@ -1,5 +1,7 @@
 package com.gilfort.civmod.client;
 
+import java.util.Optional;
+
 import org.joml.Quaternionf;
 import org.jspecify.annotations.Nullable;
 
@@ -147,9 +149,7 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
                 event.getPoseStack().popPose();
             }
             // After the pose is taken out again: the line is drawn in world space from the settler's feet.
-            if (state.line != null) {
-                FishingLineRenderer.submit(state.line, event.getPoseStack(), event.getSubmitNodeCollector(), state.lightCoords);
-            }
+            state.line.ifPresent(line -> FishingLineRenderer.submit(line, event.getPoseStack(), event.getSubmitNodeCollector(), state.lightCoords));
         }
     }
 
@@ -173,7 +173,7 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
      * Fisherman's cast line (none while no line is out).
      */
     private static final class SettlerRenderState extends AvatarRenderState {
-        private FishingLineRenderer.@Nullable Line line;
+        private Optional<FishingLineRenderer.Line> line = Optional.empty();
         private @Nullable Quaternionf roll;
         private float lift;
         private float drop;
