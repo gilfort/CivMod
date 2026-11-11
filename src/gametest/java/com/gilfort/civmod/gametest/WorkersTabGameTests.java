@@ -26,6 +26,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.TestSettlements;
+import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -62,6 +63,7 @@ public final class WorkersTabGameTests {
             register(helper, "workers_tab_unassign_one", WorkersTabGameTests::unassignOne);
             register(helper, "workers_tab_auto_toggle", WorkersTabGameTests::autoToggle);
             register(helper, "workers_tab_wanted_state", WorkersTabGameTests::wantedState);
+            register(helper, "workers_tab_treasure_toggle", WorkersTabGameTests::treasureToggle);
             register(helper, "workers_tab_settler_window", WorkersTabGameTests::settlerWindow);
             register(helper, "workers_tab_days_left", WorkersTabGameTests::daysLeft);
         });
@@ -229,6 +231,33 @@ public final class WorkersTabGameTests {
         helper.assertTrue(JobBlockSite.blockAt(helper.getLevel(), helper.absolutePos(craft)).orElseThrow().byDeliveryman(),
                 "Deliveryman after two clicks for the same state");
         helper.assertTrue(deliveryTwo.getInfo().byDeliveryman(), "The second window shows Deliveryman");
+        helper.succeed();
+    }
+
+    /**
+     * The Fisherman's treasure toggle (#244): on by default, the button sends the wanted state, the JobBlock keeps it
+     * through a save and the window shows it.
+     */
+    private static void treasureToggle(GameTestHelper helper) {
+        clerkBlock(helper);
+        BlockPos fisherman = new BlockPos(4, 1, 1);
+        TestSettlements.setBlock(helper, fisherman, ModBlocks.FISHERMAN_BLOCK.get());
+        Player first = player(helper);
+        Player second = player(helper);
+        SettlementBlock block = JobBlockSite.blockAt(helper.getLevel(), helper.absolutePos(fisherman)).orElseThrow();
+        helper.assertTrue(block.treasure() && menu(helper, first, fisherman).getInfo().treasure(), "Treasure is on by default");
+
+        JobBlockMenu one = menu(helper, first, fisherman);
+        JobBlockMenu two = menu(helper, second, fisherman);
+        helper.assertTrue(one.clickMenuButton(first, one.tab(WorkersTab.class).orElseThrow().treasureButtonId(false)), "First click switches it off");
+        helper.assertTrue(two.clickMenuButton(second, two.tab(WorkersTab.class).orElseThrow().treasureButtonId(false)), "Second click for the same state");
+        helper.assertFalse(block.treasure(), "Treasure is off after two clicks for the same state");
+        helper.assertFalse(two.getInfo().treasure(), "The window shows it off");
+
+        var ops = helper.getLevel().registryAccess().createSerializationContext(JsonOps.INSTANCE);
+        SettlementBlock loaded = SettlementBlock.CODEC.parse(ops, SettlementBlock.CODEC.encodeStart(ops, block).getOrThrow()).getOrThrow();
+        helper.assertFalse(loaded.treasure(), "The JobBlock keeps it off through a save");
+        helper.assertTrue(one.clickMenuButton(first, one.tab(WorkersTab.class).orElseThrow().treasureButtonId(true)) && block.treasure(), "On again");
         helper.succeed();
     }
 

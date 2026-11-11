@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:fisherman_cast_expires",
+  "max_ticks": 60,
+  "structure": "minecraft:empty",
+  "padding": 4
+}

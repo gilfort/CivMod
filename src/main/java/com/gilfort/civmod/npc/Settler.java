@@ -94,6 +94,13 @@ public class Settler extends PathfinderMob {
     private static final EntityDataAccessor<Integer> SKIN = SynchedEntityData.defineId(Settler.class, EntityDataSerializers.INT);
     /** Sleeping without bed: -1 = no, 0–3 = straw bed facing (2D value), 4–7 = bare ground facing. */
     private static final EntityDataAccessor<Integer> STRAW = SynchedEntityData.defineId(Settler.class, EntityDataSerializers.INT);
+    /** The water the Fisherman has its line in; empty while it does not fish. Synched so the clients draw the line. */
+    private static final EntityDataAccessor<Optional<BlockPos>> CAST_TARGET = SynchedEntityData.defineId(Settler.class,
+            EntityDataSerializers.OPTIONAL_BLOCK_POS);
+    /** Entity event: a fish bites, the client dips the bobber and reels in the line. */
+    private static final byte FISH_CAUGHT_EVENT = 100;
+    /** Ticks the line stays out after the work last asked for it (the work asks every tick). */
+    private static final int CAST_HOLD_TICKS = 5;
     /** Height of the vanilla straw bed base (4 px). */
     private static final double STRAW_BED_HEIGHT = 4.0 / 16.0;
     /** Hitbox while sitting: the head of the lowered passenger pose ends about 1.3 blocks up. */
@@ -109,6 +116,10 @@ public class Settler extends PathfinderMob {
     private final com.gilfort.civmod.job.SettlerXp xp = new com.gilfort.civmod.job.SettlerXp();
     /** Looking around while sitting: the work goal holds the look of the main goals during a break. */
     private final GoalSelector sittingLook = new GoalSelector();
+    /** Client: the timeline of the cast line ({@link #castTarget()}). */
+    private final FishingCast fishingCast = new FishingCast();
+    /** Server: the tick until which the line stays out. */
+    private int castHeldUntil;
 
     /**
      * @param type  the entity type
@@ -140,6 +151,58 @@ public class Settler extends PathfinderMob {
         super.defineSynchedData(builder);
         builder.define(SKIN, 0);
         builder.define(STRAW, -1);
+        builder.define(CAST_TARGET, Optional.empty());
+    }
+
+    /**
+     * @return the water the settler has its line in (a Fisherman at work), empty otherwise
+     */
+    public Optional<BlockPos> castTarget() {
+        return entityData.get(CAST_TARGET);
+    }
+
+    /**
+     * @return client: what the cast line does now
+     */
+    public FishingCast fishingCast() {
+        return fishingCast;
+    }
+
+    /**
+     * Server: keeps the line out at the water. The work calls this every tick it fishes; the line is taken in a few ticks
+     * after the last call, wherever the work stops.
+     *
+     * @param water the water block the settler fishes in
+     */
+    public void cast(BlockPos water) {
+        castHeldUntil = tickCount + CAST_HOLD_TICKS;
+        if (!entityData.get(CAST_TARGET).map(water::equals).orElse(false)) {
+            entityData.set(CAST_TARGET, Optional.of(water.immutable()));
+        }
+    }
+
+    /** Server: a fish bites. Nearby clients play the dip and the reel-in; nothing is sent while no line is out. */
+    public void catchFish() {
+        if (tickCount < castHeldUntil) {
+            level().broadcastEntityEvent(this, FISH_CAUGHT_EVENT);
+        }
+    }
+
+    @Override
+    public void onSyncedDataUpdated(EntityDataAccessor<?> accessor) {
+        super.onSyncedDataUpdated(accessor);
+        if (CAST_TARGET.equals(accessor) && level().isClientSide() && castTarget().isPresent()) {
+            fishingCast.start(level().getGameTime());
+        }
+    }
+
+    @Override
+    public void handleEntityEvent(byte id) {
+        if (id == FISH_CAUGHT_EVENT) {
+            fishingCast.caught(level().getGameTime());
+        } else {
+            super.handleEntityEvent(id);
+        }
     }
 
     @Override
@@ -520,6 +583,9 @@ public class Settler extends PathfinderMob {
     protected void customServerAiStep(ServerLevel level) {
         super.customServerAiStep(level);
         work.aiStep(level);
+        if (tickCount >= castHeldUntil && castTarget().isPresent()) {
+            entityData.set(CAST_TARGET, Optional.empty());
+        }
         if (isSitting()) {
             // After the work goal: its look at the work target does not hold the head still. Full ticks every other
             // tick, like vanilla's goal selectors.

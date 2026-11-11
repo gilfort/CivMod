@@ -92,6 +92,7 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
         state.showCape = false;
         SettlerRenderState settlerState = (SettlerRenderState) state;
         settlerState.roll = null;
+        settlerState.line = FishingLineRenderer.extract(settler, partialTicks);
         settlerState.drop = settler.isSitting() ? SIT_DROP : 0.0F;
         state.isPassenger |= settler.isSitting();
         Direction bed = state.bedOrientation;
@@ -141,8 +142,14 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
 
     @SubscribeEvent
     static void onRenderPost(RenderLivingEvent.Post<?, ?, ?> event) {
-        if (event.getRenderState() instanceof SettlerRenderState state && state.posed()) {
-            event.getPoseStack().popPose();
+        if (event.getRenderState() instanceof SettlerRenderState state) {
+            if (state.posed()) {
+                event.getPoseStack().popPose();
+            }
+            // After the pose is taken out again: the line is drawn in world space from the settler's feet.
+            if (state.line != null) {
+                FishingLineRenderer.submit(state.line, event.getPoseStack(), event.getSubmitNodeCollector(), state.lightCoords);
+            }
         }
     }
 
@@ -161,8 +168,12 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
         }
     }
 
-    /** The player render state plus tonight's side pose (none when awake or lying on the back) and the sitting drop. */
+    /**
+     * The player render state plus tonight's side pose (none when awake or lying on the back), the sitting drop and the
+     * Fisherman's cast line (none while no line is out).
+     */
     private static final class SettlerRenderState extends AvatarRenderState {
+        private FishingLineRenderer.@Nullable Line line;
         private @Nullable Quaternionf roll;
         private float lift;
         private float drop;
