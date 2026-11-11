@@ -42,7 +42,7 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
 /**
  * The Clerk's store (vault {@code Jobs/Clerk.md}): the containers linked with the Scroll of Assignment (the Clerk JobBlock has no
  * slots of its own), and the access rule. Taking from it needs a working Clerk at its counter (a settler assigned, in its
- * shift from its waking time to 18:30, a Tavern Host to 20:00); the Deliverymen of its Warehouse reach all of it as staff, and settlers put items in
+ * shift from its waking time to 18:00, a Tavern Host to 20:00); the Deliverymen of its Warehouse reach all of it as staff, and settlers put items in
  * at any time ({@link #dropOff}). Hoppers and pipes on the block see no slot.
  * <p>
  * Every Pantry is a food point: settlers take food from the nearest Pantry that has food
@@ -51,8 +51,8 @@ import net.neoforged.neoforge.transfer.item.ItemResource;
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class ClerkStorage {
 
-    /** End of the Clerk's shift in day ticks (18:30; day time 0 = 06:00). */
-    public static final long SHIFT_END = 12500L;
+    /** End of the Clerk's shift in day ticks (18:00; day time 0 = 06:00). */
+    public static final long SHIFT_END = 12000L;
     /** End of the Tavern Host's shift in day ticks (20:00): the Tavern evening runs until bedtime. */
     public static final long TAVERN_SHIFT_END = 14000L;
     /** Customers are served within this distance of the Clerk's counter. */
@@ -121,7 +121,7 @@ public final class ClerkStorage {
      * The one place that says which jobs serve a counter and when their shift ends.
      *
      * @param job a job
-     * @return the day time its shift ends: 20:00 for the Tavern Host, 18:30 for the Clerk; empty for a job without a counter
+     * @return the day time its shift ends: 20:00 for the Tavern Host, 18:00 for the Clerk; empty for a job without a counter
      */
     public static OptionalLong shiftEnd(Job job) {
         if (job == ModJobs.CLERK.get()) {

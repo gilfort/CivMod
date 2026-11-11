@@ -185,18 +185,18 @@ public final class PantryGameTests {
         helper.succeed();
     }
 
-    /** The Tavern Host works 05:30–20:00 (a Clerk stops at 18:30) and wakes early. */
+    /** The Tavern Host works 05:30–20:00 (a Clerk stops at 18:00) and wakes early. */
     private static void shift(GameTestHelper helper) {
         Settler host = ModEntityTypes.SETTLER.get().create(helper.getLevel(), EntitySpawnReason.EVENT);
         long day = 4L;
-        helper.assertTrue(host.getWork().dayTimes(day).workEnd() < ClerkStorage.SHIFT_END, "Without the job: off before 18:30");
+        helper.assertTrue(host.getWork().dayTimes(day).workEnd() < ClerkStorage.SHIFT_END, "Without the job: off before 18:00");
         host.addJob(new SettlerJob(ModJobs.TAVERN_HOST.get(), helper.absolutePos(new BlockPos(1, 1, 1))));
         helper.assertTrue(host.getWork().dayTimes(day).workEnd() == 14000L, "With the Tavern Host job: 20:00");
         UUID id = host.getUUID();
         helper.assertTrue(ClerkStorage.inShift(id, day, 13999L, ModJobs.TAVERN_HOST.get()), "Open until 20:00");
         helper.assertFalse(ClerkStorage.inShift(id, day, 14000L, ModJobs.TAVERN_HOST.get()), "Closed at 20:00");
-        helper.assertTrue(ClerkStorage.inShift(id, day, ClerkStorage.SHIFT_END, ModJobs.TAVERN_HOST.get()), "Still open at 18:30");
-        helper.assertFalse(ClerkStorage.inShift(id, day, ClerkStorage.SHIFT_END, ModJobs.CLERK.get()), "A Clerk closes at 18:30");
+        helper.assertTrue(ClerkStorage.inShift(id, day, ClerkStorage.SHIFT_END, ModJobs.TAVERN_HOST.get()), "Still open at 18:00");
+        helper.assertFalse(ClerkStorage.inShift(id, day, ClerkStorage.SHIFT_END, ModJobs.CLERK.get()), "A Clerk closes at 18:00");
         host.addJob(new SettlerJob(ModJobs.CLERK.get(), helper.absolutePos(new BlockPos(2, 1, 1))));
         helper.assertTrue(host.getWork().dayTimes(day).workEnd() == 14000L, "Both counter jobs: the later end");
         long wake = host.getWork().dayTimes(day).wake();
