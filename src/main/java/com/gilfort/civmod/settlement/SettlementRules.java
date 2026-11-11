@@ -35,7 +35,7 @@ public final class SettlementRules {
     private static final int[] SERVED_CLERKS = {2, 4, 6, 8, 12};
 
     /** Containers a Clerk JobBlock links as storage per level (index 0 = level 1). */
-    private static final int[] CLERK_STORAGE = {2, 4, 8, 12, 16};
+    private static final int[] CLERK_STORAGE = {2, 4, 6, 10, 16};
     /** Stand spots per Clerk JobBlock. */
     public static final int MAX_STAND_SPOTS = 8;
     /** Blocks between a Stage and its Sound center at most (vault {@code Systems/Entertainment.md}). */
@@ -119,7 +119,7 @@ public final class SettlementRules {
 
     /**
      * @param level the Clerk JobBlock level
-     * @return how many linked containers a Clerk JobBlock uses at that level: 2 / 4 / 8 / 12 / 16
+     * @return how many linked containers a Clerk JobBlock uses at that level: 2 / 4 / 6 / 10 / 16
      */
     public static int clerkStorage(int level) {
         return CLERK_STORAGE[clampLevel(level) - MIN_LEVEL];

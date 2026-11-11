@@ -1,8 +1,8 @@
 package com.gilfort.civmod.job;
 
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import com.gilfort.civmod.api.ScanResult;
@@ -19,26 +19,28 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.neoforged.neoforge.common.Tags;
 
 /**
- * Miner scan (vault {@code Jobs/Miner.md}): which stone and ore types exist in a cylinder around the scan centre,
- * from the bottom to the top of the world. Every type counts once, so only the block palettes of the chunk sections
- * are read; single blocks are only read for sections whose palette lists every block (very many types).
+ * Miner scan (vault {@code Jobs/Miner.md}): how many blocks of each stone and ore type lie in a cylinder around the
+ * scan centre, from the bottom to the top of the world. It reads the packed block storage of each chunk section in one
+ * pass ({@link net.minecraft.world.level.chunk.PalettedContainer#count}), so no block is looked up on its own, a
+ * section of one block type costs a single step, and a single ore block is never missed. A section that the radius
+ * touches counts whole, also the part outside the radius.
  */
 public final class MineScan implements SectionScan<MineScan.Result> {
 
     /**
      * Result of a scan.
      *
-     * @param stones stone types found
-     * @param ores   ore types found
+     * @param stones block count per stone type found
+     * @param ores   block count per ore type found
      */
-    public record Result(Set<Identifier> stones, Set<Identifier> ores) implements ScanResult {
+    public record Result(Map<Identifier, Integer> stones, Map<Identifier, Integer> ores) implements ScanResult {
 
         /** Empty result. */
-        public static final Result EMPTY = new Result(Set.of(), Set.of());
+        public static final Result EMPTY = new Result(Map.of(), Map.of());
 
         @Override
         public List<Identifier> foundBlocks() {
-            return Stream.concat(stones.stream().sorted(), ores.stream().sorted()).toList();
+            return Stream.concat(stones.keySet().stream().sorted(), ores.keySet().stream().sorted()).toList();
         }
     }
 
@@ -52,8 +54,8 @@ public final class MineScan implements SectionScan<MineScan.Result> {
     private int sectionY = Integer.MIN_VALUE;
     private int sectionZ;
     private boolean done;
-    private final Set<Identifier> stones = new HashSet<>();
-    private final Set<Identifier> ores = new HashSet<>();
+    private final Map<Identifier, Integer> stones = new HashMap<>();
+    private final Map<Identifier, Integer> ores = new HashMap<>();
 
     /**
      * @param center the scan centre (primary work place or JobBlock)
@@ -77,7 +79,7 @@ public final class MineScan implements SectionScan<MineScan.Result> {
 
     @Override
     public Result result() {
-        return new Result(Set.copyOf(stones), Set.copyOf(ores));
+        return new Result(Map.copyOf(stones), Map.copyOf(ores));
     }
 
     @Override
@@ -113,16 +115,7 @@ public final class MineScan implements SectionScan<MineScan.Result> {
         if (section.hasOnlyAir()) {
             return;
         }
-        // The predicate never matches, so every palette entry is visited; a global palette answers without asking.
-        boolean[] visited = new boolean[1];
-        boolean maybe = section.maybeHas(state -> {
-            visited[0] = true;
-            collect(state);
-            return false;
-        });
-        if (maybe && !visited[0]) {
-            readBlocks(section, sx, sz);
-        }
+        section.getStates().count(this::collect);
     }
 
     private boolean intersects(int sx, int sz) {
@@ -133,27 +126,11 @@ public final class MineScan implements SectionScan<MineScan.Result> {
         return dx * dx + dz * dz <= (long) radius * radius;
     }
 
-    private void readBlocks(LevelChunkSection section, int sx, int sz) {
-        long radiusSquared = (long) radius * radius;
-        for (int x = 0; x < 16; x++) {
-            for (int z = 0; z < 16; z++) {
-                long dx = SectionPos.sectionToBlockCoord(sx) + x - center.getX();
-                long dz = SectionPos.sectionToBlockCoord(sz) + z - center.getZ();
-                if (dx * dx + dz * dz > radiusSquared) {
-                    continue;
-                }
-                for (int y = 0; y < 16; y++) {
-                    collect(section.getBlockState(x, y, z));
-                }
-            }
-        }
-    }
-
-    private void collect(BlockState state) {
+    private void collect(BlockState state, int count) {
         if (state.is(Tags.Blocks.ORES)) {
-            ores.add(BuiltInRegistries.BLOCK.getKey(state.getBlock()));
+            ores.merge(BuiltInRegistries.BLOCK.getKey(state.getBlock()), count, Integer::sum);
         } else if (state.is(Tags.Blocks.STONES)) {
-            stones.add(BuiltInRegistries.BLOCK.getKey(state.getBlock()));
+            stones.merge(BuiltInRegistries.BLOCK.getKey(state.getBlock()), count, Integer::sum);
         }
     }
 }
