@@ -590,6 +590,23 @@ public final class JobAssignments {
     }
 
     /**
+     * Sets the treasure option of a Fisherman Block.
+     *
+     * @param data     the dimension's settlement data
+     * @param jobBlock the JobBlock position
+     * @param on       whether the Fisherman may catch treasure
+     * @return the state now: whether treasure is on (true without a JobBlock there, the default)
+     */
+    public static boolean setTreasure(SettlementData data, BlockPos jobBlock, boolean on) {
+        Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
+        block.filter(found -> found.treasure() != on).ifPresent(found -> {
+            found.setTreasure(on);
+            data.changed();
+        });
+        return block.map(SettlementBlock::treasure).orElse(true);
+    }
+
+    /**
      * Excludes or includes a found resource of a Resource Collection JobBlock (vault
      * {@code Systems/Resource Collection Jobs.md}): the job no longer produces an excluded type.
      *

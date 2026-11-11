@@ -213,11 +213,13 @@ final class WorkRules {
                     ? Optional.of(new ResourceCollectionProfile.Produced(List.of(crafted.get()), ItemStack.EMPTY))
                     : profile instanceof SecondaryToolProfile withSecondary
                             ? withSecondary.produce(context, withSecondary.secondaryTool(site.block()).flatMap(kind -> SettlerTools.best(settler, kind)))
-                            : profile instanceof DropPoolProfile pooled
-                                    // Entries with their own tool use it from the collect inventory, read only when one asks.
-                                    ? pooled.produce(context, JobDrops.Tools.of(level, settler, () -> supply.collect()
-                                            .orElseGet(() -> ClerkStorage.stock(level, site.collect(), DayClock.dayTime(level), true))))
-                                    : profile.produce(context);
+                            : profile instanceof FishingProfile fishing
+                                    ? fishing.produce(context, site.block().treasure())
+                                    : profile instanceof DropPoolProfile pooled
+                                            // Entries with their own tool use it from the collect inventory, read only when one asks.
+                                            ? pooled.produce(context, JobDrops.Tools.of(level, settler, () -> supply.collect()
+                                                    .orElseGet(() -> ClerkStorage.stock(level, site.collect(), DayClock.dayTime(level), true))))
+                                            : profile.produce(context);
             rolls++;
             if (produced.isPresent()) {
                 if (crafted.isEmpty()) {

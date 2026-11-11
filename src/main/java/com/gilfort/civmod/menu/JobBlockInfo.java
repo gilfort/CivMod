@@ -57,10 +57,12 @@ import net.minecraft.server.level.ServerLevel;
  * @param biome          today's biome bonus line and the "?" overview of the Job's biome bonuses
  * @param blessingLeft   at the Center Block: the ticks the settlement's work speed blessing still acts (0 = none)
  * @param storageUnlinked whether this is a Clerk JobBlock without a linked container (the header asks to link one)
+ * @param treasure       whether a Fisherman may catch treasure (the "Treasure" toggle of its JobBlock)
  */
 public record JobBlockInfo(Job jobType, int level, Component settlementName, boolean inSettlement, boolean connected,
         int distance, int required, List<Worker> workers, List<JobPlaces.Line> places, boolean collectLeaves, boolean byDeliveryman,
-        MissionTab missionTab, BiomeInfo biome, long blessingLeft, boolean storageUnlinked) {
+        MissionTab missionTab, BiomeInfo biome, long blessingLeft, boolean storageUnlinked,
+        boolean treasure) {
 
     /**
      * @return for an unconnected block: whether the settlement has no connected block to reach
@@ -339,7 +341,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         List<JobPlaces.Line> changed = places.stream()
                 .map(line -> line.job() == job ? new JobPlaces.Line(line.job(), line.taken(), line.places(), on) : line).toList();
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, workers, changed, collectLeaves,
-                byDeliveryman, missionTab, biome, blessingLeft, storageUnlinked);
+                byDeliveryman, missionTab, biome, blessingLeft, storageUnlinked, treasure);
     }
 
     /** The fields up to the Center Block's blessing: a composite codec holds at most 14 fields, the last flag follows it. */
@@ -360,20 +362,22 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
             ByteBufCodecs.VAR_LONG, JobBlockInfo::blessingLeft,
             (type, level, settlementName, inSettlement, connected, distance, required, workers, places, collectLeaves, byDeliveryman,
                     missionTab, biome, blessingLeft) -> new JobBlockInfo(type, level, settlementName, inSettlement, connected, distance, required,
-                            workers, places, collectLeaves, byDeliveryman, missionTab, biome, blessingLeft, false));
+                            workers, places, collectLeaves, byDeliveryman, missionTab, biome, blessingLeft, false, true));
 
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, JobBlockInfo> STREAM_CODEC = StreamCodec.of(
             (buf, info) -> {
                 BASE_CODEC.encode(buf, info);
                 buf.writeBoolean(info.storageUnlinked());
+                buf.writeBoolean(info.treasure());
             },
             buf -> {
                 JobBlockInfo base = BASE_CODEC.decode(buf);
                 boolean storageUnlinked = buf.readBoolean();
+                boolean treasure = buf.readBoolean();
                 return new JobBlockInfo(base.jobType(), base.level(), base.settlementName(), base.inSettlement(), base.connected(), base.distance(),
                         base.required(), base.workers(), base.places(), base.collectLeaves(), base.byDeliveryman(), base.missionTab(), base.biome(),
-                        base.blessingLeft(), storageUnlinked);
+                        base.blessingLeft(), storageUnlinked, treasure);
             });
 
     /**
@@ -412,7 +416,8 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
                 new MissionTab(SettlementWorld.missionOffer(level, pos), taken, settlers, OutcomeRules.get()),
                 BiomeInfo.of(level, pos, jobType, assignees),
                 blessingLeft(settlement, block, now),
-                jobType == ModJobs.CLERK.get() && block.map(found -> found.storage().isEmpty()).orElse(false));
+                jobType == ModJobs.CLERK.get() && block.map(found -> found.storage().isEmpty()).orElse(false),
+                block.map(SettlementBlock::treasure).orElse(true));
     }
 
     /**
@@ -434,7 +439,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
         List<MissionSettler> settlersLeft = missionTab.settlers().stream().filter(entry -> !entry.id().equals(settler)).toList();
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, left,
                 JobPlaces.lines(jobType, level, offeredJobs(), left.stream().map(Worker::assignee).toList(), autoJobs()), collectLeaves, byDeliveryman,
-                new MissionTab(missionTab.offer(), takenLeft, settlersLeft, missionTab.rules()), biome, blessingLeft, storageUnlinked);
+                new MissionTab(missionTab.offer(), takenLeft, settlersLeft, missionTab.rules()), biome, blessingLeft, storageUnlinked, treasure);
     }
 
     /**
@@ -443,7 +448,16 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withCollectLeaves(boolean on) {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, workers, places, on,
-                byDeliveryman, missionTab, biome, blessingLeft, storageUnlinked);
+                byDeliveryman, missionTab, biome, blessingLeft, storageUnlinked, treasure);
+    }
+
+    /**
+     * @param on whether a Fisherman may catch treasure
+     * @return a copy with that treasure option
+     */
+    public JobBlockInfo withTreasure(boolean on) {
+        return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, workers, places, collectLeaves,
+                byDeliveryman, missionTab, biome, blessingLeft, storageUnlinked, on);
     }
 
     /**
@@ -452,7 +466,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public JobBlockInfo withByDeliveryman(boolean deliveryman) {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, workers, places, collectLeaves,
-                deliveryman, missionTab, biome, blessingLeft, storageUnlinked);
+                deliveryman, missionTab, biome, blessingLeft, storageUnlinked, treasure);
     }
 
     /**
@@ -475,7 +489,7 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
 
     private JobBlockInfo withMissionTab(MissionTab changed) {
         return new JobBlockInfo(jobType, level, settlementName, inSettlement, connected, distance, required, workers, places, collectLeaves, byDeliveryman,
-                changed, biome, blessingLeft, storageUnlinked);
+                changed, biome, blessingLeft, storageUnlinked, treasure);
     }
 
     /**
@@ -506,6 +520,6 @@ public record JobBlockInfo(Job jobType, int level, Component settlementName, boo
      */
     public static JobBlockInfo unknown(Job jobType, int jobLevel) {
         return new JobBlockInfo(jobType, jobLevel, Component.empty(), false, false, 0, 0, List.of(), JobPlaces.lines(jobType, jobLevel, List.of()), false, false,
-                MissionTab.EMPTY, BiomeInfo.NONE, 0L, false);
+                MissionTab.EMPTY, BiomeInfo.NONE, 0L, false, true);
     }
 }

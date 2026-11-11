@@ -7,10 +7,10 @@ import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
-import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.api.SectionScan;
 import com.gilfort.civmod.api.XpGain;
+import com.gilfort.civmod.npc.Settler;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -41,10 +41,11 @@ import net.neoforged.neoforge.common.Tags;
 
 /**
  * Fisherman (vault {@code Jobs/Fisherman.md}): fishing rod, open water with a shore in reach as work place, water
- * count scan; a catch is treasure (vanilla treasure loot table) by the treasure chance, otherwise a fish of the
- * {@link FishTable} among those not excluded at the JobBlock.
+ * count scan; a catch is treasure (vanilla treasure loot table) by the treasure chance, unless the JobBlock's treasure
+ * option is off, otherwise a fish of the {@link FishTable} among those not excluded at the JobBlock. While it works the
+ * settler casts a line to the water ({@link Settler#cast}) that dips at every catch.
  */
-public final class FishermanProfile implements ResourceCollectionProfile {
+public final class FishermanProfile implements FishingProfile {
 
     /** Fishing reach: the settler stands on the shore within this distance. */
     public static final double FISHING_REACH = 6.0;
@@ -222,9 +223,10 @@ public final class FishermanProfile implements ResourceCollectionProfile {
     }
 
     @Override
-    public Optional<Produced> produce(Context context) {
+    public Optional<Produced> produce(Context context, boolean treasureOn) {
         ServerLevel level = context.level();
-        boolean treasure = level.getRandom().nextDouble()
+        // With the option off the chance is not rolled at all.
+        boolean treasure = treasureOn && level.getRandom().nextDouble()
                 < context.rareChance(treasureChance(context.skillLevel(), enchantmentLevel(context.tool(), Enchantments.LUCK_OF_THE_SEA)));
         List<ItemStack> items;
         if (treasure) {
@@ -241,6 +243,9 @@ public final class FishermanProfile implements ResourceCollectionProfile {
                     .orElse(List.of());
         }
         context.settler().swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, false);
+        if (context.settler() instanceof Settler settler) {
+            settler.catchFish();
+        }
         Vec3 surface = Vec3.atCenterOf(context.poi()).add(0.0, 0.5, 0.0);
         level.sendParticles(ParticleTypes.SPLASH, surface.x, surface.y, surface.z, 12, 0.3, 0.0, 0.3, 0.1);
         level.playSound(null, context.poi(), SoundEvents.FISHING_BOBBER_RETRIEVE, SoundSource.NEUTRAL, 0.6F, 1.0F);
