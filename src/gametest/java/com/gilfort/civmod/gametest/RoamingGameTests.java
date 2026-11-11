@@ -369,12 +369,15 @@ public final class RoamingGameTests {
         // Whichever log the day starts with, he is at the other one later.
         boolean[] seenFirst = new boolean[1];
         boolean[] seenSecond = new boolean[1];
+        // The buffer is emptied when it is delivered, so "produced" sticks once seen.
+        boolean[] produced = new boolean[1];
         helper.succeedWhen(() -> {
             Vec3 position = settler.position();
             seenFirst[0] |= position.distanceToSqr(Vec3.atBottomCenterOf(first)) < 16.0;
             seenSecond[0] |= position.distanceToSqr(Vec3.atBottomCenterOf(second)) < 16.0;
+            produced[0] |= settler.getWork().buffer(jobBlock).count() > 0;
             helper.assertTrue(seenFirst[0] && seenSecond[0], "He has not worked at both logs yet (status " + settler.getWork().status(jobBlock) + ")");
-            helper.assertTrue(settler.getWork().buffer(jobBlock).count() > 0, "Nothing produced");
+            helper.assertTrue(produced[0], "Nothing produced (status " + settler.getWork().status(jobBlock) + ")");
             helper.assertTrue(settler.getWork().scan(jobBlock).isPresent(), "The scan is still there");
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
