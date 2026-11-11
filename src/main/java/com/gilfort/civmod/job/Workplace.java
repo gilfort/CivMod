@@ -10,6 +10,7 @@ import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import org.jspecify.annotations.Nullable;
 
@@ -95,6 +96,12 @@ final class Workplace {
         private final Map<TagKey<Block>, StationSeen> recipeStations = new HashMap<>();
         /** The day a delivery after work found the drop-off full: it is not tried again that evening. */
         private long fullAfterWorkDay = -1L;
+        /** How the settler moves around the work place of a day, null before the first plan of the work. */
+        private @Nullable RoamingOfDay roaming;
+    }
+
+    /** The roaming of the work place of a day; a new day starts it anew. */
+    private record RoamingOfDay(long day, Roaming roaming) {
     }
 
     /** The last search for an innate recipe's station: whether one was found, and until when that counts. */
@@ -471,6 +478,33 @@ final class Workplace {
      */
     boolean noFreeWorkPlace() {
         return dayState.noFreeWorkPlace;
+    }
+
+    /**
+     * How the settler moves around the work place of the day (a {@link RoamingProfile}); kept for the day while the anchor
+     * stays the same, started anew with a new day or work place, so every day begins at the work place.
+     *
+     * @param anchor the work place of the day
+     * @param day    the day
+     * @param create starts the roaming around the anchor
+     * @return the roaming of the anchor
+     */
+    Roaming roamingAt(BlockPos anchor, long day, Supplier<Roaming> create) {
+        RoamingOfDay current = dayState.roaming;
+        if (current == null || current.day() != day || !current.roaming().anchor().equals(anchor)) {
+            current = new RoamingOfDay(day, create.get());
+            dayState.roaming = current;
+        }
+        return current.roaming();
+    }
+
+    /**
+     * @param target where the settler stands now
+     * @return the roaming started by the last plan, one that stands at the target if the work was forgotten since
+     */
+    Roaming roamingOrStanding(BlockPos target) {
+        RoamingOfDay current = dayState.roaming;
+        return current == null ? Roaming.standingAt(target) : current.roaming();
     }
 
     /**

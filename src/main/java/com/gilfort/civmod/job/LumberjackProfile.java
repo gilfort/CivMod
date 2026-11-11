@@ -9,6 +9,7 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.api.SectionScan;
+import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
 
 import net.minecraft.core.BlockPos;
@@ -28,9 +29,9 @@ import net.neoforged.neoforge.common.Tags;
 
 /**
  * Lumberjack (vault {@code Jobs/Lumberjack.md}): axe, logs as work places, daily wood scan, optional leaves with
- * shears.
+ * shears; every few game hours he changes the log he works at ({@link LogRoaming}).
  */
-public final class LumberjackProfile implements SecondaryToolProfile {
+public final class LumberjackProfile implements SecondaryToolProfile, RoamingProfile {
 
     private static final int AUTO_SEARCH_HORIZONTAL = 20;
     private static final int AUTO_SEARCH_VERTICAL = 30;
@@ -68,6 +69,11 @@ public final class LumberjackProfile implements SecondaryToolProfile {
     @Override
     public BlockPos scanCenter(BlockPos jobBlock, List<BlockPos> workPoints, BlockPos workPlace) {
         return workPoints.isEmpty() ? workPlace : workPoints.get(0);
+    }
+
+    @Override
+    public Roaming roaming(ServerLevel level, JobBlockSite site, BlockPos anchor, long gameTime) {
+        return new LogRoaming(this, anchor, gameTime, level.getRandom());
     }
 
     @Override

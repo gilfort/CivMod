@@ -10,6 +10,9 @@ public final class DayClock {
     /** Ticks per day. */
     public static final long DAY_TICKS = 24000L;
 
+    /** Ticks per game hour. */
+    public static final long HOUR_TICKS = 1000L;
+
     private DayClock() {
     }
 

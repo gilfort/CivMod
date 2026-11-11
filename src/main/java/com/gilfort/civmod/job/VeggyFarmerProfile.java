@@ -15,6 +15,7 @@ import com.gilfort.civmod.api.SectionScan;
 import com.gilfort.civmod.api.SimpleCollectionProfile;
 import com.gilfort.civmod.block.ScarecrowBlock;
 import com.gilfort.civmod.registry.ModItems;
+import com.gilfort.civmod.settlement.JobBlockSite;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -40,13 +41,15 @@ import net.minecraft.world.level.block.state.BlockState;
  * do not count.</li>
  * <li>Roll: a crop type weighted by its count, then the loot of its mature state with the hoe (Fortune applies). The
  * crops are never harvested.</li>
+ * <li>Walk: he starts at the scarecrow and hits crops around his current position ({@link CropRoaming}); the roll stays with
+ * the scarecrow.</li>
  * <li>Tool: a hoe ({@code #minecraft:hoes}); speed: the shared formula × the plant farm curve of the Job.</li>
  * <li>NPC drop pool ({@link JobDrops}): the scan also counts the blocks of the Job's entries, the roll adds them.</li>
  * </ul>
  * Roll, tool and speed are those of a {@link SimpleCollectionProfile}; this profile adds the scarecrow and the crop
  * filter.
  */
-public final class VeggyFarmerProfile extends FarmProfile implements DropPoolProfile {
+public final class VeggyFarmerProfile extends FarmProfile implements DropPoolProfile, RoamingProfile {
 
     /** The reason without a scarecrow. */
     private static final BlockingReason NO_SCARECROW = BlockingReason.of("civmod.blocked.no_scarecrow").withIcon(ModItems.SCARECROW.get());
@@ -92,6 +95,11 @@ public final class VeggyFarmerProfile extends FarmProfile implements DropPoolPro
         List<BlockPos> found = BlockSearch.all(level, jobBlock, AUTO_SEARCH_HORIZONTAL, HALF_HEIGHT, ScarecrowBlock::isLowerHalf).stream()
                 .filter(free).toList();
         return found.isEmpty() ? null : found.get(level.getRandom().nextInt(found.size()));
+    }
+
+    @Override
+    public Roaming roaming(ServerLevel level, JobBlockSite site, BlockPos anchor, long gameTime) {
+        return new CropRoaming(anchor, scanRadius(site.level()), HALF_HEIGHT, gameTime, level.getRandom());
     }
 
     @Override
