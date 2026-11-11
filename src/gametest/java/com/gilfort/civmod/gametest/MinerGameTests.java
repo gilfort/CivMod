@@ -8,6 +8,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.job.BlockSearch;
 import com.gilfort.civmod.job.MineScan;
 import com.gilfort.civmod.job.MinerOutput;
@@ -65,6 +66,8 @@ public final class MinerGameTests {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "miner_roll", MinerGameTests::roll);
             register(helper, "miner_excluded_roll", MinerGameTests::excludedRoll);
+            register(helper, "miner_roll_counts", MinerGameTests::rollWeightsUseCounts);
+            register(helper, "miner_found_chance", MinerGameTests::foundTabShowsChance);
             register(helper, "miner_weights_merge", MinerGameTests::weightsMerge);
             register(helper, "miner_palette_scan", MinerGameTests::paletteScan);
             register(helper, "miner_scan_edge_section", MinerGameTests::edgeSectionCountsWhole);
@@ -143,6 +146,41 @@ public final class MinerGameTests {
         Map<Identifier, Integer> stonesOnly = sample(new MineScan.Result(Map.of(STONE, 1), Map.of()), STONE, type -> true, 100, weights);
         double nothing = stonesOnly.getOrDefault(Identifier.withDefaultNamespace("air"), 0) / (double) SAMPLES;
         helper.assertTrue(Math.abs(nothing - 0.3396) < 0.015, "A missing ore group yields nothing for those rolls: " + nothing);
+        helper.succeed();
+    }
+
+    /**
+     * The weight of a type is its base weight times the square root of its block count, inside its group; an ore without
+     * a base weight falls back to the unknown ore weight. The groups keep their skill share.
+     */
+    private static void rollWeightsUseCounts(GameTestHelper helper) {
+        Identifier ruby = Identifier.fromNamespaceAndPath("modded", "ruby_ore");
+        MinerWeights weights = new MinerWeights(99.7, -0.34, Map.of(STONE, 100.0), Map.of(IRON_ORE, 70.0, DIAMOND_ORE, 70.0), 10, 10);
+        MineScan.Result scan = new MineScan.Result(Map.of(STONE, 1), Map.of(IRON_ORE, 400, DIAMOND_ORE, 100, ruby, 100));
+
+        Map<Identifier, Integer> level100 = sample(scan, STONE, type -> true, 100, weights);
+        double ores = (level100.getOrDefault(IRON_ORE, 0) + level100.getOrDefault(DIAMOND_ORE, 0) + level100.getOrDefault(ruby, 0)) / (double) SAMPLES;
+        helper.assertTrue(Math.abs(ores - 0.3396) < 0.015, "The ore group keeps its skill share (~34 %): " + ores);
+        // 70 x sqrt(400) = 1400, 70 x sqrt(100) = 700, unknown 10 x sqrt(100) = 100: shares 14/22, 7/22, 1/22 of the ore rolls.
+        double oreRolls = ores * SAMPLES;
+        double iron = level100.getOrDefault(IRON_ORE, 0) / oreRolls;
+        double diamond = level100.getOrDefault(DIAMOND_ORE, 0) / oreRolls;
+        double unknown = level100.getOrDefault(ruby, 0) / oreRolls;
+        helper.assertTrue(Math.abs(iron - 14.0 / 22.0) < 0.03, "Iron: 4x the blocks gives 2x the weight (~64 % of the ores): " + iron);
+        helper.assertTrue(Math.abs(diamond - 7.0 / 22.0) < 0.03, "Diamond (~32 % of the ores): " + diamond);
+        helper.assertTrue(Math.abs(unknown - 1.0 / 22.0) < 0.02, "An ore without a weight uses the unknown ore weight (~5 %): " + unknown);
+        helper.succeed();
+    }
+
+    /** The Found tab names each kind with its chance and never shows the number of blocks. */
+    private static void foundTabShowsChance(GameTestHelper helper) {
+        ResourceCollectionProfile profile = ModJobs.MINER.get().profile(ResourceCollectionProfile.class).orElseThrow();
+        MineScan.Result scan = new MineScan.Result(Map.of(STONE, 4321), Map.of(IRON_ORE, 5));
+        Map<Identifier, String> names = new HashMap<>();
+        profile.found(scan, Optional.empty()).forEach(found -> names.put(found.type(), found.icon().getHoverName().getString()));
+        helper.assertTrue(names.get(STONE).contains("99.7"), "The only stone has the whole stone share at skill 1: " + names.get(STONE));
+        helper.assertTrue(names.get(IRON_ORE).contains("0.3"), "The only ore has the whole ore share at skill 1: " + names.get(IRON_ORE));
+        names.values().forEach(name -> helper.assertFalse(name.contains("4321") || name.contains("5 "), "No block count in " + name));
         helper.succeed();
     }
 
