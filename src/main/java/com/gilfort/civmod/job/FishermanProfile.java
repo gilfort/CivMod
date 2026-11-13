@@ -160,7 +160,7 @@ public final class FishermanProfile implements FishingProfile {
         for (BlockPos spot : BlockPos.betweenClosed(pos.offset(-search, -2, -search), pos.offset(search, 3, search))) {
             int dx = spot.getX() - pos.getX();
             int dz = spot.getZ() - pos.getZ();
-            if (dx * dx + dz * dz <= FISHING_REACH * FISHING_REACH && level.isLoaded(spot) && SettlerWork.canStand(level, spot)) {
+            if (dx * dx + dz * dz <= FISHING_REACH * FISHING_REACH && level.isLoaded(spot) && StandingSpots.canStand(level, spot)) {
                 return true;
             }
         }

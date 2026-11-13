@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.job.SettlerWork;
+import com.gilfort.civmod.job.StandingSpots;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.registry.ModEntityTypes;
@@ -174,13 +175,13 @@ public final class ScheduleGameTests {
         }
         ServerLevel level = helper.getLevel();
         BlockPos log = helper.absolutePos(new BlockPos(4, 1, 4));
-        Vec3 spot = SettlerWork.standingSpot(level, log);
+        Vec3 spot = StandingSpots.standingSpot(level, log);
         BlockPos feet = BlockPos.containing(spot);
         helper.assertTrue(level.getBlockState(feet).isAir() && level.getBlockState(feet.above()).isAir(), "Spot must be free: " + feet);
         helper.assertTrue(feet.getY() == log.getY() && feet.distSqr(log) <= 4, "Spot must be next to the log: " + feet);
 
         BlockPos head = placeBed(helper, new BlockPos(1, 1, 1));
-        BlockPos bedSpot = BlockPos.containing(SettlerWork.standingSpot(level, head));
+        BlockPos bedSpot = BlockPos.containing(StandingSpots.standingSpot(level, head));
         helper.assertFalse(level.getBlockState(bedSpot).getBlock() instanceof BedBlock || level.getBlockState(bedSpot.below()).getBlock() instanceof BedBlock,
                 "Must not stand on the bed: " + bedSpot);
         helper.succeed();
