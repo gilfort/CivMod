@@ -1117,8 +1117,8 @@ final class ProducingLoop implements CategoryLoop {
      */
     private double speed(ServerLevel level, SettlerJob job, SimulatedSpan span) {
         Workplace workplace = shell.workplace(job.jobBlock());
-        return LumberjackOutput.speed(shell.effectiveLevel(job)) * workplace.jobFactor(level, job.jobType())
-                * workplace.biomeBonus(level, job.jobType()).speed().value() * shell.speedFactor(level, span);
+        return SettlerSpeed.withBiome(LumberjackOutput.speed(shell.effectiveLevel(job)) * workplace.jobFactor(level, job.jobType()),
+                workplace.biomeBonus(level, job.jobType()), SettlerSpeed.speedFactor(shell, level, span));
     }
 
     private static ProducingProfile profile(SettlerJob job) {

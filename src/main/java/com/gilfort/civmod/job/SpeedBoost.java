@@ -6,7 +6,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 /**
  * The timed work speed boost a settler got from a {@code WorkSpeed} effect of a Service act (vault
  * {@code Systems/Entertainment.md}); saved with the settler. It is the per-settler sibling of the settlement's blessing
- * ({@link com.gilfort.civmod.settlement.Bonuses}) and adds to it in {@link SettlerWork#speedFactor}.
+ * ({@link com.gilfort.civmod.settlement.Bonuses}) and adds to it in {@link SettlerSpeed#speedFactor}.
  * <p>
  * A settler has one boost at a time ({@link #start}): listening to several performers never stacks. Immutable.
  *

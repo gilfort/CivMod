@@ -117,12 +117,13 @@ public record EntertainmentRules(double decay, double tier2Threshold, double tie
     /**
      * Adds the Entertainment bonus to the share of the other speed bonuses; they add up, they do not multiply.
      *
-     * @param value           the value
-     * @param blessingFactor  the factor of the other speed bonus, 1 for none (the Priest blessing: 1.2)
+     * @param value        the value
+     * @param bonusFactor  the factor of the other speed bonuses, 1 for none: the Priest blessing (1.2) plus the share of a
+     *                     {@code WorkSpeed} boost, so 1.3 with both
      * @return the factor to multiply the work speed with
      */
-    public double speedFactor(double value, double blessingFactor) {
-        return 1.0 + (blessingFactor - 1.0) + speedBonus(value);
+    public double speedFactor(double value, double bonusFactor) {
+        return 1.0 + (bonusFactor - 1.0) + speedBonus(value);
     }
 
     /**

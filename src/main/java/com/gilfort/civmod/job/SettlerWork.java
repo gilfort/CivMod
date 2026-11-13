@@ -26,7 +26,6 @@ import com.gilfort.civmod.api.ServiceProfile;
 import com.gilfort.civmod.api.XpGain;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.entertainment.Entertainment;
-import com.gilfort.civmod.entertainment.EntertainmentRules;
 import com.gilfort.civmod.entertainment.Stage;
 import com.gilfort.civmod.entertainment.Tavern;
 import com.gilfort.civmod.food.SettlerFood;
@@ -41,7 +40,6 @@ import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.registry.ModJobs;
-import com.gilfort.civmod.settlement.Bonuses;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.OccupiedPlaces;
@@ -1972,63 +1970,10 @@ public final class SettlerWork {
     }
 
     /**
-     * The work speed factor of the settlement's blessing ({@link Bonuses}): live that of now, in catch-up the average over
-     * the simulated work time.
-     *
-     * @param level the level
-     * @return 1 without a blessing, else its factor
+     * @return the settler's Entertainment value, the input of the work speed ({@link SettlerSpeed})
      */
-    public double blessingFactor(ServerLevel level) {
-        return blessingFactor(level, SimulatedSpan.LIVE);
-    }
-
-    /**
-     * @param level the level
-     * @param span  the simulated work span, {@link SimulatedSpan#LIVE} in live play
-     * @return 1 without a blessing, else its factor
-     */
-    double blessingFactor(ServerLevel level, SimulatedSpan span) {
-        return SettlementData.get(level).settlement(settler.getSettlementId()).map(settlement -> {
-            if (!span.simulated()) {
-                long clock = level.getOverworldClockTime();
-                return settlement.bonuses().remaining(Bonuses.Kind.WORK_SPEED, clock) > 0 ? Bonuses.Kind.WORK_SPEED.factor() : 1.0;
-            }
-            return settlement.bonuses().averageFactor(Bonuses.Kind.WORK_SPEED, span.workFrom(), span.workTo());
-        }).orElse(1.0);
-    }
-
-    /**
-     * The factor every work speed is multiplied with: the one place where the speed bonuses add up. The blessing's share
-     * ({@link #blessingFactor}), the boost of a {@code WorkSpeed} effect ({@link #speedBoostShare}) and the 2 % per point of
-     * Entertainment ({@link EntertainmentRules#speedFactor}) are added, not multiplied. Live play and catch-up both read it; the value is the one of the day being worked, because the
-     * decay is taken at wake-up before the work starts.
-     *
-     * @param level the level
-     * @return 1 without any bonus, 1.4 with full Entertainment and a blessing
-     */
-    public double speedFactor(ServerLevel level) {
-        return speedFactor(level, SimulatedSpan.LIVE);
-    }
-
-    /**
-     * @param level the level
-     * @param span  the simulated work span, {@link SimulatedSpan#LIVE} in live play
-     * @return the speed factor, with the bonuses averaged over the span in catch-up
-     */
-    double speedFactor(ServerLevel level, SimulatedSpan span) {
-        return EntertainmentRules.get().speedFactor(needs.entertainment().value(), blessingFactor(level, span) + speedBoostShare(level, span));
-    }
-
-    /**
-     * The share a {@code WorkSpeed} effect of a Service act adds to the speed factor ({@link SpeedBoost}): live that of now,
-     * in catch-up the average over the simulated work time.
-     *
-     * @param level the level
-     * @param span  the simulated work span, {@link SimulatedSpan#LIVE} in live play
-     * @return 0 without a boost, else its percent as a fraction
-     */
-    private double speedBoostShare(ServerLevel level, SimulatedSpan span) {
-        return span.simulated() ? speedBoost.averageShare(span.workFrom(), span.workTo()) : speedBoost.share(level.getOverworldClockTime());
+    double entertainmentValue() {
+        return needs.entertainment().value();
     }
 
     /**
