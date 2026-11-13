@@ -81,3 +81,9 @@ Datapack files, config values, network payloads and saved data are validated whe
 A behaviour-preserving refactor (rename, extract, move) goes in its own commit, never mixed with a behaviour change, so the diff reads as "nothing should change". Touched code is left a little cleaner, within the files the story already changes. Splitting an oversized file (rule 6) is a larger cleanup and gets its own story. A story that needs a small change in such a file makes that change without splitting first. A new file that receives code moved out of a touched file counts as touched.
 
 *Review:* a commit that both moves code and changes what it does; cleanup in files the story does not otherwise touch; a file split inside a feature story without its own commit.
+
+## 12. Producing Jobs take part in the chain
+
+A new Producing Job joins the request chain (vault `Systems/Sub-Requests.md`) through the shared Producing loop and its profile: it posts a child request for an input it cannot make itself and it serves child requests with its checked patterns. Delivery mode (Self or Deliveryman) is transport only. No Job, profile or mode gets its own rule for sub-requests, holds or the skip clock. A new profile is picked up by the generic GameTest over all registered Producing Jobs (`sub_request_every_profile`).
+
+*Review:* a Job, profile or delivery-mode branch inside `ProducingLoop`, `SubRequests` or `Holds`; a Producing Job that posts or serves requests outside the shared loop; a new kind of holder that does not extend `ReservedFor`.

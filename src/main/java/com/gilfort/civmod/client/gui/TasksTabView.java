@@ -23,6 +23,10 @@ final class TasksTabView implements JobBlockTabView {
     private static final int LIST_Y = 34;
     /** Height of a row: an item and one line of text. */
     private static final int ROW_HEIGHT = 18;
+    /** Pixels a sub-request is indented per level below its main request. */
+    private static final int SUB_REQUEST_INDENT = 8;
+    /** Size of a sub-request's icon and text relative to a main request's. */
+    private static final float SUB_REQUEST_SCALE = 0.75F;
     /** Gap between the rows and the scrollbar. */
     private static final int SCROLLBAR_GAP = 2;
 
@@ -125,14 +129,22 @@ final class TasksTabView implements JobBlockTabView {
         for (int row = 0; row < Math.min(visible(), rows.size() - offset); row++) {
             ClerkTabData.TaskRow task = rows.get(offset + row);
             int y = rowsY() + row * ROW_HEIGHT;
-            graphics.item(task.icon(), left, y + 1);
-            // A request's icon carries its amount.
-            graphics.itemDecorations(font, task.icon(), left, y + 1);
             Component status = task.status().icon();
             int statusWidth = font.width(status);
             int textY = y + (ROW_HEIGHT - font.lineHeight) / 2 + 1;
             graphics.text(font, status, right - statusWidth, textY, task.status().color(), false);
-            graphics.text(font, CivGui.fit(font, task.text(), right - statusWidth - 4 - left - 20), left + 20, textY, CivGui.LABEL_COLOR, false);
+            // A sub-request sits indented and smaller under its main request.
+            float scale = task.depth() == 0 ? 1.0F : SUB_REQUEST_SCALE;
+            int indent = task.depth() * SUB_REQUEST_INDENT;
+            int textWidth = (int) ((right - statusWidth - 4 - left - indent - 20) / scale);
+            graphics.pose().pushMatrix();
+            graphics.pose().translate(left + indent, y);
+            graphics.pose().scale(scale, scale);
+            graphics.item(task.icon(), 0, 1);
+            // A request's icon carries its amount.
+            graphics.itemDecorations(font, task.icon(), 0, 1);
+            graphics.text(font, CivGui.fit(font, task.text(), textWidth), 20, textY - y, CivGui.LABEL_COLOR, false);
+            graphics.pose().popMatrix();
             if (mouseX >= screen.left() + left && mouseX < screen.left() + right && mouseY >= screen.top() + y
                     && mouseY < screen.top() + y + ROW_HEIGHT) {
                 graphics.setComponentTooltipForNextFrame(font, task.details(), mouseX, mouseY);
