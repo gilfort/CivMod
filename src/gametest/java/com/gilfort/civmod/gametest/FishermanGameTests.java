@@ -295,6 +295,9 @@ public final class FishermanGameTests {
     /** A cast line stays out while the work refreshes it and is taken in a few ticks after the last refresh. */
     private static void castExpires(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
+        // The line is taken in on the settler's own tick, and the test has only 60 ticks: without forced, generated
+        // chunks the settler may not tick at all in that time.
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(4, 0, 4));
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
         Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(2, 2, 2)));
         settler.snapTo(spawn.x, spawn.y, spawn.z, 0.0F, 0.0F);
@@ -310,6 +313,7 @@ public final class FishermanGameTests {
         helper.succeedWhen(() -> {
             helper.assertTrue(settler.castTarget().isEmpty(), "The line is taken in without refresh");
             settler.discard();
+            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });
     }
 }

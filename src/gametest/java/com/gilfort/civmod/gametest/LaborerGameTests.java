@@ -56,6 +56,15 @@ public final class LaborerGameTests {
     private static final BlockPos A = new BlockPos(1, 1, 1);
     private static final BlockPos B = new BlockPos(1, 1, 9);
     private static final BlockPos C = new BlockPos(1, 1, 17);
+    /** Where the logs of the free block at {@link #A} lie, relative to it: on the far side, out of reach of the own Job. */
+    private static final BlockPos FREE_LOGS_OFFSET = new BlockPos(0, 0, -18);
+    /**
+     * Beyond the free block's logs. The forced area runs from here to {@link #FLOOR_END}: the settler walks between the
+     * logs and the floor, and a settler in a chunk that is not forced does not tick.
+     */
+    private static final BlockPos FREE_LOGS_CORNER = new BlockPos(0, 0, -24);
+    /** The end (exclusive) of the stone floor of {@link #floor}. */
+    private static final BlockPos FLOOR_END = new BlockPos(12, 0, 24);
 
     private LaborerGameTests() {
     }
@@ -85,8 +94,8 @@ public final class LaborerGameTests {
 
     /** A stone floor under the test area. */
     private static void floor(GameTestHelper helper) {
-        for (int x = 0; x < 12; x++) {
-            for (int z = 0; z < 24; z++) {
+        for (int x = 0; x < FLOOR_END.getX(); x++) {
+            for (int z = 0; z < FLOOR_END.getZ(); z++) {
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
             }
         }
@@ -264,9 +273,9 @@ public final class LaborerGameTests {
     private static void switchesToHigherJob(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         floor(helper);
-        List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(8, 0, -24));
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper, FREE_LOGS_CORNER, FLOOR_END);
         // The free block's logs lie on the far side, out of reach of the settler's own Job.
-        BlockPos free = lumberjackBlock(helper, A, new BlockPos(0, 0, -18));
+        BlockPos free = lumberjackBlock(helper, A, FREE_LOGS_OFFSET);
         // The settler's own Job: a Lumberjack block without any log in reach yet.
         TestSettlements.setBlock(helper, B, ModBlocks.LUMBERJACK_BLOCK.get());
         BlockPos own = helper.absolutePos(B);
@@ -404,8 +413,8 @@ public final class LaborerGameTests {
     private static void catchUpWithJobs(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         floor(helper);
-        List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(8, 0, -24));
-        BlockPos free = lumberjackBlock(helper, A, new BlockPos(0, 0, -18));
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper, FREE_LOGS_CORNER, FLOOR_END);
+        BlockPos free = lumberjackBlock(helper, A, FREE_LOGS_OFFSET);
         // The worker's own Job: a Lumberjack block without any log in reach.
         TestSettlements.setBlock(helper, B, ModBlocks.LUMBERJACK_BLOCK.get());
         BlockPos own = helper.absolutePos(B);
