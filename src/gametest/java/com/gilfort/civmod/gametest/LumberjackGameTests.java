@@ -364,9 +364,17 @@ public final class LumberjackGameTests {
      * timed tests failed now and then. Loading synchronously makes the start independent of the machine's speed.
      */
     public static List<long[]> forceChunks(GameTestHelper helper, BlockPos corner) {
+        return forceChunks(helper, BlockPos.ZERO, corner);
+    }
+
+    /**
+     * {@link #forceChunks(GameTestHelper, BlockPos)} for an area that does not start at the test origin, e.g. one that
+     * reaches to both sides of it.
+     */
+    static List<long[]> forceChunks(GameTestHelper helper, BlockPos from, BlockPos to) {
         ServerLevel level = helper.getLevel();
-        BlockPos min = helper.absolutePos(BlockPos.ZERO);
-        BlockPos max = helper.absolutePos(corner);
+        BlockPos min = helper.absolutePos(from);
+        BlockPos max = helper.absolutePos(to);
         int minX = SectionPos.blockToSectionCoord(Math.min(min.getX(), max.getX()));
         int maxX = SectionPos.blockToSectionCoord(Math.max(min.getX(), max.getX()));
         int minZ = SectionPos.blockToSectionCoord(Math.min(min.getZ(), max.getZ()));
