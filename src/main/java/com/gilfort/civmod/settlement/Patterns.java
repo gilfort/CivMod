@@ -451,7 +451,9 @@ public final class Patterns {
     }
 
     /**
-     * Sets "Produce at once" of a pattern set to "Always produce".
+     * Sets "Produce at once" of a pattern set to "Always produce". Takes the {@link SettlementData} and returns nothing
+     * (unlike the other mutators, which take the level and return the new pattern): it never reads the level and has no
+     * pattern to report when the slot is not set to "Always produce".
      *
      * @param data   the dimension's settlement data
      * @param pos    the JobBlock
@@ -465,7 +467,8 @@ public final class Patterns {
     }
 
     /**
-     * Empties a library slot; an innate pattern stays.
+     * Empties a library slot; an innate pattern stays. Takes the {@link SettlementData} and returns nothing (unlike the
+     * other mutators, which take the level and return the new pattern): it never reads the level and leaves no pattern.
      *
      * @param data the dimension's settlement data
      * @param pos  the JobBlock
