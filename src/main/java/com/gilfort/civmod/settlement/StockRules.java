@@ -137,7 +137,7 @@ public final class StockRules {
                 Requests.update(data, settlement, request.get().id(), open -> open.withAmount(missing).withPriority(rule.priority()));
             } else if (rule.hasMin() && held < rule.min() && missing > 0) {
                 Requests.add(data, settlement, new Request(UUID.randomUUID(), rule.item(), missing, rule.priority(), Optional.of(clerk),
-                        Optional.of(rule.slot()), Optional.empty(), List.of(), List.of()));
+                        Optional.of(rule.slot()), Optional.empty(), List.of(), List.of(), Optional.empty()));
             }
         }
         // Requests whose rule is gone (should not happen; deleting a rule withdraws its request).

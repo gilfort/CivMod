@@ -330,7 +330,7 @@ public final class StockRuleGameTests {
 
     /** Requests saved before the review fixes of #54 ("rule": -1, one "missing" input) still load. */
     private static void oldRequestSave(GameTestHelper helper) {
-        Request current = new Request(UUID.randomUUID(), Items.STICK, 4, 0, Optional.empty(), Optional.empty(), Optional.empty(), List.of(), List.of());
+        Request current = new Request(UUID.randomUUID(), Items.STICK, 4, 0, Optional.empty(), Optional.empty(), Optional.empty(), List.of(), List.of(), Optional.empty());
         com.google.gson.JsonObject json = Request.CODEC.encodeStart(JsonOps.INSTANCE, current).getOrThrow().getAsJsonObject();
         json.addProperty("rule", -1);
         json.add("missing", com.google.gson.JsonParser.parseString("{\"item\": \"minecraft:oak_planks\", \"count\": 2}"));

@@ -126,11 +126,16 @@ public final class Stock {
     }
 
     /**
-     * @param reserved the amounts reserved for others, by item
-     * @return this Stock without them
+     * @param more the amounts reserved or held for others, by item
+     * @return this Stock without them (and without what it was already without)
      */
-    Stock without(Map<Item, Integer> reserved) {
-        return reserved.isEmpty() ? this : new Stock(parts, summaries, counter, reserved);
+    Stock without(Map<Item, Integer> more) {
+        if (more.isEmpty()) {
+            return this;
+        }
+        Map<Item, Integer> all = new HashMap<>(reserved);
+        more.forEach((item, count) -> all.merge(item, count, Integer::sum));
+        return new Stock(parts, summaries, counter, all);
     }
 
     /**

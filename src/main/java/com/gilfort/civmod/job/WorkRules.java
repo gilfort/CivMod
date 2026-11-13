@@ -362,8 +362,9 @@ final class WorkRules {
                     supply.handedOut().run();
                 }
                 return taken;
-            });
+            }, () -> ToolOrders.supply(level, settler, job, profile, site));
             settler.getWork().toolNeeds().recheck(job);
+            ToolOrders.settled(level, settler, job, profile);
             tool = settler.getWork().tool(job, profile);
         }
         return tool;
@@ -397,9 +398,11 @@ final class WorkRules {
             long time = level.getGameTime();
             if (belt.isEmpty()) {
                 // "No tool" waits an hour between searches, too.
-                return Optional.of(new MissingTool(kind, tools.search(job, time, () -> SettlerTools.find(collect, kind, rule).isPresent())));
+                return Optional.of(new MissingTool(kind, tools.search(job, time, () -> SettlerTools.find(collect, kind, rule).isPresent(),
+                        () -> ToolOrders.supply(level, settler, job, profile, site))));
             }
-            if (!rule.meets(belt.get()) && tools.search(job, time, () -> SettlerTools.better(collect, kind, rule, belt))) {
+            if (!rule.meets(belt.get()) && tools.search(job, time, () -> SettlerTools.better(collect, kind, rule, belt),
+                    () -> ToolOrders.supply(level, settler, job, profile, site))) {
                 return Optional.of(new MissingTool(kind, true));
             }
         }

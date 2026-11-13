@@ -91,8 +91,26 @@ public final class Requests {
      */
     public static Request post(SettlementData data, Settlement settlement, Item item, int amount, Optional<BlockPos> target,
             Optional<UUID> parent) {
+        return post(data, settlement, item, amount, target, parent, Optional.empty());
+    }
+
+    /**
+     * Posts a request whose result is held for someone once it is in the Clerk (the tool supply, vault
+     * {@code Systems/Needs.md}).
+     *
+     * @param data        the dimension's settlement data
+     * @param settlement  the settlement
+     * @param item        the requested item
+     * @param amount      the amount
+     * @param target      the Clerk the result goes to, if any
+     * @param parent      the request this is a sub-request of
+     * @param reservedFor who the result is held for
+     * @return the posted request
+     */
+    public static Request post(SettlementData data, Settlement settlement, Item item, int amount, Optional<BlockPos> target,
+            Optional<UUID> parent, Optional<ReservedFor> reservedFor) {
         int priority = parent.flatMap(id -> get(settlement, id)).map(Request::priority).orElse(DEFAULT_PRIORITY);
-        Request request = new Request(UUID.randomUUID(), item, amount, priority, target, Optional.empty(), parent, List.of(), List.of());
+        Request request = new Request(UUID.randomUUID(), item, amount, priority, target, Optional.empty(), parent, List.of(), List.of(), reservedFor);
         settlement.mutableRequests().add(request);
         data.setDirty();
         return request;
@@ -150,7 +168,7 @@ public final class Requests {
     /**
      * A producer delivered its claimed amount: the claim ends without reopening it; a request with nothing open and no
      * claim left is done and removed. The posting Clerk checks its rules right after the delivery. The result of a
-     * sub-request is held at its Clerk for the parent request ({@link Holds}).
+     * sub-request is held at its Clerk for the parent request, that of a request with a reservation for its holder ({@link Holds}).
      *
      * @param data       the dimension's settlement data
      * @param settlement the settlement
@@ -158,15 +176,18 @@ public final class Requests {
      * @param settler    the producer settler
      */
     public static void finish(SettlementData data, Settlement settlement, UUID id, UUID settler) {
-        get(settlement, id).ifPresent(found -> holdForParent(settlement, found, settler));
+        get(settlement, id).ifPresent(found -> holdResult(settlement, found, settler));
         update(data, settlement, id, found -> found.withoutClaim(settler, false));
     }
 
-    /** The delivered part of a sub-request waits in its Clerk for the parent request. */
-    private static void holdForParent(Settlement settlement, Request child, UUID settler) {
-        if (child.parent().isPresent() && child.target().isPresent()) {
-            child.claimOf(settler).ifPresent(claim -> Holds.hold(settlement, child.target().get(), ReservedFor.request(child.parent().get()),
-                    child.item(), claim.amount()));
+    /**
+     * The delivered part of a sub-request waits in its Clerk for the parent request, that of a request with a reservation
+     * for its holder.
+     */
+    private static void holdResult(Settlement settlement, Request done, UUID settler) {
+        Optional<ReservedFor> holder = done.reservedFor().or(() -> done.parent().map(ReservedFor::request));
+        if (holder.isPresent() && done.target().isPresent()) {
+            done.claimOf(settler).ifPresent(claim -> Holds.hold(settlement, done.target().get(), holder.get(), done.item(), claim.amount()));
         }
     }
 
@@ -204,6 +225,17 @@ public final class Requests {
     public static void withdraw(SettlementData data, Settlement settlement, UUID id) {
         update(data, settlement, id, found -> found.withAmount(0));
         children(settlement, id).forEach(child -> withdraw(data, settlement, child.id()));
+    }
+
+    /**
+     * A request no longer needs its result held for someone: the result is free stock once it is made.
+     *
+     * @param data       the dimension's settlement data
+     * @param settlement the settlement
+     * @param id         the request id
+     */
+    public static void dropReservation(SettlementData data, Settlement settlement, UUID id) {
+        update(data, settlement, id, Request::withoutReservation);
     }
 
     /**

@@ -11,6 +11,7 @@ import com.gilfort.civmod.menu.WorkersTabData;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.JobBlockTab;
 import com.gilfort.civmod.menu.WorkersTab;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.mojang.blaze3d.platform.InputConstants;
 
@@ -108,6 +109,11 @@ final class WorkersTabView implements JobBlockTabView {
         return menu.getInfo().jobType().profile(FishermanProfile.class).isPresent() && info.inSettlement();
     }
 
+    /** Whether the Clerk's "Auto tool supply" toggle is shown. */
+    private boolean toolSupplyToggle() {
+        return menu.getInfo().jobType() == ModJobs.CLERK.get() && menu.workers().inSettlement();
+    }
+
     /** The toggle buttons of the bottom row: the leaf toggle, the treasure toggle, then the other views' toggles. */
     private List<WorkersToggle> toggles() {
         List<WorkersToggle> toggles = new ArrayList<>();
@@ -118,6 +124,10 @@ final class WorkersTabView implements JobBlockTabView {
         if (treasureToggle()) {
             toggles.add(new WorkersToggle(Component.translatable(menu.workers().treasure() ? "civmod.gui.job_block.treasure.on"
                     : "civmod.gui.job_block.treasure.off"), tab.treasureButtonId(!menu.workers().treasure())));
+        }
+        if (toolSupplyToggle()) {
+            toggles.add(new WorkersToggle(Component.translatable(menu.workers().autoToolSupply() ? "civmod.gui.job_block.tool_supply.on"
+                    : "civmod.gui.job_block.tool_supply.off"), tab.toolSupplyButtonId(!menu.workers().autoToolSupply())));
         }
         screen.views().forEach(view -> view.workersToggle().ifPresent(toggles::add));
         return toggles;
@@ -234,6 +244,9 @@ final class WorkersTabView implements JobBlockTabView {
         }
         if (treasureToggle()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.treasure"));
+        }
+        if (toolSupplyToggle()) {
+            lines.add(Component.translatable("civmod.gui.job_block.help.tool_supply"));
         }
         // The biomes that change something for the Job, and that all others do not.
         lines.addAll(menu.getInfo().overview());

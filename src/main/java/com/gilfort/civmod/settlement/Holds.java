@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
 import com.gilfort.civmod.logistics.ReservedFor;
 
@@ -16,7 +17,9 @@ import net.minecraft.world.item.Item;
  * takes it. Everybody else sees the stock minus the holds ({@link #held}, applied by {@code ClerkStorage.stock}); the
  * holder counts its hold into a plan ({@link #heldFor}) and uses it up ({@link #consume}).
  * <p>
- * A hold ends when its holder is gone ({@link #valid}), on the next read. Kept in the {@link Settlement}, not saved: after
+ * A hold ends when its holder is gone ({@link #valid}), on the next read: a request that is done or withdrawn, a settler
+ * that left the settlement, a Delivery task that is done. A tool made for a settler is held for the settler until it is
+ * handed over to a Delivery task ({@link #handOver}) or released ({@link #release}). Kept in the {@link Settlement}, not saved: after
  * a reload the amount is free stock and the parent asks again if it still lacks it. Not the {@link Reservations} of
  * Delivery tasks, which are tied to a Deliveryman's day.
  */
@@ -110,6 +113,32 @@ public final class Holds {
         settlement.mutableHolds().values().removeIf(List::isEmpty);
     }
 
+    /**
+     * Ends the holds of a holder (the tool is free stock again).
+     *
+     * @param settlement the settlement
+     * @param owner      the holder
+     * @param kind       which items: only holds of items that pass
+     */
+    public static void release(Settlement settlement, ReservedFor owner, Predicate<Item> kind) {
+        settlement.mutableHolds().values().forEach(ledger -> ledger.removeIf(hold -> hold.owner().equals(owner) && kind.test(hold.item())));
+        settlement.mutableHolds().values().removeIf(List::isEmpty);
+    }
+
+    /**
+     * Hands what a holder holds over to another holder (the tool made for a settler goes to the Delivery task that carries
+     * it).
+     *
+     * @param settlement the settlement
+     * @param from       the holder now
+     * @param to         the holder after
+     * @param kind       which items: only holds of items that pass
+     */
+    public static void handOver(Settlement settlement, ReservedFor from, ReservedFor to, Predicate<Item> kind) {
+        settlement.mutableHolds().values().forEach(ledger -> ledger.replaceAll(hold -> hold.owner().equals(from) && kind.test(hold.item())
+                ? new Hold(hold.item(), hold.count(), to) : hold));
+    }
+
     /** The valid holds of a Clerk; holds of a gone holder are dropped. */
     private static List<Hold> ledger(Settlement settlement, BlockPos clerk) {
         List<Hold> ledger = settlement.mutableHolds().get(clerk);
@@ -123,10 +152,15 @@ public final class Holds {
         return ledger;
     }
 
-    /** A hold lasts as long as its holder: a request while it is still there (open or being worked on). */
+    /**
+     * A hold lasts as long as its holder: a request while it is still there (open or being worked on), a settler while it
+     * belongs to the settlement, a Delivery task while it is open.
+     */
     private static boolean valid(Settlement settlement, Hold hold) {
         return switch (hold.owner().kind()) {
             case REQUEST -> Requests.get(settlement, hold.owner().id()).isPresent();
+            case SETTLER -> settlement.members().contains(hold.owner().id());
+            case DELIVERY -> Deliveries.get(settlement, hold.owner().id()).isPresent();
         };
     }
 }

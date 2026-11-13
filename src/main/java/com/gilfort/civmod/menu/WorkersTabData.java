@@ -52,14 +52,15 @@ import net.minecraft.server.level.ServerLevel;
  * @param blessingEnd     at the Center Block: the clock value at which the settlement's work speed blessing ends, 0 = none
  * @param storageUnlinked whether this is a Clerk JobBlock without a linked container (the header asks to link one)
  * @param treasure        whether a Fisherman may catch treasure (the "Treasure" toggle of its JobBlock)
+ * @param autoToolSupply  whether a Clerk gets missing tools made and delivered for its settlers (the "Auto tool supply" toggle)
  */
 public record WorkersTabData(Component settlementName, boolean inSettlement, boolean connected, int distance, int required, List<Worker> workers,
         List<JobPlaces.Line> places, boolean collectLeaves, boolean byDeliveryman, Biome biome, long blessingEnd, boolean storageUnlinked,
-        boolean treasure) {
+        boolean treasure, boolean autoToolSupply) {
 
     /** Before the first sync, and for a block that is not registered. */
     public static final WorkersTabData EMPTY = new WorkersTabData(Component.empty(), false, false, 0, 0, List.of(), List.of(), false, false,
-            Biome.NONE, 0L, false, true);
+            Biome.NONE, 0L, false, true, true);
 
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, WorkersTabData> STREAM_CODEC = StreamCodec.composite(
@@ -76,6 +77,7 @@ public record WorkersTabData(Component settlementName, boolean inSettlement, boo
             ByteBufCodecs.VAR_LONG, WorkersTabData::blessingEnd,
             ByteBufCodecs.BOOL, WorkersTabData::storageUnlinked,
             ByteBufCodecs.BOOL, WorkersTabData::treasure,
+            ByteBufCodecs.BOOL, WorkersTabData::autoToolSupply,
             WorkersTabData::new);
 
     /**
@@ -92,6 +94,7 @@ public record WorkersTabData(Component settlementName, boolean inSettlement, boo
      * @param blessingEnd     the end of the blessing
      * @param storageUnlinked whether the Clerk has no linked container
      * @param treasure        the treasure option
+     * @param autoToolSupply  the tool supply option
      */
     public WorkersTabData {
         workers = List.copyOf(workers);
@@ -264,7 +267,7 @@ public record WorkersTabData(Component settlementName, boolean inSettlement, boo
                 Biome.of(level, pos, jobType, assignees),
                 blessingEnd(settlement, block, level.getOverworldClockTime()),
                 jobType == ModJobs.CLERK.get() && block.map(found -> found.storage().isEmpty()).orElse(false),
-                block.map(SettlementBlock::treasure).orElse(true));
+                block.map(SettlementBlock::treasure).orElse(true), block.map(SettlementBlock::autoToolSupply).orElse(true));
     }
 
     private static long blessingEnd(Optional<Settlement> settlement, Optional<SettlementBlock> block, long now) {

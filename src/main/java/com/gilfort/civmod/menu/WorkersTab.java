@@ -27,8 +27,8 @@ import net.minecraft.world.item.Items;
 /**
  * The "Workers" tab of every JobBlock (vault {@code Systems/GUI.md}, "Info becomes Workers"): per offered Job its line
  * with the automatic assignment button, below it one row per settler with ✕ (unassigns it at once) and a click on head
- * or name that opens the settler window; plus the leaf collection toggle (Lumberjack) and the treasure toggle
- * (Fisherman). Its data is the synced {@link WorkersTabData}; the server changes the state and sends the data again
+ * or name that opens the settler window; plus the leaf collection toggle (Lumberjack), the treasure toggle
+ * (Fisherman) and the "Auto tool supply" toggle (Clerk). Its data is the synced {@link WorkersTabData}; the server changes the state and sends the data again
  * ({@link JobBlockMenu#resend}), the client only renders and asks. JobBlocks are upgraded with the JobBlock Upgrade
  * items, not here ({@link com.gilfort.civmod.block.JobBlockUpgrade}).
  */
@@ -38,6 +38,8 @@ public final class WorkersTab extends JobBlockTab {
     private static final int LEAVES = 0;
     /** Buttons: set the treasure option off / on (Fisherman, {@link #treasureButtonId}). */
     private static final int TREASURE = LEAVES + 2;
+    /** Buttons: set the Clerk's automatic tool supply off / on ({@link #toolSupplyButtonId}). */
+    private static final int TOOL_SUPPLY = TREASURE + 2;
 
     private final TabData<WorkersTabData> data = new TabData<>(WorkersTabData.EMPTY,
             (menu, level, pos) -> WorkersTabData.of(level, pos, menu.getInfo().jobType(), menu.getInfo().level()), WorkersTabData.Sync::new);
@@ -71,7 +73,7 @@ public final class WorkersTab extends JobBlockTab {
 
     @Override
     int buttons() {
-        return TREASURE + 2;
+        return TOOL_SUPPLY + 2;
     }
 
     /**
@@ -95,12 +97,24 @@ public final class WorkersTab extends JobBlockTab {
         return buttonId(TREASURE + (on ? 1 : 0));
     }
 
+    /**
+     * Like {@link #leavesButtonId}, the tool supply toggle carries the wanted state.
+     *
+     * @param on the wanted state of the Clerk's automatic tool supply
+     * @return the menu button id that sets it
+     */
+    public int toolSupplyButtonId(boolean on) {
+        return buttonId(TOOL_SUPPLY + (on ? 1 : 0));
+    }
+
     @Override
     boolean clickButton(Player player, int button) {
         if (button < TREASURE) {
             setLeaves(button - LEAVES == 1);
-        } else {
+        } else if (button < TOOL_SUPPLY) {
             setTreasure(button - TREASURE == 1);
+        } else {
+            menu().editSettlement((data, pos) -> JobAssignments.setAutoToolSupply(data, pos, button - TOOL_SUPPLY == 1));
         }
         return true;
     }

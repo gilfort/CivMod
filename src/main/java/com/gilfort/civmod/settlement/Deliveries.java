@@ -13,6 +13,7 @@ import java.util.function.ToIntFunction;
 import java.util.function.UnaryOperator;
 
 import com.gilfort.civmod.logistics.DeliveryTask;
+import com.gilfort.civmod.logistics.ReservedFor;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.registry.ModJobs;
 
@@ -408,6 +409,8 @@ public final class Deliveries {
             Reservations.release(settlement, id);
             input.items().forEach((item, count) -> Reservations.reserve(settlement, task.source(), id, item, count, day));
         }));
+        // What a tool supply held back for this task is reserved now.
+        Holds.release(settlement, ReservedFor.delivery(id), item -> true);
     }
 
     /**

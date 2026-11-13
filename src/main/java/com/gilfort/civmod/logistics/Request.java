@@ -32,9 +32,11 @@ import net.minecraft.world.item.Items;
  * @param claims   the producers crafting parts of it
  * @param missing  every base input a producer misses to work on it ("Missing: 6× Cobblestone, 4× Stick"), set by the
  *                 producer
+ * @param reservedFor who the result is held for once it is in the Clerk (the tool supply: the settler the tool is for),
+ *                 empty for a request whose result is free stock
  */
 public record Request(UUID id, Item item, int amount, int priority, Optional<BlockPos> target, Optional<Integer> rule, Optional<UUID> parent,
-        List<Claim> claims, List<Missing> missing) {
+        List<Claim> claims, List<Missing> missing, Optional<ReservedFor> reservedFor) {
 
     /**
      * A part of a request a producer is crafting.
@@ -102,7 +104,8 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
             Claim.CODEC.listOf().optionalFieldOf("claims", List.of()).forGetter(Request::claims),
             // Saves before the review fixes of #54 hold one missing input instead of a list.
             Codec.withAlternative(Missing.CODEC.listOf(), Missing.CODEC.xmap(List::of, list -> list.getFirst()))
-                    .optionalFieldOf("missing", List.of()).forGetter(Request::missing)
+                    .optionalFieldOf("missing", List.of()).forGetter(Request::missing),
+            ReservedFor.CODEC.optionalFieldOf("reserved_for").forGetter(Request::reservedFor)
     ).apply(instance, Request::new));
 
     /**
@@ -115,6 +118,7 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
      * @param parent   the parent request
      * @param claims   the claims
      * @param missing  what a producer misses
+     * @param reservedFor who the result is held for
      */
     public Request {
         amount = Math.max(0, amount);
@@ -158,7 +162,7 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
      * @return a copy with another open amount
      */
     public Request withAmount(int newAmount) {
-        return new Request(id, item, newAmount, priority, target, rule, parent, claims, missing);
+        return new Request(id, item, newAmount, priority, target, rule, parent, claims, missing, reservedFor);
     }
 
     /**
@@ -166,14 +170,21 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
      * @return a copy with another priority
      */
     public Request withPriority(int newPriority) {
-        return new Request(id, item, amount, newPriority, target, rule, parent, claims, missing);
+        return new Request(id, item, amount, newPriority, target, rule, parent, claims, missing, reservedFor);
     }
 
     /**
      * @return a copy without a target Clerk (the result goes to the producer's own drop-off)
      */
     public Request withoutTarget() {
-        return new Request(id, item, amount, priority, Optional.empty(), rule, parent, claims, missing);
+        return new Request(id, item, amount, priority, Optional.empty(), rule, parent, claims, missing, reservedFor);
+    }
+
+    /**
+     * @return a copy whose result is free stock again (the holder no longer needs it)
+     */
+    public Request withoutReservation() {
+        return new Request(id, item, amount, priority, target, rule, parent, claims, missing, Optional.empty());
     }
 
     /**
@@ -181,7 +192,7 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
      * @return a copy with other missing inputs
      */
     public Request withMissing(List<Missing> newMissing) {
-        return new Request(id, item, amount, priority, target, rule, parent, claims, newMissing);
+        return new Request(id, item, amount, priority, target, rule, parent, claims, newMissing, reservedFor);
     }
 
     /**
@@ -203,7 +214,7 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
             }
         }
         changed.add(new Claim(settler, name, total));
-        return new Request(id, item, amount - claimed, priority, target, rule, parent, changed, List.of());
+        return new Request(id, item, amount - claimed, priority, target, rule, parent, changed, List.of(), reservedFor);
     }
 
     /**
@@ -216,6 +227,6 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
     public Request withoutClaim(UUID settler, boolean reopened) {
         int back = reopened ? claimOf(settler).map(Claim::amount).orElse(0) : 0;
         List<Claim> changed = claims.stream().filter(claim -> !claim.settler().equals(settler)).toList();
-        return new Request(id, item, amount + back, priority, target, rule, parent, changed, missing);
+        return new Request(id, item, amount + back, priority, target, rule, parent, changed, missing, reservedFor);
     }
 }

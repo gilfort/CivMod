@@ -247,6 +247,8 @@ final class ResourceCollectionLoop implements CategoryLoop {
             if (!taken) {
                 // Nothing better after all: the next search waits an hour.
                 shell.toolNeeds().searched(job, level.getGameTime());
+            } else {
+                ToolOrders.settled(level, settler, job, profile.get());
             }
             List<CollectionRecipes.Offer> offered = CollectionRecipes.offered(level, job.jobType(), profile.get(), shell.workplace(job.jobBlock()).scan());
             taken |= CollectionRecipes.refill(settler, CollectionRecipes.allowed(offered, site.get().block().excluded(job.jobType()),
