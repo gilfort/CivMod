@@ -198,7 +198,7 @@ final class SettlerRest {
         if (rest == null) {
             return Optional.empty();
         }
-        return Optional.of(rest.straw() != null ? Vec3.atBottomCenterOf(rest.pos()) : SettlerWork.standingSpot(level, rest.pos()));
+        return Optional.of(rest.straw() != null ? Vec3.atBottomCenterOf(rest.pos()) : StandingSpots.standingSpot(level, rest.pos()));
     }
 
     /**
@@ -241,6 +241,6 @@ final class SettlerRest {
         BlockPos feet = settler.blockPosition();
         BlockPos bed = level.getBlockState(feet).getBlock() instanceof AbstractBedBlock ? feet
                 : level.getBlockState(feet.below()).getBlock() instanceof AbstractBedBlock ? feet.below() : null;
-        return bed == null ? Optional.empty() : Optional.of(SettlerWork.standingSpot(level, bed));
+        return bed == null ? Optional.empty() : Optional.of(StandingSpots.standingSpot(level, bed));
     }
 }

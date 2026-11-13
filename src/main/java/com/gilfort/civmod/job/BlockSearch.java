@@ -32,12 +32,12 @@ public final class BlockSearch {
      * @return whether a settler can stand next to or on top of it (not buried in a wall or floor)
      */
     public static boolean isExposed(ServerLevel level, BlockPos pos) {
-        if (SettlerWork.canStand(level, pos.above())) {
+        if (StandingSpots.canStand(level, pos.above())) {
             return true;
         }
         for (Direction direction : Direction.Plane.HORIZONTAL) {
             BlockPos side = pos.relative(direction);
-            if (level.isLoaded(side) && SettlerWork.canStand(level, side)) {
+            if (level.isLoaded(side) && StandingSpots.canStand(level, side)) {
                 return true;
             }
         }
