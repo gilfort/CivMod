@@ -331,20 +331,21 @@ public final class PriestGameTests {
         Settler priest = priest(helper, settlement);
         ServerLevel level = helper.getLevel();
         SettlementData data = SettlementData.get(level);
-        long clock = level.getOverworldClockTime();
-        long day = DayClock.day(clock);
+        long day = DayClock.day(level.getOverworldClockTime());
         // Dark shrine: the Priest does not go to pray.
         data.setShrine(settlement, new Shrine.State(day, 0L));
         priest.getWork().decideNow(level);
         helper.assertTrue(priest.getWork().activeJob().isEmpty() || priest.getWork().activeJob().filter(job -> job.jobType() == ModJobs.PRIEST.get()).isEmpty(),
                 "Does not pray in the dark: " + priest.getWork().activeJob());
-        // Glowing: it prays and rolls once.
-        data.setShrine(settlement, new Shrine.State(Shrine.NO_DAY, clock + Shrine.GLOW_TICKS));
+        // Glowing: it prays and rolls once. Other tests move the shared clock (setDayTime), so the glow does not depend on
+        // it and the check below only asks whether the roll rewrote the shrine.
+        Shrine.State endlessGlow = new Shrine.State(Shrine.NO_DAY, Long.MAX_VALUE);
+        data.setShrine(settlement, endlessGlow);
         helper.startSequence().thenExecute(() -> priest.getWork().decideNow(level))
                 .thenWaitUntil(() -> helper.assertTrue(totalExp(priest) > 0, "Prayed and rolled: EXP " + totalExp(priest)))
                 .thenExecute(() -> {
                     helper.assertTrue(totalExp(priest) >= Shrine.EXP_PER_LEVEL, "15 EXP for the roll: " + totalExp(priest));
-                    helper.assertTrue(settlement.shrine().endedDay() == day || settlement.shrine().chainUntil() > clock + Shrine.GLOW_TICKS,
+                    helper.assertTrue(settlement.shrine().endedDay() != Shrine.NO_DAY || settlement.shrine().chainUntil() != endlessGlow.chainUntil(),
                             "The roll ended the glow or kept it going: " + settlement.shrine());
                     settlement.members().forEach(member -> {
                         if (level.getEntity(member) instanceof Settler settler) {
