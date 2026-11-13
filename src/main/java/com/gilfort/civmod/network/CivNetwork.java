@@ -43,7 +43,7 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 public final class CivNetwork {
 
     /** Network protocol version; client and server must match. */
-    public static final String PROTOCOL_VERSION = "6";
+    public static final String PROTOCOL_VERSION = "7";
 
     private CivNetwork() {
     }

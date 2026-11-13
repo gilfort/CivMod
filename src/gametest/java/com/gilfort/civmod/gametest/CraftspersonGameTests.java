@@ -42,9 +42,12 @@ import com.gilfort.civmod.settlement.TestAssignments;
 import com.gilfort.civmod.settlement.TestSettlements;
 import com.mojang.serialization.JsonOps;
 
+import io.netty.buffer.Unpooled;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -54,6 +57,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -84,6 +88,7 @@ public final class CraftspersonGameTests {
             register(helper, "craftsperson_menu", CraftspersonGameTests::menu);
             register(helper, "craftsperson_live_linked_storage", CraftspersonGameTests::liveLinkedStorage);
             register(helper, "craftsperson_crafts_metal", CraftspersonGameTests::craftsMetal);
+            register(helper, "craftsperson_edit_codec", CraftspersonGameTests::editCodec);
             register(helper, "craftsperson_live_linked_storage_far", CraftspersonGameTests::liveLinkedStorageFar);
             register(helper, "craftsperson_live_two_sources_on_shift", CraftspersonGameTests::liveTwoSources);
             register(helper, "craftsperson_unreachable_inputs", CraftspersonGameTests::unreachableInputs);
@@ -705,6 +710,32 @@ public final class CraftspersonGameTests {
         patterns.edit(PatternsTabData.Edit.clear(1, craftJob(), 3));
         helper.assertTrue(PatternsTabData.of(level, pos, craftJob()).pattern(3).isEmpty(), "Cleared through the menu");
         helper.assertTrue(data.settlementAt(pos).isPresent(), "Still registered");
+        helper.succeed();
+    }
+
+    /**
+     * Every Patterns tab edit survives the network codec as its own record, with exactly the fields of its operation
+     * (#231).
+     */
+    private static void editCodec(GameTestHelper helper) {
+        List<PatternsTabData.Edit> edits = List.of(
+                PatternsTabData.Edit.setOutput(7, craftJob(), 3, Items.TORCH),
+                PatternsTabData.Edit.setInput(7, craftJob(), 4, 2, Items.STICK, RecipeType.CRAFTING),
+                PatternsTabData.Edit.cycle(7, craftJob(), 5, -1),
+                PatternsTabData.Edit.toggleCheck(7, craftJob(), 6),
+                PatternsTabData.Edit.clear(7, craftJob(), 7),
+                PatternsTabData.Edit.transfer(7, craftJob(), 8, RecipeType.SMELTING, Optional.empty(), List.of(Items.COAL, Items.AIR)),
+                PatternsTabData.Edit.toggleAlways(7, craftJob(), 9),
+                PatternsTabData.Edit.setAtOnce(7, craftJob(), 10, 12));
+        for (PatternsTabData.Edit edit : edits) {
+            RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), helper.getLevel().registryAccess());
+            PatternsTabData.Edit.STREAM_CODEC.encode(buffer, edit);
+            PatternsTabData.Edit read = PatternsTabData.Edit.STREAM_CODEC.decode(buffer);
+            helper.assertTrue(read.equals(edit) && buffer.readableBytes() == 0, "Edit round trip: " + edit + " read as " + read);
+        }
+        PatternsTabData.Edit atOnce = edits.getLast();
+        helper.assertTrue(atOnce instanceof PatternsTabData.Edit.SetAtOnce(int container, Job job, int slot, int crafts)
+                && container == 7 && slot == 10 && crafts == 12, "Set at once carries the crafts per round: " + atOnce);
         helper.succeed();
     }
 
