@@ -132,9 +132,10 @@ public final class SettlementBlock {
      * @param stockRules the stock rules
      * @param served     the Served Clerks of a Warehouse, in linking order
      * @param ledgers    the Ledgers used on the block (9 more rule slots each)
+     * @param orders     the Delivery Orders
      */
     private record ClerkFields(List<BlockPos> storage, List<StandSpot> standSpots, SpotOfDay spotOfDay, List<StockRule> stockRules,
-            List<BlockPos> served, int ledgers) {
+            List<BlockPos> served, int ledgers, DeliveryOrders.Saved orders) {
 
         static final MapCodec<ClerkFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 BlockPos.CODEC.listOf().optionalFieldOf("storage", List.of()).forGetter(ClerkFields::storage),
@@ -142,10 +143,11 @@ public final class SettlementBlock {
                 SpotOfDay.CODEC.optionalFieldOf("spot_of_day", SpotOfDay.NONE).forGetter(ClerkFields::spotOfDay),
                 StockRule.CODEC.listOf().optionalFieldOf("stock_rules", List.of()).forGetter(ClerkFields::stockRules),
                 BlockPos.CODEC.listOf().optionalFieldOf("served_clerks", List.of()).forGetter(ClerkFields::served),
-                Codec.INT.optionalFieldOf("ledgers", 0).forGetter(ClerkFields::ledgers)
+                Codec.INT.optionalFieldOf("ledgers", 0).forGetter(ClerkFields::ledgers),
+                DeliveryOrders.Saved.CODEC.optionalFieldOf("delivery_orders", DeliveryOrders.Saved.NONE).forGetter(ClerkFields::orders)
         ).apply(instance, ClerkFields::new));
 
-        static final ClerkFields NONE = new ClerkFields(List.of(), List.of(), SpotOfDay.NONE, List.of(), List.of(), 0);
+        static final ClerkFields NONE = new ClerkFields(List.of(), List.of(), SpotOfDay.NONE, List.of(), List.of(), 0, DeliveryOrders.Saved.NONE);
     }
 
     /**
@@ -395,6 +397,7 @@ public final class SettlementBlock {
     private SpotOfDay spotOfDay;
     private final List<StockRule> stockRules = new ArrayList<>();
     private int ledgers;
+    private final DeliveryOrders orders;
     private final List<BlockPos> served = new ArrayList<>();
     private Optional<BlockPos> homeClerk;
     private final Map<Job, Library> libraries = new LinkedHashMap<>();
@@ -452,6 +455,7 @@ public final class SettlementBlock {
         clerk.stockRules().stream().filter(rule -> ruled.add(rule.item())).forEach(this.stockRules::add);
         this.served.addAll(clerk.served());
         this.ledgers = Math.clamp(clerk.ledgers(), 0, SettlementRules.MAX_LEDGERS);
+        this.orders = new DeliveryOrders(clerk.orders());
         this.homeClerk = homeClerk;
         producing.libraries().forEach(saved -> {
             Library library = library(saved.job());
@@ -564,7 +568,7 @@ public final class SettlementBlock {
     }
 
     private ClerkFields clerkFields() {
-        return new ClerkFields(List.copyOf(storage), List.copyOf(standSpots), spotOfDay, List.copyOf(stockRules), List.copyOf(served), ledgers);
+        return new ClerkFields(List.copyOf(storage), List.copyOf(standSpots), spotOfDay, List.copyOf(stockRules), List.copyOf(served), ledgers, orders.saved());
     }
 
     private ProducingFields producingFields() {
@@ -680,6 +684,20 @@ public final class SettlementBlock {
 
     void setLedgers(int ledgers) {
         this.ledgers = Math.clamp(ledgers, 0, SettlementRules.MAX_LEDGERS);
+    }
+
+    /**
+     * @return the Delivery Orders of this Clerk JobBlock: its filled Delivery Slips (always empty for other blocks)
+     */
+    public DeliveryOrders orders() {
+        return orders;
+    }
+
+    /**
+     * @return the slots of the Delivery Orders in use: (level + Ledgers) × 9, like the stock rule slots
+     */
+    public int orderSlots() {
+        return stockSlots();
     }
 
     /**

@@ -31,7 +31,7 @@ public final class JobBlockTabs {
         if (jobType == ModJobs.CLERK.get()) {
             // A Clerk JobBlock has no slots of its own: its storage is linked containers (the Storage tab of its settler).
             TabData<ClerkTabData> clerk = StockTab.newData();
-            tabs.addAll(List.of(new StockTab(clerk), new TasksTab(clerk)));
+            tabs.addAll(List.of(new StockTab(clerk), new TasksTab(clerk), new DeliveryOrdersTab()));
         } else {
             tabs.add(new StorageTab(jobType == ModJobs.TAVERN_HOST.get()));
             switch (jobType.category()) {

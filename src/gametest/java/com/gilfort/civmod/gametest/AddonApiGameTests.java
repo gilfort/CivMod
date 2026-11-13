@@ -155,7 +155,7 @@ public final class AddonApiGameTests {
         helper.assertValueEqual(tabs(job(PRODUCER)), producing, "Any Producing Job: Station Types, then its Patterns tab");
         helper.assertValueEqual(tabs(ModJobs.ADVENTURER.get()), List.of(workers, storage, "civmod.gui.job_block.tab.missions", "civmod.gui.station_types.tab"),
                 "Mission: Missions and Station Types tabs");
-        helper.assertValueEqual(tabs(ModJobs.CLERK.get()), List.of(workers, "civmod.gui.clerk.tab.stock", "civmod.gui.clerk.tab.tasks"),
+        helper.assertValueEqual(tabs(ModJobs.CLERK.get()), List.of(workers, "civmod.gui.clerk.tab.stock", "civmod.gui.clerk.tab.tasks", "civmod.gui.clerk.tab.orders"),
                 "Clerk keeps its tabs but the Storage tab (it has no slots)");
         helper.assertValueEqual(tabs(job(NO_COSTS)), List.of(workers, storage), "Service: Workers and Storage only");
         helper.succeed();

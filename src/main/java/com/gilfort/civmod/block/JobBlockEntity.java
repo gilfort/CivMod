@@ -15,6 +15,7 @@ import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
+import com.gilfort.civmod.settlement.SlipOrders;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -301,6 +302,8 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
     public void preRemoveSideEffects(BlockPos pos, BlockState state) {
         super.preRemoveSideEffects(pos, state);
         if (level instanceof ServerLevel serverLevel) {
+            // A Clerk's Delivery Slips drop before the block leaves the settlement.
+            JobBlockSite.at(serverLevel, pos).ifPresent(site -> SlipOrders.dropOrders(serverLevel, site.settlement(), site.block()));
             SettlementWorld.remove(serverLevel, pos);
         }
     }

@@ -394,6 +394,27 @@ public final class Stock {
     }
 
     /**
+     * Tries a stack out without changing anything.
+     *
+     * @param stack the stack
+     * @return how many of it {@link #insert} would take
+     */
+    public int fits(ItemStack stack) {
+        int rest = stack.getCount();
+        ItemResource resource = ItemResource.of(stack);
+        for (Part part : parts) {
+            if (rest <= 0) {
+                break;
+            }
+            // The transaction is never committed: the insert is only a test.
+            try (Transaction transaction = Transaction.openRoot()) {
+                rest -= ResourceHandlerUtil.insertStacking(part.handler(), resource, rest, transaction);
+            }
+        }
+        return stack.getCount() - rest;
+    }
+
+    /**
      * Puts a stack in, container by container (a Clerk's linked containers in linking order).
      *
      * @param stack the stack

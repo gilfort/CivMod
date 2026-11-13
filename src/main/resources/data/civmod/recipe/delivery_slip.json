@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:paper",
+    "minecraft:paper",
+    "civmod:scroll_of_assignment"
+  ],
+  "result": {
+    "id": "civmod:delivery_slip"
+  }
+}
