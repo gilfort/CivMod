@@ -7,6 +7,7 @@ import java.util.UUID;
 import java.util.function.UnaryOperator;
 
 import com.gilfort.civmod.logistics.Request;
+import com.gilfort.civmod.logistics.ReservedFor;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.Item;
@@ -148,7 +149,8 @@ public final class Requests {
 
     /**
      * A producer delivered its claimed amount: the claim ends without reopening it; a request with nothing open and no
-     * claim left is done and removed. The posting Clerk checks its rules right after the delivery.
+     * claim left is done and removed. The posting Clerk checks its rules right after the delivery. The result of a
+     * sub-request is held at its Clerk for the parent request ({@link Holds}).
      *
      * @param data       the dimension's settlement data
      * @param settlement the settlement
@@ -156,7 +158,25 @@ public final class Requests {
      * @param settler    the producer settler
      */
     public static void finish(SettlementData data, Settlement settlement, UUID id, UUID settler) {
+        get(settlement, id).ifPresent(found -> holdForParent(settlement, found, settler));
         update(data, settlement, id, found -> found.withoutClaim(settler, false));
+    }
+
+    /** The delivered part of a sub-request waits in its Clerk for the parent request. */
+    private static void holdForParent(Settlement settlement, Request child, UUID settler) {
+        if (child.parent().isPresent() && child.target().isPresent()) {
+            child.claimOf(settler).ifPresent(claim -> Holds.hold(settlement, child.target().get(), ReservedFor.request(child.parent().get()),
+                    child.item(), claim.amount()));
+        }
+    }
+
+    /**
+     * @param settlement a settlement
+     * @param id         a request id
+     * @return the sub-requests posted for that request (open or being worked on), in posting order
+     */
+    public static List<Request> children(Settlement settlement, UUID id) {
+        return settlement.requests().stream().filter(request -> request.parent().filter(id::equals).isPresent()).toList();
     }
 
     /**
@@ -183,11 +203,7 @@ public final class Requests {
      */
     public static void withdraw(SettlementData data, Settlement settlement, UUID id) {
         update(data, settlement, id, found -> found.withAmount(0));
-        for (Request child : List.copyOf(settlement.requests())) {
-            if (child.parent().filter(id::equals).isPresent()) {
-                withdraw(data, settlement, child.id());
-            }
-        }
+        children(settlement, id).forEach(child -> withdraw(data, settlement, child.id()));
     }
 
     /**
@@ -203,11 +219,7 @@ public final class Requests {
             return;
         }
         update(data, settlement, id, found -> found.withPriority(priority));
-        for (Request child : List.copyOf(settlement.requests())) {
-            if (child.parent().filter(id::equals).isPresent()) {
-                setPriority(data, settlement, child.id(), priority);
-            }
-        }
+        children(settlement, id).forEach(child -> setPriority(data, settlement, child.id(), priority));
     }
 
     /** Adds a request (a stock rule posted it). */

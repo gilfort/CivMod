@@ -33,8 +33,8 @@ import net.minecraft.world.item.crafting.Ingredient;
  */
 public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integer> takes, List<Request.Missing> missing, int operations) {
 
-    /** Patterns deeper than this are not followed (guards against long or cyclic chains). */
-    private static final int MAX_DEPTH = 8;
+    /** Patterns deeper than this are not followed (guards against long or cyclic chains); sub-requests stop here too. */
+    public static final int MAX_DEPTH = 8;
 
     /**
      * One pattern crafted a number of times.

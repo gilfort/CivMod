@@ -21,6 +21,7 @@ import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.Holds;
 import com.gilfort.civmod.settlement.Reservations;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
@@ -265,7 +266,7 @@ public final class ClerkStorage {
      * @param pos    a Clerk JobBlock or any container
      * @param linked whether the linked storage of a Clerk is reachable (its working Clerk serves the visitor)
      * @param task   the Delivery task asking, which sees what is reserved for it; null for everybody else
-     * @return the reachable stock, without what the Clerk reserved for other tasks
+     * @return the reachable stock, without what the Clerk reserved for other tasks or holds for requests
      */
     public static Stock stock(ServerLevel level, BlockPos pos, boolean linked, @Nullable UUID task) {
         if (!level.isLoaded(pos)) {
@@ -275,7 +276,8 @@ public final class ClerkStorage {
         ClerkStock view = clerk.isPresent() ? ClerkStock.of(level, pos) : null;
         if (view != null) {
             return view.stock(activeStorage(clerk.get().block()), linked)
-                    .without(Reservations.reserved(clerk.get().settlement(), pos, DayClock.day(level), task));
+                    .without(Reservations.reserved(clerk.get().settlement(), pos, DayClock.day(level), task))
+                    .without(Holds.held(clerk.get().settlement(), pos));
         }
         ResourceHandler<ItemResource> own = level.getCapability(Capabilities.Item.BLOCK, pos, null);
         return own == null ? Stock.EMPTY : Stock.live(List.of(own), false);

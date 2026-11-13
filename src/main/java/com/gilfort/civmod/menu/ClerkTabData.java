@@ -139,8 +139,10 @@ public record ClerkTabData(int level, int ledgers, List<StockRule> rules, List<T
      * @param text    the short text ("Smith: 8 Iron Pickaxe", "Lumberjack → Clerk")
      * @param status  its status
      * @param details the tooltip lines: the text, then amount, reason, Deliveryman or producer
+     * @param depth   how deep the row sits under its main request: 0 for a main request or a delivery, 1 and more for the
+     *                sub-requests below it (drawn indented and smaller)
      */
-    public record TaskRow(ItemStack icon, Component text, TaskStatus status, List<Component> details) {
+    public record TaskRow(ItemStack icon, Component text, TaskStatus status, List<Component> details, int depth) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, TaskRow> STREAM_CODEC = StreamCodec.composite(
@@ -148,6 +150,7 @@ public record ClerkTabData(int level, int ledgers, List<StockRule> rules, List<T
                 ComponentSerialization.STREAM_CODEC, TaskRow::text,
                 TaskStatus.STREAM_CODEC, TaskRow::status,
                 ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), TaskRow::details,
+                ByteBufCodecs.VAR_INT, TaskRow::depth,
                 TaskRow::new);
 
         /**
@@ -155,21 +158,34 @@ public record ClerkTabData(int level, int ledgers, List<StockRule> rules, List<T
          * @param text    the short text
          * @param status  the status
          * @param details the tooltip lines
+         * @param depth   the depth under the main request
          */
         public TaskRow {
             details = List.copyOf(details);
+        }
+
+        /**
+         * A row that sits at the top level.
+         *
+         * @param icon    the icon
+         * @param text    the short text
+         * @param status  the status
+         * @param details the tooltip lines
+         */
+        public TaskRow(ItemStack icon, Component text, TaskStatus status, List<Component> details) {
+            this(icon, text, status, details, 0);
         }
 
         // Item stacks have no value equality; the tab is only resent when a row really changed.
         @Override
         public boolean equals(Object other) {
             return other instanceof TaskRow row && ItemStack.matches(icon, row.icon) && text.equals(row.text) && status == row.status
-                    && details.equals(row.details);
+                    && details.equals(row.details) && depth == row.depth;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(icon.getItem(), text, status, details);
+            return Objects.hash(icon.getItem(), text, status, details, depth);
         }
     }
 
@@ -218,47 +234,79 @@ public record ClerkTabData(int level, int ledgers, List<StockRule> rules, List<T
         List<BlockPos> clerks = warehouse ? Warehouses.handled(settlement.get(), block.get()) : List.of(clerk);
         List<TaskRow> tasks = new ArrayList<>(requests(level, settlement.get(), clerk, clerks));
         tasks.addAll(deliveries(level, settlement.get(), clerks));
-        // A stable sort: requests stay before deliveries, each in its own order.
-        tasks.sort(Comparator.comparingInt(row -> row.status().order()));
-        return new ClerkTabData(block.get().level(), block.get().ledgers(), block.get().stockRules(), tasks, served(settlement.get(), block.get()),
+        return new ClerkTabData(block.get().level(), block.get().ledgers(), block.get().stockRules(), byStatus(tasks), served(settlement.get(), block.get()),
                 Warehouses.servedBy(settlement.get(), clerk).map(ClerkStorage::name), StockRules.surplusNowhere(level, clerk));
     }
 
     /**
+     * Orders the rows by status, a stable sort: requests stay before deliveries, each in its own order. A main request
+     * moves together with the sub-requests under it.
+     */
+    private static List<TaskRow> byStatus(List<TaskRow> rows) {
+        List<List<TaskRow>> groups = new ArrayList<>();
+        for (TaskRow row : rows) {
+            if (row.depth() == 0 || groups.isEmpty()) {
+                groups.add(new ArrayList<>());
+            }
+            groups.getLast().add(row);
+        }
+        groups.sort(Comparator.comparingInt(group -> group.getFirst().status().order()));
+        return groups.stream().flatMap(List::stream).toList();
+    }
+
+    /**
      * The requests of the Clerks' rules, highest priority first: "Smith: 8 Iron Pickaxe" while a producer crafts it,
-     * else "8 Iron Pickaxe"; another Clerk's request names it in the tooltip ("For <Clerk>").
+     * else "8 Iron Pickaxe"; another Clerk's request names it in the tooltip ("For <Clerk>"). Below each one sit its open
+     * sub-requests.
      */
     private static List<TaskRow> requests(ServerLevel level, Settlement settlement, BlockPos clerk, List<BlockPos> clerks) {
-        return Requests.byPriority(settlement).stream()
+        List<TaskRow> rows = new ArrayList<>();
+        Requests.byPriority(settlement).stream()
                 .filter(request -> request.rule().isPresent() && request.target().filter(clerks::contains).isPresent())
-                .map(request -> {
-                    int amount = request.amount() + request.crafting();
-                    Component item = new ItemStack(request.item()).getHoverName();
-                    Component text = request.claims().isEmpty() ? Component.translatable("civmod.gui.clerk.task.request.open", amount, item)
-                            : Component.translatable("civmod.gui.clerk.task.request", producer(settlement, request.claims().get(0)), amount, item);
-                    TaskStatus status;
-                    Component reason;
-                    if (!request.claims().isEmpty()) {
-                        status = TaskStatus.IN_PROGRESS;
-                        reason = Component.translatable("civmod.gui.clerk.request.crafting", request.claims().get(0).name());
-                    } else if (!request.missing().isEmpty()) {
-                        status = TaskStatus.BLOCKED;
-                        reason = missing(request);
-                    } else if (!Producers.canMake(level, settlement, request.item())) {
-                        status = TaskStatus.BLOCKED;
-                        reason = Component.translatable("civmod.gui.clerk.request.no_producer");
-                    } else {
-                        status = TaskStatus.WAITING;
-                        reason = Component.translatable("civmod.gui.clerk.request.waiting");
-                    }
-                    List<Component> details = new ArrayList<>(List.of(text, gray(reason),
-                            gray(Component.translatable("civmod.gui.clerk.request.priority", request.priority()))));
-                    BlockPos target = request.target().get();
-                    if (!target.equals(clerk)) {
-                        details.add(gray(Component.translatable("civmod.gui.clerk.task.for", name(settlement, target))));
-                    }
-                    return new TaskRow(new ItemStack(request.item(), amount), text, status, details);
-                }).toList();
+                .forEach(request -> {
+                    rows.add(requestRow(level, settlement, clerk, request, 0));
+                    addSubRequests(rows, level, settlement, clerk, request, 1);
+                });
+        return rows;
+    }
+
+    /** The open sub-requests of a request, each followed by its own, one level deeper. */
+    private static void addSubRequests(List<TaskRow> rows, ServerLevel level, Settlement settlement, BlockPos clerk, Request parent, int depth) {
+        for (Request child : Requests.children(settlement, parent.id())) {
+            if (child.amount() + child.crafting() > 0) {
+                rows.add(requestRow(level, settlement, clerk, child, depth));
+                addSubRequests(rows, level, settlement, clerk, child, depth + 1);
+            }
+        }
+    }
+
+    private static TaskRow requestRow(ServerLevel level, Settlement settlement, BlockPos clerk, Request request, int depth) {
+        int amount = request.amount() + request.crafting();
+        Component item = new ItemStack(request.item()).getHoverName();
+        Component text = request.claims().isEmpty() ? Component.translatable("civmod.gui.clerk.task.request.open", amount, item)
+                : Component.translatable("civmod.gui.clerk.task.request", producer(settlement, request.claims().get(0)), amount, item);
+        TaskStatus status;
+        Component reason;
+        if (!request.claims().isEmpty()) {
+            status = TaskStatus.IN_PROGRESS;
+            reason = Component.translatable("civmod.gui.clerk.request.crafting", request.claims().get(0).name());
+        } else if (!request.missing().isEmpty()) {
+            status = TaskStatus.BLOCKED;
+            reason = missing(request);
+        } else if (!Producers.canMake(level, settlement, request.item())) {
+            status = TaskStatus.BLOCKED;
+            reason = Component.translatable("civmod.gui.clerk.request.no_producer");
+        } else {
+            status = TaskStatus.WAITING;
+            reason = Component.translatable("civmod.gui.clerk.request.waiting");
+        }
+        List<Component> details = new ArrayList<>(List.of(text, gray(reason),
+                gray(Component.translatable("civmod.gui.clerk.request.priority", request.priority()))));
+        BlockPos target = request.target().get();
+        if (depth == 0 && !target.equals(clerk)) {
+            details.add(gray(Component.translatable("civmod.gui.clerk.task.for", name(settlement, target))));
+        }
+        return new TaskRow(new ItemStack(request.item(), amount), text, status, details, depth);
     }
 
     /** The Job of the producer crafting a claim ("Smith"), its name if it holds none. */
