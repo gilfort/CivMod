@@ -172,7 +172,7 @@ public final class NeedLimitedWorkGameTests {
     private static LevelSpy work(ServerLevel level, Settler settler, SettlerJob job) {
         LevelSpy spy = new LevelSpy();
         WorkRules.work(level, settler, job, spy, JobBlockSite.at(level, job.jobBlock()).orElseThrow(), settler.getWork().workplace(job.jobBlock()),
-                job.jobBlock(), ROLLS, WorkRules.ToolSupply.BELT, NOWHERE);
+                job.jobBlock(), ROLLS, SimulatedSpan.LIVE, WorkRules.ToolSupply.BELT, NOWHERE);
         return spy;
     }
 }

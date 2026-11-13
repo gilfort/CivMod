@@ -102,9 +102,10 @@ interface CategoryLoop {
      * @param job       the job
      * @param day       the day
      * @param workTicks the work ticks available
+     * @param span      the simulated day time and work span of the hour
      * @return the rolls made and the work ticks left over for the next job
      */
-    SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks);
+    SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks, SimulatedSpan span);
 
     /**
      * Whether the settler, standing at the target of its current step, works the block there in a way players must

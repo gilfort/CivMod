@@ -290,9 +290,9 @@ final class ServiceLoop implements CategoryLoop {
     }
 
     @Override
-    public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks) {
+    public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks, SimulatedSpan span) {
         // Standing through a window uses the work time; the acts and the round are not played in catch-up.
-        return new SimulatedWork(0, ServiceActs.openAt(acts(job), ServiceAct.Kind.STATIONARY, shell.catchUpDayTime()).isPresent() ? 0.0 : workTicks);
+        return new SimulatedWork(0, ServiceActs.openAt(acts(job), ServiceAct.Kind.STATIONARY, span.dayTime()).isPresent() ? 0.0 : workTicks);
     }
 
     @Override

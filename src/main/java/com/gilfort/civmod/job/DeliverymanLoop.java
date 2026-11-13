@@ -455,7 +455,7 @@ final class DeliverymanLoop implements CategoryLoop {
      * trip. A full store ends the hour with the rest carried.
      */
     @Override
-    public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks) {
+    public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks, SimulatedSpan span) {
         Optional<JobBlockSite> found = JobBlockSite.at(level, job.jobBlock());
         if (found.isEmpty()) {
             shell.endCatchUpJob(job.jobBlock());
@@ -492,7 +492,7 @@ final class DeliverymanLoop implements CategoryLoop {
                 break;
             }
             time -= ticks;
-            long dayTime = shell.catchUpDayTime();
+            long dayTime = span.dayTime();
             for (DeliveryTask task : trip) {
                 skipped.add(task.source());
                 // Catch-up reaches every counter.
