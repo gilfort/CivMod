@@ -52,7 +52,7 @@ public class JobBlockMenu extends CivMenu {
     private final List<JobBlockTab> tabs;
     /** The tabs' synced data, each once, in tab order. */
     private final List<TabData<?>> synced;
-    private JobBlockInfo info;
+    private final JobBlockInfo info;
     private int tabSyncIn;
 
     /**
@@ -148,19 +148,10 @@ public class JobBlockMenu extends CivMenu {
     }
 
     /**
-     * @return the info snapshot
+     * @return the info snapshot: the header and what never changes while the window is open
      */
     public JobBlockInfo getInfo() {
         return info;
-    }
-
-    /**
-     * Client: the server sent a new info snapshot; both sides: a tab changed it.
-     *
-     * @param info the info
-     */
-    public void setInfo(JobBlockInfo info) {
-        this.info = info;
     }
 
     /**

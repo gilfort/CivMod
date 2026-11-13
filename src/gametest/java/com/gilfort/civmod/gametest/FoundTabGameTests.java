@@ -81,7 +81,7 @@ public final class FoundTabGameTests {
         player.snapTo(jobBlock.getX() + 0.5, jobBlock.getY() + 1, jobBlock.getZ() + 0.5);
         JobBlockEntity entity = (JobBlockEntity) level.getBlockEntity(jobBlock);
         SettlementBlock block = JobBlockSite.blockAt(level, jobBlock).orElseThrow();
-        return new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(level, jobBlock, block.jobType(), block.level()));
+        return new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(block.jobType(), block.level()));
     }
 
     private static int count(Container container, Item item) {

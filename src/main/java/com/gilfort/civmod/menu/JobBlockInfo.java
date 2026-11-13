@@ -1,221 +1,48 @@
 package com.gilfort.civmod.menu;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.function.UnaryOperator;
 
 import com.gilfort.civmod.api.Job;
-import com.gilfort.civmod.api.JobCategory;
-import com.gilfort.civmod.mission.MissionOffer;
-import com.gilfort.civmod.mission.MissionRules;
-import com.gilfort.civmod.mission.OutcomeRules;
-import com.gilfort.civmod.npc.Settler;
-import com.gilfort.civmod.settlement.JobBlockSite;
-import com.gilfort.civmod.settlement.SettlementBlock;
-import com.gilfort.civmod.settlement.SettlementWorld;
 
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.Identifier;
-import net.minecraft.server.level.ServerLevel;
 
 /**
- * Snapshot of a JobBlock shown in the header line; sent to the client when the menu opens. The tabs' data changes while
- * the window is open and syncs through {@link TabData}.
+ * What a JobBlock window knows from the moment it opens: the header (the Job and the block level) and what never
+ * changes while the window is open. Everything else that changes (the Workers and Missions tabs, the header tooltip)
+ * syncs through {@link TabData}. Sent to the client when the menu opens.
  *
- * @param jobType   the offered job
- * @param level     the JobBlock level
- * @param overview  the "?" overview of the Job's biome bonuses ({@link BiomeBonusText#overview}), static for the Job
- * @param missionTab the missions and Mission Job settlers (Mission Board only, else empty)
+ * @param jobType  the offered job
+ * @param level    the JobBlock level
+ * @param overview the "?" overview of the Job's biome bonuses ({@link BiomeBonusText#overview}), static for the Job
  */
-public record JobBlockInfo(Job jobType, int level, List<Component> overview, MissionTab missionTab) {
+public record JobBlockInfo(Job jobType, int level, List<Component> overview) {
 
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, JobBlockInfo> STREAM_CODEC = StreamCodec.composite(
             Job.STREAM_CODEC, JobBlockInfo::jobType,
             ByteBufCodecs.VAR_INT, JobBlockInfo::level,
             ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), JobBlockInfo::overview,
-            MissionTab.STREAM_CODEC, JobBlockInfo::missionTab,
             JobBlockInfo::new);
 
     /**
-     * @param jobType   the offered job
-     * @param level     the JobBlock level
-     * @param overview  the biome bonus overview
-     * @param missionTab the missions
+     * @param jobType  the offered job
+     * @param level    the JobBlock level
+     * @param overview the biome bonus overview
      */
     public JobBlockInfo {
         overview = List.copyOf(overview);
     }
 
     /**
-     * What the missions tab of a Mission Board shows.
-     *
-     * @param offer    the daily mission offer
-     * @param taken    the missions settlers of this board took (reserved or on the way; loaded settlers only)
-     * @param settlers the settlers of this board with their Mission Job (loaded settlers only), for assignments
-     * @param rules    the outcome constants, so the client shows the chances of the outcome roll
-     */
-    public record MissionTab(List<MissionOffer.Entry> offer, List<TakenMission> taken, List<MissionSettler> settlers, OutcomeRules rules) {
-
-        /** No missions (any other JobBlock). */
-        public static final MissionTab EMPTY = new MissionTab(List.of(), List.of(), List.of(), OutcomeRules.FALLBACK);
-
-        /** Network codec. */
-        public static final StreamCodec<RegistryFriendlyByteBuf, MissionTab> STREAM_CODEC = StreamCodec.composite(
-                MissionOffer.Entry.STREAM_CODEC.apply(ByteBufCodecs.list()), MissionTab::offer,
-                TakenMission.STREAM_CODEC.apply(ByteBufCodecs.list()), MissionTab::taken,
-                MissionSettler.STREAM_CODEC.apply(ByteBufCodecs.list()), MissionTab::settlers,
-                OutcomeRules.STREAM_CODEC, MissionTab::rules,
-                MissionTab::new);
-
-        /**
-         * @param offer    the daily mission offer
-         * @param taken    the missions settlers of this board took
-         * @param settlers the settlers of this board with their Mission Job
-         * @param rules    the outcome constants
-         */
-        public MissionTab {
-            offer = List.copyOf(offer);
-            taken = List.copyOf(taken);
-            settlers = List.copyOf(settlers);
-        }
-
-        /**
-         * @param id a settler UUID
-         * @return that settler of the board, if loaded
-         */
-        public Optional<MissionSettler> settler(UUID id) {
-            return settlers.stream().filter(settler -> settler.id().equals(id)).findFirst();
-        }
-
-        /**
-         * @return the settlers as the pick rule sees them (same order as {@link #settlers()})
-         */
-        public List<MissionRules.Picker> pickers() {
-            return settlers.stream().map(settler -> new MissionRules.Picker(settler.id(), settler.job(), settler.skill())).toList();
-        }
-
-        /** A copy with one offer entry changed. */
-        MissionTab withEntry(int index, UnaryOperator<MissionOffer.Entry> change) {
-            if (index < 0 || index >= offer.size()) {
-                return this;
-            }
-            List<MissionOffer.Entry> changed = new ArrayList<>(offer);
-            changed.set(index, change.apply(offer.get(index)));
-            return new MissionTab(changed, taken, settlers, rules);
-        }
-    }
-
-    /**
-     * A settler of a Mission Board that a mission can be assigned to.
-     *
-     * @param id    the settler UUID
-     * @param name  the settler name
-     * @param job   its Mission Job
-     * @param skill its effective Mission Job skill (capped by the board level)
-     */
-    public record MissionSettler(UUID id, String name, Job job, int skill) {
-
-        /** Network codec. */
-        public static final StreamCodec<RegistryFriendlyByteBuf, MissionSettler> STREAM_CODEC = StreamCodec.composite(
-                UUIDUtil.STREAM_CODEC, MissionSettler::id,
-                ByteBufCodecs.STRING_UTF8, MissionSettler::name,
-                Job.STREAM_CODEC, MissionSettler::job,
-                ByteBufCodecs.VAR_INT, MissionSettler::skill,
-                MissionSettler::new);
-    }
-
-    /**
-     * A mission a settler of the board took: it left the offer.
-     *
-     * @param settler  the settler name
-     * @param mission  the mission id
-     * @param departed whether the settler is on its way (otherwise it leaves the next morning)
-     */
-    public record TakenMission(String settler, Identifier mission, boolean departed) {
-
-        /** Network codec. */
-        public static final StreamCodec<RegistryFriendlyByteBuf, TakenMission> STREAM_CODEC = StreamCodec.composite(
-                ByteBufCodecs.STRING_UTF8, TakenMission::settler,
-                Identifier.STREAM_CODEC, TakenMission::mission,
-                ByteBufCodecs.BOOL, TakenMission::departed,
-                TakenMission::new);
-    }
-
-    /**
-     * @param level    the dimension
-     * @param pos      the JobBlock position
      * @param jobType  the offered job
      * @param jobLevel the JobBlock level
-     * @return the current info of that JobBlock
+     * @return the info of a JobBlock of that Job and level
      */
-    public static JobBlockInfo of(ServerLevel level, BlockPos pos, Job jobType, int jobLevel) {
-        List<SettlementBlock.Assignee> assignees = JobBlockSite.blockAt(level, pos).map(SettlementBlock::assignees).orElse(List.of());
-        List<TakenMission> taken = new ArrayList<>();
-        List<MissionSettler> settlers = new ArrayList<>();
-        for (SettlementBlock.Assignee assignee : assignees) {
-            if (!(level.getEntity(assignee.id()) instanceof Settler settler)) {
-                continue;
-            }
-            settler.getWork().missionTrip().ifPresent(trip -> taken.add(new TakenMission(assignee.name(), trip.mission(), trip.departed())));
-            settler.getJobs().stream().filter(job -> job.jobBlock().equals(pos) && job.jobType().category() == JobCategory.MISSION).findFirst()
-                    .ifPresent(job -> settlers.add(new MissionSettler(assignee.id(), assignee.name(), job.jobType(),
-                            settler.getWork().effectiveLevel(job))));
-        }
-        return new JobBlockInfo(jobType, jobLevel, BiomeBonusText.overview(jobType),
-                new MissionTab(SettlementWorld.missionOffer(level, pos), taken, settlers, OutcomeRules.get()));
-    }
-
-    /**
-     * @param index  a mission offer index
-     * @param marked the new mark
-     * @return a copy with that offer entry marked or unmarked
-     */
-    public JobBlockInfo withMarked(int index, boolean marked) {
-        return withMissionTab(missionTab.withEntry(index, entry -> entry.withMarked(marked)));
-    }
-
-    /**
-     * @param index    a mission offer index
-     * @param assignee the settler the mission is assigned to, empty to unlock it
-     * @return a copy with that offer entry assigned or unlocked
-     */
-    public JobBlockInfo withAssignee(int index, Optional<UUID> assignee) {
-        return withMissionTab(missionTab.withEntry(index, entry -> entry.withAssignee(assignee)));
-    }
-
-    private JobBlockInfo withMissionTab(MissionTab changed) {
-        return new JobBlockInfo(jobType, level, overview, changed);
-    }
-
-    /**
-     * @return the daily mission offer (Mission Board only)
-     */
-    public List<MissionOffer.Entry> missions() {
-        return missionTab.offer();
-    }
-
-    /**
-     * @return the missions settlers of this board took
-     */
-    public List<TakenMission> taken() {
-        return missionTab.taken();
-    }
-
-    /**
-     * @param jobType  the offered job
-     * @param jobLevel the JobBlock level
-     * @return info without settlement data
-     */
-    public static JobBlockInfo unknown(Job jobType, int jobLevel) {
-        return new JobBlockInfo(jobType, jobLevel, List.of(), MissionTab.EMPTY);
+    public static JobBlockInfo of(Job jobType, int jobLevel) {
+        return new JobBlockInfo(jobType, jobLevel, BiomeBonusText.overview(jobType));
     }
 }

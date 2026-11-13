@@ -137,8 +137,8 @@ public final class BiomeBonusGuiGameTests {
         BlockPos clerk = helper.absolutePos(new BlockPos(6, 1, 6));
         WorkersTabData mushroom = WorkersTabData.of(level, clerk, ModJobs.CLERK.get(), 1);
         helper.assertTrue(today(mushroom).equals(Optional.of("Mushroom Fields · Speed ×1.3")), "With an effect: " + today(mushroom));
-        helper.assertTrue(strings(JobBlockInfo.of(level, clerk, ModJobs.CLERK.get(), 1).overview()).equals(List.of("Biome bonuses:", "Mushroom Fields: Speed ×1.3", "All other biomes: no effect")),
-                "The Clerk's overview: " + strings(JobBlockInfo.of(level, clerk, ModJobs.CLERK.get(), 1).overview()));
+        helper.assertTrue(strings(JobBlockInfo.of(ModJobs.CLERK.get(), 1).overview()).equals(List.of("Biome bonuses:", "Mushroom Fields: Speed ×1.3", "All other biomes: no effect")),
+                "The Clerk's overview: " + strings(JobBlockInfo.of(ModJobs.CLERK.get(), 1).overview()));
         fillBiome(helper,new BlockPos(0, -4, 0), new BlockPos(16, 8, 16), Biomes.SAVANNA);
         WorkersTabData savanna = WorkersTabData.of(level, clerk, ModJobs.CLERK.get(), 1);
         helper.assertTrue(today(savanna).equals(Optional.of("Savanna")), "The biome alone: " + today(savanna));

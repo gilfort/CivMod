@@ -9,7 +9,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
-import com.gilfort.civmod.menu.JobBlockInfo;
+import com.gilfort.civmod.menu.MissionsTabData;
 import com.gilfort.civmod.mission.Mission;
 import com.gilfort.civmod.mission.MissionOffer;
 import com.gilfort.civmod.mission.MissionRules;
@@ -100,13 +100,13 @@ public final class MissionChancesGameTests {
         helper.assertFalse(MissionRules.chances(OutcomeRules.FALLBACK, 10, 10).highDeath(), "At the recommendation");
 
         OutcomeRules rules = new OutcomeRules(0.5, 0.01, 0.1, 0.9, 0.05, 0.02, 0.02, 0.5, 3.0, 1.0);
-        JobBlockInfo.MissionTab tab = new JobBlockInfo.MissionTab(List.of(marked("lv5")), List.of(),
-                List.of(new JobBlockInfo.MissionSettler(ALICE, "Alice", ModJobs.ADVENTURER.get(), 7)), rules);
+        MissionsTabData tab = new MissionsTabData(List.of(marked("lv5")), List.of(),
+                List.of(new MissionsTabData.MissionSettler(ALICE, "Alice", ModJobs.ADVENTURER.get(), 7)), rules);
         RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), helper.getLevel().registryAccess());
-        JobBlockInfo.MissionTab.STREAM_CODEC.encode(buffer, tab);
-        JobBlockInfo.MissionTab read = JobBlockInfo.MissionTab.STREAM_CODEC.decode(buffer);
+        MissionsTabData.STREAM_CODEC.encode(buffer, tab);
+        MissionsTabData read = MissionsTabData.STREAM_CODEC.decode(buffer);
         helper.assertTrue(read.equals(tab), "Round trip: " + read);
-        helper.assertTrue(JobBlockInfo.MissionTab.EMPTY.rules().equals(OutcomeRules.FALLBACK), "No board: fallback constants");
+        helper.assertTrue(MissionsTabData.EMPTY.rules().equals(OutcomeRules.FALLBACK), "No board: fallback constants");
         helper.succeed();
     }
 }

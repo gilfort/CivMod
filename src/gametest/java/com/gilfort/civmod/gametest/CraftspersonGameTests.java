@@ -676,7 +676,7 @@ public final class CraftspersonGameTests {
         Player player = helper.makeMockPlayer(GameType.CREATIVE);
         player.snapTo(pos.getX() + 0.5, pos.getY() + 1, pos.getZ() + 0.5);
         JobBlockEntity entity = (JobBlockEntity) level.getBlockEntity(pos);
-        JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(level, pos, ModJobs.CRAFTSPERSON.get(), 1));
+        JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(ModJobs.CRAFTSPERSON.get(), 1));
         PatternsTab patterns = menu.tab(PatternsTab.class).orElseThrow();
         helper.assertTrue(menu.getTabCount() > menu.tab(StationTypesTab.class).orElseThrow().index(),
                 "Storage, Info, Patterns, Station Types and the Specializations' Patterns");

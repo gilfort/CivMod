@@ -17,6 +17,7 @@ import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.JobBlockTab;
 import com.gilfort.civmod.menu.MissionsTab;
+import com.gilfort.civmod.menu.MissionsTabData;
 import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.menu.StationTypesTabData;
@@ -375,6 +376,16 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      */
     public static void handleWorkersTab(WorkersTabData.Sync payload, IPayloadContext context) {
         receive(payload.containerId(), open -> open.tab(WorkersTab.class).map(WorkersTab::data), payload.tab());
+    }
+
+    /**
+     * Client handler of {@link MissionsTabData.Sync}: updates the missions of the open Mission Board menu.
+     *
+     * @param payload the payload
+     * @param context the payload context
+     */
+    public static void handleMissionsTab(MissionsTabData.Sync payload, IPayloadContext context) {
+        receive(payload.containerId(), open -> open.tab(MissionsTab.class).map(MissionsTab::data), payload.tab());
     }
 
     // ---------------------------------------------------------------- recipe viewers

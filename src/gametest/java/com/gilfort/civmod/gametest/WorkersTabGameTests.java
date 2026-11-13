@@ -117,7 +117,7 @@ public final class WorkersTabGameTests {
         BlockPos pos = helper.absolutePos(relative);
         JobBlockEntity entity = (JobBlockEntity) level.getBlockEntity(pos);
         SettlementBlock block = JobBlockSite.blockAt(level, pos).orElseThrow();
-        return new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(level, pos, block.jobType(), block.level()));
+        return new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(block.jobType(), block.level()));
     }
 
     /** The Workers data a window holds now (what the server last sent its client), without reading it again. */

@@ -2,7 +2,6 @@ package com.gilfort.civmod.block;
 
 import org.jspecify.annotations.Nullable;
 
-import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.menu.JobBlockInfo;
@@ -350,10 +349,6 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
         if (!(getBlockState().getBlock() instanceof JobBlock jobBlock)) {
             return null;
         }
-        Job jobType = jobBlock.getJobType();
-        JobBlockInfo info = level instanceof ServerLevel serverLevel
-                ? JobBlockInfo.of(serverLevel, worldPosition, jobType, jobLevel)
-                : JobBlockInfo.unknown(jobType, jobLevel);
-        return new JobBlockMenu(containerId, inventory, this, info);
+        return new JobBlockMenu(containerId, inventory, this, JobBlockInfo.of(jobBlock.getJobType(), jobLevel));
     }
 }
