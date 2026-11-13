@@ -242,6 +242,10 @@ final class WorkersTabView implements JobBlockTabView {
 
     // ---------------------------------------------------------------- drawing
 
+    /** What a row needs to draw itself: the graphics, the font, the label colour and the mouse. */
+    private record Canvas(GuiGraphicsExtractor graphics, Font font, int color, int mouseX, int mouseY) {
+    }
+
     @Override
     public void extractLabels(GuiGraphicsExtractor graphics, JobBlockTab shown, int mouseX, int mouseY) {
         Font font = screen.getFont();
@@ -252,14 +256,15 @@ final class WorkersTabView implements JobBlockTabView {
         int first = scroller.offset(max);
         int end = Math.min(rows.size(), first + visible());
         int right = right(rows);
+        Canvas canvas = new Canvas(graphics, font, color, mouseX, mouseY);
         scroller.extract(graphics, scrollbarX(), TOP, visible() * ROW_HEIGHT, max);
         for (int i = first; i < end; i++) {
             Row row = rows.get(i);
             int y = rowY(i - first);
             if (row.worker() < 0) {
-                jobLine(graphics, font, info, row.line(), y, right, color, mouseX, mouseY);
+                jobLine(canvas, info, row.line(), y, right);
             } else {
-                workerRow(graphics, font, info.workers().get(row.worker()), y, right, color, mouseX, mouseY);
+                workerRow(canvas, info.workers().get(row.worker()), y, right);
             }
         }
         int y = footerY() + 2;
@@ -277,7 +282,12 @@ final class WorkersTabView implements JobBlockTabView {
      * A Job line: "Deliveryman 2/4", the first one with today's biome ("· Jungle ★", its effects on hover); in a
      * settlement the automatic assignment icon on the right.
      */
-    private void jobLine(GuiGraphicsExtractor graphics, Font font, WorkersTabData info, int index, int y, int right, int color, int mouseX, int mouseY) {
+    private void jobLine(Canvas canvas, WorkersTabData info, int index, int y, int right) {
+        GuiGraphicsExtractor graphics = canvas.graphics();
+        Font font = canvas.font();
+        int color = canvas.color();
+        int mouseX = canvas.mouseX();
+        int mouseY = canvas.mouseY();
         JobPlaces.Line line = info.places().get(index);
         MutableComponent text = JobPickerScreen.label(line).copy();
         WorkersTabData.Biome biome = info.biome();
@@ -314,7 +324,12 @@ final class WorkersTabView implements JobBlockTabView {
     }
 
     /** A settler row: head, name and "Lv 23" (a settler away: greyed, "Away", the mission on hover). */
-    private void workerRow(GuiGraphicsExtractor graphics, Font font, WorkersTabData.Worker worker, int y, int right, int color, int mouseX, int mouseY) {
+    private void workerRow(Canvas canvas, WorkersTabData.Worker worker, int y, int right) {
+        GuiGraphicsExtractor graphics = canvas.graphics();
+        Font font = canvas.font();
+        int color = canvas.color();
+        int mouseX = canvas.mouseX();
+        int mouseY = canvas.mouseY();
         int x = CivGui.PADDING + INDENT;
         boolean grey = !worker.opensWindow();
         PlayerFaceExtractor.extractRenderState(graphics, SettlerRenderer.skin(Math.max(0, worker.skin())), x, y + (ROW_HEIGHT - HEAD) / 2, HEAD,
