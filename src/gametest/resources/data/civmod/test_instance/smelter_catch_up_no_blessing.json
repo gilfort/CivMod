@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:smelter_catch_up_no_blessing",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

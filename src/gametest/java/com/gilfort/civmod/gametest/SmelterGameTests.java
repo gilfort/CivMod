@@ -26,6 +26,7 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.Bonuses;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.Fuels;
 import com.gilfort.civmod.settlement.JobAssignments;
@@ -91,11 +92,40 @@ public final class SmelterGameTests {
             register(helper, "smelter_two_smelters", SmelterGameTests::twoSmelters);
             register(helper, "smelter_live_lit_furnaces", SmelterGameTests::liveLitFurnaces);
             register(helper, "smelter_fuel_tab", SmelterGameTests::fuelTab);
+            register(helper, "smelter_catch_up_blessing_averaged", h -> blessedCatchUp(h, true));
+            register(helper, "smelter_catch_up_no_blessing", h -> blessedCatchUp(h, false));
         });
     }
 
     private static void register(RegisterEvent.RegisterHelper<Consumer<GameTestHelper>> helper, String name, Consumer<GameTestHelper> test) {
         helper.register(ResourceKey.create(Registries.TEST_FUNCTION, CivMod.id(name)), test);
+    }
+
+    /**
+     * Catch-up weighs a blessing by the part of the simulated work time it covers, not by the clock of now: a blessing over
+     * the first half of a span that ended long ago speeds the smelting up by 10 %. At level 1 an ingot takes 314 work ticks,
+     * 285 with the averaged blessing; 290 work ticks only finish one with it.
+     *
+     * @param blessed whether the blessing covers the first half of the span (the control run has none)
+     */
+    private static void blessedCatchUp(GameTestHelper helper, boolean blessed) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 1), new ItemStack(Items.COAL, 1)));
+        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 1, Optional.of(setup.clerk()), Optional.empty());
+        Settler settler = worker(helper, setup);
+        double workTicks = 290.0;
+        long dayStart = (Math.floorDiv(level.getOverworldClockTime(), 24000L) - 1) * 24000L;
+        long span = (long) Math.ceil(workTicks / (Fatigue.expectedWorkShare() * CivModConfig.CATCH_UP_MULTIPLIER.get()));
+        if (blessed) {
+            setup.data().setBonuses(setup.settlement(), Bonuses.NONE.start(Bonuses.Kind.WORK_SPEED, dayStart, dayStart + 2000L + span / 2));
+        }
+        catchUpWork(level, settler, 0L, workTicks);
+
+        int ingots = count(level, setup.clerk(), Items.IRON_INGOT);
+        helper.assertTrue(ingots == (blessed ? 1 : 0), (blessed ? "Averaged blessing: " : "No blessing: ") + ingots + " ingot(s) from 290 work ticks");
+        setup.data().setBonuses(setup.settlement(), Bonuses.NONE);
+        cleanUp(setup, settler);
+        helper.succeed();
     }
 
     /** The Smelter. */
