@@ -8,6 +8,8 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.AutoAssignment;
 import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
@@ -26,9 +28,9 @@ import net.minecraft.world.item.Items;
  * The "Workers" tab of every JobBlock (vault {@code Systems/GUI.md}, "Info becomes Workers"): per offered Job its line
  * with the automatic assignment button, below it one row per settler with ✕ (unassigns it at once) and a click on head
  * or name that opens the settler window; plus the leaf collection toggle (Lumberjack) and the treasure toggle
- * (Fisherman). Its data is the window's
- * {@link JobBlockInfo} ({@link JobBlockInfo#workers()}). JobBlocks are upgraded with the JobBlock Upgrade items, not here
- * ({@link com.gilfort.civmod.block.JobBlockUpgrade}).
+ * (Fisherman). Its data is the synced {@link WorkersTabData}; the server changes the state and sends the data again
+ * ({@link JobBlockMenu#resend}), the client only renders and asks. JobBlocks are upgraded with the JobBlock Upgrade
+ * items, not here ({@link com.gilfort.civmod.block.JobBlockUpgrade}).
  */
 public final class WorkersTab extends JobBlockTab {
 
@@ -36,10 +38,9 @@ public final class WorkersTab extends JobBlockTab {
     private static final int LEAVES = 0;
     /** Buttons: set the treasure option off / on (Fisherman, {@link #treasureButtonId}). */
     private static final int TREASURE = LEAVES + 2;
-    /** Buttons from here: set the automatic assignment toggle of a Job line ({@link #autoButtonId}). */
-    private static final int AUTO_ASSIGN = TREASURE + 2;
-    /** Most Job lines of a JobBlock with an automatic assignment toggle. */
-    private static final int MAX_JOB_LINES = 16;
+
+    private final TabData<WorkersTabData> data = new TabData<>(WorkersTabData.EMPTY,
+            (menu, level, pos) -> WorkersTabData.of(level, pos, menu.getInfo().jobType(), menu.getInfo().level()), WorkersTabData.Sync::new);
 
     @Override
     public Component label() {
@@ -57,24 +58,25 @@ public final class WorkersTab extends JobBlockTab {
     }
 
     @Override
-    int buttons() {
-        return AUTO_ASSIGN + 2 * MAX_JOB_LINES;
+    public Optional<TabData<?>> synced() {
+        return Optional.of(data);
     }
 
     /**
-     * The toggle buttons carry the wanted state instead of a toggle, so two players clicking the same line agree with
-     * what they see.
-     *
-     * @param line the index of the Job line ({@link JobBlockInfo#places()})
-     * @param on   the wanted state of its automatic assignment
-     * @return the menu button id that sets it
+     * @return the Workers data as last synced
      */
-    public int autoButtonId(int line, boolean on) {
-        return buttonId(AUTO_ASSIGN + 2 * line + (on ? 1 : 0));
+    public TabData<WorkersTabData> data() {
+        return data;
+    }
+
+    @Override
+    int buttons() {
+        return TREASURE + 2;
     }
 
     /**
-     * Like {@link #autoButtonId}, the leaf toggle carries the wanted state.
+     * The toggle buttons carry the wanted state instead of a toggle, so two players clicking the same switch agree with
+     * what they see.
      *
      * @param on the wanted state of leaf collection
      * @return the menu button id that sets it
@@ -84,7 +86,7 @@ public final class WorkersTab extends JobBlockTab {
     }
 
     /**
-     * Like {@link #autoButtonId}, the treasure toggle carries the wanted state.
+     * Like {@link #leavesButtonId}, the treasure toggle carries the wanted state.
      *
      * @param on the wanted state of the Fisherman's treasure
      * @return the menu button id that sets it
@@ -97,90 +99,78 @@ public final class WorkersTab extends JobBlockTab {
     boolean clickButton(Player player, int button) {
         if (button < TREASURE) {
             setLeaves(button - LEAVES == 1);
-            return true;
-        }
-        if (button < AUTO_ASSIGN) {
+        } else {
             setTreasure(button - TREASURE == 1);
-            return true;
         }
-        return setAuto((button - AUTO_ASSIGN) / 2, (button - AUTO_ASSIGN) % 2 == 1);
+        return true;
     }
 
     private void setLeaves(boolean on) {
-        JobBlockMenu menu = menu();
-        menu.setInfo(menu.getInfo().withCollectLeaves(on));
-        menu.site().ifPresent(site -> JobAssignments.setLeaves(SettlementData.get(site.level()), site.pos(), on));
+        menu().editSettlement((data, pos) -> JobAssignments.setLeaves(data, pos, on));
     }
 
     private void setTreasure(boolean on) {
-        JobBlockMenu menu = menu();
-        menu.setInfo(menu.getInfo().withTreasure(on));
-        menu.site().ifPresent(site -> JobAssignments.setTreasure(SettlementData.get(site.level()), site.pos(), on));
-    }
-
-    /** Sets the automatic assignment toggle of a Job line; switching it on may assign settlers at once (fresh snapshot). */
-    private boolean setAuto(int line, boolean on) {
-        JobBlockMenu menu = menu();
-        JobBlockInfo info = menu.getInfo();
-        if (line >= info.places().size() || !info.inSettlement()) {
-            return false;
-        }
-        Job job = info.places().get(line).job();
-        Optional<JobBlockMenu.Site> site = menu.site();
-        if (site.isPresent()) {
-            if (!AutoAssignment.setAuto(site.get().level(), site.get().pos(), job, on)) {
-                return false;
-            }
-            menu.refreshInfo(site.get());
-        } else {
-            menu.setInfo(info.withAuto(job, on));
-        }
-        return true;
-    }
-
-    /** The listed worker that is this settler, empty if it left the list (the row a click was meant for is gone). */
-    private Optional<JobBlockInfo.Worker> worker(UUID settler) {
-        return menu().getInfo().workers().stream().filter(worker -> worker.assignee().id().equals(settler)).findFirst();
+        menu().editSettlement((data, pos) -> JobAssignments.setTreasure(data, pos, on));
     }
 
     /**
-     * ✕: removes one settler from the JobBlock at once; its skill and EXP stay with it (fresh snapshot). The client
-     * applies it to its snapshot and sends {@link Worker}; the server unassigns.
+     * Server: sets the automatic assignment toggle of a Job line; switching it on may assign settlers at once.
+     *
+     * @param job the Job of the line
+     * @param on  the wanted state
+     * @return whether the state changed (false for a Job the block does not offer or a block outside a settlement)
+     */
+    public boolean setAuto(Job job, boolean on) {
+        JobBlockMenu menu = menu();
+        Optional<JobBlockMenu.Site> site = menu.validSite();
+        if (site.isEmpty() || !AutoAssignment.setAuto(site.get().level(), site.get().pos(), job, on)) {
+            return false;
+        }
+        menu.resend();
+        return true;
+    }
+
+    /** The assignee of this JobBlock that is this settler, empty if it left (the row a click was meant for is gone). */
+    private static Optional<SettlementBlock.Assignee> assignee(JobBlockMenu.Site site, UUID settler) {
+        return JobBlockSite.blockAt(site.level(), site.pos()).flatMap(block -> block.assignee(settler));
+    }
+
+    /**
+     * Server: ✕ removes one settler from the JobBlock at once; its skill and EXP stay with it.
      *
      * @param settler the settler of the row
-     * @return whether it was listed (and is unassigned now)
+     * @return whether it works here (and is unassigned now)
      */
     public boolean unassign(UUID settler) {
         JobBlockMenu menu = menu();
-        if (worker(settler).isEmpty()) {
+        Optional<JobBlockMenu.Site> site = menu.validSite();
+        if (site.isEmpty() || assignee(site.get(), settler).isEmpty()) {
             return false;
         }
-        Optional<JobBlockMenu.Site> site = menu.site();
-        if (site.isPresent()) {
-            SettlementWorld.unassign(site.get().level(), site.get().pos(), settler);
-            menu.refreshInfo(site.get());
-        } else {
-            menu.setInfo(menu.getInfo().withoutWorker(settler));
-        }
+        SettlementWorld.unassign(site.get().level(), site.get().pos(), settler);
+        menu.resend();
         return true;
     }
 
     /**
-     * Opens the settler window of a loaded worker at home (server); it stays open while the player stays at the JobBlock
+     * Server: opens the settler window of a loaded worker at home; it stays open while the player stays at the JobBlock
      * and the settler works there.
      *
      * @param player  the player clicking
      * @param settler the settler of the row
-     * @return whether it is listed and opens its window
+     * @return whether it works here, is loaded and at home, and opens its window
      */
     public boolean open(Player player, UUID settler) {
-        if (worker(settler).filter(JobBlockInfo.Worker::opensWindow).isEmpty()) {
+        Optional<JobBlockMenu.Site> site = menu().validSite();
+        if (site.isEmpty() || !(player instanceof ServerPlayer serverPlayer)) {
             return false;
         }
-        Optional<JobBlockMenu.Site> site = menu().site();
-        if (site.isPresent() && player instanceof ServerPlayer serverPlayer && site.get().level().getEntity(settler) instanceof Settler found) {
-            found.openWindow(serverPlayer, Optional.of(site.get().pos()));
+        Optional<SettlementBlock.Assignee> assignee = assignee(site.get(), settler);
+        if (assignee.isEmpty() || !WorkersTabData.Worker.of(site.get().level(), assignee.get()).opensWindow()
+                || !(site.get().level().getEntity(settler) instanceof Settler found)) {
+            return false;
         }
+        found.openWindow(serverPlayer, Optional.of(site.get().pos()));
         return true;
     }
 
@@ -215,15 +205,13 @@ public final class WorkersTab extends JobBlockTab {
          * @param player the player
          */
         public void handle(ServerPlayer player) {
-            if (player.containerMenu instanceof JobBlockMenu menu && menu.containerId == containerId && menu.stillValid(player)) {
-                menu.tab(WorkersTab.class).ifPresent(tab -> {
-                    if (open) {
-                        tab.open(player, settler);
-                    } else {
-                        tab.unassign(settler);
-                    }
-                });
-            }
+            JobBlockMenu.open(player, containerId).flatMap(menu -> menu.tab(WorkersTab.class)).ifPresent(tab -> {
+                if (open) {
+                    tab.open(player, settler);
+                } else {
+                    tab.unassign(settler);
+                }
+            });
         }
     }
 }

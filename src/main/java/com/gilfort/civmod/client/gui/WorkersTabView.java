@@ -7,13 +7,14 @@ import java.util.UUID;
 import com.gilfort.civmod.client.SettlerRenderer;
 import com.gilfort.civmod.job.FishermanProfile;
 import com.gilfort.civmod.job.LumberjackProfile;
-import com.gilfort.civmod.menu.JobBlockInfo;
+import com.gilfort.civmod.menu.WorkersTabData;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.JobBlockTab;
 import com.gilfort.civmod.menu.WorkersTab;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.mojang.blaze3d.platform.InputConstants;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -65,8 +66,8 @@ final class WorkersTabView implements JobBlockTabView {
     /**
      * A row of the list.
      *
-     * @param line   the index of its Job line ({@link JobBlockInfo#places()}), -1 for a worker without one
-     * @param worker the index of its worker ({@link JobBlockInfo#workers()}), -1 for the Job line itself
+     * @param line   the index of its Job line ({@link WorkersTabData#places()}), -1 for a worker without one
+     * @param worker the index of its worker ({@link WorkersTabData#workers()}), -1 for the Job line itself
      */
     private record Row(int line, int worker) {
     }
@@ -82,30 +83,41 @@ final class WorkersTabView implements JobBlockTabView {
         this.scroller = new ListScroller(screen);
     }
 
+    /** The server sent new Workers data: the ✕ buttons and toggles follow it. */
+    @Override
+    public void dataChanged() {
+        screen.rebuild();
+    }
+
+    /** The overworld clock the server's absolute times (blessing end, return time) count in. */
+    private static long clockNow() {
+        return Minecraft.getInstance().level.getOverworldClockTime();
+    }
+
     // ---------------------------------------------------------------- layout
 
     /** Whether the Lumberjack's leaf toggle is shown. */
     private boolean leavesToggle() {
-        JobBlockInfo info = menu.getInfo();
-        return info.jobType().profile(LumberjackProfile.class).isPresent() && info.inSettlement();
+        WorkersTabData info = menu.workers();
+        return menu.getInfo().jobType().profile(LumberjackProfile.class).isPresent() && info.inSettlement();
     }
 
     /** Whether the Fisherman's treasure toggle is shown. */
     private boolean treasureToggle() {
-        JobBlockInfo info = menu.getInfo();
-        return info.jobType().profile(FishermanProfile.class).isPresent() && info.inSettlement();
+        WorkersTabData info = menu.workers();
+        return menu.getInfo().jobType().profile(FishermanProfile.class).isPresent() && info.inSettlement();
     }
 
     /** The toggle buttons of the bottom row: the leaf toggle, the treasure toggle, then the other views' toggles. */
     private List<WorkersToggle> toggles() {
         List<WorkersToggle> toggles = new ArrayList<>();
         if (leavesToggle()) {
-            toggles.add(new WorkersToggle(Component.translatable(menu.getInfo().collectLeaves() ? "civmod.gui.job_block.leaves.on"
-                    : "civmod.gui.job_block.leaves.off"), tab.leavesButtonId(!menu.getInfo().collectLeaves())));
+            toggles.add(new WorkersToggle(Component.translatable(menu.workers().collectLeaves() ? "civmod.gui.job_block.leaves.on"
+                    : "civmod.gui.job_block.leaves.off"), tab.leavesButtonId(!menu.workers().collectLeaves())));
         }
         if (treasureToggle()) {
-            toggles.add(new WorkersToggle(Component.translatable(menu.getInfo().treasure() ? "civmod.gui.job_block.treasure.on"
-                    : "civmod.gui.job_block.treasure.off"), tab.treasureButtonId(!menu.getInfo().treasure())));
+            toggles.add(new WorkersToggle(Component.translatable(menu.workers().treasure() ? "civmod.gui.job_block.treasure.on"
+                    : "civmod.gui.job_block.treasure.off"), tab.treasureButtonId(!menu.workers().treasure())));
         }
         screen.views().forEach(view -> view.workersToggle().ifPresent(toggles::add));
         return toggles;
@@ -115,7 +127,7 @@ final class WorkersTabView implements JobBlockTabView {
     private List<WorkersLine> footer() {
         List<WorkersLine> lines = new ArrayList<>();
         screen.views().forEach(view -> lines.addAll(view.workersLines()));
-        long left = menu.getInfo().blessingLeft();
+        long left = menu.workers().blessingLeft(clockNow());
         if (left > 0) {
             // In-game minutes: 1000 ticks are an hour.
             long minutes = Math.max(1L, left * 60L / 1000L);
@@ -127,9 +139,9 @@ final class WorkersTabView implements JobBlockTabView {
     }
 
     /** The rows: every Job line, then its workers; workers whose Job has no line last. */
-    private static List<Row> rows(JobBlockInfo info) {
+    private static List<Row> rows(WorkersTabData info) {
         List<Row> rows = new ArrayList<>();
-        List<JobBlockInfo.Worker> workers = info.workers();
+        List<WorkersTabData.Worker> workers = info.workers();
         boolean[] listed = new boolean[workers.size()];
         for (int line = 0; line < info.places().size(); line++) {
             rows.add(new Row(line, -1));
@@ -183,7 +195,7 @@ final class WorkersTabView implements JobBlockTabView {
     /** The ✕ buttons of the shown settler rows and the toggle row. */
     @Override
     public void init() {
-        JobBlockInfo info = menu.getInfo();
+        WorkersTabData info = menu.workers();
         List<Row> rows = rows(info);
         int first = scroller.offset(maxOffset(rows));
         int end = Math.min(rows.size(), first + visible());
@@ -194,25 +206,19 @@ final class WorkersTabView implements JobBlockTabView {
                 continue;
             }
             UUID settler = info.workers().get(row.worker()).assignee().id();
-            Button remove = screen.addWidget(tab.index(), Button.builder(Component.literal("✕"), pressed -> {
-                tab.unassign(settler);
-                ClientPacketDistributor.sendToServer(new WorkersTab.Worker(menu.containerId, settler, false));
-                screen.rebuild();
-            }).bounds(x, screen.top() + rowY(i - first) + 1, ICON, ICON).build());
+            Button remove = screen.addWidget(tab.index(), Button.builder(Component.literal("✕"),
+                    pressed -> ClientPacketDistributor.sendToServer(new WorkersTab.Worker(menu.containerId, settler, false))).bounds(x, screen.top() + rowY(i - first) + 1, ICON, ICON).build());
             remove.setTooltip(Tooltip.create(Component.translatable("civmod.gui.job_block.unassign")));
         }
         for (WorkersToggle toggle : toggles()) {
-            screen.addWidget(tab.index(), Button.builder(toggle.label(), pressed -> {
-                screen.clickMenuButton(toggle.buttonId());
-                screen.rebuild();
-            }).bounds(screen.left() + CivGui.PADDING, screen.top() + screen.panelHeight() - BOTTOM_MARGIN - 20, screen.panelWidth() - 2 * CivGui.PADDING, 20)
+            screen.addWidget(tab.index(), Button.builder(toggle.label(), pressed -> screen.clickMenuButton(toggle.buttonId())).bounds(screen.left() + CivGui.PADDING, screen.top() + screen.panelHeight() - BOTTOM_MARGIN - 20, screen.panelWidth() - 2 * CivGui.PADDING, 20)
                     .build());
         }
     }
 
     @Override
     public List<Component> helpLines(JobBlockTab shown) {
-        JobBlockInfo info = menu.getInfo();
+        WorkersTabData info = menu.workers();
         List<Component> lines = new ArrayList<>();
         if (!info.workers().isEmpty()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.open_settler"));
@@ -230,30 +236,35 @@ final class WorkersTabView implements JobBlockTabView {
             lines.add(Component.translatable("civmod.gui.job_block.help.treasure"));
         }
         // The biomes that change something for the Job, and that all others do not.
-        lines.addAll(info.biome().overview());
+        lines.addAll(menu.getInfo().overview());
         return lines;
     }
 
     // ---------------------------------------------------------------- drawing
 
+    /** What a row needs to draw itself: the graphics, the font, the label colour and the mouse. */
+    private record Canvas(GuiGraphicsExtractor graphics, Font font, int color, int mouseX, int mouseY) {
+    }
+
     @Override
     public void extractLabels(GuiGraphicsExtractor graphics, JobBlockTab shown, int mouseX, int mouseY) {
         Font font = screen.getFont();
-        JobBlockInfo info = menu.getInfo();
+        WorkersTabData info = menu.workers();
         int color = info.inSettlement() && info.connected() ? CivGui.LABEL_COLOR : CivGui.HINT_COLOR;
         List<Row> rows = rows(info);
         int max = maxOffset(rows);
         int first = scroller.offset(max);
         int end = Math.min(rows.size(), first + visible());
         int right = right(rows);
+        Canvas canvas = new Canvas(graphics, font, color, mouseX, mouseY);
         scroller.extract(graphics, scrollbarX(), TOP, visible() * ROW_HEIGHT, max);
         for (int i = first; i < end; i++) {
             Row row = rows.get(i);
             int y = rowY(i - first);
             if (row.worker() < 0) {
-                jobLine(graphics, font, info, row.line(), y, right, color, mouseX, mouseY);
+                jobLine(canvas, info, row.line(), y, right);
             } else {
-                workerRow(graphics, font, info.workers().get(row.worker()), y, right, color, mouseX, mouseY);
+                workerRow(canvas, info.workers().get(row.worker()), y, right);
             }
         }
         int y = footerY() + 2;
@@ -271,10 +282,15 @@ final class WorkersTabView implements JobBlockTabView {
      * A Job line: "Deliveryman 2/4", the first one with today's biome ("· Jungle ★", its effects on hover); in a
      * settlement the automatic assignment icon on the right.
      */
-    private void jobLine(GuiGraphicsExtractor graphics, Font font, JobBlockInfo info, int index, int y, int right, int color, int mouseX, int mouseY) {
+    private void jobLine(Canvas canvas, WorkersTabData info, int index, int y, int right) {
+        GuiGraphicsExtractor graphics = canvas.graphics();
+        Font font = canvas.font();
+        int color = canvas.color();
+        int mouseX = canvas.mouseX();
+        int mouseY = canvas.mouseY();
         JobPlaces.Line line = info.places().get(index);
         MutableComponent text = JobPickerScreen.label(line).copy();
-        JobBlockInfo.BiomeInfo biome = info.biome();
+        WorkersTabData.Biome biome = info.biome();
         boolean withBiome = index == 0 && biome.biome().isPresent();
         if (withBiome) {
             text.append(" · ").append(biome.biome().get());
@@ -308,7 +324,12 @@ final class WorkersTabView implements JobBlockTabView {
     }
 
     /** A settler row: head, name and "Lv 23" (a settler away: greyed, "Away", the mission on hover). */
-    private void workerRow(GuiGraphicsExtractor graphics, Font font, JobBlockInfo.Worker worker, int y, int right, int color, int mouseX, int mouseY) {
+    private void workerRow(Canvas canvas, WorkersTabData.Worker worker, int y, int right) {
+        GuiGraphicsExtractor graphics = canvas.graphics();
+        Font font = canvas.font();
+        int color = canvas.color();
+        int mouseX = canvas.mouseX();
+        int mouseY = canvas.mouseY();
         int x = CivGui.PADDING + INDENT;
         boolean grey = !worker.opensWindow();
         PlayerFaceExtractor.extractRenderState(graphics, SettlerRenderer.skin(Math.max(0, worker.skin())), x, y + (ROW_HEIGHT - HEAD) / 2, HEAD,
@@ -326,7 +347,7 @@ final class WorkersTabView implements JobBlockTabView {
             if (over(x, y, levelRight - x, ROW_HEIGHT, mouseX, mouseY)) {
                 Component mission = MissionsTabView.title(away.mission(), MissionsTabView.mission(away.mission()));
                 graphics.setComponentTooltipForNextFrame(font, List.of(Component.translatable("civmod.gui.job_block.worker.away_tooltip", mission,
-                        away.daysLeft())), mouseX, mouseY);
+                        WorkersTabData.Worker.daysLeft(clockNow(), away.returnTime()))), mouseX, mouseY);
             }
         });
     }
@@ -349,7 +370,7 @@ final class WorkersTabView implements JobBlockTabView {
         if (event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return false;
         }
-        JobBlockInfo info = menu.getInfo();
+        WorkersTabData info = menu.workers();
         List<Row> rows = rows(info);
         int max = maxOffset(rows);
         int before = scroller.offset(max);
@@ -364,7 +385,8 @@ final class WorkersTabView implements JobBlockTabView {
             int y = rowY(i - before);
             if (row.worker() < 0) {
                 if (info.inSettlement() && over(right - ICON, y + 1, ICON, ICON, event.x(), event.y())) {
-                    screen.clickMenuButton(tab.autoButtonId(row.line(), !info.places().get(row.line()).auto()));
+                    JobPlaces.Line line = info.places().get(row.line());
+                    ClientPacketDistributor.sendToServer(new WorkersTabData.Auto(menu.containerId, line.job(), !line.auto()));
                     screen.clickSound();
                     return true;
                 }
@@ -381,7 +403,7 @@ final class WorkersTabView implements JobBlockTabView {
     /** Scrolls the list by one row per wheel step. */
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
-        int max = maxOffset(rows(menu.getInfo()));
+        int max = maxOffset(rows(menu.workers()));
         int before = scroller.offset(max);
         if (!scroller.wheel(scrollY, max)) {
             return false;
@@ -392,7 +414,7 @@ final class WorkersTabView implements JobBlockTabView {
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event) {
-        int max = maxOffset(rows(menu.getInfo()));
+        int max = maxOffset(rows(menu.workers()));
         int before = scroller.offset(max);
         if (!scroller.drag(event.y(), TOP, visible() * ROW_HEIGHT, max)) {
             return false;

@@ -435,11 +435,11 @@ public final class LaborerGameTests {
         int[] stage = {0};
         int[] helped = new int[1];
         helper.onEachTick(() -> {
-            if (stage[0] == 0 && worker.getWork().catchUpReady(level)) {
+            if (stage[0] == 0 && worker.getWork().startCatchUpScan(level)) {
                 helped[0] = caughtUp(level, worker, free);
                 hire(helper, boss, free);
                 stage[0] = 1;
-            } else if (stage[0] == 1 && boss.getWork().catchUpReady(level)) {
+            } else if (stage[0] == 1 && boss.getWork().startCatchUpScan(level)) {
                 stage[0] = 2;
                 int employed = caughtUp(level, boss, free);
                 helper.assertTrue(employed >= 20, "The employee produced too little to compare: " + employed);

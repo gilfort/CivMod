@@ -20,6 +20,7 @@ import com.gilfort.civmod.api.ServiceProfile;
 import com.gilfort.civmod.api.WorkSpeed;
 import com.gilfort.civmod.entertainment.EntertainmentRules;
 import com.gilfort.civmod.job.JobBalancing;
+import com.gilfort.civmod.job.SettlerSpeed;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.job.Schedule;
 import com.gilfort.civmod.job.ServiceActNumbers;
@@ -418,9 +419,9 @@ public final class ServiceGameTests {
                             "WorkSpeed boosts the settlers in range for two hours: " + near.getWork().speedBoost());
                     helper.assertTrue(out.getWork().speedBoost().equals(SpeedBoost.NONE), "Not the ones out of range");
                     // Blessing 20 % + boost 50 % + 1 point of Entertainment (2 %): the shares add.
-                    double factor = near.getWork().speedFactor(level);
+                    double factor = SettlerSpeed.speedFactor(near.getWork(), level);
                     helper.assertTrue(near(factor, 1.72), "The boost adds to the blessing and Entertainment: " + factor);
-                    helper.assertTrue(near(out.getWork().speedFactor(level), 1.2), "Out of range only the blessing counts: " + out.getWork().speedFactor(level));
+                    helper.assertTrue(near(SettlerSpeed.speedFactor(out.getWork(), level), 1.2), "Out of range only the blessing counts: " + SettlerSpeed.speedFactor(out.getWork(), level));
                     MobEffectInstance speed = hearing.getEffect(MobEffects.SPEED);
                     helper.assertTrue(speed != null && speed.getAmplifier() == 1 && speed.getDuration() > 150, "MobEffect reaches the player in range: " + speed);
                     helper.assertTrue(!deaf.hasEffect(MobEffects.SPEED), "Not the player out of range");

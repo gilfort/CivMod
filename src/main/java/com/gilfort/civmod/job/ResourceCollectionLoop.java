@@ -284,8 +284,8 @@ final class ResourceCollectionLoop implements CategoryLoop {
         }
         JobBuffer buffer = shell.workplace(jobBlock).buffer();
         // A Laborer works a fraction of the tick: the rolls come slower, the rules stay the same.
-        WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site.get(), shell.workplace(jobBlock), rollPlace, shell.laborer().speed(job),
-                WorkRules.ToolSupply.BELT, new BufferOutput(buffer, stacks -> {
+        WorkRules.Result result = WorkRules.work(new WorkRules.Setup(level, settler, job, profile.get(), site.get(), shell.workplace(jobBlock), WorkRules.ToolSupply.BELT),
+                rollPlace, shell.laborer().speed(job), SimulatedSpan.LIVE, new BufferOutput(buffer, stacks -> {
                     stacks.forEach(buffer::add);
                     return !buffer.isFull();
                 }));
@@ -324,8 +324,8 @@ final class ResourceCollectionLoop implements CategoryLoop {
     }
 
     /** The game time of the simulated moment of catch-up (the search throttle of the tools counts in game time). */
-    private long simulatedGameTime(ServerLevel level, long day) {
-        long simulated = day * DayClock.DAY_TICKS + shell.catchUpDayTime();
+    private long simulatedGameTime(ServerLevel level, long day, SimulatedSpan span) {
+        long simulated = day * DayClock.DAY_TICKS + span.dayTime();
         return level.getGameTime() - (level.getOverworldClockTime() - simulated);
     }
 
@@ -334,7 +334,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
      * drop-off, then the buffer; missing tools are taken from the collect inventory.
      */
     @Override
-    public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks) {
+    public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks, SimulatedSpan span) {
         Optional<JobBlockSite> found = JobBlockSite.at(level, job.jobBlock());
         Optional<ResourceCollectionProfile> profile = job.jobType().profile(ResourceCollectionProfile.class);
         Workplace workplace = shell.workplace(job.jobBlock());
@@ -351,9 +351,10 @@ final class ResourceCollectionLoop implements CategoryLoop {
         JobBlockSite site = found.get();
         // A Laborer works at a fraction of the speed: the same time gives fewer work ticks.
         double speed = shell.laborer().speed(job);
-        WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site, workplace, poi, workTicks * speed,
-                WorkRules.ToolSupply.beltAnd(ClerkStorage.stock(level, site.collect(), shell.catchUpDayTime(), true),
-                        () -> ClerkCounter.handOut(level, site.collect(), false), simulatedGameTime(level, day)), new BufferOutput(workplace.buffer(), stacks -> shell.deliverDirect(level, site, stacks)));
+        WorkRules.Result result = WorkRules.work(new WorkRules.Setup(level, settler, job, profile.get(), site, workplace,
+                WorkRules.ToolSupply.beltAnd(ClerkStorage.stock(level, site.collect(), span.dayTime(), true),
+                        () -> ClerkCounter.handOut(level, site.collect(), false), simulatedGameTime(level, day, span))),
+                poi, workTicks * speed, span, new BufferOutput(workplace.buffer(), stacks -> shell.deliverDirect(level, site, stacks, span.dayTime())));
         if (result.end() == WorkRules.End.NONE) {
             return new SimulatedWork(result.rolls(), 0.0);
         }

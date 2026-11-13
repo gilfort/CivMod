@@ -17,6 +17,7 @@ import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.JobBlockTab;
 import com.gilfort.civmod.menu.MissionsTab;
+import com.gilfort.civmod.menu.MissionsTabData;
 import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.menu.StationTypesTabData;
@@ -26,6 +27,7 @@ import com.gilfort.civmod.menu.StorageTab;
 import com.gilfort.civmod.menu.TasksTab;
 import com.gilfort.civmod.menu.TabData;
 import com.gilfort.civmod.menu.WorkersTab;
+import com.gilfort.civmod.menu.WorkersTabData;
 
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -153,24 +155,24 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
         int x = leftPos + titleLabelX;
         int y = topPos + titleLabelY;
         if (mouseX >= x && mouseX < x + font.width(header) && mouseY >= y && mouseY < y + font.lineHeight) {
-            graphics.setComponentTooltipForNextFrame(font, headerLines(info), mouseX, mouseY);
+            graphics.setComponentTooltipForNextFrame(font, headerLines(info, menu.workers()), mouseX, mouseY);
         }
     }
 
     /** The tooltip lines of the header. */
-    private static List<Component> headerLines(JobBlockInfo info) {
+    private static List<Component> headerLines(JobBlockInfo info, WorkersTabData workers) {
         Component settlement;
-        if (!info.inSettlement()) {
+        if (!workers.inSettlement()) {
             settlement = Component.translatable("civmod.gui.job_block.not_registered").withStyle(ChatFormatting.RED);
-        } else if (!info.connected()) {
-            settlement = (info.nothingToReach() ? Component.translatable("civmod.gui.job_block.no_center")
-                    : Component.translatable("civmod.gui.job_block.unconnected", info.required(), info.distance())).withStyle(ChatFormatting.RED);
+        } else if (!workers.connected()) {
+            settlement = (workers.nothingToReach() ? Component.translatable("civmod.gui.job_block.no_center")
+                    : Component.translatable("civmod.gui.job_block.unconnected", workers.required(), workers.distance())).withStyle(ChatFormatting.RED);
         } else {
-            settlement = info.settlementName();
+            settlement = workers.settlementName();
         }
         List<Component> lines = new ArrayList<>(List.of(settlement, Component.translatable("civmod.tooltip.job_level", info.level(), SettlementRules.MAX_LEVEL),
                 Component.translatable("civmod.gui.job_block.skill_cap", SettlementRules.skillCap(info.level()))));
-        if (info.storageUnlinked()) {
+        if (workers.storageUnlinked()) {
             lines.add(Component.translatable("civmod.gui.job_block.link_storage").withStyle(ChatFormatting.RED));
         }
         return lines;
@@ -367,19 +369,23 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     }
 
     /**
-     * Client handler of {@link JobBlockInfo.Sync}: updates the info of the open JobBlock menu.
+     * Client handler of {@link WorkersTabData.Sync}: updates the Workers data of the open JobBlock menu.
      *
      * @param payload the payload
      * @param context the payload context
      */
-    public static void handleInfo(JobBlockInfo.Sync payload, IPayloadContext context) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player != null && minecraft.player.containerMenu instanceof JobBlockMenu open && open.containerId == payload.containerId()) {
-            open.setInfo(payload.info());
-            if (minecraft.gui.screen() instanceof JobBlockScreen screen) {
-                screen.rebuildWidgets();
-            }
-        }
+    public static void handleWorkersTab(WorkersTabData.Sync payload, IPayloadContext context) {
+        receive(payload.containerId(), open -> open.tab(WorkersTab.class).map(WorkersTab::data), payload.tab());
+    }
+
+    /**
+     * Client handler of {@link MissionsTabData.Sync}: updates the missions of the open Mission Board menu.
+     *
+     * @param payload the payload
+     * @param context the payload context
+     */
+    public static void handleMissionsTab(MissionsTabData.Sync payload, IPayloadContext context) {
+        receive(payload.containerId(), open -> open.tab(MissionsTab.class).map(MissionsTab::data), payload.tab());
     }
 
     // ---------------------------------------------------------------- recipe viewers

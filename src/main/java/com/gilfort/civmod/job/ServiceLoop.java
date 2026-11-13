@@ -97,7 +97,7 @@ final class ServiceLoop implements CategoryLoop {
     /** The Job's place of the day: a Bard stands on top of its Stage (if there is room), any other settler next to its JobBlock. */
     private static JobStep place(ServerLevel level, JobBlockSite site, JobStatus status) {
         BlockPos top = site.pos().above();
-        if (Stage.isStage(site.block()) && SettlerWork.canStand(level, top)) {
+        if (Stage.isStage(site.block()) && StandingSpots.canStand(level, top)) {
             return JobStep.walk(top, STAGE_REACH, status);
         }
         return JobStep.walk(site.pos(), SettlerWork.REACH, status);
@@ -290,9 +290,9 @@ final class ServiceLoop implements CategoryLoop {
     }
 
     @Override
-    public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks) {
+    public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks, SimulatedSpan span) {
         // Standing through a window uses the work time; the acts and the round are not played in catch-up.
-        return new SimulatedWork(0, ServiceActs.openAt(acts(job), ServiceAct.Kind.STATIONARY, shell.catchUpDayTime()).isPresent() ? 0.0 : workTicks);
+        return new SimulatedWork(0, ServiceActs.openAt(acts(job), ServiceAct.Kind.STATIONARY, span.dayTime()).isPresent() ? 0.0 : workTicks);
     }
 
     @Override

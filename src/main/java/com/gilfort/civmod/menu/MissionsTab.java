@@ -1,30 +1,27 @@
 package com.gilfort.civmod.menu;
 
-import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
-import com.gilfort.civmod.mission.MissionRules;
 import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.settlement.MissionOffers;
 import com.gilfort.civmod.settlement.SettlementData;
-import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 /**
  * The "Missions" tab of the Mission Board (vault {@code Systems/Missions.md}): the daily offer with marks and
- * assignments, and the missions its settlers took. Its data is the window's {@link JobBlockInfo#missionTab()}.
+ * assignments, and the missions its settlers took. Its data is the synced {@link MissionsTabData}; the server changes
+ * the offer and sends the data again ({@link JobBlockMenu#resend}), the client only renders and asks
+ * ({@link MissionsTabData.Mark}, {@link MissionsTabData.Assign}).
  */
 public final class MissionsTab extends JobBlockTab {
 
-    /** Mark buttons: two per offer entry (unmark, mark). */
-    private static final int MARK_BUTTONS = 2 * MissionRules.MAX_OFFER_SIZE;
-    /** Assign buttons per offer entry: unlock, then one per board settler. */
-    private static final int ASSIGN_SLOTS = 1 + SettlementRules.MAX_SETTLERS;
+    private final TabData<MissionsTabData> data = new TabData<>(MissionsTabData.EMPTY, (menu, level, pos) -> MissionsTabData.of(level, pos),
+            MissionsTabData.Sync::new);
 
     @Override
     public Component label() {
@@ -37,79 +34,63 @@ public final class MissionsTab extends JobBlockTab {
     }
 
     @Override
-    int buttons() {
-        return MARK_BUTTONS + ASSIGN_SLOTS * MissionRules.MAX_OFFER_SIZE;
+    public Optional<TabData<?>> synced() {
+        return Optional.of(data);
     }
 
     /**
-     * The mark buttons carry the wanted state instead of a toggle, so two players clicking the same entry agree with
-     * what they see.
-     *
-     * @param index  a mission offer index
-     * @param marked the wanted mark
-     * @return the menu button id that sets it
+     * @return the missions as last synced
      */
-    public int markButtonId(int index, boolean marked) {
-        return buttonId(2 * index + (marked ? 1 : 0));
+    public TabData<MissionsTabData> data() {
+        return data;
     }
 
     /**
-     * Assign buttons name the settler by its index in the snapshot the player sees
-     * ({@link JobBlockInfo.MissionTab#settlers()}); the server assigns the settler of its own snapshot at that index.
+     * Server: marks or unmarks an offered mission. The caller names the mission it saw at that index; if the offer
+     * changed since, nothing happens.
      *
-     * @param index   a mission offer index
-     * @param settler the settler index in the board's settler list, {@code -1} to unlock the mission
-     * @return the menu button id that assigns or unlocks it
+     * @param index   the offer entry
+     * @param mission the mission expected at that index
+     * @param marked  the wanted mark
+     * @return whether the entry was set
      */
-    public int assignButtonId(int index, int settler) {
-        return buttonId(MARK_BUTTONS + ASSIGN_SLOTS * index + settler + 1);
-    }
-
-    @Override
-    boolean clickButton(Player player, int button) {
-        if (button < MARK_BUTTONS) {
-            return mark(button / 2, button % 2 == 1);
-        }
-        return assign((button - MARK_BUTTONS) / ASSIGN_SLOTS, (button - MARK_BUTTONS) % ASSIGN_SLOTS - 1);
-    }
-
-    private boolean mark(int index, boolean marked) {
+    public boolean mark(int index, Identifier mission, boolean marked) {
         JobBlockMenu menu = menu();
-        JobBlockInfo info = menu.getInfo();
-        if (index >= info.missions().size()) {
+        Optional<JobBlockMenu.Site> site = menu.validSite();
+        if (site.isEmpty() || !MissionOffers.setMarked(SettlementData.get(site.get().level()), site.get().pos(), index, mission, marked)) {
             return false;
         }
-        Optional<JobBlockMenu.Site> site = menu.site();
-        if (site.isPresent() && !MissionOffers.setMarked(SettlementData.get(site.get().level()), site.get().pos(), index,
-                info.missions().get(index).mission(), marked)) {
-            return false;
-        }
-        menu.setInfo(info.withMarked(index, marked));
+        menu.resend();
         return true;
     }
 
-    /** Assigns an offer entry to a settler of the board ({@code settler} = index in the snapshot) or unlocks it ({@code -1}). */
-    private boolean assign(int index, int settler) {
+    /**
+     * Server: assigns an offered mission to a settler of the board or unlocks it. The caller names the mission it saw at
+     * that index; if the offer changed since, nothing happens.
+     *
+     * @param index   the offer entry
+     * @param mission the mission expected at that index
+     * @param settler the settler to assign it to, empty to unlock the mission
+     * @return whether the entry was changed (false for a settler that is not a loaded settler of this board)
+     */
+    public boolean assign(int index, Identifier mission, Optional<UUID> settler) {
         JobBlockMenu menu = menu();
-        JobBlockInfo info = menu.getInfo();
-        List<JobBlockInfo.MissionSettler> settlers = info.missionTab().settlers();
-        if (index >= info.missions().size() || settler >= settlers.size()) {
+        Optional<JobBlockMenu.Site> site = menu.validSite();
+        if (site.isEmpty()) {
             return false;
         }
-        Identifier mission = info.missions().get(index).mission();
-        Optional<JobBlockInfo.MissionSettler> chosen = settler < 0 ? Optional.empty() : Optional.of(settlers.get(settler));
-        Optional<JobBlockMenu.Site> site = menu.site();
-        if (site.isPresent()) {
-            SettlementData data = SettlementData.get(site.get().level());
-            boolean changed = chosen.isPresent()
-                    ? MissionOffers.assign(data, site.get().pos(), index, mission, chosen.get().id(), chosen.get().job(),
-                            Missions.all(site.get().level().registryAccess()))
-                    : MissionOffers.unlock(data, site.get().pos(), index, mission);
-            if (!changed) {
-                return false;
-            }
+        SettlementData settlements = SettlementData.get(site.get().level());
+        boolean changed;
+        if (settler.isPresent()) {
+            Optional<MissionsTabData.MissionSettler> chosen = MissionsTabData.of(site.get().level(), site.get().pos()).settler(settler.get());
+            changed = chosen.isPresent() && MissionOffers.assign(settlements, site.get().pos(), index, mission, chosen.get().id(), chosen.get().job(),
+                    Missions.all(site.get().level().registryAccess()));
+        } else {
+            changed = MissionOffers.unlock(settlements, site.get().pos(), index, mission);
         }
-        menu.setInfo(info.withAssignee(index, chosen.map(JobBlockInfo.MissionSettler::id)));
-        return true;
+        if (changed) {
+            menu.resend();
+        }
+        return changed;
     }
 }

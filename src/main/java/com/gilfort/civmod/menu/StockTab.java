@@ -74,7 +74,7 @@ public final class StockTab extends JobBlockTab {
      */
     public void editRule(int slot, Optional<StockRule> rule) {
         JobBlockMenu menu = menu();
-        Optional<JobBlockMenu.Site> site = menu.site().filter(found -> menu.stillValid(menu.player()));
+        Optional<JobBlockMenu.Site> site = menu.validSite();
         if (site.isEmpty()) {
             return;
         }

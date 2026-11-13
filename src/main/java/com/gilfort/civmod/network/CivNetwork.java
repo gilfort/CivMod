@@ -9,8 +9,9 @@ import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.menu.FuelTab;
 import com.gilfort.civmod.menu.FuelTabData;
-import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
+import com.gilfort.civmod.menu.MissionsTab;
+import com.gilfort.civmod.menu.MissionsTabData;
 import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.menu.SettlerMenu;
@@ -18,6 +19,7 @@ import com.gilfort.civmod.menu.StorageTerminal;
 import com.gilfort.civmod.menu.StationTypesTabData;
 import com.gilfort.civmod.menu.StockTab;
 import com.gilfort.civmod.menu.WorkersTab;
+import com.gilfort.civmod.menu.WorkersTabData;
 import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.settlement.JobPointsDisplay;
 import com.gilfort.civmod.settlement.SettlementOutline;
@@ -41,7 +43,7 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 public final class CivNetwork {
 
     /** Network protocol version; client and server must match. */
-    public static final String PROTOCOL_VERSION = "5";
+    public static final String PROTOCOL_VERSION = "7";
 
     private CivNetwork() {
     }
@@ -82,29 +84,37 @@ public final class CivNetwork {
             }
         });
         registrar.playToServer(ClerkTabData.Edit.TYPE, ClerkTabData.Edit.STREAM_CODEC, (payload, context) -> {
-            if (context.player().containerMenu instanceof JobBlockMenu menu && menu.containerId == payload.containerId()) {
-                menu.tab(StockTab.class).ifPresent(tab -> tab.editRule(payload.slot(), payload.rule()));
-            }
+            JobBlockMenu.open(context.player(), payload.containerId()).flatMap(menu -> menu.tab(StockTab.class))
+                    .ifPresent(tab -> tab.editRule(payload.slot(), payload.rule()));
         });
         registrar.playToServer(PatternsTabData.Edit.TYPE, PatternsTabData.Edit.STREAM_CODEC, (payload, context) -> {
-            if (context.player().containerMenu instanceof JobBlockMenu menu && menu.containerId == payload.containerId()) {
-                PatternsTab.of(menu, payload.job()).ifPresent(tab -> tab.edit(payload));
-            }
+            JobBlockMenu.open(context.player(), payload.containerId()).flatMap(menu -> PatternsTab.of(menu, payload.job()))
+                    .ifPresent(tab -> tab.edit(payload));
         });
         registrar.playToServer(FuelTabData.Edit.TYPE, FuelTabData.Edit.STREAM_CODEC, (payload, context) -> {
-            if (context.player().containerMenu instanceof JobBlockMenu menu && menu.containerId == payload.containerId()) {
-                menu.tab(FuelTab.class).ifPresent(tab -> tab.edit(payload.op(), payload.slot(), payload.item()));
-            }
+            JobBlockMenu.open(context.player(), payload.containerId()).flatMap(menu -> menu.tab(FuelTab.class))
+                    .ifPresent(tab -> tab.edit(payload.op(), payload.slot(), payload.item()));
         });
         registrar.playToServer(FoundTabData.Toggle.TYPE, FoundTabData.Toggle.STREAM_CODEC, (payload, context) -> {
-            if (context.player().containerMenu instanceof JobBlockMenu menu && menu.containerId == payload.containerId()) {
-                menu.tab(FoundTab.class).ifPresent(tab -> tab.toggleExcluded(payload.job(), payload.resource()));
-            }
+            JobBlockMenu.open(context.player(), payload.containerId()).flatMap(menu -> menu.tab(FoundTab.class))
+                    .ifPresent(tab -> tab.toggleExcluded(payload.job(), payload.resource()));
         });
         registrar.playToServer(WorkersTab.Worker.TYPE, WorkersTab.Worker.STREAM_CODEC, (payload, context) -> {
             if (context.player() instanceof ServerPlayer player) {
                 payload.handle(player);
             }
+        });
+        registrar.playToServer(WorkersTabData.Auto.TYPE, WorkersTabData.Auto.STREAM_CODEC, (payload, context) -> {
+            JobBlockMenu.open(context.player(), payload.containerId()).flatMap(menu -> menu.tab(WorkersTab.class))
+                    .ifPresent(tab -> tab.setAuto(payload.job(), payload.on()));
+        });
+        registrar.playToServer(MissionsTabData.Mark.TYPE, MissionsTabData.Mark.STREAM_CODEC, (payload, context) -> {
+            JobBlockMenu.open(context.player(), payload.containerId()).flatMap(menu -> menu.tab(MissionsTab.class))
+                    .ifPresent(tab -> tab.mark(payload.index(), payload.mission(), payload.marked()));
+        });
+        registrar.playToServer(MissionsTabData.Assign.TYPE, MissionsTabData.Assign.STREAM_CODEC, (payload, context) -> {
+            JobBlockMenu.open(context.player(), payload.containerId()).flatMap(menu -> menu.tab(MissionsTab.class))
+                    .ifPresent(tab -> tab.assign(payload.index(), payload.mission(), payload.settler()));
         });
         registrar.playToServer(JobPicker.Choose.TYPE, JobPicker.Choose.STREAM_CODEC, (payload, context) -> {
             if (context.player() instanceof ServerPlayer player) {
@@ -138,7 +148,8 @@ public final class CivNetwork {
         registrar.playToClient(JobPointsDisplay.Sync.TYPE, JobPointsDisplay.Sync.STREAM_CODEC);
         registrar.playToClient(ClerkTabData.Sync.TYPE, ClerkTabData.Sync.STREAM_CODEC);
         registrar.playToClient(FoundTabData.Sync.TYPE, FoundTabData.Sync.STREAM_CODEC);
-        registrar.playToClient(JobBlockInfo.Sync.TYPE, JobBlockInfo.Sync.STREAM_CODEC);
+        registrar.playToClient(WorkersTabData.Sync.TYPE, WorkersTabData.Sync.STREAM_CODEC);
+        registrar.playToClient(MissionsTabData.Sync.TYPE, MissionsTabData.Sync.STREAM_CODEC);
         registrar.playToClient(ThoughtBubble.Show.TYPE, ThoughtBubble.Show.STREAM_CODEC);
         registrar.playToClient(JobDrops.Sync.TYPE, JobDrops.Sync.STREAM_CODEC);
     }

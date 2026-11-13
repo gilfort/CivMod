@@ -54,8 +54,7 @@ public final class PatternsTab extends JobBlockTab {
                     : menu.tab(PatternsTab.class).flatMap(first -> first.data.get().job()).orElse(menu.getInfo().jobType());
             // The innate recipes first; a pattern its Job filters out loses its checkmark as soon as the tab shows it,
             // foreign ones keep theirs.
-            Patterns.syncInnate(level, pos, job);
-            Patterns.uncheckFiltered(level, pos, job);
+            Patterns.refresh(level, pos, job);
             return PatternsTabData.of(level, pos, job);
         }, PatternsTabData.Sync::new);
     }
@@ -125,7 +124,7 @@ public final class PatternsTab extends JobBlockTab {
 
     /**
      * The delivery toggle carries the wanted state instead of a toggle, so two players clicking it agree with what they
-     * see (like {@link WorkersTab#autoButtonId}).
+     * see (like {@link WorkersTabData.Auto}).
      *
      * @param byDeliveryman the wanted state: whether Deliverymen carry the results
      * @return the menu button id of the Base Job's tab that sets it
@@ -137,9 +136,7 @@ public final class PatternsTab extends JobBlockTab {
     @Override
     boolean clickButton(Player player, int button) {
         boolean byDeliveryman = button - DELIVERY == 1;
-        JobBlockMenu menu = menu();
-        menu.setInfo(menu.getInfo().withByDeliveryman(byDeliveryman));
-        menu.site().ifPresent(site -> JobAssignments.setDelivery(SettlementData.get(site.level()), site.pos(), byDeliveryman));
+        menu().editSettlement((data, pos) -> JobAssignments.setDelivery(data, pos, byDeliveryman));
         return true;
     }
 
@@ -150,29 +147,23 @@ public final class PatternsTab extends JobBlockTab {
      */
     public void edit(PatternsTabData.Edit edit) {
         JobBlockMenu menu = menu();
-        Optional<JobBlockMenu.Site> site = menu.site().filter(found -> menu.stillValid(menu.player()));
+        Optional<JobBlockMenu.Site> site = menu.validSite();
         if (site.isEmpty() || edit.job() != job) {
             // Only the tab of the edit's Job takes it (PatternsTab.of).
             return;
         }
         ServerLevel level = site.get().level();
         BlockPos pos = site.get().pos();
-        Optional<?> ignored = switch (edit.op()) {
-            case SET_OUTPUT -> Patterns.setOutput(level, pos, job, edit.slot(), edit.item());
-            case SET_INPUT -> Patterns.setInput(level, pos, job, edit.slot(), edit.index(), edit.item(), edit.layout());
-            case CYCLE -> Patterns.cycle(level, pos, job, edit.slot(), edit.index());
-            case TOGGLE_CHECK -> Optional.of(Patterns.toggleCheck(level, pos, job, edit.slot()));
-            case CLEAR -> {
-                Patterns.clear(SettlementData.get(level), pos, job, edit.slot());
-                yield Optional.empty();
-            }
-            case TRANSFER -> Patterns.transfer(level, pos, job, edit.slot(), edit.recipe(), edit.grid(), edit.layout());
-            case TOGGLE_ALWAYS -> Optional.of(Patterns.toggleAlways(level, pos, job, edit.slot()));
-            case SET_AT_ONCE -> {
-                Patterns.setAtOnce(SettlementData.get(level), pos, job, edit.slot(), edit.index());
-                yield Optional.empty();
-            }
-        };
+        switch (edit) {
+            case PatternsTabData.Edit.SetOutput set -> Patterns.setOutput(level, pos, job, set.slot(), set.output());
+            case PatternsTabData.Edit.SetInput set -> Patterns.setInput(level, pos, job, set.slot(), set.cell(), set.item(), Optional.of(set.layout()));
+            case PatternsTabData.Edit.Cycle cycle -> Patterns.cycle(level, pos, job, cycle.slot(), cycle.direction());
+            case PatternsTabData.Edit.ToggleCheck toggle -> Patterns.toggleCheck(level, pos, job, toggle.slot());
+            case PatternsTabData.Edit.Clear clear -> Patterns.clear(SettlementData.get(level), pos, job, clear.slot());
+            case PatternsTabData.Edit.Transfer transfer -> Patterns.transfer(level, pos, job, transfer.slot(), transfer.recipe(), transfer.grid(), transfer.layout());
+            case PatternsTabData.Edit.ToggleAlways toggle -> Patterns.toggleAlways(level, pos, job, toggle.slot());
+            case PatternsTabData.Edit.SetAtOnce set -> Patterns.setAtOnce(SettlementData.get(level), pos, job, set.slot(), set.crafts());
+        }
         menu.syncSoon();
     }
 }

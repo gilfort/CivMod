@@ -84,7 +84,7 @@ public final class PriestLoop implements CategoryLoop {
     }
 
     @Override
-    public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks) {
+    public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks, SimulatedSpan span) {
         // The Priest prays once a day in catchUpDay and does not use the work time.
         return new SimulatedWork(0, workTicks);
     }

@@ -171,8 +171,8 @@ public final class NeedLimitedWorkGameTests {
     /** One tick per roll at the spy's speed. */
     private static LevelSpy work(ServerLevel level, Settler settler, SettlerJob job) {
         LevelSpy spy = new LevelSpy();
-        WorkRules.work(level, settler, job, spy, JobBlockSite.at(level, job.jobBlock()).orElseThrow(), settler.getWork().workplace(job.jobBlock()),
-                job.jobBlock(), ROLLS, WorkRules.ToolSupply.BELT, NOWHERE);
+        WorkRules.work(new WorkRules.Setup(level, settler, job, spy, JobBlockSite.at(level, job.jobBlock()).orElseThrow(), settler.getWork().workplace(job.jobBlock()),
+                WorkRules.ToolSupply.BELT), job.jobBlock(), ROLLS, SimulatedSpan.LIVE, NOWHERE);
         return spy;
     }
 }

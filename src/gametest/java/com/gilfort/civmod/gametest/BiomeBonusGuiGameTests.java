@@ -11,6 +11,7 @@ import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 import com.gilfort.civmod.menu.BiomeBonusText;
 import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.menu.JobBlockInfo;
+import com.gilfort.civmod.menu.WorkersTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
@@ -109,7 +110,7 @@ public final class BiomeBonusGuiGameTests {
                             "Stone tooltip: " + strings(stone.bonusLines()));
                     FoundTabData.Entry granite = tab.entry(Identifier.withDefaultNamespace("granite")).orElseThrow();
                     helper.assertTrue(!granite.rareBonus() && !granite.doubleBonus() && granite.bonusLines().isEmpty(), "Granite: no star: " + granite);
-                    Optional<String> line = today(JobBlockInfo.of(level, jobBlock, ModJobs.MINER.get(), 1));
+                    Optional<String> line = today(WorkersTabData.of(level, jobBlock, ModJobs.MINER.get(), 1));
                     helper.assertTrue(line.equals(Optional.of("Desert · Ore chance ×1.5 · Raw Iron drops +75% · Cobblestone drops +25%")),
                             "JobBlock line: " + line);
                     settler.discard();
@@ -119,7 +120,7 @@ public final class BiomeBonusGuiGameTests {
                 .thenSucceed();
     }
 
-    private static Optional<String> today(JobBlockInfo info) {
+    private static Optional<String> today(WorkersTabData info) {
         return info.biome().today().map(Component::getString);
     }
 
@@ -134,16 +135,16 @@ public final class BiomeBonusGuiGameTests {
         fillBiome(helper,new BlockPos(0, -4, 0), new BlockPos(16, 8, 16), Biomes.MUSHROOM_FIELDS);
         TestSettlements.setBlock(helper, new BlockPos(6, 1, 6), ModBlocks.CLERK_BLOCK.get());
         BlockPos clerk = helper.absolutePos(new BlockPos(6, 1, 6));
-        JobBlockInfo mushroom = JobBlockInfo.of(level, clerk, ModJobs.CLERK.get(), 1);
+        WorkersTabData mushroom = WorkersTabData.of(level, clerk, ModJobs.CLERK.get(), 1);
         helper.assertTrue(today(mushroom).equals(Optional.of("Mushroom Fields · Speed ×1.3")), "With an effect: " + today(mushroom));
-        helper.assertTrue(strings(mushroom.biome().overview()).equals(List.of("Biome bonuses:", "Mushroom Fields: Speed ×1.3", "All other biomes: no effect")),
-                "The Clerk's overview: " + strings(mushroom.biome().overview()));
+        helper.assertTrue(strings(JobBlockInfo.of(ModJobs.CLERK.get(), 1).overview()).equals(List.of("Biome bonuses:", "Mushroom Fields: Speed ×1.3", "All other biomes: no effect")),
+                "The Clerk's overview: " + strings(JobBlockInfo.of(ModJobs.CLERK.get(), 1).overview()));
         fillBiome(helper,new BlockPos(0, -4, 0), new BlockPos(16, 8, 16), Biomes.SAVANNA);
-        JobBlockInfo savanna = JobBlockInfo.of(level, clerk, ModJobs.CLERK.get(), 1);
+        WorkersTabData savanna = WorkersTabData.of(level, clerk, ModJobs.CLERK.get(), 1);
         helper.assertTrue(today(savanna).equals(Optional.of("Savanna")), "The biome alone: " + today(savanna));
         TestSettlements.setBlock(helper, new BlockPos(10, 1, 10), ModBlocks.MINER_BLOCK.get());
         BlockPos miner = helper.absolutePos(new BlockPos(10, 1, 10));
-        helper.assertTrue(today(JobBlockInfo.of(level, miner, ModJobs.MINER.get(), 1)).isEmpty(), "No work place of the day, no biome");
+        helper.assertTrue(today(WorkersTabData.of(level, miner, ModJobs.MINER.get(), 1)).isEmpty(), "No work place of the day, no biome");
         fillBiome(helper,new BlockPos(0, -4, 0), new BlockPos(16, 8, 16), Biomes.PLAINS);
         forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         helper.succeed();

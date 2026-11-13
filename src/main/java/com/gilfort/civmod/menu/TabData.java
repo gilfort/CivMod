@@ -64,12 +64,17 @@ public final class TabData<T> {
         value = received;
     }
 
-    /** Server: reads the current value and sends it if it changed. */
-    void sync(JobBlockMenu menu, ServerPlayer player, ServerLevel level, BlockPos pos) {
+    /**
+     * Server: reads the current value and, if it changed, keeps it and sends it to the window's player (a player who
+     * is not a {@link ServerPlayer}, as in a GameTest, only keeps it).
+     */
+    void sync(JobBlockMenu menu, ServerLevel level, BlockPos pos) {
         T now = reader.read(menu, level, pos);
         if (!now.equals(value)) {
             value = now;
-            PacketDistributor.sendToPlayer(player, payload.apply(menu.containerId, now));
+            if (menu.player() instanceof ServerPlayer player) {
+                PacketDistributor.sendToPlayer(player, payload.apply(menu.containerId, now));
+            }
         }
     }
 }

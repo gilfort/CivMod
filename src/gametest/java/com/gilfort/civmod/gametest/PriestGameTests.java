@@ -7,6 +7,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.job.PriestLoop;
+import com.gilfort.civmod.job.SettlerSpeed;
 import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.job.SkillRules;
 import com.gilfort.civmod.npc.Races;
@@ -330,20 +331,21 @@ public final class PriestGameTests {
         Settler priest = priest(helper, settlement);
         ServerLevel level = helper.getLevel();
         SettlementData data = SettlementData.get(level);
-        long clock = level.getOverworldClockTime();
-        long day = DayClock.day(clock);
+        long day = DayClock.day(level.getOverworldClockTime());
         // Dark shrine: the Priest does not go to pray.
         data.setShrine(settlement, new Shrine.State(day, 0L));
         priest.getWork().decideNow(level);
         helper.assertTrue(priest.getWork().activeJob().isEmpty() || priest.getWork().activeJob().filter(job -> job.jobType() == ModJobs.PRIEST.get()).isEmpty(),
                 "Does not pray in the dark: " + priest.getWork().activeJob());
-        // Glowing: it prays and rolls once.
-        data.setShrine(settlement, new Shrine.State(Shrine.NO_DAY, clock + Shrine.GLOW_TICKS));
+        // Glowing: it prays and rolls once. Other tests move the shared clock (setDayTime), so the glow does not depend on
+        // it and the check below only asks whether the roll rewrote the shrine.
+        Shrine.State endlessGlow = new Shrine.State(Shrine.NO_DAY, Long.MAX_VALUE);
+        data.setShrine(settlement, endlessGlow);
         helper.startSequence().thenExecute(() -> priest.getWork().decideNow(level))
                 .thenWaitUntil(() -> helper.assertTrue(totalExp(priest) > 0, "Prayed and rolled: EXP " + totalExp(priest)))
                 .thenExecute(() -> {
                     helper.assertTrue(totalExp(priest) >= Shrine.EXP_PER_LEVEL, "15 EXP for the roll: " + totalExp(priest));
-                    helper.assertTrue(settlement.shrine().endedDay() == day || settlement.shrine().chainUntil() > clock + Shrine.GLOW_TICKS,
+                    helper.assertTrue(settlement.shrine().endedDay() != Shrine.NO_DAY || settlement.shrine().chainUntil() != endlessGlow.chainUntil(),
                             "The roll ended the glow or kept it going: " + settlement.shrine());
                     settlement.members().forEach(member -> {
                         if (level.getEntity(member) instanceof Settler settler) {
@@ -398,12 +400,12 @@ public final class PriestGameTests {
         ServerLevel level = helper.getLevel();
         SettlementData data = SettlementData.get(level);
         long now = level.getOverworldClockTime();
-        helper.assertTrue(priest.getWork().blessingFactor(level) == 1.0, "No blessing, factor 1");
+        helper.assertTrue(SettlerSpeed.blessingFactor(priest.getWork(), level) == 1.0, "No blessing, factor 1");
         // The test clock stands still: the blessing's end is moved around now instead.
         data.setBonuses(settlement, Bonuses.NONE.start(Bonuses.Kind.WORK_SPEED, now - 10L, now + 1L));
-        helper.assertTrue(Math.abs(priest.getWork().blessingFactor(level) - 1.2) < 1e-9, "Blessed, factor 1.2");
+        helper.assertTrue(Math.abs(SettlerSpeed.blessingFactor(priest.getWork(), level) - 1.2) < 1e-9, "Blessed, factor 1.2");
         data.setBonuses(settlement, Bonuses.NONE.start(Bonuses.Kind.WORK_SPEED, now - 10L, now));
-        helper.assertTrue(priest.getWork().blessingFactor(level) == 1.0, "Ended with the blessing");
+        helper.assertTrue(SettlerSpeed.blessingFactor(priest.getWork(), level) == 1.0, "Ended with the blessing");
         cleanUp(priest);
         helper.succeed();
     }
