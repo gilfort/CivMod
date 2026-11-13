@@ -14,12 +14,12 @@ import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.PatternLayout;
 import com.gilfort.civmod.logistics.PatternRecipes;
 import com.gilfort.civmod.menu.GuiIcons;
-import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.JobBlockTab;
 import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.menu.TabData;
+import com.gilfort.civmod.menu.WorkersTabData;
 import com.mojang.blaze3d.platform.InputConstants;
 
 import net.minecraft.ChatFormatting;
@@ -119,7 +119,7 @@ final class PatternsTabView implements JobBlockTabView {
     /** The delivery toggle (Self / Deliveryman) on the Workers tab of a JobBlock in a settlement; the Base Job's tab handles it. */
     @Override
     public Optional<WorkersToggle> workersToggle() {
-        JobBlockInfo current = menu.getInfo();
+        WorkersTabData current = menu.workers();
         if (!current.inSettlement()) {
             return Optional.empty();
         }

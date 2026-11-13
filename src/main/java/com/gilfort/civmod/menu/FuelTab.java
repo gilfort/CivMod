@@ -70,7 +70,7 @@ public final class FuelTab extends JobBlockTab {
      */
     public void edit(FuelTabData.Op op, int slot, Item item) {
         JobBlockMenu menu = menu();
-        Optional<JobBlockMenu.Site> site = menu.site().filter(found -> menu.stillValid(menu.player()));
+        Optional<JobBlockMenu.Site> site = menu.validSite();
         if (site.isEmpty()) {
             return;
         }

@@ -434,7 +434,7 @@ public final class SmelterGameTests {
         Player player = helper.makeMockPlayer(GameType.CREATIVE);
         player.snapTo(pos.getX() + 0.5, pos.getY() + 1, pos.getZ() + 0.5);
         JobBlockEntity entity = (JobBlockEntity) level.getBlockEntity(pos);
-        JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(level, pos, smelter(), 1));
+        JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(smelter(), 1));
         FuelTab tab = menu.tab(FuelTab.class).orElseThrow();
         helper.assertTrue(tab.shown() && menu.tab(StationTypesTab.class).map(StationTypesTab::shown).equals(Optional.of(true)),
                 "Fuel tab and Station Types tab shown");
@@ -461,7 +461,7 @@ public final class SmelterGameTests {
 
         BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(5, 1, 1));
         JobBlockMenu craftMenu = new JobBlockMenu(2, player.getInventory(), (JobBlockEntity) level.getBlockEntity(craft),
-                JobBlockInfo.of(level, craft, CraftspersonGameTests.craftJob(), 1));
+                JobBlockInfo.of(CraftspersonGameTests.craftJob(), 1));
         helper.assertTrue(craftMenu.tab(FuelTab.class).isEmpty(), "The Craftsperson burns no fuel: no Fuel tab");
         helper.succeed();
     }

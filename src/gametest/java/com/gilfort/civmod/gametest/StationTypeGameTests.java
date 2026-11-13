@@ -116,7 +116,7 @@ public final class StationTypeGameTests {
         ServerLevel level = helper.getLevel();
         player.snapTo(pos.getX() + 0.5, pos.getY() + 1, pos.getZ() + 0.5);
         JobBlockEntity entity = (JobBlockEntity) level.getBlockEntity(pos);
-        return new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(level, pos, block(level, pos).jobType(), entity.getJobLevel()));
+        return new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(block(level, pos).jobType(), entity.getJobLevel()));
     }
 
     /**

@@ -280,7 +280,7 @@ public final class StockRuleGameTests {
         player.snapTo(clerk.getX() + 0.5, clerk.getY() + 1, clerk.getZ() + 0.5);
         JobBlockEntity entity = (JobBlockEntity) level.getBlockEntity(clerk);
         JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), entity,
-                JobBlockInfo.of(level, clerk, ModJobs.CLERK.get(), entity.getJobLevel()));
+                JobBlockInfo.of(ModJobs.CLERK.get(), entity.getJobLevel()));
         helper.assertTrue(menu.getTabCount() == 3, "Workers, Stock, Tasks");
         menu.setActiveTab(menu.tab(StockTab.class).orElseThrow().index());
         helper.assertTrue(menu.slots.get(0).isActive() && menu.slots.size() == 36, "Stock tab: only the player inventory, no storage slots");

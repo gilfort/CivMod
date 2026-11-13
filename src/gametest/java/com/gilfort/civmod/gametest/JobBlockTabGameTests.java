@@ -69,7 +69,7 @@ public final class JobBlockTabGameTests {
     /** The window of a JobBlock of that Job as its client opens it (no settlement data). */
     static JobBlockMenu menu(GameTestHelper helper, Job job) {
         Player player = helper.makeMockPlayer(GameType.SURVIVAL);
-        return new JobBlockMenu(1, player.getInventory(), new SimpleContainer(JobBlockEntity.SLOTS), JobBlockInfo.unknown(job, 1));
+        return new JobBlockMenu(1, player.getInventory(), new SimpleContainer(JobBlockEntity.SLOTS), JobBlockInfo.of(job, 1));
     }
 
     /** The translation keys of the tab labels, in tab order. */

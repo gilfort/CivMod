@@ -26,7 +26,7 @@ public final class ModMenuTypes {
     public static final Supplier<MenuType<DebugMenu>> DEBUG = MENU_TYPES.register(
             "debug", () -> new MenuType<>(DebugMenu::new, FeatureFlags.VANILLA_SET));
 
-    /** Menu of all JobBlocks; the client receives a {@link com.gilfort.civmod.menu.JobBlockInfo} snapshot. */
+    /** Menu of all JobBlocks; the client receives a {@link com.gilfort.civmod.menu.JobBlockInfo} header. */
     public static final Supplier<MenuType<JobBlockMenu>> JOB_BLOCK = MENU_TYPES.register(
             "job_block", () -> IMenuTypeExtension.create(JobBlockMenu::new));
 
