@@ -275,19 +275,44 @@ final class MissionLoop implements CategoryLoop {
 
     /**
      * Ends the mission once its return time has passed: the settler reappears where it vanished, rolls the outcome,
-     * puts the loot into the job's buffer (catch-up: straight into the drop-off) and gains EXP; it then walks back to
-     * deliver. A settler whose Mission Job is its top priority right away asks for its next mission.
+     * puts the loot into the job's buffer and gains EXP; it then walks back to deliver. A settler whose Mission Job is its
+     * top priority right away asks for its next mission.
      *
-     * @param level   the level
-     * @param clock   the world time
-     * @param catchUp whether this runs during catch-up (quiet, direct delivery)
+     * @param level the level
+     * @param clock the world time
      * @return whether the settler returned
      */
-    boolean returnIfDue(ServerLevel level, long clock, boolean catchUp) {
+    boolean returnIfDue(ServerLevel level, long clock) {
+        return returnIfDue(level, clock, OptionalLong.empty());
+    }
+
+    /**
+     * {@link #returnIfDue(ServerLevel, long)} for one simulated hour of catch-up: quiet, the loot goes straight into the
+     * drop-off. The delivery counts at the return time, or at the start of the hour when the settler came back while
+     * nothing was simulated (at night).
+     *
+     * @param level the level
+     * @param from  the world time at which the simulated hour starts
+     * @param to    the world time at which it ends
+     * @return whether the settler returned
+     */
+    boolean returnInCatchUp(ServerLevel level, long from, long to) {
+        return returnIfDue(level, to, OptionalLong.of(from));
+    }
+
+    /**
+     * @param to          the world time the return check runs at
+     * @param catchUpFrom the start of the simulated hour; empty in live play
+     */
+    private boolean returnIfDue(ServerLevel level, long to, OptionalLong catchUpFrom) {
         MissionTrip ended = trip;
-        if (ended == null || !ended.departed() || clock < ended.returnTime()) {
+        if (ended == null || !ended.departed() || to < ended.returnTime()) {
             return false;
         }
+        // Catch-up delivers straight into the drop-off, at the day time the settler is back in the simulated hour.
+        OptionalLong deliveryDayTime = catchUpFrom.isPresent()
+                ? OptionalLong.of(DayClock.dayTime(Math.max(catchUpFrom.getAsLong(), ended.returnTime())))
+                : OptionalLong.empty();
         trip = null;
         leaveTarget = null;
         returnedAt = ended.returnTime();
@@ -300,7 +325,7 @@ final class MissionLoop implements CategoryLoop {
             return true;
         }
         shell.setStatus(board, JobStatus.IDLE);
-        if (mission.isPresent() && finish(level, job.get(), site.get(), mission.get(), catchUp) == MissionRules.Outcome.DEATH) {
+        if (mission.isPresent() && finish(level, job.get(), site.get(), mission.get(), deliveryDayTime) == MissionRules.Outcome.DEATH) {
             die(level, board, mission.get());
             return true;
         }
@@ -310,8 +335,14 @@ final class MissionLoop implements CategoryLoop {
         return true;
     }
 
-    /** Rolls the outcome; a survivor gets its loot, XP, EXP and a return message. */
-    private MissionRules.Outcome finish(ServerLevel level, SettlerJob job, JobBlockSite site, Mission mission, boolean catchUp) {
+    /**
+     * Rolls the outcome; a survivor gets its loot, XP, EXP and a return message.
+     *
+     * @param catchUpDayTime the day time of a catch-up delivery straight into the drop-off; empty in live play
+     */
+    private MissionRules.Outcome finish(ServerLevel level, SettlerJob job, JobBlockSite site, Mission mission,
+            OptionalLong catchUpDayTime) {
+        boolean catchUp = catchUpDayTime.isPresent();
         OutcomeRules rules = OutcomeRules.get();
         int cap = site.skillCap();
         int skill = shell.effectiveLevel(job);
@@ -328,7 +359,7 @@ final class MissionLoop implements CategoryLoop {
         } else if (outcome == MissionRules.Outcome.SUCCESS) {
             List<ItemStack> loot = loot(level, mission, MissionRules.rolls(mission, skill));
             if (catchUp) {
-                shell.deliverDirect(level, site, loot, shell.lastCatchUpDayTime());
+                shell.deliverDirect(level, site, loot, catchUpDayTime.getAsLong());
             } else {
                 JobBuffer buffer = shell.workplace(site.pos()).buffer();
                 loot.forEach(buffer::add);

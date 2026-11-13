@@ -185,8 +185,6 @@ public final class SettlerWork {
     private CatchUpCounters counters = CatchUpCounters.NONE;
     /** Schedule decisions per catch-up step at most (meals in a row; guards against a meal that never ends). */
     private static final int CATCH_UP_DECISIONS = 64;
-    /** The day time at which the last simulated hour began ({@link #lastCatchUpDayTime}). */
-    private long lastHourDayTime;
 
     /**
      * @param settler the settler
@@ -638,7 +636,7 @@ public final class SettlerWork {
      * @return whether the settler returned
      */
     public boolean returnFromMission(ServerLevel level, long clock) {
-        return missions.returnIfDue(level, clock, false);
+        return missions.returnIfDue(level, clock);
     }
 
     /**
@@ -777,7 +775,7 @@ public final class SettlerWork {
         long day = moment.day();
         boolean jumped = SettlerBeds.nightSkipped(lastClock, clock, DECISION_INTERVAL, WORK_END);
         lastClock = clock;
-        if (missions.departed() && (window.pending() || !missions.returnIfDue(level, clock, false))) {
+        if (missions.departed() && (window.pending() || !missions.returnIfDue(level, clock))) {
             if (missions.isAway()) {
                 // Away: nothing to decide until the return (missed time is caught up first).
                 return;
@@ -1811,7 +1809,7 @@ public final class SettlerWork {
         }
         // Progress is saved: a settler unloaded during the run continues later instead of repeating hours.
         window.advanceTo(to);
-        if ((missions.departed() && !missions.returnIfDue(level, to, true)) || settler.isRemoved()) {
+        if ((missions.departed() && !missions.returnInCatchUp(level, from, to)) || settler.isRemoved()) {
             // On the mission all hour (no hunger, no work), or died on it.
             return 0;
         }
@@ -1827,7 +1825,6 @@ public final class SettlerWork {
         }
         long dayTime = from - day * DayClock.DAY_TICKS;
         long hourDayTime = dayTime;
-        lastHourDayTime = hourDayTime;
 
         // The same need rules as live: the first hour of a day is its wake-up.
         SettlerMeals.FoodLookup foodLookup = meals.lookup(level, dayTime);
@@ -1999,17 +1996,6 @@ public final class SettlerWork {
      */
     public void setSpeedBoost(SpeedBoost boost) {
         speedBoost = boost;
-    }
-
-    /**
-     * The day time at which the last simulated hour began. Only the return of a mission reads it, before the hour it falls
-     * into has set its own day time: the loot is delivered with the Clerk access of the hour before. The work loops get
-     * their day time from the {@link SimulatedSpan}.
-     *
-     * @return the day time of the last simulated hour
-     */
-    long lastCatchUpDayTime() {
-        return lastHourDayTime;
     }
 
     /**
