@@ -180,16 +180,13 @@ public final class SettlerWork {
     // Catch-up (vault Systems/Settlement.md): missed time while unloaded.
     /** Minimum missed time that is caught up (2 real minutes). */
     public static final long CATCH_UP_MIN_GAP = 2400;
-    private long savedClock = -1;
-    private long catchUpFrom = -1;
-    private long catchUpTo = -1;
-    private boolean catchUpRegistered;
+    /** The missed time waiting to be caught up. */
+    private final CatchUpWindow window = new CatchUpWindow();
     private boolean quiet;
-    private int cuItems;
-    private int cuMeals;
+    /** What the running catch-up produced. */
+    private CatchUpCounters counters = CatchUpCounters.NONE;
     /** Schedule decisions per catch-up step at most (meals in a row; guards against a meal that never ends). */
     private static final int CATCH_UP_DECISIONS = 64;
-    private double cuDays;
     /** The day time of the hour being simulated in catch-up ({@link #catchUpDayTime}). */
     private long cuDayTime;
     /** The clock span of the work being simulated in catch-up, {@link #NOT_SIMULATING} outside it. */
@@ -432,7 +429,7 @@ public final class SettlerWork {
             workplace.savedScan().ifPresent(saved::add);
         });
         long clock = settler.level() instanceof ServerLevel level ? level.getOverworldClockTime() : -1L;
-        return new BuffersSnapshot(buffers, workPlaces, saved, new CatchUpState(clock, catchUpFrom, catchUpTo), missions.trip());
+        return new BuffersSnapshot(buffers, workPlaces, saved, window.save(clock), missions.trip());
     }
 
     /**
@@ -542,9 +539,7 @@ public final class SettlerWork {
         snapshot.workPlaces().forEach(entry -> workplace(entry.jobBlock()).restoreWorkPlace(entry));
         snapshot.scans().forEach(scan -> workplace(scan.jobBlock()).restoreScan(scan));
         allLoops().forEach(loop -> loop.restore(snapshot));
-        savedClock = snapshot.catchUp().activeClock();
-        catchUpFrom = snapshot.catchUp().from();
-        catchUpTo = snapshot.catchUp().to();
+        window.restore(snapshot.catchUp());
     }
 
     // ---------------------------------------------------------------- queries for the GUI
@@ -719,21 +714,18 @@ public final class SettlerWork {
      * @param level the level
      */
     public void aiStep(ServerLevel level) {
-        if (savedClock >= 0) {
-            // First tick after loading: remember missed time for the catch-up simulation.
-            long now = level.getOverworldClockTime();
-            if (now - savedClock >= CATCH_UP_MIN_GAP && !settler.isHomeless()) {
-                catchUpFrom = catchUpFrom >= 0 ? Math.min(catchUpFrom, savedClock) : savedClock;
-                catchUpTo = now;
-            }
-            savedClock = -1;
-        }
+        // First tick after loading: remember missed time for the catch-up simulation.
+        window.resolveSaved(level.getOverworldClockTime(), CATCH_UP_MIN_GAP, settler.isHomeless());
         if ((settler.tickCount + settler.getId()) % DECISION_INTERVAL == 0) {
             long profile = com.gilfort.civmod.debug.CivProfiler.start();
             meals.accountHunger(level);
-            if (catchUpFrom >= 0 && !catchUpRegistered && catchUpReady(level)) {
-                catchUpRegistered = true;
-                CatchUp.register(level, settler);
+            if (window.pending() && !window.registered()) {
+                if (!settlementExists(level)) {
+                    window.drop();
+                } else if (startCatchUpScan(level)) {
+                    window.register();
+                    CatchUp.register(level, settler);
+                }
             }
             decide(level);
             com.gilfort.civmod.debug.CivProfiler.stop(com.gilfort.civmod.debug.CivProfiler.Section.DECISIONS, profile);
@@ -791,7 +783,7 @@ public final class SettlerWork {
         long day = moment.day();
         boolean jumped = SettlerBeds.nightSkipped(lastClock, clock, DECISION_INTERVAL, WORK_END);
         lastClock = clock;
-        if (missions.departed() && (catchUpFrom >= 0 || !missions.returnIfDue(level, clock, false))) {
+        if (missions.departed() && (window.pending() || !missions.returnIfDue(level, clock, false))) {
             if (missions.isAway()) {
                 // Away: nothing to decide until the return (missed time is caught up first).
                 return;
@@ -853,11 +845,11 @@ public final class SettlerWork {
         checkStuck(level);
 
         SettlerMeals.FoodLookup foodLookup = meals.lookup(level, dayTime);
-        if (catchUpFrom < 0 && dayTime >= dayTimes(day).wake()) {
+        if (!window.pending() && dayTime >= dayTimes(day).wake()) {
             // Missed days first: catch-up checks them in their order.
             needs.step(level, day, foodLookup::hasFood);
         }
-        if (CivModConfig.SOCIAL_LIFE.get() && !social.holdsDecision() && catchUpFrom < 0 && !quiet) {
+        if (CivModConfig.SOCIAL_LIFE.get() && !social.holdsDecision() && !window.pending() && !quiet) {
             // Live only: greetings and conversations are not simulated in catch-up. A seated Tavern guest never starts one.
             social.meet(level, interruptible(level), !tavern.sitsAtSeat(activity));
         }
@@ -1703,7 +1695,7 @@ public final class SettlerWork {
      * @return whether missed time is waiting to be caught up
      */
     public boolean hasPendingCatchUp() {
-        return catchUpFrom >= 0;
+        return window.pending();
     }
 
     /**
@@ -1713,38 +1705,43 @@ public final class SettlerWork {
      * @param to   clock at which it was loaded again
      */
     public void setCatchUp(long from, long to) {
-        catchUpFrom = from;
-        catchUpTo = to;
-        catchUpRegistered = false;
+        window.set(from, to);
     }
 
     /**
      * @return start of the missed time (capped to the maximum number of days)
      */
     public long catchUpFrom() {
-        long earliest = catchUpTo - CivModConfig.CATCH_UP_MAX_DAYS.get() * DayClock.DAY_TICKS;
-        return Math.max(catchUpFrom, earliest);
+        return window.cappedFrom(CivModConfig.CATCH_UP_MAX_DAYS.get());
     }
 
     /**
      * @return end of the missed time
      */
     public long catchUpTo() {
-        return catchUpTo;
+        return window.to();
     }
 
     /**
-     * Whether all blocks the settler needs are loaded and a scan result exists (starts the scan otherwise). Public for
-     * tests, which call it until it holds before they run a catch-up.
+     * @param level the level
+     * @return whether the settler's settlement still exists
+     */
+    private boolean settlementExists(ServerLevel level) {
+        return SettlementData.get(level).settlement(settler.getSettlementId()).isPresent();
+    }
+
+    /**
+     * Whether all blocks the settler needs are loaded and a scan result exists. It also starts the scan of every block that
+     * has none yet, so the answer changes on a later call: the caller asks again until it holds. Public for tests, which
+     * call it until it holds before they run a catch-up.
      *
      * @param level the level
-     * @return whether the catch-up can run
+     * @return whether the catch-up can run (false as well when the settlement is gone)
      */
-    public boolean catchUpReady(ServerLevel level) {
+    public boolean startCatchUpScan(ServerLevel level) {
         SettlementData data = SettlementData.get(level);
         Optional<com.gilfort.civmod.settlement.Settlement> settlement = data.settlement(settler.getSettlementId());
         if (settlement.isEmpty()) {
-            catchUpFrom = -1;
             return false;
         }
         for (SettlementBlock block : settlement.get().blocks()) {
@@ -1777,12 +1774,10 @@ public final class SettlerWork {
      * Prepares a catch-up run.
      */
     void startCatchUp() {
-        cuDays = Math.max(0, catchUpTo - catchUpFrom()) / (double) DayClock.DAY_TICKS;
+        counters = CatchUpCounters.start(Math.max(0, window.to() - catchUpFrom()) / (double) DayClock.DAY_TICKS);
         quiet = true;
         allLoops().forEach(CategoryLoop::startCatchUp);
         jobWorkplaces.values().forEach(workplace -> workplace.setCatchUpEnded(false));
-        cuItems = 0;
-        cuMeals = 0;
     }
 
     /**
@@ -1792,12 +1787,10 @@ public final class SettlerWork {
      */
     void finishCatchUp(ServerLevel level) {
         CivMod.LOGGER.info("Catch-up {}: {} day(s), {} item(s), {} meal(s), skills {}", settler.getName().getString(),
-                String.format(java.util.Locale.ROOT, "%.1f", cuDays), cuItems, cuMeals,
+                String.format(java.util.Locale.ROOT, "%.1f", counters.days()), counters.items(), counters.meals(),
                 settler.getSkills().snapshot());
         // Foraging that is over came back during the run (Schedule); one still going on continues live.
-        catchUpFrom = -1;
-        catchUpTo = -1;
-        catchUpRegistered = false;
+        window.clear();
         quiet = false;
         // Live play chooses anew.
         laborer.interrupt(level);
@@ -1818,12 +1811,12 @@ public final class SettlerWork {
     int simulateHour(ServerLevel level, long day, int hour) {
         long hourStart = day * DayClock.DAY_TICKS + hour * 1000L;
         long from = Math.max(hourStart, catchUpFrom());
-        long to = Math.min(hourStart + 1000L, catchUpTo);
+        long to = Math.min(hourStart + 1000L, window.to());
         if (to <= from || settler.isHomeless()) {
             return 0;
         }
         // Progress is saved: a settler unloaded during the run continues later instead of repeating hours.
-        catchUpFrom = Math.max(catchUpFrom, to);
+        window.advanceTo(to);
         if ((missions.departed() && !missions.returnIfDue(level, to, true)) || settler.isRemoved()) {
             // On the mission all hour (no hunger, no work), or died on it.
             return 0;
@@ -1952,7 +1945,7 @@ public final class SettlerWork {
             return Intent.IDLE;
         } finally {
             if (food.level() > levelBefore) {
-                cuMeals++;
+                counters = counters.withMeal();
             }
             settler.getInventory().setChanged();
         }
@@ -2090,10 +2083,10 @@ public final class SettlerWork {
         JobBuffer buffer = workplace(site.pos()).buffer();
         for (ItemStack stack : stacks) {
             ItemStack rest = dropOff.insert(stack);
-            cuItems += stack.getCount() - rest.getCount();
+            counters = counters.withItems(stack.getCount() - rest.getCount());
             if (!rest.isEmpty()) {
                 buffer.add(rest);
-                cuItems += rest.getCount();
+                counters = counters.withItems(rest.getCount());
             }
         }
         // A delivery into a Clerk: its stock rules are checked right away; a harvest in a drop-off may be a pickup.
