@@ -104,6 +104,10 @@ public final class CivNetwork {
                 payload.handle(player);
             }
         });
+        registrar.playToServer(WorkersTab.WorkerAuto.TYPE, WorkersTab.WorkerAuto.STREAM_CODEC, (payload, context) -> {
+            JobBlockMenu.open(context.player(), payload.containerId()).flatMap(menu -> menu.tab(WorkersTab.class))
+                    .ifPresent(tab -> tab.setWorkerAuto(payload.settler(), payload.on()));
+        });
         registrar.playToServer(WorkersTabData.Auto.TYPE, WorkersTabData.Auto.STREAM_CODEC, (payload, context) -> {
             JobBlockMenu.open(context.player(), payload.containerId()).flatMap(menu -> menu.tab(WorkersTab.class))
                     .ifPresent(tab -> tab.setAuto(payload.job(), payload.on()));

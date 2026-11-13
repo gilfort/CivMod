@@ -301,6 +301,7 @@ public class Settler extends PathfinderMob {
      * @param jobBlock the JobBlock position
      */
     public void removeJob(BlockPos jobBlock) {
+        toolJobGone(jobBlock);
         jobs = jobs.stream().filter(job -> !job.jobBlock().equals(jobBlock)).toList();
         work.forget(jobBlock);
     }
@@ -317,8 +318,32 @@ public class Settler extends PathfinderMob {
         if (jobs.stream().noneMatch(held -> held.jobBlock().equals(jobBlock) && held.jobType() != job)) {
             return;
         }
+        toolJobGone(jobBlock);
         jobs = jobs.stream().map(held -> held.jobBlock().equals(jobBlock) ? new SettlerJob(job, jobBlock) : held).toList();
         work.forget(jobBlock);
+    }
+
+    /** A Job leaves the settler: its request for the Job's tool ends (vault {@code Systems/Needs.md}). */
+    private void toolJobGone(BlockPos jobBlock) {
+        if (level() instanceof net.minecraft.server.level.ServerLevel server) {
+            jobs.stream().filter(job -> job.jobBlock().equals(jobBlock)).findFirst()
+                    .ifPresent(gone -> com.gilfort.civmod.job.ToolOrders.jobGone(server, this, gone));
+        }
+    }
+
+    /**
+     * Sets the "Auto" switch of the Deliveryman job at a JobBlock (vault {@code Jobs/Deliveryman.md}).
+     *
+     * @param jobBlock the JobBlock position
+     * @param on       whether the Deliveryman also takes the automatic tasks
+     * @return whether the settler holds a job there
+     */
+    public boolean setJobAuto(BlockPos jobBlock, boolean on) {
+        if (jobs.stream().noneMatch(job -> job.jobBlock().equals(jobBlock))) {
+            return false;
+        }
+        jobs = jobs.stream().map(job -> job.jobBlock().equals(jobBlock) ? job.withAuto(on) : job).toList();
+        return true;
     }
 
     /**
@@ -329,6 +354,8 @@ public class Settler extends PathfinderMob {
     public void remove(RemovalReason reason) {
         if (reason.shouldDestroy() && level() instanceof net.minecraft.server.level.ServerLevel server) {
             com.gilfort.civmod.settlement.Requests.releaseAll(SettlementData.get(server), getUUID());
+            // Its requests for tools end with it.
+            com.gilfort.civmod.job.ToolOrders.settlerGone(server, getUUID());
             com.gilfort.civmod.settlement.Deliveries.releaseAll(SettlementData.get(server), getUUID());
             // Its load drops with it: the results it carried are lost.
             com.gilfort.civmod.settlement.Deliveries.dropCarried(SettlementData.get(server), getUUID());

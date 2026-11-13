@@ -6,6 +6,7 @@ import java.util.UUID;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.AutoAssignment;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
@@ -27,8 +28,8 @@ import net.minecraft.world.item.Items;
 /**
  * The "Workers" tab of every JobBlock (vault {@code Systems/GUI.md}, "Info becomes Workers"): per offered Job its line
  * with the automatic assignment button, below it one row per settler with ✕ (unassigns it at once) and a click on head
- * or name that opens the settler window; plus the leaf collection toggle (Lumberjack) and the treasure toggle
- * (Fisherman). Its data is the synced {@link WorkersTabData}; the server changes the state and sends the data again
+ * or name that opens the settler window; plus the leaf collection toggle (Lumberjack), the treasure toggle
+ * (Fisherman) and the "Auto tool supply" toggle (Clerk). Its data is the synced {@link WorkersTabData}; the server changes the state and sends the data again
  * ({@link JobBlockMenu#resend}), the client only renders and asks. JobBlocks are upgraded with the JobBlock Upgrade
  * items, not here ({@link com.gilfort.civmod.block.JobBlockUpgrade}).
  */
@@ -38,6 +39,8 @@ public final class WorkersTab extends JobBlockTab {
     private static final int LEAVES = 0;
     /** Buttons: set the treasure option off / on (Fisherman, {@link #treasureButtonId}). */
     private static final int TREASURE = LEAVES + 2;
+    /** Buttons: set the Clerk's automatic tool supply off / on ({@link #toolSupplyButtonId}). */
+    private static final int TOOL_SUPPLY = TREASURE + 2;
 
     private final TabData<WorkersTabData> data = new TabData<>(WorkersTabData.EMPTY,
             (menu, level, pos) -> WorkersTabData.of(level, pos, menu.getInfo().jobType(), menu.getInfo().level()), WorkersTabData.Sync::new);
@@ -71,7 +74,7 @@ public final class WorkersTab extends JobBlockTab {
 
     @Override
     int buttons() {
-        return TREASURE + 2;
+        return TOOL_SUPPLY + 2;
     }
 
     /**
@@ -95,12 +98,24 @@ public final class WorkersTab extends JobBlockTab {
         return buttonId(TREASURE + (on ? 1 : 0));
     }
 
+    /**
+     * Like {@link #leavesButtonId}, the tool supply toggle carries the wanted state.
+     *
+     * @param on the wanted state of the Clerk's automatic tool supply
+     * @return the menu button id that sets it
+     */
+    public int toolSupplyButtonId(boolean on) {
+        return buttonId(TOOL_SUPPLY + (on ? 1 : 0));
+    }
+
     @Override
     boolean clickButton(Player player, int button) {
         if (button < TREASURE) {
             setLeaves(button - LEAVES == 1);
-        } else {
+        } else if (button < TOOL_SUPPLY) {
             setTreasure(button - TREASURE == 1);
+        } else {
+            menu().editSettlement((data, pos) -> JobAssignments.setAutoToolSupply(data, pos, button - TOOL_SUPPLY == 1));
         }
         return true;
     }
@@ -153,6 +168,24 @@ public final class WorkersTab extends JobBlockTab {
     }
 
     /**
+     * Server: sets the "Auto" switch of a Deliveryman's job at this JobBlock (it works Delivery Slips only while off).
+     *
+     * @param settler the settler of the row
+     * @param on      the wanted state
+     * @return whether it is a loaded Deliveryman of this block and now has that state
+     */
+    public boolean setWorkerAuto(UUID settler, boolean on) {
+        JobBlockMenu menu = menu();
+        Optional<JobBlockMenu.Site> site = menu.validSite();
+        if (site.isEmpty() || assignee(site.get(), settler).filter(found -> found.job() == ModJobs.DELIVERYMAN.get()).isEmpty()
+                || !(site.get().level().getEntity(settler) instanceof Settler found) || !found.setJobAuto(site.get().pos(), on)) {
+            return false;
+        }
+        menu.resend();
+        return true;
+    }
+
+    /**
      * Server: opens the settler window of a loaded worker at home; it stays open while the player stays at the JobBlock
      * and the settler works there.
      *
@@ -166,7 +199,7 @@ public final class WorkersTab extends JobBlockTab {
             return false;
         }
         Optional<SettlementBlock.Assignee> assignee = assignee(site.get(), settler);
-        if (assignee.isEmpty() || !WorkersTabData.Worker.of(site.get().level(), assignee.get()).opensWindow()
+        if (assignee.isEmpty() || !WorkersTabData.Worker.of(site.get().level(), site.get().pos(), assignee.get()).opensWindow()
                 || !(site.get().level().getEntity(settler) instanceof Settler found)) {
             return false;
         }
@@ -212,6 +245,31 @@ public final class WorkersTab extends JobBlockTab {
                     tab.unassign(settler);
                 }
             });
+        }
+    }
+
+    /**
+     * Client → server: switch the "Auto" of a Deliveryman row, keyed by the settler.
+     *
+     * @param containerId the menu's container id
+     * @param settler     the settler of the row
+     * @param on          the wanted state
+     */
+    public record WorkerAuto(int containerId, UUID settler, boolean on) implements CustomPacketPayload {
+
+        /** Payload type. */
+        public static final Type<WorkerAuto> TYPE = new Type<>(CivMod.id("workers_tab_worker_auto"));
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, WorkerAuto> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, WorkerAuto::containerId,
+                UUIDUtil.STREAM_CODEC, WorkerAuto::settler,
+                ByteBufCodecs.BOOL, WorkerAuto::on,
+                WorkerAuto::new);
+
+        @Override
+        public Type<WorkerAuto> type() {
+            return TYPE;
         }
     }
 }

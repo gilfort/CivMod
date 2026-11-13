@@ -13,6 +13,7 @@ import java.util.function.ToIntFunction;
 import java.util.function.UnaryOperator;
 
 import com.gilfort.civmod.logistics.DeliveryTask;
+import com.gilfort.civmod.logistics.ReservedFor;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.registry.ModJobs;
 
@@ -254,9 +255,13 @@ public final class Deliveries {
      *
      * @param settlement a settlement
      * @param task       a task
-     * @return the Clerk JobBlock (the collect inventory for inputs), empty while the producer has no Home Clerk
+     * @return the Clerk JobBlock (the collect inventory for inputs), empty while the producer has no Home Clerk and for a
+     *         slip (its targets are worked out at the source)
      */
     public static Optional<BlockPos> destination(Settlement settlement, DeliveryTask task) {
+        if (task.slip().isPresent()) {
+            return Optional.empty();
+        }
         if (task.input().isPresent()) {
             return Optional.of(task.input().get().to());
         }
@@ -279,7 +284,8 @@ public final class Deliveries {
      * @return the tasks handled for them or bringing results to them, in creation order (the Tasks tab)
      */
     public static List<DeliveryTask> toClerks(Settlement settlement, List<BlockPos> clerks) {
-        return settlement.deliveries().stream().filter(task -> handler(settlement, task).filter(clerks::contains).isPresent()
+        return settlement.deliveries().stream().filter(task -> task.slip().isEmpty())
+                .filter(task -> handler(settlement, task).filter(clerks::contains).isPresent()
                 || task.result().filter(result -> clerks.contains(result.clerk())).isPresent()).toList();
     }
 
@@ -319,8 +325,53 @@ public final class Deliveries {
         return (task.urgent() ? URGENT_SCORE : 0.0) + waited * SCORE_PER_SECOND - Math.sqrt(task.source().distSqr(from)) * SCORE_PER_BLOCK;
     }
 
+    /** Which free tasks a Deliveryman takes. */
+    public enum Scope {
+        /** Every task. */
+        ALL,
+        /** Delivery Slips only (the "Auto" switch of the Deliveryman is off). */
+        SLIPS_ONLY,
+        /** The automatic tasks only (catch-up: a slip needs a visit, so it is not caught up). */
+        AUTOMATIC_ONLY;
+
+        boolean takes(DeliveryTask task) {
+            return switch (this) {
+                case ALL -> true;
+                case SLIPS_ONLY -> task.slip().isPresent();
+                case AUTOMATIC_ONLY -> task.slip().isEmpty();
+            };
+        }
+    }
+
     /**
-     * The best free task of a Warehouse.
+     * The best free task of a Warehouse. The automatic tasks rank by score as before (an urgent one counts as 10 minutes
+     * of waiting). Delivery Slips sit between: while an urgent automatic task is open it is worked first (the best
+     * automatic task by score), else the slip with the lowest slot, else the best automatic task by score.
+     *
+     * @param settlement the settlement
+     * @param warehouse  the Deliveryman's Warehouse
+     * @param from       where the Deliveryman is
+     * @param gameTime   the game time now
+     * @param day        the day now (locks of earlier days are over)
+     * @param skipped    sources the Deliveryman leaves out (unreachable today)
+     * @param scope      which tasks he takes
+     * @return the task, empty if there is none ("No pickups")
+     */
+    public static Optional<DeliveryTask> pick(Settlement settlement, SettlementBlock warehouse, BlockPos from, long gameTime, long day,
+            Set<BlockPos> skipped, Scope scope) {
+        List<DeliveryTask> free = free(settlement, warehouse, day, skipped).stream().filter(scope::takes).toList();
+        List<DeliveryTask> automatic = free.stream().filter(task -> task.slip().isEmpty()).toList();
+        Optional<DeliveryTask> best = automatic.stream().max(Comparator.comparingDouble(task -> score(task, gameTime, from)));
+        if (automatic.stream().anyMatch(DeliveryTask::urgent)) {
+            return best;
+        }
+        Optional<DeliveryTask> slip = free.stream().filter(task -> task.slip().isPresent())
+                .min(Comparator.comparingInt(task -> task.slip().orElseThrow(() -> new IllegalStateException("Not a slip task: " + task)).slot()));
+        return slip.isPresent() ? slip : best;
+    }
+
+    /**
+     * The best free task of a Warehouse, every kind.
      *
      * @param settlement the settlement
      * @param warehouse  the Deliveryman's Warehouse
@@ -332,8 +383,7 @@ public final class Deliveries {
      */
     public static Optional<DeliveryTask> pick(Settlement settlement, SettlementBlock warehouse, BlockPos from, long gameTime, long day,
             Set<BlockPos> skipped) {
-        return free(settlement, warehouse, day, skipped).stream()
-                .max(Comparator.comparingDouble(task -> score(task, gameTime, from)));
+        return pick(settlement, warehouse, from, gameTime, day, skipped, Scope.ALL);
     }
 
     /**
@@ -352,9 +402,13 @@ public final class Deliveries {
     public static List<DeliveryTask> batch(Settlement settlement, SettlementBlock warehouse, DeliveryTask first, int capacity,
             ToIntFunction<DeliveryTask> stacksOf, long day, Set<BlockPos> skipped) {
         List<DeliveryTask> trip = new ArrayList<>(List.of(first));
+        if (first.slip().isPresent()) {
+            // A slip is a trip of its own: its targets are worked out at the source.
+            return List.copyOf(trip);
+        }
         Optional<BlockPos> target = destination(settlement, first);
         List<DeliveryTask> candidates = new ArrayList<>(free(settlement, warehouse, day, skipped).stream()
-                .filter(task -> !task.id().equals(first.id()) && destination(settlement, task).equals(target)).toList());
+                .filter(task -> task.slip().isEmpty() && !task.id().equals(first.id()) && destination(settlement, task).equals(target)).toList());
         int stacks = stacksOf.applyAsInt(first);
         while (!candidates.isEmpty()) {
             BlockPos last = trip.get(trip.size() - 1).source();
@@ -408,6 +462,8 @@ public final class Deliveries {
             Reservations.release(settlement, id);
             input.items().forEach((item, count) -> Reservations.reserve(settlement, task.source(), id, item, count, day));
         }));
+        // What a tool supply held back for this task is reserved now.
+        Holds.release(settlement, ReservedFor.delivery(id), item -> true);
     }
 
     /**

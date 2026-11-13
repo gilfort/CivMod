@@ -6,6 +6,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.block.StarterTools;
+import com.gilfort.civmod.item.DeliverySlipItem;
 import com.gilfort.civmod.item.JobBlockUpgradeItem;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 
@@ -55,6 +56,10 @@ public final class ModItems {
     /** The Scroll of Assignment. */
     public static final DeferredItem<ScrollOfAssignmentItem> SCROLL_OF_ASSIGNMENT = ITEMS.registerItem("scroll_of_assignment",
             ScrollOfAssignmentItem::new, properties -> properties.stacksTo(1));
+
+    /** The Delivery Slip: a written order for the Deliverymen of a Warehouse (vault {@code Jobs/Deliveryman.md}). */
+    public static final DeferredItem<DeliverySlipItem> DELIVERY_SLIP = ITEMS.registerItem("delivery_slip", DeliverySlipItem::new,
+            properties -> properties.stacksTo(1));
 
     // The Upgrade items follow the scroll, so the creative tab lists them right after it.
     /** JobBlock Upgrade Lv 2 (iron). */

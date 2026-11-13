@@ -165,11 +165,26 @@ public final class ToolNeeds {
      * @return whether the search ran and found a tool
      */
     boolean search(SettlerJob job, long time, BooleanSupplier search) {
+        return search(job, time, search, () -> false);
+    }
+
+    /**
+     * Like {@link #search(SettlerJob, long, BooleanSupplier)}; after a search that found nothing, the tool supply
+     * ({@link ToolOrders}) gets its turn.
+     *
+     * @param job      the Job
+     * @param time     the game time
+     * @param search   the search; answers whether it found (or took) a tool
+     * @param onMiss   runs after a fruitless search; answers whether a tool reached the collect inventory meanwhile, which
+     *                 starts no waiting hour, so the next check looks again
+     * @return whether the search ran and found a tool
+     */
+    boolean search(SettlerJob job, long time, BooleanSupplier search, BooleanSupplier onMiss) {
         if (!searchDue(job, time)) {
             return false;
         }
         boolean found = search.getAsBoolean();
-        if (!found) {
+        if (!found && !onMiss.getAsBoolean()) {
             searched(job, time);
         }
         return found;

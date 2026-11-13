@@ -126,11 +126,16 @@ public final class Stock {
     }
 
     /**
-     * @param reserved the amounts reserved for others, by item
-     * @return this Stock without them
+     * @param more the amounts reserved or held for others, by item
+     * @return this Stock without them (and without what it was already without)
      */
-    Stock without(Map<Item, Integer> reserved) {
-        return reserved.isEmpty() ? this : new Stock(parts, summaries, counter, reserved);
+    Stock without(Map<Item, Integer> more) {
+        if (more.isEmpty()) {
+            return this;
+        }
+        Map<Item, Integer> all = new HashMap<>(reserved);
+        more.forEach((item, count) -> all.merge(item, count, Integer::sum));
+        return new Stock(parts, summaries, counter, all);
     }
 
     /**
@@ -391,6 +396,27 @@ public final class Stock {
             return ItemStack.EMPTY;
         }
         return ItemStack.EMPTY;
+    }
+
+    /**
+     * Tries a stack out without changing anything.
+     *
+     * @param stack the stack
+     * @return how many of it {@link #insert} would take
+     */
+    public int fits(ItemStack stack) {
+        int rest = stack.getCount();
+        ItemResource resource = ItemResource.of(stack);
+        for (Part part : parts) {
+            if (rest <= 0) {
+                break;
+            }
+            // The transaction is never committed: the insert is only a test.
+            try (Transaction transaction = Transaction.openRoot()) {
+                rest -= ResourceHandlerUtil.insertStacking(part.handler(), resource, rest, transaction);
+            }
+        }
+        return stack.getCount() - rest;
     }
 
     /**

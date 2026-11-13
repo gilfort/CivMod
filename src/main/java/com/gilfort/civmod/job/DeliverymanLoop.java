@@ -12,6 +12,7 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.DeliveryTask;
 import com.gilfort.civmod.logistics.Pickups;
+import com.gilfort.civmod.logistics.SlipPlan;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -29,6 +30,7 @@ import com.gilfort.civmod.settlement.Warehouses;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.capabilities.Capabilities;
@@ -60,7 +62,7 @@ final class DeliverymanLoop implements CategoryLoop {
     /** Ticks a Deliveryman spends at each stop of a trip (catch-up estimate). */
     static final int STOP_TICKS = 40;
     /** Sources further away count as reachable: a path search is only conclusive within the follow range. */
-    private static final double PATH_CHECK = 16.0;
+    static final double PATH_CHECK = 16.0;
 
     private final SettlerWork shell;
     private final Settler settler;
@@ -76,8 +78,10 @@ final class DeliverymanLoop implements CategoryLoop {
     /** The source walked to and how it is reached (a foreign Clerk's counter). */
     private @Nullable BlockPos visiting;
     private ClerkStorage.@Nullable Visit visit;
-    /** Sources found unreachable today. */
+    /** Sources and slip targets found unreachable today. */
     private final Set<BlockPos> unreachable = new HashSet<>();
+    /** The Delivery Slip trips of this Deliveryman. */
+    private final SlipTrips slips;
     private long unreachableDay = Long.MIN_VALUE;
 
     /**
@@ -86,6 +90,7 @@ final class DeliverymanLoop implements CategoryLoop {
     DeliverymanLoop(SettlerWork shell) {
         this.shell = shell;
         this.settler = shell.settler();
+        this.slips = new SlipTrips(shell, unreachable);
     }
 
     /**
@@ -111,10 +116,11 @@ final class DeliverymanLoop implements CategoryLoop {
         route.removeIf(id -> !mine(settlement, id, day));
         if (!load.isEmpty() && (route.isEmpty() || load.stacks().size() >= capacity)) {
             releaseRoute(level, settlement);
+            slips.skipUnreachableLeg(level);
             return JobStep.DELIVER;
         }
         while (true) {
-            if (route.isEmpty() && !startTrip(level, settlement, site.block(), capacity, day)) {
+            if (route.isEmpty() && !startTrip(level, site, job, capacity, day)) {
                 return JobStep.skip(JobStatus.NO_PICKUPS);
             }
             DeliveryTask task = Deliveries.get(settlement, route.get(0)).orElseThrow();
@@ -139,13 +145,17 @@ final class DeliverymanLoop implements CategoryLoop {
     }
 
     /** Picks the best free task and the tasks batched with it, and locks them. */
-    private boolean startTrip(ServerLevel level, Settlement settlement, SettlementBlock warehouseBlock, int capacity, long day) {
-        Optional<DeliveryTask> first = Deliveries.pick(settlement, warehouseBlock, settler.blockPosition(), level.getGameTime(), day, unreachable);
+    private boolean startTrip(ServerLevel level, JobBlockSite site, SettlerJob job, int capacity, long day) {
+        Settlement settlement = site.settlement();
+        SettlementBlock warehouseBlock = site.block();
+        SettlementData data = SettlementData.get(level);
+        SlipTrips.sync(level, data, settlement, warehouseBlock);
+        Deliveries.Scope scope = job.auto() ? Deliveries.Scope.ALL : Deliveries.Scope.SLIPS_ONLY;
+        Optional<DeliveryTask> first = Deliveries.pick(settlement, warehouseBlock, settler.blockPosition(), level.getGameTime(), day, unreachable, scope);
         if (first.isEmpty()) {
             return false;
         }
         List<DeliveryTask> trip = Deliveries.batch(settlement, warehouseBlock, first.get(), capacity, task -> stacksOf(level, task), day, unreachable);
-        SettlementData data = SettlementData.get(level);
         for (DeliveryTask task : trip) {
             Deliveries.take(data, settlement, task.id(), settler.getUUID(), settler.getName().getString(), day);
             route.add(task.id());
@@ -200,6 +210,9 @@ final class DeliverymanLoop implements CategoryLoop {
     }
 
     private static Component sourceName(Settlement settlement, DeliveryTask task) {
+        if (task.slip().isPresent()) {
+            return Component.translatable("item.civmod.delivery_slip");
+        }
         // An input delivery is collected at its store, the others at their JobBlock's drop-off.
         return settlement.block(task.input().isPresent() ? task.source() : task.jobBlock())
                 .map(block -> ClerkStorage.isClerk(block) ? ClerkStorage.name(block) : block.jobType().displayName())
@@ -235,7 +248,7 @@ final class DeliverymanLoop implements CategoryLoop {
                 Optional<DeliveryTask> task = Deliveries.get(settlement, id).filter(found -> found.source().equals(source));
                 if (task.isPresent()) {
                     route.remove(id);
-                    collect(level, settlement, job, task.get(), load, capacity, staff(settlement, job, source) ? null : counter, dayTime, true);
+                    collect(new Collection(level, settlement, load, capacity, staff(settlement, job, source) ? null : counter, dayTime, true), task.get());
                 }
             }
         }
@@ -243,17 +256,54 @@ final class DeliverymanLoop implements CategoryLoop {
     }
 
     /**
+     * What a stop at a source has to work with.
+     *
+     * @param level      the level
+     * @param settlement the settlement
+     * @param load       the carry inventory
+     * @param capacity   its size in stacks
+     * @param counter    null when the Deliveryman is staff at the source, else whether it stands at the counter
+     * @param dayTime    the time of day
+     * @param effects    whether the counter shows its effects (not in catch-up)
+     */
+    record Collection(ServerLevel level, Settlement settlement, JobBuffer load, int capacity, @Nullable Boolean counter, long dayTime,
+            boolean effects) {
+
+        /** What the source holds, as staff or at the counter. */
+        Stock stockAt(BlockPos source) {
+            return counter == null ? ClerkStorage.stock(level, source, true) : ClerkStorage.stock(level, source, dayTime, counter);
+        }
+
+        /** What the source holds as the input delivery {@code task} sees it (its reservations are not in the way). */
+        Stock stockAt(BlockPos source, UUID task) {
+            return counter == null ? ClerkStorage.stock(level, source, true, task) : ClerkStorage.stock(level, source, dayTime, counter, task);
+        }
+
+        /** Something was taken at a counter: the Clerk hands it out. */
+        void handedOut(Stock stock, BlockPos source) {
+            if (counter != null && stock.counter()) {
+                ClerkCounter.handOut(level, source, effects);
+            }
+        }
+    }
+
+    /**
      * Takes what fits of one task. A pickup is done once its source is empty, otherwise free again. A result is carried
      * from now on (what did not fit stays as a task of its own); nothing found ends it. Inputs are picked up whole as
-     * reserved; a shortfall frees the task for another try.
-     *
-     * @param counter null when the Deliveryman is staff at the source, else whether it stands at the counter
+     * reserved; a shortfall frees the task for another try. A slip is a visit of its own ({@link SlipTrips#collect}).
      */
-    private void collect(ServerLevel level, Settlement settlement, SettlerJob job, DeliveryTask task, JobBuffer load, int capacity,
-            @Nullable Boolean counter, long dayTime, boolean effects) {
+    private void collect(Collection visit, DeliveryTask task) {
+        ServerLevel level = visit.level();
+        Settlement settlement = visit.settlement();
+        JobBuffer load = visit.load();
+        int capacity = visit.capacity();
         SettlementData data = SettlementData.get(level);
+        if (task.slip().isPresent()) {
+            slips.collect(visit, task);
+            return;
+        }
         if (task.input().isPresent()) {
-            collectInputs(level, settlement, task, load, capacity, counter, dayTime, effects);
+            collectInputs(visit, task);
             return;
         }
         if (task.result().isEmpty()) {
@@ -275,13 +325,13 @@ final class DeliverymanLoop implements CategoryLoop {
             Deliveries.release(data, settlement, task.id());
             return;
         }
-        Stock stock = counter == null ? ClerkStorage.stock(level, task.source(), true) : ClerkStorage.stock(level, task.source(), dayTime, counter);
+        Stock stock = visit.stockAt(task.source());
         int want = Math.min(result.count(), load.room(new ItemStack(result.item()), capacity));
         List<ItemStack> got = want > 0 ? stock.take(result.item(), want) : List.of();
         int taken = got.stream().mapToInt(ItemStack::getCount).sum();
         got.forEach(load::add);
-        if (taken > 0 && counter != null && stock.counter()) {
-            ClerkCounter.handOut(level, task.source(), effects);
+        if (taken > 0) {
+            visit.handedOut(stock, task.source());
         }
         // Less than wanted: the source ran short; less wanted than the task holds: the rest did not fit and waits.
         int left = taken == want ? result.count() - want : 0;
@@ -292,8 +342,10 @@ final class DeliverymanLoop implements CategoryLoop {
      * Picks up the reserved inputs of an input delivery (in catch-up the task is taken and reserved right here). What
      * does not fit the carry inventory stays at the store (the task is free again); a shortfall frees it as well.
      */
-    private void collectInputs(ServerLevel level, Settlement settlement, DeliveryTask task, JobBuffer load, int capacity,
-            @Nullable Boolean counter, long dayTime, boolean effects) {
+    private void collectInputs(Collection visit, DeliveryTask task) {
+        ServerLevel level = visit.level();
+        Settlement settlement = visit.settlement();
+        JobBuffer load = visit.load();
         SettlementData data = SettlementData.get(level);
         long day = DayClock.day(level);
         Optional<DeliveryTask.Taker> taker = task.takerOn(day);
@@ -301,19 +353,18 @@ final class DeliverymanLoop implements CategoryLoop {
             // Taken by another Deliveryman (catch-up meets a live lock): its inputs are reserved for that one.
             return;
         }
-        if (!level.isLoaded(task.source()) || capacity - load.stacks().size() < stacksOf(level, task)) {
+        if (!level.isLoaded(task.source()) || visit.capacity() - load.stacks().size() < stacksOf(level, task)) {
             Deliveries.release(data, settlement, task.id());
             return;
         }
         if (taker.isEmpty()) {
             Deliveries.take(data, settlement, task.id(), settler.getUUID(), settler.getName().getString(), day);
         }
-        Stock stock = counter == null ? ClerkStorage.stock(level, task.source(), true, task.id())
-                : ClerkStorage.stock(level, task.source(), dayTime, counter, task.id());
+        Stock stock = visit.stockAt(task.source(), task.id());
         Reservations.Pickup pickup = Deliveries.pickUpInput(data, settlement, task.id(), settler.getUUID(), stock, day);
         pickup.taken().forEach(load::add);
-        if (!pickup.failed() && counter != null && stock.counter()) {
-            ClerkCounter.handOut(level, task.source(), effects);
+        if (!pickup.failed()) {
+            visit.handedOut(stock, task.source());
         }
     }
 
@@ -327,6 +378,10 @@ final class DeliverymanLoop implements CategoryLoop {
      *         Warehouse
      */
     BlockPos unloadTarget(ServerLevel level, SettlerJob job) {
+        Optional<SlipPlan.Leg> leg = slips.currentLeg(level);
+        if (leg.isPresent()) {
+            return leg.get().target();
+        }
         BlockPos target = store;
         if (target == null) {
             target = JobBlockSite.at(level, job.jobBlock()).flatMap(site -> Deliveries.carriedBy(site.settlement(), settler.getUUID()).stream()
@@ -336,7 +391,7 @@ final class DeliverymanLoop implements CategoryLoop {
     }
 
     /** A Clerk JobBlock, or a loaded container (a producer's collect inventory). */
-    private static boolean deliverable(ServerLevel level, BlockPos target) {
+    static boolean deliverable(ServerLevel level, BlockPos target) {
         return JobBlockSite.blockAt(level, target).filter(ClerkStorage::isClerk).isPresent()
                 || level.isLoaded(target) && level.getCapability(Capabilities.Item.BLOCK, target, null) != null;
     }
@@ -364,6 +419,10 @@ final class DeliverymanLoop implements CategoryLoop {
      * @return whether everything was delivered
      */
     boolean unload(ServerLevel level, SettlerJob job) {
+        Optional<SlipPlan.Leg> leg = slips.currentLeg(level);
+        if (leg.isPresent()) {
+            return slips.unloadLeg(level, job, leg.get());
+        }
         BlockPos target = unloadTarget(level, job);
         boolean all = unload(level, job, target, shell.workplace(job.jobBlock()).buffer());
         if (all) {
@@ -432,6 +491,7 @@ final class DeliverymanLoop implements CategoryLoop {
             Deliveries.dropCarried(data, settler.getUUID());
         }
         route.clear();
+        slips.clear();
         store = null;
         checked = null;
         visiting = null;
@@ -480,7 +540,8 @@ final class DeliverymanLoop implements CategoryLoop {
         }
         Set<BlockPos> skipped = new HashSet<>();
         while (time > 0) {
-            Optional<DeliveryTask> first = Deliveries.pick(settlement, found.get().block(), job.jobBlock(), level.getGameTime(), day, skipped);
+            Optional<DeliveryTask> first = Deliveries.pick(settlement, found.get().block(), job.jobBlock(), level.getGameTime(), day, skipped,
+                    Deliveries.Scope.AUTOMATIC_ONLY);
             if (first.isEmpty()) {
                 break;
             }
@@ -496,7 +557,7 @@ final class DeliverymanLoop implements CategoryLoop {
             for (DeliveryTask task : trip) {
                 skipped.add(task.source());
                 // Catch-up reaches every counter.
-                collect(level, settlement, job, task, load, capacity, staff(settlement, job, task.source()) ? null : true, dayTime, false);
+                collect(new Collection(level, settlement, load, capacity, staff(settlement, job, task.source()) ? null : true, dayTime, false), task);
             }
             int carried = load.stacks().size();
             store = target;

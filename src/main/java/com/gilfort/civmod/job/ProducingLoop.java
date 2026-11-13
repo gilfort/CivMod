@@ -25,11 +25,13 @@ import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.logistics.ItemCounts;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.Request;
+import com.gilfort.civmod.logistics.ReservedFor;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.Deliveries;
 import com.gilfort.civmod.settlement.Fuels;
+import com.gilfort.civmod.settlement.Holds;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.OccupiedPlaces;
@@ -39,6 +41,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
+import com.gilfort.civmod.settlement.SubRequests;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.Warehouses;
 
@@ -244,13 +247,16 @@ final class ProducingLoop implements CategoryLoop {
             if (stores == null && site.block().byDeliveryman()) {
                 stores = stores(level, site, dayTime);
             }
-            Supplies supplies = supplies(level, site, request.target(), stores, dayTime, catchUp);
+            ReservedFor holder = ReservedFor.request(request.id());
+            Supplies supplies = supplies(level, site, request.target(), stores, dayTime, catchUp).withHeld(Holds.heldFor(settlement, holder));
             Map<Item, Integer> available = supplies.available();
             int amount = CraftPlan.most(level, profile, checked, request.item(), request.amount(), held, available, room);
             if (amount <= 0) {
                 // What the whole open request misses ("2× stone pickaxe" → "Missing: 6× Cobblestone").
                 CraftPlan failed = CraftPlan.plan(level, profile, checked, request.item(), request.amount(), held, available);
                 Requests.setMissing(data, settlement, request.id(), failed.missing());
+                // What it cannot make itself, it asks the settlement for; the request waits out its skip.
+                SubRequests.post(level, data, settlement, request, failed.missing());
                 skips.put(request.id(), now + SKIP_TICKS);
                 fuelLacking = Optional.empty();
                 continue;
@@ -271,6 +277,8 @@ final class ProducingLoop implements CategoryLoop {
                 continue;
             }
             CraftPlan plan = CraftPlan.plan(level, profile, checked, request.item(), claimed, held, available);
+            // The plan uses what sub-requests made for this request; from here on it is plain stock for the fetch.
+            Holds.consume(settlement, holder, plan.takes());
             return new Pick(Optional.of(round(level, job, site, Optional.of(request.id()), plan, fuel, supplies)), true, Optional.empty(), Optional.empty());
         }
         if (tries > 0) {
@@ -295,6 +303,29 @@ final class ProducingLoop implements CategoryLoop {
      */
     private record Supplies(Map<Item, Integer> collect, Optional<BlockPos> clerk, @Nullable Map<BlockPos, Map<Item, Integer>> stores,
             Map<Item, Integer> available) {
+
+        /**
+         * @param held what is held for the request being planned, by Clerk: it counts as stock where the round can fetch it
+         * @return these supplies with it added
+         */
+        Supplies withHeld(Map<BlockPos, Map<Item, Integer>> held) {
+            if (held.isEmpty()) {
+                return this;
+            }
+            Map<Item, Integer> all = new HashMap<>(available);
+            Map<BlockPos, Map<Item, Integer>> allStores = stores == null ? null : new LinkedHashMap<>(stores);
+            held.forEach((clerk, items) -> {
+                if (allStores != null && allStores.containsKey(clerk)) {
+                    Map<Item, Integer> merged = new HashMap<>(allStores.get(clerk));
+                    ItemCounts.addAll(merged, items);
+                    allStores.put(clerk, merged);
+                    ItemCounts.addAll(all, items);
+                } else if (clerk().filter(clerk::equals).isPresent()) {
+                    ItemCounts.addAll(all, items);
+                }
+            });
+            return new Supplies(collect, clerk, allStores, all);
+        }
     }
 
     /**

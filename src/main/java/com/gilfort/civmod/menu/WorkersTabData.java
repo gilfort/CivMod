@@ -12,6 +12,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.job.BiomeBonuses;
 import com.gilfort.civmod.job.MissionTrip;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Bonuses;
 import com.gilfort.civmod.settlement.DayClock;
@@ -52,14 +53,15 @@ import net.minecraft.server.level.ServerLevel;
  * @param blessingEnd     at the Center Block: the clock value at which the settlement's work speed blessing ends, 0 = none
  * @param storageUnlinked whether this is a Clerk JobBlock without a linked container (the header asks to link one)
  * @param treasure        whether a Fisherman may catch treasure (the "Treasure" toggle of its JobBlock)
+ * @param autoToolSupply  whether a Clerk gets missing tools made and delivered for its settlers (the "Auto tool supply" toggle)
  */
 public record WorkersTabData(Component settlementName, boolean inSettlement, boolean connected, int distance, int required, List<Worker> workers,
         List<JobPlaces.Line> places, boolean collectLeaves, boolean byDeliveryman, Biome biome, long blessingEnd, boolean storageUnlinked,
-        boolean treasure) {
+        boolean treasure, boolean autoToolSupply) {
 
     /** Before the first sync, and for a block that is not registered. */
     public static final WorkersTabData EMPTY = new WorkersTabData(Component.empty(), false, false, 0, 0, List.of(), List.of(), false, false,
-            Biome.NONE, 0L, false, true);
+            Biome.NONE, 0L, false, true, true);
 
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, WorkersTabData> STREAM_CODEC = StreamCodec.composite(
@@ -76,6 +78,7 @@ public record WorkersTabData(Component settlementName, boolean inSettlement, boo
             ByteBufCodecs.VAR_LONG, WorkersTabData::blessingEnd,
             ByteBufCodecs.BOOL, WorkersTabData::storageUnlinked,
             ByteBufCodecs.BOOL, WorkersTabData::treasure,
+            ByteBufCodecs.BOOL, WorkersTabData::autoToolSupply,
             WorkersTabData::new);
 
     /**
@@ -92,6 +95,7 @@ public record WorkersTabData(Component settlementName, boolean inSettlement, boo
      * @param blessingEnd     the end of the blessing
      * @param storageUnlinked whether the Clerk has no linked container
      * @param treasure        the treasure option
+     * @param autoToolSupply  the tool supply option
      */
     public WorkersTabData {
         workers = List.copyOf(workers);
@@ -182,8 +186,9 @@ public record WorkersTabData(Component settlementName, boolean inSettlement, boo
      * @param level    its skill level in that Job, 0 while unloaded
      * @param skin     its skin index ({@code Settler#getSkin}), -1 while unloaded
      * @param away     the mission it is away on, empty at home (also while it only reserved one)
+     * @param auto     for a Deliveryman: its "Auto" switch (whether it also takes the automatic tasks); true for the others
      */
-    public record Worker(SettlementBlock.Assignee assignee, boolean loaded, int level, int skin, Optional<Away> away) {
+    public record Worker(SettlementBlock.Assignee assignee, boolean loaded, int level, int skin, Optional<Away> away, boolean auto) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Worker> STREAM_CODEC = StreamCodec.composite(
@@ -192,6 +197,7 @@ public record WorkersTabData(Component settlementName, boolean inSettlement, boo
                 ByteBufCodecs.VAR_INT, Worker::level,
                 ByteBufCodecs.INT, Worker::skin,
                 Away.STREAM_CODEC.apply(ByteBufCodecs::optional), Worker::away,
+                ByteBufCodecs.BOOL, Worker::auto,
                 Worker::new);
 
         /**
@@ -214,13 +220,14 @@ public record WorkersTabData(Component settlementName, boolean inSettlement, boo
          * @param assignee the settler and its Job at the JobBlock
          * @return its row; a settler whose entity is not loaded has its name and Job only
          */
-        static Worker of(ServerLevel level, SettlementBlock.Assignee assignee) {
+        static Worker of(ServerLevel level, BlockPos jobBlock, SettlementBlock.Assignee assignee) {
             if (!(level.getEntity(assignee.id()) instanceof Settler settler)) {
-                return new Worker(assignee, false, 0, -1, Optional.empty());
+                return new Worker(assignee, false, 0, -1, Optional.empty(), true);
             }
             Optional<Away> away = settler.getWork().missionTrip().filter(MissionTrip::departed)
                     .map(trip -> new Away(trip.mission(), trip.returnTime()));
-            return new Worker(assignee, true, settler.getSkills().get(assignee.job()).level(), settler.getSkin(), away);
+            boolean auto = settler.getJobs().stream().filter(job -> job.jobBlock().equals(jobBlock)).findFirst().map(SettlerJob::auto).orElse(true);
+            return new Worker(assignee, true, settler.getSkills().get(assignee.job()).level(), settler.getSkin(), away, auto);
         }
 
         /**
@@ -254,7 +261,7 @@ public record WorkersTabData(Component settlementName, boolean inSettlement, boo
         List<SettlementBlock.Assignee> assignees = block.map(SettlementBlock::assignees).orElse(List.of());
         List<Worker> workers = new ArrayList<>();
         for (SettlementBlock.Assignee assignee : assignees) {
-            workers.add(Worker.of(level, assignee));
+            workers.add(Worker.of(level, pos, assignee));
         }
         return new WorkersTabData(settlement.map(Settlement::displayName).orElse(Component.empty()),
                 settlement.isPresent(), status.connected(), status.distance(), status.required(), workers,
@@ -264,7 +271,7 @@ public record WorkersTabData(Component settlementName, boolean inSettlement, boo
                 Biome.of(level, pos, jobType, assignees),
                 blessingEnd(settlement, block, level.getOverworldClockTime()),
                 jobType == ModJobs.CLERK.get() && block.map(found -> found.storage().isEmpty()).orElse(false),
-                block.map(SettlementBlock::treasure).orElse(true));
+                block.map(SettlementBlock::treasure).orElse(true), block.map(SettlementBlock::autoToolSupply).orElse(true));
     }
 
     private static long blessingEnd(Optional<Settlement> settlement, Optional<SettlementBlock> block, long now) {

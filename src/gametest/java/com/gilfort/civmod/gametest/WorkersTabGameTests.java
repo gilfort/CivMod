@@ -2,6 +2,7 @@ package com.gilfort.civmod.gametest;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
@@ -18,6 +19,7 @@ import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.menu.WorkersTab;
 import com.gilfort.civmod.menu.WorkersTabData;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
@@ -69,6 +71,8 @@ public final class WorkersTabGameTests {
             register(helper, "workers_tab_auto_toggle", WorkersTabGameTests::autoToggle);
             register(helper, "workers_tab_wanted_state", WorkersTabGameTests::wantedState);
             register(helper, "workers_tab_treasure_toggle", WorkersTabGameTests::treasureToggle);
+            register(helper, "workers_tab_tool_supply_toggle", WorkersTabGameTests::toolSupplyToggle);
+            register(helper, "workers_tab_deliveryman_auto", WorkersTabGameTests::deliverymanAuto);
             register(helper, "workers_tab_settler_window", WorkersTabGameTests::settlerWindow);
             register(helper, "workers_tab_days_left", WorkersTabGameTests::daysLeft);
             register(helper, "workers_tab_away_absolute", WorkersTabGameTests::awayAbsolute);
@@ -283,6 +287,57 @@ public final class WorkersTabGameTests {
         SettlementBlock loaded = SettlementBlock.CODEC.parse(ops, SettlementBlock.CODEC.encodeStart(ops, block).getOrThrow()).getOrThrow();
         helper.assertFalse(loaded.treasure(), "The JobBlock keeps it off through a save");
         helper.assertTrue(one.clickMenuButton(first, one.tab(WorkersTab.class).orElseThrow().treasureButtonId(true)) && block.treasure(), "On again");
+        helper.succeed();
+    }
+
+    /**
+     * The Clerk's "Auto tool supply" toggle (#242): on by default, the button sends the wanted state, the Clerk keeps it
+     * through a save and the window shows it.
+     */
+    private static void toolSupplyToggle(GameTestHelper helper) {
+        clerkBlock(helper);
+        Player first = player(helper);
+        Player second = player(helper);
+        SettlementBlock block = JobBlockSite.blockAt(helper.getLevel(), helper.absolutePos(CLERK)).orElseThrow();
+        helper.assertTrue(block.autoToolSupply() && sees(menu(helper, first)).autoToolSupply(), "The tool supply is on by default");
+
+        JobBlockMenu one = menu(helper, first);
+        JobBlockMenu two = menu(helper, second);
+        helper.assertTrue(one.clickMenuButton(first, one.tab(WorkersTab.class).orElseThrow().toolSupplyButtonId(false)), "First click switches it off");
+        helper.assertTrue(two.clickMenuButton(second, two.tab(WorkersTab.class).orElseThrow().toolSupplyButtonId(false)), "Second click for the same state");
+        helper.assertFalse(block.autoToolSupply(), "The supply is off after two clicks for the same state");
+        helper.assertFalse(sees(two).autoToolSupply(), "The window shows it off");
+
+        var ops = helper.getLevel().registryAccess().createSerializationContext(JsonOps.INSTANCE);
+        SettlementBlock loaded = SettlementBlock.CODEC.parse(ops, SettlementBlock.CODEC.encodeStart(ops, block).getOrThrow()).getOrThrow();
+        helper.assertFalse(loaded.autoToolSupply(), "The Clerk keeps it off through a save");
+        helper.assertTrue(one.clickMenuButton(first, one.tab(WorkersTab.class).orElseThrow().toolSupplyButtonId(true)) && block.autoToolSupply(), "On again");
+        helper.succeed();
+    }
+
+    /**
+     * The "Auto" switch of a Deliveryman job (#240): on by default, a click of the Deliveryman's row sets it, the settler
+     * keeps it through a save, the window shows it.
+     */
+    private static void deliverymanAuto(GameTestHelper helper) {
+        Settlement settlement = clerkBlock(helper);
+        Settler alice = settler(helper, settlement, "Alice", new BlockPos(3, 1, 3));
+        hire(helper, alice, ModJobs.DELIVERYMAN.get());
+        Player player = player(helper);
+        BlockPos pos = helper.absolutePos(CLERK);
+        JobBlockMenu menu = menu(helper, player);
+        WorkersTab tab = menu.tab(WorkersTab.class).orElseThrow();
+        helper.assertTrue(alice.getJobs().stream().allMatch(SettlerJob::auto) && sees(menu).workers().get(index(sees(menu), alice)).auto(),
+                "Auto is on by default");
+        helper.assertTrue(tab.setWorkerAuto(alice.getUUID(), false), "The click sets it off");
+        SettlerJob job = alice.getJobs().stream().filter(held -> held.jobBlock().equals(pos)).findFirst().orElseThrow();
+        helper.assertFalse(job.auto(), "The job holds it");
+        helper.assertFalse(sees(menu).workers().get(index(sees(menu), alice)).auto(), "The window shows it off");
+        var ops = helper.getLevel().registryAccess().createSerializationContext(JsonOps.INSTANCE);
+        helper.assertFalse(SettlerJob.CODEC.parse(ops, SettlerJob.CODEC.encodeStart(ops, job).getOrThrow()).getOrThrow().auto(), "It survives a save");
+        helper.assertTrue(tab.setWorkerAuto(alice.getUUID(), true) && alice.getJobs().stream().allMatch(SettlerJob::auto), "On again");
+        helper.assertFalse(tab.setWorkerAuto(UUID.randomUUID(), false), "A settler that does not work here is refused");
+        alice.discard();
         helper.succeed();
     }
 

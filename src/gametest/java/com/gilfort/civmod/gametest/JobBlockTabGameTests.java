@@ -12,6 +12,7 @@ import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.JobBlockTab;
 import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.menu.WorkersTab;
+import com.gilfort.civmod.registry.ModItems;
 import com.gilfort.civmod.registry.ModJobs;
 
 import net.minecraft.core.registries.Registries;
@@ -43,6 +44,7 @@ public final class JobBlockTabGameTests {
     private static final String MISSIONS = "civmod.gui.job_block.tab.missions";
     private static final String STOCK = "civmod.gui.clerk.tab.stock";
     private static final String TASKS = "civmod.gui.clerk.tab.tasks";
+    private static final String ORDERS = "civmod.gui.clerk.tab.orders";
     private static final String PATTERNS = "civmod.gui.patterns.tab_job";
     private static final String STATION_TYPES = "civmod.gui.station_types.tab";
     private static final String FUEL = "civmod.gui.fuel.tab";
@@ -199,12 +201,12 @@ public final class JobBlockTabGameTests {
     }
 
     /**
-     * Clerk: Workers, Stock, Tasks in the tall panel (one Tasks tab replaces Requests and Deliveries, #142); no Storage
+     * Clerk: Workers, Stock, Tasks, Delivery Orders in the tall panel (one Tasks tab replaces Requests and Deliveries, #142); no Storage
      * tab, the block has no slots (#176).
      */
     private static void clerk(GameTestHelper helper) {
-        assertTabs(helper, ModJobs.CLERK.get(), List.of(WORKERS, STOCK, TASKS),
-                List.of(Items.NAME_TAG, Items.WRITABLE_BOOK, Items.PAPER), true, List.of(1));
+        assertTabs(helper, ModJobs.CLERK.get(), List.of(WORKERS, STOCK, TASKS, ORDERS),
+                List.of(Items.NAME_TAG, Items.WRITABLE_BOOK, Items.PAPER, ModItems.DELIVERY_SLIP.get()), true, List.of(1, 3));
         helper.succeed();
     }
 

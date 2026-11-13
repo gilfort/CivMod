@@ -11,6 +11,7 @@ import com.gilfort.civmod.menu.WorkersTabData;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.JobBlockTab;
 import com.gilfort.civmod.menu.WorkersTab;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.mojang.blaze3d.platform.InputConstants;
 
@@ -108,6 +109,11 @@ final class WorkersTabView implements JobBlockTabView {
         return menu.getInfo().jobType().profile(FishermanProfile.class).isPresent() && info.inSettlement();
     }
 
+    /** Whether the Clerk's "Auto tool supply" toggle is shown. */
+    private boolean toolSupplyToggle() {
+        return menu.getInfo().jobType() == ModJobs.CLERK.get() && menu.workers().inSettlement();
+    }
+
     /** The toggle buttons of the bottom row: the leaf toggle, the treasure toggle, then the other views' toggles. */
     private List<WorkersToggle> toggles() {
         List<WorkersToggle> toggles = new ArrayList<>();
@@ -118,6 +124,10 @@ final class WorkersTabView implements JobBlockTabView {
         if (treasureToggle()) {
             toggles.add(new WorkersToggle(Component.translatable(menu.workers().treasure() ? "civmod.gui.job_block.treasure.on"
                     : "civmod.gui.job_block.treasure.off"), tab.treasureButtonId(!menu.workers().treasure())));
+        }
+        if (toolSupplyToggle()) {
+            toggles.add(new WorkersToggle(Component.translatable(menu.workers().autoToolSupply() ? "civmod.gui.job_block.tool_supply.on"
+                    : "civmod.gui.job_block.tool_supply.off"), tab.toolSupplyButtonId(!menu.workers().autoToolSupply())));
         }
         screen.views().forEach(view -> view.workersToggle().ifPresent(toggles::add));
         return toggles;
@@ -235,6 +245,12 @@ final class WorkersTabView implements JobBlockTabView {
         if (treasureToggle()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.treasure"));
         }
+        if (toolSupplyToggle()) {
+            lines.add(Component.translatable("civmod.gui.job_block.help.tool_supply"));
+        }
+        if (menu.getInfo().jobType() == ModJobs.DELIVERYMAN.get()) {
+            lines.add(Component.translatable("civmod.gui.job_block.help.worker_auto"));
+        }
         // The biomes that change something for the Job, and that all others do not.
         lines.addAll(menu.getInfo().overview());
         return lines;
@@ -335,7 +351,8 @@ final class WorkersTabView implements JobBlockTabView {
         PlayerFaceExtractor.extractRenderState(graphics, SettlerRenderer.skin(Math.max(0, worker.skin())), x, y + (ROW_HEIGHT - HEAD) / 2, HEAD,
                 grey ? GREY_HEAD : 0xFFFFFFFF);
         int textY = y + (ROW_HEIGHT - font.lineHeight) / 2 + 1;
-        int levelRight = right - ICON - 4;
+        boolean deliveryman = isDeliveryman(worker);
+        int levelRight = right - ICON - 4 - (deliveryman ? ICON + 2 : 0);
         Component level = worker.away().isPresent() ? Component.translatable("civmod.gui.job_block.worker.away")
                 : worker.loaded() ? Component.translatable("civmod.gui.settler.level_short", worker.level()) : Component.empty();
         int levelX = levelRight - font.width(level);
@@ -343,6 +360,18 @@ final class WorkersTabView implements JobBlockTabView {
         int nameX = x + HEAD + 4;
         Component name = CivGui.fit(font, Component.literal(worker.assignee().name()), levelX - 4 - nameX);
         graphics.text(font, name, nameX, textY, grey ? CivGui.HINT_COLOR : color, false);
+        if (deliveryman) {
+            int autoX = autoX(right);
+            graphics.item(AUTO_ICON, autoX, y + 1);
+            if (!worker.auto()) {
+                CivGui.slotInactive(graphics, autoX, y + 1);
+            }
+            if (over(autoX, y + 1, ICON, ICON, mouseX, mouseY)) {
+                CivGui.slotHover(graphics, autoX, y + 1);
+                graphics.setComponentTooltipForNextFrame(font, List.of(Component.translatable(worker.auto()
+                        ? "civmod.gui.job_block.worker_auto.on" : "civmod.gui.job_block.worker_auto.off")), mouseX, mouseY);
+            }
+        }
         worker.away().ifPresent(away -> {
             if (over(x, y, levelRight - x, ROW_HEIGHT, mouseX, mouseY)) {
                 Component mission = MissionsTabView.title(away.mission(), MissionsTabView.mission(away.mission()));
@@ -350,6 +379,16 @@ final class WorkersTabView implements JobBlockTabView {
                         WorkersTabData.Worker.daysLeft(clockNow(), away.returnTime()))), mouseX, mouseY);
             }
         });
+    }
+
+    /** Whether the row is a loaded Deliveryman: only then its "Auto" switch is shown. */
+    private static boolean isDeliveryman(WorkersTabData.Worker worker) {
+        return worker.loaded() && worker.assignee().job() == ModJobs.DELIVERYMAN.get();
+    }
+
+    /** The left edge of the "Auto" icon of a Deliveryman row: next to the ✕ button. */
+    private static int autoX(int right) {
+        return right - 2 * ICON - 2;
     }
 
     /** Whether the mouse is over an area given in panel coordinates. */
@@ -390,6 +429,11 @@ final class WorkersTabView implements JobBlockTabView {
                     screen.clickSound();
                     return true;
                 }
+            } else if (isDeliveryman(info.workers().get(row.worker())) && over(autoX(right), y + 1, ICON, ICON, event.x(), event.y())) {
+                WorkersTabData.Worker worker = info.workers().get(row.worker());
+                ClientPacketDistributor.sendToServer(new WorkersTab.WorkerAuto(menu.containerId, worker.assignee().id(), !worker.auto()));
+                screen.clickSound();
+                return true;
             } else if (info.workers().get(row.worker()).opensWindow()
                     && over(CivGui.PADDING + INDENT, y, right - ICON - 4 - CivGui.PADDING - INDENT, ROW_HEIGHT, event.x(), event.y())) {
                 ClientPacketDistributor.sendToServer(new WorkersTab.Worker(menu.containerId, info.workers().get(row.worker()).assignee().id(), true));

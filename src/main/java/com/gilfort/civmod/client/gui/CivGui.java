@@ -69,6 +69,8 @@ public final class CivGui {
     private static final int INACTIVE_TINT = 0xA0000000 | (INSET_FILL & 0xFFFFFF);
     /** Vanilla slot highlight under the mouse. */
     private static final int HOVER_TINT = 0x80FFFFFF;
+    /** Tint over a slot whose slip cannot be worked (a container is gone). */
+    static final int MISSING_TINT = 0x80FF0000;
     /** Colour of a bonus star (vanilla gold). */
     static final int STAR_COLOR = 0xFFFFAA00;
     /** The bonus star glyph. */

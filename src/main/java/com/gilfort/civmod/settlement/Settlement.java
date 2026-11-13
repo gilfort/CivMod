@@ -89,6 +89,8 @@ public final class Settlement {
     private final Map<UUID, BlockPos> bedReservations = new LinkedHashMap<>();
     /** Clerk JobBlock → its reservations (not saved, see {@link Reservations}). */
     private final Map<BlockPos, List<Reservations.Reservation>> reservations = new HashMap<>();
+    /** Clerk JobBlock → the stock it holds back for requests (not saved, see {@link Holds}). */
+    private final Map<BlockPos, List<Holds.Hold>> holds = new HashMap<>();
     /** Occupied work place → who occupies it (not saved, see {@link OccupiedPlaces}). */
     private final Map<BlockPos, OccupiedPlaces.Occupation> occupied = new HashMap<>();
     /** JobBlock → the Laborers helping there (not saved, see {@link Laborers}). */
@@ -409,6 +411,10 @@ public final class Settlement {
         return reservations;
     }
 
+    Map<BlockPos, List<Holds.Hold>> mutableHolds() {
+        return holds;
+    }
+
     Map<BlockPos, OccupiedPlaces.Occupation> mutableOccupied() {
         return occupied;
     }
@@ -449,6 +455,7 @@ public final class Settlement {
         blocks.values().forEach(block -> block.mutableServed().remove(pos));
         // A removed Clerk's reservations go with it; those of removed tasks elsewhere expire on the next read.
         reservations.remove(pos);
+        holds.remove(pos);
         // The work places its settlers occupied are free again.
         occupied.values().removeIf(occupation -> occupation.jobBlock().equals(pos));
         // Its Laborers stop helping there.
