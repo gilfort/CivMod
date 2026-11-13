@@ -13,6 +13,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ProducingProfile;
+import com.gilfort.civmod.logistics.InnateLayout;
 import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.PatternLayout;
@@ -586,6 +587,20 @@ public final class Patterns {
     }
 
     /**
+     * Brings a library up to date before it is read: {@link #syncInnate(ServerLevel, BlockPos, Job)}, then
+     * {@link #uncheckFiltered(ServerLevel, BlockPos, Job)}. The checkmark limit ({@link #enforceLimit}) stays a separate
+     * call.
+     *
+     * @param level the level
+     * @param pos   the JobBlock
+     * @param job   the Producing Job whose library it is
+     */
+    public static void refresh(ServerLevel level, BlockPos pos, Job job) {
+        syncInnate(level, pos, job);
+        uncheckFiltered(level, pos, job);
+    }
+
+    /**
      * Lays out the Job's innate recipes in the first slots of its library, ordered by recipe id (vault
      * {@code Systems/Producing Jobs.md}). A player pattern on a slot an innate recipe needs moves to the next free slot
      * (lost if none is left: patterns are ghost items); a removed innate recipe frees its slot. An innate pattern keeps
@@ -645,47 +660,10 @@ public final class Patterns {
             return false;
         }
         library.setInnateLaidOut(recipes);
-        Map<ResourceKey<Recipe<?>>, Pattern> before = current.stream().filter(Pattern::innate).filter(pattern -> pattern.recipe().isPresent())
-                .collect(Collectors.toMap(pattern -> pattern.recipe().get(), pattern -> pattern, (first, second) -> first));
-        List<Pattern> laidOut = new ArrayList<>();
-        List<Integer> fresh = new ArrayList<>();
-        int innate = Math.min(recipes.size(), Pattern.SLOTS);
-        for (int slot = 0; slot < innate; slot++) {
-            RecipeHolder<JobCraftingRecipe> holder = recipes.get(slot);
-            Pattern old = before.get(holder.id());
-            if (old == null) {
-                fresh.add(slot);
-            }
-            Pattern laid = InnateRecipes.pattern(slot, holder, old != null && old.checked());
-            laidOut.add(old != null ? laid.withAlways(old.always(), old.atOnce()) : laid);
-        }
-        boolean[] taken = new boolean[Pattern.SLOTS];
-        for (int slot = 0; slot < innate; slot++) {
-            taken[slot] = true;
-        }
-        List<Pattern> displaced = new ArrayList<>();
-        for (Pattern pattern : current) {
-            if (pattern.innate()) {
-                continue;
-            }
-            if (taken[pattern.slot()]) {
-                displaced.add(pattern);
-            } else {
-                taken[pattern.slot()] = true;
-                laidOut.add(pattern);
-            }
-        }
-        for (Pattern pattern : displaced) {
-            // The next free slot; none left: the pattern is lost (a ghost item, nothing to give back).
-            for (int slot = innate; slot < Pattern.SLOTS; slot++) {
-                if (!taken[slot]) {
-                    taken[slot] = true;
-                    laidOut.add(pattern.withSlot(slot));
-                    break;
-                }
-            }
-        }
-        laidOut.sort((a, b) -> Integer.compare(a.slot(), b.slot()));
+        InnateLayout.Result layout = InnateLayout.layout(current, recipes.stream().map(RecipeHolder::id).toList(),
+                (slot, recipe, checked) -> InnateRecipes.pattern(slot, recipes.get(slot), checked));
+        List<Pattern> laidOut = layout.patterns();
+        List<Integer> fresh = layout.fresh();
         if (laidOut.equals(current)) {
             return false;
         }

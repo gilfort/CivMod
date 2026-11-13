@@ -54,8 +54,7 @@ public final class PatternsTab extends JobBlockTab {
                     : menu.tab(PatternsTab.class).flatMap(first -> first.data.get().job()).orElse(menu.getInfo().jobType());
             // The innate recipes first; a pattern its Job filters out loses its checkmark as soon as the tab shows it,
             // foreign ones keep theirs.
-            Patterns.syncInnate(level, pos, job);
-            Patterns.uncheckFiltered(level, pos, job);
+            Patterns.refresh(level, pos, job);
             return PatternsTabData.of(level, pos, job);
         }, PatternsTabData.Sync::new);
     }
