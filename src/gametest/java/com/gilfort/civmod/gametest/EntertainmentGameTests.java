@@ -8,6 +8,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.entertainment.Entertainment;
 import com.gilfort.civmod.entertainment.EntertainmentRules;
 import com.gilfort.civmod.job.CatchUp;
+import com.gilfort.civmod.job.SettlerSpeed;
 import com.gilfort.civmod.job.NeedState;
 import com.gilfort.civmod.job.NeedsReport;
 import com.gilfort.civmod.job.Schedule;
@@ -206,14 +207,14 @@ public final class EntertainmentGameTests {
         for (double[] row : table) {
             set(settler, row[0]);
             data.setBonuses(settlement, Bonuses.NONE);
-            double plain = settler.getWork().speedFactor(level);
+            double plain = SettlerSpeed.speedFactor(settler.getWork(), level);
             helper.assertTrue(near(plain, row[1]), "Entertainment " + row[0] + " without a blessing: " + row[1] + ", got " + plain);
             // The test clock stands still: the blessing runs around now.
             data.setBonuses(settlement, Bonuses.NONE.start(Bonuses.Kind.WORK_SPEED, now - 10L, now + 1L));
-            double blessed = settler.getWork().speedFactor(level);
+            double blessed = SettlerSpeed.speedFactor(settler.getWork(), level);
             helper.assertTrue(near(blessed, row[2]), "Entertainment " + row[0] + " with a blessing: " + row[2] + ", got " + blessed);
         }
-        helper.assertTrue(near(settler.getWork().blessingFactor(level), 1.2), "The blessing alone stays 1.2");
+        helper.assertTrue(near(SettlerSpeed.blessingFactor(settler.getWork(), level), 1.2), "The blessing alone stays 1.2");
         NeedTierGameTests.end(helper, settler, jobBlock);
     }
 

@@ -7,6 +7,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.job.PriestLoop;
+import com.gilfort.civmod.job.SettlerSpeed;
 import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.job.SkillRules;
 import com.gilfort.civmod.npc.Races;
@@ -398,12 +399,12 @@ public final class PriestGameTests {
         ServerLevel level = helper.getLevel();
         SettlementData data = SettlementData.get(level);
         long now = level.getOverworldClockTime();
-        helper.assertTrue(priest.getWork().blessingFactor(level) == 1.0, "No blessing, factor 1");
+        helper.assertTrue(SettlerSpeed.blessingFactor(priest.getWork(), level) == 1.0, "No blessing, factor 1");
         // The test clock stands still: the blessing's end is moved around now instead.
         data.setBonuses(settlement, Bonuses.NONE.start(Bonuses.Kind.WORK_SPEED, now - 10L, now + 1L));
-        helper.assertTrue(Math.abs(priest.getWork().blessingFactor(level) - 1.2) < 1e-9, "Blessed, factor 1.2");
+        helper.assertTrue(Math.abs(SettlerSpeed.blessingFactor(priest.getWork(), level) - 1.2) < 1e-9, "Blessed, factor 1.2");
         data.setBonuses(settlement, Bonuses.NONE.start(Bonuses.Kind.WORK_SPEED, now - 10L, now));
-        helper.assertTrue(priest.getWork().blessingFactor(level) == 1.0, "Ended with the blessing");
+        helper.assertTrue(SettlerSpeed.blessingFactor(priest.getWork(), level) == 1.0, "Ended with the blessing");
         cleanUp(priest);
         helper.succeed();
     }
