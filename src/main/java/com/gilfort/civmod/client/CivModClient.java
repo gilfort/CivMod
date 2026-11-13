@@ -1,7 +1,10 @@
 package com.gilfort.civmod.client;
 
+import java.util.List;
+
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.client.gui.DebugScreen;
+import com.gilfort.civmod.client.gui.DeliverySlipScreen;
 import com.gilfort.civmod.client.gui.JobBlockScreen;
 import com.gilfort.civmod.client.gui.JobPickerScreen;
 import com.gilfort.civmod.client.gui.JobReplaceScreen;
@@ -10,6 +13,7 @@ import com.gilfort.civmod.client.gui.SettlerScreen;
 import com.gilfort.civmod.item.JobBlockUpgradeItem;
 import com.gilfort.civmod.item.JobPicker;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
+import com.gilfort.civmod.logistics.DeliverySlip;
 import com.gilfort.civmod.menu.StationTypesTabData;
 import com.gilfort.civmod.npc.VillagerConversion;
 import com.gilfort.civmod.registry.ModBlockEntityTypes;
@@ -22,6 +26,7 @@ import com.gilfort.civmod.settlement.SettlementOutline;
 import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
 import net.minecraft.client.renderer.entity.VillagerRenderer;
@@ -86,6 +91,7 @@ public final class CivModClient {
         event.register(ModMenuTypes.DEBUG.get(), DebugScreen::new);
         event.register(ModMenuTypes.JOB_BLOCK.get(), JobBlockScreen::new);
         event.register(ModMenuTypes.SETTLER.get(), SettlerScreen::new);
+        event.register(ModMenuTypes.DELIVERY_SLIP.get(), DeliverySlipScreen::new);
     }
 
     /**
@@ -166,8 +172,32 @@ public final class CivModClient {
                         .withStyle(ChatFormatting.GRAY));
             }
         }
+        if (event.getItemStack().is(ModItems.DELIVERY_SLIP.get())) {
+            slipTooltip(event.getItemStack(), event.getToolTip());
+        }
         if (event.getItemStack().is(ModItems.LEDGER.get())) {
             event.getToolTip().add(1, Component.translatable("civmod.tooltip.ledger").withStyle(ChatFormatting.GRAY));
+        }
+        if (event.getItemStack().is(ModItems.DELIVERY_SLIP.get())) {
+            slipTooltip(event.getItemStack(), event.getToolTip());
+        }
+    }
+
+    /** What a Delivery Slip says: its source, targets, filter and variant; a missing container in red on top. */
+    private static void slipTooltip(ItemStack stack, List<Component> tooltip) {
+        DeliverySlip slip = stack.get(ModDataComponents.DELIVERY_SLIP.get());
+        if (slip == null) {
+            tooltip.add(1, Component.translatable("civmod.tooltip.slip.blank").withStyle(ChatFormatting.GRAY));
+            return;
+        }
+        tooltip.add(1, Component.translatable("civmod.tooltip.slip.source", slip.source().map(BlockPos::toShortString).orElse("-"))
+                .withStyle(ChatFormatting.GRAY));
+        tooltip.add(2, Component.translatable("civmod.tooltip.slip.targets", slip.targets().size()).withStyle(ChatFormatting.GRAY));
+        tooltip.add(3, Component.translatable(slip.blacklist() ? "civmod.tooltip.slip.blacklist" : "civmod.tooltip.slip.whitelist", slip.filter().size())
+                .withStyle(ChatFormatting.GRAY));
+        tooltip.add(4, Component.translatable("civmod.gui.slip.variant." + slip.variant().getSerializedName()).withStyle(ChatFormatting.GRAY));
+        if (slip.status() != DeliverySlip.Status.OK) {
+            tooltip.add(1, Component.translatable("civmod.tooltip.slip." + slip.status().getSerializedName()).withStyle(ChatFormatting.RED));
         }
     }
 }

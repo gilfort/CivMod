@@ -24,6 +24,7 @@ import com.gilfort.civmod.menu.StationTypesTabData;
 import com.gilfort.civmod.menu.StationTypesTab;
 import com.gilfort.civmod.menu.StockTab;
 import com.gilfort.civmod.menu.StorageTab;
+import com.gilfort.civmod.menu.DeliveryOrdersTab;
 import com.gilfort.civmod.menu.TasksTab;
 import com.gilfort.civmod.menu.TabData;
 import com.gilfort.civmod.menu.WorkersTab;
@@ -98,6 +99,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
                 case MissionsTab missions -> new MissionsTabView(this, missions);
                 case StockTab stock -> new StockTabView(this, stock);
                 case TasksTab tasks -> new TasksTabView(this, tasks);
+                case DeliveryOrdersTab orders -> new DeliveryOrdersTabView(this, orders);
                 case StationTypesTab stations -> new StationTypesTabView(this, stations);
                 case FuelTab fuel -> new FuelTabView(this, fuel);
                 case PatternsTab _ -> library;

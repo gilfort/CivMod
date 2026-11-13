@@ -131,6 +131,13 @@ public final class CivModConfig {
                     "Cuts the cost of the check on large servers.")
             .define("socialLife", true);
 
+    /** Seconds a Delivery Slip rests after each visit of a Deliveryman. */
+    public static final ModConfigSpec.IntValue SLIP_COOLDOWN_SECONDS = BUILDER
+            .comment("Delivery Slips: seconds a slip rests after each visit of a Deliveryman.",
+                    "Three empty visits in a row double it, three more double it again (4 times the value is the cap).",
+                    "A visit that moves items sets it back to this value.")
+            .defineInRange("slipCooldownSeconds", 30, 1, 3600);
+
     /** The built config spec, registered in the mod constructor. */
     public static final ModConfigSpec SPEC = BUILDER.build();
 

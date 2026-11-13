@@ -132,10 +132,11 @@ public final class SettlementBlock {
      * @param stockRules the stock rules
      * @param served     the Served Clerks of a Warehouse, in linking order
      * @param ledgers    the Ledgers used on the block (9 more rule slots each)
+     * @param orders     the Delivery Orders
      * @param autoToolSupply whether the settlers of the JobBlocks this Clerk belongs to get tools from the settlement
      */
     private record ClerkFields(List<BlockPos> storage, List<StandSpot> standSpots, SpotOfDay spotOfDay, List<StockRule> stockRules,
-            List<BlockPos> served, int ledgers, boolean autoToolSupply) {
+            List<BlockPos> served, int ledgers, DeliveryOrders.Saved orders, boolean autoToolSupply) {
 
         static final MapCodec<ClerkFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 BlockPos.CODEC.listOf().optionalFieldOf("storage", List.of()).forGetter(ClerkFields::storage),
@@ -144,10 +145,11 @@ public final class SettlementBlock {
                 StockRule.CODEC.listOf().optionalFieldOf("stock_rules", List.of()).forGetter(ClerkFields::stockRules),
                 BlockPos.CODEC.listOf().optionalFieldOf("served_clerks", List.of()).forGetter(ClerkFields::served),
                 Codec.INT.optionalFieldOf("ledgers", 0).forGetter(ClerkFields::ledgers),
+                DeliveryOrders.Saved.CODEC.optionalFieldOf("delivery_orders", DeliveryOrders.Saved.NONE).forGetter(ClerkFields::orders),
                 Codec.BOOL.optionalFieldOf("auto_tool_supply", true).forGetter(ClerkFields::autoToolSupply)
         ).apply(instance, ClerkFields::new));
 
-        static final ClerkFields NONE = new ClerkFields(List.of(), List.of(), SpotOfDay.NONE, List.of(), List.of(), 0, true);
+        static final ClerkFields NONE = new ClerkFields(List.of(), List.of(), SpotOfDay.NONE, List.of(), List.of(), 0, DeliveryOrders.Saved.NONE, true);
     }
 
     /**
@@ -398,6 +400,7 @@ public final class SettlementBlock {
     private final List<StockRule> stockRules = new ArrayList<>();
     private int ledgers;
     private boolean autoToolSupply = true;
+    private final DeliveryOrders orders;
     private final List<BlockPos> served = new ArrayList<>();
     private Optional<BlockPos> homeClerk;
     private final Map<Job, Library> libraries = new LinkedHashMap<>();
@@ -456,6 +459,7 @@ public final class SettlementBlock {
         this.served.addAll(clerk.served());
         this.ledgers = Math.clamp(clerk.ledgers(), 0, SettlementRules.MAX_LEDGERS);
         this.autoToolSupply = clerk.autoToolSupply();
+        this.orders = new DeliveryOrders(clerk.orders());
         this.homeClerk = homeClerk;
         producing.libraries().forEach(saved -> {
             Library library = library(saved.job());
@@ -568,7 +572,8 @@ public final class SettlementBlock {
     }
 
     private ClerkFields clerkFields() {
-        return new ClerkFields(List.copyOf(storage), List.copyOf(standSpots), spotOfDay, List.copyOf(stockRules), List.copyOf(served), ledgers, autoToolSupply);
+        return new ClerkFields(List.copyOf(storage), List.copyOf(standSpots), spotOfDay, List.copyOf(stockRules), List.copyOf(served), ledgers, orders.saved(),
+                autoToolSupply);
     }
 
     private ProducingFields producingFields() {
@@ -696,6 +701,20 @@ public final class SettlementBlock {
 
     void setLedgers(int ledgers) {
         this.ledgers = Math.clamp(ledgers, 0, SettlementRules.MAX_LEDGERS);
+    }
+
+    /**
+     * @return the Delivery Orders of this Clerk JobBlock: its filled Delivery Slips (always empty for other blocks)
+     */
+    public DeliveryOrders orders() {
+        return orders;
+    }
+
+    /**
+     * @return the slots of the Delivery Orders in use: (level + Ledgers) × 9, like the stock rule slots
+     */
+    public int orderSlots() {
+        return stockSlots();
     }
 
     /**

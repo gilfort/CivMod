@@ -4,6 +4,7 @@ import java.util.function.Supplier;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.item.ScrollBinding;
+import com.gilfort.civmod.logistics.DeliverySlip;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.mojang.serialization.Codec;
 
@@ -41,6 +42,10 @@ public final class ModDataComponents {
     /** What a Scroll of Assignment is bound to. */
     public static final Supplier<DataComponentType<ScrollBinding>> SCROLL_BINDING = DATA_COMPONENTS.registerComponentType("scroll_binding",
             builder -> builder.persistent(ScrollBinding.CODEC).networkSynchronized(ScrollBinding.STREAM_CODEC));
+
+    /** The order written on a Delivery Slip (vault {@code Jobs/Deliveryman.md}); a plain slip has none yet. */
+    public static final Supplier<DataComponentType<DeliverySlip>> DELIVERY_SLIP = DATA_COMPONENTS.registerComponentType("delivery_slip",
+            builder -> builder.persistent(DeliverySlip.CODEC).networkSynchronized(DeliverySlip.STREAM_CODEC));
 
     private ModDataComponents() {
     }

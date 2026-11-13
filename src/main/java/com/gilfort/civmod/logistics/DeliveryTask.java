@@ -29,9 +29,43 @@ import net.minecraft.world.item.Item;
  * @param result   what a result delivery carries, empty for a pickup
  * @param input    what an input delivery carries, empty for the others
  * @param taker    the Deliveryman working on it (not saved: a reload frees it)
+ * @param slip     the Delivery Slip it carries out, empty for the automatic tasks; its {@code jobBlock} is the Clerk JobBlock
+ *                 whose Delivery Orders hold the slip
  */
 public record DeliveryTask(UUID id, BlockPos source, BlockPos jobBlock, long created, boolean urgent, Optional<Result> result,
-        Optional<Input> input, Optional<Taker> taker) {
+        Optional<Input> input, Optional<Taker> taker, Optional<SlipRef> slip) {
+
+    /**
+     * The slip a task carries out.
+     *
+     * @param id   the slip id
+     * @param slot the slot of the slip in the Delivery Orders: the lower, the higher its priority
+     */
+    public record SlipRef(UUID id, int slot) {
+
+        /** Save codec. */
+        public static final Codec<SlipRef> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                UUIDUtil.CODEC.fieldOf("id").forGetter(SlipRef::id),
+                Codec.INT.fieldOf("slot").forGetter(SlipRef::slot)
+        ).apply(instance, SlipRef::new));
+    }
+
+    /**
+     * A task of the automatic kinds.
+     *
+     * @param id       the task id
+     * @param source   where the items are picked up
+     * @param jobBlock the JobBlock the task belongs to
+     * @param created  the game time the task was created
+     * @param urgent   whether the drop-off was full
+     * @param result   what a result delivery carries
+     * @param input    what an input delivery carries
+     * @param taker    the Deliveryman working on it
+     */
+    public DeliveryTask(UUID id, BlockPos source, BlockPos jobBlock, long created, boolean urgent, Optional<Result> result,
+            Optional<Input> input, Optional<Taker> taker) {
+        this(id, source, jobBlock, created, urgent, result, input, taker, Optional.empty());
+    }
 
     /**
      * The Deliveryman a task is locked to.
@@ -122,9 +156,10 @@ public record DeliveryTask(UUID id, BlockPos source, BlockPos jobBlock, long cre
             Codec.LONG.fieldOf("created").forGetter(DeliveryTask::created),
             Codec.BOOL.optionalFieldOf("urgent", false).forGetter(DeliveryTask::urgent),
             Result.CODEC.optionalFieldOf("result").forGetter(DeliveryTask::result),
-            Input.CODEC.optionalFieldOf("input").forGetter(DeliveryTask::input)
-    ).apply(instance, (id, source, jobBlock, created, urgent, result, input) -> new DeliveryTask(id.orElseGet(UUID::randomUUID), source,
-            jobBlock, created, urgent, result, input, Optional.empty())));
+            Input.CODEC.optionalFieldOf("input").forGetter(DeliveryTask::input),
+            SlipRef.CODEC.optionalFieldOf("slip").forGetter(DeliveryTask::slip)
+    ).apply(instance, (id, source, jobBlock, created, urgent, result, input, slip) -> new DeliveryTask(id.orElseGet(UUID::randomUUID), source,
+            jobBlock, created, urgent, result, input, Optional.empty(), slip)));
 
     /**
      * A pickup.
@@ -140,10 +175,10 @@ public record DeliveryTask(UUID id, BlockPos source, BlockPos jobBlock, long cre
     }
 
     /**
-     * @return whether it is a pickup (neither a result nor an input delivery)
+     * @return whether it is a pickup (neither a result nor an input delivery nor a slip)
      */
     public boolean pickup() {
-        return result.isEmpty() && input.isEmpty();
+        return result.isEmpty() && input.isEmpty() && slip.isEmpty();
     }
 
     /**
@@ -181,14 +216,14 @@ public record DeliveryTask(UUID id, BlockPos source, BlockPos jobBlock, long cre
      * @return a copy with that taker
      */
     public DeliveryTask withTaker(Optional<Taker> taker) {
-        return new DeliveryTask(id, source, jobBlock, created, urgent, result, input, taker);
+        return new DeliveryTask(id, source, jobBlock, created, urgent, result, input, taker, slip);
     }
 
     /**
      * @return an urgent copy
      */
     public DeliveryTask asUrgent() {
-        return new DeliveryTask(id, source, jobBlock, created, true, result, input, taker);
+        return new DeliveryTask(id, source, jobBlock, created, true, result, input, taker, slip);
     }
 
     /**
@@ -196,7 +231,7 @@ public record DeliveryTask(UUID id, BlockPos source, BlockPos jobBlock, long cre
      * @return a copy carrying that result
      */
     public DeliveryTask withResult(Result changed) {
-        return new DeliveryTask(id, source, jobBlock, created, urgent, Optional.of(changed), input, taker);
+        return new DeliveryTask(id, source, jobBlock, created, urgent, Optional.of(changed), input, taker, slip);
     }
 
     /**
@@ -204,7 +239,7 @@ public record DeliveryTask(UUID id, BlockPos source, BlockPos jobBlock, long cre
      * @return a copy carrying that input
      */
     public DeliveryTask withInput(Input changed) {
-        return new DeliveryTask(id, source, jobBlock, created, urgent, result, Optional.of(changed), taker);
+        return new DeliveryTask(id, source, jobBlock, created, urgent, result, Optional.of(changed), taker, slip);
     }
 
     /**

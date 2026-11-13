@@ -4,6 +4,7 @@ import java.util.function.Supplier;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.menu.DebugMenu;
+import com.gilfort.civmod.menu.DeliverySlipMenu;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.SettlerMenu;
 
@@ -33,6 +34,10 @@ public final class ModMenuTypes {
     /** Menu of settlers; the client receives a {@link com.gilfort.civmod.menu.SettlerInfo} snapshot. */
     public static final Supplier<MenuType<SettlerMenu>> SETTLER = MENU_TYPES.register(
             "settler", () -> IMenuTypeExtension.create(SettlerMenu::new));
+
+    /** The window of a Delivery Slip. */
+    public static final Supplier<MenuType<DeliverySlipMenu>> DELIVERY_SLIP = MENU_TYPES.register(
+            "delivery_slip", () -> IMenuTypeExtension.create(DeliverySlipMenu::new));
 
     private ModMenuTypes() {
     }

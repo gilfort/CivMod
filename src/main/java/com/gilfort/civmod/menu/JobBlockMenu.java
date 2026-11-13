@@ -7,6 +7,7 @@ import java.util.function.BiConsumer;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.registry.ModMenuTypes;
+import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 
@@ -110,6 +111,14 @@ public class JobBlockMenu extends CivMenu {
         });
         int[] inventoryTabs = this.tabs.stream().filter(JobBlockTab::showsInventory).mapToInt(JobBlockTab::index).toArray();
         addPlayerInventory(inventory, 8, isTall() ? CLERK_HEIGHT - 82 : 84, inventoryTabs);
+        // The Clerk's Delivery Orders: slots for filled Delivery Slips, kept in the settlement data on the server. They
+        // follow the player inventory, so the storage and inventory slots keep their indices.
+        tab(DeliveryOrdersTab.class).ifPresent(orders -> {
+            addDataSlots(orders.data());
+            Container slips = site().<Container>map(found -> new OrdersContainer(found.level(), found.pos())).orElseGet(DeliveryOrdersTab::clientContainer);
+            orders.createSlots(slips).forEach(this::addSlot);
+            refreshOrders();
+        });
     }
 
     /**
@@ -215,8 +224,15 @@ public class JobBlockMenu extends CivMenu {
         tabSyncIn = 0;
     }
 
+    /** Server: shows the slot count and the "Auto" switch of the Clerk in the Delivery Orders tab. */
+    private void refreshOrders() {
+        site().flatMap(found -> JobBlockSite.at(found.level(), found.pos())).ifPresent(found ->
+                tab(DeliveryOrdersTab.class).ifPresent(orders -> orders.refresh(found.block())));
+    }
+
     @Override
     public void broadcastChanges() {
+        refreshOrders();
         super.broadcastChanges();
         if (synced.isEmpty() || !(player instanceof ServerPlayer) || site().isEmpty() || --tabSyncIn > 0) {
             return;

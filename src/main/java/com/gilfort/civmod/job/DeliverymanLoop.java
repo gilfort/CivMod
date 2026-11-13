@@ -1,17 +1,24 @@
 package com.gilfort.civmod.job;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.DeliveryTask;
 import com.gilfort.civmod.logistics.Pickups;
+import com.gilfort.civmod.logistics.SlipPlan;
+import com.gilfort.civmod.logistics.SlipSites;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -23,12 +30,14 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
+import com.gilfort.civmod.settlement.SlipOrders;
 import com.gilfort.civmod.settlement.StockRules;
 import com.gilfort.civmod.settlement.Warehouses;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.capabilities.Capabilities;
@@ -76,7 +85,9 @@ final class DeliverymanLoop implements CategoryLoop {
     /** The source walked to and how it is reached (a foreign Clerk's counter). */
     private @Nullable BlockPos visiting;
     private ClerkStorage.@Nullable Visit visit;
-    /** Sources found unreachable today. */
+    /** The stops of the slip trip under way, still to unload at (not saved: a reload sends the load to the Warehouse). */
+    private final Deque<SlipPlan.Leg> legs = new ArrayDeque<>();
+    /** Sources and slip targets found unreachable today. */
     private final Set<BlockPos> unreachable = new HashSet<>();
     private long unreachableDay = Long.MIN_VALUE;
 
@@ -111,6 +122,7 @@ final class DeliverymanLoop implements CategoryLoop {
         route.removeIf(id -> !mine(settlement, id, day));
         if (!load.isEmpty() && (route.isEmpty() || load.stacks().size() >= capacity)) {
             releaseRoute(level, settlement);
+            skipUnreachableLeg(level);
             return JobStep.DELIVER;
         }
         while (true) {
@@ -140,12 +152,14 @@ final class DeliverymanLoop implements CategoryLoop {
 
     /** Picks the best free task and the tasks batched with it, and locks them. */
     private boolean startTrip(ServerLevel level, Settlement settlement, SettlementBlock warehouseBlock, int capacity, long day) {
-        Optional<DeliveryTask> first = Deliveries.pick(settlement, warehouseBlock, settler.blockPosition(), level.getGameTime(), day, unreachable);
+        SettlementData data = SettlementData.get(level);
+        syncSlips(level, data, settlement, warehouseBlock);
+        Deliveries.Scope scope = warehouseBlock.orders().auto() ? Deliveries.Scope.ALL : Deliveries.Scope.SLIPS_ONLY;
+        Optional<DeliveryTask> first = Deliveries.pick(settlement, warehouseBlock, settler.blockPosition(), level.getGameTime(), day, unreachable, scope);
         if (first.isEmpty()) {
             return false;
         }
         List<DeliveryTask> trip = Deliveries.batch(settlement, warehouseBlock, first.get(), capacity, task -> stacksOf(level, task), day, unreachable);
-        SettlementData data = SettlementData.get(level);
         for (DeliveryTask task : trip) {
             Deliveries.take(data, settlement, task.id(), settler.getUUID(), settler.getName().getString(), day);
             route.add(task.id());
@@ -153,6 +167,25 @@ final class DeliverymanLoop implements CategoryLoop {
         store = Deliveries.destination(settlement, first.get()).orElse(null);
         checked = null;
         return true;
+    }
+
+    /**
+     * The 16-block rule for the target of a slip trip: a target a path search ends short of is left out for the rest of
+     * the day (the plan of the next visit skips it), its stop is dropped.
+     */
+    private void skipUnreachableLeg(ServerLevel level) {
+        currentLeg(level).filter(leg -> settler.position().distanceTo(Vec3.atCenterOf(leg.target())) <= PATH_CHECK
+                && shell.pathEndsShort(leg.target(), SettlerWork.REACH)).ifPresent(leg -> {
+                    unreachable.add(leg.target());
+                    legs.remove(leg);
+                });
+    }
+
+    /** Brings the slip tasks of the Clerks of the Warehouse up to date before the pick. */
+    private static void syncSlips(ServerLevel level, SettlementData data, Settlement settlement, SettlementBlock warehouseBlock) {
+        for (BlockPos clerk : Warehouses.handled(settlement, warehouseBlock)) {
+            settlement.block(clerk).ifPresent(block -> SlipOrders.sync(data, settlement, block, level.getGameTime(), pos -> SlipSites.isMissing(level, pos)));
+        }
     }
 
     private boolean mine(Settlement settlement, UUID id, long day) {
@@ -200,6 +233,9 @@ final class DeliverymanLoop implements CategoryLoop {
     }
 
     private static Component sourceName(Settlement settlement, DeliveryTask task) {
+        if (task.slip().isPresent()) {
+            return Component.translatable("item.civmod.delivery_slip");
+        }
         // An input delivery is collected at its store, the others at their JobBlock's drop-off.
         return settlement.block(task.input().isPresent() ? task.source() : task.jobBlock())
                 .map(block -> ClerkStorage.isClerk(block) ? ClerkStorage.name(block) : block.jobType().displayName())
@@ -252,6 +288,10 @@ final class DeliverymanLoop implements CategoryLoop {
     private void collect(ServerLevel level, Settlement settlement, SettlerJob job, DeliveryTask task, JobBuffer load, int capacity,
             @Nullable Boolean counter, long dayTime, boolean effects) {
         SettlementData data = SettlementData.get(level);
+        if (task.slip().isPresent()) {
+            collectSlip(level, settlement, task, load, capacity, counter, dayTime, effects);
+            return;
+        }
         if (task.input().isPresent()) {
             collectInputs(level, settlement, task, load, capacity, counter, dayTime, effects);
             return;
@@ -286,6 +326,38 @@ final class DeliverymanLoop implements CategoryLoop {
         // Less than wanted: the source ran short; less wanted than the task holds: the rest did not fit and waits.
         int left = taken == want ? result.count() - want : 0;
         Deliveries.carry(data, settlement, task.id(), settler.getUUID(), taken, left);
+    }
+
+    /**
+     * The visit of a Delivery Slip: scans the source, works out what goes where ({@link SlipPlan}) and takes it; the stops
+     * follow as {@link #legs}. Nothing to move: the Deliveryman is done here and takes the next task. Either way the slip
+     * rests for its cooldown and its task is gone until then.
+     */
+    private void collectSlip(ServerLevel level, Settlement settlement, DeliveryTask task, JobBuffer load, int capacity,
+            @Nullable Boolean counter, long dayTime, boolean effects) {
+        SettlementData data = SettlementData.get(level);
+        Optional<SlipOrders.Order> found = SlipOrders.order(settlement, task);
+        if (found.isEmpty() || !level.isLoaded(task.source())) {
+            // The slip was taken out, or the source cannot be read now: no visit happened.
+            Deliveries.done(data, settlement, task.id());
+            return;
+        }
+        SlipOrders.Order order = found.get();
+        Stock stock = counter == null ? ClerkStorage.stock(level, task.source(), true) : ClerkStorage.stock(level, task.source(), dayTime, counter);
+        SlipPlan plan = SlipPlan.of(order.slip(), order.clerk().orders().clock(order.slip().id()), stock,
+                target -> unreachable.contains(target) ? Stock.EMPTY : ClerkStorage.stock(level, target, true), capacity, level.getRandom());
+        int before = load.count();
+        plan.take().forEach((item, count) -> stock.take(item, count).forEach(load::add));
+        boolean moved = load.count() > before;
+        if (moved && counter != null && stock.counter()) {
+            ClerkCounter.handOut(level, task.source(), effects);
+        }
+        legs.clear();
+        if (moved) {
+            legs.addAll(plan.legs());
+        }
+        SlipOrders.visited(data, order.clerk(), order.slip().id(), level.getGameTime(), moved, CivModConfig.SLIP_COOLDOWN_SECONDS.get(), plan.next());
+        Deliveries.done(data, settlement, task.id());
     }
 
     /**
@@ -327,6 +399,10 @@ final class DeliverymanLoop implements CategoryLoop {
      *         Warehouse
      */
     BlockPos unloadTarget(ServerLevel level, SettlerJob job) {
+        Optional<SlipPlan.Leg> leg = currentLeg(level);
+        if (leg.isPresent()) {
+            return leg.get().target();
+        }
         BlockPos target = store;
         if (target == null) {
             target = JobBlockSite.at(level, job.jobBlock()).flatMap(site -> Deliveries.carriedBy(site.settlement(), settler.getUUID()).stream()
@@ -364,6 +440,10 @@ final class DeliverymanLoop implements CategoryLoop {
      * @return whether everything was delivered
      */
     boolean unload(ServerLevel level, SettlerJob job) {
+        Optional<SlipPlan.Leg> leg = currentLeg(level);
+        if (leg.isPresent()) {
+            return unloadLeg(level, job, leg.get());
+        }
         BlockPos target = unloadTarget(level, job);
         boolean all = unload(level, job, target, shell.workplace(job.jobBlock()).buffer());
         if (all) {
@@ -371,6 +451,45 @@ final class DeliverymanLoop implements CategoryLoop {
         }
         StockRules.check(level, target, DayClock.dayTime(level));
         return all;
+    }
+
+    /** The next stop of the slip trip whose target is still there, empty without a slip trip. */
+    private Optional<SlipPlan.Leg> currentLeg(ServerLevel level) {
+        return legs.stream().filter(leg -> deliverable(level, leg.target())).findFirst();
+    }
+
+    /**
+     * Unloads what a stop of a slip trip gets into its target: no more of an item than the plan gave it. The stop is done
+     * afterwards, whatever fitted; what is left goes to the next stop or, after the last one, into the Warehouse. A target
+     * that is full is no reason to wait here, so this never blocks the job with "Storage full".
+     *
+     * @return true: the job goes on
+     */
+    private boolean unloadLeg(ServerLevel level, SettlerJob job, SlipPlan.Leg leg) {
+        Stock stock = ClerkStorage.stock(level, leg.target(), true);
+        Map<Item, Integer> allowed = new HashMap<>(leg.items());
+        JobBuffer load = shell.workplace(job.jobBlock()).buffer();
+        int before = load.stacks().size();
+        load.deliver(stack -> {
+            int part = Math.min(stack.getCount(), allowed.getOrDefault(stack.getItem(), 0));
+            if (part <= 0) {
+                return 0;
+            }
+            int delivered = part - stock.insert(stack.copyWithCount(part)).getCount();
+            allowed.merge(stack.getItem(), -delivered, Integer::sum);
+            return delivered;
+        });
+        int delivered = before - load.stacks().size();
+        if (delivered > 0) {
+            int jobBlockLevel = shell.jobBlockLevel(job);
+            shell.gainExp(level, job, delivered * job.jobType().baseExp() * jobBlockLevel, SettlementRules.skillCap(jobBlockLevel));
+        }
+        // The stop and the stops before it (their targets are gone) are done.
+        List<SlipPlan.Leg> all = List.copyOf(legs);
+        legs.clear();
+        legs.addAll(all.subList(all.indexOf(leg) + 1, all.size()));
+        StockRules.check(level, leg.target(), DayClock.dayTime(level));
+        return true;
     }
 
     /**
@@ -432,6 +551,7 @@ final class DeliverymanLoop implements CategoryLoop {
             Deliveries.dropCarried(data, settler.getUUID());
         }
         route.clear();
+        legs.clear();
         store = null;
         checked = null;
         visiting = null;
@@ -480,7 +600,8 @@ final class DeliverymanLoop implements CategoryLoop {
         }
         Set<BlockPos> skipped = new HashSet<>();
         while (time > 0) {
-            Optional<DeliveryTask> first = Deliveries.pick(settlement, found.get().block(), job.jobBlock(), level.getGameTime(), day, skipped);
+            Optional<DeliveryTask> first = Deliveries.pick(settlement, found.get().block(), job.jobBlock(), level.getGameTime(), day, skipped,
+                    Deliveries.Scope.AUTOMATIC_ONLY);
             if (first.isEmpty()) {
                 break;
             }
