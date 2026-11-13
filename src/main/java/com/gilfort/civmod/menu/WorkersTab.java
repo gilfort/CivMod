@@ -106,19 +106,11 @@ public final class WorkersTab extends JobBlockTab {
     }
 
     private void setLeaves(boolean on) {
-        JobBlockMenu menu = menu();
-        menu.site().ifPresent(site -> {
-            JobAssignments.setLeaves(SettlementData.get(site.level()), site.pos(), on);
-            menu.resend();
-        });
+        menu().editSettlement((data, pos) -> JobAssignments.setLeaves(data, pos, on));
     }
 
     private void setTreasure(boolean on) {
-        JobBlockMenu menu = menu();
-        menu.site().ifPresent(site -> {
-            JobAssignments.setTreasure(SettlementData.get(site.level()), site.pos(), on);
-            menu.resend();
-        });
+        menu().editSettlement((data, pos) -> JobAssignments.setTreasure(data, pos, on));
     }
 
     /**

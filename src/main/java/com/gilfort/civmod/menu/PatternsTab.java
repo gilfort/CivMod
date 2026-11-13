@@ -136,11 +136,7 @@ public final class PatternsTab extends JobBlockTab {
     @Override
     boolean clickButton(Player player, int button) {
         boolean byDeliveryman = button - DELIVERY == 1;
-        JobBlockMenu menu = menu();
-        menu.site().ifPresent(site -> {
-            JobAssignments.setDelivery(SettlementData.get(site.level()), site.pos(), byDeliveryman);
-            menu.resend();
-        });
+        menu().editSettlement((data, pos) -> JobAssignments.setDelivery(data, pos, byDeliveryman));
         return true;
     }
 
