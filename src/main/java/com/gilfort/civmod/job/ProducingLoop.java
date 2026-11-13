@@ -132,8 +132,7 @@ final class ProducingLoop implements CategoryLoop {
     public JobStep plan(ServerLevel level, SettlerJob job, JobBlockSite site, long day, long dayTime) {
         BlockPos jobBlock = job.jobBlock();
         releaseIfRestored(level);
-        Patterns.syncInnate(level, jobBlock, job.jobType());
-        Patterns.uncheckFiltered(level, jobBlock, job.jobType());
+        Patterns.refresh(level, jobBlock, job.jobType());
         Patterns.enforceLimit(level, jobBlock, job.jobType(), settler.getUUID(), profile(job).checkLimit(shell.effectiveLevel(job)));
         Workplace workplace = shell.workplace(jobBlock);
         if (workplace.round() == null) {
@@ -1338,8 +1337,7 @@ final class ProducingLoop implements CategoryLoop {
         }
         JobBlockSite site = found.get();
         releaseIfRestored(level);
-        Patterns.syncInnate(level, jobBlock, job.jobType());
-        Patterns.uncheckFiltered(level, jobBlock, job.jobType());
+        Patterns.refresh(level, jobBlock, job.jobType());
         Patterns.enforceLimit(level, jobBlock, job.jobType(), settler.getUUID(), profile(job).checkLimit(shell.effectiveLevel(job)));
         if (station(level, job, site, day) == null) {
             shell.setStatus(jobBlock, noStation(shell.workplace(jobBlock)));
