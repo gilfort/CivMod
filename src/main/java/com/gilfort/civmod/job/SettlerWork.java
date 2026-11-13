@@ -1803,9 +1803,9 @@ public final class SettlerWork {
      * @return the number of production rolls
      */
     int simulateHour(ServerLevel level, long day, int hour) {
-        long hourStart = day * DayClock.DAY_TICKS + hour * 1000L;
+        long hourStart = day * DayClock.DAY_TICKS + hour * DayClock.HOUR_TICKS;
         long from = Math.max(hourStart, catchUpFrom());
-        long to = Math.min(hourStart + 1000L, window.to());
+        long to = Math.min(hourStart + DayClock.HOUR_TICKS, window.to());
         if (to <= from || settler.isHomeless()) {
             return 0;
         }

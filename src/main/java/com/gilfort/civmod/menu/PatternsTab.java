@@ -124,7 +124,7 @@ public final class PatternsTab extends JobBlockTab {
 
     /**
      * The delivery toggle carries the wanted state instead of a toggle, so two players clicking it agree with what they
-     * see (like {@link WorkersTab#autoButtonId}).
+     * see (like {@link WorkersTabData.Auto}).
      *
      * @param byDeliveryman the wanted state: whether Deliverymen carry the results
      * @return the menu button id of the Base Job's tab that sets it
@@ -136,11 +136,7 @@ public final class PatternsTab extends JobBlockTab {
     @Override
     boolean clickButton(Player player, int button) {
         boolean byDeliveryman = button - DELIVERY == 1;
-        JobBlockMenu menu = menu();
-        menu.site().ifPresent(site -> {
-            JobAssignments.setDelivery(SettlementData.get(site.level()), site.pos(), byDeliveryman);
-            menu.resend();
-        });
+        menu().editSettlement((data, pos) -> JobAssignments.setDelivery(data, pos, byDeliveryman));
         return true;
     }
 

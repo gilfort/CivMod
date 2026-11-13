@@ -2,10 +2,12 @@ package com.gilfort.civmod.menu;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.registry.ModMenuTypes;
+import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
 
 import net.minecraft.core.BlockPos;
@@ -184,6 +186,19 @@ public class JobBlockMenu extends CivMenu {
      */
     Optional<Site> validSite() {
         return site().filter(found -> stillValid(player));
+    }
+
+    /**
+     * Server: applies an edit to this block's settlement data, then sends the tabs at once. Does nothing on the client
+     * or once the player is away.
+     *
+     * @param edit the change, given the settlement data and the block's position
+     */
+    void editSettlement(BiConsumer<SettlementData, BlockPos> edit) {
+        validSite().ifPresent(site -> {
+            edit.accept(SettlementData.get(site.level()), site.pos());
+            resend();
+        });
     }
 
     /**
