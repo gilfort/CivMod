@@ -178,9 +178,6 @@ public final class CivModClient {
         if (event.getItemStack().is(ModItems.LEDGER.get())) {
             event.getToolTip().add(1, Component.translatable("civmod.tooltip.ledger").withStyle(ChatFormatting.GRAY));
         }
-        if (event.getItemStack().is(ModItems.DELIVERY_SLIP.get())) {
-            slipTooltip(event.getItemStack(), event.getToolTip());
-        }
     }
 
     /** What a Delivery Slip says: its source, targets, filter and variant; a missing container in red on top. */

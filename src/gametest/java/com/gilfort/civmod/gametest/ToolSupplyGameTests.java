@@ -76,6 +76,8 @@ public final class ToolSupplyGameTests {
             register(helper, "tool_supply_delivery", ToolSupplyGameTests::delivery);
             register(helper, "tool_supply_chain", ToolSupplyGameTests::chain);
             register(helper, "tool_supply_clerk_collect", ToolSupplyGameTests::clerkCollect);
+            register(helper, "tool_supply_self_mode", ToolSupplyGameTests::selfMode);
+            register(helper, "tool_supply_nobody_makes", ToolSupplyGameTests::nobodyMakes);
         });
     }
 
@@ -346,8 +348,8 @@ public final class ToolSupplyGameTests {
     }
 
     /**
-     * The example of the issue: a Miner needs an iron pickaxe, the Clerk holds only iron ingots and a log. The Smith asks
-     * for sticks, the Craftsperson makes them from the log, the Smith makes the pickaxe; it waits in the Clerk for the
+     * The example of the issue: a Miner needs an iron pickaxe, the Clerk holds only raw iron, coal and a log. The Smith asks
+     * for iron ingots and sticks, the Smelter makes the ingots, the Craftsperson makes the sticks from the log, the Smith makes the pickaxe; it waits in the Clerk for the
      * Miner, nobody else sees it, a Deliveryman carries it into the Miner's collect chest and the Miner swaps to it.
      */
     private static void chain(GameTestHelper helper) {
@@ -359,7 +361,7 @@ public final class ToolSupplyGameTests {
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
             }
         }
-        BlockPos clerk = clerkWith(helper, List.of(new ItemStack(Items.IRON_INGOT, 3), new ItemStack(Items.OAK_LOG, 1)));
+        BlockPos clerk = clerkWith(helper, List.of(new ItemStack(Items.RAW_IRON, 3), new ItemStack(Items.OAK_LOG, 1), new ItemStack(Items.COAL, 2)));
         SettlementData data = SettlementData.get(level);
         Settlement settlement = settlement(helper, clerk);
         BlockPos smithy = SmithGameTests.smithy(helper, new BlockPos(1, 1, 5));
@@ -368,6 +370,10 @@ public final class ToolSupplyGameTests {
         CraftspersonGameTests.placeTable(helper, new BlockPos(3, 1, 9));
         Settler smith = worker(helper, data, settlement, smithy, new BlockPos(2, 1, 7), "Sigrun", SmithGameTests.smith());
         Settler crafter = worker(helper, data, settlement, workshop, new BlockPos(2, 1, 11), "Carl", CraftspersonGameTests.craftJob());
+        BlockPos smelterBlock = SmelterGameTests.smelterBlock(helper, new BlockPos(6, 1, 17));
+        helper.setBlock(new BlockPos(8, 1, 17), Blocks.FURNACE);
+        SmelterGameTests.ironPattern(helper, smelterBlock, 0);
+        Settler smelter = worker(helper, data, settlement, smelterBlock, new BlockPos(7, 1, 18), "Ida", SmelterGameTests.smelter());
         helper.assertTrue(Patterns.setOutput(level, smithy, SmithGameTests.smith(), 0, Items.IRON_PICKAXE).orElseThrow().checked(), "Pickaxe checked");
         Patterns.setOutput(level, smithy, SmithGameTests.smith(), 1, Items.STICK);
         CraftspersonGameTests.define(helper, workshop, 0, Items.STICK);
@@ -391,7 +397,9 @@ public final class ToolSupplyGameTests {
 
         catchUp(level, smith);
         catchUp(level, crafter);
+        catchUp(level, smelter);
         for (int pass = 0; pass < MAX_PASSES && Requests.get(settlement, pickaxe).isPresent(); pass++) {
+            catchUp(level, smelter);
             catchUp(level, smith);
         }
         helper.assertTrue(Requests.get(settlement, pickaxe).isEmpty(), "The pickaxe is made (Smith status " + smith.getWork().status(smithy) + "): "
@@ -419,10 +427,11 @@ public final class ToolSupplyGameTests {
                         + miner.getInventory().getItem(Settler.BELT_START) + ", at " + miner.blockPosition() + ", chest at " + chest + ")"))
                 .thenExecute(() -> {
                     helper.assertTrue(onBelt(miner, Items.STONE_PICKAXE) && settlement.requests().isEmpty(), "A free belt keeps the stone pickaxe, no request is left");
-                    cleanUp(helper, smith, crafter, miner, dora);
+                    cleanUp(helper, smith, crafter, smelter, miner, dora);
                     forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
                     TestAssignments.unassign(data, smithy);
                     TestAssignments.unassign(data, workshop);
+                    TestAssignments.unassign(data, smelterBlock);
                     TestAssignments.unassign(data, clerk);
                 })
                 .thenSucceed();
@@ -447,6 +456,46 @@ public final class ToolSupplyGameTests {
         ask(helper, miner);
         helper.assertTrue(Holds.heldFor(settlement, me).isEmpty() && free(level, clerk, Items.IRON_PICKAXE) == 1, "The tool is free stock at the collect point");
         helper.assertTrue(settlement.deliveries().isEmpty() && settlement.requests().isEmpty(), "Nothing to carry, nothing to ask: " + settlement.deliveries());
+        finish(helper, miner);
+    }
+
+    /**
+     * Without a Deliveryman the settler carries the tool over itself: the Clerk is not the collect inventory (a chest is),
+     * no delivery is posted, and on the next search the tool is in the chest and no longer held.
+     */
+    private static void selfMode(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerk = clerkWith(helper, List.of(new ItemStack(Items.IRON_PICKAXE)));
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = settlement(helper, clerk);
+        Settler miner = miner(helper, new BlockPos(1, 1, 13), IRON_SKILL);
+        helper.setBlock(new BlockPos(3, 1, 13), Blocks.CHEST);
+        BlockPos chest = helper.absolutePos(new BlockPos(3, 1, 13));
+        helper.assertTrue(JobAssignments.cyclePoint(data, jobBlock(miner), chest, false, true) == JobAssignments.PointResult.COLLECT,
+                "The chest is the collect inventory");
+        ReservedFor me = ReservedFor.settler(miner.getUUID());
+        Holds.hold(settlement, clerk, me, Items.IRON_PICKAXE, 1);
+
+        ask(helper, miner);
+        helper.assertTrue(settlement.deliveries().stream().noneMatch(task -> task.input().isPresent()), "No delivery is posted: " + settlement.deliveries());
+        helper.assertTrue(((Container) level.getBlockEntity(chest)).hasAnyMatching(stack -> stack.is(Items.IRON_PICKAXE)), "The tool is in the chest");
+        helper.assertTrue(Holds.heldFor(settlement, me).isEmpty() && free(level, clerk, Items.IRON_PICKAXE) == 0, "Nothing is held and nothing is left in the Clerk");
+        helper.assertTrue(settlement.requests().isEmpty(), "No request");
+        finish(helper, miner);
+    }
+
+    /**
+     * No producer can make the tool: the request is posted anyway and stays open (no timeout), so the Tasks tab can say
+     * what is missing.
+     */
+    private static void nobodyMakes(GameTestHelper helper) {
+        BlockPos clerk = clerkWith(helper, List.of());
+        Settlement settlement = settlement(helper, clerk);
+        Settler miner = miner(helper, new BlockPos(1, 1, 13), IRON_SKILL);
+        ask(helper, miner);
+        List<Request> asked = requestsOf(settlement, miner);
+        helper.assertTrue(asked.size() == 1 && asked.getFirst().target().equals(Optional.of(clerk)) && asked.getFirst().amount() == 1,
+                "A request is posted although nobody makes it: " + settlement.requests());
         finish(helper, miner);
     }
 }

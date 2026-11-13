@@ -329,7 +329,7 @@ public final class Deliveries {
     public enum Scope {
         /** Every task. */
         ALL,
-        /** Delivery Slips only (the "Auto" switch of the Warehouse is off). */
+        /** Delivery Slips only (the "Auto" switch of the Deliveryman is off). */
         SLIPS_ONLY,
         /** The automatic tasks only (catch-up: a slip needs a visit, so it is not caught up). */
         AUTOMATIC_ONLY;
@@ -344,8 +344,9 @@ public final class Deliveries {
     }
 
     /**
-     * The best free task of a Warehouse: urgent tasks first, then slips (the lower the slot, the sooner), then the rest
-     * by score.
+     * The best free task of a Warehouse. The automatic tasks rank by score as before (an urgent one counts as 10 minutes
+     * of waiting). Delivery Slips sit between: while an urgent automatic task is open it is worked first (the best
+     * automatic task by score), else the slip with the lowest slot, else the best automatic task by score.
      *
      * @param settlement the settlement
      * @param warehouse  the Deliveryman's Warehouse
@@ -358,9 +359,15 @@ public final class Deliveries {
      */
     public static Optional<DeliveryTask> pick(Settlement settlement, SettlementBlock warehouse, BlockPos from, long gameTime, long day,
             Set<BlockPos> skipped, Scope scope) {
-        return free(settlement, warehouse, day, skipped).stream().filter(scope::takes)
-                .max(Comparator.comparingInt(Deliveries::rank).thenComparingInt(task -> task.slip().map(ref -> -ref.slot()).orElse(0))
-                        .thenComparingDouble(task -> score(task, gameTime, from)));
+        List<DeliveryTask> free = free(settlement, warehouse, day, skipped).stream().filter(scope::takes).toList();
+        List<DeliveryTask> automatic = free.stream().filter(task -> task.slip().isEmpty()).toList();
+        Optional<DeliveryTask> best = automatic.stream().max(Comparator.comparingDouble(task -> score(task, gameTime, from)));
+        if (automatic.stream().anyMatch(DeliveryTask::urgent)) {
+            return best;
+        }
+        Optional<DeliveryTask> slip = free.stream().filter(task -> task.slip().isPresent())
+                .min(Comparator.comparingInt(task -> task.slip().orElseThrow(() -> new IllegalStateException("Not a slip task: " + task)).slot()));
+        return slip.isPresent() ? slip : best;
     }
 
     /**
@@ -377,11 +384,6 @@ public final class Deliveries {
     public static Optional<DeliveryTask> pick(Settlement settlement, SettlementBlock warehouse, BlockPos from, long gameTime, long day,
             Set<BlockPos> skipped) {
         return pick(settlement, warehouse, from, gameTime, day, skipped, Scope.ALL);
-    }
-
-    /** Urgent tasks come first, then Delivery Slips, then the automatic tasks. */
-    private static int rank(DeliveryTask task) {
-        return task.urgent() ? 2 : task.slip().isPresent() ? 1 : 0;
     }
 
     /**

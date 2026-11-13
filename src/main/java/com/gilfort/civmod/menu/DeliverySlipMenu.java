@@ -129,7 +129,7 @@ public final class DeliverySlipMenu extends CivMenu {
             filter.setItem(slot, slot < slip.filter().size() ? new ItemStack(slip.filter().get(slot)) : ItemStack.EMPTY);
         }
         numbers.set(DATA_MODE, slip.blacklist() ? 1 : 0);
-        numbers.set(DATA_VARIANT, slip.variant().index());
+        numbers.set(DATA_VARIANT, slip.variant().ordinal());
         numbers.set(DATA_FILL, slip.fillTo());
         numbers.set(DATA_KEEP, slip.keep());
     }

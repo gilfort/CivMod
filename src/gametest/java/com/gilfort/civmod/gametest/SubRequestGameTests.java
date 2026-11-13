@@ -113,12 +113,12 @@ public final class SubRequestGameTests {
 
     /**
      * Example of the issue: a Clerk's Min rule asks for an iron pickaxe, the Smith lacks sticks (outside its domain), a
-     * Craftsperson makes them from planks. The Smith posts a child request for the sticks at the Clerk, the Craftsperson
+     * Craftsperson makes them from a log (planks on the way). The Smith posts a child request for the sticks at the Clerk, the Craftsperson
      * claims it, the sticks wait in the Clerk for the pickaxe request (nobody else sees them) and the pickaxe arrives.
      */
     private static void smithSticks(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        BlockPos clerk = clerkWith(helper, List.of(new ItemStack(Items.IRON_INGOT, 3), new ItemStack(Items.OAK_PLANKS, 2)));
+        BlockPos clerk = clerkWith(helper, List.of(new ItemStack(Items.IRON_INGOT, 3), new ItemStack(Items.OAK_LOG, 1)));
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
         helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.IRON_PICKAXE, 1, 0)), "Rule set");
@@ -134,6 +134,7 @@ public final class SubRequestGameTests {
         helper.assertTrue(Patterns.setOutput(level, smithy, SmithGameTests.smith(), 0, Items.IRON_PICKAXE).orElseThrow().checked(), "Pickaxe checked");
         Patterns.setOutput(level, smithy, SmithGameTests.smith(), 1, Items.STICK);
         CraftspersonGameTests.define(helper, workshop, 0, Items.STICK);
+        CraftspersonGameTests.define(helper, workshop, 1, Items.OAK_PLANKS);
 
         // The Smith alone: it lacks sticks, asks for them and waits.
         catchUp(level, smith);

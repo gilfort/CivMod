@@ -455,6 +455,7 @@ public final class Settlement {
         blocks.values().forEach(block -> block.mutableServed().remove(pos));
         // A removed Clerk's reservations go with it; those of removed tasks elsewhere expire on the next read.
         reservations.remove(pos);
+        holds.remove(pos);
         // The work places its settlers occupied are free again.
         occupied.values().removeIf(occupation -> occupation.jobBlock().equals(pos));
         // Its Laborers stop helping there.

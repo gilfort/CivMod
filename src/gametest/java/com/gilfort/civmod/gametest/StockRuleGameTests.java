@@ -268,7 +268,7 @@ public final class StockRuleGameTests {
     }
 
     /**
-     * The Clerk's menu: Stock and Requests tabs, the player inventory on the Stock tab, rules only in active slots,
+     * The Clerk's menu: Stock and Tasks tabs, the player inventory on the Stock tab, rules only in active slots,
      * deleting through the menu.
      */
     private static void menu(GameTestHelper helper) {
@@ -281,9 +281,9 @@ public final class StockRuleGameTests {
         JobBlockEntity entity = (JobBlockEntity) level.getBlockEntity(clerk);
         JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), entity,
                 JobBlockInfo.of(ModJobs.CLERK.get(), entity.getJobLevel()));
-        helper.assertTrue(menu.getTabCount() == 3, "Workers, Stock, Tasks");
+        helper.assertTrue(menu.getTabCount() == 4, "Workers, Stock, Tasks, Delivery Orders");
         menu.setActiveTab(menu.tab(StockTab.class).orElseThrow().index());
-        helper.assertTrue(menu.slots.get(0).isActive() && menu.slots.size() == 36, "Stock tab: only the player inventory, no storage slots");
+        helper.assertTrue(menu.slots.get(0).isActive() && menu.slots.stream().filter(slot -> slot.isActive()).count() == 36, "Stock tab: only the player inventory is active, no storage slots");
         menu.slots.get(0).set(new ItemStack(Items.TORCH, 3));
         helper.assertTrue(menu.quickMoveStack(player, 0).isEmpty() && entity.isEmpty()
                 && menu.slots.get(0).getItem().getCount() == 3, "Shift-click on the Stock tab moves nothing");

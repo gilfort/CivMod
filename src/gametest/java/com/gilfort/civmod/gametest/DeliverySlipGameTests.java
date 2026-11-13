@@ -76,6 +76,8 @@ public final class DeliverySlipGameTests {
             register(helper, "delivery_slip_variants", DeliverySlipGameTests::variants);
             register(helper, "delivery_slip_cooldown", DeliverySlipGameTests::cooldown);
             register(helper, "delivery_slip_tasks", DeliverySlipGameTests::tasks);
+            register(helper, "delivery_slip_ranking", DeliverySlipGameTests::ranking);
+            register(helper, "delivery_slip_no_room", DeliverySlipGameTests::noRoom);
             register(helper, "delivery_slip_orders_tab", DeliverySlipGameTests::ordersTab);
             register(helper, "delivery_slip_pantry", DeliverySlipGameTests::pantry);
         });
@@ -275,14 +277,14 @@ public final class DeliverySlipGameTests {
         UUID id = UUID.randomUUID();
         long[] seconds = {30, 30, 60, 60, 60, 120, 120, 120};
         for (int visit = 0; visit < seconds.length; visit++) {
-            SlipOrders.visited(data, block, id, NOW, false, 30, 0);
+            SlipOrders.visited(data, block, id, new SlipOrders.Visit(NOW, false, 30, 0));
             long rest = (block.orders().clock(id).readyAt() - NOW) / 20L;
             helper.assertTrue(rest == seconds[visit], "Empty visit " + (visit + 1) + ": " + seconds[visit] + " s, got " + rest);
         }
-        SlipOrders.visited(data, block, id, NOW, true, 30, 2);
+        SlipOrders.visited(data, block, id, new SlipOrders.Visit(NOW, true, 30, 2));
         DeliveryOrders.Clock reset = block.orders().clock(id);
         helper.assertTrue((reset.readyAt() - NOW) / 20L == 30 && reset.emptyVisits() == 0 && reset.next() == 2, "A visit that moves items starts over: " + reset);
-        SlipOrders.visited(data, block, id, NOW, false, 10, 2);
+        SlipOrders.visited(data, block, id, new SlipOrders.Visit(NOW, false, 10, 2));
         helper.assertTrue((block.orders().clock(id).readyAt() - NOW) / 20L == 10, "The base value is a config entry");
         helper.succeed();
     }
@@ -311,10 +313,10 @@ public final class DeliverySlipGameTests {
         clerk.orders().setSlip(5, slipItem(late));
         clerk.orders().setSlip(2, slipItem(early));
 
-        SlipOrders.sync(data, settlement, clerk, NOW, pos -> false);
+        SlipOrders.sync(data, settlement, clerk, NOW, SlipOrders.World.open(pos -> false));
         List<DeliveryTask> slipTasks = settlement.deliveries().stream().filter(task -> task.slip().isPresent()).toList();
         helper.assertTrue(slipTasks.size() == 2 && slipTasks.stream().allMatch(task -> task.jobBlock().equals(warehouse)), "One task per filled slip: " + slipTasks);
-        SlipOrders.sync(data, settlement, clerk, NOW, pos -> false);
+        SlipOrders.sync(data, settlement, clerk, NOW, SlipOrders.World.open(pos -> false));
         helper.assertTrue(settlement.deliveries().size() == 2, "Syncing again creates no second task");
 
         SettlementBlock lumber = block(helper, lumberjack);
@@ -334,27 +336,98 @@ public final class DeliverySlipGameTests {
         helper.assertTrue(Deliveries.destination(settlement, slipsOnly.orElseThrow()).isEmpty(), "Its targets are worked out at the source");
         helper.assertTrue(Deliveries.get(settlement, sourceB).isEmpty(), "A slip task is no pickup of its source");
 
-        SlipOrders.visited(data, clerk, early.id(), NOW, false, 30, 0);
-        SlipOrders.sync(data, settlement, clerk, NOW + 1, pos -> false);
+        SlipOrders.visited(data, clerk, early.id(), new SlipOrders.Visit(NOW, false, 30, 0));
+        SlipOrders.sync(data, settlement, clerk, NOW + 1, SlipOrders.World.open(pos -> false));
         helper.assertTrue(settlement.deliveries().stream().filter(task -> task.slip().isPresent()).count() == 1, "A resting slip has no task");
-        SlipOrders.sync(data, settlement, clerk, NOW + 20L * 30, pos -> false);
+        SlipOrders.sync(data, settlement, clerk, NOW + 20L * 30, SlipOrders.World.open(pos -> false));
         helper.assertTrue(settlement.deliveries().stream().filter(task -> task.slip().isPresent()).count() == 2, "After the cooldown the task is back");
 
-        SlipOrders.sync(data, settlement, clerk, NOW + 20L * 30, pos -> pos.equals(sourceA));
+        SlipOrders.sync(data, settlement, clerk, NOW + 20L * 30, SlipOrders.World.open(pos -> pos.equals(sourceA)));
         helper.assertTrue(DeliveryOrders.slip(clerk.orders().slip(5)).orElseThrow().status() == DeliverySlip.Status.SOURCE_MISSING, "Source missing");
         helper.assertTrue(settlement.deliveries().stream().filter(task -> task.slip().isPresent()).count() == 1, "A slip with a missing source is skipped");
-        SlipOrders.sync(data, settlement, clerk, NOW + 20L * 30, pos -> pos.equals(target));
+        SlipOrders.sync(data, settlement, clerk, NOW + 20L * 30, SlipOrders.World.open(pos -> pos.equals(target)));
         helper.assertTrue(DeliveryOrders.slip(clerk.orders().slip(2)).orElseThrow().status() == DeliverySlip.Status.TARGET_MISSING, "Target missing");
-        helper.assertTrue(settlement.deliveries().stream().noneMatch(task -> task.slip().isPresent()), "Both skipped, the slips stay in their slots");
+        helper.assertTrue(settlement.deliveries().stream().filter(task -> task.slip().isPresent()).count() == 2, "A missing target does not stop a slip: the others are served");
         helper.assertTrue(DeliveryOrders.slip(clerk.orders().slip(5)).isPresent(), "The slip stays");
-        SlipOrders.sync(data, settlement, clerk, NOW + 20L * 30, pos -> false);
+        SlipOrders.sync(data, settlement, clerk, NOW + 20L * 30, SlipOrders.World.open(pos -> false));
         helper.assertTrue(DeliveryOrders.slip(clerk.orders().slip(5)).orElseThrow().status() == DeliverySlip.Status.OK
                 && settlement.deliveries().stream().filter(task -> task.slip().isPresent()).count() == 2, "The container is back: the slip works again");
 
         clerk.orders().setSlip(5, ItemStack.EMPTY);
-        SlipOrders.sync(data, settlement, clerk, NOW + 20L * 30, pos -> false);
+        SlipOrders.sync(data, settlement, clerk, NOW + 20L * 30, SlipOrders.World.open(pos -> false));
         helper.assertTrue(settlement.deliveries().stream().filter(task -> task.slip().isPresent()).count() == 1, "A slip taken out loses its task");
         helper.assertTrue(clerk.orders().slipIds().equals(List.of(early.id())), "Only the slip in the slot is left");
+        helper.succeed();
+    }
+
+    /**
+     * The automatic tasks rank by score as before: an urgent task is only a bonus of ten minutes, so one that waited
+     * longer wins while an urgent task is open. A slip sits between: urgent automatic task, then slip, then the others.
+     */
+    private static void ranking(GameTestHelper helper) {
+        SettlementData data = SettlementData.get(helper.getLevel());
+        BlockPos warehouse = place(helper, new BlockPos(1, 1, 1), ModJobs.CLERK.get());
+        BlockPos lumberjack = place(helper, new BlockPos(3, 1, 1), ModJobs.LUMBERJACK.get());
+        helper.assertTrue(TestAssignments.assign(data, warehouse, UUID.randomUUID(), "Dora", data.settlementAt(warehouse).orElseThrow().id(), List.of(),
+                ModJobs.DELIVERYMAN.get()) == JobAssignments.AssignResult.OK, "Deliveryman assigned");
+        Settlement settlement = data.settlementAt(warehouse).orElseThrow();
+        SettlementBlock clerk = block(helper, warehouse);
+        BlockPos source = helper.absolutePos(new BlockPos(5, 1, 1));
+        BlockPos target = helper.absolutePos(new BlockPos(9, 1, 1));
+        clerk.orders().setSlip(0, slipItem(slip(source, List.of(target), List.of(Items.BREAD), Variant.NEAREST, 0, 0)));
+        SlipOrders.sync(data, settlement, clerk, NOW, SlipOrders.World.open(pos -> false));
+
+        long hour = 20L * 3600;
+        BlockPos old = helper.absolutePos(new BlockPos(3, 1, 3));
+        BlockPos urgent = helper.absolutePos(new BlockPos(3, 1, 5));
+        Deliveries.request(data, settlement, old, lumberjack, 0L, false);
+        Optional<DeliveryTask> first = Deliveries.pick(settlement, clerk, warehouse, hour, 0L, Set.of());
+        helper.assertTrue(first.filter(task -> task.slip().isPresent()).isPresent(), "No urgent task open: the slip beats the automatic task: " + first);
+        Deliveries.request(data, settlement, urgent, lumberjack, hour, true);
+        Optional<DeliveryTask> second = Deliveries.pick(settlement, clerk, warehouse, hour, 0L, Set.of());
+        helper.assertTrue(second.filter(task -> task.source().equals(old)).isPresent(),
+                "Urgent is a score bonus: the task that waited an hour still wins, and the slip waits: " + second);
+        Optional<DeliveryTask> third = Deliveries.pick(settlement, clerk, warehouse, hour, 0L, Set.of(old));
+        helper.assertTrue(third.filter(task -> task.source().equals(urgent)).isPresent(), "An urgent task beats the slip: " + third);
+        helper.succeed();
+    }
+
+    /**
+     * A slip makes no task while every target is full (the check runs once per cooldown, not per sync) and a target that
+     * is gone does not stop the slip while another one is left.
+     */
+    private static void noRoom(GameTestHelper helper) {
+        SettlementData data = SettlementData.get(helper.getLevel());
+        BlockPos warehouse = place(helper, new BlockPos(1, 1, 1), ModJobs.CLERK.get());
+        Settlement settlement = data.settlementAt(warehouse).orElseThrow();
+        SettlementBlock clerk = block(helper, warehouse);
+        BlockPos source = chest(helper, 3, 1);
+        BlockPos full = chest(helper, 5, 1);
+        BlockPos free = chest(helper, 7, 1);
+        Container fullChest = container(helper, full);
+        for (int slot = 0; slot < fullChest.getContainerSize(); slot++) {
+            fullChest.setItem(slot, new ItemStack(Items.BREAD, 64));
+        }
+        SlipOrders.World world = SlipOrders.World.of(helper.getLevel());
+        clerk.orders().setSlip(0, slipItem(slip(source, List.of(full), List.of(Items.BREAD), Variant.NEAREST, 0, 0)));
+        SlipOrders.sync(data, settlement, clerk, NOW, world);
+        helper.assertTrue(settlement.deliveries().stream().noneMatch(task -> task.slip().isPresent()), "A full target: no task");
+        helper.assertTrue(clerk.orders().clock(clerk.orders().slipIds().get(0)).readyAt() > NOW, "The slip rests for its cooldown");
+        helper.assertTrue(clerk.orders().clock(clerk.orders().slipIds().get(0)).emptyVisits() == 0, "That is no empty visit");
+
+        fullChest.setItem(0, ItemStack.EMPTY);
+        long later = NOW + 20L * 30;
+        SlipOrders.sync(data, settlement, clerk, NOW + 1, world);
+        helper.assertTrue(settlement.deliveries().stream().noneMatch(task -> task.slip().isPresent()), "Room again, but the slip still rests");
+        SlipOrders.sync(data, settlement, clerk, later, world);
+        helper.assertTrue(settlement.deliveries().stream().anyMatch(task -> task.slip().isPresent()), "After the cooldown the room is seen: the task is there");
+
+        DeliverySlip two = slip(source, List.of(full, free), List.of(Items.BREAD), Variant.NEAREST, 0, 0);
+        clerk.orders().setSlip(0, slipItem(two));
+        helper.setBlock(new BlockPos(7, 1, 1), Blocks.AIR);
+        SlipOrders.sync(data, settlement, clerk, later + 20L * 60, world);
+        helper.assertTrue(DeliveryOrders.slip(clerk.orders().slip(0)).orElseThrow().status() == DeliverySlip.Status.TARGET_MISSING, "Target missing shows");
+        helper.assertTrue(settlement.deliveries().stream().anyMatch(task -> task.slip().isPresent()), "The slip still serves the target that is left");
         helper.succeed();
     }
 
@@ -362,7 +435,7 @@ public final class DeliverySlipGameTests {
 
     /**
      * The Clerk's Delivery Orders tab has {@code (level + Ledgers) x 9} slots, takes filled slips only, keeps them in the
-     * settlement data and posts their tasks; "Auto" is on by default.
+     * settlement data and posts their tasks.
      */
     private static void ordersTab(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -379,7 +452,6 @@ public final class DeliverySlipGameTests {
         List<Slot> slots = menu.slots.stream().filter(slot -> slot.container.getContainerSize() == DeliveryOrders.MAX_SLOTS).toList();
         helper.assertTrue(slots.size() == DeliveryOrders.MAX_SLOTS && slots.stream().filter(Slot::isActive).count() == 9 && tab.slots() == 9,
                 "Level 1: 9 slots in use, got " + slots.stream().filter(Slot::isActive).count());
-        helper.assertTrue(tab.auto(), "Auto is on by default");
 
         ItemStack filled = slipItem(slip(a, List.of(b), List.of(Items.BREAD), Variant.NEAREST, 0, 0));
         helper.assertTrue(!slots.get(0).mayPlace(new ItemStack(ModItems.DELIVERY_SLIP.get())), "A plain slip does not go in");

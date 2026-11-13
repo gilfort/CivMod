@@ -69,17 +69,10 @@ public record DeliverySlip(UUID id, Optional<BlockPos> source, List<BlockPos> ta
         }
 
         /**
-         * @return the position of the variant in the window's cycle, which is also how the menu sends it
-         */
-        public int index() {
-            return List.of(values()).indexOf(this);
-        }
-
-        /**
          * @return the variant after this one in the window's cycle
          */
         public Variant next() {
-            return values()[(index() + 1) % values().length];
+            return values()[(ordinal() + 1) % values().length];
         }
     }
 

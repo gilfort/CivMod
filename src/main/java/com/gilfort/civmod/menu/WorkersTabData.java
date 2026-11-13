@@ -12,6 +12,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.job.BiomeBonuses;
 import com.gilfort.civmod.job.MissionTrip;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Bonuses;
 import com.gilfort.civmod.settlement.DayClock;
@@ -185,8 +186,9 @@ public record WorkersTabData(Component settlementName, boolean inSettlement, boo
      * @param level    its skill level in that Job, 0 while unloaded
      * @param skin     its skin index ({@code Settler#getSkin}), -1 while unloaded
      * @param away     the mission it is away on, empty at home (also while it only reserved one)
+     * @param auto     for a Deliveryman: its "Auto" switch (whether it also takes the automatic tasks); true for the others
      */
-    public record Worker(SettlementBlock.Assignee assignee, boolean loaded, int level, int skin, Optional<Away> away) {
+    public record Worker(SettlementBlock.Assignee assignee, boolean loaded, int level, int skin, Optional<Away> away, boolean auto) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Worker> STREAM_CODEC = StreamCodec.composite(
@@ -195,6 +197,7 @@ public record WorkersTabData(Component settlementName, boolean inSettlement, boo
                 ByteBufCodecs.VAR_INT, Worker::level,
                 ByteBufCodecs.INT, Worker::skin,
                 Away.STREAM_CODEC.apply(ByteBufCodecs::optional), Worker::away,
+                ByteBufCodecs.BOOL, Worker::auto,
                 Worker::new);
 
         /**
@@ -217,13 +220,14 @@ public record WorkersTabData(Component settlementName, boolean inSettlement, boo
          * @param assignee the settler and its Job at the JobBlock
          * @return its row; a settler whose entity is not loaded has its name and Job only
          */
-        static Worker of(ServerLevel level, SettlementBlock.Assignee assignee) {
+        static Worker of(ServerLevel level, BlockPos jobBlock, SettlementBlock.Assignee assignee) {
             if (!(level.getEntity(assignee.id()) instanceof Settler settler)) {
-                return new Worker(assignee, false, 0, -1, Optional.empty());
+                return new Worker(assignee, false, 0, -1, Optional.empty(), true);
             }
             Optional<Away> away = settler.getWork().missionTrip().filter(MissionTrip::departed)
                     .map(trip -> new Away(trip.mission(), trip.returnTime()));
-            return new Worker(assignee, true, settler.getSkills().get(assignee.job()).level(), settler.getSkin(), away);
+            boolean auto = settler.getJobs().stream().filter(job -> job.jobBlock().equals(jobBlock)).findFirst().map(SettlerJob::auto).orElse(true);
+            return new Worker(assignee, true, settler.getSkills().get(assignee.job()).level(), settler.getSkin(), away, auto);
         }
 
         /**
@@ -257,7 +261,7 @@ public record WorkersTabData(Component settlementName, boolean inSettlement, boo
         List<SettlementBlock.Assignee> assignees = block.map(SettlementBlock::assignees).orElse(List.of());
         List<Worker> workers = new ArrayList<>();
         for (SettlementBlock.Assignee assignee : assignees) {
-            workers.add(Worker.of(level, assignee));
+            workers.add(Worker.of(level, pos, assignee));
         }
         return new WorkersTabData(settlement.map(Settlement::displayName).orElse(Component.empty()),
                 settlement.isPresent(), status.connected(), status.distance(), status.required(), workers,

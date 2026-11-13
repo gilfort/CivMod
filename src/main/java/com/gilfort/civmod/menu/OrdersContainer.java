@@ -3,7 +3,6 @@ package com.gilfort.civmod.menu;
 import java.util.Optional;
 import java.util.stream.IntStream;
 
-import com.gilfort.civmod.logistics.SlipSites;
 import com.gilfort.civmod.settlement.DeliveryOrders;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementData;
@@ -50,7 +49,8 @@ final class OrdersContainer implements Container {
 
     @Override
     public ItemStack getItem(int slot) {
-        return site().map(found -> found.block().orders().slip(slot)).orElse(ItemStack.EMPTY);
+        // A copy: edits of the live stack would skip the sync and the save.
+        return site().map(found -> found.block().orders().slip(slot).copy()).orElse(ItemStack.EMPTY);
     }
 
     @Override
@@ -65,7 +65,7 @@ final class OrdersContainer implements Container {
 
     @Override
     public ItemStack removeItemNoUpdate(int slot) {
-        ItemStack stack = getItem(slot).copy();
+        ItemStack stack = getItem(slot);
         site().ifPresent(found -> found.block().orders().setSlip(slot, ItemStack.EMPTY));
         return stack;
     }
@@ -83,14 +83,14 @@ final class OrdersContainer implements Container {
 
     @Override
     public boolean canPlaceItem(int slot, ItemStack stack) {
-        return site().filter(found -> slot < found.block().orderSlots()).isPresent() && DeliveryOrders.slip(stack).isPresent();
+        return site().filter(found -> slot < found.block().stockSlots()).isPresent() && DeliveryOrders.slip(stack).isPresent();
     }
 
     @Override
     public void setChanged() {
         site().ifPresent(found -> {
             SettlementData data = SettlementData.get(level);
-            SlipOrders.sync(data, found.settlement(), found.block(), level.getGameTime(), other -> SlipSites.isMissing(level, other));
+            SlipOrders.sync(data, found.settlement(), found.block(), level.getGameTime(), SlipOrders.World.of(level));
             data.setDirty();
         });
     }

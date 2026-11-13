@@ -91,28 +91,28 @@ public final class Requests {
      */
     public static Request post(SettlementData data, Settlement settlement, Item item, int amount, Optional<BlockPos> target,
             Optional<UUID> parent) {
-        return post(data, settlement, item, amount, target, parent, Optional.empty());
+        int priority = parent.flatMap(id -> get(settlement, id)).map(Request::priority).orElse(DEFAULT_PRIORITY);
+        Request request = new Request(UUID.randomUUID(), item, amount, priority, target, Optional.empty(), parent, List.of(), List.of(),
+                Optional.empty());
+        add(data, settlement, request);
+        return request;
     }
 
     /**
-     * Posts a request whose result is held for someone once it is in the Clerk (the tool supply, vault
+     * Posts a request for one item whose result is held for someone once it is in the Clerk (the tool supply, vault
      * {@code Systems/Needs.md}).
      *
      * @param data        the dimension's settlement data
      * @param settlement  the settlement
      * @param item        the requested item
-     * @param amount      the amount
-     * @param target      the Clerk the result goes to, if any
-     * @param parent      the request this is a sub-request of
+     * @param clerk       the Clerk the result goes to
      * @param reservedFor who the result is held for
      * @return the posted request
      */
-    public static Request post(SettlementData data, Settlement settlement, Item item, int amount, Optional<BlockPos> target,
-            Optional<UUID> parent, Optional<ReservedFor> reservedFor) {
-        int priority = parent.flatMap(id -> get(settlement, id)).map(Request::priority).orElse(DEFAULT_PRIORITY);
-        Request request = new Request(UUID.randomUUID(), item, amount, priority, target, Optional.empty(), parent, List.of(), List.of(), reservedFor);
-        settlement.mutableRequests().add(request);
-        data.setDirty();
+    public static Request postReserved(SettlementData data, Settlement settlement, Item item, BlockPos clerk, ReservedFor reservedFor) {
+        Request request = new Request(UUID.randomUUID(), item, 1, DEFAULT_PRIORITY, Optional.of(clerk), Optional.empty(), Optional.empty(),
+                List.of(), List.of(), Optional.of(reservedFor));
+        add(data, settlement, request);
         return request;
     }
 

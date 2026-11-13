@@ -301,7 +301,7 @@ public class Settler extends PathfinderMob {
      * @param jobBlock the JobBlock position
      */
     public void removeJob(BlockPos jobBlock) {
-        jobs.stream().filter(job -> job.jobBlock().equals(jobBlock)).findFirst().ifPresent(this::toolJobGone);
+        toolJobGone(jobBlock);
         jobs = jobs.stream().filter(job -> !job.jobBlock().equals(jobBlock)).toList();
         work.forget(jobBlock);
     }
@@ -318,16 +318,32 @@ public class Settler extends PathfinderMob {
         if (jobs.stream().noneMatch(held -> held.jobBlock().equals(jobBlock) && held.jobType() != job)) {
             return;
         }
-        jobs.stream().filter(held -> held.jobBlock().equals(jobBlock)).findFirst().ifPresent(this::toolJobGone);
+        toolJobGone(jobBlock);
         jobs = jobs.stream().map(held -> held.jobBlock().equals(jobBlock) ? new SettlerJob(job, jobBlock) : held).toList();
         work.forget(jobBlock);
     }
 
     /** A Job leaves the settler: its request for the Job's tool ends (vault {@code Systems/Needs.md}). */
-    private void toolJobGone(SettlerJob gone) {
+    private void toolJobGone(BlockPos jobBlock) {
         if (level() instanceof net.minecraft.server.level.ServerLevel server) {
-            com.gilfort.civmod.job.ToolOrders.jobGone(server, this, gone);
+            jobs.stream().filter(job -> job.jobBlock().equals(jobBlock)).findFirst()
+                    .ifPresent(gone -> com.gilfort.civmod.job.ToolOrders.jobGone(server, this, gone));
         }
+    }
+
+    /**
+     * Sets the "Auto" switch of the Deliveryman job at a JobBlock (vault {@code Jobs/Deliveryman.md}).
+     *
+     * @param jobBlock the JobBlock position
+     * @param on       whether the Deliveryman also takes the automatic tasks
+     * @return whether the settler holds a job there
+     */
+    public boolean setJobAuto(BlockPos jobBlock, boolean on) {
+        if (jobs.stream().noneMatch(job -> job.jobBlock().equals(jobBlock))) {
+            return false;
+        }
+        jobs = jobs.stream().map(job -> job.jobBlock().equals(jobBlock) ? job.withAuto(on) : job).toList();
+        return true;
     }
 
     /**

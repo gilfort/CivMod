@@ -711,16 +711,9 @@ public final class SettlementBlock {
     }
 
     /**
-     * @return the slots of the Delivery Orders in use: (level + Ledgers) × 9, like the stock rule slots
+     * @return the active slots of the stock rules and of the Delivery Orders: (level + Ledgers) × 9 ({@link StockRule#slots(int, int)})
      */
-    public int orderSlots() {
-        return stockSlots();
-    }
-
-    /**
-     * @return the active stock rule slots: (level + Ledgers) × 9 ({@link StockRule#slots(int, int)})
-     */
-    int stockSlots() {
+    public int stockSlots() {
         return StockRule.slots(level, ledgers);
     }
 

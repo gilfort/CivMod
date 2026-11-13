@@ -103,6 +103,29 @@ public record SlipPlan(List<Leg> legs, int next) {
         return new SlipPlan(legs, next);
     }
 
+    /**
+     * A cheap look at the targets before a task is made, without the source: does any target have an inventory, is a
+     * listed item below the fill limit and does it fit? A blacklist slip cannot be checked item by item, so a target with
+     * an inventory counts as having room.
+     *
+     * @param slip        the slip
+     * @param targetStock what a target takes
+     * @return whether at least one target may take something
+     */
+    public static boolean roomLeft(DeliverySlip slip, Function<BlockPos, Stock> targetStock) {
+        for (BlockPos pos : slip.targets()) {
+            Stock target = targetStock.apply(pos);
+            if (target.isEmpty()) {
+                continue;
+            }
+            if (slip.blacklist() || slip.filter().stream().anyMatch(item -> (slip.fillTo() <= 0 || target.count(item) < slip.fillTo())
+                    && target.fits(new ItemStack(item)) > 0)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** What one target gets of the spare items, within what the Deliveryman can still carry. */
     private static Map<Item, Integer> fill(DeliverySlip slip, Stock target, Map<Item, Integer> spare, Map<Item, Integer> taken,
             int carryStacks) {
@@ -146,7 +169,7 @@ public record SlipPlan(List<Leg> legs, int next) {
      * @param random for the random variant
      * @return all targets in order; for the forced round robin only the next one
      */
-    public static List<BlockPos> targetOrder(DeliverySlip slip, DeliveryOrders.Clock clock, RandomSource random) {
+    private static List<BlockPos> targetOrder(DeliverySlip slip, DeliveryOrders.Clock clock, RandomSource random) {
         List<BlockPos> targets = new ArrayList<>(slip.targets());
         BlockPos from = slip.source().orElseThrow(() -> new IllegalStateException("A filled slip has a source: " + slip));
         switch (slip.variant()) {

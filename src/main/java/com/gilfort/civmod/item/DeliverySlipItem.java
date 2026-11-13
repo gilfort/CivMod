@@ -3,7 +3,6 @@ package com.gilfort.civmod.item;
 import java.util.Locale;
 import java.util.Optional;
 
-import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.logistics.DeliverySlip;
 import com.gilfort.civmod.logistics.SlipSites;
@@ -86,9 +85,9 @@ public class DeliverySlipItem extends Item {
      */
     public static Result setSource(ServerLevel level, ItemStack stack, BlockPos pos) {
         DeliverySlip slip = order(stack);
-        Result refused = refusal(level, slip, pos);
-        if (refused != null) {
-            return refused;
+        Optional<Result> refused = refusal(level, slip, pos);
+        if (refused.isPresent()) {
+            return refused.get();
         }
         stack.set(ModDataComponents.DELIVERY_SLIP.get(), slip.withSource(pos));
         return Result.SOURCE_SET;
@@ -111,27 +110,27 @@ public class DeliverySlipItem extends Item {
             stack.set(ModDataComponents.DELIVERY_SLIP.get(), slip.withTargetToggled(pos));
             return Result.TARGET_REMOVED;
         }
-        Result refused = refusal(level, slip, pos);
-        if (refused != null) {
-            return refused;
+        Optional<Result> refused = refusal(level, slip, pos);
+        if (refused.isPresent()) {
+            return refused.get();
         }
         stack.set(ModDataComponents.DELIVERY_SLIP.get(), slip.withTargetToggled(pos));
         return Result.TARGET_ADDED;
     }
 
-    /** Why a block cannot join the slip, null if it can. */
-    private static @Nullable Result refusal(ServerLevel level, DeliverySlip slip, BlockPos pos) {
+    /** Why a block cannot join the slip, empty if it can. */
+    private static Optional<Result> refusal(ServerLevel level, DeliverySlip slip, BlockPos pos) {
         if (!SlipSites.isContainer(level, pos)) {
-            return Result.NOT_A_CONTAINER;
+            return Optional.of(Result.NOT_A_CONTAINER);
         }
         SettlementData data = SettlementData.get(level);
         Optional<Settlement> settlement = data.settlementContaining(pos);
         if (settlement.isEmpty()) {
-            return Result.OUTSIDE;
+            return Optional.of(Result.OUTSIDE);
         }
         Optional<BlockPos> known = slip.source().or(() -> slip.targets().stream().findFirst());
         boolean elsewhere = known.flatMap(data::settlementContaining).filter(other -> other.id() != settlement.get().id()).isPresent();
-        return elsewhere ? Result.OTHER_SETTLEMENT : null;
+        return elsewhere ? Optional.of(Result.OTHER_SETTLEMENT) : Optional.empty();
     }
 
     @Override

@@ -6,6 +6,7 @@ import java.util.UUID;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.AutoAssignment;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
@@ -167,6 +168,24 @@ public final class WorkersTab extends JobBlockTab {
     }
 
     /**
+     * Server: sets the "Auto" switch of a Deliveryman's job at this JobBlock (it works Delivery Slips only while off).
+     *
+     * @param settler the settler of the row
+     * @param on      the wanted state
+     * @return whether it is a loaded Deliveryman of this block and now has that state
+     */
+    public boolean setWorkerAuto(UUID settler, boolean on) {
+        JobBlockMenu menu = menu();
+        Optional<JobBlockMenu.Site> site = menu.validSite();
+        if (site.isEmpty() || assignee(site.get(), settler).filter(found -> found.job() == ModJobs.DELIVERYMAN.get()).isEmpty()
+                || !(site.get().level().getEntity(settler) instanceof Settler found) || !found.setJobAuto(site.get().pos(), on)) {
+            return false;
+        }
+        menu.resend();
+        return true;
+    }
+
+    /**
      * Server: opens the settler window of a loaded worker at home; it stays open while the player stays at the JobBlock
      * and the settler works there.
      *
@@ -180,7 +199,7 @@ public final class WorkersTab extends JobBlockTab {
             return false;
         }
         Optional<SettlementBlock.Assignee> assignee = assignee(site.get(), settler);
-        if (assignee.isEmpty() || !WorkersTabData.Worker.of(site.get().level(), assignee.get()).opensWindow()
+        if (assignee.isEmpty() || !WorkersTabData.Worker.of(site.get().level(), site.get().pos(), assignee.get()).opensWindow()
                 || !(site.get().level().getEntity(settler) instanceof Settler found)) {
             return false;
         }
@@ -226,6 +245,31 @@ public final class WorkersTab extends JobBlockTab {
                     tab.unassign(settler);
                 }
             });
+        }
+    }
+
+    /**
+     * Client → server: switch the "Auto" of a Deliveryman row, keyed by the settler.
+     *
+     * @param containerId the menu's container id
+     * @param settler     the settler of the row
+     * @param on          the wanted state
+     */
+    public record WorkerAuto(int containerId, UUID settler, boolean on) implements CustomPacketPayload {
+
+        /** Payload type. */
+        public static final Type<WorkerAuto> TYPE = new Type<>(CivMod.id("workers_tab_worker_auto"));
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, WorkerAuto> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, WorkerAuto::containerId,
+                UUIDUtil.STREAM_CODEC, WorkerAuto::settler,
+                ByteBufCodecs.BOOL, WorkerAuto::on,
+                WorkerAuto::new);
+
+        @Override
+        public Type<WorkerAuto> type() {
+            return TYPE;
         }
     }
 }

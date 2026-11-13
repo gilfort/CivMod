@@ -18,7 +18,7 @@ import net.minecraft.world.item.ItemStack;
 
 /**
  * The "Delivery Orders" of a Clerk JobBlock (vault {@code Jobs/Deliveryman.md}): the filled Delivery Slips in its slots,
- * the clock of each slip (cooldown, empty visits, round robin position) and the "Auto" switch of its Deliverymen. The
+ * the clock of each slip (cooldown, empty visits, round robin position). The
  * slots hold {@code (level + Ledgers) x 9} slips in use ({@link StockRule#slots(int, int)}, like the stock rule slots); the order is the
  * priority. Kept in the {@link SettlementBlock}, so it is saved with the settlement.
  */
@@ -51,24 +51,21 @@ public final class DeliveryOrders {
      * The saved form.
      *
      * @param slips  the slip in each slot (empty stacks for empty slots)
-     * @param auto   whether the Deliverymen also take the automatic tasks
      * @param clocks the clock of each slip by its id
      */
-    public record Saved(List<ItemStack> slips, boolean auto, Map<UUID, Clock> clocks) {
+    public record Saved(List<ItemStack> slips, Map<UUID, Clock> clocks) {
 
         /** Save codec. */
         public static final Codec<Saved> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                 ItemStack.OPTIONAL_CODEC.listOf().optionalFieldOf("slips", List.of()).forGetter(Saved::slips),
-                Codec.BOOL.optionalFieldOf("auto", true).forGetter(Saved::auto),
                 Codec.unboundedMap(UUIDUtil.STRING_CODEC, Clock.CODEC).optionalFieldOf("clocks", Map.of()).forGetter(Saved::clocks)
         ).apply(instance, Saved::new));
 
-        /** Nothing saved: no slips, Auto on. */
-        public static final Saved NONE = new Saved(List.of(), true, Map.of());
+        /** Nothing saved: no slips. */
+        public static final Saved NONE = new Saved(List.of(), Map.of());
     }
 
     private final List<ItemStack> slips = new ArrayList<>();
-    private boolean auto = true;
     private final Map<UUID, Clock> clocks = new HashMap<>();
 
     DeliveryOrders() {
@@ -85,7 +82,6 @@ public final class DeliveryOrders {
         for (int slot = 0; slot < Math.min(MAX_SLOTS, saved.slips().size()); slot++) {
             slips.set(slot, saved.slips().get(slot).copy());
         }
-        auto = saved.auto();
         clocks.putAll(saved.clocks());
     }
 
@@ -93,7 +89,7 @@ public final class DeliveryOrders {
      * @return the saved form
      */
     Saved saved() {
-        return new Saved(slips.stream().map(ItemStack::copy).toList(), auto, Map.copyOf(clocks));
+        return new Saved(slips.stream().map(ItemStack::copy).toList(), Map.copyOf(clocks));
     }
 
     /**
@@ -130,20 +126,6 @@ public final class DeliveryOrders {
     }
 
     /**
-     * @return whether the Deliverymen also take the automatic tasks (Auto on, the default)
-     */
-    public boolean auto() {
-        return auto;
-    }
-
-    /**
-     * @param auto whether the Deliverymen also take the automatic tasks
-     */
-    public void setAuto(boolean auto) {
-        this.auto = auto;
-    }
-
-    /**
      * @param slip a slip id
      * @return its clock
      */
@@ -155,7 +137,7 @@ public final class DeliveryOrders {
      * @param slip  a slip id
      * @param clock its new clock
      */
-    public void setClock(UUID slip, Clock clock) {
+    void setClock(UUID slip, Clock clock) {
         clocks.put(slip, clock);
     }
 }

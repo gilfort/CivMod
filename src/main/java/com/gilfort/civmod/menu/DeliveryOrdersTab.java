@@ -10,7 +10,6 @@ import com.gilfort.civmod.settlement.SettlementBlock;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.inventory.SimpleContainerData;
 import net.minecraft.world.inventory.Slot;
@@ -19,8 +18,8 @@ import net.minecraft.world.item.ItemStack;
 /**
  * The Clerk's "Delivery Orders" tab (vault {@code Jobs/Deliveryman.md}): slots for filled Delivery Slips, {@code (level +
  * Ledgers) x 9} of them in use, with the player inventory to take slips from. The slips are standing orders and are not
- * consumed; the slot order, top left to bottom right, is their priority. One button switches "Auto" of the Deliverymen
- * of this Warehouse. The slot count and the switch reach the client as menu data; the slips themselves are slot items.
+ * consumed; the slot order, top left to bottom right, is their priority. The slot count reaches the client as menu data;
+ * the slips themselves are slot items.
  */
 public final class DeliveryOrdersTab extends JobBlockTab {
 
@@ -32,9 +31,7 @@ public final class DeliveryOrdersTab extends JobBlockTab {
     static final int COLUMNS = 9;
 
     private static final int DATA_SLOTS = 0;
-    private static final int DATA_AUTO = 1;
-    private static final int DATA_COUNT = 2;
-    private static final int BUTTON_AUTO = 0;
+    private static final int DATA_COUNT = 1;
 
     private final ContainerData data = new SimpleContainerData(DATA_COUNT);
 
@@ -108,31 +105,13 @@ public final class DeliveryOrdersTab extends JobBlockTab {
         return true;
     }
 
-    @Override
-    int buttons() {
-        return 1;
-    }
-
-    @Override
-    boolean clickButton(Player player, int button) {
-        if (button != BUTTON_AUTO) {
-            return false;
-        }
-        menu().editSettlement((settlementData, pos) -> settlementData.settlementAt(pos).flatMap(settlement -> settlement.block(pos)).ifPresent(block -> {
-            block.orders().setAuto(!block.orders().auto());
-            settlementData.setDirty();
-        }));
-        return true;
-    }
-
     /**
-     * Server: reads the slot count and the "Auto" switch of the Clerk into the menu data.
+     * Server: reads the slot count of the Clerk into the menu data.
      *
      * @param block the Clerk JobBlock of the window
      */
     void refresh(SettlementBlock block) {
-        data.set(DATA_SLOTS, block.orderSlots());
-        data.set(DATA_AUTO, block.orders().auto() ? 1 : 0);
+        data.set(DATA_SLOTS, block.stockSlots());
     }
 
     /**
@@ -147,19 +126,5 @@ public final class DeliveryOrdersTab extends JobBlockTab {
      */
     public int slots() {
         return data.get(DATA_SLOTS);
-    }
-
-    /**
-     * @return whether the Deliverymen of this Warehouse also take the automatic tasks
-     */
-    public boolean auto() {
-        return data.get(DATA_AUTO) == 1;
-    }
-
-    /**
-     * @return the menu button id of the "Auto" switch
-     */
-    public int autoButtonId() {
-        return buttonId(BUTTON_AUTO);
     }
 }

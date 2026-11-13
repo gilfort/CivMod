@@ -1,15 +1,18 @@
 package com.gilfort.civmod.job;
 
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Predicate;
 
 import com.gilfort.civmod.api.ResourceCollectionProfile;
+import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Producers;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.ReservedFor;
+import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.Deliveries;
@@ -19,6 +22,7 @@ import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.Warehouses;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
@@ -65,57 +69,101 @@ public final class ToolOrders {
         if (home.isEmpty() || settlement.block(home.get()).filter(SettlementBlock::autoToolSupply).isEmpty()) {
             return false;
         }
-        SettlementData data = SettlementData.get(level);
         ReservedFor me = ReservedFor.settler(settler.getUUID());
         Predicate<Item> kind = kindOf(profile);
-        Optional<Boolean> held = handOver(level, data, settlement, site, job, me, kind, rule);
-        if (held.isPresent()) {
-            return held.get();
+        Need need = new Need(level, settlement, site, job, me, kind, rule);
+        Held held = handOver(need);
+        if (held != Held.NOTHING) {
+            return held == Held.IN_COLLECT;
         }
         boolean onItsWay = settlement.deliveries().stream().anyMatch(task -> !task.surplus() && task.jobBlock().equals(job.jobBlock())
                 && task.input().filter(input -> input.to().equals(site.collect()) && input.items().keySet().stream().anyMatch(kind)).isPresent());
         boolean asked = settlement.requests().stream().anyMatch(request -> request.reservedFor().filter(me::equals).isPresent() && kind.test(request.item()));
         if (!onItsWay && !asked) {
-            chooseTool(level, settlement, kind, rule).ifPresent(tool -> Requests.post(data, settlement, tool, 1, home, Optional.empty(), Optional.of(me)));
+            chooseTool(level, settlement, kind, rule).ifPresent(tool -> Requests.postReserved(SettlementData.get(level), settlement, tool, home.get(), me));
         }
         return false;
     }
 
+    /** What the tool supply works with: the settler's need and where it stands. */
+    private record Need(ServerLevel level, Settlement settlement, JobBlockSite site, SettlerJob job, ReservedFor me, Predicate<Item> kind,
+            ToolStaircase.Rule rule) {
+    }
+
+    /** What became of a tool held for the settler. */
+    private enum Held {
+        /** Nothing is held for it. */
+        NOTHING,
+        /** A delivery carries it, or it waits for one. */
+        ON_ITS_WAY,
+        /** It is free stock in the collect inventory now. */
+        IN_COLLECT
+    }
+
     /**
-     * A tool held for the settler: at the collect inventory it is released to the settler, elsewhere an input delivery
-     * carries it and the Delivery task holds it from then on.
-     *
-     * @return empty if nothing is held for the settler, else whether the tool is free stock in the collect inventory now
+     * A tool held for the settler: at the collect inventory it is released to the settler. Elsewhere an input delivery
+     * carries it and the Delivery task holds it from then on; where no Deliveryman serves the Clerk, the settler carries
+     * it over to its collect inventory itself on this search (no walk is simulated), so the tool arrives in every mode.
      */
-    private static Optional<Boolean> handOver(ServerLevel level, SettlementData data, Settlement settlement, JobBlockSite site, SettlerJob job,
-            ReservedFor me, Predicate<Item> kind, ToolStaircase.Rule rule) {
-        for (Map.Entry<BlockPos, Map<Item, Integer>> store : Holds.heldFor(settlement, me).entrySet()) {
+    private static Held handOver(Need need) {
+        Settlement settlement = need.settlement();
+        for (Map.Entry<BlockPos, Map<Item, Integer>> store : Holds.heldFor(settlement, need.me()).entrySet()) {
             Optional<Map.Entry<Item, Integer>> tool = store.getValue().entrySet().stream()
-                    .filter(entry -> kind.test(entry.getKey()) && rule.meets(new ItemStack(entry.getKey()))).findFirst();
+                    .filter(entry -> need.kind().test(entry.getKey()) && need.rule().meets(new ItemStack(entry.getKey()))).findFirst();
             if (tool.isEmpty()) {
                 continue;
             }
-            if (store.getKey().equals(site.collect())) {
-                Holds.release(settlement, me, kind);
-                return Optional.of(true);
+            BlockPos collect = need.site().collect();
+            if (store.getKey().equals(collect)) {
+                Holds.release(settlement, need.me(), need.kind());
+                return Held.IN_COLLECT;
             }
-            UUID task = Deliveries.postInput(data, settlement, store.getKey(), job.jobBlock(), site.collect(),
-                    Map.of(tool.get().getKey(), tool.get().getValue()), true, level.getGameTime());
-            Holds.handOver(settlement, me, ReservedFor.delivery(task), kind);
-            return Optional.of(false);
+            if (Warehouses.warehouseOf(settlement, store.getKey()).isEmpty()) {
+                return carryYourself(need, store.getKey(), tool.get().getKey(), tool.get().getValue()) ? Held.IN_COLLECT : Held.ON_ITS_WAY;
+            }
+            UUID task = Deliveries.postInput(SettlementData.get(need.level()), settlement, store.getKey(), need.job().jobBlock(), collect,
+                    Map.of(tool.get().getKey(), tool.get().getValue()), true, need.level().getGameTime());
+            Holds.handOver(settlement, need.me(), ReservedFor.delivery(task), need.kind());
+            return Held.ON_ITS_WAY;
         }
-        return Optional.empty();
+        return Held.NOTHING;
+    }
+
+    /**
+     * Self mode: the settler takes the held tool out of the Clerk and puts it into its collect inventory. What does not fit
+     * goes back and the tool stays held, so the next search tries again.
+     *
+     * @return whether the tool is in the collect inventory now
+     */
+    private static boolean carryYourself(Need need, BlockPos store, Item tool, int count) {
+        // Released first: a stock hides what is held for someone else.
+        Holds.release(need.settlement(), need.me(), need.kind());
+        Stock from = ClerkStorage.stock(need.level(), store, true);
+        Stock to = ClerkStorage.stock(need.level(), need.site().collect(), true);
+        int left = 0;
+        for (ItemStack stack : from.take(tool, count)) {
+            left += to.insert(stack).getCount();
+        }
+        if (left > 0) {
+            from.insert(new ItemStack(tool, left));
+            Holds.hold(need.settlement(), store, need.me(), tool, left);
+        }
+        return left < count;
     }
 
     /**
      * The tool to ask for: the weakest item of the Job's tool kind that meets the requirement and that a producer of the
-     * settlement can make, so a settler gets the cheapest tool its skill asks for.
+     * settlement can make, so a settler gets the cheapest tool its skill asks for. When no producer can make any, the
+     * weakest one is asked for anyway: the request stays open with "Missing: ..." until somebody can (no timeout).
      */
     private static Optional<Item> chooseTool(ServerLevel level, Settlement settlement, Predicate<Item> kind, ToolStaircase.Rule rule) {
-        return BuiltInRegistries.ITEM.stream().filter(item -> new ItemStack(item).has(DataComponents.TOOL) && kind.test(item)
-                        && rule.meets(new ItemStack(item)) && Producers.canMake(level, settlement, item))
-                .min(Comparator.comparingInt((Item item) -> ToolTiers.tier(new ItemStack(item)))
-                        .thenComparing(item -> BuiltInRegistries.ITEM.getKey(item).toString()));
+        List<Item> candidates = BuiltInRegistries.ITEM.stream().filter(item -> new ItemStack(item).has(DataComponents.TOOL) && kind.test(item)
+                        && rule.meets(new ItemStack(item)))
+                .sorted(Comparator.comparingInt((Item item) -> ToolTiers.tier(new ItemStack(item)))
+                        .thenComparing(item -> BuiltInRegistries.ITEM.getKey(item).toString()))
+                .toList();
+        return candidates.stream().filter(item -> Producers.canMake(level, settlement, item)).findFirst()
+                .or(() -> candidates.stream().findFirst());
     }
 
     /**
