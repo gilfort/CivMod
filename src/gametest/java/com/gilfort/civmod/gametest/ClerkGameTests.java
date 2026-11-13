@@ -17,7 +17,7 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.block.JobBlockEntity;
-import com.gilfort.civmod.menu.JobBlockInfo;
+import com.gilfort.civmod.menu.WorkersTabData;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.ClerkSpots;
@@ -385,11 +385,11 @@ public final class ClerkGameTests {
     private static void noStorageHint(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos clerk = clerkWithStorage(helper);
-        helper.assertFalse(JobBlockInfo.of(level, clerk, ModJobs.CLERK.get(), 1).storageUnlinked(), "A linked chest: no hint");
+        helper.assertFalse(WorkersTabData.of(level, clerk, ModJobs.CLERK.get(), 1).storageUnlinked(), "A linked chest: no hint");
         SettlementData data = SettlementData.get(level);
         JobAssignments.cycleClerkPoint(data, clerk, helper.absolutePos(new BlockPos(4, 1, 1)), true, false, Direction.NORTH);
-        helper.assertTrue(JobBlockInfo.of(level, clerk, ModJobs.CLERK.get(), 1).storageUnlinked(), "The chest is unlinked: link a container");
-        helper.assertFalse(JobBlockInfo.of(level, helper.absolutePos(new BlockPos(1, 1, 1)), ModJobs.CRAFTSPERSON.get(), 1).storageUnlinked(),
+        helper.assertTrue(WorkersTabData.of(level, clerk, ModJobs.CLERK.get(), 1).storageUnlinked(), "The chest is unlinked: link a container");
+        helper.assertFalse(WorkersTabData.of(level, helper.absolutePos(new BlockPos(1, 1, 1)), ModJobs.CRAFTSPERSON.get(), 1).storageUnlinked(),
                 "Other JobBlocks never ask");
         helper.succeed();
     }

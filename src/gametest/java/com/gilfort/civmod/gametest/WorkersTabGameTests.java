@@ -7,17 +7,21 @@ import java.util.function.Consumer;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.block.JobBlockEntity;
+import com.gilfort.civmod.job.MissionTrip;
 import com.gilfort.civmod.job.SettlerSkills;
+import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.menu.WorkersTab;
+import com.gilfort.civmod.menu.WorkersTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.Settlement;
@@ -32,6 +36,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntitySpawnReason;
@@ -66,6 +71,7 @@ public final class WorkersTabGameTests {
             register(helper, "workers_tab_treasure_toggle", WorkersTabGameTests::treasureToggle);
             register(helper, "workers_tab_settler_window", WorkersTabGameTests::settlerWindow);
             register(helper, "workers_tab_days_left", WorkersTabGameTests::daysLeft);
+            register(helper, "workers_tab_away_absolute", WorkersTabGameTests::awayAbsolute);
         });
     }
 
@@ -114,6 +120,17 @@ public final class WorkersTabGameTests {
         return new JobBlockMenu(1, player.getInventory(), entity, JobBlockInfo.of(level, pos, block.jobType(), block.level()));
     }
 
+    /** The Workers data a window holds now (what the server last sent its client), without reading it again. */
+    private static WorkersTabData shown(JobBlockMenu menu) {
+        return menu.tab(WorkersTab.class).orElseThrow().data().get();
+    }
+
+    /** The Workers data a window holds after its next broadcast: the server reads the block again. */
+    private static WorkersTabData sees(JobBlockMenu menu) {
+        menu.resend();
+        return shown(menu);
+    }
+
     private static Player player(GameTestHelper helper) {
         Player player = helper.makeMockPlayer(GameType.SURVIVAL);
         BlockPos pos = helper.absolutePos(CLERK);
@@ -121,14 +138,18 @@ public final class WorkersTabGameTests {
         return player;
     }
 
-    private static int index(JobBlockInfo info, Settler settler) {
-        List<JobBlockInfo.Worker> workers = info.workers();
+    private static int index(WorkersTabData info, Settler settler) {
+        List<WorkersTabData.Worker> workers = info.workers();
         for (int i = 0; i < workers.size(); i++) {
             if (workers.get(i).assignee().id().equals(settler.getUUID())) {
                 return i;
             }
         }
         return -1;
+    }
+
+    private static JobPlaces.Line line(WorkersTabData data, Job job) {
+        return data.places().stream().filter(line -> line.job() == job).findFirst().orElseThrow();
     }
 
     /** One worker per settler with its Job and its level in that Job; a loaded settler on no mission can be opened. */
@@ -139,9 +160,9 @@ public final class WorkersTabGameTests {
         hire(helper, alice, ModJobs.CLERK.get());
         hire(helper, bob, ModJobs.DELIVERYMAN.get());
         bob.getSkills().set(ModJobs.DELIVERYMAN.get(), new SettlerSkills.Skill(23, 5));
-        JobBlockInfo info = menu(helper, player(helper)).getInfo();
+        WorkersTabData info = sees(menu(helper, player(helper)));
         helper.assertValueEqual(info.workers().size(), 2, "One worker per settler");
-        JobBlockInfo.Worker worker = info.workers().get(index(info, bob));
+        WorkersTabData.Worker worker = info.workers().get(index(info, bob));
         helper.assertValueEqual(worker.assignee().name(), "Bob", "Worker name");
         helper.assertTrue(worker.assignee().job() == ModJobs.DELIVERYMAN.get(), "Worker Job: " + worker);
         helper.assertValueEqual(worker.level(), 23, "Level in the Job it holds here");
@@ -161,15 +182,18 @@ public final class WorkersTabGameTests {
         bob.getSkills().set(ModJobs.DELIVERYMAN.get(), new SettlerSkills.Skill(23, 5));
         Player player = player(helper);
         JobBlockMenu menu = menu(helper, player);
+        JobBlockMenu other = menu(helper, player(helper));
+        helper.assertTrue(index(sees(other), bob) >= 0, "The other window lists Bob before");
         WorkersTab tab = menu.tab(WorkersTab.class).orElseThrow();
         helper.assertTrue(tab.unassign(bob.getUUID()), "✕ is taken");
         SettlementBlock block = JobBlockSite.blockAt(helper.getLevel(), helper.absolutePos(CLERK)).orElseThrow();
         helper.assertTrue(bob.getJobs().isEmpty() && block.assignee(bob.getUUID()).isEmpty(), "Bob left the JobBlock: " + bob.getJobs());
         helper.assertTrue(block.assignee(alice.getUUID()).isPresent() && alice.getJobs().size() == 1, "Alice stays");
         helper.assertValueEqual(bob.getSkills().get(ModJobs.DELIVERYMAN.get()), new SettlerSkills.Skill(23, 5), "Skill and EXP stay with the settler");
-        helper.assertTrue(index(menu.getInfo(), bob) < 0 && index(menu.getInfo(), alice) >= 0, "The tab lists only Alice: " + menu.getInfo().workers());
-        helper.assertTrue(menu.getInfo().places().stream().filter(line -> line.job() == ModJobs.DELIVERYMAN.get()).allMatch(line -> line.taken() == 0),
-                "The Deliveryman place is free: " + menu.getInfo().places());
+        helper.assertTrue(index(shown(menu), bob) < 0 && index(shown(menu), alice) >= 0, "The tab lists only Alice: " + shown(menu).workers());
+        helper.assertTrue(shown(menu).places().stream().filter(line -> line.job() == ModJobs.DELIVERYMAN.get()).allMatch(line -> line.taken() == 0),
+                "The Deliveryman place is free: " + shown(menu).places());
+        helper.assertTrue(index(sees(other), bob) < 0 && index(shown(other), alice) >= 0, "The other window lists only Alice: " + shown(other).workers());
         // Keyed by settler: a click on a row that left the list in the meantime does nothing, even if another row took its place.
         helper.assertFalse(tab.unassign(bob.getUUID()), "A settler no longer listed is not unassigned again");
         helper.assertTrue(block.assignee(alice.getUUID()).isPresent(), "Alice stays after the stale click");
@@ -184,17 +208,18 @@ public final class WorkersTabGameTests {
         Settler idle = settler(helper, settlement, "Idle", new BlockPos(3, 1, 3));
         Player player = player(helper);
         JobBlockMenu menu = menu(helper, player);
+        JobBlockMenu other = menu(helper, player(helper));
         WorkersTab tab = menu.tab(WorkersTab.class).orElseThrow();
-        int line = 0;
-        while (menu.getInfo().places().get(line).job() != ModJobs.DELIVERYMAN.get()) {
-            line++;
-        }
-        helper.assertTrue(menu.clickMenuButton(player, tab.autoButtonId(line, true)), "Toggle on is taken");
-        JobPlaces.Line deliveryman = menu.getInfo().places().get(line);
+        Job deliverymen = ModJobs.DELIVERYMAN.get();
+        helper.assertFalse(line(sees(menu), deliverymen).auto(), "Off before");
+        helper.assertTrue(tab.setAuto(deliverymen, true), "Toggle on is taken");
+        JobPlaces.Line deliveryman = line(shown(menu), deliverymen);
         helper.assertTrue(deliveryman.auto(), "Automatic assignment on: " + deliveryman);
-        helper.assertTrue(index(menu.getInfo(), idle) >= 0 && idle.getJobs().size() == 1, "The jobless settler took the place: " + menu.getInfo().workers());
-        helper.assertTrue(menu.clickMenuButton(player, tab.autoButtonId(line, false)), "Toggle off is taken");
-        helper.assertFalse(menu.getInfo().places().get(line).auto(), "Automatic assignment off");
+        helper.assertTrue(index(shown(menu), idle) >= 0 && idle.getJobs().size() == 1, "The jobless settler took the place: " + shown(menu).workers());
+        helper.assertTrue(line(sees(other), deliverymen).auto() && index(shown(other), idle) >= 0, "The other window shows both: " + shown(other));
+        helper.assertFalse(tab.setAuto(ModJobs.MINER.get(), true), "A Job the block does not offer is refused");
+        helper.assertTrue(tab.setAuto(deliverymen, false), "Toggle off is taken");
+        helper.assertFalse(line(shown(menu), deliverymen).auto(), "Automatic assignment off");
         idle.discard();
         helper.succeed();
     }
@@ -214,23 +239,23 @@ public final class WorkersTabGameTests {
 
         JobBlockMenu leavesOne = menu(helper, first, lumberjack);
         JobBlockMenu leavesTwo = menu(helper, second, lumberjack);
-        boolean leaves = !leavesOne.getInfo().collectLeaves();
+        boolean leaves = !sees(leavesOne).collectLeaves();
         helper.assertTrue(leavesOne.clickMenuButton(first, leavesOne.tab(WorkersTab.class).orElseThrow().leavesButtonId(leaves)), "First leaf click");
         helper.assertTrue(leavesTwo.clickMenuButton(second, leavesTwo.tab(WorkersTab.class).orElseThrow().leavesButtonId(leaves)), "Second leaf click");
         helper.assertValueEqual(JobBlockSite.blockAt(helper.getLevel(), helper.absolutePos(lumberjack)).orElseThrow().collectLeaves(), leaves,
                 "Leaf collection after two clicks for the same state");
-        helper.assertValueEqual(leavesTwo.getInfo().collectLeaves(), leaves, "The second window shows the leaf state");
+        helper.assertValueEqual(sees(leavesTwo).collectLeaves(), leaves, "The second window shows the leaf state");
 
         JobBlockMenu deliveryOne = menu(helper, first, craft);
         JobBlockMenu deliveryTwo = menu(helper, second, craft);
-        helper.assertFalse(deliveryOne.getInfo().byDeliveryman(), "Default: Self");
+        helper.assertFalse(sees(deliveryOne).byDeliveryman(), "Default: Self");
         PatternsTab baseOne = PatternsTab.of(deliveryOne, ModJobs.CRAFTSPERSON.get()).orElseThrow();
         PatternsTab baseTwo = PatternsTab.of(deliveryTwo, ModJobs.CRAFTSPERSON.get()).orElseThrow();
         helper.assertTrue(deliveryOne.clickMenuButton(first, baseOne.deliveryButtonId(true)), "First delivery click");
         helper.assertTrue(deliveryTwo.clickMenuButton(second, baseTwo.deliveryButtonId(true)), "Second delivery click");
         helper.assertTrue(JobBlockSite.blockAt(helper.getLevel(), helper.absolutePos(craft)).orElseThrow().byDeliveryman(),
                 "Deliveryman after two clicks for the same state");
-        helper.assertTrue(deliveryTwo.getInfo().byDeliveryman(), "The second window shows Deliveryman");
+        helper.assertTrue(sees(deliveryTwo).byDeliveryman(), "The second window shows Deliveryman");
         helper.succeed();
     }
 
@@ -245,14 +270,14 @@ public final class WorkersTabGameTests {
         Player first = player(helper);
         Player second = player(helper);
         SettlementBlock block = JobBlockSite.blockAt(helper.getLevel(), helper.absolutePos(fisherman)).orElseThrow();
-        helper.assertTrue(block.treasure() && menu(helper, first, fisherman).getInfo().treasure(), "Treasure is on by default");
+        helper.assertTrue(block.treasure() && sees(menu(helper, first, fisherman)).treasure(), "Treasure is on by default");
 
         JobBlockMenu one = menu(helper, first, fisherman);
         JobBlockMenu two = menu(helper, second, fisherman);
         helper.assertTrue(one.clickMenuButton(first, one.tab(WorkersTab.class).orElseThrow().treasureButtonId(false)), "First click switches it off");
         helper.assertTrue(two.clickMenuButton(second, two.tab(WorkersTab.class).orElseThrow().treasureButtonId(false)), "Second click for the same state");
         helper.assertFalse(block.treasure(), "Treasure is off after two clicks for the same state");
-        helper.assertFalse(two.getInfo().treasure(), "The window shows it off");
+        helper.assertFalse(sees(two).treasure(), "The window shows it off");
 
         var ops = helper.getLevel().registryAccess().createSerializationContext(JsonOps.INSTANCE);
         SettlementBlock loaded = SettlementBlock.CODEC.parse(ops, SettlementBlock.CODEC.encodeStart(ops, block).getOrThrow()).getOrThrow();
@@ -295,11 +320,35 @@ public final class WorkersTabGameTests {
 
     /** "back in x d": whole days rounded up, at least 1. */
     private static void daysLeft(GameTestHelper helper) {
-        helper.assertValueEqual(JobBlockInfo.Worker.daysLeft(0L, 36000L), 2, "1.5 days");
-        helper.assertValueEqual(JobBlockInfo.Worker.daysLeft(0L, 48000L), 2, "Exactly 2 days");
-        helper.assertValueEqual(JobBlockInfo.Worker.daysLeft(10L, 48011L), 3, "Just over 2 days");
-        helper.assertValueEqual(JobBlockInfo.Worker.daysLeft(0L, 100L), 1, "Later today");
-        helper.assertValueEqual(JobBlockInfo.Worker.daysLeft(500L, 100L), 1, "Overdue: still 1");
+        helper.assertValueEqual(WorkersTabData.Worker.daysLeft(0L, 36000L), 2, "1.5 days");
+        helper.assertValueEqual(WorkersTabData.Worker.daysLeft(0L, 48000L), 2, "Exactly 2 days");
+        helper.assertValueEqual(WorkersTabData.Worker.daysLeft(10L, 48011L), 3, "Just over 2 days");
+        helper.assertValueEqual(WorkersTabData.Worker.daysLeft(0L, 100L), 1, "Later today");
+        helper.assertValueEqual(WorkersTabData.Worker.daysLeft(500L, 100L), 1, "Overdue: still 1");
         helper.succeed();
+    }
+
+    /**
+     * A settler on a mission carries the absolute return time, so the "back in x d" counts down on the client and the
+     * data does not change while the mission runs.
+     */
+    private static void awayAbsolute(GameTestHelper helper) {
+        Settlement settlement = clerkBlock(helper);
+        Settler alice = settler(helper, settlement, "Alice", new BlockPos(3, 1, 3));
+        hire(helper, alice, ModJobs.CLERK.get());
+        long returnTime = helper.getLevel().getOverworldClockTime() + 3 * DayClock.DAY_TICKS;
+        Identifier mission = CivMod.id("dungeon_raid");
+        alice.getWork().restore(new SettlerWork.BuffersSnapshot(List.of(), List.of(), List.of(), SettlerWork.CatchUpState.NONE,
+                Optional.of(new MissionTrip(helper.absolutePos(CLERK), mission, returnTime))));
+        JobBlockMenu menu = menu(helper, player(helper));
+        WorkersTabData first = sees(menu);
+        WorkersTabData.Worker worker = first.workers().get(index(first, alice));
+        helper.assertTrue(worker.away().equals(Optional.of(new WorkersTabData.Worker.Away(mission, returnTime))), "Away until the return time: " + worker);
+        helper.assertFalse(worker.opensWindow(), "A settler on a mission does not open its window");
+        helper.runAfterDelay(40, () -> {
+            helper.assertTrue(sees(menu).equals(first), "The data does not change while the mission runs");
+            alice.discard();
+            helper.succeed();
+        });
     }
 }

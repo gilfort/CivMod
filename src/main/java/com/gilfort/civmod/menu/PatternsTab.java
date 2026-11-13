@@ -138,8 +138,10 @@ public final class PatternsTab extends JobBlockTab {
     boolean clickButton(Player player, int button) {
         boolean byDeliveryman = button - DELIVERY == 1;
         JobBlockMenu menu = menu();
-        menu.setInfo(menu.getInfo().withByDeliveryman(byDeliveryman));
-        menu.site().ifPresent(site -> JobAssignments.setDelivery(SettlementData.get(site.level()), site.pos(), byDeliveryman));
+        menu.site().ifPresent(site -> {
+            JobAssignments.setDelivery(SettlementData.get(site.level()), site.pos(), byDeliveryman);
+            menu.resend();
+        });
         return true;
     }
 
@@ -150,7 +152,7 @@ public final class PatternsTab extends JobBlockTab {
      */
     public void edit(PatternsTabData.Edit edit) {
         JobBlockMenu menu = menu();
-        Optional<JobBlockMenu.Site> site = menu.site().filter(found -> menu.stillValid(menu.player()));
+        Optional<JobBlockMenu.Site> site = menu.validSite();
         if (site.isEmpty() || edit.job() != job) {
             // Only the tab of the edit's Job takes it (PatternsTab.of).
             return;

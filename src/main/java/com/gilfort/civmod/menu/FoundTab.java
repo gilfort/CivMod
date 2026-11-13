@@ -52,7 +52,7 @@ public final class FoundTab extends JobBlockTab {
      */
     public boolean toggleExcluded(Job job, Identifier type) {
         JobBlockMenu menu = menu();
-        Optional<JobBlockMenu.Site> site = menu.site().filter(found -> menu.stillValid(menu.player()));
+        Optional<JobBlockMenu.Site> site = menu.validSite();
         if (site.isEmpty() || FoundTabData.of(site.get().level(), site.get().pos()).section(job).flatMap(section -> section.entry(type)).isEmpty()) {
             return false;
         }

@@ -100,8 +100,7 @@ public final class StationTypesTab extends JobBlockTab {
         if (result != StationTypes.PutResult.UNLOCKED && result != StationTypes.PutResult.REPLACED) {
             return false;
         }
-        menu.refreshInfo(site.get());
-        menu.syncSoon();
+        menu.resend();
         return true;
     }
 }

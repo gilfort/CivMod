@@ -18,7 +18,6 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Menu of a JobBlock: a window of tabs ({@link JobBlockTab}, chosen by {@link JobBlockTabs}). Every window has the
@@ -165,6 +164,13 @@ public class JobBlockMenu extends CivMenu {
     }
 
     /**
+     * @return the Workers data as last synced (the block's settlement state, for the header too)
+     */
+    public WorkersTabData workers() {
+        return tab(WorkersTab.class).map(workers -> workers.data().get()).orElse(WorkersTabData.EMPTY);
+    }
+
+    /**
      * @return the JobBlock this window shows on the server, empty on the client
      */
     Optional<Site> site() {
@@ -181,12 +187,21 @@ public class JobBlockMenu extends CivMenu {
         return player;
     }
 
-    /** Server: reads the info snapshot again and sends it (the server changed it beyond what the client predicts). */
-    void refreshInfo(Site site) {
-        info = JobBlockInfo.of(site.level(), site.pos(), info.jobType(), info.level());
-        if (player instanceof ServerPlayer serverPlayer) {
-            PacketDistributor.sendToPlayer(serverPlayer, new JobBlockInfo.Sync(containerId, info));
-        }
+    /**
+     * @return the JobBlock this window shows on the server while the window is still valid for its player, empty on the
+     *         client and once the player is away
+     */
+    Optional<Site> validSite() {
+        return site().filter(found -> stillValid(player));
+    }
+
+    /**
+     * Server: a tab changed the JobBlock; reads the tabs' synced data now and sends what changed, to this window's
+     * player. The windows of other players at the block pick the change up with their next broadcast.
+     */
+    public void resend() {
+        site().ifPresent(site -> synced.forEach(data -> data.sync(this, site.level(), site.pos())));
+        tabSyncIn = TAB_SYNC_INTERVAL;
     }
 
     /** Server: sends the tabs' synced data with the next broadcast instead of waiting for the interval. */
@@ -197,12 +212,20 @@ public class JobBlockMenu extends CivMenu {
     @Override
     public void broadcastChanges() {
         super.broadcastChanges();
-        if (synced.isEmpty() || !(player instanceof ServerPlayer serverPlayer) || site().isEmpty() || --tabSyncIn > 0) {
+        if (synced.isEmpty() || !(player instanceof ServerPlayer) || site().isEmpty() || --tabSyncIn > 0) {
             return;
         }
-        tabSyncIn = TAB_SYNC_INTERVAL;
-        Site site = site().get();
-        synced.forEach(data -> data.sync(this, serverPlayer, site.level(), site.pos()));
+        resend();
+    }
+
+    /**
+     * @param player      the player
+     * @param containerId the container id a packet named
+     * @return the JobBlock window the player has open under that id, while it is still valid for the player
+     */
+    public static Optional<JobBlockMenu> open(Player player, int containerId) {
+        return player.containerMenu instanceof JobBlockMenu menu && menu.containerId == containerId && menu.stillValid(player)
+                ? Optional.of(menu) : Optional.empty();
     }
 
     @Override
