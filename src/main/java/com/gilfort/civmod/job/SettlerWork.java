@@ -40,7 +40,6 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.ThoughtBubble;
-import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Bonuses;
 import com.gilfort.civmod.settlement.DayClock;
@@ -55,7 +54,6 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -72,9 +70,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.block.AbstractBedBlock;
-import net.minecraft.world.level.block.BedBlock;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.phys.Vec3;
@@ -1669,7 +1664,7 @@ public final class SettlerWork {
             bestDistance = distance;
             lastProgressTick = level.getGameTime();
         } else if (level.getGameTime() - lastProgressTick > CivModConfig.ANTI_STUCK_SECONDS.get() * 20L) {
-            Vec3 spot = standingSpot(level, target, reach());
+            Vec3 spot = StandingSpots.standingSpot(level, target, reach());
             settler.teleportTo(spot.x, spot.y, spot.z);
             settler.getNavigation().stop();
             lastProgressTick = level.getGameTime();
@@ -1677,69 +1672,6 @@ public final class SettlerWork {
             stepOffBed(level);
             settler.getNavigation().moveTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5, 0.6);
         }
-    }
-
-    /**
-     * Finds a free spot to stand on next to a target (work place, container, bed), so a teleport never puts the
-     * settler inside a block (e.g. into the trunk above a log) or on top of a bed. Spots are within reach of the
-     * target, so the settler can work from there.
-     *
-     * @param level  the level
-     * @param target the target block
-     * @return the feet position
-     */
-    public static Vec3 standingSpot(ServerLevel level, BlockPos target) {
-        return standingSpot(level, target, REACH);
-    }
-
-    /**
-     * Finds a free spot to stand on within the given reach of a target.
-     *
-     * @param level  the level
-     * @param target the target block
-     * @param reach  the horizontal reach
-     * @return the feet position
-     */
-    public static Vec3 standingSpot(ServerLevel level, BlockPos target, double reach) {
-        BlockState state = level.getBlockState(target);
-        if (state.getBlock() instanceof AbstractBedBlock && state.hasProperty(BedBlock.FACING)) {
-            Optional<Vec3> standUp = AbstractBedBlock.findStandUpPosition(ModEntityTypes.SETTLER.get(), level, target,
-                    state.getValue(BedBlock.FACING), 0.0F);
-            if (standUp.isPresent()) {
-                return standUp.get();
-            }
-        }
-        BlockPos best = null;
-        double bestDistance = Double.MAX_VALUE;
-        int search = (int) Math.floor(reach);
-        for (BlockPos pos : BlockPos.betweenClosed(target.offset(-search, -2, -search), target.offset(search, 3, search))) {
-            int dx = pos.getX() - target.getX();
-            int dz = pos.getZ() - target.getZ();
-            if (dx * dx + dz * dz <= reach * reach && canStand(level, pos)) {
-                // Prefer spots at the target's height.
-                double distance = pos.distSqr(target) + 2.0 * Math.abs(pos.getY() - target.getY());
-                if (distance < bestDistance) {
-                    bestDistance = distance;
-                    best = pos.immutable();
-                }
-            }
-        }
-        if (best != null) {
-            return Vec3.atBottomCenterOf(best);
-        }
-        BlockPos up = target.above();
-        for (int i = 0; i < 32 && !canStand(level, up); i++) {
-            up = up.above();
-        }
-        return Vec3.atBottomCenterOf(up);
-    }
-
-    static boolean canStand(ServerLevel level, BlockPos pos) {
-        BlockPos below = pos.below();
-        return level.getBlockState(pos).getCollisionShape(level, pos).isEmpty()
-                && level.getBlockState(pos.above()).getCollisionShape(level, pos.above()).isEmpty()
-                && level.getFluidState(pos).isEmpty()
-                && level.getBlockState(below).isFaceSturdy(level, below, Direction.UP);
     }
 
     /** Gets down from a bed the settler stands on before it walks ({@link SettlerRest#offBedSpot}). */
