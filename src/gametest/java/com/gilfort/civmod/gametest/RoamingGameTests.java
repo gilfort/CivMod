@@ -53,6 +53,8 @@ public final class RoamingGameTests {
     /** The crop list of the Veggy Farmer lives for 30 seconds. */
     private static final long CROP_CACHE_TICKS = 600L;
     private static final Predicate<BlockPos> ALL_FREE = pos -> true;
+    /** The far corner (exclusive) of the stone floor of {@link #lumberjackBlock}. */
+    private static final BlockPos LUMBERJACK_FLOOR_END = new BlockPos(20, 0, 12);
 
     private RoamingGameTests() {
     }
@@ -80,8 +82,8 @@ public final class RoamingGameTests {
 
     /** A stone floor and a Lumberjack JobBlock at (1, 1, 1); returns its absolute position. */
     private static BlockPos lumberjackBlock(GameTestHelper helper) {
-        for (int x = 0; x < 20; x++) {
-            for (int z = 0; z < 12; z++) {
+        for (int x = 0; x < LUMBERJACK_FLOOR_END.getX(); x++) {
+            for (int z = 0; z < LUMBERJACK_FLOOR_END.getZ(); z++) {
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
             }
         }
@@ -339,7 +341,9 @@ public final class RoamingGameTests {
      */
     private static void lumberjackWorksInWorld(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        // The whole floor with the spawn and both logs: a settler in a chunk that is not forced does not tick, and with the
+        // default corner the spawn at z 10 or the second log at x 12 lay outside the forced chunks on some test positions.
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper, LUMBERJACK_FLOOR_END);
         BlockPos jobBlock = lumberjackBlock(helper);
         for (int y = 1; y <= 3; y++) {
             for (int x = 4; x < 6; x++) {
