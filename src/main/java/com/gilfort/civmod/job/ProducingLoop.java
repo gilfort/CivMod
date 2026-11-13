@@ -738,15 +738,16 @@ final class ProducingLoop implements CategoryLoop {
      *
      * @param now  live: the game time; catch-up: the simulated clock
      * @param live false in catch-up
+     * @param span the simulated day time and work span in catch-up, {@link SimulatedSpan#LIVE} live
      */
-    private record Moment(long now, boolean live) {
+    private record Moment(long now, boolean live, SimulatedSpan span) {
 
         static Moment live(ServerLevel level) {
-            return new Moment(level.getGameTime(), true);
+            return new Moment(level.getGameTime(), true, SimulatedSpan.LIVE);
         }
 
-        static Moment simulated(double clock) {
-            return new Moment((long) clock, false);
+        static Moment simulated(double clock, SimulatedSpan span) {
+            return new Moment((long) clock, false, span);
         }
     }
 
@@ -873,7 +874,7 @@ final class ProducingLoop implements CategoryLoop {
         if (round.charges.isEmpty()) {
             return new Worked(0, noFuel ? Outcome.NO_FUEL : Outcome.WORKING);
         }
-        double add = ticks * speed(level, job) / 20.0;
+        double add = ticks * speed(level, job, moment.span()) / 20.0;
         double need = workTime(level, job, round, stations.getFirst());
         int executed = 0;
         List<BlockPos> done = new ArrayList<>();
@@ -1114,10 +1115,10 @@ final class ProducingLoop implements CategoryLoop {
      * Operations per second: the shared speed formula × the base job factor (replaced by a station extra at the station
      * of the day) × the biome bonus of the station of the day.
      */
-    private double speed(ServerLevel level, SettlerJob job) {
+    private double speed(ServerLevel level, SettlerJob job, SimulatedSpan span) {
         Workplace workplace = shell.workplace(job.jobBlock());
         return LumberjackOutput.speed(shell.effectiveLevel(job)) * workplace.jobFactor(level, job.jobType())
-                * workplace.biomeBonus(level, job.jobType()).speed().value() * shell.speedFactor(level);
+                * workplace.biomeBonus(level, job.jobType()).speed().value() * shell.speedFactor(level, span);
     }
 
     private static ProducingProfile profile(SettlerJob job) {
@@ -1328,7 +1329,7 @@ final class ProducingLoop implements CategoryLoop {
      * rest into the own drop-off.
      */
     @Override
-    public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks) {
+    public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks, SimulatedSpan span) {
         BlockPos jobBlock = job.jobBlock();
         Optional<JobBlockSite> found = JobBlockSite.at(level, jobBlock);
         if (found.isEmpty()) {
@@ -1344,7 +1345,7 @@ final class ProducingLoop implements CategoryLoop {
             return new SimulatedWork(0, workTicks);
         }
         // The time of day follows the simulated clock: a round crossing 18:00 no longer reaches the linked storage.
-        double clock = day * (double) DayClock.DAY_TICKS + shell.catchUpDayTime();
+        double clock = day * (double) DayClock.DAY_TICKS + span.dayTime();
         Workplace workplace = shell.workplace(jobBlock);
         double ticks = workTicks;
         int operations = 0;
@@ -1352,7 +1353,7 @@ final class ProducingLoop implements CategoryLoop {
             if (workplace.round() == null) {
                 if (workplace.dropOffPending() || (workplace.buffer().shouldDeliver() && shell.deliverable(job))) {
                     workplace.setDropOffPending(false);
-                    if (!deliverToDropOff(level, site)) {
+                    if (!deliverToDropOff(level, site, span.dayTime())) {
                         shell.endCatchUpJob(jobBlock);
                         return new SimulatedWork(operations, ticks);
                     }
@@ -1378,7 +1379,7 @@ final class ProducingLoop implements CategoryLoop {
                 workplace.setRound(round);
                 if (round.phase != Round.Phase.WAIT) {
                     for (BlockPos source : List.copyOf(round.sources)) {
-                        fetch(level, job, site, round, source, ClerkStorage.stock(level, source, DayClock.dayTime((long) clock), true), Moment.simulated(clock));
+                        fetch(level, job, site, round, source, ClerkStorage.stock(level, source, DayClock.dayTime((long) clock), true), Moment.simulated(clock, span));
                     }
                 }
                 if (round.always() && workplace.round() == null) {
@@ -1400,14 +1401,14 @@ final class ProducingLoop implements CategoryLoop {
                 Optional<JobStatus> waiting = waitForInputs(level, site, round, DayClock.dayTime(now), now);
                 waiting.ifPresent(status -> shell.setStatus(jobBlock, status));
                 if (waiting.isEmpty()) {
-                    fetch(level, job, site, round, site.collect(), ClerkStorage.stock(level, site.collect(), DayClock.dayTime(now), true), Moment.simulated(now));
+                    fetch(level, job, site, round, site.collect(), ClerkStorage.stock(level, site.collect(), DayClock.dayTime(now), true), Moment.simulated(now, span));
                 } else if (workplace.round() != null) {
                     // The Deliverymen bring the inputs later: the next job takes the rest of the time.
                     return new SimulatedWork(operations, ticks);
                 }
                 continue;
             }
-            double perTick = speed(level, job) / 20.0;
+            double perTick = speed(level, job, span) / 20.0;
             while (round.phase == Round.Phase.CRAFT && ticks > 0.0 && workplace.round() == round) {
                 BlockPos ofDay = station(level, job, site, day);
                 if (ofDay == null || perTick <= 0.0) {
@@ -1418,10 +1419,10 @@ final class ProducingLoop implements CategoryLoop {
                 List<BlockPos> stations = mainStep(level, job, round) ? stations(level, job, site, day, ofDay) : List.of(ofDay);
                 // Up to the next finished charge (the one furthest on); none runs yet: they start first.
                 double furthest = round.charges.values().stream().mapToDouble(Double::doubleValue).max().orElse(Double.NaN);
-                double span = Double.isNaN(furthest) ? 0.0 : Math.min(ticks, Math.max(0.0, (workTime(level, job, round, stations.getFirst()) - furthest) / perTick));
-                Worked worked = work(level, job, site, round, stations, span, Moment.simulated(clock + span));
-                ticks -= span;
-                clock += span;
+                double slice = Double.isNaN(furthest) ? 0.0 : Math.min(ticks, Math.max(0.0, (workTime(level, job, round, stations.getFirst()) - furthest) / perTick));
+                Worked worked = work(level, job, site, round, stations, slice, Moment.simulated(clock + slice, span));
+                ticks -= slice;
+                clock += slice;
                 operations += worked.executed();
                 if (worked.outcome() == Outcome.CRAFTED) {
                     round.phase = Round.Phase.DELIVER;
@@ -1439,7 +1440,7 @@ final class ProducingLoop implements CategoryLoop {
             }
             if (workplace.round() == round && round.phase == Round.Phase.DELIVER
                     && !deliver(level, job, round, DayClock.dayTime((long) clock))
-                    && !deliverToDropOff(level, site)) {
+                    && !deliverToDropOff(level, site, span.dayTime())) {
                 shell.endCatchUpJob(jobBlock);
                 return new SimulatedWork(operations, ticks);
             }
@@ -1452,10 +1453,10 @@ final class ProducingLoop implements CategoryLoop {
      *
      * @return whether everything fit
      */
-    private boolean deliverToDropOff(ServerLevel level, JobBlockSite site) {
+    private boolean deliverToDropOff(ServerLevel level, JobBlockSite site, long dayTime) {
         JobBuffer buffer = shell.workplace(site.pos()).buffer();
         List<Item> fuels = Fuels.of(site.block());
-        shell.deliverDirect(level, site, buffer.takeAll(stack -> !fuels.contains(stack.getItem())));
+        shell.deliverDirect(level, site, buffer.takeAll(stack -> !fuels.contains(stack.getItem())), dayTime);
         return buffer.stacks().stream().allMatch(stack -> fuels.contains(stack.getItem()));
     }
 

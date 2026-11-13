@@ -187,12 +187,8 @@ public final class SettlerWork {
     private CatchUpCounters counters = CatchUpCounters.NONE;
     /** Schedule decisions per catch-up step at most (meals in a row; guards against a meal that never ends). */
     private static final int CATCH_UP_DECISIONS = 64;
-    /** The day time of the hour being simulated in catch-up ({@link #catchUpDayTime}). */
-    private long cuDayTime;
-    /** The clock span of the work being simulated in catch-up, {@link #NOT_SIMULATING} outside it. */
-    private long cuWorkFrom = NOT_SIMULATING;
-    private long cuWorkTo = NOT_SIMULATING;
-    private static final long NOT_SIMULATING = Long.MIN_VALUE;
+    /** The day time at which the last simulated hour began ({@link #lastCatchUpDayTime}). */
+    private long lastHourDayTime;
 
     /**
      * @param settler the settler
@@ -1832,7 +1828,8 @@ public final class SettlerWork {
             return 0;
         }
         long dayTime = from - day * DayClock.DAY_TICKS;
-        cuDayTime = dayTime;
+        long hourDayTime = dayTime;
+        lastHourDayTime = hourDayTime;
 
         // The same need rules as live: the first hour of a day is its wake-up.
         SettlerMeals.FoodLookup foodLookup = meals.lookup(level, dayTime);
@@ -1861,14 +1858,8 @@ public final class SettlerWork {
         int rolls = 0;
         if (decideCatchUp(level, day, dayTime) == Intent.WORK && work > 0) {
             // The blessing counts where it falls into the simulated work time.
-            cuWorkFrom = from;
-            cuWorkTo = from + work;
-            try {
-                rolls = simulateWork(level, day, work * share * CivModConfig.CATCH_UP_MULTIPLIER.get());
-            } finally {
-                cuWorkFrom = NOT_SIMULATING;
-                cuWorkTo = NOT_SIMULATING;
-            }
+            SimulatedSpan span = new SimulatedSpan(hourDayTime, from, from + work);
+            rolls = simulateWork(level, day, work * share * CivModConfig.CATCH_UP_MULTIPLIER.get(), span);
         }
         if (to >= workEndTick) {
             endDay(level);
@@ -1954,9 +1945,10 @@ public final class SettlerWork {
     /**
      * Simulates some work ticks during catch-up through the category loops, in job priority order.
      *
+     * @param span the simulated day time and work span of the hour
      * @return the number of rolls
      */
-    private int simulateWork(ServerLevel level, long day, double workTicks) {
+    private int simulateWork(ServerLevel level, long day, double workTicks, SimulatedSpan span) {
         int rolls = 0;
         double remaining = workTicks;
         for (SettlerJob job : settler.getJobs()) {
@@ -1968,13 +1960,13 @@ public final class SettlerWork {
                 endCatchUpJob(job.jobBlock());
                 continue;
             }
-            CategoryLoop.SimulatedWork simulated = loop.simulateWork(level, job, day, remaining);
+            CategoryLoop.SimulatedWork simulated = loop.simulateWork(level, job, day, remaining, span);
             rolls += simulated.rolls();
             remaining = simulated.remaining();
         }
         if (remaining > 0.0) {
             // No Job of the list can use the time left: the Laborer helps, at a fraction of the speed.
-            rolls += laborer.simulate(level, day, remaining);
+            rolls += laborer.simulate(level, day, remaining, span);
         }
         return rolls;
     }
@@ -1987,12 +1979,21 @@ public final class SettlerWork {
      * @return 1 without a blessing, else its factor
      */
     public double blessingFactor(ServerLevel level) {
+        return blessingFactor(level, SimulatedSpan.LIVE);
+    }
+
+    /**
+     * @param level the level
+     * @param span  the simulated work span, {@link SimulatedSpan#LIVE} in live play
+     * @return 1 without a blessing, else its factor
+     */
+    double blessingFactor(ServerLevel level, SimulatedSpan span) {
         return SettlementData.get(level).settlement(settler.getSettlementId()).map(settlement -> {
-            if (cuWorkFrom == NOT_SIMULATING) {
+            if (!span.simulated()) {
                 long clock = level.getOverworldClockTime();
                 return settlement.bonuses().remaining(Bonuses.Kind.WORK_SPEED, clock) > 0 ? Bonuses.Kind.WORK_SPEED.factor() : 1.0;
             }
-            return settlement.bonuses().averageFactor(Bonuses.Kind.WORK_SPEED, cuWorkFrom, cuWorkTo);
+            return settlement.bonuses().averageFactor(Bonuses.Kind.WORK_SPEED, span.workFrom(), span.workTo());
         }).orElse(1.0);
     }
 
@@ -2006,7 +2007,16 @@ public final class SettlerWork {
      * @return 1 without any bonus, 1.4 with full Entertainment and a blessing
      */
     public double speedFactor(ServerLevel level) {
-        return EntertainmentRules.get().speedFactor(needs.entertainment().value(), blessingFactor(level) + speedBoostShare(level));
+        return speedFactor(level, SimulatedSpan.LIVE);
+    }
+
+    /**
+     * @param level the level
+     * @param span  the simulated work span, {@link SimulatedSpan#LIVE} in live play
+     * @return the speed factor, with the bonuses averaged over the span in catch-up
+     */
+    double speedFactor(ServerLevel level, SimulatedSpan span) {
+        return EntertainmentRules.get().speedFactor(needs.entertainment().value(), blessingFactor(level, span) + speedBoostShare(level, span));
     }
 
     /**
@@ -2014,10 +2024,11 @@ public final class SettlerWork {
      * in catch-up the average over the simulated work time.
      *
      * @param level the level
+     * @param span  the simulated work span, {@link SimulatedSpan#LIVE} in live play
      * @return 0 without a boost, else its percent as a fraction
      */
-    private double speedBoostShare(ServerLevel level) {
-        return cuWorkFrom == NOT_SIMULATING ? speedBoost.share(level.getOverworldClockTime()) : speedBoost.averageShare(cuWorkFrom, cuWorkTo);
+    private double speedBoostShare(ServerLevel level, SimulatedSpan span) {
+        return span.simulated() ? speedBoost.averageShare(span.workFrom(), span.workTo()) : speedBoost.share(level.getOverworldClockTime());
     }
 
     /**
@@ -2046,14 +2057,14 @@ public final class SettlerWork {
     }
 
     /**
-     * The day time of the hour being simulated in catch-up, at which Clerk access is checked. Catch-up starts every day
-     * at 06:00 at the earliest, when every Clerk (up 05:30–06:00) is already on shift; this also makes the level's day
-     * enough for {@link ClerkStorage#working}.
+     * The day time at which the last simulated hour began. Only the return of a mission reads it, before the hour it falls
+     * into has set its own day time: the loot is delivered with the Clerk access of the hour before. The work loops get
+     * their day time from the {@link SimulatedSpan}.
      *
-     * @return the simulated day time
+     * @return the day time of the last simulated hour
      */
-    long catchUpDayTime() {
-        return cuDayTime;
+    long lastCatchUpDayTime() {
+        return lastHourDayTime;
     }
 
     /**
@@ -2075,9 +2086,10 @@ public final class SettlerWork {
      * @param level  the level
      * @param site   the JobBlock site
      * @param stacks the output
+     * @param dayTime the simulated day time, at which Clerk access is checked
      * @return false when the buffer is full as well (the job ends)
      */
-    boolean deliverDirect(ServerLevel level, JobBlockSite site, List<ItemStack> stacks) {
+    boolean deliverDirect(ServerLevel level, JobBlockSite site, List<ItemStack> stacks, long dayTime) {
         // No walking in catch-up; a Clerk drop-off takes into its linked storage at any time.
         Stock dropOff = ClerkStorage.dropOff(level, site.dropOff());
         JobBuffer buffer = workplace(site.pos()).buffer();
@@ -2090,7 +2102,7 @@ public final class SettlerWork {
             }
         }
         // A delivery into a Clerk: its stock rules are checked right away; a harvest in a drop-off may be a pickup.
-        StockRules.check(level, site.dropOff(), cuDayTime);
+        StockRules.check(level, site.dropOff(), dayTime);
         Pickups.delivered(level, site, !buffer.isEmpty());
         return !buffer.isFull();
     }

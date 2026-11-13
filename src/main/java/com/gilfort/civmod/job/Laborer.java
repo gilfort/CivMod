@@ -233,9 +233,10 @@ final class Laborer {
      * @param level     the level
      * @param day       the day
      * @param workTicks the work ticks no Job of the list used
+     * @param span      the simulated day time and work span of the hour
      * @return the rolls made
      */
-    int simulate(ServerLevel level, long day, double workTicks) {
+    int simulate(ServerLevel level, long day, double workTicks, SimulatedSpan span) {
         double remaining = workTicks;
         int rolls = 0;
         for (int i = 0; i < TRIES && remaining > 0.0; i++) {
@@ -244,7 +245,7 @@ final class Laborer {
             if (loop == null) {
                 break;
             }
-            CategoryLoop.SimulatedWork simulated = loop.simulateWork(level, job, day, remaining);
+            CategoryLoop.SimulatedWork simulated = loop.simulateWork(level, job, day, remaining, span);
             rolls += simulated.rolls();
             remaining = simulated.remaining();
             if (shell.workplace(job.jobBlock()).catchUpEnded()) {

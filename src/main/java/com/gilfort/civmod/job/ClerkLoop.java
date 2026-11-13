@@ -93,10 +93,10 @@ final class ClerkLoop implements CategoryLoop {
     }
 
     @Override
-    public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks) {
+    public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks, SimulatedSpan span) {
         // Standing at the counter uses the work time; hand-outs to customers give the EXP. Called once per simulated
         // hour of the shift: the stock rules are checked then.
-        StockRules.check(level, job.jobBlock(), shell.catchUpDayTime());
+        StockRules.check(level, job.jobBlock(), span.dayTime());
         return new SimulatedWork(0, 0.0);
     }
 

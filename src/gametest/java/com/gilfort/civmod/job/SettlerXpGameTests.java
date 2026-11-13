@@ -390,11 +390,11 @@ public final class SettlerXpGameTests {
         ItemStack pickaxe = tool(level, Items.IRON_PICKAXE, 10, true);
         settler.getInventory().setItem(Settler.BELT_START, pickaxe);
         WorkRules.work(level, settler, job, new XpProfile(XpGain.of(3), List.of(new ItemStack(Items.COBBLESTONE))), JobBlockSite.at(level, jobBlock).orElseThrow(), settler.getWork().workplace(jobBlock),
-                jobBlock, 3, WorkRules.ToolSupply.BELT, NOWHERE);
+                jobBlock, 3, SimulatedSpan.LIVE, WorkRules.ToolSupply.BELT, NOWHERE);
         helper.assertTrue(pickaxe.getDamageValue() == 0, "Each roll wears 1 and mends up to 6: " + pickaxe.getDamageValue());
         helper.assertTrue(settler.getXp().points() == 2, "The third roll needs 1 of its 3 XP, the rest is stored: " + settler.getXp().points());
         WorkRules.work(level, settler, job, new XpProfile(XpGain.of(3), List.of()), JobBlockSite.at(level, jobBlock).orElseThrow(), settler.getWork().workplace(jobBlock),
-                jobBlock, 3, WorkRules.ToolSupply.BELT, NOWHERE);
+                jobBlock, 3, SimulatedSpan.LIVE, WorkRules.ToolSupply.BELT, NOWHERE);
         helper.assertTrue(settler.getXp().points() == 2, "A roll that yields nothing earns no profile XP: " + settler.getXp().points());
         settler.discard();
         SettlementManager.remove(data, jobBlock, 0L, SettlementManager.Listener.NONE);

@@ -328,7 +328,7 @@ final class MissionLoop implements CategoryLoop {
         } else if (outcome == MissionRules.Outcome.SUCCESS) {
             List<ItemStack> loot = loot(level, mission, MissionRules.rolls(mission, skill));
             if (catchUp) {
-                shell.deliverDirect(level, site, loot);
+                shell.deliverDirect(level, site, loot, shell.lastCatchUpDayTime());
             } else {
                 JobBuffer buffer = shell.workplace(site.pos()).buffer();
                 loot.forEach(buffer::add);
@@ -505,7 +505,7 @@ final class MissionLoop implements CategoryLoop {
      * Missions are not started during catch-up; the time goes to the next job.
      */
     @Override
-    public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks) {
+    public SimulatedWork simulateWork(ServerLevel level, SettlerJob job, long day, double workTicks, SimulatedSpan span) {
         return new SimulatedWork(0, workTicks);
     }
 

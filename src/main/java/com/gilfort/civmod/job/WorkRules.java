@@ -144,12 +144,13 @@ final class WorkRules {
      * @param workplace the job's Workplace (scan, production accumulator)
      * @param poi       the work place of the day
      * @param workTicks the work ticks (1 live, an hour's share in catch-up)
+     * @param span      the simulated span in catch-up, {@link SimulatedSpan#LIVE} live (speed bonuses are averaged over it)
      * @param supply    where tools come from
      * @param output    where produced items go
      * @return what came out
      */
     static Result work(ServerLevel level, Settler settler, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site, Workplace workplace,
-            BlockPos poi, double workTicks, ToolSupply supply, Output output) {
+            BlockPos poi, double workTicks, SimulatedSpan span, ToolSupply supply, Output output) {
         ScanResult scan = workplace.scan();
         if (profile.needsResources() && scan != null && !profile.hasResources(scan)) {
             return new Result(0, 0, 0, 0, false, End.NO_RESOURCES, workTicks);
@@ -173,7 +174,7 @@ final class WorkRules {
         int cap = site.skillCap();
         int skillLevel = settler.getWork().effectiveLevel(job);
         BiomeBonus bonus = workplace.biomeBonus(level, job.jobType());
-        double speedFactor = settler.getWork().speedFactor(level);
+        double speedFactor = settler.getWork().speedFactor(level, span);
         double accumulated = workplace.production();
         double ticks = workTicks;
         int rolls = 0;
