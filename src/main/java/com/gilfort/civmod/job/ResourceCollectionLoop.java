@@ -284,8 +284,8 @@ final class ResourceCollectionLoop implements CategoryLoop {
         }
         JobBuffer buffer = shell.workplace(jobBlock).buffer();
         // A Laborer works a fraction of the tick: the rolls come slower, the rules stay the same.
-        WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site.get(), shell.workplace(jobBlock), rollPlace, shell.laborer().speed(job), SimulatedSpan.LIVE,
-                WorkRules.ToolSupply.BELT, new BufferOutput(buffer, stacks -> {
+        WorkRules.Result result = WorkRules.work(new WorkRules.Setup(level, settler, job, profile.get(), site.get(), shell.workplace(jobBlock), WorkRules.ToolSupply.BELT),
+                rollPlace, shell.laborer().speed(job), SimulatedSpan.LIVE, new BufferOutput(buffer, stacks -> {
                     stacks.forEach(buffer::add);
                     return !buffer.isFull();
                 }));
@@ -351,9 +351,10 @@ final class ResourceCollectionLoop implements CategoryLoop {
         JobBlockSite site = found.get();
         // A Laborer works at a fraction of the speed: the same time gives fewer work ticks.
         double speed = shell.laborer().speed(job);
-        WorkRules.Result result = WorkRules.work(level, settler, job, profile.get(), site, workplace, poi, workTicks * speed, span,
+        WorkRules.Result result = WorkRules.work(new WorkRules.Setup(level, settler, job, profile.get(), site, workplace,
                 WorkRules.ToolSupply.beltAnd(ClerkStorage.stock(level, site.collect(), span.dayTime(), true),
-                        () -> ClerkCounter.handOut(level, site.collect(), false), simulatedGameTime(level, day, span)), new BufferOutput(workplace.buffer(), stacks -> shell.deliverDirect(level, site, stacks, span.dayTime())));
+                        () -> ClerkCounter.handOut(level, site.collect(), false), simulatedGameTime(level, day, span))),
+                poi, workTicks * speed, span, new BufferOutput(workplace.buffer(), stacks -> shell.deliverDirect(level, site, stacks, span.dayTime())));
         if (result.end() == WorkRules.End.NONE) {
             return new SimulatedWork(result.rolls(), 0.0);
         }

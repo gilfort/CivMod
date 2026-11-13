@@ -130,11 +130,8 @@ final class WorkRules {
     record Result(int rolls, int items, int toolWear, int exp, boolean levelUp, End end, double ticksLeft) {
     }
 
-    private WorkRules() {
-    }
-
     /**
-     * Advances a job by some work ticks.
+     * Who works on what: the fixed part of a call to {@link #work}.
      *
      * @param level     the level
      * @param settler   the settler
@@ -142,15 +139,33 @@ final class WorkRules {
      * @param profile   the job's profile
      * @param site      the job's JobBlock site
      * @param workplace the job's Workplace (scan, production accumulator)
+     * @param supply    where tools come from
+     */
+    record Setup(ServerLevel level, Settler settler, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site, Workplace workplace,
+            ToolSupply supply) {
+    }
+
+    private WorkRules() {
+    }
+
+    /**
+     * Advances a job by some work ticks.
+     *
+     * @param setup     who works, on what job, and where tools come from
      * @param poi       the work place of the day
      * @param workTicks the work ticks (1 live, an hour's share in catch-up)
      * @param span      the simulated span in catch-up, {@link SimulatedSpan#LIVE} live (speed bonuses are averaged over it)
-     * @param supply    where tools come from
      * @param output    where produced items go
      * @return what came out
      */
-    static Result work(ServerLevel level, Settler settler, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site, Workplace workplace,
-            BlockPos poi, double workTicks, SimulatedSpan span, ToolSupply supply, Output output) {
+    static Result work(Setup setup, BlockPos poi, double workTicks, SimulatedSpan span, Output output) {
+        ServerLevel level = setup.level();
+        Settler settler = setup.settler();
+        SettlerJob job = setup.job();
+        ResourceCollectionProfile profile = setup.profile();
+        JobBlockSite site = setup.site();
+        Workplace workplace = setup.workplace();
+        ToolSupply supply = setup.supply();
         ScanResult scan = workplace.scan();
         if (profile.needsResources() && scan != null && !profile.hasResources(scan)) {
             return new Result(0, 0, 0, 0, false, End.NO_RESOURCES, workTicks);
