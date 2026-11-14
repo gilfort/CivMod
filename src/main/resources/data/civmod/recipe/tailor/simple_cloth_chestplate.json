@@ -1,0 +1,9 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:tailor"],
+  "ingredients": [
+    { "ingredient": "#minecraft:wool", "count": 8 },
+    "minecraft:string"
+  ],
+  "result": { "id": "civmod:simple_cloth_chestplate" }
+}
