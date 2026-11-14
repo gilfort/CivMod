@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_dye",
+  "dye": "#minecraft:dyes",
+  "group": "dyed_armor",
+  "result": {
+    "id": "civmod:high_cloth_helmet"
+  },
+  "target": "civmod:high_cloth_helmet"
+}
