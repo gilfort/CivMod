@@ -45,7 +45,7 @@ import net.minecraft.world.level.block.state.BlockState;
  * recipe of the recipe type {@code civmod:job_crafting} that players cannot craft anywhere (no block uses the type).
  * <p>
  * Every <b>Producing Job</b> named in {@link #jobs()} knows it: it sits locked in the first slots of the Job's pattern
- * library (ordered by recipe id), can only be checked or unchecked and counts towards the checkmark limit. Profiles do
+ * library (ordered by recipe id) and can only be checked or unchecked; it does not count towards the checkmark limit. Profiles do
  * not list the type in {@link ProducingProfile#recipeTypes()}; the domain and filters of the profile do not apply to it.
  * <p>
  * Every <b>Resource Collection Job</b> named in {@link #jobs()} turns a consumed input into a product while it works
@@ -161,11 +161,12 @@ import net.minecraft.world.level.block.state.BlockState;
  * @param weight      the recipe's weight in a Resource Collection Job's roll (at least 1)
  * @param drops       the outcomes one is drawn from per execution, if the recipe has random results
  * @param stationAfter the block state that replaces the station block after every execution, if the work uses the station up
+ * @param ingredients the single ingredients of one execution (derived from {@code inputs}): every ingredient repeated {@code count} times, in order
  */
 @ApiStatus.Experimental
 public record JobCraftingRecipe(List<Identifier> jobs, List<Input> inputs, Optional<ItemStackTemplate> result, Optional<Ingredient> tool,
-        Optional<TagKey<Block>> station, Optional<Requirement> requires, int weight, Optional<Drops> drops, Optional<BlockState> stationAfter)
-        implements Recipe<CraftingInput> {
+        Optional<TagKey<Block>> station, Optional<Requirement> requires, int weight, Optional<Drops> drops, Optional<BlockState> stationAfter,
+        List<Ingredient> ingredients) implements Recipe<CraftingInput> {
 
     /** The most ingredients (entries of {@code ingredients}) of one execution: the 3×3 pattern grid. */
     public static final int MAX_INGREDIENTS = 9;
@@ -299,6 +300,20 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Input> inputs, Optio
     public static final RecipeSerializer<JobCraftingRecipe> SERIALIZER = new RecipeSerializer<>(MAP_CODEC, STREAM_CODEC);
 
     /**
+     * Checks the weight and keeps the lists as copies.
+     */
+    public JobCraftingRecipe {
+        jobs = List.copyOf(jobs);
+        inputs = List.copyOf(inputs);
+        ingredients = List.copyOf(ingredients);
+        if (weight < 1) {
+            throw new IllegalArgumentException("weight must be at least 1: " + weight);
+        }
+    }
+
+    /**
+     * A recipe from its parsed parts; the single ingredients are worked out once from {@code inputs}.
+     *
      * @param jobs        the Jobs that know the recipe
      * @param inputs      the ingredients of one execution with their counts
      * @param result      what one execution makes for sure, if anything
@@ -309,12 +324,13 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Input> inputs, Optio
      * @param drops       the outcomes one is drawn from per execution, if any
      * @param stationAfter the block state that replaces the station block after an execution, if any
      */
-    public JobCraftingRecipe {
-        jobs = List.copyOf(jobs);
-        inputs = List.copyOf(inputs);
-        if (weight < 1) {
-            throw new IllegalArgumentException("weight must be at least 1: " + weight);
-        }
+    public JobCraftingRecipe(List<Identifier> jobs, List<Input> inputs, Optional<ItemStackTemplate> result, Optional<Ingredient> tool,
+            Optional<TagKey<Block>> station, Optional<Requirement> requires, int weight, Optional<Drops> drops, Optional<BlockState> stationAfter) {
+        this(jobs, inputs, result, tool, station, requires, weight, drops, stationAfter, flatten(inputs));
+    }
+
+    private static List<Ingredient> flatten(List<Input> inputs) {
+        return inputs.stream().flatMap(input -> Collections.nCopies(input.count(), input.ingredient()).stream()).toList();
     }
 
     /**
@@ -331,14 +347,6 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Input> inputs, Optio
             Optional<TagKey<Block>> station) {
         this(jobs, ingredients.stream().map(Input::of).toList(), Optional.of(result), tool, station, Optional.empty(), DEFAULT_WEIGHT,
                 Optional.empty(), Optional.empty());
-    }
-
-    /**
-     * @return the single ingredients of one execution: every ingredient of {@link #inputs()} repeated {@code count}
-     *         times, in order. This is what the fetch step, the chain resolution and the use-up step work through.
-     */
-    public List<Ingredient> ingredients() {
-        return inputs.stream().flatMap(input -> Collections.nCopies(input.count(), input.ingredient()).stream()).toList();
     }
 
     /**

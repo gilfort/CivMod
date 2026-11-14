@@ -147,9 +147,9 @@ public final class InnateRecipes {
 
     /**
      * The library pattern of an innate recipe: its result as output, one item per ingredient in the grid (a {@code count}
-     * does not repeat it; the tooltip names the count). A recipe
-     * without a result shows the first stack its outcomes give ({@link DropPools#representative}), once per execution; the
-     * Producing loop makes the drawn stacks instead of that item.
+     * does not repeat it; the tooltip names the count). A recipe without a result shows the first stack its outcomes give
+     * ({@link DropPools#representative}), once per execution; the Producing loop makes the drawn stacks instead of that
+     * item.
      *
      * @param slot    the library slot
      * @param holder  the innate recipe
