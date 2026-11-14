@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:tailor_recipes",
+  "max_ticks": 400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
