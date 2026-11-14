@@ -10,6 +10,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.gametest.FletcherGameTests.Setup;
+import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
@@ -65,6 +66,7 @@ public final class BottlerGameTests {
             register(helper, "bottler_recipes", BottlerGameTests::recipes);
             register(helper, "bottler_water_bucket", BottlerGameTests::waterBucket);
             register(helper, "bottler_lava_bucket", BottlerGameTests::lavaBucket);
+            register(helper, "bottler_water_without_cauldron", BottlerGameTests::waterWithoutCauldron);
             register(helper, "bottler_dragons_breath", BottlerGameTests::dragonsBreath);
             register(helper, "bottler_missing_bucket", BottlerGameTests::missingBucket);
         });
@@ -104,8 +106,8 @@ public final class BottlerGameTests {
                 "Description: " + bottler.description().getString());
         ProducingProfile profile = bottler.profile(ProducingProfile.class).orElseThrow();
         helper.assertTrue(profile.recipeTypes().equals(List.of(RecipeType.CRAFTING)), "Crafting is the only recipe type");
-        helper.assertTrue(profile.station(RecipeType.CRAFTING).location().equals(CivMod.id("stations/water_cauldron")),
-                "The main station tag is the water cauldron's: " + profile.station(RecipeType.CRAFTING));
+        helper.assertTrue(profile.station(RecipeType.CRAFTING).location().equals(CivMod.id("stations/bottler")),
+                "The main station tag is the union of the three stations: " + profile.station(RecipeType.CRAFTING));
         BlockPos pos = bottlery(helper, new BlockPos(1, 1, 1));
         helper.assertTrue(JobPlaces.lines(StationTypeGameTests.block(level, pos)).stream().map(JobPlaces.Line::job).toList().contains(bottler),
                 "The job picker offers the Bottler");
@@ -124,7 +126,8 @@ public final class BottlerGameTests {
         JobCraftingRecipe water = recipe(helper, recipes, Items.WATER_BUCKET);
         JobCraftingRecipe lava = recipe(helper, recipes, Items.LAVA_BUCKET);
         JobCraftingRecipe breath = recipe(helper, recipes, Items.DRAGON_BREATH);
-        helper.assertTrue(water.station().isEmpty() && water.stationAfter().isEmpty(), "Water: the main station, left as it is");
+        helper.assertTrue(water.station().filter(tag -> tag.location().equals(CivMod.id("stations/water_cauldron"))).isPresent()
+                && water.stationAfter().isEmpty(), "Water: water cauldron, left as it is");
         helper.assertTrue(lava.station().filter(tag -> tag.location().equals(CivMod.id("stations/lava_cauldron"))).isPresent()
                 && lava.stationAfter().equals(Optional.of(Blocks.CAULDRON.defaultBlockState())), "Lava: lava cauldron, empty cauldron afterwards");
         helper.assertTrue(breath.station().filter(tag -> tag.location().equals(CivMod.id("stations/dragon_egg"))).isPresent()
@@ -173,16 +176,19 @@ public final class BottlerGameTests {
         BlockPos craft = bottlery(helper, new BlockPos(1, 1, 5));
         BlockPos lava = new BlockPos(3, 1, 5);
         helper.setBlock(lava, Blocks.LAVA_CAULDRON);
-        helper.setBlock(new BlockPos(9, 1, 5), Blocks.WATER_CAULDRON);
         Settler settler = FletcherGameTests.worker(helper, setup, craft, bottler());
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.LAVA_BUCKET) == 1,
                 "The lava bucket arrived (status " + settler.getWork().status(craft) + ")");
         helper.assertTrue(helper.getBlockState(lava).is(Blocks.CAULDRON), "The lava cauldron is empty afterwards: " + helper.getBlockState(lava));
-        helper.assertTrue(helper.getBlockState(new BlockPos(9, 1, 5)).is(Blocks.WATER_CAULDRON), "The water cauldron is left alone");
 
         helper.assertTrue(StockRules.setRule(setup.data(), setup.clerk(), StockRule.minimum(0, Items.LAVA_BUCKET, 2, 0)), "Second lava bucket wanted");
         StockRules.check(level, setup.clerk(), ClerkGameTests.MORNING);
+        CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
+        helper.assertTrue(settler.getWork().status(craft) == JobStatus.BLOCKED, "No station at all: " + settler.getWork().status(craft));
+        helper.assertValueEqual(settler.getWork().statusText(craft).getString(), "Needs a station nearby: Cauldron or Dragon Egg", "Reason");
+        // A water cauldron stands again: the job works, and the lava recipe alone is marked.
+        helper.setBlock(new BlockPos(9, 1, 5), Blocks.WATER_CAULDRON);
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.LAVA_BUCKET) == 1, "No second lava bucket without lava");
         helper.assertTrue(Requests.ofClerk(setup.settlement(), setup.clerk()).stream().anyMatch(request -> request.item() == Items.LAVA_BUCKET),
@@ -194,14 +200,33 @@ public final class BottlerGameTests {
         helper.succeed();
     }
 
-    /** A glass bottle becomes dragon's breath at a placed dragon egg; the egg is still there afterwards. */
+    /**
+     * With a lava cauldron alone (no water cauldron) a water bucket request stays open and the recipe is marked "Needs a
+     * station nearby: Water Cauldron": every recipe checks its own station.
+     */
+    private static void waterWithoutCauldron(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = FletcherGameTests.setup(helper, List.of(new ItemStack(Items.BUCKET)), List.of(new ItemStack(Items.WATER_BUCKET)));
+        BlockPos craft = bottlery(helper, new BlockPos(1, 1, 5));
+        helper.setBlock(new BlockPos(3, 1, 5), Blocks.LAVA_CAULDRON);
+        Settler settler = FletcherGameTests.worker(helper, setup, craft, bottler());
+        CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
+        helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.WATER_BUCKET) == 0, "No water bucket without a water cauldron");
+        helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.BUCKET) == 1, "The empty bucket stays");
+        PatternsTabData tab = PatternsTabData.of(level, craft, bottler());
+        helper.assertTrue(tab.needs().values().stream().map(Component::getString).toList().contains("Needs a station nearby: Water Cauldron"),
+                "The water recipe is marked: " + tab.needs());
+        FletcherGameTests.cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /** A glass bottle becomes dragon's breath at a placed dragon egg, with no cauldron at all; the egg is still there afterwards. */
     private static void dragonsBreath(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Setup setup = FletcherGameTests.setup(helper, List.of(new ItemStack(Items.GLASS_BOTTLE)), List.of(new ItemStack(Items.DRAGON_BREATH)));
         BlockPos craft = bottlery(helper, new BlockPos(1, 1, 5));
         BlockPos egg = new BlockPos(3, 1, 5);
         helper.setBlock(egg, Blocks.DRAGON_EGG);
-        helper.setBlock(new BlockPos(9, 1, 5), Blocks.WATER_CAULDRON);
         Settler settler = FletcherGameTests.worker(helper, setup, craft, bottler());
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.DRAGON_BREATH) == 1,
@@ -225,7 +250,6 @@ public final class BottlerGameTests {
                 == JobAssignments.AssignResult.OK, "Craftsperson assigned");
         BlockPos craft = bottlery(helper, new BlockPos(1, 1, 5));
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.LAVA_CAULDRON);
-        helper.setBlock(new BlockPos(9, 1, 5), Blocks.WATER_CAULDRON);
         Settler settler = FletcherGameTests.worker(helper, setup, craft, bottler());
         Request lava = Requests.claimable(setup.settlement()).getFirst();
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
