@@ -1,0 +1,264 @@
+{
+  "type": "civmod:job_crafting",
+  "drops": [
+    {
+      "results": [
+        {
+          "count": 2,
+          "id": "minecraft:lilac"
+        }
+      ],
+      "weight": 1575
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:allium"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:azure_bluet"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:blue_orchid"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:closed_eyeblossom"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:cornflower"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:dandelion"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:golden_dandelion"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:lily_of_the_valley"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:open_eyeblossom"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:orange_tulip"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:oxeye_daisy"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:peony"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:pink_tulip"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:pitcher_plant"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:poppy"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:red_tulip"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:rose_bush"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:sunflower"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:torchflower"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:white_tulip"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        },
+        {
+          "id": "minecraft:wither_rose"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:lilac"
+        }
+      ],
+      "weight": 210
+    },
+    {
+      "results": [],
+      "weight": 105
+    }
+  ],
+  "ingredients": [
+    "minecraft:lilac",
+    "minecraft:bone_meal"
+  ],
+  "jobs": [
+    "civmod:florist"
+  ]
+}

@@ -144,6 +144,10 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> SIFTER = JOBS.register("sifter", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.HOPPER).bubbleIcon(() -> Items.SAND).displayItem(() -> Items.SAND).hungerFactor(0.5)
             .baseExp(2).unlockItem(() -> Items.HOPPER).profile(InnateProfile::sifter).build());
+    /** See vault {@code Jobs/Florist.md}; multiplies flowers with bone meal at a flower pot, with a drawn result that is never sure. */
+    public static final DeferredHolder<Job, Job> FLORIST = JOBS.register("florist", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.FLOWER_POT).bubbleIcon(() -> Items.POPPY).displayItem(() -> Items.POPPY).hungerFactor(0.5)
+            .baseExp(2).jobFactor(0.5).unlockItem(() -> Items.FLOWER_POT).profile(InnateProfile::florist).build());
     /** See vault {@code Jobs/Smelter.md}; smelts requested items at furnaces, several in parallel, burning fuel. */
     public static final DeferredHolder<Job, Job> SMELTER = JOBS.register("smelter", () -> Job.builder(JobCategory.PRODUCING)
             .icon(ModItems.SMELTER_BLOCK).bubbleIcon(() -> Items.IRON_INGOT).displayItem(() -> Items.COAL).hungerFactor(0.5).baseExp(1)
