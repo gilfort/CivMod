@@ -20,5 +20,6 @@ public final class CivModDataGenerators {
     @SubscribeEvent
     static void onGatherData(GatherDataEvent.Client event) {
         event.createProvider(ConcreteMixerRecipes::new);
+        event.createProvider(FloristRecipes::new);
     }
 }
