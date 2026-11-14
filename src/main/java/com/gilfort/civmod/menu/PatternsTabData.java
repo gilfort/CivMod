@@ -227,11 +227,11 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
     }
 
     /**
-     * @return how many patterns are checked and usable by the producer (what counts against the limit; foreign patterns
-     *         keep their checkmark without counting)
+     * @return how many player patterns are checked and usable by the producer (what counts against the limit; foreign
+     *         patterns keep their checkmark without counting, and so do innate recipes)
      */
     public long checked() {
-        return patterns.stream().filter(pattern -> pattern.checked() && !unusable(pattern.slot())).count();
+        return patterns.stream().filter(pattern -> pattern.checked() && !pattern.innate() && !unusable(pattern.slot())).count();
     }
 
 

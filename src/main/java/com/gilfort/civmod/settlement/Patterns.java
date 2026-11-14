@@ -54,8 +54,8 @@ import net.minecraft.world.level.block.Block;
  * <p>
  * Innate recipes ({@link InnateRecipes}) sit in the first slots of a Job's library, ordered by recipe id, as locked
  * patterns ({@link Pattern#innate()}): they are always usable (the profile's recipe types, filters and domain do not
- * apply), count towards the checkmark limit and only toggle their checkmark and "Always produce"; edit, clear, overwrite and recipe viewer
- * transfers are refused. {@link #syncInnate} lays them out again whenever the library is used or the datapacks change.
+ * apply), do not count towards the checkmark limit and only toggle their checkmark and "Always produce"; edit, clear,
+ * overwrite and recipe viewer transfers are refused. {@link #syncInnate} lays them out again whenever the library is used or the datapacks change.
  */
 public final class Patterns {
 
@@ -145,7 +145,7 @@ public final class Patterns {
      * @param block a JobBlock
      * @param job   a Producing Job of it
      * @return the checked patterns of the Job's library it can use (of its recipe types, passing its filters), in list
-     *         order; only these count against the checkmark limit. None while the library is {@link #locked}.
+     *         order; only the player patterns among them count against the checkmark limit ({@link #counted}). None while the library is {@link #locked}.
      */
     public static List<Pattern> usable(ServerLevel level, SettlementBlock block, Job job) {
         if (locked(block, job)) {
@@ -153,6 +153,17 @@ public final class Patterns {
         }
         ProducingProfile profile = profile(job);
         return checked(block, job).stream().filter(pattern -> allowed(level, profile, pattern)).toList();
+    }
+
+    /**
+     * @param level the level
+     * @param block a JobBlock
+     * @param job   a Producing Job of it
+     * @return the {@link #usable} patterns that count against the checkmark limit: the player patterns, not the innate
+     *         recipes
+     */
+    public static List<Pattern> counted(ServerLevel level, SettlementBlock block, Job job) {
+        return usable(level, block, job).stream().filter(pattern -> !pattern.innate()).toList();
     }
 
     /**
@@ -392,7 +403,7 @@ public final class Patterns {
 
     /**
      * Checks or unchecks a pattern; checking needs a pattern its Job can use and a free checkmark (counted over the
-     * {@link #usable} patterns). Every toggle ends the state line ({@link SettlementBlock#notice(Job)}).
+     * {@link #counted} patterns; an innate recipe is always free to check). Every toggle ends the state line ({@link SettlementBlock#notice(Job)}).
      *
      * @param level the level
      * @param pos   the JobBlock
@@ -411,16 +422,20 @@ public final class Patterns {
         SettlementBlock.Library library = block.library(job);
         library.setNotice(Optional.empty());
         boolean check = !pattern.get().checked();
-        if (check && (!allowed(level, profile(job), pattern.get()) || usable(level, block, job).size() >= library.checkLimit())) {
+        if (check && (!allowed(level, profile(job), pattern.get()) || atLimit(level, block, job, pattern.get()))) {
             return false;
         }
         replace(data, library, pattern.get().withChecked(check));
         return check;
     }
 
+    private static boolean atLimit(ServerLevel level, SettlementBlock block, Job job, Pattern pattern) {
+        return !pattern.innate() && counted(level, block, job).size() >= block.library(job).checkLimit();
+    }
+
     /**
      * Sets or clears "Always produce" of a pattern (vault {@code Systems/Producing Jobs.md}). Setting it also checks the
-     * pattern, so it needs a pattern its Job can use and, on an unchecked one, a free checkmark; clearing it keeps the
+     * pattern, so it needs a pattern its Job can use and, on an unchecked player pattern, a free checkmark; clearing it keeps the
      * checkmark. Every toggle ends the state line.
      *
      * @param level the level
@@ -444,7 +459,7 @@ public final class Patterns {
             replace(data, library, current.withAlways(false, current.atOnce()));
             return false;
         }
-        if (!allowed(level, profile(job), current) || (!current.checked() && usable(level, block, job).size() >= library.checkLimit())) {
+        if (!allowed(level, profile(job), current) || (!current.checked() && atLimit(level, block, job, current))) {
             return false;
         }
         replace(data, library, current.withChecked(true).withAlways(true, current.atOnce()));
@@ -520,7 +535,7 @@ public final class Patterns {
     }
 
     /**
-     * Applies a checkmark limit to a Job's library: if it dropped, the last {@link #usable}
+     * Applies a checkmark limit to a Job's library: if it dropped, the last {@link #counted}
      * patterns in list order lose their checkmark until the count fits, and the GUI shows how many were removed. Foreign
      * patterns keep theirs.
      *
@@ -542,7 +557,7 @@ public final class Patterns {
             library.setCheckLimit(limit);
             data.setDirty();
         }
-        List<Pattern> checked = usable(level, block, job);
+        List<Pattern> checked = counted(level, block, job);
         int removed = Math.max(0, checked.size() - limit);
         for (Pattern pattern : checked.subList(checked.size() - removed, checked.size())) {
             replace(data, library, pattern.withChecked(false));
@@ -604,7 +619,7 @@ public final class Patterns {
      * Lays out the Job's innate recipes in the first slots of its library, ordered by recipe id (vault
      * {@code Systems/Producing Jobs.md}). A player pattern on a slot an innate recipe needs moves to the next free slot
      * (lost if none is left: patterns are ghost items); a removed innate recipe frees its slot. An innate pattern keeps
-     * the check state of its recipe id; a new one is checked while the checkmark limit has room. A locked library is
+     * the check state of its recipe id; a new one is checked. A locked library is
      * left as it is.
      *
      * @param level the level
@@ -671,10 +686,8 @@ public final class Patterns {
         patterns.clear();
         patterns.addAll(laidOut);
         for (int slot : fresh) {
-            // Like every new pattern: checked while the limit has room.
-            if (usable(level, block, job).size() < library.checkLimit()) {
-                patterns.set(slot, patterns.get(slot).withChecked(true));
-            }
+            // Innate recipes do not count against the limit, so a new one is always checked.
+            patterns.set(slot, patterns.get(slot).withChecked(true));
         }
         data.setDirty();
         return true;
@@ -746,7 +759,7 @@ public final class Patterns {
     /**
      * Puts a pattern into its slot. Replacing a pattern that made something keeps its checkmark if the new one is
      * usable, and its "Always produce" settings with it; a new pattern (empty slot, or one that made nothing) is checked automatically if it is usable and a
-     * checkmark is free (counted over the {@link #usable} patterns), at the limit it stays unchecked with the "masters
+     * checkmark is free (counted over the {@link #counted} patterns), at the limit it stays unchecked with the "masters
      * only n recipes" state line. Any other edit ends the state line.
      */
     private static Optional<Pattern> put(ServerLevel level, BlockPos pos, Job job, int slot, Pattern pattern) {
@@ -767,7 +780,7 @@ public final class Patterns {
         if (replaced.isPresent() || !allowed) {
             checked = allowed && replaced.map(Pattern::checked).orElse(false);
         } else {
-            checked = usable(level, block, job).size() < library.checkLimit();
+            checked = counted(level, block, job).size() < library.checkLimit();
         }
         boolean atLimit = replaced.isEmpty() && allowed && !checked;
         library.setNotice(atLimit ? Optional.of(new SettlementBlock.Notice.AtLimit(library.checkLimit())) : Optional.empty());
