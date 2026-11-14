@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:concrete_mixer_unlock",
+  "max_ticks": 400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

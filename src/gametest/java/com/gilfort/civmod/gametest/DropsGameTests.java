@@ -73,7 +73,7 @@ public final class DropsGameTests {
     }
 
     private static DropOutcome outcome(int weight, int minLevel, Item item) {
-        return new DropOutcome(weight, minLevel, List.of(new ItemStackTemplate(item.builtInRegistryHolder())));
+        return new DropOutcome(weight, minLevel, List.of(new ItemStackTemplate(item)));
     }
 
     /** Five steps like the Sifter's: weights 200 (Lv 1), 100 (Lv 21), 40 (Lv 41), 15 (Lv 61), 6 (Lv 81). */
