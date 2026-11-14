@@ -156,5 +156,6 @@ public final class CivNetwork {
         registrar.playToClient(MissionsTabData.Sync.TYPE, MissionsTabData.Sync.STREAM_CODEC);
         registrar.playToClient(ThoughtBubble.Show.TYPE, ThoughtBubble.Show.STREAM_CODEC);
         registrar.playToClient(JobDrops.Sync.TYPE, JobDrops.Sync.STREAM_CODEC);
+        registrar.playToClient(com.gilfort.civmod.job.DropPools.Sync.TYPE, com.gilfort.civmod.job.DropPools.Sync.STREAM_CODEC);
     }
 }
