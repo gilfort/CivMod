@@ -1,0 +1,264 @@
+{
+  "type": "civmod:job_crafting",
+  "drops": [
+    {
+      "results": [
+        {
+          "count": 2,
+          "id": "minecraft:dandelion"
+        }
+      ],
+      "weight": 1575
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:allium"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:azure_bluet"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:blue_orchid"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:closed_eyeblossom"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:cornflower"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:golden_dandelion"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:lilac"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:lily_of_the_valley"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:open_eyeblossom"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:orange_tulip"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:oxeye_daisy"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:peony"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:pink_tulip"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:pitcher_plant"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:poppy"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:red_tulip"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:rose_bush"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:sunflower"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:torchflower"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:white_tulip"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        },
+        {
+          "id": "minecraft:wither_rose"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:dandelion"
+        }
+      ],
+      "weight": 210
+    },
+    {
+      "results": [],
+      "weight": 105
+    }
+  ],
+  "ingredients": [
+    "minecraft:dandelion",
+    "minecraft:bone_meal"
+  ],
+  "jobs": [
+    "civmod:florist"
+  ]
+}

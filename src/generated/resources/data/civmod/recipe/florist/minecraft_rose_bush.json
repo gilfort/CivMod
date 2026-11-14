@@ -1,0 +1,264 @@
+{
+  "type": "civmod:job_crafting",
+  "drops": [
+    {
+      "results": [
+        {
+          "count": 2,
+          "id": "minecraft:rose_bush"
+        }
+      ],
+      "weight": 1575
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:allium"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:azure_bluet"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:blue_orchid"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:closed_eyeblossom"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:cornflower"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:dandelion"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:golden_dandelion"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:lilac"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:lily_of_the_valley"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:open_eyeblossom"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:orange_tulip"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:oxeye_daisy"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:peony"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:pink_tulip"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:pitcher_plant"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:poppy"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:red_tulip"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:sunflower"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:torchflower"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:white_tulip"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        },
+        {
+          "id": "minecraft:wither_rose"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:rose_bush"
+        }
+      ],
+      "weight": 210
+    },
+    {
+      "results": [],
+      "weight": 105
+    }
+  ],
+  "ingredients": [
+    "minecraft:rose_bush",
+    "minecraft:bone_meal"
+  ],
+  "jobs": [
+    "civmod:florist"
+  ]
+}

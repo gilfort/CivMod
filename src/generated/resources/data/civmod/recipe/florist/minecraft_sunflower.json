@@ -1,0 +1,264 @@
+{
+  "type": "civmod:job_crafting",
+  "drops": [
+    {
+      "results": [
+        {
+          "count": 2,
+          "id": "minecraft:sunflower"
+        }
+      ],
+      "weight": 1575
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:allium"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:azure_bluet"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:blue_orchid"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:closed_eyeblossom"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:cornflower"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:dandelion"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:golden_dandelion"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:lilac"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:lily_of_the_valley"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:open_eyeblossom"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:orange_tulip"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:oxeye_daisy"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:peony"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:pink_tulip"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:pitcher_plant"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:poppy"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:red_tulip"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:rose_bush"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:torchflower"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:white_tulip"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        },
+        {
+          "id": "minecraft:wither_rose"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        }
+      ],
+      "weight": 210
+    },
+    {
+      "results": [],
+      "weight": 105
+    }
+  ],
+  "ingredients": [
+    "minecraft:sunflower",
+    "minecraft:bone_meal"
+  ],
+  "jobs": [
+    "civmod:florist"
+  ]
+}
