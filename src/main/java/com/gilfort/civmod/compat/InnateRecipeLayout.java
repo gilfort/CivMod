@@ -18,8 +18,10 @@ import com.mojang.serialization.JsonOps;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.advancements.predicates.StatePropertiesPredicate;
+import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemStackTemplate;
 import net.minecraft.world.item.SpawnEggItem;
@@ -76,6 +78,8 @@ public final class InnateRecipeLayout {
     public static final String STATE_LINE = TITLE + ".state";
     /** Tooltip line of an item a {@code drops} recipe can give: its chance and the skill level it needs. */
     public static final String DROP_LINE = TITLE + ".drop";
+    /** Tooltip line of an item that only a {@code tag_result} can give: the chance of the outcome, its level and the tag. */
+    public static final String DROP_TAG_LINE = TITLE + ".drop_tag";
     /** The translation key of the first line on the Composter's input ("Any compostable item"). */
     public static final String COMPOST_LINE = TITLE + ".compostable";
     /** The translation key of the Composter's points rule. */
@@ -168,7 +172,8 @@ public final class InnateRecipeLayout {
 
     /**
      * @param recipe an innate recipe
-     * @return what the result slot shows: its result, then every kind of item its {@code drops} can give (each once)
+     * @return what the result slot shows: its result, then every kind of item its {@code drops} can give (each once),
+     *         the members of a {@code tag_result} tag included (the items the recipe uses up are not among them)
      */
     public static List<ItemStack> outputs(JobCraftingRecipe recipe) {
         List<ItemStack> outputs = new ArrayList<>();
@@ -176,7 +181,14 @@ public final class InnateRecipeLayout {
         recipe.drops().ifPresent(drops -> ClientDropPools.outcomes(drops).stream().flatMap(outcome -> outcome.results().stream())
                 .map(ItemStackTemplate::create)
                 .filter(stack -> outputs.stream().noneMatch(shown -> ItemStack.isSameItemSameComponents(shown, stack))).forEach(outputs::add));
+        recipe.drops().ifPresent(drops -> ClientDropPools.outcomes(drops).stream().flatMap(outcome -> outcome.tagResult().stream())
+                .flatMap(tagResult -> tagResult.candidates(usedUp(recipe)).stream()).map(ItemStack::new)
+                .filter(stack -> outputs.stream().noneMatch(shown -> ItemStack.isSameItemSameComponents(shown, stack))).forEach(outputs::add));
         return outputs;
+    }
+
+    private static List<Item> usedUp(JobCraftingRecipe recipe) {
+        return recipe.inputs().stream().flatMap(input -> input.ingredient().items()).map(Holder::value).toList();
     }
 
     /**
@@ -190,9 +202,16 @@ public final class InnateRecipeLayout {
             return List.of();
         }
         List<DropOutcome> outcomes = ClientDropPools.outcomes(recipe.drops().get());
-        return outcomes.stream().filter(outcome -> outcome.results().stream().anyMatch(stack -> ItemStack.isSameItemSameComponents(stack.create(), shown)))
+        List<Component> lines = new ArrayList<>(outcomes.stream()
+                .filter(outcome -> outcome.results().stream().anyMatch(stack -> ItemStack.isSameItemSameComponents(stack.create(), shown)))
                 .map(outcome -> (Component) Component.translatable(DROP_LINE, PERCENT.format(DropDraw.percentAtUnlock(outcomes, outcome)), outcome.minLevel()))
-                .toList();
+                .toList());
+        for (DropOutcome outcome : outcomes) {
+            outcome.tagResult().filter(tagResult -> tagResult.candidates(usedUp(recipe)).contains(shown.getItem())).ifPresent(tagResult -> lines.add(
+                    Component.translatable(DROP_TAG_LINE, PERCENT.format(DropDraw.percentAtUnlock(outcomes, outcome)), outcome.minLevel(),
+                            "#" + tagResult.tag().location())));
+        }
+        return lines;
     }
 
     /**

@@ -600,6 +600,7 @@
   "civmod.recipe_viewer.innate_recipes.compostable": "Any compostable item",
   "civmod.recipe_viewer.innate_recipes.compost_rule": "Each item adds its compost chance as points (0.3 for seeds, 0.65 for wheat); 7 points make 1 bone meal. The tool wears by 1 per bone meal.",
   "civmod.recipe_viewer.innate_recipes.drop": "Chance: %s %% (from level %s)",
+  "civmod.recipe_viewer.innate_recipes.drop_tag": "Chance: %s %% (from level %s), a different item of %s",
   "civmod.recipe_viewer.settler_gathering": "Settler Gathering",
   "civmod.recipe_viewer.settler_gathering.from": "Gathered by settlers from",
   "civmod.recipe_viewer.settler_gathering.tool": "Tool: taken from the collect inventory, worn by 1 per drop",

@@ -1041,7 +1041,7 @@ final class ProducingLoop implements CategoryLoop {
         round.addRemainders(leftovers);
         Pattern pattern = step.pattern();
         Optional<JobCraftingRecipe> innate = InnateRecipes.recipe(level, pattern);
-        ExecutionOutcome made = ExecutionOutcome.of(innate, pattern, shell.effectiveLevel(job), settler.getRandom());
+        ExecutionOutcome made = ExecutionOutcome.of(innate, pattern, shell.effectiveLevel(job), consumed, settler.getRandom());
         ItemStack result = made.result();
         Optional<RecipeHolder<?>> recipe = recipe(level, pattern);
         // Read before the buffer takes the stacks.
