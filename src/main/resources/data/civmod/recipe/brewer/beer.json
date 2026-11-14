@@ -1,0 +1,14 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:brewer"],
+  "ingredients": [
+    "#c:buckets/water",
+    "#c:crops/wheat",
+    "#c:crops/wheat",
+    "#c:crops/wheat",
+    "minecraft:glass_bottle",
+    "minecraft:glass_bottle",
+    "minecraft:glass_bottle"
+  ],
+  "result": { "id": "civmod:beer", "count": 3 }
+}

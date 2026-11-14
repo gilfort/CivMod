@@ -24,7 +24,8 @@ import net.minecraft.world.level.block.Block;
  * Dyer bleaches at; vault {@code Jobs/Concrete Mixer.md});</li>
  * <li>{@link #sifter()}: the station is a hopper ({@code civmod:stations/sifter}, vault {@code Jobs/Sifter.md});</li>
  * <li>{@link #bottler()}: the main station is the union tag {@code civmod:stations/bottler} of the water cauldron, the
- * lava cauldron and the dragon egg; each recipe names its own (vault {@code Jobs/Bottler.md}).</li>
+ * lava cauldron and the dragon egg; each recipe names its own (vault {@code Jobs/Bottler.md});</li>
+ * <li>{@link #brewer()}: the station is a barrel ({@code civmod:stations/barrel}, vault {@code Jobs/Brewer.md}).</li>
  * </ul>
  */
 public final class InnateProfile implements ProducingProfile {
@@ -59,6 +60,11 @@ public final class InnateProfile implements ProducingProfile {
      */
     public static InnateProfile bottler() {
         return new InnateProfile("bottler");
+    }
+
+    /** @return the Brewer's profile: innate recipes at a barrel */
+    public static InnateProfile brewer() {
+        return new InnateProfile("barrel");
     }
 
     @Override

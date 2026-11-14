@@ -43,6 +43,8 @@ final class Round {
     final List<Ingredient> tools;
     /** The kinds of item the executions of the round drew from a {@code drops} recipe, delivered with {@link #item}. */
     final Set<Item> drawn = new HashSet<>();
+    /** The kinds of item the executions left over from their inputs (empty buckets), delivered with {@link #item}. */
+    final Set<Item> remainders = new HashSet<>();
     /** The nearest station per station tag of a recipe type other than the work place of the day's, looked up once. */
     final Map<TagKey<Block>, Optional<BlockPos>> stations = new HashMap<>();
     /**
