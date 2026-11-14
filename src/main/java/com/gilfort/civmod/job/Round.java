@@ -2,10 +2,12 @@ package com.gilfort.civmod.job;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import com.gilfort.civmod.logistics.CraftPlan;
@@ -39,6 +41,8 @@ final class Round {
     final List<UUID> inputs;
     /** The tools of innate recipes the settler lacks on its belt, taken at the collect inventory (empty: none). */
     final List<Ingredient> tools;
+    /** The kinds of item the executions of the round drew from a {@code drops} recipe, delivered with {@link #item}. */
+    final Set<Item> drawn = new HashSet<>();
     /** The nearest station per station tag of a recipe type other than the work place of the day's, looked up once. */
     final Map<TagKey<Block>, Optional<BlockPos>> stations = new HashMap<>();
     /**

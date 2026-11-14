@@ -176,11 +176,62 @@ Job-only recipes the player cannot craft anywhere: CivMod's recipe type `civmod:
 
 - `jobs`: Job ids. A Job that is neither Producing nor Resource Collection (or not registered) is ignored with a log warning. Resource Collection Jobs use innate recipes differently (`requires`, `weight`): see [Resource Collection Jobs](resource-collection.md#innate-recipes).
 - `ingredients`: 1–9 ingredients, shapeless (item ids, `#tags` or lists, like vanilla recipes).
-- `result`: the item stack one execution makes.
+- `result`: the item stack one execution makes. Optional if the recipe has `drops`; a recipe with neither is rejected when the datapack loads, with a log message.
+- `drops` (optional): random results, see [Drops](#drops) below.
 - `tool` (optional): an item id or `#tag`. The settler takes the tool from its collect inventory onto its belt at the start of a round (like a Resource Collection tool) and wears it by 1 durability per execution; Unbreaking works. Without the tool on the belt or in the collect inventory only this recipe is skipped, and the Patterns tab marks it ("Needs Shears"); the Job keeps working its other recipes.
 - `station` (optional): a block `#tag`. The settler works the recipe at the nearest such station within 16 blocks of the JobBlock (like a step of another recipe type); without `station` the station of the Job's main recipe type counts. A missing station skips and marks the recipe ("Needs a Water Cauldron nearby"); the search runs at most every 30 s per settler and tag.
 
 In the library innate recipes sit in the first slots, ordered by recipe id, with a lock (tooltip "Innate recipe of the Fletcher"). They count towards the checkmark limit and are checked automatically like every new pattern while the limit has room; the player can only check and uncheck them and set "Always produce" (no edit, clear, overwrite or recipe viewer transfer). Your profile's `domain()` and filters do not apply to them: naming the Job in `jobs` is the opt-in. When a datapack adds an innate recipe later, a player pattern on a slot it needs moves to the next free slot (lost if all 54 are used: patterns are ghost items); a removed innate recipe frees its slot; the check state is kept per recipe id. JEI and REI show innate recipes in a display-only "Job Recipes" category (inputs, result, tool, station, the Jobs' icons as catalysts). The example addon's Stonecutter has one (`data/civmod_example/recipe/stonecutter/mossy_cobblestone.json`).
+
+**A Job with innate recipes only.** CivMod's Crusher (grindstone) and Concrete Mixer (water cauldron) work nothing but innate recipes. Their profile lists `crafting` as its only recipe type, names the one station, and returns a `domain()` whose item tag (`civmod:domains/none`) is empty, so no crafting pattern a player makes passes the domain and every library slot beyond the innate recipes stays unusable. Copy that shape for your own Job: the Crusher's nine recipes are plain files in `data/civmod/recipe/crusher/`, and the Mixer reuses the water cauldron tag the Dyer bleaches at. The recipes carry no `station`, so the main station is the work place; without it the Job reports "No work place". The Mixer's 16 recipes are not written by hand: `./gradlew runData` generates them (`ConcreteMixerRecipes`, output in `src/generated/resources/data/civmod/recipe/concrete_mixer/`, committed).
+
+### Drops
+
+`drops` makes an innate recipe draw its result. Each execution draws one outcome among weighted outcomes and makes its stacks, so the settler of a Sifter finds a dye, an ore or, with a high skill, a gem in a block of sand. The outcomes are either written into the recipe or named as a shared pool by id:
+
+```json
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:sifter"],
+  "ingredients": ["minecraft:sand"],
+  "drops": "civmod:sifter",
+  "tool": "#minecraft:shovels"
+}
+```
+
+```json
+"drops": [
+  { "weight": 3, "results": [] },
+  { "weight": 1, "min_level": 10, "results": [{ "id": "minecraft:flint", "count": 2 }] }
+]
+```
+
+An outcome has these fields (`DropOutcome`):
+
+- `weight`: at least 1. The chance of an outcome is its weight divided by the total weight of the outcomes in the draw.
+- `min_level` (optional, default 1): the settler's skill level in the Job from which the outcome is in the draw. The outcome stays in the draw at every higher level, so cheap finds never go away. The level counts as the settler's effective skill, which the JobBlock's level caps (20 per level): a skill of 100 needs a level 5 JobBlock.
+- `results`: the stacks the outcome gives. The list may be empty (the settler finds nothing) or hold several stacks. Items, counts and components are validated when the datapack loads; an unknown item rejects the recipe.
+
+A pool is the file `data/<namespace>/civmod_drop_pools/<name>.json`, named `<namespace>:<name>` in `drops`:
+
+```json
+{
+  "outcomes": [
+    { "weight": 200, "results": [{ "id": "minecraft:bone_meal" }] },
+    { "weight": 100, "min_level": 21, "results": [{ "id": "minecraft:redstone" }] }
+  ]
+}
+```
+
+The pool files of all packs with the same id are merged: their outcomes are added, lowest pack first. A pack that ships `civmod_drop_pools/sifter.json` in the `civmod` namespace adds finds to the Sifter. A file that does not parse is skipped with a log warning and the other files of the pool still count. A recipe that names a pool nobody ships finds nothing; the log says so once per datapack load. A recipe with `drops` and `requires` is rejected (a Resource Collection recipe makes one product).
+
+How a recipe with `drops` runs:
+
+- **Only through "Always produce".** The result of a draw is not known beforehand, so such a recipe cannot serve a request: the request pick leaves it out and it does not hold an always-produce round back. The player checks the pattern, sets the box and the amount per round. The finds go to the Home Clerk, or to the own drop-off without one. A Max rule does not apply to it, because the pattern's icon is only one of the possible finds; without a Max rule it runs until Clerk and drop-off are full.
+- **The Patterns tab icon** is the `result` if the recipe has one, else the first stack any outcome gives. A recipe with both `result` and `drops` makes the result on every execution and draws on top of it.
+- **One draw per execution.** The tool wears by 1 durability per execution as usual, whatever the draw gives.
+- **JEI and REI** show the possible stacks in the result slot of the "Job Recipes" category; the tooltip of a stack names its chance in percent and the level it needs (the chance counts the outcomes in the draw at that level).
+- **Tests** can script the draw: `DropPools.script(RandomSource)` replaces the random source of every draw until it is called with `null`, and `DropDraw.draw(outcomes, level, random)` is a pure function over any `RandomSource`. The draw asks the source once for a number below the total weight of the outcomes in the draw; the outcomes take turns in file order.
 
 ## Checkmarks
 
@@ -188,7 +239,7 @@ Only checked patterns are worked. Each library has its own checkmark limit; only
 
 ## Always produce
 
-A checked pattern set to "Always produce" in the pattern editor is worked without a request, for every Producing Job and without a profile hook. It is the lowest priority: only while the Job has no request it has a checked pattern for. Such patterns take turns, each round with its own "Produce at once" (crafts per round, as far as materials, buffer and fuel allow); the result goes to the Home Clerk (no Home Clerk: the own drop-off). A pattern without inputs, or whose output reached an active Max rule of the Home Clerk, passes its turn without an error status; without a Max rule it runs until Clerk and drop-off are full ("Drop-off full"). Nothing is reserved: inputs stay usable for everyone until they are taken. The turn is not saved. Setting the box checks the pattern, so the checkmark limit applies. Innate recipes can be set as well.
+A checked pattern set to "Always produce" in the pattern editor is worked without a request, for every Producing Job and without a profile hook. It is the lowest priority: only while the Job has no request it has a checked pattern for. Such patterns take turns, each round with its own "Produce at once" (crafts per round, as far as materials, buffer and fuel allow); the result goes to the Home Clerk (no Home Clerk: the own drop-off). A pattern without inputs, or whose output reached an active Max rule of the Home Clerk, passes its turn without an error status; without a Max rule it runs until Clerk and drop-off are full ("Drop-off full"). Nothing is reserved: inputs stay usable for everyone until they are taken. The turn is not saved. Setting the box checks the pattern, so the checkmark limit applies. Innate recipes can be set as well. A recipe with [`drops`](#drops) runs only here.
 
 ## Not part of the profile
 

@@ -69,7 +69,9 @@ final class InnateRecipeCategory implements DisplayCategory<InnateRecipeDisplay>
         widgets.add(Widgets.createArrow(new Point(x + InnateRecipeLayout.ARROW_X, y + InnateRecipeLayout.MIDDLE_Y)));
         Point output = new Point(x + InnateRecipeLayout.OUTPUT_X, y + InnateRecipeLayout.MIDDLE_Y);
         widgets.add(Widgets.createResultSlotBackground(output));
-        widgets.add(Widgets.createSlot(output).entries(EntryIngredients.of(recipe.result())).disableBackground().markOutput());
+        widgets.add(Widgets.createSlot(output).entries(InnateRecipeLayout.outputs(recipe).stream().map(EntryStacks::of)
+                .map(stack -> stack.tooltip(InnateRecipeLayout.dropLines(recipe, stack.getValue()).toArray(Component[]::new))).toList())
+                .disableBackground().markOutput());
         recipe.tool().ifPresent(tool -> widgets.add(Widgets.createSlot(new Point(x + InnateRecipeLayout.TOOL_X, y + InnateRecipeLayout.EXTRAS_Y))
                 .entries(EntryIngredients.ofIngredient(tool).stream()
                         .map(stack -> stack.copy().tooltip(Component.translatable(InnateRecipeLayout.TOOL_LINE))).toList())));

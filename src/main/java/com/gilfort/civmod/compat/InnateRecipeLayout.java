@@ -1,15 +1,22 @@
 package com.gilfort.civmod.compat;
 
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
+import com.gilfort.civmod.api.DropOutcome;
 import com.gilfort.civmod.api.JobCraftingRecipe;
+import com.gilfort.civmod.client.ClientDropPools;
+import com.gilfort.civmod.job.DropDraw;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.advancements.predicates.StatePropertiesPredicate;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ItemStackTemplate;
 import net.minecraft.world.item.SpawnEggItem;
 
 /**
@@ -55,6 +62,10 @@ public final class InnateRecipeLayout {
     public static final String REQUIRES_LINE = TITLE + ".requires";
     /** Tooltip line of a required block state. */
     public static final String STATE_LINE = TITLE + ".state";
+    /** Tooltip line of an item a {@code drops} recipe can give: its chance and the skill level it needs. */
+    public static final String DROP_LINE = TITLE + ".drop";
+
+    private static final DecimalFormat PERCENT = new DecimalFormat("0.#", DecimalFormatSymbols.getInstance(Locale.ROOT));
 
     private InnateRecipeLayout() {
     }
@@ -92,6 +103,35 @@ public final class InnateRecipeLayout {
     public static Optional<Component> stateLine(StatePropertiesPredicate state) {
         return StatePropertiesPredicate.CODEC.encodeStart(JsonOps.INSTANCE, state).result()
                 .map(json -> Component.translatable(STATE_LINE, json.toString().replaceAll("[{}\"]", "").replace(":", ": ").replace(",", ", ")));
+    }
+
+    /**
+     * @param recipe an innate recipe
+     * @return what the result slot shows: its result, then every kind of item its {@code drops} can give (each once)
+     */
+    public static List<ItemStack> outputs(JobCraftingRecipe recipe) {
+        List<ItemStack> outputs = new ArrayList<>();
+        recipe.result().ifPresent(result -> outputs.add(result.create()));
+        recipe.drops().ifPresent(drops -> ClientDropPools.outcomes(drops).stream().flatMap(outcome -> outcome.results().stream())
+                .map(ItemStackTemplate::create)
+                .filter(stack -> outputs.stream().noneMatch(shown -> ItemStack.isSameItemSameComponents(shown, stack))).forEach(outputs::add));
+        return outputs;
+    }
+
+    /**
+     * @param recipe an innate recipe
+     * @param shown  an item of the result slot
+     * @return the tooltip lines of that item for the outcomes of the recipe's {@code drops} that give it: its chance and
+     *         the level it needs, one line per outcome (none for the result and for items the draw cannot give)
+     */
+    public static List<Component> dropLines(JobCraftingRecipe recipe, ItemStack shown) {
+        if (recipe.drops().isEmpty()) {
+            return List.of();
+        }
+        List<DropOutcome> outcomes = ClientDropPools.outcomes(recipe.drops().get());
+        return outcomes.stream().filter(outcome -> outcome.results().stream().anyMatch(stack -> ItemStack.isSameItemSameComponents(stack.create(), shown)))
+                .map(outcome -> (Component) Component.translatable(DROP_LINE, PERCENT.format(DropDraw.percentAtUnlock(outcomes, outcome)), outcome.minLevel()))
+                .toList();
     }
 
     /**

@@ -44,7 +44,10 @@ final class InnateRecipeCategory extends AbstractRecipeCategory<RecipeHolder<Job
         for (int i = 0; i < inputs.size(); i++) {
             builder.addInputSlot(InnateRecipeLayout.inputX(i), InnateRecipeLayout.inputY(i)).setStandardSlotBackground().add(inputs.get(i));
         }
-        builder.addOutputSlot(InnateRecipeLayout.OUTPUT_X, InnateRecipeLayout.MIDDLE_Y).setOutputSlotBackground().add(recipe.result());
+        builder.addOutputSlot(InnateRecipeLayout.OUTPUT_X, InnateRecipeLayout.MIDDLE_Y).setOutputSlotBackground()
+                .addItemStacks(InnateRecipeLayout.outputs(recipe))
+                .addRichTooltipCallback((view, tooltip) -> view.getDisplayedItemStack()
+                        .ifPresent(shown -> InnateRecipeLayout.dropLines(recipe, shown).forEach(tooltip::add)));
         builder.setShapeless();
         recipe.tool().ifPresent(tool -> builder.addSlot(RecipeIngredientRole.CRAFTING_STATION, InnateRecipeLayout.TOOL_X, InnateRecipeLayout.EXTRAS_Y)
                 .setStandardSlotBackground().add(tool)

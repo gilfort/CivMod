@@ -1,0 +1,21 @@
+{
+  "outcomes": [
+    { "weight": 200, "min_level": 1, "results": [{ "id": "minecraft:bone_meal" }] },
+    { "weight": 150, "min_level": 1, "results": [{ "id": "minecraft:white_dye" }] },
+    { "weight": 150, "min_level": 1, "results": [{ "id": "minecraft:gray_dye" }] },
+    { "weight": 150, "min_level": 1, "results": [{ "id": "minecraft:light_gray_dye" }] },
+    { "weight": 150, "min_level": 1, "results": [{ "id": "minecraft:blue_dye" }] },
+    { "weight": 200, "min_level": 1, "results": [{ "id": "minecraft:flint" }] },
+    { "weight": 100, "min_level": 21, "results": [{ "id": "minecraft:redstone" }] },
+    { "weight": 80, "min_level": 21, "results": [{ "id": "minecraft:raw_copper" }] },
+    { "weight": 70, "min_level": 21, "results": [{ "id": "minecraft:raw_iron" }] },
+    { "weight": 50, "min_level": 21, "results": [{ "id": "minecraft:lapis_lazuli" }] },
+    { "weight": 40, "min_level": 41, "results": [{ "id": "minecraft:raw_gold" }] },
+    { "weight": 30, "min_level": 41, "results": [{ "id": "minecraft:prismarine_shard" }] },
+    { "weight": 30, "min_level": 41, "results": [{ "id": "minecraft:glowstone_dust" }] },
+    { "weight": 15, "min_level": 61, "results": [{ "id": "minecraft:emerald" }] },
+    { "weight": 15, "min_level": 61, "results": [{ "id": "minecraft:prismarine_crystals" }] },
+    { "weight": 6, "min_level": 81, "results": [{ "id": "minecraft:diamond" }] },
+    { "weight": 4, "min_level": 81, "results": [{ "id": "minecraft:netherite_scrap" }] }
+  ]
+}

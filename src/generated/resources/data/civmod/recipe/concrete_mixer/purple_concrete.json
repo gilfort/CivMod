@@ -1,0 +1,12 @@
+{
+  "type": "civmod:job_crafting",
+  "ingredients": [
+    "minecraft:purple_concrete_powder"
+  ],
+  "jobs": [
+    "civmod:concrete_mixer"
+  ],
+  "result": {
+    "id": "minecraft:purple_concrete"
+  }
+}

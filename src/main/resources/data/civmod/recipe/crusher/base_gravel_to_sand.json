@@ -1,0 +1,6 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:crusher"],
+  "ingredients": ["minecraft:gravel"],
+  "result": { "id": "minecraft:sand" }
+}

@@ -1,0 +1,6 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:crusher"],
+  "ingredients": ["minecraft:glowstone"],
+  "result": { "id": "minecraft:glowstone_dust", "count": 4 }
+}

@@ -334,7 +334,7 @@ final class WorkRules {
         for (CollectionRecipes.Offer offer : offered) {
             if (excludedTypes.contains(CollectionRecipes.type(offer.holder()))) {
                 excluded++;
-            } else if (!atMax.contains(offer.holder().value().result().create().getItem())) {
+            } else if (!atMax.contains(CollectionRecipes.product(offer.holder().value()).getItem())) {
                 return End.NONE;
             }
         }
