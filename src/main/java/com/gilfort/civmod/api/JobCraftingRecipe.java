@@ -300,12 +300,13 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Input> inputs, Optio
     public static final RecipeSerializer<JobCraftingRecipe> SERIALIZER = new RecipeSerializer<>(MAP_CODEC, STREAM_CODEC);
 
     /**
-     * Checks the weight and keeps the lists as copies.
+     * Checks the weight and keeps the lists as copies. The given {@code ingredients} are ignored: they are always worked
+     * out again from {@code inputs}, so the two can never disagree.
      */
     public JobCraftingRecipe {
         jobs = List.copyOf(jobs);
         inputs = List.copyOf(inputs);
-        ingredients = List.copyOf(ingredients);
+        ingredients = flatten(inputs);
         if (weight < 1) {
             throw new IllegalArgumentException("weight must be at least 1: " + weight);
         }
@@ -326,7 +327,7 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Input> inputs, Optio
      */
     public JobCraftingRecipe(List<Identifier> jobs, List<Input> inputs, Optional<ItemStackTemplate> result, Optional<Ingredient> tool,
             Optional<TagKey<Block>> station, Optional<Requirement> requires, int weight, Optional<Drops> drops, Optional<BlockState> stationAfter) {
-        this(jobs, inputs, result, tool, station, requires, weight, drops, stationAfter, flatten(inputs));
+        this(jobs, inputs, result, tool, station, requires, weight, drops, stationAfter, List.of());
     }
 
     private static List<Ingredient> flatten(List<Input> inputs) {
