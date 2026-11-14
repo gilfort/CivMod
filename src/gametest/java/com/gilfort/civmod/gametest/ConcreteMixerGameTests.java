@@ -28,6 +28,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LayeredCauldronBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.registries.RegisterEvent;
@@ -150,19 +152,20 @@ public final class ConcreteMixerGameTests {
         Setup setup = FletcherGameTests.setup(helper, List.of(new ItemStack(powder(DyeColor.WHITE))), List.of(new ItemStack(concrete(DyeColor.WHITE))));
         BlockPos craft = mixery(helper, new BlockPos(1, 1, 5));
         BlockPos cauldron = new BlockPos(3, 1, 5);
-        helper.setBlock(cauldron, Blocks.WATER_CAULDRON);
+        BlockState filled = Blocks.WATER_CAULDRON.defaultBlockState().setValue(LayeredCauldronBlock.LEVEL, 2);
+        helper.setBlock(cauldron, filled);
         Settler settler = FletcherGameTests.worker(helper, setup, craft, mixer());
         checkOnly(helper, craft, concrete(DyeColor.WHITE));
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), concrete(DyeColor.WHITE)) == 1,
                 "The white concrete arrived (status " + settler.getWork().status(craft) + ")");
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), powder(DyeColor.WHITE)) == 0, "The powder is used up");
-        helper.assertTrue(helper.getBlockState(cauldron).is(Blocks.WATER_CAULDRON), "The cauldron still holds water: " + helper.getBlockState(cauldron));
+        helper.assertTrue(helper.getBlockState(cauldron).equals(filled), "The cauldron holds the same water level: " + helper.getBlockState(cauldron));
         FletcherGameTests.cleanUp(setup, settler);
         helper.succeed();
     }
 
-    /** Without a water cauldron nothing is mixed and the Mixer reports that it has no work place. */
+    /** Without a water cauldron nothing is mixed and the Mixer says it needs a station nearby. */
     private static void withoutCauldron(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Setup setup = FletcherGameTests.setup(helper, List.of(new ItemStack(powder(DyeColor.WHITE))), List.of(new ItemStack(concrete(DyeColor.WHITE))));
@@ -172,7 +175,8 @@ public final class ConcreteMixerGameTests {
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), concrete(DyeColor.WHITE)) == 0, "No concrete without a water cauldron");
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), powder(DyeColor.WHITE)) == 1, "The powder stays");
-        helper.assertTrue(settler.getWork().status(craft) == JobStatus.NO_WORK_PLACE, "Status: " + settler.getWork().status(craft));
+        helper.assertTrue(settler.getWork().status(craft) == JobStatus.BLOCKED, "Status: " + settler.getWork().status(craft));
+        helper.assertValueEqual(settler.getWork().statusText(craft).getString(), "Needs a station nearby: Water Cauldron", "Reason");
         FletcherGameTests.cleanUp(setup, settler);
         helper.succeed();
     }

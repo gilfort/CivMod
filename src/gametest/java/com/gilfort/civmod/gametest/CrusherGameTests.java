@@ -196,7 +196,7 @@ public final class CrusherGameTests {
         helper.succeed();
     }
 
-    /** Without a grindstone nothing is crushed and the Crusher reports that it has no work place. */
+    /** Without a grindstone nothing is crushed and the Crusher says it needs a station nearby. */
     private static void withoutGrindstone(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Setup setup = FletcherGameTests.setup(helper, List.of(new ItemStack(Items.COBBLESTONE)), List.of(new ItemStack(Items.GRAVEL)));
@@ -205,7 +205,8 @@ public final class CrusherGameTests {
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.GRAVEL) == 0, "No gravel without a grindstone");
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.COBBLESTONE) == 1, "The cobblestone stays");
-        helper.assertTrue(settler.getWork().status(craft) == JobStatus.NO_WORK_PLACE, "Status: " + settler.getWork().status(craft));
+        helper.assertTrue(settler.getWork().status(craft) == JobStatus.BLOCKED, "Status: " + settler.getWork().status(craft));
+        helper.assertValueEqual(settler.getWork().statusText(craft).getString(), "Needs a station nearby: Grindstone", "Reason");
         FletcherGameTests.cleanUp(setup, settler);
         helper.succeed();
     }
