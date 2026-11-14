@@ -10,12 +10,12 @@ import com.gilfort.civmod.api.DropOutcome;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ProducingProfile;
-import com.gilfort.civmod.datagen.FloristRecipes;
 import com.gilfort.civmod.gametest.FletcherGameTests.Setup;
 import com.gilfort.civmod.job.DropPools;
 import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.menu.PatternsTabData;
+import com.gilfort.civmod.registry.ModItems;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.Patterns;
@@ -23,6 +23,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -30,6 +31,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemStackTemplate;
@@ -116,11 +118,11 @@ public final class FloristGameTests {
         }
     }
 
-    /** The roll that lands on the first outcome with these results: the weight in front of it. */
-    private static int rollFor(List<DropOutcome> outcomes, List<ItemStackTemplate> results) {
+    /** The roll that lands on the first outcome with these results and this tag result: the weight in front of it. */
+    private static int rollFor(List<DropOutcome> outcomes, List<ItemStackTemplate> results, boolean withTag) {
         int before = 0;
         for (DropOutcome outcome : outcomes) {
-            if (outcome.results().equals(results)) {
+            if (outcome.results().equals(results) && outcome.tagResult().isPresent() == withTag) {
                 return before;
             }
             before += outcome.weight();
@@ -128,13 +130,17 @@ public final class FloristGameTests {
         throw new AssertionError("No outcome gives " + results + " in " + outcomes);
     }
 
-    private static List<ItemStackTemplate> results(Outcome outcome, List<Item> others) {
+    private static List<ItemStackTemplate> results(Outcome outcome) {
         return switch (outcome) {
             case DOUBLE -> List.of(new ItemStackTemplate(FLOWER, 2));
-            case DIFFERENT -> List.of(new ItemStackTemplate(FLOWER), new ItemStackTemplate(others.getFirst()));
-            case COMES_BACK -> List.of(new ItemStackTemplate(FLOWER));
+            case DIFFERENT, COMES_BACK -> List.of(new ItemStackTemplate(FLOWER));
             case LOST -> List.of();
         };
+    }
+
+    /** The scripted draw of an outcome: the roll that lands on it and, for the different flower, the index in the tag. */
+    private static RandomSource scriptFor(List<DropOutcome> outcomes, Outcome outcome, int tagIndex) {
+        return DropsGameTests.scripted(rollFor(outcomes, results(outcome), outcome == Outcome.DIFFERENT), tagIndex);
     }
 
     /** Every item of the two flower tags as the running game sees them. */
@@ -144,8 +150,14 @@ public final class FloristGameTests {
                 .map(Holder::value).distinct().toList();
     }
 
-    private static int weightOf(List<DropOutcome> outcomes, List<ItemStackTemplate> results) {
-        return outcomes.stream().filter(outcome -> outcome.results().equals(results)).mapToInt(DropOutcome::weight).sum();
+    /** The flowers that have a recipe of their own: the vanilla ones (the test datapack adds a beer of civmod to the tag). */
+    private static List<Item> vanillaFlowers(ServerLevel level) {
+        return flowers(level).stream().filter(flower -> BuiltInRegistries.ITEM.getKey(flower).getNamespace().equals(Identifier.DEFAULT_NAMESPACE)).toList();
+    }
+
+    private static int weightOf(List<DropOutcome> outcomes, List<ItemStackTemplate> results, boolean withTag) {
+        return outcomes.stream().filter(outcome -> outcome.results().equals(results) && outcome.tagResult().isPresent() == withTag)
+                .mapToInt(DropOutcome::weight).sum();
     }
 
     /**
@@ -172,22 +184,27 @@ public final class FloristGameTests {
         helper.succeed();
     }
 
-    /** Every flower of the two flower tags has a recipe of its own: its outcomes weigh 75, 10, 10 and 5 in a hundred. */
+    /**
+     * Every vanilla flower of the two flower tags has a recipe of its own with exactly four outcomes that weigh 75, 10, 10
+     * and 5; the "different flower" outcome takes its second flower from the civmod flower tag.
+     */
     private static void recipesPerFlower(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos pos = florist(helper, new BlockPos(1, 1, 1));
-        List<Item> flowers = flowers(level);
+        List<Item> flowers = vanillaFlowers(level);
         helper.assertTrue(flowers.contains(Items.POPPY) && flowers.contains(Items.SUNFLOWER), "Small and tall flowers are listed: " + flowers);
         Patterns.syncInnate(level, pos, florist());
         helper.assertTrue(InnateRecipes.of(level, florist()).size() == flowers.size(),
                 "One recipe per flower: " + InnateRecipes.of(level, florist()).size() + " for " + flowers.size());
         for (Item flower : flowers) {
             List<DropOutcome> outcomes = DropPools.outcomes(recipeOf(level, pos, flower).drops().orElseThrow());
-            int others = flowers.size() - 1;
-            helper.assertTrue(outcomes.stream().mapToInt(DropOutcome::weight).sum() == 100 * others, "Weights add up for " + flower);
-            helper.assertTrue(weightOf(outcomes, List.of(new ItemStackTemplate(flower, 2))) == 75 * others, "75 % double for " + flower);
-            helper.assertTrue(weightOf(outcomes, List.of(new ItemStackTemplate(flower))) == 10 * others, "10 % comes back for " + flower);
-            helper.assertTrue(weightOf(outcomes, List.of()) == 5 * others, "5 % lost for " + flower);
+            helper.assertTrue(outcomes.size() == 4, "Four outcomes for " + flower + ": " + outcomes);
+            helper.assertTrue(weightOf(outcomes, List.of(new ItemStackTemplate(flower, 2)), false) == 75, "75 % double for " + flower);
+            helper.assertTrue(weightOf(outcomes, List.of(new ItemStackTemplate(flower)), true) == 10, "10 % a different flower for " + flower);
+            helper.assertTrue(weightOf(outcomes, List.of(new ItemStackTemplate(flower)), false) == 10, "10 % comes back for " + flower);
+            helper.assertTrue(weightOf(outcomes, List.of(), false) == 5, "5 % lost for " + flower);
+            DropOutcome different = outcomes.stream().filter(outcome -> outcome.tagResult().isPresent()).findFirst().orElseThrow();
+            helper.assertTrue(different.tagResult().orElseThrow().tag().location().equals(CivMod.id("florist_flowers")), "The tag of the different flower");
         }
         helper.succeed();
     }
@@ -203,7 +220,7 @@ public final class FloristGameTests {
         List<Item> others = flowers(level).stream().filter(flower -> !flower.equals(FLOWER)).toList();
         List<DropOutcome> outcomes = DropPools.outcomes(recipe.drops().orElseThrow());
         Settler settler = FletcherGameTests.worker(helper, setup, craft, florist());
-        DropPools.script(DropsGameTests.scripted(rollFor(outcomes, results(outcome, others))));
+        DropPools.script(scriptFor(outcomes, outcome, 0));
         try {
             CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
             int flowers = FletcherGameTests.count(level, setup.clerk(), FLOWER);
@@ -236,7 +253,7 @@ public final class FloristGameTests {
         alwaysMake(helper, craft, recipe, 4);
         List<DropOutcome> outcomes = DropPools.outcomes(recipe.drops().orElseThrow());
         Settler settler = FletcherGameTests.worker(helper, setup, craft, florist());
-        DropPools.script(DropsGameTests.scripted(rollFor(outcomes, List.of(new ItemStackTemplate(FLOWER, 2)))));
+        DropPools.script(scriptFor(outcomes, Outcome.DOUBLE, 0));
         try {
             CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
             helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), FLOWER) == 8, "4 crafts, 8 flowers at the Home Clerk: " + FletcherGameTests.count(level, setup.clerk(), FLOWER) + " flowers, " + FletcherGameTests.count(level, setup.clerk(), Items.BONE_MEAL) + " bone meal");
@@ -250,18 +267,22 @@ public final class FloristGameTests {
     }
 
     /**
-     * A flower of another mod in the flower tags joins the "different type" pool of every other flower's recipe: the
-     * drops are built from the flowers the tags hold, whoever added them.
+     * A flower another pack adds to the flower tags comes up at runtime: the test datapack puts a beer into
+     * {@code #c:flowers/small}, and a scripted draw of the "different flower" outcome of the poppy recipe lands on it. The
+     * flower of the recipe itself is never drawn as the different one.
      */
     private static void foreignFlower(GameTestHelper helper) {
-        Item foreign = Items.STICK;
-        List<Item> flowers = List.of(Items.POPPY, Items.DANDELION, foreign);
-        List<DropOutcome> outcomes = FloristRecipes.outcomes(Items.POPPY, flowers).outcomes();
-        helper.assertTrue(weightOf(outcomes, List.of(new ItemStackTemplate(Items.POPPY), new ItemStackTemplate(foreign))) == 10, "The foreign flower can grow");
-        helper.assertTrue(weightOf(outcomes, List.of(new ItemStackTemplate(Items.POPPY), new ItemStackTemplate(Items.DANDELION))) == 10, "The dandelion can grow");
-        helper.assertTrue(outcomes.stream().mapToInt(DropOutcome::weight).sum() == 200, "Two other flowers, 200 in total: " + outcomes);
-        List<DropOutcome> ofForeign = FloristRecipes.outcomes(foreign, flowers).outcomes();
-        helper.assertTrue(weightOf(ofForeign, List.of(new ItemStackTemplate(foreign, 2))) == 150, "The foreign flower doubles like the others");
+        ServerLevel level = helper.getLevel();
+        BlockPos pos = florist(helper, new BlockPos(1, 1, 1));
+        Item foreign = ModItems.BEER.get();
+        helper.assertTrue(flowers(level).contains(foreign), "The test datapack adds a beer to the small flowers");
+        JobCraftingRecipe recipe = recipeOf(level, pos, FLOWER);
+        List<DropOutcome> outcomes = DropPools.outcomes(recipe.drops().orElseThrow());
+        List<Item> candidates = outcomes.stream().flatMap(outcome -> outcome.tagResult().stream()).findFirst().orElseThrow().candidates(List.of(FLOWER));
+        helper.assertTrue(candidates.contains(foreign) && !candidates.contains(FLOWER), "The beer can be the different flower, the poppy cannot: " + candidates);
+        List<ItemStack> drawn = DropPools.draw(recipe.drops().orElseThrow(), 1, scriptFor(outcomes, Outcome.DIFFERENT, candidates.indexOf(foreign)),
+                List.of(new ItemStack(FLOWER), new ItemStack(Items.BONE_MEAL)));
+        helper.assertTrue(drawn.size() == 2 && drawn.get(0).is(FLOWER) && drawn.get(1).is(foreign), "The poppy and the beer: " + drawn);
         helper.succeed();
     }
 }
