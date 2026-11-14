@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.ToIntFunction;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -218,14 +219,23 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
     }
 
     /**
-     * Removes a settler's claim.
+     * Removes a settler's claim, its whole amount open again (the settler released it).
      *
-     * @param settler  the producer settler
-     * @param reopened whether its amount is open again (released) or gone (finished and delivered)
+     * @param settler the producer settler
      * @return the changed request
      */
-    public Request withoutClaim(UUID settler, boolean reopened) {
-        return withDelivered(settler, reopened ? 0 : Integer.MAX_VALUE);
+    public Request withReleasedClaim(UUID settler) {
+        return withoutClaim(settler, Claim::amount);
+    }
+
+    /**
+     * Removes a settler's claim after it delivered all of it: the amount is gone.
+     *
+     * @param settler the producer settler
+     * @return the changed request
+     */
+    public Request withDeliveredInFull(UUID settler) {
+        return withoutClaim(settler, claim -> 0);
     }
 
     /**
@@ -236,7 +246,11 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
      * @return the changed request
      */
     public Request withDelivered(UUID settler, int delivered) {
-        int back = claimOf(settler).map(claim -> Math.max(0, claim.amount() - delivered)).orElse(0);
+        return withoutClaim(settler, claim -> Math.max(0, claim.amount() - delivered));
+    }
+
+    private Request withoutClaim(UUID settler, ToIntFunction<Claim> reopened) {
+        int back = claimOf(settler).map(reopened::applyAsInt).orElse(0);
         List<Claim> changed = claims.stream().filter(claim -> !claim.settler().equals(settler)).toList();
         return new Request(id, item, amount + back, priority, target, rule, parent, changed, missing, reservedFor);
     }

@@ -1,7 +1,5 @@
 package com.gilfort.civmod.api;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -10,8 +8,6 @@ import org.jetbrains.annotations.ApiStatus;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
-import net.minecraft.core.Holder;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -114,19 +110,5 @@ public record DropOutcome(int weight, int minLevel, List<ItemStackTemplate> resu
                 TagKey.streamCodec(Registries.ITEM), TagResult::tag,
                 ByteBufCodecs.VAR_INT, TagResult::count,
                 TagResult::new);
-
-        /**
-         * @param excluded the items the recipe used up, which the draw never picks
-         * @return the members of the tag the draw can pick, in tag order; empty while the tag is unknown or has no other member
-         */
-        public List<Item> candidates(Collection<? extends Item> excluded) {
-            List<Item> found = new ArrayList<>();
-            for (Holder<Item> holder : BuiltInRegistries.ITEM.getTagOrEmpty(tag)) {
-                if (!excluded.contains(holder.value())) {
-                    found.add(holder.value());
-                }
-            }
-            return found;
-        }
     }
 }

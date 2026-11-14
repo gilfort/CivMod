@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 import org.jspecify.annotations.Nullable;
 
@@ -35,6 +36,7 @@ import com.gilfort.civmod.settlement.Fuels;
 import com.gilfort.civmod.settlement.Holds;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.settlement.LibraryRestPoints;
 import com.gilfort.civmod.settlement.OccupiedPlaces;
 import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.Requests;
@@ -1046,28 +1048,18 @@ final class ProducingLoop implements CategoryLoop {
         Optional<RecipeHolder<?>> recipe = recipe(level, pattern);
         // Read before the buffer takes the stacks.
         List<XpGain> xp = SettlerXp.gains(JobBalancing.of(job.jobType()).xp(), recipe.map(holder -> profile(job).xp(level, holder)).orElse(XpGain.NONE), made.all());
-        int wear = 1;
-        if (recipe.isPresent()) {
-            List<ItemStack> produced = profile(job).execute(level, recipe.get(), result, List.copyOf(consumed),
-                    Patterns.restPoints(level, job.jobBlock(), job.jobType()));
-            produced.forEach(buffer::add);
-            wear = profile(job).toolWear(produced);
-        } else {
-            // The recipe is gone (datapack change): the pattern's own output, as recorded.
-            buffer.add(result);
-            leftovers.forEach(buffer::add);
-        }
+        List<ItemStack> produced = recipe.isPresent()
+                ? profile(job).execute(level, recipe.get(), result, List.copyOf(consumed), new LibraryRestPoints(level, job.jobBlock(), job.jobType()))
+                // The recipe is gone (datapack change): the pattern's own output, as recorded.
+                : Stream.concat(Stream.of(result), leftovers.stream()).toList();
+        produced.forEach(buffer::add);
         made.drawn().forEach(stack -> {
             buffer.add(stack);
             round.drawn.add(stack.getItem());
         });
-        // 1 durability per execution (the profile can change that), Unbreaking as usual (like a Resource Collection tool).
-        int durability = wear;
-        worn.ifPresent(stack -> {
-            for (int used = 0; used < durability && !stack.isEmpty(); used++) {
-                SettlerTools.wear(level, settler, stack);
-            }
-        });
+        // Unbreaking as usual (like a Resource Collection tool); a profile can ask for more than 1 durability per execution.
+        int wear = recipe.isPresent() ? profile(job).toolWear(produced) : 1;
+        worn.ifPresent(stack -> SettlerTools.wear(level, settler, stack, wear));
         shell.collectXp(level, xp, worn.orElse(ItemStack.EMPTY));
         shell.gainExp(level, job, job.jobType().baseExp() * site.level(), site.skillCap());
         innate.flatMap(JobCraftingRecipe::stationAfter).ifPresent(after -> shell.workplace(job.jobBlock()).replaceStation(level, execution.station(), after));
@@ -1111,7 +1103,7 @@ final class ProducingLoop implements CategoryLoop {
         }
         rest.forEach(buffer::add);
         workplace.setRound(null);
-        // Only what was made counts: a Composter's round of single items can make less than it claimed, the rest stays open.
+        // Only what was made counts: a profile can make less than the round claimed, the rest of the claim stays open.
         int delivered = product.stream().filter(stack -> stack.is(round.item)).mapToInt(ItemStack::getCount).sum();
         round.request.ifPresent(id -> settlementOf(data, id).ifPresent(found -> Requests.finish(data, found, id, settler.getUUID(), delivered)));
         if (dropOff.isPresent()) {

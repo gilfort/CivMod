@@ -81,8 +81,9 @@ public final class FloristRecipes extends JsonCodecProvider<Recipe<?>> {
     /**
      * Reads the flowers from the tag files on the class path, because the item tags are not bound while data is generated.
      * Every pack with a file for a tag adds to it, nested {@code #tag} entries are followed, and ids that are no item are
-     * skipped. Only vanilla flowers get a recipe of their own: the data run sees the other mods of the dev environment, and a recipe of a mod a player did not install would break the datapack. Flowers of other mods still come up as the
-     * different flower of these recipes, and the mod or pack that ships them can add a recipe for them.
+     * skipped. Only vanilla flowers get a recipe of their own: the data run sees the other mods of the dev environment,
+     * and a recipe of a mod a player did not install would break the datapack. Flowers of other mods still come up as
+     * the different flower of these recipes, and the mod or pack that ships them can add a recipe for them.
      *
      * @return every vanilla flower of the small and tall flower tags, once, ordered by item id
      */

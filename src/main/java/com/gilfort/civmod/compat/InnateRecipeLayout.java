@@ -12,6 +12,7 @@ import com.gilfort.civmod.api.DropOutcome;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.client.ClientDropPools;
 import com.gilfort.civmod.job.DropDraw;
+import com.gilfort.civmod.job.DropPools;
 import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.logistics.PatternRecipes;
 import com.mojang.serialization.JsonOps;
@@ -182,7 +183,7 @@ public final class InnateRecipeLayout {
                 .map(ItemStackTemplate::create)
                 .filter(stack -> outputs.stream().noneMatch(shown -> ItemStack.isSameItemSameComponents(shown, stack))).forEach(outputs::add));
         recipe.drops().ifPresent(drops -> ClientDropPools.outcomes(drops).stream().flatMap(outcome -> outcome.tagResult().stream())
-                .flatMap(tagResult -> tagResult.candidates(usedUp(recipe)).stream()).map(ItemStack::new)
+                .flatMap(tagResult -> DropPools.candidates(tagResult.tag(), usedUp(recipe)).stream()).map(ItemStack::new)
                 .filter(stack -> outputs.stream().noneMatch(shown -> ItemStack.isSameItemSameComponents(shown, stack))).forEach(outputs::add));
         return outputs;
     }
@@ -207,7 +208,7 @@ public final class InnateRecipeLayout {
                 .map(outcome -> (Component) Component.translatable(DROP_LINE, PERCENT.format(DropDraw.percentAtUnlock(outcomes, outcome)), outcome.minLevel()))
                 .toList());
         for (DropOutcome outcome : outcomes) {
-            outcome.tagResult().filter(tagResult -> tagResult.candidates(usedUp(recipe)).contains(shown.getItem())).ifPresent(tagResult -> lines.add(
+            outcome.tagResult().filter(tagResult -> DropPools.candidates(tagResult.tag(), usedUp(recipe)).contains(shown.getItem())).ifPresent(tagResult -> lines.add(
                     Component.translatable(DROP_TAG_LINE, PERCENT.format(DropDraw.percentAtUnlock(outcomes, outcome)), outcome.minLevel(),
                             "#" + tagResult.tag().location())));
         }

@@ -590,7 +590,7 @@ public final class SettlementBlock {
     }
 
     private ProducingFields producingFields() {
-        List<SavedLibrary> saved = libraries.entrySet().stream().filter(entry -> !entry.getValue().patterns().isEmpty())
+        List<SavedLibrary> saved = libraries.entrySet().stream().filter(entry -> !entry.getValue().patterns().isEmpty() || entry.getValue().restPoints() != 0)
                 .map(entry -> new SavedLibrary(entry.getKey(), List.copyOf(entry.getValue().patterns()), entry.getValue().checkLimit(),
                         Map.copyOf(entry.getValue().workerLimits()), entry.getValue().restPoints())).toList();
         return new ProducingFields(saved, byDeliveryman, fuel);

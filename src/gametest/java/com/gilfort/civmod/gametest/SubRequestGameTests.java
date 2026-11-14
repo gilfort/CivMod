@@ -102,6 +102,12 @@ public final class SubRequestGameTests {
         return settler;
     }
 
+    /** A producer delivers the whole of its claim on a request. */
+    static void finishInFull(SettlementData data, Settlement settlement, UUID id, UUID settler) {
+        int claimed = Requests.get(settlement, id).flatMap(request -> request.claimOf(settler)).map(Request.Claim::amount).orElse(0);
+        Requests.finish(data, settlement, id, settler, claimed);
+    }
+
     /** Catches up some hours of the previous workday for the settlers one after the other. */
     private static void catchUp(ServerLevel level, Settler... settlers) {
         long dayStart = Math.floorDiv(level.getOverworldClockTime(), 24000L) * 24000L;
@@ -224,7 +230,7 @@ public final class SubRequestGameTests {
                     && child.target().equals(Optional.of(clerk)), job + ": child of the parent: " + child);
             helper.assertTrue(Requests.claim(data, settlement, child.id(), producer, "Worker", 2) == 2, job + ": claimed");
             helper.assertTrue(ClerkStorage.dropOff(level, clerk).insert(new ItemStack(item, 2)).isEmpty(), job + ": result stored");
-            Requests.finish(data, settlement, child.id(), producer);
+            SubRequestGameTests.finishInFull(data, settlement, child.id(), producer);
             helper.assertTrue(Requests.children(settlement, parent.id()).isEmpty(), job + ": child done");
             helper.assertTrue(count(level, clerk, item) == before, job + ": held for the parent, nobody else sees it");
             helper.assertTrue(Holds.heldFor(settlement, ReservedFor.request(parent.id())).getOrDefault(clerk, Map.of()).getOrDefault(item, 0) == 2,
@@ -314,7 +320,7 @@ public final class SubRequestGameTests {
         Request child = Requests.children(settlement, parent.id()).getFirst();
         UUID producer = UUID.randomUUID();
         Requests.claim(data, settlement, child.id(), producer, "Carl", 2);
-        Requests.finish(data, settlement, child.id(), producer);
+        SubRequestGameTests.finishInFull(data, settlement, child.id(), producer);
         helper.assertTrue(ClerkTabData.of(level, clerk).tasks().size() == 1, "A fulfilled sub-request disappears");
         helper.succeed();
     }

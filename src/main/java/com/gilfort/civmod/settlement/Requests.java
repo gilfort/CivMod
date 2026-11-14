@@ -145,7 +145,7 @@ public final class Requests {
      * @param settler    the producer settler
      */
     public static void release(SettlementData data, Settlement settlement, UUID id, UUID settler) {
-        update(data, settlement, id, found -> found.withoutClaim(settler, true));
+        update(data, settlement, id, found -> found.withReleasedClaim(settler));
     }
 
     /**
@@ -166,23 +166,11 @@ public final class Requests {
     }
 
     /**
-     * A producer delivered its claimed amount: the claim ends without reopening it; a request with nothing open and no
-     * claim left is done and removed. The posting Clerk checks its rules right after the delivery. The result of a
-     * sub-request is held at its Clerk for the parent request, that of a request with a reservation for its holder ({@link Holds}).
-     *
-     * @param data       the dimension's settlement data
-     * @param settlement the settlement
-     * @param id         the request id
-     * @param settler    the producer settler
-     */
-    public static void finish(SettlementData data, Settlement settlement, UUID id, UUID settler) {
-        finish(data, settlement, id, settler, Integer.MAX_VALUE);
-    }
-
-    /**
      * A producer delivered what it made of its claimed amount, which can be less than the claim (the Composter's single
-     * items make no bone meal): the delivered part is done as in {@link #finish(SettlementData, Settlement, UUID, UUID)},
-     * the rest of the claim is open again for the next round.
+     * items make no bone meal): the delivered part is done, the rest of the claim is open again for the next round. A
+     * request with nothing open and no claim left is done and removed; the posting Clerk checks its rules right after the
+     * delivery. The result of a sub-request is held at its Clerk for the parent request, that of a request with a
+     * reservation for its holder ({@link Holds}).
      *
      * @param data       the dimension's settlement data
      * @param settlement the settlement

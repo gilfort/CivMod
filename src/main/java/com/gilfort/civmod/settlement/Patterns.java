@@ -13,7 +13,6 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ProducingProfile;
-import com.gilfort.civmod.api.RestPoints;
 import com.gilfort.civmod.logistics.InnateLayout;
 import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.logistics.Pattern;
@@ -705,34 +704,6 @@ public final class Patterns {
     public static void setNeeds(ServerLevel level, BlockPos pos, Job job, Map<ResourceKey<Recipe<?>>, Component> needs) {
         block(SettlementData.get(level), pos, job).map(block -> block.library(job)).filter(library -> !library.needs().equals(needs))
                 .ifPresent(library -> library.setNeeds(needs));
-    }
-
-    /**
-     * The points a Job keeps between its executions (the Composter's rest toward its next bone meal, vault
-     * {@code Jobs/Composter.md}), saved with the JobBlock. Reads and writes go to the JobBlock's library of the Job; a
-     * JobBlock without one keeps nothing.
-     *
-     * @param level the level
-     * @param pos   the JobBlock
-     * @param job   the Producing Job whose library it is
-     * @return the kept points of the library
-     */
-    public static RestPoints restPoints(ServerLevel level, BlockPos pos, Job job) {
-        return new RestPoints() {
-            @Override
-            public int get() {
-                return block(SettlementData.get(level), pos, job).map(block -> block.restPoints(job)).orElse(0);
-            }
-
-            @Override
-            public void set(int points) {
-                SettlementData data = SettlementData.get(level);
-                block(data, pos, job).map(block -> block.library(job)).filter(library -> library.restPoints() != points).ifPresent(library -> {
-                    library.setRestPoints(points);
-                    data.setDirty();
-                });
-            }
-        };
     }
 
     /**

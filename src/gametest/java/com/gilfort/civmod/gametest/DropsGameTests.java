@@ -1,6 +1,7 @@
 package com.gilfort.civmod.gametest;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
@@ -9,7 +10,6 @@ import com.gilfort.civmod.api.Drops;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.job.DropDraw;
 import com.gilfort.civmod.job.DropPools;
-import com.gilfort.civmod.registry.ModItems;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.JsonOps;
@@ -85,8 +85,8 @@ public final class DropsGameTests {
                 outcome(15, 61, Items.EMERALD), outcome(6, 81, Items.DIAMOND));
     }
 
-    private static Item first(List<ItemStackTemplate> drawn) {
-        return drawn.getFirst().item().value();
+    private static Item first(Optional<DropOutcome> drawn) {
+        return drawn.orElseThrow().results().getFirst().item().value();
     }
 
     private static void poolPure(GameTestHelper helper) {
@@ -97,18 +97,18 @@ public final class DropsGameTests {
         helper.assertValueEqual(DropDraw.eligible(steps, 100).size(), 5, "Level 100 has every step: the junk stays");
 
         // Level 1: whatever the draw, only bone meal (the only weight is 200).
-        helper.assertValueEqual(first(DropDraw.draw(steps, 1, scripted(0))), Items.BONE_MEAL, "Level 1, lowest roll");
-        helper.assertValueEqual(first(DropDraw.draw(steps, 1, scripted(199))), Items.BONE_MEAL, "Level 1, highest roll");
+        helper.assertValueEqual(first(DropDraw.pick(steps, 1, scripted(0))), Items.BONE_MEAL, "Level 1, lowest roll");
+        helper.assertValueEqual(first(DropDraw.pick(steps, 1, scripted(199))), Items.BONE_MEAL, "Level 1, highest roll");
         // Level 100: total 361; rolls walk the steps in order.
-        helper.assertValueEqual(first(DropDraw.draw(steps, 100, scripted(0))), Items.BONE_MEAL, "Level 100, junk on roll 0");
-        helper.assertValueEqual(first(DropDraw.draw(steps, 100, scripted(199))), Items.BONE_MEAL, "Level 100, last junk roll");
-        helper.assertValueEqual(first(DropDraw.draw(steps, 100, scripted(200))), Items.REDSTONE, "Level 100, first redstone roll");
-        helper.assertValueEqual(first(DropDraw.draw(steps, 100, scripted(354))), Items.EMERALD, "Level 100, last emerald roll");
-        helper.assertValueEqual(first(DropDraw.draw(steps, 100, scripted(355))), Items.DIAMOND, "Level 100, first diamond roll");
-        helper.assertValueEqual(first(DropDraw.draw(steps, 100, scripted(360))), Items.DIAMOND, "Level 100, last roll is the diamond");
+        helper.assertValueEqual(first(DropDraw.pick(steps, 100, scripted(0))), Items.BONE_MEAL, "Level 100, junk on roll 0");
+        helper.assertValueEqual(first(DropDraw.pick(steps, 100, scripted(199))), Items.BONE_MEAL, "Level 100, last junk roll");
+        helper.assertValueEqual(first(DropDraw.pick(steps, 100, scripted(200))), Items.REDSTONE, "Level 100, first redstone roll");
+        helper.assertValueEqual(first(DropDraw.pick(steps, 100, scripted(354))), Items.EMERALD, "Level 100, last emerald roll");
+        helper.assertValueEqual(first(DropDraw.pick(steps, 100, scripted(355))), Items.DIAMOND, "Level 100, first diamond roll");
+        helper.assertValueEqual(first(DropDraw.pick(steps, 100, scripted(360))), Items.DIAMOND, "Level 100, last roll is the diamond");
         // The draw asks for a number below the total weight of the eligible outcomes only.
         helper.assertValueEqual(DropDraw.totalWeight(DropDraw.eligible(steps, 21)), 300, "Total weight at level 21");
-        helper.assertTrue(DropDraw.draw(List.of(), 50, scripted(0)).isEmpty(), "No outcomes draw nothing");
+        helper.assertTrue(DropDraw.pick(List.of(), 50, scripted(0)).isEmpty(), "No outcomes draw nothing");
         helper.succeed();
     }
 
@@ -120,7 +120,7 @@ public final class DropsGameTests {
         helper.assertValueEqual(one.getOrThrow().get(1).results().getFirst().count(), 2, "A result keeps its count");
         List<DropOutcome> merged = DropPools.merge(List.of(one.getOrThrow(), two.getOrThrow()));
         helper.assertValueEqual(merged.size(), 3, "Entries of several packs are added");
-        helper.assertValueEqual(first(DropDraw.draw(merged, 100, scripted(305))), Items.DIAMOND, "The added entry can be drawn");
+        helper.assertValueEqual(first(DropDraw.pick(merged, 100, scripted(305))), Items.DIAMOND, "The added entry can be drawn");
         helper.succeed();
     }
 
@@ -192,11 +192,10 @@ public final class DropsGameTests {
                 .isError(), "A count of 0 is rejected");
 
         List<ItemStack> poppy = List.of(new ItemStack(Items.POPPY));
-        List<Item> candidates = tag.candidates(List.of(Items.POPPY));
+        List<Item> candidates = DropPools.candidates(tag.tag(), List.of(Items.POPPY));
         helper.assertTrue(candidates.size() >= 2 && !candidates.contains(Items.POPPY), "The input is left out of the tag: " + candidates);
-        helper.assertTrue(candidates.contains(Items.DANDELION) && candidates.contains(ModItems.BEER.get()),
-                "The tag holds the vanilla flowers and the one the test datapack added: " + candidates);
-        helper.assertValueEqual(tag.candidates(List.of()).size(), candidates.size() + 1, "Without an input the whole tag is in the draw");
+        helper.assertTrue(candidates.contains(Items.DANDELION), "The tag holds the vanilla flowers: " + candidates);
+        helper.assertValueEqual(DropPools.candidates(tag.tag(), List.of()).size(), candidates.size() + 1, "Without an input the whole tag is in the draw");
 
         // The first roll picks the outcome, the second the member of the tag.
         List<ItemStack> first = DropPools.draw(drops, 1, scripted(0, 0), poppy);

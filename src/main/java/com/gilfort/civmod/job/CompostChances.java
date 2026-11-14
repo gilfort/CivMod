@@ -4,25 +4,30 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.OptionalInt;
 
-import org.jspecify.annotations.Nullable;
-
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.CompostableIngredient;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
+import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.util.random.Weighted;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.Compostable;
-import net.minecraft.world.item.crafting.RecipeMap;
 import net.minecraft.world.level.storage.loot.providers.number.ints.ConstantValue;
 import net.minecraft.world.level.storage.loot.providers.number.ints.ContextIntProvider;
 import net.minecraft.world.level.storage.loot.providers.number.ints.NumberDispatcher;
 import net.minecraft.world.level.storage.loot.providers.number.ints.ResolvableInt;
 import net.minecraft.world.level.storage.loot.providers.number.ints.WeightedListValue;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 
 /**
  * The compost chance of an item for the Composter (vault {@code Jobs/Composter.md}), in hundredths of a point: the
@@ -31,12 +36,13 @@ import net.minecraft.world.level.storage.loot.providers.number.ints.WeightedList
  * The provider's special case for an empty composter (always one layer) is left out, as it belongs to the block, not to
  * the item. A provider this class cannot average counts as no chance and is logged once.
  * <p>
- * The chances are looked up once per datapack load: the cache is dropped when the recipe set is replaced.
+ * The chances are looked up once per datapack load: a reload listener drops the cache (and the item list of
+ * {@link CompostableIngredient}) on every reload, and each chance is worked out on its first use.
  */
+@EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class CompostChances {
 
-    /** The recipe set the cache was built for (replaced on every datapack reload). */
-    private static @Nullable RecipeMap cachedFrom;
+    private static final Identifier ID = CivMod.id("compost_chances");
     private static final Map<Item, Integer> CHANCES = new HashMap<>();
 
     private CompostChances() {
@@ -48,15 +54,26 @@ public final class CompostChances {
      * @return the stack's compost chance in hundredths of a point (30 for seeds), 0 if it cannot be composted
      */
     public static int percent(ServerLevel level, ItemStack stack) {
-        RecipeMap recipes = level.recipeAccess().recipeMap();
-        if (recipes != cachedFrom) {
-            CHANCES.clear();
-            cachedFrom = recipes;
-        }
         if (!stack.has(DataComponents.COMPOSTABLE)) {
             return 0;
         }
-        return CHANCES.computeIfAbsent(stack.getItem(), item -> chanceOf(level.getServer().reloadableRegistries().lookup(),stack.get(DataComponents.COMPOSTABLE)));
+        return CHANCES.computeIfAbsent(stack.getItem(), item -> chanceOf(level.getServer().reloadableRegistries().lookup(), stack.get(DataComponents.COMPOSTABLE)));
+    }
+
+    @SubscribeEvent
+    static void onAddReloadListeners(AddServerReloadListenersEvent event) {
+        event.addListener(ID, new SimplePreparableReloadListener<Void>() {
+            @Override
+            protected Void prepare(ResourceManager manager, ProfilerFiller profiler) {
+                return null;
+            }
+
+            @Override
+            protected void apply(Void prepared, ResourceManager manager, ProfilerFiller profiler) {
+                CHANCES.clear();
+                CompostableIngredient.invalidate();
+            }
+        });
     }
 
     private static int chanceOf(HolderLookup.Provider registries, Compostable compostable) {

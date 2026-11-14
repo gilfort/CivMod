@@ -6,7 +6,6 @@ import java.util.Optional;
 import com.gilfort.civmod.api.DropOutcome;
 
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.item.ItemStackTemplate;
 
 /**
  * The weighted draw of a {@code drops} recipe (vault {@code Systems/Producing Jobs.md}) as pure functions: no world, no
@@ -56,19 +55,6 @@ public final class DropDraw {
             }
         }
         throw new IllegalStateException("Roll " + roll + " is beyond the total weight of " + eligible);
-    }
-
-    /**
-     * Draws one outcome like {@link #pick} and gives its fixed stacks (the random item of a {@code tag_result} needs the
-     * item registry and the inputs of the recipe, see {@link DropPools#draw}).
-     *
-     * @param outcomes the outcomes of a recipe
-     * @param level    the settler's skill level in the Job
-     * @param random   the random source, asked once for a number below the total weight
-     * @return the stacks of the drawn outcome, empty if it found nothing or no outcome is in the draw
-     */
-    public static List<ItemStackTemplate> draw(List<DropOutcome> outcomes, int level, RandomSource random) {
-        return pick(outcomes, level, random).map(DropOutcome::results).orElse(List.of());
     }
 
     /**

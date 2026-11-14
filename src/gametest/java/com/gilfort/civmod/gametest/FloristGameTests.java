@@ -7,6 +7,7 @@ import java.util.stream.Stream;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.DropOutcome;
+import com.gilfort.civmod.api.Drops;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ProducingProfile;
@@ -52,6 +53,10 @@ public final class FloristGameTests {
 
     /** Work time the tests catch up: plenty for a few crafts at job factor 0.5. */
     private static final long WORK_TICKS = 12000L;
+    /** Most rounds of catch-up the chain needs: ask, compost, craft. */
+    private static final int MAX_PASSES = 4;
+    /** Wheat in the Clerk, more than the 7 points of one bone meal need. */
+    private static final int WHEAT_STOCK = 30;
     /** The flower the round tests grow. */
     private static final Item FLOWER = Items.POPPY;
 
@@ -69,6 +74,7 @@ public final class FloristGameTests {
             register(helper, "florist_outcome_lost", test -> grow(test, Outcome.LOST, 0, 0));
             register(helper, "florist_always_produce", FloristGameTests::alwaysProduce);
             register(helper, "florist_foreign_flower", FloristGameTests::foreignFlower);
+            register(helper, "florist_bone_meal_chain", FloristGameTests::boneMealChain);
         });
     }
 
@@ -150,7 +156,7 @@ public final class FloristGameTests {
                 .map(Holder::value).distinct().toList();
     }
 
-    /** The flowers that have a recipe of their own: the vanilla ones (the test datapack adds a beer of civmod to the tag). */
+    /** The flowers that have a recipe of their own: the vanilla ones (other mods' items in the tag have none). */
     private static List<Item> vanillaFlowers(ServerLevel level) {
         return flowers(level).stream().filter(flower -> BuiltInRegistries.ITEM.getKey(flower).getNamespace().equals(Identifier.DEFAULT_NAMESPACE)).toList();
     }
@@ -267,22 +273,64 @@ public final class FloristGameTests {
     }
 
     /**
-     * A flower another pack adds to the flower tags comes up at runtime: the test datapack puts a beer into
-     * {@code #c:flowers/small}, and a scripted draw of the "different flower" outcome of the poppy recipe lands on it. The
-     * flower of the recipe itself is never drawn as the different one.
+     * An item of another mod comes up at runtime: the draw reads the tag when it draws, so a member that is no vanilla
+     * flower can be the different flower. The poppy recipe's outcomes are drawn with the test-only tag
+     * {@code civmod:test_foreign_flowers} (poppy, dandelion and a beer) in place of the flower tag, so no dev client
+     * grows beer from flowers. A scripted draw of the "different flower" outcome lands on the beer; the poppy itself is
+     * never drawn as the different one.
      */
     private static void foreignFlower(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos pos = florist(helper, new BlockPos(1, 1, 1));
         Item foreign = ModItems.BEER.get();
-        helper.assertTrue(flowers(level).contains(foreign), "The test datapack adds a beer to the small flowers");
-        JobCraftingRecipe recipe = recipeOf(level, pos, FLOWER);
-        List<DropOutcome> outcomes = DropPools.outcomes(recipe.drops().orElseThrow());
-        List<Item> candidates = outcomes.stream().flatMap(outcome -> outcome.tagResult().stream()).findFirst().orElseThrow().candidates(List.of(FLOWER));
+        TagKey<Item> testTag = TagKey.create(Registries.ITEM, CivMod.id("test_foreign_flowers"));
+        List<DropOutcome> outcomes = DropPools.outcomes(recipeOf(level, pos, FLOWER).drops().orElseThrow()).stream()
+                .map(outcome -> new DropOutcome(outcome.weight(), outcome.minLevel(), outcome.results(),
+                        outcome.tagResult().map(tagResult -> new DropOutcome.TagResult(testTag, tagResult.count()))))
+                .toList();
+        List<Item> candidates = DropPools.candidates(testTag, List.of(FLOWER));
         helper.assertTrue(candidates.contains(foreign) && !candidates.contains(FLOWER), "The beer can be the different flower, the poppy cannot: " + candidates);
-        List<ItemStack> drawn = DropPools.draw(recipe.drops().orElseThrow(), 1, scriptFor(outcomes, Outcome.DIFFERENT, candidates.indexOf(foreign)),
+        List<ItemStack> drawn = DropPools.draw(Drops.of(outcomes), 1, scriptFor(outcomes, Outcome.DIFFERENT, candidates.indexOf(foreign)),
                 List.of(new ItemStack(FLOWER), new ItemStack(Items.BONE_MEAL)));
         helper.assertTrue(drawn.size() == 2 && drawn.get(0).is(FLOWER) && drawn.get(1).is(foreign), "The poppy and the beer: " + drawn);
+        helper.assertTrue(!flowers(level).contains(foreign), "The flower tags themselves stay free of the beer");
+        helper.succeed();
+    }
+
+    /**
+     * The chain of the spec: the Home Clerk keeps one bone meal in stock (a Min rule), so the Composter turns wheat into it
+     * through a request, and the Florist, who has the poppy but no bone meal, grows it as soon as the bone meal is there. An
+     * "Always produce" round of the Florist posts no sub-request of its own (its recipes cannot serve requests), so the
+     * bone meal reaches it through the Clerk's stock.
+     */
+    private static void boneMealChain(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = FletcherGameTests.setup(helper, List.of(new ItemStack(FLOWER), new ItemStack(Items.WHEAT, WHEAT_STOCK)),
+                List.of(new ItemStack(Items.BONE_MEAL)));
+        BlockPos floristBlock = florist(helper, new BlockPos(1, 1, 5));
+        helper.setBlock(new BlockPos(3, 1, 5), Blocks.FLOWER_POT);
+        JobCraftingRecipe recipe = recipeOf(level, floristBlock, FLOWER);
+        alwaysMake(helper, floristBlock, recipe, 1);
+        BlockPos compostBlock = ComposterGameTests.composting(helper, new BlockPos(1, 1, 9));
+        helper.setBlock(new BlockPos(3, 1, 9), Blocks.COMPOSTER);
+        Settler florist = FletcherGameTests.worker(helper, setup, floristBlock, florist());
+        Settler composter = FletcherGameTests.worker(helper, setup, compostBlock, ComposterGameTests.composter());
+        composter.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.NETHERITE_HOE));
+        List<DropOutcome> outcomes = DropPools.outcomes(recipe.drops().orElseThrow());
+        DropPools.script(scriptFor(outcomes, Outcome.DOUBLE, 0));
+        try {
+            for (int pass = 0; pass < MAX_PASSES && FletcherGameTests.count(level, setup.clerk(), FLOWER) < 2; pass++) {
+                CraftspersonGameTests.catchUp(level, florist, WORK_TICKS);
+                CraftspersonGameTests.catchUp(level, composter, WORK_TICKS);
+            }
+            helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), FLOWER) == 2,
+                    "Two poppies at the Clerk (florist " + florist.getWork().status(floristBlock) + ", composter " + composter.getWork().status(compostBlock) + ")");
+            helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.WHEAT) < WHEAT_STOCK, "The Composter used wheat");
+        } finally {
+            DropPools.script(null);
+            FletcherGameTests.cleanUp(setup, florist);
+            composter.discard();
+        }
         helper.succeed();
     }
 }

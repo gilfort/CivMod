@@ -15,6 +15,7 @@ import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.JobPlaces;
+import com.gilfort.civmod.settlement.LibraryRestPoints;
 import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.SettlementData;
@@ -72,6 +73,7 @@ public final class ComposterGameTests {
             TestFunctions.register(helper, "composter_hoe_wear", ComposterGameTests::hoeWear);
             TestFunctions.register(helper, "composter_without_hoe", ComposterGameTests::withoutHoe);
             TestFunctions.register(helper, "composter_request_served", ComposterGameTests::requestServed);
+            TestFunctions.register(helper, "composter_rest_points_saved", ComposterGameTests::restPointsSaved);
         });
     }
 
@@ -81,7 +83,7 @@ public final class ComposterGameTests {
     }
 
     /** A level-2 Craftsperson JobBlock with the Composter unlocked by a composter in its second Station Types slot. */
-    private static BlockPos composting(GameTestHelper helper, BlockPos relative) {
+    static BlockPos composting(GameTestHelper helper, BlockPos relative) {
         BlockPos pos = CraftspersonGameTests.craftsperson(helper, relative);
         StationTypeGameTests.setLevel(helper, relative, 2);
         helper.assertTrue(StationTypeGameTests.unlock(helper, pos, 1, Items.COMPOSTER), "A composter unlocks the Composter");
@@ -269,6 +271,20 @@ public final class ComposterGameTests {
         helper.assertTrue(StationTypeGameTests.block(level, craft).restPoints(composter()) == WHEAT_REST, "0.3 points are left");
         helper.assertTrue(Requests.claimable(setup.settlement()).isEmpty(), "The request is done: " + Requests.claimable(setup.settlement()));
         FletcherGameTests.cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /** The rest points are saved with the JobBlock even while the Composter library holds no pattern. */
+    private static void restPointsSaved(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos craft = composting(helper, new BlockPos(1, 1, 5));
+        new LibraryRestPoints(level, craft, composter()).set(SEED_REST);
+        SettlementBlock block = StationTypeGameTests.block(level, craft);
+        helper.assertTrue(block.patterns(composter()).isEmpty(), "The library holds no pattern: " + block.patterns(composter()));
+        var ops = level.registryAccess().createSerializationContext(JsonOps.INSTANCE);
+        SettlementData loaded = SettlementData.CODEC.parse(ops, SettlementData.CODEC.encodeStart(ops, SettlementData.get(level)).getOrThrow()).getOrThrow();
+        SettlementBlock reloaded = loaded.settlementAt(craft).orElseThrow().block(craft).orElseThrow();
+        helper.assertTrue(reloaded.restPoints(composter()) == SEED_REST, "The rest survives a save and load: " + reloaded.restPoints(composter()));
         helper.succeed();
     }
 }

@@ -112,7 +112,7 @@ public final class StockRuleGameTests {
         helper.assertTrue(loaded.block(clerk).orElseThrow().stockRules().equals(settlement.block(clerk).orElseThrow().stockRules()),
                 "Rules are saved");
 
-        Requests.finish(data, settlement, request.id(), CARL);
+        SubRequestGameTests.finishInFull(data, settlement, request.id(), CARL);
         Stock delivered = ClerkStorage.stock(level, clerk, true);
         delivered.insert(new ItemStack(Items.STONE_PICKAXE));
         delivered.insert(new ItemStack(Items.STONE_PICKAXE));
@@ -145,7 +145,7 @@ public final class StockRuleGameTests {
         TestAssignments.unassign(data, clerk);
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(Requests.byPriority(settlement).size() == 1, "Claimed request stays until delivered");
-        Requests.finish(data, settlement, torches.id(), CARL);
+        SubRequestGameTests.finishInFull(data, settlement, torches.id(), CARL);
         helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "All gone");
         helper.succeed();
     }
@@ -253,7 +253,7 @@ public final class StockRuleGameTests {
         helper.assertTrue(running.amount() == 0 && running.crafting() == 4, "A running craft is finished: " + running);
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(Requests.get(settlement, ladders.id()).isPresent(), "Kept until delivered");
-        Requests.finish(data, settlement, ladders.id(), CARL);
+        SubRequestGameTests.finishInFull(data, settlement, ladders.id(), CARL);
         helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "Delivered: gone");
 
         StockRules.setRule(data, clerk, StockRule.minimum(2, Items.TORCH, 16, 0));
