@@ -112,6 +112,10 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> DYER = JOBS.register("dyer", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.LOOM).bubbleIcon(() -> Items.DYE.red()).displayItem(() -> Items.DYE.red()).hungerFactor(0.5)
             .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.LOOM).profile(DomainProfile::dyer).build());
+    /** See vault {@code Jobs/Baker.md}; crafts everything that is food at a crafting table, fast with a furnace near it. */
+    public static final DeferredHolder<Job, Job> BAKER = JOBS.register("baker", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.HAY_BLOCK).bubbleIcon(() -> Items.BREAD).displayItem(() -> Items.BREAD).hungerFactor(0.5)
+            .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.HAY_BLOCK).profile(DomainProfile::baker).build());
     /** See vault {@code Jobs/Crusher.md}; breaks stone down into gravel, sand and more at a grindstone with innate recipes only. */
     public static final DeferredHolder<Job, Job> CRUSHER = JOBS.register("crusher", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.GRINDSTONE).bubbleIcon(() -> Items.GRAVEL).displayItem(() -> Items.GRAVEL).hungerFactor(0.5)

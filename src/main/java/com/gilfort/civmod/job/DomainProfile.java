@@ -24,7 +24,9 @@ import net.minecraft.world.level.block.Block;
  * <li>{@link #stonemason()}: {@code stonecutting} at a stonecutter and {@code crafting} at a crafting table nearby,
  * stone domain (vault {@code Jobs/Stonemason.md});</li>
  * <li>{@link #dyer()}: {@code crafting} at a loom, dye domain (dyes and their crafting sources, so every dyed block;
- * vault {@code Jobs/Dyer.md}).</li>
+ * vault {@code Jobs/Dyer.md});</li>
+ * <li>{@link #baker()}: {@code crafting} at the Craftsperson's crafting table, food domain (everything with a food, crop,
+ * egg, milk or sugar input; vault {@code Jobs/Baker.md}).</li>
  * </ul>
  */
 public final class DomainProfile implements ProducingProfile {
@@ -34,8 +36,12 @@ public final class DomainProfile implements ProducingProfile {
     private final TagKey<Item> domain;
 
     private DomainProfile(List<RecipeType<?>> recipeTypes, String job, String domain) {
+        this(recipeTypes, TagKey.create(Registries.BLOCK, CivMod.id("stations/" + job)), domain);
+    }
+
+    private DomainProfile(List<RecipeType<?>> recipeTypes, TagKey<Block> station, String domain) {
         this.recipeTypes = List.copyOf(recipeTypes);
-        this.station = TagKey.create(Registries.BLOCK, CivMod.id("stations/" + job));
+        this.station = station;
         this.domain = TagKey.create(Registries.ITEM, CivMod.id("domains/" + domain));
     }
 
@@ -52,6 +58,11 @@ public final class DomainProfile implements ProducingProfile {
     /** @return the Dyer's profile: {@code crafting} at looms, dye domain */
     public static DomainProfile dyer() {
         return new DomainProfile(List.of(RecipeType.CRAFTING), "dyer", "dye");
+    }
+
+    /** @return the Baker's profile: {@code crafting} at the Craftsperson's crafting tables, food domain */
+    public static DomainProfile baker() {
+        return new DomainProfile(List.of(RecipeType.CRAFTING), CraftspersonProfile.STATION, "food");
     }
 
     @Override
