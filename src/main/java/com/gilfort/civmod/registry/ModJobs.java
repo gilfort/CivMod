@@ -8,6 +8,7 @@ import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.AnimalFarmerProfile;
 import com.gilfort.civmod.job.BardProfile;
 import com.gilfort.civmod.job.BeekeeperProfile;
+import com.gilfort.civmod.job.ComposterProfile;
 import com.gilfort.civmod.job.CraftspersonProfile;
 import com.gilfort.civmod.job.DomainProfile;
 import com.gilfort.civmod.job.FarmingProfiles;
@@ -144,6 +145,10 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> SIFTER = JOBS.register("sifter", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.HOPPER).bubbleIcon(() -> Items.SAND).displayItem(() -> Items.SAND).hungerFactor(0.5)
             .baseExp(2).unlockItem(() -> Items.HOPPER).profile(InnateProfile::sifter).build());
+    /** See vault {@code Jobs/Composter.md}; turns anything compostable into bone meal at a composter with a hoe, by points. */
+    public static final DeferredHolder<Job, Job> COMPOSTER = JOBS.register("composter", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.COMPOSTER).bubbleIcon(() -> Items.BONE_MEAL).displayItem(() -> Items.BONE_MEAL).hungerFactor(0.5)
+            .baseExp(2).unlockItem(() -> Items.COMPOSTER).profile(ComposterProfile::new).build());
     /** See vault {@code Jobs/Smelter.md}; smelts requested items at furnaces, several in parallel, burning fuel. */
     public static final DeferredHolder<Job, Job> SMELTER = JOBS.register("smelter", () -> Job.builder(JobCategory.PRODUCING)
             .icon(ModItems.SMELTER_BLOCK).bubbleIcon(() -> Items.IRON_INGOT).displayItem(() -> Items.COAL).hungerFactor(0.5).baseExp(1)

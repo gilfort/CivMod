@@ -25,7 +25,9 @@ import net.minecraft.world.level.block.Block;
  * <li>{@link #sifter()}: the station is a hopper ({@code civmod:stations/sifter}, vault {@code Jobs/Sifter.md});</li>
  * <li>{@link #bottler()}: the main station is the union tag {@code civmod:stations/bottler} of the water cauldron, the
  * lava cauldron and the dragon egg; each recipe names its own (vault {@code Jobs/Bottler.md});</li>
- * <li>{@link #brewer()}: the station is a barrel ({@code civmod:stations/barrel}, vault {@code Jobs/Brewer.md}).</li>
+ * <li>{@link #brewer()}: the station is a barrel ({@code civmod:stations/barrel}, vault {@code Jobs/Brewer.md});</li>
+ * <li>{@link #composter()}: the station is a composter ({@code civmod:stations/composter}, vault
+ * {@code Jobs/Composter.md}).</li>
  * </ul>
  */
 public final class InnateProfile implements ProducingProfile {
@@ -65,6 +67,11 @@ public final class InnateProfile implements ProducingProfile {
     /** @return the Brewer's profile: innate recipes at a barrel */
     public static InnateProfile brewer() {
         return new InnateProfile("barrel");
+    }
+
+    /** @return the Composter's innate profile: innate recipes at a composter ({@link ComposterProfile} adds the points) */
+    static InnateProfile composter() {
+        return new InnateProfile("composter");
     }
 
     @Override

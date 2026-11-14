@@ -63,6 +63,8 @@ public final class CivModJobs {
     public static final DeferredHolder<Job, Job> BREWER = job("brewer");
     /** Producing: Specialization of the Craftsperson, sifts sand and gravel for small finds; unlocked by a hopper. */
     public static final DeferredHolder<Job, Job> SIFTER = job("sifter");
+    /** Producing: Specialization of the Craftsperson, turns anything compostable into bone meal at a composter; unlocked by a composter. */
+    public static final DeferredHolder<Job, Job> COMPOSTER = job("composter");
     /** Producing: Specialization of the Smelter, cooks food at smokers; unlocked by a smoker. */
     public static final DeferredHolder<Job, Job> COOK = job("cook");
     /** Producing: Specialization of the Smelter, smelts ores and metal at blast furnaces; unlocked by a blast furnace. */
