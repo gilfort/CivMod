@@ -49,6 +49,8 @@ public final class CivModJobs {
     public static final DeferredHolder<Job, Job> STONEMASON = job("stonemason");
     /** Producing: Specialization of the Craftsperson, makes dyes and dyes blocks, bleaches wool; unlocked by a loom. */
     public static final DeferredHolder<Job, Job> DYER = job("dyer");
+    /** Producing: Specialization of the Craftsperson, crafts everything that is food at a crafting table; unlocked by a hay bale. */
+    public static final DeferredHolder<Job, Job> BAKER = job("baker");
     /** Producing: Specialization of the Craftsperson, breaks stone down into gravel, sand and more at a grindstone; unlocked by a grindstone. */
     public static final DeferredHolder<Job, Job> CRUSHER = job("crusher");
     /** Producing: Specialization of the Craftsperson, turns concrete powder into concrete at a water cauldron; unlocked by a water bucket. */
