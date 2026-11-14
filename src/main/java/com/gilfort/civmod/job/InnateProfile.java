@@ -23,8 +23,8 @@ import net.minecraft.world.level.block.Block;
  * <li>{@link #concreteMixer()}: the station is a water cauldron ({@code civmod:stations/water_cauldron}, the one the
  * Dyer bleaches at; vault {@code Jobs/Concrete Mixer.md});</li>
  * <li>{@link #sifter()}: the station is a hopper ({@code civmod:stations/sifter}, vault {@code Jobs/Sifter.md});</li>
- * <li>{@link #bottler()}: the station is a water cauldron; the lava bucket and dragon's breath recipes name their own
- * station ({@code civmod:stations/lava_cauldron}, {@code civmod:stations/dragon_egg}, vault {@code Jobs/Bottler.md}).</li>
+ * <li>{@link #bottler()}: the main station is the union tag {@code civmod:stations/bottler} of the water cauldron, the
+ * lava cauldron and the dragon egg; each recipe names its own (vault {@code Jobs/Bottler.md}).</li>
  * </ul>
  */
 public final class InnateProfile implements ProducingProfile {
@@ -54,11 +54,11 @@ public final class InnateProfile implements ProducingProfile {
     }
 
     /**
-     * @return the Bottler's profile: innate recipes at a water cauldron; its lava and dragon's breath recipes name a station of
-     *         their own
+     * @return the Bottler's profile: the main station is the union tag {@code civmod:stations/bottler} (water cauldron, lava
+     *         cauldron, dragon egg); every recipe names its own station
      */
     public static InnateProfile bottler() {
-        return new InnateProfile("water_cauldron");
+        return new InnateProfile("bottler");
     }
 
     @Override
