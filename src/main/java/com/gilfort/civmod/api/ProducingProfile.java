@@ -169,6 +169,31 @@ public interface ProducingProfile extends CategoryProfile {
         return produced;
     }
 
+    /**
+     * Executes a recipe once for a Job that keeps points between executions (the Composter, vault {@code Jobs/Composter.md}):
+     * like {@link #execute(ServerLevel, RecipeHolder, ItemStack, List, RestPoints)} without the points, which most Jobs do not keep.
+     *
+     * @param level    the level
+     * @param recipe   the recipe
+     * @param result   what the pattern makes per execution
+     * @param consumed the inputs taken out
+     * @param rest     the points the JobBlock keeps for the Job
+     * @return what goes into the buffer (by default what {@link #execute(ServerLevel, RecipeHolder, ItemStack, List)} gives)
+     */
+    default List<ItemStack> execute(ServerLevel level, RecipeHolder<?> recipe, ItemStack result, List<ItemStack> consumed, RestPoints rest) {
+        return execute(level, recipe, result, consumed);
+    }
+
+    /**
+     * The durability an innate recipe's tool loses for one execution (Unbreaking works on it).
+     *
+     * @param produced what the execution put into the buffer
+     * @return the durability, 1 by default; the Composter's hoe loses 1 per bone meal made
+     */
+    default int toolWear(List<ItemStack> produced) {
+        return 1;
+    }
+
     /** A smithing transform's result with the consumed base item's components, the pattern's result without one. */
     private static ItemStack transformed(SmithingTransformRecipe recipe, ItemStack result, List<ItemStack> consumed) {
         return consumed.stream().filter(recipe.baseIngredient()).findFirst()
