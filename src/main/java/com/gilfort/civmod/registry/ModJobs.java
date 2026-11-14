@@ -18,11 +18,14 @@ import com.gilfort.civmod.job.MechanicProfile;
 import com.gilfort.civmod.job.MinerProfile;
 import com.gilfort.civmod.job.SmelterProfile;
 import com.gilfort.civmod.job.SmithProfile;
+import com.gilfort.civmod.job.TailorProfile;
 import com.gilfort.civmod.job.VeggyFarmerProfile;
+import com.gilfort.civmod.registry.ModClothing.ClothSet;
 import com.gilfort.civmod.settlement.Shrine;
 
 import net.minecraft.core.Registry;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.equipment.ArmorType;
 import net.minecraft.resources.ResourceKey;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
@@ -116,6 +119,11 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> BAKER = JOBS.register("baker", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.HAY_BLOCK).bubbleIcon(() -> Items.BREAD).displayItem(() -> Items.BREAD).hungerFactor(0.5)
             .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.HAY_BLOCK).profile(DomainProfile::baker).build());
+    /** See vault {@code Jobs/Tailor.md}; sews the cloth sets and crafts everything of wool and leather at a crafting table, fast with a loom near it. */
+    public static final DeferredHolder<Job, Job> TAILOR = JOBS.register("tailor", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.WOOL.white()).bubbleIcon(() -> ModClothing.piece(ClothSet.SIMPLE, ArmorType.CHESTPLATE).get())
+            .displayItem(() -> ModClothing.piece(ClothSet.SIMPLE, ArmorType.CHESTPLATE).get()).hungerFactor(0.5)
+            .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.WOOL.white()).profile(TailorProfile::new).build());
     /** See vault {@code Jobs/Crusher.md}; breaks stone down into gravel, sand and more at a grindstone with innate recipes only. */
     public static final DeferredHolder<Job, Job> CRUSHER = JOBS.register("crusher", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.GRINDSTONE).bubbleIcon(() -> Items.GRAVEL).displayItem(() -> Items.GRAVEL).hungerFactor(0.5)

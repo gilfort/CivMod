@@ -1,0 +1,26 @@
+{
+  "layers": {
+    "humanoid": [
+      {
+        "dyeable": {
+          "color_when_undyed": -1
+        },
+        "texture": "civmod:cloth"
+      },
+      {
+        "texture": "civmod:high_cloth_overlay"
+      }
+    ],
+    "humanoid_leggings": [
+      {
+        "dyeable": {
+          "color_when_undyed": -1
+        },
+        "texture": "civmod:cloth"
+      },
+      {
+        "texture": "civmod:high_cloth_overlay"
+      }
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "civmod:item/cloth_boots",
+    "layer1": "civmod:item/medium_cloth_boots_overlay"
+  }
+}

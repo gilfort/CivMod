@@ -40,9 +40,10 @@ final class InnateRecipeCategory extends AbstractRecipeCategory<RecipeHolder<Job
     @Override
     public void setRecipe(IRecipeLayoutBuilder builder, RecipeHolder<JobCraftingRecipe> holder, IFocusGroup focuses) {
         JobCraftingRecipe recipe = holder.value();
-        List<Ingredient> inputs = recipe.ingredients();
+        List<JobCraftingRecipe.Input> inputs = recipe.inputs();
         for (int i = 0; i < inputs.size(); i++) {
-            builder.addInputSlot(InnateRecipeLayout.inputX(i), InnateRecipeLayout.inputY(i)).setStandardSlotBackground().add(inputs.get(i));
+            builder.addInputSlot(InnateRecipeLayout.inputX(i), InnateRecipeLayout.inputY(i)).setStandardSlotBackground()
+                    .addItemStacks(InnateRecipeLayout.inputStacks(inputs.get(i)));
         }
         builder.addOutputSlot(InnateRecipeLayout.OUTPUT_X, InnateRecipeLayout.MIDDLE_Y).setOutputSlotBackground()
                 .addItemStacks(InnateRecipeLayout.outputs(recipe))

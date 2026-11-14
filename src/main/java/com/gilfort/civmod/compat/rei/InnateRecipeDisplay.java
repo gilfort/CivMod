@@ -42,7 +42,8 @@ final class InnateRecipeDisplay extends BasicDisplay {
     private final RecipeHolder<JobCraftingRecipe> holder;
 
     InnateRecipeDisplay(RecipeHolder<JobCraftingRecipe> holder) {
-        super(EntryIngredients.ofIngredients(holder.value().ingredients()), List.of(EntryIngredients.ofItemStacks(InnateRecipeLayout.outputs(holder.value()))),
+        super(holder.value().inputs().stream().map(input -> EntryIngredients.ofItemStacks(InnateRecipeLayout.inputStacks(input))).toList(),
+                List.of(EntryIngredients.ofItemStacks(InnateRecipeLayout.outputs(holder.value()))),
                 Optional.of(holder.id().identifier()));
         this.holder = holder;
     }

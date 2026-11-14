@@ -62,9 +62,9 @@ final class InnateRecipeCategory implements DisplayCategory<InnateRecipeDisplay>
         int y = bounds.y + PADDING_Y;
         List<Widget> widgets = new ArrayList<>();
         widgets.add(Widgets.createRecipeBase(bounds));
-        for (int i = 0; i < recipe.ingredients().size(); i++) {
+        for (int i = 0; i < recipe.inputs().size(); i++) {
             widgets.add(Widgets.createSlot(new Point(x + InnateRecipeLayout.inputX(i), y + InnateRecipeLayout.inputY(i)))
-                    .entries(EntryIngredients.ofIngredient(recipe.ingredients().get(i))).markInput());
+                    .entries(EntryIngredients.ofItemStacks(InnateRecipeLayout.inputStacks(recipe.inputs().get(i)))).markInput());
         }
         widgets.add(Widgets.createArrow(new Point(x + InnateRecipeLayout.ARROW_X, y + InnateRecipeLayout.MIDDLE_Y)));
         Point output = new Point(x + InnateRecipeLayout.OUTPUT_X, y + InnateRecipeLayout.MIDDLE_Y);

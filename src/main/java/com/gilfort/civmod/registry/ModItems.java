@@ -157,6 +157,7 @@ public final class ModItems {
      * @param modEventBus the mod-specific event bus
      */
     public static void register(IEventBus modEventBus) {
+        ModClothing.registerItems();
         ITEMS.register(modEventBus);
         modEventBus.addListener(StarterTools::addDefaults);
     }

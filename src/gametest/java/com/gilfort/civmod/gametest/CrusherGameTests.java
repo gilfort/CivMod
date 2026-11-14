@@ -43,7 +43,7 @@ public final class CrusherGameTests {
 
     /** Work time of the previous workday the request tests catch up: plenty for a few executions at job factor 1.0. */
     private static final long WORK_TICKS = 4000L;
-    /** The six recipes of the ticket's list come first by id and get the checkmarks of a new Crusher (limit 6). */
+    /** The six recipes of the ticket's list come first by id before the extras. */
     private static final int REQUIRED_RECIPES = 6;
     /** The three extras the ticket lists after the required six. */
     private static final int EXTRA_RECIPES = 3;
@@ -98,7 +98,7 @@ public final class CrusherGameTests {
     /**
      * The Crusher specializes the Craftsperson (job factor 1.0, base EXP 2, hunger 0.5), is unlocked by a grindstone, works
      * innate recipes only at a grindstone, needs no tool and looks like gravel. Its six required recipes fill the
-     * first slots, locked and checked; the three extras follow unchecked.
+     * first slots, locked and checked; the three extras follow, also checked (innate recipes do not count against the limit).
      */
     private static void unlock(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -124,9 +124,8 @@ public final class CrusherGameTests {
         int recipes = REQUIRED_RECIPES + EXTRA_RECIPES;
         for (int slot = 0; slot < recipes; slot++) {
             Optional<Pattern> pattern = Patterns.pattern(StationTypeGameTests.block(level, pos), crusher, slot);
-            boolean required = slot < REQUIRED_RECIPES;
-            helper.assertTrue(pattern.filter(Pattern::innate).filter(found -> found.checked() == required).isPresent(),
-                    "Slot " + slot + " holds an innate recipe, checked for the required six only: " + pattern);
+            helper.assertTrue(pattern.filter(Pattern::innate).filter(Pattern::checked).isPresent(),
+                    "Slot " + slot + " holds an innate recipe, checked: " + pattern);
         }
         helper.assertTrue(Patterns.pattern(StationTypeGameTests.block(level, pos), crusher, recipes).isEmpty(), "No tenth recipe");
         Pattern planks = Patterns.setOutput(level, pos, crusher, recipes, Items.OAK_PLANKS).orElseThrow();

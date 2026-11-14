@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_dye",
+  "dye": "#minecraft:dyes",
+  "group": "dyed_armor",
+  "result": {
+    "id": "civmod:simple_cloth_leggings"
+  },
+  "target": "civmod:simple_cloth_leggings"
+}
