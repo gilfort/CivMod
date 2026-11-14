@@ -46,8 +46,6 @@ public final class ConcreteMixerGameTests {
     private static final long WORK_TICKS = 4000L;
     /** The number of dye colours, so the number of concrete recipes. */
     private static final int COLOURS = 16;
-    /** How many recipes a new Mixer checks: the checkmark limit of a settler without skill. */
-    private static final int FIRST_CHECKED = 6;
 
     private ConcreteMixerGameTests() {
     }
@@ -118,7 +116,7 @@ public final class ConcreteMixerGameTests {
 
     /**
      * One recipe per colour, each one concrete powder to one concrete of the same colour, none needing a tool; they sit
-     * locked in the first 16 slots and the first six are checked (limit 6).
+     * locked in the first 16 slots and all checked (innate recipes do not count against the limit).
      */
     private static void sixteenRecipes(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -135,9 +133,8 @@ public final class ConcreteMixerGameTests {
         Patterns.syncInnate(level, pos, mixer);
         for (int slot = 0; slot < COLOURS; slot++) {
             Optional<Pattern> pattern = Patterns.pattern(StationTypeGameTests.block(level, pos), mixer, slot);
-            boolean firstSix = slot < FIRST_CHECKED;
-            helper.assertTrue(pattern.filter(Pattern::innate).filter(found -> found.checked() == firstSix).isPresent(),
-                    "Slot " + slot + " holds an innate recipe, checked for the first six only: " + pattern);
+            helper.assertTrue(pattern.filter(Pattern::innate).filter(Pattern::checked).isPresent(),
+                    "Slot " + slot + " holds an innate recipe, checked: " + pattern);
         }
         helper.assertTrue(Patterns.pattern(StationTypeGameTests.block(level, pos), mixer, COLOURS).isEmpty(), "No 17th recipe");
         helper.succeed();
@@ -181,7 +178,7 @@ public final class ConcreteMixerGameTests {
         helper.succeed();
     }
 
-    /** Checks the one innate recipe that makes the item and unchecks every other: a new Mixer has only its first six checked. */
+    /** Checks the one innate recipe that makes the item and unchecks every other. */
     private static void checkOnly(GameTestHelper helper, BlockPos craft, Item output) {
         ServerLevel level = helper.getLevel();
         Job mixer = mixer();

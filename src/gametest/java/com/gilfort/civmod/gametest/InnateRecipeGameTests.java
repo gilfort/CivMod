@@ -200,29 +200,31 @@ public final class InnateRecipeGameTests {
     }
 
     /**
-     * Innate recipes count towards the checkmark limit (6): with both checked only 4 player patterns get a checkmark.
-     * An innate recipe added by a datapack later moves the player pattern on its slot to the next free one and stays
-     * unchecked while the limit is full.
+     * Innate recipes do not count towards the checkmark limit (6): both stay checked and 6 player patterns get a
+     * checkmark. An innate recipe added by a datapack later moves the player pattern on its slot to the next free one and
+     * is checked on its own, while the limit still caps the player patterns.
      */
     private static void checkmarkLimit(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Job fletcher = FletcherGameTests.fletcher();
         BlockPos pos = FletcherGameTests.fletchery(helper, new BlockPos(1, 1, 1));
-        List<Item> outputs = List.of(Items.ARROW, Items.BOW, Items.FISHING_ROD, Items.LEAD, Items.CROSSBOW);
+        List<Item> outputs = List.of(Items.ARROW, Items.BOW, Items.FISHING_ROD, Items.LEAD, Items.CROSSBOW, Items.ARROW, Items.ARROW);
         for (int i = 0; i < outputs.size(); i++) {
             Pattern pattern = Patterns.setOutput(level, pos, fletcher, 2 + i, outputs.get(i)).orElseThrow();
-            helper.assertTrue(pattern.checked() == (i < 4), outputs.get(i) + (i < 4 ? " checked" : " unchecked at the limit"));
+            helper.assertTrue(pattern.checked() == (i < 6), outputs.get(i) + (i < 6 ? " checked" : " unchecked at the limit"));
         }
-        helper.assertTrue(PatternsTabData.of(level, pos, fletcher).checked() == 6, "6 checkmarks: 2 innate + 4");
+        PatternsTabData full = PatternsTabData.of(level, pos, fletcher);
+        helper.assertTrue(full.checked() == 6, "6 checkmarks count: " + full.checked());
+        helper.assertTrue(full.pattern(0).orElseThrow().checked() && full.pattern(1).orElseThrow().checked(), "Both innate recipes stay checked");
 
         List<RecipeHolder<JobCraftingRecipe>> innate = with(level, fletcher, extra("fletcher/zz_test", Items.TARGET));
         helper.assertTrue(Patterns.syncInnate(level, pos, fletcher, innate), "The library changed");
         PatternsTabData tab = PatternsTabData.of(level, pos, fletcher);
         Pattern added = tab.pattern(2).orElseThrow();
-        helper.assertTrue(added.innate() && added.output() == Items.TARGET && !added.checked(), "The new innate recipe in slot 2, unchecked: " + added);
-        helper.assertTrue(tab.pattern(7).filter(pattern -> pattern.output() == Items.ARROW && pattern.checked()).isPresent(),
-                "The arrow pattern moved to the next free slot, checked: " + tab.pattern(7));
-        helper.assertTrue(tab.checked() == 6, "Still 6 checkmarks: " + tab.checked());
+        helper.assertTrue(added.innate() && added.output() == Items.TARGET && added.checked(), "The new innate recipe in slot 2, checked: " + added);
+        helper.assertTrue(tab.pattern(9).filter(pattern -> pattern.output() == Items.ARROW && pattern.checked()).isPresent(),
+                "The arrow pattern moved to the next free slot, checked: " + tab.pattern(9));
+        helper.assertTrue(tab.checked() == 6, "Still 6 counted checkmarks: " + tab.checked());
         helper.succeed();
     }
 

@@ -73,6 +73,8 @@ public final class TailorGameTests {
             TestFunctions.register(helper, "tailor_colour_white", TailorGameTests::colourWhite);
             TestFunctions.register(helper, "tailor_medium_needs_trim", TailorGameTests::mediumNeedsTrim);
             TestFunctions.register(helper, "tailor_domain", TailorGameTests::domain);
+            TestFunctions.register(helper, "tailor_innate_beyond_limit", TailorGameTests::innateBeyondLimit);
+            TestFunctions.register(helper, "tailor_dyes_only_cloth", TailorGameTests::dyesOnlyCloth);
             TestFunctions.register(helper, "tailor_clerk_request", TailorGameTests::clerkRequest);
             TestFunctions.register(helper, "tailor_loom_faster", TailorGameTests::loomFaster);
             TestFunctions.register(helper, "tailor_without_loom_slower", TailorGameTests::withoutLoomSlower);
@@ -151,7 +153,7 @@ public final class TailorGameTests {
         helper.succeed();
     }
 
-    /** The pure colour choice: the most common colour wins, the first one listed on a tie, nothing for no wool. */
+    /** The pure colour choice: the most common colour wins, the lower dye id on a tie, nothing for no wool. */
     private static void colourChoice(GameTestHelper helper) {
         DyeColor red = DyeColor.RED;
         DyeColor blue = DyeColor.BLUE;
@@ -159,9 +161,10 @@ public final class TailorGameTests {
         helper.assertTrue(WoolColors.dominant(List.of(red)).equals(Optional.of(red)), "One wool");
         helper.assertTrue(WoolColors.dominant(colours(red, 5, blue, 3)).equals(Optional.of(red)), "5 red, 3 blue: red");
         helper.assertTrue(WoolColors.dominant(colours(blue, 3, red, 5)).equals(Optional.of(red)), "3 blue, 5 red: red, whatever the order");
-        helper.assertTrue(WoolColors.dominant(colours(red, 4, blue, 4)).equals(Optional.of(red)), "4 red first, 4 blue: red");
-        helper.assertTrue(WoolColors.dominant(colours(blue, 4, red, 4)).equals(Optional.of(blue)), "4 blue first, 4 red: blue");
-        helper.assertTrue(WoolColors.dominant(List.of(red, blue, blue, red)).equals(Optional.of(red)), "A tie in mixed order: the first colour listed");
+        helper.assertTrue(WoolColors.dominant(colours(red, 4, blue, 4)).equals(Optional.of(blue)), "4 red first, 4 blue: blue has the lower dye id");
+        helper.assertTrue(WoolColors.dominant(colours(blue, 4, red, 4)).equals(Optional.of(blue)), "4 blue first, 4 red: blue, whatever the order");
+        helper.assertTrue(WoolColors.dominant(List.of(red, blue, blue, red)).equals(Optional.of(blue)), "A tie in mixed order: the lower dye id");
+        helper.assertTrue(WoolColors.dominant(List.of(DyeColor.BLACK, DyeColor.WHITE)).equals(Optional.of(DyeColor.WHITE)), "White is the lowest dye id");
         helper.assertTrue(WoolColors.of(new ItemStack(Items.WOOL.red())).equals(Optional.of(red)), "Red wool is red");
         helper.assertTrue(WoolColors.of(new ItemStack(Items.WOOL.white())).equals(Optional.of(DyeColor.WHITE)), "White wool is white");
         helper.assertTrue(WoolColors.of(new ItemStack(Items.STRING)).isEmpty(), "String has no wool colour");
@@ -207,10 +210,10 @@ public final class TailorGameTests {
         helper.succeed();
     }
 
-    /** From 4 red and 4 blue wool the chestplate takes the colour of the first slot. */
+    /** From 4 red and 4 blue wool the chestplate takes the colour with the lower dye id (blue), whichever lies first. */
     private static void colourTie(GameTestHelper helper) {
-        int colour = chestplateColour(helper, List.of(new ItemStack(Items.WOOL.blue(), 4), new ItemStack(Items.WOOL.red(), 4)));
-        helper.assertTrue(colour == rgb(DyeColor.BLUE), "4 blue in the first slot against 4 red is blue: " + colour);
+        int colour = chestplateColour(helper, List.of(new ItemStack(Items.WOOL.red(), 4), new ItemStack(Items.WOOL.blue(), 4)));
+        helper.assertTrue(colour == rgb(DyeColor.BLUE), "4 red in the first slot against 4 blue is blue: " + colour);
         helper.succeed();
     }
 
@@ -285,14 +288,45 @@ public final class TailorGameTests {
         Job tailor = tailor();
         BlockPos craft = tailorShop(helper, new BlockPos(1, 1, 5));
         Patterns.syncInnate(level, craft, tailor);
-        // The six innate recipes the library checked on its own fill the limit: free a checkmark.
-        Patterns.toggleCheck(level, craft, tailor, 0);
         helper.assertTrue(Patterns.setOutput(level, craft, tailor, INNATE_RECIPES, Items.CARPET.white()).orElseThrow().checked(), "A carpet pattern is checked");
         helper.assertFalse(Patterns.setOutput(level, craft, tailor, INNATE_RECIPES + 1, Items.IRON_PICKAXE).orElseThrow().checked(), "A pickaxe is outside the domain");
         helper.assertFalse(Patterns.toggleCheck(level, craft, tailor, INNATE_RECIPES + 1), "And cannot be checked");
         PatternsTabData tab = PatternsTabData.of(level, craft, tailor);
         helper.assertTrue(tab.filtered().equals(Set.of(INNATE_RECIPES + 1))
                 && tab.filteredLine().equals(Component.translatable("civmod.gui.patterns.outside_domain")), "Greyed out: " + tab.filtered());
+        helper.succeed();
+    }
+
+    /**
+     * At level 1 (limit 6) all twelve cloth recipes are checked, because innate recipes do not count against the limit;
+     * the limit still caps the player patterns: the seventh stays unchecked.
+     */
+    private static void innateBeyondLimit(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Job tailor = tailor();
+        BlockPos craft = tailorShop(helper, new BlockPos(1, 1, 5));
+        Patterns.syncInnate(level, craft, tailor);
+        var block = StationTypeGameTests.block(level, craft);
+        for (int slot = 0; slot < INNATE_RECIPES; slot++) {
+            helper.assertTrue(Patterns.pattern(block, tailor, slot).orElseThrow().checked(), "Innate recipe " + slot + " is checked");
+        }
+        helper.assertTrue(PatternsTabData.of(level, craft, tailor).checked() == 0, "None of them counts");
+        for (int i = 0; i < Patterns.BASE_CHECKMARKS + 1; i++) {
+            boolean checked = Patterns.setOutput(level, craft, tailor, INNATE_RECIPES + i, Items.CARPET.white()).orElseThrow().checked();
+            helper.assertTrue(checked == (i < Patterns.BASE_CHECKMARKS), "Player pattern " + i + (checked ? " checked" : " unchecked at the limit"));
+        }
+        helper.succeed();
+    }
+
+    /** Only the twelve cloth pieces are dyed: other items of the clothing tags (addon clothing) and everything else are not cloth. */
+    private static void dyesOnlyCloth(GameTestHelper helper) {
+        for (ClothSet set : ClothSet.values()) {
+            for (ArmorType type : PIECES) {
+                helper.assertTrue(ModClothing.isCloth(new ItemStack(piece(set, type))), set + " " + type + " is cloth");
+            }
+        }
+        helper.assertFalse(ModClothing.isCloth(new ItemStack(Items.LEATHER_HELMET)), "Leather armour is not cloth");
+        helper.assertFalse(ModClothing.isCloth(new ItemStack(Items.WOOL.white())), "Wool is not cloth");
         helper.succeed();
     }
 

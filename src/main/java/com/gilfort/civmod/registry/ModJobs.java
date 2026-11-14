@@ -19,8 +19,8 @@ import com.gilfort.civmod.job.MinerProfile;
 import com.gilfort.civmod.job.SmelterProfile;
 import com.gilfort.civmod.job.SmithProfile;
 import com.gilfort.civmod.job.TailorProfile;
-import com.gilfort.civmod.registry.ModClothing.ClothSet;
 import com.gilfort.civmod.job.VeggyFarmerProfile;
+import com.gilfort.civmod.registry.ModClothing.ClothSet;
 import com.gilfort.civmod.settlement.Shrine;
 
 import net.minecraft.core.Registry;
