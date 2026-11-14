@@ -12,6 +12,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.equipment.ArmorMaterial;
 import net.minecraft.world.item.equipment.ArmorType;
 import net.minecraft.world.item.equipment.EquipmentAsset;
@@ -69,18 +70,6 @@ public final class ModClothing {
 
     private static final Map<ClothSet, Map<ArmorType, DeferredItem<Item>>> PIECE_ITEMS = new EnumMap<>(ClothSet.class);
 
-    static {
-        for (ClothSet set : ClothSet.values()) {
-            ArmorMaterial material = material(set);
-            Map<ArmorType, DeferredItem<Item>> pieces = new EnumMap<>(ArmorType.class);
-            for (ArmorType type : PIECES) {
-                pieces.put(type, ModItems.ITEMS.registerItem(set.id() + "_cloth_" + type.getName(), Item::new,
-                        properties -> properties.humanoidArmor(material, type)));
-            }
-            PIECE_ITEMS.put(set, pieces);
-        }
-    }
-
     private ModClothing() {
     }
 
@@ -93,9 +82,25 @@ public final class ModClothing {
         return PIECE_ITEMS.get(set).get(type);
     }
 
-    /** Loads the class so its items are registered; called by {@link ModItems#register}. */
-    static void init() {
-        // The static initializer registers the items.
+    /**
+     * @param stack any stack
+     * @return whether it is one of the twelve cloth pieces (the pieces in the clothing tags that addons add are not)
+     */
+    public static boolean isCloth(ItemStack stack) {
+        return PIECE_ITEMS.values().stream().anyMatch(pieces -> pieces.values().stream().anyMatch(item -> stack.is(item.get())));
+    }
+
+    /** Registers the twelve cloth pieces in {@link ModItems#ITEMS}; called by {@link ModItems#register} before the registry is attached. */
+    static void registerItems() {
+        for (ClothSet set : ClothSet.values()) {
+            ArmorMaterial material = material(set);
+            Map<ArmorType, DeferredItem<Item>> pieces = new EnumMap<>(ArmorType.class);
+            for (ArmorType type : PIECES) {
+                pieces.put(type, ModItems.ITEMS.registerItem(set.id() + "_cloth_" + type.getName(), Item::new,
+                        properties -> properties.humanoidArmor(material, type)));
+            }
+            PIECE_ITEMS.put(set, pieces);
+        }
     }
 
     private static ArmorMaterial material(ClothSet set) {
