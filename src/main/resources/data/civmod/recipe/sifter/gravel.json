@@ -1,0 +1,7 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:sifter"],
+  "ingredients": ["minecraft:gravel"],
+  "drops": "civmod:sifter",
+  "tool": "#minecraft:shovels"
+}
