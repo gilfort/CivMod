@@ -3,7 +3,6 @@ package com.gilfort.civmod.gametest;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
@@ -33,7 +32,6 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.effect.MobEffect;
@@ -66,6 +64,8 @@ public final class BrewerGameTests {
     private static final int MAX_PASSES = 4;
     /** Beer one execution makes, and the wheat and glass bottles it takes. */
     private static final int BATCH = 3;
+    /** Empty buckets that lie in the Brewer's buffer before the round of the spare bucket test. */
+    private static final int SPARE_BUCKETS = 2;
     /** Ticks of the nausea beer gives (3 seconds). */
     private static final int NAUSEA_TICKS = 60;
     /** Ticks of the regeneration beer gives (10 seconds). */
@@ -77,18 +77,16 @@ public final class BrewerGameTests {
     @SubscribeEvent
     static void onRegister(RegisterEvent event) {
         event.register(Registries.TEST_FUNCTION, helper -> {
-            register(helper, "brewer_beer_item", BrewerGameTests::beerItem);
-            register(helper, "brewer_unlock", BrewerGameTests::unlock);
-            register(helper, "brewer_recipe", BrewerGameTests::recipe);
-            register(helper, "brewer_brews_beer", BrewerGameTests::brewsBeer);
-            register(helper, "brewer_beer_not_eaten", BrewerGameTests::beerNotEaten);
-            register(helper, "brewer_bottler_chain", BrewerGameTests::bottlerChain);
+            TestFunctions.register(helper, "brewer_beer_item", BrewerGameTests::beerItem);
+            TestFunctions.register(helper, "brewer_unlock", BrewerGameTests::unlock);
+            TestFunctions.register(helper, "brewer_recipe", BrewerGameTests::recipe);
+            TestFunctions.register(helper, "brewer_brews_beer", BrewerGameTests::brewsBeer);
+            TestFunctions.register(helper, "brewer_spare_buckets_stay", BrewerGameTests::spareBucketsStay);
+            TestFunctions.register(helper, "brewer_beer_not_eaten", BrewerGameTests::beerNotEaten);
+            TestFunctions.register(helper, "brewer_bottler_chain", BrewerGameTests::bottlerChain);
         });
     }
 
-    private static void register(RegisterEvent.RegisterHelper<Consumer<GameTestHelper>> helper, String name, Consumer<GameTestHelper> test) {
-        helper.register(ResourceKey.create(Registries.TEST_FUNCTION, CivMod.id(name)), test);
-    }
 
     /** The Brewer. */
     static Job brewer() {
@@ -200,6 +198,32 @@ public final class BrewerGameTests {
                 && FletcherGameTests.count(level, setup.clerk(), Items.WHEAT) == 0
                 && FletcherGameTests.count(level, setup.clerk(), Items.GLASS_BOTTLE) == 0, "The inputs are used up");
         helper.assertTrue(helper.getBlockState(barrel).is(Blocks.BARREL), "The barrel stays: " + helper.getBlockState(barrel));
+        FletcherGameTests.cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /**
+     * Two empty buckets lie in the Brewer's buffer before the round: only the one bucket the brewing leaves is delivered
+     * with the beer, the spare ones stay in the buffer.
+     */
+    private static void spareBucketsStay(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = FletcherGameTests.setup(helper,
+                List.of(new ItemStack(Items.WATER_BUCKET), new ItemStack(Items.WHEAT, BATCH), new ItemStack(Items.GLASS_BOTTLE, BATCH)),
+                List.of(new ItemStack(ModItems.BEER.get(), BATCH)));
+        BlockPos craft = brewery(helper, new BlockPos(1, 1, 5));
+        helper.setBlock(new BlockPos(3, 1, 5), Blocks.BARREL);
+        Settler settler = FletcherGameTests.worker(helper, setup, craft, brewer());
+        // A first pass of one tick creates the JobBlock's workplace, whose buffer takes the spare buckets.
+        CraftspersonGameTests.catchUp(level, settler, 1L);
+        settler.getWork().buffer(craft).add(new ItemStack(Items.BUCKET, SPARE_BUCKETS));
+        CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
+        helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), ModItems.BEER.get()) == BATCH,
+                "Three beer arrived (status " + settler.getWork().status(craft) + ")");
+        int delivered = FletcherGameTests.count(level, setup.clerk(), Items.BUCKET);
+        helper.assertTrue(delivered == 1, "Only the bucket the brewing left was delivered: " + delivered);
+        int kept = settler.getWork().buffer(craft).counts().getOrDefault(Items.BUCKET, 0);
+        helper.assertTrue(kept == SPARE_BUCKETS, "The spare buckets stayed in the buffer: " + kept);
         FletcherGameTests.cleanUp(setup, settler);
         helper.succeed();
     }

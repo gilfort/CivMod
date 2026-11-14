@@ -42,6 +42,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * What a settler keeps for one job at its JobBlock (vault {@code Systems/Resource Collection Jobs.md},
@@ -306,9 +307,17 @@ final class Workplace {
         return seen.found();
     }
 
-    /** Forgets what the last searches found: a station was replaced ({@code station_after}), so the next check looks again. */
-    void forgetRecipeStations() {
+    /**
+     * Replaces the station an innate recipe used up ({@code station_after}). The block is no station any more, so the
+     * station searches of the day and of the round are forgotten and the next pick marks the recipe "Needs a station
+     * nearby".
+     */
+    void replaceStation(ServerLevel level, BlockPos station, BlockState after) {
+        level.setBlockAndUpdate(station, after);
         dayState.recipeStations.clear();
+        if (round != null) {
+            round.forgetStations();
+        }
     }
 
     // ---------------------------------------------------------------- buffer and status
