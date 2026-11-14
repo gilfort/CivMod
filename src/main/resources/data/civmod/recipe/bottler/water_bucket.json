@@ -1,0 +1,7 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:bottler"],
+  "ingredients": ["minecraft:bucket"],
+  "result": { "id": "minecraft:water_bucket" },
+  "station": "#civmod:stations/water_cauldron"
+}

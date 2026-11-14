@@ -1,5 +1,6 @@
 package com.gilfort.civmod.registry;
 
+import java.util.List;
 import java.util.Set;
 
 import com.gilfort.civmod.CivMod;
@@ -10,9 +11,14 @@ import com.gilfort.civmod.item.DeliverySlipItem;
 import com.gilfort.civmod.item.JobBlockUpgradeItem;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.Consumables;
+import net.minecraft.world.item.consume_effects.ApplyStatusEffectsConsumeEffect;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredItem;
@@ -27,6 +33,14 @@ public final class ModItems {
 
     /** Deferred register for items in the {@code civmod} namespace. */
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(CivMod.MOD_ID);
+
+    private static final int BEER_STACK_SIZE = 16;
+    private static final int BEER_NUTRITION = 1;
+    private static final float BEER_SATURATION = 2.0F;
+    /** Nausea of a beer: 3 seconds. */
+    private static final int BEER_NAUSEA_TICKS = 60;
+    /** Regeneration of a beer: 10 seconds. */
+    private static final int BEER_REGENERATION_TICKS = 200;
 
     /** Item of the {@link ModBlocks#LUMBERJACK_BLOCK}. */
     public static final DeferredItem<BlockItem> LUMBERJACK_BLOCK = jobBlockItem(ModBlocks.LUMBERJACK_BLOCK, Items.STONE_AXE);
@@ -72,6 +86,17 @@ public final class ModItems {
     public static final DeferredItem<JobBlockUpgradeItem> JOB_BLOCK_UPGRADE_5 = jobBlockUpgrade(5);
     /** The Ledger: 9 more stock rule slots on a Clerk JobBlock, at most 3 per block (vault {@code Jobs/Clerk.md}). */
     public static final DeferredItem<Item> LEDGER = ITEMS.registerSimpleItem("ledger");
+
+    /**
+     * Beer, the Brewer's product (vault {@code Jobs/Brewer.md}): a drink that gives nausea for 3 seconds and regeneration for 10
+     * seconds and leaves a glass bottle. Tagged {@code civmod:settler_inedible}, so settlers never eat it.
+     */
+    public static final DeferredItem<Item> BEER = ITEMS.registerItem("beer", Item::new, properties -> properties.stacksTo(BEER_STACK_SIZE)
+            .food(new FoodProperties(BEER_NUTRITION, BEER_SATURATION, false),
+                    Consumables.defaultDrink().onConsume(new ApplyStatusEffectsConsumeEffect(List.of(
+                            new MobEffectInstance(MobEffects.NAUSEA, BEER_NAUSEA_TICKS),
+                            new MobEffectInstance(MobEffects.REGENERATION, BEER_REGENERATION_TICKS)))).build())
+            .usingConvertsTo(Items.GLASS_BOTTLE));
 
     /** Render-only item for the red X above unconnected JobBlocks; not obtainable. */
     public static final DeferredItem<Item> UNCONNECTED_MARKER = ITEMS.registerSimpleItem("unconnected_marker");

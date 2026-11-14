@@ -393,8 +393,10 @@ public final class WorkersTabGameTests {
         hire(helper, alice, ModJobs.CLERK.get());
         long returnTime = helper.getLevel().getOverworldClockTime() + 3 * DayClock.DAY_TICKS;
         Identifier mission = CivMod.id("dungeon_raid");
+        // Already gone: a departed trip that is not gone yet makes the next decision resume leaving, and a Clerk has no
+        // Mission Job, so the trip would be forgotten whenever Alice's decision tick falls inside the 40-tick window.
         alice.getWork().restore(new SettlerWork.BuffersSnapshot(List.of(), List.of(), List.of(), SettlerWork.CatchUpState.NONE,
-                Optional.of(new MissionTrip(helper.absolutePos(CLERK), mission, returnTime))));
+                Optional.of(new MissionTrip(helper.absolutePos(CLERK), mission, returnTime).withExit(alice.blockPosition()))));
         JobBlockMenu menu = menu(helper, player(helper));
         WorkersTabData first = sees(menu);
         WorkersTabData.Worker worker = first.workers().get(index(first, alice));

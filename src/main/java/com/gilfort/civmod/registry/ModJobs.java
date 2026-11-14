@@ -112,6 +112,10 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> DYER = JOBS.register("dyer", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.LOOM).bubbleIcon(() -> Items.DYE.red()).displayItem(() -> Items.DYE.red()).hungerFactor(0.5)
             .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.LOOM).profile(DomainProfile::dyer).build());
+    /** See vault {@code Jobs/Baker.md}; crafts everything that is food at a crafting table, fast with a furnace near it. */
+    public static final DeferredHolder<Job, Job> BAKER = JOBS.register("baker", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.HAY_BLOCK).bubbleIcon(() -> Items.BREAD).displayItem(() -> Items.BREAD).hungerFactor(0.5)
+            .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.HAY_BLOCK).profile(DomainProfile::baker).build());
     /** See vault {@code Jobs/Crusher.md}; breaks stone down into gravel, sand and more at a grindstone with innate recipes only. */
     public static final DeferredHolder<Job, Job> CRUSHER = JOBS.register("crusher", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.GRINDSTONE).bubbleIcon(() -> Items.GRAVEL).displayItem(() -> Items.GRAVEL).hungerFactor(0.5)
@@ -120,6 +124,14 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> CONCRETE_MIXER = JOBS.register("concrete_mixer", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.CAULDRON).bubbleIcon(() -> Items.CONCRETE.white()).displayItem(() -> Items.CONCRETE.white())
             .hungerFactor(0.5).baseExp(2).unlockItem(() -> Items.WATER_BUCKET).profile(InnateProfile::concreteMixer).build());
+    /** See vault {@code Jobs/Bottler.md}; fills buckets and bottles at water and lava cauldrons and a dragon egg with innate recipes only. */
+    public static final DeferredHolder<Job, Job> BOTTLER = JOBS.register("bottler", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.CAULDRON).bubbleIcon(() -> Items.WATER_BUCKET).displayItem(() -> Items.WATER_BUCKET)
+            .hungerFactor(0.5).baseExp(2).unlockItem(() -> Items.CAULDRON).profile(InnateProfile::bottler).build());
+    /** See vault {@code Jobs/Brewer.md}; brews beer at a barrel with an innate recipe only, slowly (job factor 0.5). */
+    public static final DeferredHolder<Job, Job> BREWER = JOBS.register("brewer", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.BARREL).bubbleIcon(ModItems.BEER).displayItem(ModItems.BEER)
+            .hungerFactor(0.5).baseExp(2).jobFactor(0.5).unlockItem(() -> Items.BARREL).profile(InnateProfile::brewer).build());
     /** See vault {@code Jobs/Sifter.md}; sifts sand and gravel with a shovel at a hopper, drawing finds from a pool by skill level. */
     public static final DeferredHolder<Job, Job> SIFTER = JOBS.register("sifter", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.HOPPER).bubbleIcon(() -> Items.SAND).displayItem(() -> Items.SAND).hungerFactor(0.5)
