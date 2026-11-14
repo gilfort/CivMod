@@ -25,13 +25,14 @@ record ExecutionOutcome(ItemStack result, List<ItemStack> drawn) {
      * @param innate  the innate recipe the pattern follows, empty for a pattern of a player
      * @param pattern the pattern
      * @param level   the settler's effective skill level in the Job
+     * @param inputs  what the execution used up (the random item of a tag result is none of these)
      * @param random  the random source of the draw (a test can script it, see {@link DropPools#script})
      * @return what the execution makes
      */
-    static ExecutionOutcome of(Optional<JobCraftingRecipe> innate, Pattern pattern, int level, RandomSource random) {
+    static ExecutionOutcome of(Optional<JobCraftingRecipe> innate, Pattern pattern, int level, List<ItemStack> inputs, RandomSource random) {
         boolean drawsOnly = innate.filter(JobCraftingRecipe::drawsOnly).isPresent();
         ItemStack result = drawsOnly ? ItemStack.EMPTY : new ItemStack(pattern.output(), pattern.count());
-        List<ItemStack> drawn = innate.flatMap(JobCraftingRecipe::drops).map(drops -> DropPools.draw(drops, level, random)).orElse(List.of());
+        List<ItemStack> drawn = innate.flatMap(JobCraftingRecipe::drops).map(drops -> DropPools.draw(drops, level, random, inputs)).orElse(List.of());
         return new ExecutionOutcome(result, drawn);
     }
 

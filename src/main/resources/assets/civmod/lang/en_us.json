@@ -593,6 +593,7 @@
   "civmod.recipe_viewer.innate_recipes.block.powder_snow_cauldron": "Powder Snow Cauldron",
   "civmod.recipe_viewer.innate_recipes.state": "State: %s",
   "civmod.recipe_viewer.innate_recipes.drop": "Chance: %s %% (from level %s)",
+  "civmod.recipe_viewer.innate_recipes.drop_tag": "Chance: %s %% (from level %s), a different item of %s",
   "civmod.recipe_viewer.settler_gathering": "Settler Gathering",
   "civmod.recipe_viewer.settler_gathering.from": "Gathered by settlers from",
   "civmod.recipe_viewer.settler_gathering.tool": "Tool: taken from the collect inventory, worn by 1 per drop",

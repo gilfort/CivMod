@@ -9,6 +9,7 @@ import com.gilfort.civmod.api.Drops;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.job.DropDraw;
 import com.gilfort.civmod.job.DropPools;
+import com.gilfort.civmod.registry.ModItems;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.JsonOps;
@@ -18,6 +19,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemStackTemplate;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.levelgen.LegacyRandomSource;
@@ -53,6 +55,7 @@ public final class DropsGameTests {
             register(helper, "drops_chances", DropsGameTests::chances);
             register(helper, "drops_recipe_format", DropsGameTests::recipeFormat);
             register(helper, "drops_recipe_rejected", DropsGameTests::recipeRejected);
+            register(helper, "drops_tag_result", DropsGameTests::tagResult);
         });
     }
 
@@ -170,6 +173,42 @@ public final class DropsGameTests {
         helper.assertTrue(parse(helper, RECIPE_BASE + "\"drops\": \"not an id\"}").isError(), "A pool name that is no id is rejected");
         helper.assertTrue(parse(helper, RECIPE_BASE + "\"drops\": \"civmod:sifter\", \"requires\": {\"entity\": \"minecraft:cow\"}}").isError(),
                 "Drops do not go with requires");
+        helper.succeed();
+    }
+
+    private static final String TAG_DROPS = "\"drops\": [{\"weight\": 1, \"results\": [{\"id\": \"minecraft:poppy\"}], \"tag_result\": {\"tag\": \"#%s\"}}]}";
+
+    /**
+     * An outcome can add one random item of an item tag: every member except the items that went into the recipe is equally
+     * likely, an empty tag adds nothing, and the format rejects what makes no sense.
+     */
+    private static void tagResult(GameTestHelper helper) {
+        DataResult<JobCraftingRecipe> parsed = parse(helper, RECIPE_BASE + String.format(TAG_DROPS, "c:flowers/small"));
+        helper.assertTrue(parsed.isSuccess(), "A tag_result loads: " + parsed.error().map(DataResult.Error::message).orElse(""));
+        Drops drops = parsed.getOrThrow().drops().orElseThrow();
+        DropOutcome.TagResult tag = drops.outcomes().getFirst().tagResult().orElseThrow();
+        helper.assertValueEqual(tag.count(), 1, "The count of a tag_result defaults to 1");
+        helper.assertTrue(parse(helper, RECIPE_BASE + "\"drops\": [{\"weight\": 1, \"results\": [], \"tag_result\": {\"tag\": \"#c:flowers/small\", \"count\": 0}}]}")
+                .isError(), "A count of 0 is rejected");
+
+        List<ItemStack> poppy = List.of(new ItemStack(Items.POPPY));
+        List<Item> candidates = tag.candidates(List.of(Items.POPPY));
+        helper.assertTrue(candidates.size() >= 2 && !candidates.contains(Items.POPPY), "The input is left out of the tag: " + candidates);
+        helper.assertTrue(candidates.contains(Items.DANDELION) && candidates.contains(ModItems.BEER.get()),
+                "The tag holds the vanilla flowers and the one the test datapack added: " + candidates);
+        helper.assertValueEqual(tag.candidates(List.of()).size(), candidates.size() + 1, "Without an input the whole tag is in the draw");
+
+        // The first roll picks the outcome, the second the member of the tag.
+        List<ItemStack> first = DropPools.draw(drops, 1, scripted(0, 0), poppy);
+        helper.assertValueEqual(first.size(), 2, "The result and one tag item");
+        helper.assertValueEqual(first.get(0).getItem(), Items.POPPY, "The listed result");
+        helper.assertValueEqual(first.get(1).getItem(), candidates.getFirst(), "Index 0 of the candidates");
+        List<ItemStack> last = DropPools.draw(drops, 1, scripted(0, candidates.size() - 1), poppy);
+        helper.assertValueEqual(last.get(1).getItem(), candidates.getLast(), "The last index of the candidates");
+
+        Drops emptyTag = parse(helper, RECIPE_BASE + String.format(TAG_DROPS, "civmod:no_such_tag")).getOrThrow().drops().orElseThrow();
+        List<ItemStack> nothing = DropPools.draw(emptyTag, 1, scripted(0, 0), poppy);
+        helper.assertValueEqual(nothing.size(), 1, "An empty tag adds nothing to the listed result");
         helper.succeed();
     }
 }
