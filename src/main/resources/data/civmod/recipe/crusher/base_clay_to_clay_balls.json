@@ -1,0 +1,6 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:crusher"],
+  "ingredients": ["minecraft:clay"],
+  "result": { "id": "minecraft:clay_ball", "count": 4 }
+}
