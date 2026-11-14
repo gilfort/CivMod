@@ -128,12 +128,20 @@ public final class InnateRecipeGameTests {
         helper.assertTrue(parse(ops, "[{\"ingredient\": \"minecraft:stick\", \"count\": 0}]").isEmpty(), "Count 0 is rejected");
         helper.assertTrue(parse(ops, "[{\"ingredient\": \"minecraft:stick\", \"count\": -3}]").isEmpty(), "A negative count is rejected");
         helper.assertTrue(parse(ops, "[" + "\"minecraft:stick\",".repeat(9) + "\"minecraft:clay_ball\"]").isEmpty(), "10 ingredients are too many");
+        helper.assertTrue(parse(ops, "[{\"ingredient\": \"minecraft:glass_bottle\", \"count\": 2}]", ", \"requires\": {\"entity\": \"minecraft:cow\"}").isEmpty(),
+                "A Resource Collection recipe takes no count above 1");
+        helper.assertTrue(parse(ops, "[\"minecraft:glass_bottle\"]", ", \"requires\": {\"entity\": \"minecraft:cow\"}").isPresent(),
+                "A Resource Collection recipe with plain ingredients is fine");
         helper.succeed();
     }
 
     private static Optional<JobCraftingRecipe> parse(RegistryOps<JsonElement> ops, String ingredients) {
+        return parse(ops, ingredients, "");
+    }
+
+    private static Optional<JobCraftingRecipe> parse(RegistryOps<JsonElement> ops, String ingredients, String extraFields) {
         JsonElement json = JsonParser.parseString("{\"jobs\": [\"civmod:fletcher\"], \"ingredients\": " + ingredients
-                + ", \"result\": {\"id\": \"minecraft:brick\"}}");
+                + ", \"result\": {\"id\": \"minecraft:brick\"}" + extraFields + "}");
         return JobCraftingRecipe.MAP_CODEC.codec().parse(ops, json).result();
     }
 

@@ -92,7 +92,7 @@ import net.minecraft.world.level.block.state.BlockState;
  * recipe has at most 9 entries; a {@code count} below 1 or above 64 rejects the recipe when the datapack loads, with a
  * log message. The Patterns tab and the recipe viewers show one slot per entry with its count; the settler fetches, and
  * the chain resolution asks for, all {@code count} items before an execution starts. A tag entry takes any mix of its
- * items.</li>
+ * items. A Resource Collection recipe (with {@code requires}) takes no {@code count} above 1.</li>
  * <li>{@code result}: the made item stack. Optional when the recipe has {@code drops}; a recipe with neither is
  * rejected when the datapack loads, with a log message.</li>
  * <li>{@code tool} (optional, Producing only): an item id or {@code #tag}; the settler fetches it like a Resource
@@ -342,8 +342,9 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Input> inputs, Optio
     }
 
     /**
-     * Checks a parsed recipe at the datapack edge: it needs a result or drops, and neither drops nor a station change go
-     * with {@code requires} (a Resource Collection Job makes one product and works at no station).
+     * Checks a parsed recipe at the datapack edge: it needs a result or drops; neither drops, a station change nor a
+     * {@code count} above 1 go with {@code requires} (a Resource Collection Job makes one product, works at no station and
+     * uses up one item per ingredient).
      */
     private static DataResult<JobCraftingRecipe> validate(JobCraftingRecipe recipe) {
         if (recipe.result.isEmpty() && recipe.drops.isEmpty()) {
@@ -354,6 +355,9 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Input> inputs, Optio
         }
         if (recipe.stationAfter.isPresent() && recipe.requires.isPresent()) {
             return DataResult.error(() -> "\"station_after\" does not go with \"requires\": a Resource Collection recipe has no station");
+        }
+        if (recipe.requires.isPresent() && recipe.inputs.stream().anyMatch(input -> input.count() > 1)) {
+            return DataResult.error(() -> "\"count\" above 1 does not go with \"requires\": a Resource Collection recipe uses up one item per ingredient");
         }
         return DataResult.success(recipe);
     }
