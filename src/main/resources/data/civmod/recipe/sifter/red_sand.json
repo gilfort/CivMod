@@ -1,0 +1,7 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:sifter"],
+  "ingredients": ["minecraft:red_sand"],
+  "drops": "civmod:sifter",
+  "tool": "#minecraft:shovels"
+}

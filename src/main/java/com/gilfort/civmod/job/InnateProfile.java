@@ -21,7 +21,8 @@ import net.minecraft.world.level.block.Block;
  * <li>{@link #crusher()}: the station is a grindstone ({@code civmod:stations/crusher}, vault
  * {@code Jobs/Crusher.md});</li>
  * <li>{@link #concreteMixer()}: the station is a water cauldron ({@code civmod:stations/water_cauldron}, the one the
- * Dyer bleaches at; vault {@code Jobs/Concrete Mixer.md}).</li>
+ * Dyer bleaches at; vault {@code Jobs/Concrete Mixer.md});</li>
+ * <li>{@link #sifter()}: the station is a hopper ({@code civmod:stations/sifter}, vault {@code Jobs/Sifter.md}).</li>
  * </ul>
  */
 public final class InnateProfile implements ProducingProfile {
@@ -38,6 +39,11 @@ public final class InnateProfile implements ProducingProfile {
     /** @return the Crusher's profile: innate recipes at a grindstone */
     public static InnateProfile crusher() {
         return new InnateProfile("crusher");
+    }
+
+    /** @return the Sifter's profile: innate recipes at a hopper */
+    public static InnateProfile sifter() {
+        return new InnateProfile("sifter");
     }
 
     /** @return the Concrete Mixer's profile: innate recipes at a water cauldron */

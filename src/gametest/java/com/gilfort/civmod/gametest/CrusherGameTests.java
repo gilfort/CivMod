@@ -92,7 +92,7 @@ public final class CrusherGameTests {
     static Optional<ItemStack> resultFor(ServerLevel level, Job job, Item input) {
         return InnateRecipes.of(level, job).stream().map(RecipeHolder::value)
                 .filter(recipe -> recipe.ingredients().size() == 1 && recipe.ingredients().getFirst().test(new ItemStack(input)))
-                .map(recipe -> recipe.result().create()).findFirst();
+                .map(recipe -> recipe.result().orElseThrow().create()).findFirst();
     }
 
     /**

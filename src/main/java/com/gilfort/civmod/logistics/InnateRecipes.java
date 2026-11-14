@@ -11,10 +11,12 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.Drops;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ProducingProfile;
+import com.gilfort.civmod.job.DropPools;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.registry.ModRecipes;
 
@@ -26,6 +28,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ItemStackTemplate;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
@@ -41,6 +45,9 @@ import net.minecraft.world.level.block.Block;
  * recipes per Job, their station tags per Job and the recipes by id, so the lookups of the loops cost one map access.
  */
 public final class InnateRecipes {
+
+    /** The icon of a {@code drops} recipe whose pool gives nothing (a pool nobody ships): the pattern needs some item. */
+    private static final Item UNKNOWN_DROP = Items.BARRIER;
 
     /** The recipe set the cache was built from (replaced on every datapack reload). */
     private static @Nullable RecipeMap cachedFrom;
@@ -129,7 +136,19 @@ public final class InnateRecipes {
     }
 
     /**
-     * The library pattern of an innate recipe: its result as output, one item per ingredient in the grid.
+     * @param level   the level
+     * @param pattern a pattern
+     * @return the {@code drops} of the innate recipe it follows, empty if it follows none or one without {@code drops}.
+     *         Such a pattern cannot serve a request: the result of a draw is not known beforehand.
+     */
+    public static Optional<Drops> drops(ServerLevel level, Pattern pattern) {
+        return recipe(level, pattern).flatMap(JobCraftingRecipe::drops);
+    }
+
+    /**
+     * The library pattern of an innate recipe: its result as output, one item per ingredient in the grid. A recipe
+     * without a result shows the first stack its outcomes give ({@link DropPools#representative}), once per execution; the
+     * Producing loop makes the drawn stacks instead of that item.
      *
      * @param slot    the library slot
      * @param holder  the innate recipe
@@ -138,9 +157,11 @@ public final class InnateRecipes {
      */
     public static Pattern pattern(int slot, RecipeHolder<JobCraftingRecipe> holder, boolean checked) {
         JobCraftingRecipe recipe = holder.value();
-        ItemStack result = recipe.result().create();
+        ItemStack shown = recipe.result().or(() -> recipe.drops().flatMap(DropPools::representative)).map(ItemStackTemplate::create)
+                .orElseGet(() -> new ItemStack(UNKNOWN_DROP));
+        int count = recipe.result().isPresent() ? shown.getCount() : 1;
         List<Item> grid = recipe.ingredients().stream().map(PatternRecipes::representative).toList();
-        return new Pattern(slot, result.getItem(), result.getCount(), grid, Optional.of(holder.id()), false, checked, true);
+        return new Pattern(slot, shown.getItem(), count, grid, Optional.of(holder.id()), false, checked, true);
     }
 
     /**
@@ -201,8 +222,11 @@ public final class InnateRecipes {
                 Job job = ModJobs.REGISTRY.getValue(id);
                 if (producing(job)) {
                     byJob.computeIfAbsent(job, key -> new ArrayList<>()).add(holder);
-                } else if (collecting(job)) {
+                } else if (collecting(job) && holder.value().result().isPresent()) {
                     collecting.computeIfAbsent(job, key -> new ArrayList<>()).add(holder);
+                } else if (collecting(job)) {
+                    CivMod.LOGGER.warn("Innate recipe {} has no result, which the Resource Collection Job {} needs: ignored for it",
+                            holder.id().identifier(), id);
                 } else {
                     CivMod.LOGGER.warn("Innate recipe {} names {}, which is no known Producing or Resource Collection Job: ignored for it",
                             holder.id().identifier(), id);

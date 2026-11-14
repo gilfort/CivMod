@@ -94,12 +94,20 @@ public final class CollectionRecipes {
     public static List<Listed> listed(ServerLevel level, Job job, ResourceCollectionProfile profile, ScanResult scan, @Nullable Settler settler, Stock collect) {
         return offered(level, job, profile, scan).stream().map(Offer::holder).map(holder -> {
             JobCraftingRecipe recipe = holder.value();
-            ItemStack icon = recipe.result().create();
+            ItemStack icon = product(recipe);
             Optional<Component> needs = recipe.ingredients().stream()
                     .filter(input -> (settler == null || SettlerTools.beltCount(settler, input::test) == 0) && !collect.contains(input::test)).findFirst()
                     .map(InnateRecipes::needsInput);
             return new Listed(type(holder), icon, icon.getItem(), needs);
         }).toList();
+    }
+
+    /**
+     * @param recipe an innate recipe of a Resource Collection Job (the index leaves out those without a result)
+     * @return the stack it collects
+     */
+    static ItemStack product(JobCraftingRecipe recipe) {
+        return recipe.result().orElseThrow(() -> new IllegalStateException("Resource Collection recipe without a result: " + recipe)).create();
     }
 
     /**
@@ -121,7 +129,7 @@ public final class CollectionRecipes {
      */
     static List<Offer> allowed(List<Offer> offered, Set<Identifier> excluded, Set<Item> atMax) {
         return offered.stream()
-                .filter(offer -> !excluded.contains(type(offer.holder())) && !atMax.contains(offer.holder().value().result().create().getItem())).toList();
+                .filter(offer -> !excluded.contains(type(offer.holder())) && !atMax.contains(product(offer.holder().value()).getItem())).toList();
     }
 
     /**
@@ -198,7 +206,7 @@ public final class CollectionRecipes {
             pick -= offer.weight();
             if (pick < 0) {
                 consume(settler, offer.holder().value());
-                return Optional.of(offer.holder().value().result().create());
+                return Optional.of(product(offer.holder().value()));
             }
         }
         return Optional.empty();

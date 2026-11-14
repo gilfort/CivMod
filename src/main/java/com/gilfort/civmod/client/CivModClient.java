@@ -137,6 +137,7 @@ public final class CivModClient {
         event.register(com.gilfort.civmod.menu.FuelTabData.Sync.TYPE, JobBlockScreen::handleFuelTab);
         event.register(com.gilfort.civmod.menu.FoundTabData.Sync.TYPE, JobBlockScreen::handleFoundTab);
         event.register(com.gilfort.civmod.job.JobDrops.Sync.TYPE, ClientJobDrops::handle);
+        event.register(com.gilfort.civmod.job.DropPools.Sync.TYPE, ClientDropPools::handle);
         event.register(com.gilfort.civmod.menu.WorkersTabData.Sync.TYPE, JobBlockScreen::handleWorkersTab);
         event.register(com.gilfort.civmod.menu.MissionsTabData.Sync.TYPE, JobBlockScreen::handleMissionsTab);
         event.register(com.gilfort.civmod.npc.ThoughtBubble.Show.TYPE, ThoughtBubbleRenderer::handle);

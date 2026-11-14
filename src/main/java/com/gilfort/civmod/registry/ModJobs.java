@@ -120,6 +120,10 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> CONCRETE_MIXER = JOBS.register("concrete_mixer", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.CAULDRON).bubbleIcon(() -> Items.CONCRETE.white()).displayItem(() -> Items.CONCRETE.white())
             .hungerFactor(0.5).baseExp(2).unlockItem(() -> Items.WATER_BUCKET).profile(InnateProfile::concreteMixer).build());
+    /** See vault {@code Jobs/Sifter.md}; sifts sand and gravel with a shovel at a hopper, drawing finds from a pool by skill level. */
+    public static final DeferredHolder<Job, Job> SIFTER = JOBS.register("sifter", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.HOPPER).bubbleIcon(() -> Items.SAND).displayItem(() -> Items.SAND).hungerFactor(0.5)
+            .baseExp(2).unlockItem(() -> Items.HOPPER).profile(InnateProfile::sifter).build());
     /** See vault {@code Jobs/Smelter.md}; smelts requested items at furnaces, several in parallel, burning fuel. */
     public static final DeferredHolder<Job, Job> SMELTER = JOBS.register("smelter", () -> Job.builder(JobCategory.PRODUCING)
             .icon(ModItems.SMELTER_BLOCK).bubbleIcon(() -> Items.IRON_INGOT).displayItem(() -> Items.COAL).hungerFactor(0.5).baseExp(1)

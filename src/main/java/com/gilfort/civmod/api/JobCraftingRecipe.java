@@ -85,7 +85,8 @@ import net.minecraft.world.level.block.state.BlockState;
  * <li>{@code jobs}: the Job ids; Jobs that are neither Producing nor Resource Collection (or unknown) are ignored with a
  * log warning.</li>
  * <li>{@code ingredients}: shapeless, 1–9 ingredients (item ids, {@code #tags} or lists).</li>
- * <li>{@code result}: the made item stack.</li>
+ * <li>{@code result}: the made item stack. Optional when the recipe has {@code drops}; a recipe with neither is
+ * rejected when the datapack loads, with a log message.</li>
  * <li>{@code tool} (optional, Producing only): an item id or {@code #tag}; the settler fetches it like a Resource
  * Collection tool (belt, else from its collect inventory) and wears it by 1 durability per execution (Unbreaking works).
  * Without the tool only this recipe is skipped and marked in the Patterns tab ("Needs Shears").</li>
@@ -103,19 +104,38 @@ import net.minecraft.world.level.block.state.BlockState;
  * the weights of the found types (the Animal Farmer weighs an animal type by its count, other Jobs each found type by
  * 1), times the count of its {@code requires} in the scan (20 cows: milk weighs 20 × {@code weight}); without
  * {@code requires} the weight alone.</li>
+ * <li>{@code drops} (optional, Producing only): weighted outcomes, one of which is drawn per execution, either listed
+ * in the recipe or named as a shared pool by id; see {@link Drops} and {@link DropOutcome}. The settler's skill level in
+ * the Job decides which outcomes are in the draw. The drawn stacks are made in addition to the {@code result}, if the
+ * recipe has one. The result of a draw is not known beforehand, so a recipe with {@code drops} cannot serve a request:
+ * it runs only as an "Always produce" pattern, and its Patterns tab icon is the {@code result}, else the first stack
+ * its outcomes give. A Resource Collection recipe (with {@code requires}) takes no {@code drops}.</li>
  * </ul>
+ *
+ * A Producing recipe that sifts sand (the pool is the file {@code data/civmod/civmod_drop_pools/sifter.json}):
+ *
+ * <pre>{@code
+ * {
+ *   "type": "civmod:job_crafting",
+ *   "jobs": ["civmod:sifter"],
+ *   "ingredients": ["minecraft:sand"],
+ *   "drops": "civmod:sifter",
+ *   "tool": "#minecraft:shovels"
+ * }
+ * }</pre>
  *
  * @param jobs        the Jobs that know the recipe
  * @param ingredients the inputs of one execution (shapeless)
- * @param result      what one execution makes
+ * @param result      what one execution makes for sure, if anything (a recipe has a result, {@code drops}, or both)
  * @param tool        the tool the settler needs, if any
  * @param station     the station tag the recipe is worked at, if not the Job's main station
  * @param requires    what a Resource Collection Job must have found for the recipe, if anything
  * @param weight      the recipe's weight in a Resource Collection Job's roll (at least 1)
+ * @param drops       the outcomes one is drawn from per execution, if the recipe has random results
  */
 @ApiStatus.Experimental
-public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredients, ItemStackTemplate result, Optional<Ingredient> tool,
-        Optional<TagKey<Block>> station, Optional<Requirement> requires, int weight) implements Recipe<CraftingInput> {
+public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredients, Optional<ItemStackTemplate> result, Optional<Ingredient> tool,
+        Optional<TagKey<Block>> station, Optional<Requirement> requires, int weight, Optional<Drops> drops) implements Recipe<CraftingInput> {
 
     /** The most ingredients of one execution: the 3×3 pattern grid. */
     public static final int MAX_INGREDIENTS = 9;
@@ -176,26 +196,28 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredie
     }
 
     /** Datapack codec. */
-    public static final MapCodec<JobCraftingRecipe> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+    public static final MapCodec<JobCraftingRecipe> MAP_CODEC = RecordCodecBuilder.<JobCraftingRecipe>mapCodec(instance -> instance.group(
             Identifier.CODEC.listOf(1, Integer.MAX_VALUE).fieldOf("jobs").forGetter(JobCraftingRecipe::jobs),
             Codec.lazyInitialized(() -> Ingredient.CODEC.listOf(1, MAX_INGREDIENTS)).fieldOf("ingredients").forGetter(JobCraftingRecipe::ingredients),
-            ItemStackTemplate.CODEC.fieldOf("result").forGetter(JobCraftingRecipe::result),
+            ItemStackTemplate.CODEC.optionalFieldOf("result").forGetter(JobCraftingRecipe::result),
             Ingredient.CODEC.optionalFieldOf("tool").forGetter(JobCraftingRecipe::tool),
             TagKey.hashedCodec(Registries.BLOCK).optionalFieldOf("station").forGetter(JobCraftingRecipe::station),
             Requirement.CODEC.optionalFieldOf("requires").forGetter(JobCraftingRecipe::requires),
-            Codec.intRange(1, Integer.MAX_VALUE).optionalFieldOf("weight", DEFAULT_WEIGHT).forGetter(JobCraftingRecipe::weight)
-    ).apply(instance, JobCraftingRecipe::new));
+            Codec.intRange(1, Integer.MAX_VALUE).optionalFieldOf("weight", DEFAULT_WEIGHT).forGetter(JobCraftingRecipe::weight),
+            Drops.CODEC.optionalFieldOf("drops").forGetter(JobCraftingRecipe::drops)
+    ).apply(instance, JobCraftingRecipe::new)).validate(JobCraftingRecipe::validate);
 
     /** Network codec (recipe viewers). */
     public static final StreamCodec<RegistryFriendlyByteBuf, JobCraftingRecipe> STREAM_CODEC = StreamCodec.composite(
             Identifier.STREAM_CODEC.apply(ByteBufCodecs.list()), JobCraftingRecipe::jobs,
             Ingredient.CONTENTS_STREAM_CODEC.apply(ByteBufCodecs.list()), JobCraftingRecipe::ingredients,
-            ItemStackTemplate.STREAM_CODEC, JobCraftingRecipe::result,
+            ByteBufCodecs.optional(ItemStackTemplate.STREAM_CODEC), JobCraftingRecipe::result,
             ByteBufCodecs.optional(Ingredient.CONTENTS_STREAM_CODEC), JobCraftingRecipe::tool,
             ByteBufCodecs.optional(Identifier.STREAM_CODEC.map(id -> TagKey.create(Registries.BLOCK, id), TagKey::location)),
             JobCraftingRecipe::station,
             ByteBufCodecs.optional(Requirement.STREAM_CODEC), JobCraftingRecipe::requires,
             ByteBufCodecs.VAR_INT, JobCraftingRecipe::weight,
+            ByteBufCodecs.optional(Drops.STREAM_CODEC), JobCraftingRecipe::drops,
             JobCraftingRecipe::new);
 
     /** The serializer of {@code civmod:job_crafting}. */
@@ -204,11 +226,12 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredie
     /**
      * @param jobs        the Jobs that know the recipe
      * @param ingredients the inputs of one execution
-     * @param result      what one execution makes
+     * @param result      what one execution makes for sure, if anything
      * @param tool        the tool the settler needs, if any
      * @param station     the station tag, if not the Job's main station
      * @param requires    what a Resource Collection Job must have found, if anything
      * @param weight      the weight in a Resource Collection Job's roll (at least 1)
+     * @param drops       the outcomes one is drawn from per execution, if any
      */
     public JobCraftingRecipe {
         jobs = List.copyOf(jobs);
@@ -219,7 +242,8 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredie
     }
 
     /**
-     * A recipe without {@code requires} and with the default weight (as a Producing Job uses it).
+     * A recipe with a result, without {@code requires} and {@code drops} and with the default weight (as a Producing Job
+     * uses it).
      *
      * @param jobs        the Jobs that know the recipe
      * @param ingredients the inputs of one execution
@@ -229,7 +253,28 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredie
      */
     public JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredients, ItemStackTemplate result, Optional<Ingredient> tool,
             Optional<TagKey<Block>> station) {
-        this(jobs, ingredients, result, tool, station, Optional.empty(), DEFAULT_WEIGHT);
+        this(jobs, ingredients, Optional.of(result), tool, station, Optional.empty(), DEFAULT_WEIGHT, Optional.empty());
+    }
+
+    /**
+     * Checks a parsed recipe at the datapack edge: it needs a result or drops, and drops do not go with {@code requires}
+     * (a Resource Collection Job makes one product).
+     */
+    private static DataResult<JobCraftingRecipe> validate(JobCraftingRecipe recipe) {
+        if (recipe.result.isEmpty() && recipe.drops.isEmpty()) {
+            return DataResult.error(() -> "a job_crafting recipe needs a \"result\", \"drops\" or both");
+        }
+        if (recipe.drops.isPresent() && recipe.requires.isPresent()) {
+            return DataResult.error(() -> "\"drops\" does not go with \"requires\": a Resource Collection recipe makes one product");
+        }
+        return DataResult.success(recipe);
+    }
+
+    /**
+     * @return whether an execution makes nothing for sure and relies on {@link #drops()} alone
+     */
+    public boolean drawsOnly() {
+        return result.isEmpty();
     }
 
     /** Players craft it nowhere. */
@@ -240,7 +285,7 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredie
 
     @Override
     public ItemStack assemble(CraftingInput input) {
-        return result.create();
+        return result.map(ItemStackTemplate::create).orElse(ItemStack.EMPTY);
     }
 
     @Override
@@ -272,7 +317,7 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredie
     @Override
     public List<RecipeDisplay> display() {
         return List.of(new ShapelessCraftingRecipeDisplay(ingredients.stream().map(Ingredient::display).toList(),
-                new SlotDisplay.ItemStackSlotDisplay(result), SlotDisplay.Empty.INSTANCE));
+                result.<SlotDisplay>map(SlotDisplay.ItemStackSlotDisplay::new).orElse(SlotDisplay.Empty.INSTANCE), SlotDisplay.Empty.INSTANCE));
     }
 
     @Override
