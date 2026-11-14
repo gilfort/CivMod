@@ -1,0 +1,12 @@
+{
+  "type": "civmod:job_crafting",
+  "ingredients": [
+    "minecraft:black_concrete_powder"
+  ],
+  "jobs": [
+    "civmod:concrete_mixer"
+  ],
+  "result": {
+    "id": "minecraft:black_concrete"
+  }
+}
