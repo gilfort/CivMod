@@ -56,6 +56,8 @@ public final class InnateRecipeLayout {
     public static final String TOOL_LINE = TITLE + ".tool";
     /** Tooltip line of the station slot. */
     public static final String STATION_LINE = TITLE + ".station";
+    /** Tooltip line of the station slot of a recipe with {@code station_after}: what the station turns into. */
+    public static final String STATION_AFTER_LINE = TITLE + ".station_after";
     /** The slot of what a Resource Collection recipe requires: below the result. */
     public static final int REQUIRES_X = OUTPUT_X;
     /** Tooltip line of the requires slot. */
@@ -68,6 +70,17 @@ public final class InnateRecipeLayout {
     private static final DecimalFormat PERCENT = new DecimalFormat("0.#", DecimalFormatSymbols.getInstance(Locale.ROOT));
 
     private InnateRecipeLayout() {
+    }
+
+    /**
+     * @param recipe an innate recipe
+     * @return the tooltip lines of the station slot: that it is worked there and, with {@code station_after}, what the
+     *         station turns into ("Afterwards the station turns into: Cauldron")
+     */
+    public static List<Component> stationLines(JobCraftingRecipe recipe) {
+        List<Component> lines = new ArrayList<>(List.of(Component.translatable(STATION_LINE)));
+        recipe.stationAfter().ifPresent(after -> lines.add(Component.translatable(STATION_AFTER_LINE, after.getBlock().getName())));
+        return lines;
     }
 
     /**

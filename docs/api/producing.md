@@ -180,6 +180,18 @@ Job-only recipes the player cannot craft anywhere: CivMod's recipe type `civmod:
 - `drops` (optional): random results, see [Drops](#drops) below.
 - `tool` (optional): an item id or `#tag`. The settler takes the tool from its collect inventory onto its belt at the start of a round (like a Resource Collection tool) and wears it by 1 durability per execution; Unbreaking works. Without the tool on the belt or in the collect inventory only this recipe is skipped, and the Patterns tab marks it ("Needs Shears"); the Job keeps working its other recipes.
 - `station` (optional): a block `#tag`. The settler works the recipe at the nearest such station within 16 blocks of the JobBlock (like a step of another recipe type); without `station` the station of the Job's main recipe type counts. A missing station skips and marks the recipe ("Needs a Water Cauldron nearby"); the search runs at most every 30 s per settler and tag.
+- `station_after` (optional): a block state that replaces the station block after every execution, for a station the work uses up. It is a block id for the default state (`"minecraft:cauldron"`) or `{ "id": "minecraft:cauldron", "properties": { ... } }`. The block replaced is the one the recipe was worked at: the recipe's own `station`, else the Job's main station. The replaced block is no station any more (unless the new state is in the tag again), so the next pick skips the recipe and marks it ("Needs a station nearby: Lava Cauldron") until a new station stands; the cached search is forgotten at once. Without `station_after` the station stays as it is. A recipe with `requires` (Resource Collection) takes none. The JEI and REI category "Job Recipes" adds "Afterwards the station turns into: Cauldron" to the tooltip of the station slot.
+
+```json
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:bottler"],
+  "ingredients": ["minecraft:bucket"],
+  "result": { "id": "minecraft:lava_bucket" },
+  "station": "#civmod:stations/lava_cauldron",
+  "station_after": "minecraft:cauldron"
+}
+```
 
 In the library innate recipes sit in the first slots, ordered by recipe id, with a lock (tooltip "Innate recipe of the Fletcher"). They count towards the checkmark limit and are checked automatically like every new pattern while the limit has room; the player can only check and uncheck them and set "Always produce" (no edit, clear, overwrite or recipe viewer transfer). Your profile's `domain()` and filters do not apply to them: naming the Job in `jobs` is the opt-in. When a datapack adds an innate recipe later, a player pattern on a slot it needs moves to the next free slot (lost if all 54 are used: patterns are ghost items); a removed innate recipe frees its slot; the check state is kept per recipe id. JEI and REI show innate recipes in a display-only "Job Recipes" category (inputs, result, tool, station, the Jobs' icons as catalysts). The example addon's Stonecutter has one (`data/civmod_example/recipe/stonecutter/mossy_cobblestone.json`).
 

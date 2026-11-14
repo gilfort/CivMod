@@ -56,7 +56,7 @@ final class InnateRecipeCategory extends AbstractRecipeCategory<RecipeHolder<Job
         if (!stations.isEmpty()) {
             builder.addSlot(RecipeIngredientRole.CRAFTING_STATION, InnateRecipeLayout.STATION_X, InnateRecipeLayout.EXTRAS_Y).setStandardSlotBackground()
                     .addItemStacks(stations)
-                    .addRichTooltipCallback((view, tooltip) -> tooltip.add(Component.translatable(InnateRecipeLayout.STATION_LINE)));
+                    .addRichTooltipCallback((view, tooltip) -> InnateRecipeLayout.stationLines(recipe).forEach(tooltip::add));
         }
         recipe.requires().ifPresent(requires -> builder.addSlot(RecipeIngredientRole.RENDER_ONLY, InnateRecipeLayout.REQUIRES_X, InnateRecipeLayout.EXTRAS_Y)
                 .setStandardSlotBackground().addItemStacks(InnateRecipeLayout.requiresIcons(requires))

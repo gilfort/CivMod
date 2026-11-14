@@ -306,6 +306,11 @@ final class Workplace {
         return seen.found();
     }
 
+    /** Forgets what the last searches found: a station was replaced ({@code station_after}), so the next check looks again. */
+    void forgetRecipeStations() {
+        dayState.recipeStations.clear();
+    }
+
     // ---------------------------------------------------------------- buffer and status
 
     /**
