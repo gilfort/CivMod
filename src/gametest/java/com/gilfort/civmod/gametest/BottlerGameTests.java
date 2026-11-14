@@ -3,7 +3,6 @@ package com.gilfort.civmod.gametest;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
@@ -28,7 +27,6 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -62,19 +60,16 @@ public final class BottlerGameTests {
     @SubscribeEvent
     static void onRegister(RegisterEvent event) {
         event.register(Registries.TEST_FUNCTION, helper -> {
-            register(helper, "bottler_unlock", BottlerGameTests::unlock);
-            register(helper, "bottler_recipes", BottlerGameTests::recipes);
-            register(helper, "bottler_water_bucket", BottlerGameTests::waterBucket);
-            register(helper, "bottler_lava_bucket", BottlerGameTests::lavaBucket);
-            register(helper, "bottler_water_without_cauldron", BottlerGameTests::waterWithoutCauldron);
-            register(helper, "bottler_dragons_breath", BottlerGameTests::dragonsBreath);
-            register(helper, "bottler_missing_bucket", BottlerGameTests::missingBucket);
+            TestFunctions.register(helper, "bottler_unlock", BottlerGameTests::unlock);
+            TestFunctions.register(helper, "bottler_recipes", BottlerGameTests::recipes);
+            TestFunctions.register(helper, "bottler_water_bucket", BottlerGameTests::waterBucket);
+            TestFunctions.register(helper, "bottler_lava_bucket", BottlerGameTests::lavaBucket);
+            TestFunctions.register(helper, "bottler_water_without_cauldron", BottlerGameTests::waterWithoutCauldron);
+            TestFunctions.register(helper, "bottler_dragons_breath", BottlerGameTests::dragonsBreath);
+            TestFunctions.register(helper, "bottler_missing_bucket", BottlerGameTests::missingBucket);
         });
     }
 
-    private static void register(RegisterEvent.RegisterHelper<Consumer<GameTestHelper>> helper, String name, Consumer<GameTestHelper> test) {
-        helper.register(ResourceKey.create(Registries.TEST_FUNCTION, CivMod.id(name)), test);
-    }
 
     /** The Bottler. */
     static Job bottler() {

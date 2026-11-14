@@ -801,6 +801,13 @@ final class ProducingLoop implements CategoryLoop {
         }
     }
 
+    /**
+     * @param station the station an execution was worked at
+     * @param moment  when it was worked
+     */
+    private record Execution(BlockPos station, Moment moment) {
+    }
+
     /** Takes the round's inputs from one source into the buffer; after the last source the craft starts. */
     private void fetch(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, BlockPos source, Stock stock, Moment moment) {
         JobBuffer buffer = shell.workplace(job.jobBlock()).buffer();
@@ -936,7 +943,7 @@ final class ProducingLoop implements CategoryLoop {
             }
             round.charges.remove(charge.getKey());
             done.add(charge.getKey());
-            boolean ok = craftOne(level, job, site, round, charge.getKey(), moment);
+            boolean ok = craftOne(level, job, site, round, new Execution(charge.getKey(), moment));
             if (!ok || round.crafted()) {
                 if (live) {
                     done.forEach(pos -> Furnaces.light(level, pos, false));
@@ -1004,10 +1011,11 @@ final class ProducingLoop implements CategoryLoop {
      * (by default the output and the remainders), EXP; an innate recipe with {@code station_after} then replaces its
      * station block.
      *
-     * @param station the station the execution was worked at
+     * @param execution the station the execution was worked at and the moment
      * @return whether it was executed (false: inputs gone, the round failed; or the tool gone, the round released)
      */
-    private boolean craftOne(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, BlockPos station, Moment moment) {
+    private boolean craftOne(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, Execution execution) {
+        Moment moment = execution.moment();
         CraftPlan.Step step = round.steps.get(round.step);
         JobBuffer buffer = shell.workplace(job.jobBlock()).buffer();
         Optional<Ingredient> tool = InnateRecipes.tool(level, step.pattern());
@@ -1029,9 +1037,11 @@ final class ProducingLoop implements CategoryLoop {
             }
             consumed.add(one);
         }
-        PatternRecipes.remainders(consumed).forEach(left -> round.remainders.add(left.getItem()));
+        List<ItemStack> leftovers = PatternRecipes.remainders(consumed);
+        round.addRemainders(leftovers);
         Pattern pattern = step.pattern();
-        ExecutionOutcome made = ExecutionOutcome.of(InnateRecipes.recipe(level, pattern), pattern, shell.effectiveLevel(job), settler.getRandom());
+        Optional<JobCraftingRecipe> innate = InnateRecipes.recipe(level, pattern);
+        ExecutionOutcome made = ExecutionOutcome.of(innate, pattern, shell.effectiveLevel(job), settler.getRandom());
         ItemStack result = made.result();
         Optional<RecipeHolder<?>> recipe = recipe(level, pattern);
         // Read before the buffer takes the stacks.
@@ -1041,7 +1051,7 @@ final class ProducingLoop implements CategoryLoop {
         } else {
             // The recipe is gone (datapack change): the pattern's own output, as recorded.
             buffer.add(result);
-            PatternRecipes.remainders(consumed).forEach(buffer::add);
+            leftovers.forEach(buffer::add);
         }
         made.drawn().forEach(stack -> {
             buffer.add(stack);
@@ -1051,7 +1061,7 @@ final class ProducingLoop implements CategoryLoop {
         worn.ifPresent(stack -> SettlerTools.wear(level, settler, stack));
         shell.collectXp(level, xp, worn.orElse(ItemStack.EMPTY));
         shell.gainExp(level, job, job.jobType().baseExp() * site.level(), site.skillCap());
-        InnateRecipes.recipe(level, pattern).flatMap(JobCraftingRecipe::stationAfter).ifPresent(after -> replaceStation(level, job, station, after));
+        innate.flatMap(JobCraftingRecipe::stationAfter).ifPresent(after -> shell.workplace(job.jobBlock()).replaceStation(level, execution.station(), after));
         if (++round.crafted >= step.crafts()) {
             round.step++;
             round.crafted = 0;
@@ -1061,15 +1071,6 @@ final class ProducingLoop implements CategoryLoop {
             handTimer = HAND_TICKS;
         }
         return true;
-    }
-
-    /**
-     * Replaces the station an innate recipe used up ({@code station_after}). The block is no station any more, so the
-     * Workplace forgets its cached station searches and the next pick marks the recipe "Needs a station nearby".
-     */
-    private void replaceStation(ServerLevel level, SettlerJob job, BlockPos station, BlockState after) {
-        level.setBlockAndUpdate(station, after);
-        shell.workplace(job.jobBlock()).forgetRecipeStations();
     }
 
     /**
@@ -1083,8 +1084,7 @@ final class ProducingLoop implements CategoryLoop {
     private boolean deliver(ServerLevel level, SettlerJob job, Round round, long dayTime) {
         Workplace workplace = shell.workplace(job.jobBlock());
         JobBuffer buffer = workplace.buffer();
-        List<ItemStack> product = buffer.takeAll(stack -> stack.is(round.item) || round.drawn.contains(stack.getItem())
-                || round.remainders.contains(stack.getItem()));
+        List<ItemStack> product = round.takeProduct(buffer);
         List<ItemStack> rest = new ArrayList<>();
         SettlementData data = SettlementData.get(level);
         // Read at delivery: a removed Clerk leaves the request without a target (own drop-off).

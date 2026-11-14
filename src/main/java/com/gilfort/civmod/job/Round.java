@@ -15,6 +15,7 @@ import com.gilfort.civmod.logistics.CraftPlan;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.level.block.Block;
 
@@ -43,8 +44,8 @@ final class Round {
     final List<Ingredient> tools;
     /** The kinds of item the executions of the round drew from a {@code drops} recipe, delivered with {@link #item}. */
     final Set<Item> drawn = new HashSet<>();
-    /** The kinds of item the executions left over from their inputs (empty buckets), delivered with {@link #item}. */
-    final Set<Item> remainders = new HashSet<>();
+    /** What the executions left over from their inputs (empty buckets), by item: delivered with {@link #item}, no more than this. */
+    private final Map<Item, Integer> remainders = new HashMap<>();
     /** The nearest station per station tag of a recipe type other than the work place of the day's, looked up once. */
     final Map<TagKey<Block>, Optional<BlockPos>> stations = new HashMap<>();
     /**
@@ -78,6 +79,46 @@ final class Round {
         this.inputs = List.copyOf(inputs);
         this.tools = List.copyOf(tools);
         this.phase = !inputs.isEmpty() ? Phase.WAIT : sources.isEmpty() ? Phase.CRAFT : Phase.FETCH;
+    }
+
+    /**
+     * Notes what one execution left over from its inputs.
+     *
+     * @param leftovers the remainders of the execution
+     */
+    void addRemainders(List<ItemStack> leftovers) {
+        leftovers.forEach(left -> remainders.merge(left.getItem(), left.getCount(), Integer::sum));
+    }
+
+    /**
+     * Takes what the round delivers out of the buffer: the item, every kind drawn from a {@code drops} recipe and the
+     * remainders its executions left (not the spare items of that kind the buffer holds besides).
+     *
+     * @param buffer the Job's buffer
+     * @return the stacks to deliver
+     */
+    List<ItemStack> takeProduct(JobBuffer buffer) {
+        List<ItemStack> product = new ArrayList<>(buffer.takeAll(stack -> stack.is(item) || drawn.contains(stack.getItem())));
+        remainders.forEach((kind, count) -> {
+            for (int left = count; left > 0; left--) {
+                ItemStack one = buffer.takeOne(stack -> stack.is(kind));
+                if (one.isEmpty()) {
+                    break;
+                }
+                ItemStack last = product.isEmpty() ? ItemStack.EMPTY : product.getLast();
+                if (ItemStack.isSameItemSameComponents(last, one) && last.getCount() < last.getMaxStackSize()) {
+                    last.grow(1);
+                } else {
+                    product.add(one);
+                }
+            }
+        });
+        return product;
+    }
+
+    /** The nearest stations looked up are forgotten: one was replaced ({@code station_after}). */
+    void forgetStations() {
+        stations.clear();
     }
 
     /**

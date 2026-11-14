@@ -3,7 +3,6 @@ package com.gilfort.civmod.gametest;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
@@ -18,7 +17,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
@@ -42,6 +40,10 @@ public final class BakerGameTests {
     private static final long WORK_TICKS = 4000L;
     /** The work time the speed tests catch up: enough for 4 executions at job factor 1.2, not at 0.3. */
     private static final long SPEED_TICKS = 1200L;
+    /** Job factor of the Baker with a furnace near its table divided by the one without (1.2 against 0.3). */
+    private static final int FURNACE_SPEEDUP = 4;
+    /** Breads of the speed tests: one round of 4 executions, delivered when the last one is done. */
+    private static final int BREADS = 4;
 
     private BakerGameTests() {
     }
@@ -49,18 +51,16 @@ public final class BakerGameTests {
     @SubscribeEvent
     static void onRegister(RegisterEvent event) {
         event.register(Registries.TEST_FUNCTION, helper -> {
-            register(helper, "baker_unlock", BakerGameTests::unlock);
-            register(helper, "baker_bakes_bread", BakerGameTests::bakesBread);
-            register(helper, "baker_modded_food", BakerGameTests::moddedFood);
-            register(helper, "baker_skips_intermediate", BakerGameTests::skipsIntermediate);
-            register(helper, "baker_furnace_faster", BakerGameTests::furnaceFaster);
-            register(helper, "baker_without_furnace_slower", BakerGameTests::withoutFurnaceSlower);
+            TestFunctions.register(helper, "baker_unlock", BakerGameTests::unlock);
+            TestFunctions.register(helper, "baker_bakes_bread", BakerGameTests::bakesBread);
+            TestFunctions.register(helper, "baker_modded_food", BakerGameTests::moddedFood);
+            TestFunctions.register(helper, "baker_skips_intermediate", BakerGameTests::skipsIntermediate);
+            TestFunctions.register(helper, "baker_furnace_faster", BakerGameTests::furnaceFaster);
+            TestFunctions.register(helper, "baker_without_furnace_slower", BakerGameTests::withoutFurnaceSlower);
+            TestFunctions.register(helper, "baker_without_furnace_four_times_slower", BakerGameTests::withoutFurnaceFourTimesSlower);
         });
     }
 
-    private static void register(RegisterEvent.RegisterHelper<Consumer<GameTestHelper>> helper, String name, Consumer<GameTestHelper> test) {
-        helper.register(ResourceKey.create(Registries.TEST_FUNCTION, CivMod.id(name)), test);
-    }
 
     /** The Baker. */
     static Job baker() {
@@ -171,27 +171,34 @@ public final class BakerGameTests {
     /** With a furnace within 4 blocks of the crafting table the Baker works at job factor 1.2: 4 breads in time. */
     private static void furnaceFaster(GameTestHelper helper) {
         helper.setBlock(new BlockPos(3, 1, 9), Blocks.FURNACE);
-        int delivered = breads(helper, 1.2);
-        helper.assertTrue(delivered == 4, "With a furnace the Baker delivered 4 breads: " + delivered);
+        int delivered = breads(helper, 1.2, SPEED_TICKS);
+        helper.assertTrue(delivered == BREADS, "With a furnace the Baker delivered " + BREADS + " breads: " + delivered);
         helper.succeed();
     }
 
-    /** The same request in the same work time without a furnace: job factor 0.3, not done yet. */
+    /** The same request in the same work time without a furnace: job factor 0.3, the round is not done yet. */
     private static void withoutFurnaceSlower(GameTestHelper helper) {
-        int delivered = breads(helper, 0.3);
-        helper.assertTrue(delivered < 4, "Without a furnace the Baker is slower: " + delivered);
+        int delivered = breads(helper, 0.3, SPEED_TICKS);
+        helper.assertTrue(delivered == 0, "Without a furnace the Baker has not finished in the time the furnace needs: " + delivered);
         helper.succeed();
     }
 
-    /** Requests 4 breads (4 executions), lets a Baker work {@link #SPEED_TICKS} and returns how many arrived. */
-    private static int breads(GameTestHelper helper, double factor) {
+    /** Without a furnace the same 4 breads take four times the work time: the same round, the speed-up is exactly 4. */
+    private static void withoutFurnaceFourTimesSlower(GameTestHelper helper) {
+        int delivered = breads(helper, 0.3, SPEED_TICKS * FURNACE_SPEEDUP);
+        helper.assertTrue(delivered == BREADS, "Without a furnace " + BREADS + " breads take four times as long: " + delivered);
+        helper.succeed();
+    }
+
+    /** Requests 4 breads (4 executions), lets a Baker work the work time and returns how many arrived. */
+    private static int breads(GameTestHelper helper, double factor, long workTicks) {
         ServerLevel level = helper.getLevel();
         Setup setup = FletcherGameTests.setup(helper, List.of(new ItemStack(Items.WHEAT, 12)), List.of(new ItemStack(Items.BREAD, 4)));
         BlockPos craft = bakery(helper, new BlockPos(1, 1, 5));
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.CRAFTING_TABLE);
         Settler settler = FletcherGameTests.worker(helper, setup, craft, baker());
         helper.assertTrue(Patterns.setOutput(level, craft, baker(), 0, Items.BREAD).orElseThrow().checked(), "Bread checked");
-        CraftspersonGameTests.catchUp(level, settler, SPEED_TICKS);
+        CraftspersonGameTests.catchUp(level, settler, workTicks);
         helper.assertTrue(settler.getWork().jobFactor(level, craft) == factor, "Job factor of the day " + factor + ": "
                 + settler.getWork().jobFactor(level, craft));
         int delivered = FletcherGameTests.count(level, setup.clerk(), Items.BREAD);

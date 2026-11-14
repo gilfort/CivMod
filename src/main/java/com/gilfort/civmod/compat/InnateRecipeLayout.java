@@ -11,13 +11,19 @@ import com.gilfort.civmod.api.DropOutcome;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.client.ClientDropPools;
 import com.gilfort.civmod.job.DropDraw;
+import com.gilfort.civmod.logistics.InnateRecipes;
+import com.gilfort.civmod.logistics.PatternRecipes;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.advancements.predicates.StatePropertiesPredicate;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemStackTemplate;
 import net.minecraft.world.item.SpawnEggItem;
+import net.minecraft.world.level.block.AbstractCauldronBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 
 /**
  * The layout of the display-only "Job Recipes" category shared by JEI and REI (vault {@code Systems/Producing Jobs.md}):
@@ -58,6 +64,8 @@ public final class InnateRecipeLayout {
     public static final String STATION_LINE = TITLE + ".station";
     /** Tooltip line of the station slot of a recipe with {@code station_after}: what the station turns into. */
     public static final String STATION_AFTER_LINE = TITLE + ".station_after";
+    /** Prefix of the names of the filled cauldrons, followed by the block's id. */
+    private static final String CAULDRON_NAME = TITLE + ".block.";
     /** The slot of what a Resource Collection recipe requires: below the result. */
     public static final int REQUIRES_X = OUTPUT_X;
     /** Tooltip line of the requires slot. */
@@ -74,13 +82,27 @@ public final class InnateRecipeLayout {
 
     /**
      * @param recipe an innate recipe
-     * @return the tooltip lines of the station slot: that it is worked there and, with {@code station_after}, what the
-     *         station turns into ("Afterwards the station turns into: Cauldron")
+     * @return the tooltip lines of the station slot: that it is worked there, the name of each station ("Lava Cauldron",
+     *         which the slot's icon cannot tell from a cauldron) and, with {@code station_after}, what the station turns
+     *         into ("Afterwards the station turns into: Water Cauldron")
      */
     public static List<Component> stationLines(JobCraftingRecipe recipe) {
         List<Component> lines = new ArrayList<>(List.of(Component.translatable(STATION_LINE)));
-        recipe.stationAfter().ifPresent(after -> lines.add(Component.translatable(STATION_AFTER_LINE, after.getBlock().getName())));
+        InnateRecipes.stations(recipe).forEach(station -> lines.add(PatternRecipes.tagName(station, Component.literal(station.location().getPath()))));
+        recipe.stationAfter().ifPresent(after -> lines.add(Component.translatable(STATION_AFTER_LINE, blockName(after.getBlock()))));
         return lines;
+    }
+
+    /**
+     * @param block a block
+     * @return its name; a filled cauldron by what fills it ("Lava Cauldron"), which vanilla names "Cauldron" like the
+     *         empty one
+     */
+    static Component blockName(Block block) {
+        if (!(block instanceof AbstractCauldronBlock) || block == Blocks.CAULDRON) {
+            return block.getName();
+        }
+        return Component.translatableWithFallback(CAULDRON_NAME + BuiltInRegistries.BLOCK.getKey(block).getPath(), block.getName().getString());
     }
 
     /**
