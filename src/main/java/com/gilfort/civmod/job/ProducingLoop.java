@@ -1029,6 +1029,7 @@ final class ProducingLoop implements CategoryLoop {
             }
             consumed.add(one);
         }
+        PatternRecipes.remainders(consumed).forEach(left -> round.remainders.add(left.getItem()));
         Pattern pattern = step.pattern();
         ExecutionOutcome made = ExecutionOutcome.of(InnateRecipes.recipe(level, pattern), pattern, shell.effectiveLevel(job), settler.getRandom());
         ItemStack result = made.result();
@@ -1082,7 +1083,8 @@ final class ProducingLoop implements CategoryLoop {
     private boolean deliver(ServerLevel level, SettlerJob job, Round round, long dayTime) {
         Workplace workplace = shell.workplace(job.jobBlock());
         JobBuffer buffer = workplace.buffer();
-        List<ItemStack> product = buffer.takeAll(stack -> stack.is(round.item) || round.drawn.contains(stack.getItem()));
+        List<ItemStack> product = buffer.takeAll(stack -> stack.is(round.item) || round.drawn.contains(stack.getItem())
+                || round.remainders.contains(stack.getItem()));
         List<ItemStack> rest = new ArrayList<>();
         SettlementData data = SettlementData.get(level);
         // Read at delivery: a removed Clerk leaves the request without a target (own drop-off).
