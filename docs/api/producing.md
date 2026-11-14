@@ -71,6 +71,8 @@ and the lang keys `job.<namespace>.<job>`, `job.<namespace>.<job>.indefinite` an
 | `checkLimit(skill)` | how many patterns can be checked at the settler's effective skill | 6 + 1 per 5 levels |
 | `workTime(recipe)` | operations one execution of a recipe takes (an operation lasts as long as the shared speed formula × job factor says) | 1 |
 | `execute(level, recipe, result, consumed)` | what one execution puts into the settler's buffer; the inputs are already taken out | the result plus the inputs' remainders (empty buckets, …), which are delivered to the Clerk with the result; a `smithing_transform` result keeps the base item's components |
+| `execute(level, recipe, result, consumed, rest)` | the same for a Job that keeps points between executions: `rest` (`RestPoints`, saved with the JobBlock, in hundredths) is read and set by the Job. The Composter adds a compost chance to it and makes a bone meal per 7 points | calls the four-argument `execute` |
+| `toolWear(produced)` | the durability an innate recipe's tool loses for one execution, given what the execution put into the buffer | 1 (the Composter: 1 per bone meal made) |
 | `xp(level, recipe)` | the XP one execution earns (`XpGain`, independent of EXP); it repairs Mending tools on the belt, the rest goes into the settler's counter; a pack's `xp` list replaces it | none |
 
 `ItemFilter.allow(tag)`, `ItemFilter.deny(tag)` and `ItemFilter.ANY` build filters. The Craftsperson is a profile with `crafting` and its crafting-table station, without filters: it crafts everything, slowly (job factor 0.3).

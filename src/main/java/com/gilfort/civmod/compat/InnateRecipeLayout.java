@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
+import com.gilfort.civmod.api.CompostableIngredient;
 import com.gilfort.civmod.api.DropOutcome;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.client.ClientDropPools;
@@ -15,6 +16,7 @@ import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.logistics.PatternRecipes;
 import com.mojang.serialization.JsonOps;
 
+import net.minecraft.ChatFormatting;
 import net.minecraft.advancements.predicates.StatePropertiesPredicate;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -78,6 +80,10 @@ public final class InnateRecipeLayout {
     public static final String DROP_LINE = TITLE + ".drop";
     /** Tooltip line of an item that only a {@code tag_result} can give: the chance of the outcome, its level and the tag. */
     public static final String DROP_TAG_LINE = TITLE + ".drop_tag";
+    /** The translation key of the first line on the Composter's input ("Any compostable item"). */
+    public static final String COMPOST_LINE = TITLE + ".compostable";
+    /** The translation key of the Composter's points rule. */
+    public static final String COMPOST_RULE_LINE = TITLE + ".compost_rule";
 
     private static final DecimalFormat PERCENT = new DecimalFormat("0.#", DecimalFormatSymbols.getInstance(Locale.ROOT));
 
@@ -150,6 +156,18 @@ public final class InnateRecipeLayout {
      */
     public static List<ItemStack> inputStacks(JobCraftingRecipe.Input input) {
         return input.ingredient().items().map(holder -> new ItemStack(holder, input.count())).toList();
+    }
+
+    /**
+     * @param input an ingredient of an innate recipe
+     * @return the tooltip lines of its input slot: "Any compostable item" and the points rule for the Composter's
+     *         ingredient, none for other ingredients
+     */
+    public static List<Component> inputLines(JobCraftingRecipe.Input input) {
+        if (input.ingredient().getCustomIngredient() instanceof CompostableIngredient) {
+            return List.of(Component.translatable(COMPOST_LINE), Component.translatable(COMPOST_RULE_LINE).withStyle(ChatFormatting.GRAY));
+        }
+        return List.of();
     }
 
     /**

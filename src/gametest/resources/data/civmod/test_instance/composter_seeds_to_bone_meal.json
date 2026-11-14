@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:composter_seeds_to_bone_meal",
+  "max_ticks": 400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

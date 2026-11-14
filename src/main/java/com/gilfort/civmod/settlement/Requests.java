@@ -176,18 +176,34 @@ public final class Requests {
      * @param settler    the producer settler
      */
     public static void finish(SettlementData data, Settlement settlement, UUID id, UUID settler) {
-        get(settlement, id).ifPresent(found -> holdResult(settlement, found, settler));
-        update(data, settlement, id, found -> found.withoutClaim(settler, false));
+        finish(data, settlement, id, settler, Integer.MAX_VALUE);
+    }
+
+    /**
+     * A producer delivered what it made of its claimed amount, which can be less than the claim (the Composter's single
+     * items make no bone meal): the delivered part is done as in {@link #finish(SettlementData, Settlement, UUID, UUID)},
+     * the rest of the claim is open again for the next round.
+     *
+     * @param data       the dimension's settlement data
+     * @param settlement the settlement
+     * @param id         the request id
+     * @param settler    the producer settler
+     * @param delivered  how many of the item it delivered (a claim of at most this is delivered in full)
+     */
+    public static void finish(SettlementData data, Settlement settlement, UUID id, UUID settler, int delivered) {
+        get(settlement, id).ifPresent(found -> holdResult(settlement, found, settler, delivered));
+        update(data, settlement, id, found -> found.withDelivered(settler, delivered));
     }
 
     /**
      * The delivered part of a sub-request waits in its Clerk for the parent request, that of a request with a reservation
      * for its holder.
      */
-    private static void holdResult(Settlement settlement, Request done, UUID settler) {
+    private static void holdResult(Settlement settlement, Request done, UUID settler, int delivered) {
         Optional<ReservedFor> holder = done.reservedFor().or(() -> done.parent().map(ReservedFor::request));
         if (holder.isPresent() && done.target().isPresent()) {
-            done.claimOf(settler).ifPresent(claim -> Holds.hold(settlement, done.target().get(), holder.get(), done.item(), claim.amount()));
+            done.claimOf(settler).ifPresent(claim -> Holds.hold(settlement, done.target().get(), holder.get(), done.item(),
+                    Math.min(claim.amount(), delivered)));
         }
     }
 

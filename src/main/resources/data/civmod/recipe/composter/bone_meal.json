@@ -1,0 +1,7 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:composter"],
+  "ingredients": [{ "neoforge:ingredient_type": "civmod:compostable" }],
+  "result": { "id": "minecraft:bone_meal" },
+  "tool": "#minecraft:hoes"
+}

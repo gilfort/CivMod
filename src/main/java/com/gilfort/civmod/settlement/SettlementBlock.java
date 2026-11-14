@@ -184,6 +184,8 @@ public final class SettlementBlock {
 
         private final List<Pattern> patterns = new ArrayList<>();
         private int checkLimit = Patterns.BASE_CHECKMARKS;
+        /** The points the Composter kept toward its next bone meal, in hundredths (0 for other Jobs). */
+        private int restPoints;
         private Optional<Notice> notice = Optional.empty();
         /** The checkmark limit each settler working this library last reported (the best one counts). */
         private final Map<UUID, Integer> workerLimits = new HashMap<>();
@@ -219,6 +221,14 @@ public final class SettlementBlock {
 
         void setCheckLimit(int checkLimit) {
             this.checkLimit = checkLimit;
+        }
+
+        int restPoints() {
+            return restPoints;
+        }
+
+        void setRestPoints(int restPoints) {
+            this.restPoints = restPoints;
         }
 
         /**
@@ -265,14 +275,16 @@ public final class SettlementBlock {
      * @param patterns   its patterns
      * @param checkLimit its checkmark limit
      * @param workers    the checkmark limit each settler working it last reported
+     * @param restPoints the points the Composter kept, in hundredths (0 for other Jobs)
      */
-    private record SavedLibrary(Job job, List<Pattern> patterns, int checkLimit, Map<UUID, Integer> workers) {
+    private record SavedLibrary(Job job, List<Pattern> patterns, int checkLimit, Map<UUID, Integer> workers, int restPoints) {
 
         static final Codec<SavedLibrary> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                 Job.CODEC.fieldOf("job").forGetter(SavedLibrary::job),
                 Pattern.CODEC.listOf().optionalFieldOf("patterns", List.of()).forGetter(SavedLibrary::patterns),
                 Codec.INT.optionalFieldOf("check_limit", Patterns.BASE_CHECKMARKS).forGetter(SavedLibrary::checkLimit),
-                Codec.unboundedMap(UUIDUtil.STRING_CODEC, Codec.INT).optionalFieldOf("workers", Map.of()).forGetter(SavedLibrary::workers)
+                Codec.unboundedMap(UUIDUtil.STRING_CODEC, Codec.INT).optionalFieldOf("workers", Map.of()).forGetter(SavedLibrary::workers),
+                Codec.INT.optionalFieldOf("rest_points", 0).forGetter(SavedLibrary::restPoints)
         ).apply(instance, SavedLibrary::new));
     }
 
@@ -465,6 +477,7 @@ public final class SettlementBlock {
             Library library = library(saved.job());
             library.mutablePatterns().addAll(saved.patterns());
             library.setCheckLimit(saved.checkLimit());
+            library.setRestPoints(saved.restPoints());
             library.workerLimits().putAll(saved.workers());
         });
         this.byDeliveryman = producing.byDeliveryman();
@@ -579,7 +592,7 @@ public final class SettlementBlock {
     private ProducingFields producingFields() {
         List<SavedLibrary> saved = libraries.entrySet().stream().filter(entry -> !entry.getValue().patterns().isEmpty())
                 .map(entry -> new SavedLibrary(entry.getKey(), List.copyOf(entry.getValue().patterns()), entry.getValue().checkLimit(),
-                        Map.copyOf(entry.getValue().workerLimits()))).toList();
+                        Map.copyOf(entry.getValue().workerLimits()), entry.getValue().restPoints())).toList();
         return new ProducingFields(saved, byDeliveryman, fuel);
     }
 
@@ -659,6 +672,15 @@ public final class SettlementBlock {
     public Set<UUID> workers(Job job) {
         Library library = libraries.get(job);
         return library == null ? Set.of() : Collections.unmodifiableSet(library.workerLimits().keySet());
+    }
+
+    /**
+     * @param job a Producing Job of this JobBlock
+     * @return the points the Composter kept toward its next bone meal, in hundredths of a point (0 for other Jobs)
+     */
+    public int restPoints(Job job) {
+        Library library = libraries.get(job);
+        return library == null ? 0 : library.restPoints();
     }
 
     Library library(Job job) {
