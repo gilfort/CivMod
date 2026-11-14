@@ -555,6 +555,7 @@
   "civmod.scroll.work_place.bottler": "a cauldron or a dragon egg",
   "civmod.gui.patterns.innate": "Innate recipe of the %s",
   "civmod.gui.patterns.needs_tool": "Needs %s",
+  "civmod.gui.patterns.input_count": "%s × %s",
   "civmod.gui.patterns.needs_station": "Needs a station nearby: %s",
   "civmod.gui.patterns.any_of": "Any %s",
   "civmod.gui.patterns.help.innate": "%s Innate recipe: only checkmark, Always produce",

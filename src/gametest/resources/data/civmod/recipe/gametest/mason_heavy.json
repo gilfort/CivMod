@@ -1,0 +1,6 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:gametest_mason"],
+  "ingredients": [{ "ingredient": "minecraft:clay_ball", "count": 8 }],
+  "result": { "id": "minecraft:brick" }
+}

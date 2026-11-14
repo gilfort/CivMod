@@ -1,11 +1,13 @@
 package com.gilfort.civmod.api;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
 import org.jetbrains.annotations.ApiStatus;
 
 import com.gilfort.civmod.registry.ModRecipes;
+import com.mojang.datafixers.util.Either;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.MapCodec;
@@ -84,7 +86,13 @@ import net.minecraft.world.level.block.state.BlockState;
  * <ul>
  * <li>{@code jobs}: the Job ids; Jobs that are neither Producing nor Resource Collection (or unknown) are ignored with a
  * log warning.</li>
- * <li>{@code ingredients}: shapeless, 1–9 ingredients (item ids, {@code #tags} or lists).</li>
+ * <li>{@code ingredients}: shapeless, 1–9 entries. An entry is an ingredient (item id, {@code #tag} or list) that uses up
+ * one item, or {@code {"ingredient": <ingredient>, "count": 8}} that uses up {@code count} items (1–64, default 1), e.g.
+ * {@code ["minecraft:stick", {"ingredient": "#minecraft:wool", "count": 8}]}. The items in total may exceed 9, but the
+ * recipe has at most 9 entries; a {@code count} below 1 or above 64 rejects the recipe when the datapack loads, with a
+ * log message. The Patterns tab and the recipe viewers show one slot per entry with its count; the settler fetches, and
+ * the chain resolution asks for, all {@code count} items before an execution starts. A tag entry takes any mix of its
+ * items.</li>
  * <li>{@code result}: the made item stack. Optional when the recipe has {@code drops}; a recipe with neither is
  * rejected when the datapack loads, with a log message.</li>
  * <li>{@code tool} (optional, Producing only): an item id or {@code #tag}; the settler fetches it like a Resource
@@ -145,7 +153,7 @@ import net.minecraft.world.level.block.state.BlockState;
  * }</pre>
  *
  * @param jobs        the Jobs that know the recipe
- * @param ingredients the inputs of one execution (shapeless)
+ * @param inputs      the ingredients of one execution (shapeless), each with the count of items it uses up
  * @param result      what one execution makes for sure, if anything (a recipe has a result, {@code drops}, or both)
  * @param tool        the tool the settler needs, if any
  * @param station     the station tag the recipe is worked at, if not the Job's main station
@@ -155,14 +163,57 @@ import net.minecraft.world.level.block.state.BlockState;
  * @param stationAfter the block state that replaces the station block after every execution, if the work uses the station up
  */
 @ApiStatus.Experimental
-public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredients, Optional<ItemStackTemplate> result, Optional<Ingredient> tool,
+public record JobCraftingRecipe(List<Identifier> jobs, List<Input> inputs, Optional<ItemStackTemplate> result, Optional<Ingredient> tool,
         Optional<TagKey<Block>> station, Optional<Requirement> requires, int weight, Optional<Drops> drops, Optional<BlockState> stationAfter)
         implements Recipe<CraftingInput> {
 
-    /** The most ingredients of one execution: the 3×3 pattern grid. */
+    /** The most ingredients (entries of {@code ingredients}) of one execution: the 3×3 pattern grid. */
     public static final int MAX_INGREDIENTS = 9;
+    /** The most items one ingredient may ask for with {@code count}: one stack. */
+    public static final int MAX_COUNT = 64;
     /** The weight of a recipe without {@code weight}. */
     public static final int DEFAULT_WEIGHT = 1;
+
+    /**
+     * One ingredient of an innate recipe and how many items of it one execution uses up. In a recipe file it is a plain
+     * ingredient (count 1) or {@code {"ingredient": <item id, #tag or list>, "count": 8}}.
+     *
+     * @param ingredient what may be used
+     * @param count      how many items of it one execution uses up (1 to {@link #MAX_COUNT})
+     */
+    @ApiStatus.Experimental
+    public record Input(Ingredient ingredient, int count) {
+
+        private static final Codec<Input> COUNTED_CODEC = Codec.lazyInitialized(() -> RecordCodecBuilder.create(instance -> instance.group(
+                Ingredient.CODEC.fieldOf("ingredient").forGetter(Input::ingredient),
+                Codec.intRange(1, MAX_COUNT).optionalFieldOf("count", 1).forGetter(Input::count)
+        ).apply(instance, Input::new)));
+
+        /** Datapack codec: a plain ingredient or the object form with {@code count}. */
+        public static final Codec<Input> CODEC = Codec.either(Codec.lazyInitialized(() -> Ingredient.CODEC), COUNTED_CODEC)
+                .xmap(either -> either.map(Input::of, input -> input), input -> input.count == 1 ? Either.left(input.ingredient) : Either.right(input));
+
+        /** Network codec (recipe viewers). */
+        public static final StreamCodec<RegistryFriendlyByteBuf, Input> STREAM_CODEC = StreamCodec.composite(
+                Ingredient.CONTENTS_STREAM_CODEC, Input::ingredient,
+                ByteBufCodecs.VAR_INT, Input::count,
+                Input::new);
+
+        /** Checks the count where the input is made. */
+        public Input {
+            if (count < 1 || count > MAX_COUNT) {
+                throw new IllegalArgumentException("count must be between 1 and " + MAX_COUNT + ": " + count);
+            }
+        }
+
+        /**
+         * @param ingredient what may be used
+         * @return an input of one item
+         */
+        public static Input of(Ingredient ingredient) {
+            return new Input(ingredient, 1);
+        }
+    }
 
     /**
      * What a Resource Collection Job's scan must have found for an innate recipe: an entity type or a block (with an
@@ -220,7 +271,7 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredie
     /** Datapack codec. */
     public static final MapCodec<JobCraftingRecipe> MAP_CODEC = RecordCodecBuilder.<JobCraftingRecipe>mapCodec(instance -> instance.group(
             Identifier.CODEC.listOf(1, Integer.MAX_VALUE).fieldOf("jobs").forGetter(JobCraftingRecipe::jobs),
-            Codec.lazyInitialized(() -> Ingredient.CODEC.listOf(1, MAX_INGREDIENTS)).fieldOf("ingredients").forGetter(JobCraftingRecipe::ingredients),
+            Input.CODEC.listOf(1, MAX_INGREDIENTS).fieldOf("ingredients").forGetter(JobCraftingRecipe::inputs),
             ItemStackTemplate.CODEC.optionalFieldOf("result").forGetter(JobCraftingRecipe::result),
             Ingredient.CODEC.optionalFieldOf("tool").forGetter(JobCraftingRecipe::tool),
             TagKey.hashedCodec(Registries.BLOCK).optionalFieldOf("station").forGetter(JobCraftingRecipe::station),
@@ -233,7 +284,7 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredie
     /** Network codec (recipe viewers). */
     public static final StreamCodec<RegistryFriendlyByteBuf, JobCraftingRecipe> STREAM_CODEC = StreamCodec.composite(
             Identifier.STREAM_CODEC.apply(ByteBufCodecs.list()), JobCraftingRecipe::jobs,
-            Ingredient.CONTENTS_STREAM_CODEC.apply(ByteBufCodecs.list()), JobCraftingRecipe::ingredients,
+            Input.STREAM_CODEC.apply(ByteBufCodecs.list()), JobCraftingRecipe::inputs,
             ByteBufCodecs.optional(ItemStackTemplate.STREAM_CODEC), JobCraftingRecipe::result,
             ByteBufCodecs.optional(Ingredient.CONTENTS_STREAM_CODEC), JobCraftingRecipe::tool,
             ByteBufCodecs.optional(Identifier.STREAM_CODEC.map(id -> TagKey.create(Registries.BLOCK, id), TagKey::location)),
@@ -249,7 +300,7 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredie
 
     /**
      * @param jobs        the Jobs that know the recipe
-     * @param ingredients the inputs of one execution
+     * @param inputs      the ingredients of one execution with their counts
      * @param result      what one execution makes for sure, if anything
      * @param tool        the tool the settler needs, if any
      * @param station     the station tag, if not the Job's main station
@@ -260,7 +311,7 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredie
      */
     public JobCraftingRecipe {
         jobs = List.copyOf(jobs);
-        ingredients = List.copyOf(ingredients);
+        inputs = List.copyOf(inputs);
         if (weight < 1) {
             throw new IllegalArgumentException("weight must be at least 1: " + weight);
         }
@@ -271,15 +322,23 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredie
      * uses it).
      *
      * @param jobs        the Jobs that know the recipe
-     * @param ingredients the inputs of one execution
+     * @param ingredients the ingredients of one execution (one item each)
      * @param result      what one execution makes
      * @param tool        the tool the settler needs, if any
      * @param station     the station tag, if not the Job's main station
      */
     public JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredients, ItemStackTemplate result, Optional<Ingredient> tool,
             Optional<TagKey<Block>> station) {
-        this(jobs, ingredients, Optional.of(result), tool, station, Optional.empty(), DEFAULT_WEIGHT, Optional.empty(),
-                Optional.empty());
+        this(jobs, ingredients.stream().map(Input::of).toList(), Optional.of(result), tool, station, Optional.empty(), DEFAULT_WEIGHT,
+                Optional.empty(), Optional.empty());
+    }
+
+    /**
+     * @return the single ingredients of one execution: every ingredient of {@link #inputs()} repeated {@code count}
+     *         times, in order. This is what the fetch step, the chain resolution and the use-up step work through.
+     */
+    public List<Ingredient> ingredients() {
+        return inputs.stream().flatMap(input -> Collections.nCopies(input.count(), input.ingredient()).stream()).toList();
     }
 
     /**
@@ -339,13 +398,13 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredie
 
     @Override
     public PlacementInfo placementInfo() {
-        return PlacementInfo.create(ingredients);
+        return PlacementInfo.create(inputs.stream().map(Input::ingredient).toList());
     }
 
     /** Shown like a shapeless recipe without a crafting station (the station depends on the Job). */
     @Override
     public List<RecipeDisplay> display() {
-        return List.of(new ShapelessCraftingRecipeDisplay(ingredients.stream().map(Ingredient::display).toList(),
+        return List.of(new ShapelessCraftingRecipeDisplay(inputs.stream().map(input -> input.ingredient().display()).toList(),
                 result.<SlotDisplay>map(SlotDisplay.ItemStackSlotDisplay::new).orElse(SlotDisplay.Empty.INSTANCE), SlotDisplay.Empty.INSTANCE));
     }
 

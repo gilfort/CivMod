@@ -17,11 +17,16 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.SettlementData;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import com.mojang.serialization.JsonOps;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
@@ -63,11 +68,73 @@ public final class InnateRecipeGameTests {
             register(helper, "innate_station_per_recipe", InnateRecipeGameTests::stationPerRecipe);
             register(helper, "innate_missing_station", InnateRecipeGameTests::missingStation);
             register(helper, "innate_names", InnateRecipeGameTests::names);
+            register(helper, "innate_count_needs_all", InnateRecipeGameTests::countNeedsAll);
+            register(helper, "innate_count_consumes", InnateRecipeGameTests::countConsumes);
+            register(helper, "innate_count_rejected", InnateRecipeGameTests::countRejected);
         });
     }
 
     private static void register(RegisterEvent.RegisterHelper<Consumer<GameTestHelper>> helper, String name, Consumer<GameTestHelper> test) {
         helper.register(ResourceKey.create(Registries.TEST_FUNCTION, CivMod.id(name)), test);
+    }
+
+    /** The GameTest recipe {@code gametest/mason_heavy}: 8 clay balls make a brick. */
+    private static final Item HEAVY_INPUT = Items.CLAY_BALL;
+    private static final int HEAVY_COUNT = 8;
+
+    /** An ingredient with {@code count} 8 does not craft with 7 in stock: nothing is made and nothing is used up. */
+    private static void countNeedsAll(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        FletcherGameTests.Setup setup = FletcherGameTests.setup(helper, List.of(new ItemStack(HEAVY_INPUT, HEAVY_COUNT - 1)),
+                List.of(new ItemStack(Items.BRICK)));
+        BlockPos craft = masonry(helper);
+        Settler settler = FletcherGameTests.worker(helper, setup, craft, mason());
+        CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
+        helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.BRICK) == 0, "No brick from 7 clay balls");
+        helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), HEAVY_INPUT) == HEAVY_COUNT - 1, "The 7 clay balls stay");
+        FletcherGameTests.cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /** With 9 clay balls in stock the mason makes one brick and uses up 8 of them; the 9th stays. */
+    private static void countConsumes(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        FletcherGameTests.Setup setup = FletcherGameTests.setup(helper, List.of(new ItemStack(HEAVY_INPUT, HEAVY_COUNT + 1)),
+                List.of(new ItemStack(Items.BRICK)));
+        BlockPos craft = masonry(helper);
+        Settler settler = FletcherGameTests.worker(helper, setup, craft, mason());
+        CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
+        helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.BRICK) == 1,
+                "A brick arrived (status " + settler.getWork().status(craft) + ")");
+        int left = FletcherGameTests.count(level, setup.clerk(), HEAVY_INPUT);
+        helper.assertTrue(left == 1, "8 clay balls were used up, 1 is left: " + left);
+        FletcherGameTests.cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /**
+     * The recipe file format: an ingredient is a plain ingredient (count 1) or an object with {@code ingredient} and
+     * {@code count}; a count of zero or below is rejected; a recipe may use more than 9 items in total, but not more
+     * than 9 ingredients.
+     */
+    private static void countRejected(GameTestHelper helper) {
+        RegistryOps<JsonElement> ops = helper.getLevel().registryAccess().createSerializationContext(JsonOps.INSTANCE);
+        JobCraftingRecipe mixed = parse(ops, "[\"minecraft:stick\", {\"ingredient\": \"minecraft:clay_ball\", \"count\": 12}]").orElse(null);
+        helper.assertTrue(mixed != null && mixed.inputs().size() == 2 && mixed.inputs().get(0).count() == 1 && mixed.inputs().get(1).count() == 12,
+                "A plain ingredient counts 1, an object carries its count: " + mixed);
+        helper.assertTrue(mixed.ingredients().size() == 13, "13 single ingredients in total: " + mixed.ingredients().size());
+        helper.assertTrue(parse(ops, "[{\"ingredient\": \"minecraft:stick\"}]").map(recipe -> recipe.inputs().getFirst().count() == 1).orElse(false),
+                "The count defaults to 1");
+        helper.assertTrue(parse(ops, "[{\"ingredient\": \"minecraft:stick\", \"count\": 0}]").isEmpty(), "Count 0 is rejected");
+        helper.assertTrue(parse(ops, "[{\"ingredient\": \"minecraft:stick\", \"count\": -3}]").isEmpty(), "A negative count is rejected");
+        helper.assertTrue(parse(ops, "[" + "\"minecraft:stick\",".repeat(9) + "\"minecraft:clay_ball\"]").isEmpty(), "10 ingredients are too many");
+        helper.succeed();
+    }
+
+    private static Optional<JobCraftingRecipe> parse(RegistryOps<JsonElement> ops, String ingredients) {
+        JsonElement json = JsonParser.parseString("{\"jobs\": [\"civmod:fletcher\"], \"ingredients\": " + ingredients
+                + ", \"result\": {\"id\": \"minecraft:brick\"}}");
+        return JobCraftingRecipe.MAP_CODEC.codec().parse(ops, json).result();
     }
 
     /**
@@ -222,7 +289,7 @@ public final class InnateRecipeGameTests {
                 List.of(new ItemStack(Items.GRAVEL), new ItemStack(Items.STICK, 4)));
         BlockPos craft = masonry(helper);
         Settler settler = FletcherGameTests.worker(helper, setup, craft, mason());
-        helper.assertTrue(Patterns.setOutput(level, craft, mason(), 1, Items.STICK).orElseThrow().checked(), "Sticks checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, mason(), 2, Items.STICK).orElseThrow().checked(), "Sticks checked");
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.STICK) == 4, "Sticks arrived (status " + settler.getWork().status(craft) + ")");
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.GRAVEL) == 0, "No gravel without an anvil");
