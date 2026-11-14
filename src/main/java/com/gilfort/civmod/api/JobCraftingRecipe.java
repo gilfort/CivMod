@@ -110,6 +110,13 @@ import net.minecraft.world.level.block.state.BlockState;
  * recipe has one. The result of a draw is not known beforehand, so a recipe with {@code drops} cannot serve a request:
  * it runs only as an "Always produce" pattern, and its Patterns tab icon is the {@code result}, else the first stack
  * its outcomes give. A Resource Collection recipe (with {@code requires}) takes no {@code drops}.</li>
+ * <li>{@code station_after} (optional, Producing only): a block state, a block id for its default state
+ * ({@code "minecraft:cauldron"}) or {@code {"id": "minecraft:cauldron", "properties": {...}}}, that replaces the station block the recipe was worked at after every execution, for a
+ * station the work uses up (a lava cauldron is an empty cauldron afterwards). Without it the station stays as it is. The
+ * recipe is worked at its {@code station}, else at the Job's main station; that is the block that is replaced. A
+ * replaced block no longer counts as a station, so the recipe is skipped and marked ("Needs a station nearby: Lava
+ * Cauldron") until a new station stands. The JEI and REI category "Job Recipes" shows what the station turns into.
+ * A Resource Collection recipe (with {@code requires}) takes no {@code station_after}.</li>
  * </ul>
  *
  * A Producing recipe that sifts sand (the pool is the file {@code data/civmod/civmod_drop_pools/sifter.json}):
@@ -124,6 +131,19 @@ import net.minecraft.world.level.block.state.BlockState;
  * }
  * }</pre>
  *
+ * A Producing recipe that uses its station up (the Bottler fills a bucket with lava):
+ *
+ * <pre>{@code
+ * {
+ *   "type": "civmod:job_crafting",
+ *   "jobs": ["civmod:bottler"],
+ *   "ingredients": ["minecraft:bucket"],
+ *   "result": { "id": "minecraft:lava_bucket" },
+ *   "station": "#civmod:stations/lava_cauldron",
+ *   "station_after": "minecraft:cauldron"
+ * }
+ * }</pre>
+ *
  * @param jobs        the Jobs that know the recipe
  * @param ingredients the inputs of one execution (shapeless)
  * @param result      what one execution makes for sure, if anything (a recipe has a result, {@code drops}, or both)
@@ -132,10 +152,12 @@ import net.minecraft.world.level.block.state.BlockState;
  * @param requires    what a Resource Collection Job must have found for the recipe, if anything
  * @param weight      the recipe's weight in a Resource Collection Job's roll (at least 1)
  * @param drops       the outcomes one is drawn from per execution, if the recipe has random results
+ * @param stationAfter the block state that replaces the station block after every execution, if the work uses the station up
  */
 @ApiStatus.Experimental
 public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredients, Optional<ItemStackTemplate> result, Optional<Ingredient> tool,
-        Optional<TagKey<Block>> station, Optional<Requirement> requires, int weight, Optional<Drops> drops) implements Recipe<CraftingInput> {
+        Optional<TagKey<Block>> station, Optional<Requirement> requires, int weight, Optional<Drops> drops, Optional<BlockState> stationAfter)
+        implements Recipe<CraftingInput> {
 
     /** The most ingredients of one execution: the 3×3 pattern grid. */
     public static final int MAX_INGREDIENTS = 9;
@@ -204,7 +226,8 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredie
             TagKey.hashedCodec(Registries.BLOCK).optionalFieldOf("station").forGetter(JobCraftingRecipe::station),
             Requirement.CODEC.optionalFieldOf("requires").forGetter(JobCraftingRecipe::requires),
             Codec.intRange(1, Integer.MAX_VALUE).optionalFieldOf("weight", DEFAULT_WEIGHT).forGetter(JobCraftingRecipe::weight),
-            Drops.CODEC.optionalFieldOf("drops").forGetter(JobCraftingRecipe::drops)
+            Drops.CODEC.optionalFieldOf("drops").forGetter(JobCraftingRecipe::drops),
+            BlockState.CODEC.optionalFieldOf("station_after").forGetter(JobCraftingRecipe::stationAfter)
     ).apply(instance, JobCraftingRecipe::new)).validate(JobCraftingRecipe::validate);
 
     /** Network codec (recipe viewers). */
@@ -218,6 +241,7 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredie
             ByteBufCodecs.optional(Requirement.STREAM_CODEC), JobCraftingRecipe::requires,
             ByteBufCodecs.VAR_INT, JobCraftingRecipe::weight,
             ByteBufCodecs.optional(Drops.STREAM_CODEC), JobCraftingRecipe::drops,
+            ByteBufCodecs.optional(ByteBufCodecs.idMapper(Block.BLOCK_STATE_REGISTRY)), JobCraftingRecipe::stationAfter,
             JobCraftingRecipe::new);
 
     /** The serializer of {@code civmod:job_crafting}. */
@@ -232,6 +256,7 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredie
      * @param requires    what a Resource Collection Job must have found, if anything
      * @param weight      the weight in a Resource Collection Job's roll (at least 1)
      * @param drops       the outcomes one is drawn from per execution, if any
+     * @param stationAfter the block state that replaces the station block after an execution, if any
      */
     public JobCraftingRecipe {
         jobs = List.copyOf(jobs);
@@ -253,12 +278,13 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredie
      */
     public JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredients, ItemStackTemplate result, Optional<Ingredient> tool,
             Optional<TagKey<Block>> station) {
-        this(jobs, ingredients, Optional.of(result), tool, station, Optional.empty(), DEFAULT_WEIGHT, Optional.empty());
+        this(jobs, ingredients, Optional.of(result), tool, station, Optional.empty(), DEFAULT_WEIGHT, Optional.empty(),
+                Optional.empty());
     }
 
     /**
-     * Checks a parsed recipe at the datapack edge: it needs a result or drops, and drops do not go with {@code requires}
-     * (a Resource Collection Job makes one product).
+     * Checks a parsed recipe at the datapack edge: it needs a result or drops, and neither drops nor a station change go
+     * with {@code requires} (a Resource Collection Job makes one product and works at no station).
      */
     private static DataResult<JobCraftingRecipe> validate(JobCraftingRecipe recipe) {
         if (recipe.result.isEmpty() && recipe.drops.isEmpty()) {
@@ -266,6 +292,9 @@ public record JobCraftingRecipe(List<Identifier> jobs, List<Ingredient> ingredie
         }
         if (recipe.drops.isPresent() && recipe.requires.isPresent()) {
             return DataResult.error(() -> "\"drops\" does not go with \"requires\": a Resource Collection recipe makes one product");
+        }
+        if (recipe.stationAfter.isPresent() && recipe.requires.isPresent()) {
+            return DataResult.error(() -> "\"station_after\" does not go with \"requires\": a Resource Collection recipe has no station");
         }
         return DataResult.success(recipe);
     }

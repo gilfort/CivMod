@@ -1,0 +1,7 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:bottler"],
+  "ingredients": ["minecraft:glass_bottle"],
+  "result": { "id": "minecraft:dragon_breath" },
+  "station": "#civmod:stations/dragon_egg"
+}

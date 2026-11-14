@@ -936,7 +936,7 @@ final class ProducingLoop implements CategoryLoop {
             }
             round.charges.remove(charge.getKey());
             done.add(charge.getKey());
-            boolean ok = craftOne(level, job, site, round, moment);
+            boolean ok = craftOne(level, job, site, round, charge.getKey(), moment);
             if (!ok || round.crafted()) {
                 if (live) {
                     done.forEach(pos -> Furnaces.light(level, pos, false));
@@ -1001,11 +1001,13 @@ final class ProducingLoop implements CategoryLoop {
 
     /**
      * One execution of the round's current step in the buffer: inputs out, the profile's "execute recipe" result in
-     * (by default the output and the remainders), EXP.
+     * (by default the output and the remainders), EXP; an innate recipe with {@code station_after} then replaces its
+     * station block.
      *
+     * @param station the station the execution was worked at
      * @return whether it was executed (false: inputs gone, the round failed; or the tool gone, the round released)
      */
-    private boolean craftOne(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, Moment moment) {
+    private boolean craftOne(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, BlockPos station, Moment moment) {
         CraftPlan.Step step = round.steps.get(round.step);
         JobBuffer buffer = shell.workplace(job.jobBlock()).buffer();
         Optional<Ingredient> tool = InnateRecipes.tool(level, step.pattern());
@@ -1048,6 +1050,7 @@ final class ProducingLoop implements CategoryLoop {
         worn.ifPresent(stack -> SettlerTools.wear(level, settler, stack));
         shell.collectXp(level, xp, worn.orElse(ItemStack.EMPTY));
         shell.gainExp(level, job, job.jobType().baseExp() * site.level(), site.skillCap());
+        InnateRecipes.recipe(level, pattern).flatMap(JobCraftingRecipe::stationAfter).ifPresent(after -> replaceStation(level, job, station, after));
         if (++round.crafted >= step.crafts()) {
             round.step++;
             round.crafted = 0;
@@ -1057,6 +1060,15 @@ final class ProducingLoop implements CategoryLoop {
             handTimer = HAND_TICKS;
         }
         return true;
+    }
+
+    /**
+     * Replaces the station an innate recipe used up ({@code station_after}). The block is no station any more, so the
+     * Workplace forgets its cached station searches and the next pick marks the recipe "Needs a station nearby".
+     */
+    private void replaceStation(ServerLevel level, SettlerJob job, BlockPos station, BlockState after) {
+        level.setBlockAndUpdate(station, after);
+        shell.workplace(job.jobBlock()).forgetRecipeStations();
     }
 
     /**
@@ -1497,7 +1509,15 @@ final class ProducingLoop implements CategoryLoop {
                     setNoStation(job);
                     return new SimulatedWork(operations, ticks);
                 }
-                List<BlockPos> stations = mainStep(level, job, round) ? stations(level, job, site, day, ofDay) : List.of(ofDay);
+                boolean main = mainStep(level, job, round);
+                // A step of another recipe type or an innate recipe with an own station is worked there, like live.
+                BlockPos stepStation = main ? ofDay : stepStation(level, job, site, round, day);
+                if (stepStation == null) {
+                    release(level, jobBlock);
+                    setNoStation(job);
+                    return new SimulatedWork(operations, ticks);
+                }
+                List<BlockPos> stations = main ? stations(level, job, site, day, ofDay) : List.of(stepStation);
                 // Up to the next finished charge (the one furthest on); none runs yet: they start first.
                 double furthest = round.charges.values().stream().mapToDouble(Double::doubleValue).max().orElse(Double.NaN);
                 double slice = Double.isNaN(furthest) ? 0.0 : Math.min(ticks, Math.max(0.0, (workTime(level, job, round, stations.getFirst()) - furthest) / perTick));

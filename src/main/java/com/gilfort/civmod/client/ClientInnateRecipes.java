@@ -18,6 +18,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.level.block.AbstractCauldronBlock;
+import net.minecraft.world.level.block.Block;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -73,8 +75,13 @@ public final class ClientInnateRecipes {
     public static List<ItemStack> stationItems(JobCraftingRecipe recipe) {
         Set<Item> items = new LinkedHashSet<>();
         InnateRecipes.stations(recipe).forEach(station -> BuiltInRegistries.BLOCK.get(station)
-                .ifPresent(blocks -> blocks.forEach(block -> items.add(block.value().asItem()))));
+                .ifPresent(blocks -> blocks.forEach(block -> items.add(itemOf(block.value())))));
         items.remove(Items.AIR);
         return items.stream().map(ItemStack::new).toList();
+    }
+
+    /** The item a station block shows as: its own, the cauldron for a filled cauldron (which has no item). */
+    private static Item itemOf(Block block) {
+        return block instanceof AbstractCauldronBlock ? Items.CAULDRON : block.asItem();
     }
 }

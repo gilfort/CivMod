@@ -76,7 +76,7 @@ final class InnateRecipeCategory implements DisplayCategory<InnateRecipeDisplay>
                 .entries(EntryIngredients.ofIngredient(tool).stream()
                         .map(stack -> stack.copy().tooltip(Component.translatable(InnateRecipeLayout.TOOL_LINE))).toList())));
         List<EntryStack<ItemStack>> stations = ClientInnateRecipes.stationItems(recipe).stream().map(EntryStacks::of)
-                .map(stack -> stack.tooltip(Component.translatable(InnateRecipeLayout.STATION_LINE))).toList();
+                .map(stack -> stack.tooltip(InnateRecipeLayout.stationLines(recipe).toArray(Component[]::new))).toList();
         if (!stations.isEmpty()) {
             widgets.add(Widgets.createSlot(new Point(x + InnateRecipeLayout.STATION_X, y + InnateRecipeLayout.EXTRAS_Y)).entries(stations));
         }

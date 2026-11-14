@@ -420,6 +420,12 @@ A Specialization of the Craftsperson that works innate recipes only: unlocked by
 **Concrete Mixer**:
 A Specialization of the Craftsperson that works innate recipes only: unlocked by a water bucket, works at a water cauldron (the Dyer's `civmod:stations/water_cauldron`, the water is not used up), no tool. Sixteen recipes, one concrete powder → one concrete per colour, written by `runData` (`ConcreteMixerRecipes`, `src/generated/resources/data/civmod/recipe/concrete_mixer/`). Job factor 1.0, base EXP 2, hunger 0.5, no Station Extra; concrete powder crafting stays with the Dyer. Code: `ModJobs.CONCRETE_MIXER`, profile `InnateProfile.concreteMixer()`.
 
+**Bottler**:
+A Specialization of the Craftsperson that works innate recipes only: unlocked by a cauldron, main station a water cauldron (`civmod:stations/water_cauldron`), no tool. Three recipes in `recipe/bottler/`: bucket → water bucket (main station, the water stays), bucket → lava bucket at a lava cauldron (`civmod:stations/lava_cauldron`, `station_after` makes it an empty cauldron) and glass bottle → dragon's breath at a placed dragon egg (`civmod:stations/dragon_egg`, never used up). Job factor 1.0, base EXP 2, hunger 0.5, no Station Extra. Code: `ModJobs.BOTTLER`, profile `InnateProfile.bottler()`.
+
+**station_after**:
+An optional field of an innate recipe (`JobCraftingRecipe.stationAfter`): the block state that replaces the station block after every execution (a lava cauldron becomes an empty cauldron). The Producing loop sets it in `craftOne` at the station the execution was worked at and makes the Workplace forget its cached station searches (`Workplace.forgetRecipeStations`), so the recipe is skipped at once when no station is left.
+
 **Innate-only profile**:
 The profile of a Job with innate recipes only (`InnateProfile`): `crafting` as its single recipe type, one station, and the domain `civmod:domains/none`, an item tag nobody is in, so no pattern a player makes from a crafting recipe is usable. Innate recipes ignore the domain.
 
