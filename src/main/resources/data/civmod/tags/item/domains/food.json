@@ -1,0 +1,9 @@
+{
+  "values": [
+    { "id": "#c:foods", "required": false },
+    { "id": "#c:crops", "required": false },
+    { "id": "#c:eggs", "required": false },
+    { "id": "#c:buckets/milk", "required": false },
+    { "id": "minecraft:sugar", "required": false }
+  ]
+}
