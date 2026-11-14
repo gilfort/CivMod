@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:cloth_dyes_like_leather",
+  "max_ticks": 400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

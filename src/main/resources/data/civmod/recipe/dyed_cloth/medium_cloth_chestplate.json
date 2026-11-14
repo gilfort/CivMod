@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_dye",
+  "dye": "#minecraft:dyes",
+  "group": "dyed_armor",
+  "result": {
+    "id": "civmod:medium_cloth_chestplate"
+  },
+  "target": "civmod:medium_cloth_chestplate"
+}

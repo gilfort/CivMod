@@ -9,6 +9,7 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.client.ClientInnateRecipes;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.PatternLayout;
@@ -622,6 +623,12 @@ final class PatternsTabView implements JobBlockTabView {
         return tab.foreign().contains(slot) ? Component.translatable("civmod.gui.patterns.foreign") : tab.filteredLine();
     }
 
+    /** An innate recipe's input as a tooltip line: its name, with the count in front when it asks for more than one. */
+    private static Component inputLine(JobCraftingRecipe.Input input) {
+        Component name = PatternRecipes.name(input.ingredient());
+        return input.count() == 1 ? name : Component.translatable("civmod.gui.patterns.input_count", input.count(), name);
+    }
+
     private static List<Component> tooltip(PatternsTabData tab, Job job, int slot) {
         List<Component> lines = new ArrayList<>();
         Optional<Pattern> pattern = tab.pattern(slot);
@@ -636,7 +643,7 @@ final class PatternsTabView implements JobBlockTabView {
             if (found.innate()) {
                 // Its inputs, as no editor shows them: a tag input by its tag ("Any Wool"), not by the grid's first item.
                 List<Component> inputs = found.recipe().flatMap(ClientInnateRecipes::recipe)
-                        .map(recipe -> recipe.ingredients().stream().map(PatternRecipes::name).toList())
+                        .map(recipe -> recipe.inputs().stream().map(PatternsTabView::inputLine).toList())
                         .orElseGet(() -> found.grid().stream().filter(item -> item != Items.AIR).map(item -> new ItemStack(item).getHoverName()).toList());
                 inputs.forEach(input -> lines.add(Component.literal("  ").append(input).withStyle(ChatFormatting.GRAY)));
             }

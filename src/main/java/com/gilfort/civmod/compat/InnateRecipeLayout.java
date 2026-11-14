@@ -141,6 +141,14 @@ public final class InnateRecipeLayout {
     }
 
     /**
+     * @param input an ingredient of an innate recipe
+     * @return what its input slot cycles through: every item it accepts, each as a stack of the ingredient's count
+     */
+    public static List<ItemStack> inputStacks(JobCraftingRecipe.Input input) {
+        return input.ingredient().items().map(holder -> new ItemStack(holder, input.count())).toList();
+    }
+
+    /**
      * @param recipe an innate recipe
      * @return what the result slot shows: its result, then every kind of item its {@code drops} can give (each once)
      */
