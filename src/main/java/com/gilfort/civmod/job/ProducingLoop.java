@@ -14,6 +14,7 @@ import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.api.BlockingReason;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.api.XpGain;
@@ -145,7 +146,7 @@ final class ProducingLoop implements CategoryLoop {
             }
             BlockPos ofDay = station(level, job, site, day);
             if (ofDay == null) {
-                return JobStep.blocked(noStation(workplace));
+                return noStationStep(job, workplace);
             }
             Pick pick = start(level, job, site, stations(level, job, site, day, ofDay), level.getGameTime(), dayTime, false);
             if (pick.round().isEmpty()) {
@@ -176,7 +177,7 @@ final class ProducingLoop implements CategoryLoop {
                 BlockPos station = stepStation(level, job, site, round, day);
                 if (station == null) {
                     release(level, jobBlock);
-                    yield JobStep.blocked(noStation(workplace));
+                    yield noStationStep(job, workplace);
                 }
                 round.chargeStations = chargeStations(level, job, site, round, station, day);
                 yield walk(new ClerkStorage.Visit(station, SettlerWork.REACH, false), fatigue.onBreak() ? JobStatus.PAUSING : JobStatus.CRAFTING);
@@ -421,7 +422,7 @@ final class ProducingLoop implements CategoryLoop {
         List<Pattern> turns = new ArrayList<>(always.stream().filter(pattern -> pattern.slot() > last).toList());
         turns.addAll(always.stream().filter(pattern -> pattern.slot() <= last).toList());
         // A drops pattern ignores Max: its icon item is only one of many things it can find.
-        turns.removeIf(pattern -> skips.containsKey(pattern.slot()) || atMax.contains(pattern.output()) && InnateRecipes.drops(level, pattern).isEmpty());
+        turns.removeIf(pattern -> skips.containsKey(pattern.slot()) || (atMax.contains(pattern.output()) && !drawsAtRandom(level, pattern)));
         if (turns.isEmpty()) {
             return Optional.empty();
         }
@@ -461,7 +462,12 @@ final class ProducingLoop implements CategoryLoop {
      * beforehand. They run only as "Always produce" patterns.
      */
     private static List<Pattern> requestable(ServerLevel level, List<Pattern> patterns) {
-        return patterns.stream().filter(pattern -> InnateRecipes.drops(level, pattern).isEmpty()).toList();
+        return patterns.stream().filter(pattern -> !drawsAtRandom(level, pattern)).toList();
+    }
+
+    /** Whether the pattern follows an innate recipe with {@code drops}: what it makes is not known beforehand. */
+    private static boolean drawsAtRandom(ServerLevel level, Pattern pattern) {
+        return InnateRecipes.drops(level, pattern).isPresent();
     }
 
     /** The JobBlock's Home Clerk, if it still is one. */
@@ -1022,7 +1028,7 @@ final class ProducingLoop implements CategoryLoop {
             consumed.add(one);
         }
         Pattern pattern = step.pattern();
-        Made made = made(level, job, pattern);
+        ExecutionOutcome made = ExecutionOutcome.of(InnateRecipes.recipe(level, pattern), pattern, shell.effectiveLevel(job), settler.getRandom());
         ItemStack result = made.result();
         Optional<RecipeHolder<?>> recipe = recipe(level, pattern);
         // Read before the buffer takes the stacks.
@@ -1051,37 +1057,6 @@ final class ProducingLoop implements CategoryLoop {
             handTimer = HAND_TICKS;
         }
         return true;
-    }
-
-    /**
-     * What one execution of a pattern makes.
-     *
-     * @param result what the pattern makes for sure (empty for a recipe that only draws)
-     * @param drawn  the stacks the draw of the recipe's {@code drops} gave, empty if it has none
-     */
-    private record Made(ItemStack result, List<ItemStack> drawn) {
-
-        /** @return the result and the drawn stacks together */
-        List<ItemStack> all() {
-            List<ItemStack> all = new ArrayList<>(drawn);
-            if (!result.isEmpty()) {
-                all.addFirst(result);
-            }
-            return all;
-        }
-    }
-
-    /**
-     * Makes the outcome of one execution: the pattern's result, and for an innate recipe with {@code drops} the draw
-     * at the settler's effective skill level (a recipe without a result makes nothing else).
-     */
-    private Made made(ServerLevel level, SettlerJob job, Pattern pattern) {
-        Optional<JobCraftingRecipe> innate = InnateRecipes.recipe(level, pattern);
-        boolean drawsOnly = innate.filter(JobCraftingRecipe::drawsOnly).isPresent();
-        ItemStack result = drawsOnly ? ItemStack.EMPTY : new ItemStack(pattern.output(), pattern.count());
-        List<ItemStack> drawn = innate.flatMap(JobCraftingRecipe::drops)
-                .map(drops -> DropPools.draw(drops, shell.effectiveLevel(job), settler.getRandom())).orElse(List.of());
-        return new Made(result, drawn);
     }
 
     /**
@@ -1338,6 +1313,31 @@ final class ProducingLoop implements CategoryLoop {
     }
 
     /**
+     * The reason of a Job that only works innate recipes when there is no station at all ("Needs a station nearby:
+     * Grindstone"): such a Job has nothing else to say about its work place. Empty if the stations are only occupied, or
+     * for another Job (which reports {@link #noStation}).
+     */
+    private static Optional<BlockingReason> missingStation(SettlerJob job, Workplace workplace) {
+        if (workplace.noFreeWorkPlace() || !(profile(job) instanceof InnateProfile)) {
+            return Optional.empty();
+        }
+        return Optional.of(BlockingReason.of(InnateRecipes.needsStation(mainStation(job))));
+    }
+
+    /** The step without a station of the day: blocked with the missing station named, else with {@link #noStation}. */
+    private static JobStep noStationStep(SettlerJob job, Workplace workplace) {
+        return missingStation(job, workplace).map(JobStep::blocked).orElseGet(() -> JobStep.blocked(noStation(workplace)));
+    }
+
+    /** Sets the status without a station of the day outside a decision (catch-up), like {@link #noStationStep} would show it. */
+    private void setNoStation(SettlerJob job) {
+        BlockPos jobBlock = job.jobBlock();
+        Workplace workplace = shell.workplace(jobBlock);
+        missingStation(job, workplace).ifPresentOrElse(reason -> shell.setStatus(jobBlock, JobStatus.BLOCKED, reason.text()),
+                () -> shell.setStatus(jobBlock, noStation(workplace)));
+    }
+
+    /**
      * The station of the round's current step: the station of the day if it is one of the step's recipe type (an
      * innate recipe: its own station, else the main type's), else the nearest station of that type (looked up once per
      * round and type).
@@ -1422,7 +1422,7 @@ final class ProducingLoop implements CategoryLoop {
         Patterns.refresh(level, jobBlock, job.jobType());
         Patterns.enforceLimit(level, jobBlock, job.jobType(), settler.getUUID(), profile(job).checkLimit(shell.effectiveLevel(job)));
         if (station(level, job, site, day) == null) {
-            shell.setStatus(jobBlock, noStation(shell.workplace(jobBlock)));
+            setNoStation(job);
             return new SimulatedWork(0, workTicks);
         }
         // The time of day follows the simulated clock: a round crossing 18:00 no longer reaches the linked storage.
@@ -1441,7 +1441,7 @@ final class ProducingLoop implements CategoryLoop {
                 }
                 BlockPos ofDay = station(level, job, site, day);
                 if (ofDay == null) {
-                    shell.setStatus(jobBlock, noStation(workplace));
+                    setNoStation(job);
                     return new SimulatedWork(operations, ticks);
                 }
                 Pick pick = start(level, job, site, stations(level, job, site, day, ofDay), (long) clock, DayClock.dayTime((long) clock), true);
@@ -1494,7 +1494,7 @@ final class ProducingLoop implements CategoryLoop {
                 BlockPos ofDay = station(level, job, site, day);
                 if (ofDay == null || perTick <= 0.0) {
                     release(level, jobBlock);
-                    shell.setStatus(jobBlock, noStation(workplace));
+                    setNoStation(job);
                     return new SimulatedWork(operations, ticks);
                 }
                 List<BlockPos> stations = mainStep(level, job, round) ? stations(level, job, site, day, ofDay) : List.of(ofDay);

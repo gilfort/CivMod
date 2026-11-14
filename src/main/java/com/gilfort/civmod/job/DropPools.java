@@ -2,6 +2,7 @@ package com.gilfort.civmod.job;
 
 import java.io.Reader;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -145,7 +146,7 @@ public final class DropPools {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Sync> STREAM_CODEC = StreamCodec.composite(
-                ByteBufCodecs.map(java.util.HashMap::new, Identifier.STREAM_CODEC, DropOutcome.STREAM_CODEC.apply(ByteBufCodecs.list())), Sync::pools,
+                ByteBufCodecs.map(HashMap::new, Identifier.STREAM_CODEC, DropOutcome.STREAM_CODEC.apply(ByteBufCodecs.list())), Sync::pools,
                 Sync::new);
 
         @Override

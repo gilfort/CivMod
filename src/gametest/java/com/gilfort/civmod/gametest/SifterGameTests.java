@@ -11,6 +11,7 @@ import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.gametest.FletcherGameTests.Setup;
 import com.gilfort.civmod.job.DropPools;
+import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.logistics.Pattern;
@@ -63,6 +64,7 @@ public final class SifterGameTests {
             register(helper, "sifter_level_hundred_draws", SifterGameTests::levelHundredDraws);
             register(helper, "sifter_shovel_wear", SifterGameTests::shovelWear);
             register(helper, "sifter_without_shovel", SifterGameTests::withoutShovel);
+            register(helper, "sifter_without_hopper", SifterGameTests::withoutHopper);
             register(helper, "sifter_always_produce", SifterGameTests::alwaysProduce);
             register(helper, "sifter_serves_no_request", SifterGameTests::servesNoRequest);
         });
@@ -223,6 +225,28 @@ public final class SifterGameTests {
             PatternsTabData tab = PatternsTabData.of(level, craft, sifter());
             Optional<String> line = Optional.ofNullable(tab.needs().get(SAND_SLOT)).map(Component::getString);
             helper.assertTrue(line.equals(Optional.of("Needs Shovel")), "The sand recipe is marked: " + tab.needs());
+        } finally {
+            DropPools.script(null);
+            FletcherGameTests.cleanUp(setup, settler);
+        }
+        helper.succeed();
+    }
+
+    /** Without a hopper nothing is sifted and the Sifter says it needs a station nearby. */
+    private static void withoutHopper(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = FletcherGameTests.setup(helper, List.of(new ItemStack(Items.SAND, 3)), List.of());
+        BlockPos craft = sifting(helper, new BlockPos(1, 1, 5), 2);
+        alwaysSift(helper, craft, 3);
+        Settler settler = FletcherGameTests.worker(helper, setup, craft, sifter());
+        settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.IRON_SHOVEL));
+        DropPools.script(DropsGameTests.scripted(0));
+        try {
+            CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
+            helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.SAND) == 3, "The sand stays");
+            helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.BONE_MEAL) == 0, "Nothing was sifted");
+            helper.assertTrue(settler.getWork().status(craft) == JobStatus.BLOCKED, "Status: " + settler.getWork().status(craft));
+            helper.assertValueEqual(settler.getWork().statusText(craft).getString(), "Needs a station nearby: Hopper", "Reason");
         } finally {
             DropPools.script(null);
             FletcherGameTests.cleanUp(setup, settler);
