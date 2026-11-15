@@ -297,7 +297,7 @@ public final class ToolSupplyGameTests {
         crafted.removeJob(jobBlock(crafted));
         Request left = Requests.get(settlement, id).orElseThrow();
         helper.assertTrue(left.reservedFor().isEmpty() && left.amount() == 0 && left.claims().size() == 1, "Crafting goes on, nothing is reserved: " + left);
-        Requests.finish(data, settlement, id, smith.getUUID());
+        SubRequestGameTests.finishInFull(data, settlement, id, smith.getUUID());
         helper.assertTrue(Holds.heldFor(settlement, ReservedFor.settler(crafted.getUUID())).isEmpty() && settlement.requests().isEmpty(),
                 "The finished tool is plain stock: " + Holds.heldFor(settlement, ReservedFor.settler(crafted.getUUID())));
         finish(helper, smith, crafted);

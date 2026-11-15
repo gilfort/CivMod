@@ -298,6 +298,20 @@ final class SettlerTools {
     }
 
     /**
+     * Wears a tool several times, stopping when it is gone.
+     *
+     * @param level   the level
+     * @param settler the settler using the tool
+     * @param tool    the tool
+     * @param times   how many durability points an execution uses (before the multiplier)
+     */
+    static void wear(ServerLevel level, Settler settler, ItemStack tool, int times) {
+        for (int used = 0; used < times && !tool.isEmpty(); used++) {
+            wear(level, settler, tool);
+        }
+    }
+
+    /**
      * Repairs Mending tools from newly collected XP (vault {@code Systems/Settler XP.md}): first the tool the action used,
      * then the others on the belt.
      *

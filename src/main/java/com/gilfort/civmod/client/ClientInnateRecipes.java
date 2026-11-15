@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.CompostableIngredient;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.logistics.InnateRecipes;
@@ -41,6 +42,7 @@ public final class ClientInnateRecipes {
 
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     static void onRecipesReceived(RecipesReceivedEvent event) {
+        CompostableIngredient.invalidate();
         if (event.getRecipeTypes().contains(ModRecipes.JOB_CRAFTING.get())) {
             recipes = InnateRecipes.sorted(event.getRecipeMap().byType(ModRecipes.JOB_CRAFTING.get()));
         }

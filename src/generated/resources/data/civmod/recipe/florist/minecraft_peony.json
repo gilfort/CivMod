@@ -1,0 +1,44 @@
+{
+  "type": "civmod:job_crafting",
+  "drops": [
+    {
+      "results": [
+        {
+          "count": 2,
+          "id": "minecraft:peony"
+        }
+      ],
+      "weight": 75
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:peony"
+        }
+      ],
+      "tag_result": {
+        "tag": "#civmod:florist_flowers"
+      },
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:peony"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [],
+      "weight": 5
+    }
+  ],
+  "ingredients": [
+    "minecraft:peony",
+    "minecraft:bone_meal"
+  ],
+  "jobs": [
+    "civmod:florist"
+  ]
+}

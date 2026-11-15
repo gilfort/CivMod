@@ -1,0 +1,44 @@
+{
+  "type": "civmod:job_crafting",
+  "drops": [
+    {
+      "results": [
+        {
+          "count": 2,
+          "id": "minecraft:red_tulip"
+        }
+      ],
+      "weight": 75
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:red_tulip"
+        }
+      ],
+      "tag_result": {
+        "tag": "#civmod:florist_flowers"
+      },
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:red_tulip"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [],
+      "weight": 5
+    }
+  ],
+  "ingredients": [
+    "minecraft:red_tulip",
+    "minecraft:bone_meal"
+  ],
+  "jobs": [
+    "civmod:florist"
+  ]
+}

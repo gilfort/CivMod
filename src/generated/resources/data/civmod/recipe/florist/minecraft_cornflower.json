@@ -1,0 +1,44 @@
+{
+  "type": "civmod:job_crafting",
+  "drops": [
+    {
+      "results": [
+        {
+          "count": 2,
+          "id": "minecraft:cornflower"
+        }
+      ],
+      "weight": 75
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:cornflower"
+        }
+      ],
+      "tag_result": {
+        "tag": "#civmod:florist_flowers"
+      },
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:cornflower"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [],
+      "weight": 5
+    }
+  ],
+  "ingredients": [
+    "minecraft:cornflower",
+    "minecraft:bone_meal"
+  ],
+  "jobs": [
+    "civmod:florist"
+  ]
+}

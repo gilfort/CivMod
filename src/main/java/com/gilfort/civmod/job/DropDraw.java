@@ -1,11 +1,11 @@
 package com.gilfort.civmod.job;
 
 import java.util.List;
+import java.util.Optional;
 
 import com.gilfort.civmod.api.DropOutcome;
 
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.item.ItemStackTemplate;
 
 /**
  * The weighted draw of a {@code drops} recipe (vault {@code Systems/Producing Jobs.md}) as pure functions: no world, no
@@ -40,18 +40,18 @@ public final class DropDraw {
      * @param outcomes the outcomes of a recipe
      * @param level    the settler's skill level in the Job
      * @param random   the random source, asked once for a number below the total weight
-     * @return the stacks of the drawn outcome, empty if it found nothing or no outcome is in the draw
+     * @return the drawn outcome, empty if no outcome is in the draw
      */
-    public static List<ItemStackTemplate> draw(List<DropOutcome> outcomes, int level, RandomSource random) {
+    public static Optional<DropOutcome> pick(List<DropOutcome> outcomes, int level, RandomSource random) {
         List<DropOutcome> eligible = eligible(outcomes, level);
         if (eligible.isEmpty()) {
-            return List.of();
+            return Optional.empty();
         }
         int roll = random.nextInt(totalWeight(eligible));
         for (DropOutcome outcome : eligible) {
             roll -= outcome.weight();
             if (roll < 0) {
-                return outcome.results();
+                return Optional.of(outcome);
             }
         }
         throw new IllegalStateException("Roll " + roll + " is beyond the total weight of " + eligible);

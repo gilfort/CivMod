@@ -2,6 +2,7 @@ package com.gilfort.civmod.job;
 
 import java.io.Reader;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +23,8 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.JsonOps;
 
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -31,8 +34,10 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
+import net.minecraft.tags.TagKey;
 import net.minecraft.util.RandomSource;
 import net.minecraft.util.profiling.ProfilerFiller;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemStackTemplate;
 import net.neoforged.bus.api.EventPriority;
@@ -106,11 +111,20 @@ public final class DropPools {
      * @param drops    the {@code drops} of the recipe
      * @param level    the settler's skill level in the Job
      * @param fallback the random source to use unless a test scripted one
-     * @return the stacks the drawn outcome gives
+     * @param inputs   what the execution used up; the random item of a {@code tag_result} is never one of these items
+     * @return the stacks the drawn outcome gives: its results, then the item drawn from its tag
      */
-    public static List<ItemStack> draw(Drops drops, int level, RandomSource fallback) {
+    public static List<ItemStack> draw(Drops drops, int level, RandomSource fallback, List<ItemStack> inputs) {
         RandomSource random = scripted != null ? scripted : fallback;
-        return DropDraw.draw(outcomes(drops), level, random).stream().map(ItemStackTemplate::create).toList();
+        Optional<DropOutcome> drawn = DropDraw.pick(outcomes(drops), level, random);
+        List<ItemStack> stacks = new ArrayList<>(drawn.map(DropOutcome::results).orElse(List.of()).stream().map(ItemStackTemplate::create).toList());
+        drawn.flatMap(DropOutcome::tagResult).ifPresent(tagResult -> {
+            List<Item> candidates = candidates(tagResult.tag(), inputs.stream().map(ItemStack::getItem).toList());
+            if (!candidates.isEmpty()) {
+                stacks.add(new ItemStack(candidates.get(random.nextInt(candidates.size())), tagResult.count()));
+            }
+        });
+        return stacks;
     }
 
     /**
@@ -121,6 +135,21 @@ public final class DropPools {
     @ApiStatus.Internal
     public static void script(@Nullable RandomSource random) {
         scripted = random;
+    }
+
+    /**
+     * @param tag      the item tag of a {@code tag_result}
+     * @param excluded the items the recipe used up, which the draw never picks
+     * @return the members of the tag the draw can pick, in tag order; empty while the tag is unknown or has no other member
+     */
+    public static List<Item> candidates(TagKey<Item> tag, Collection<? extends Item> excluded) {
+        List<Item> found = new ArrayList<>();
+        for (Holder<Item> holder : BuiltInRegistries.ITEM.getTagOrEmpty(tag)) {
+            if (!excluded.contains(holder.value())) {
+                found.add(holder.value());
+            }
+        }
+        return found;
     }
 
     private static List<DropOutcome> pool(Identifier id) {

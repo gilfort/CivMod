@@ -1,0 +1,44 @@
+{
+  "type": "civmod:job_crafting",
+  "drops": [
+    {
+      "results": [
+        {
+          "count": 2,
+          "id": "minecraft:sunflower"
+        }
+      ],
+      "weight": 75
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        }
+      ],
+      "tag_result": {
+        "tag": "#civmod:florist_flowers"
+      },
+      "weight": 10
+    },
+    {
+      "results": [
+        {
+          "id": "minecraft:sunflower"
+        }
+      ],
+      "weight": 10
+    },
+    {
+      "results": [],
+      "weight": 5
+    }
+  ],
+  "ingredients": [
+    "minecraft:sunflower",
+    "minecraft:bone_meal"
+  ],
+  "jobs": [
+    "civmod:florist"
+  ]
+}
