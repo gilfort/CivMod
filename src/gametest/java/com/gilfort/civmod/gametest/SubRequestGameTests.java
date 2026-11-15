@@ -244,7 +244,7 @@ public final class SubRequestGameTests {
             }
             helper.assertTrue(Holds.held(settlement, clerk).isEmpty(), job + ": nothing held after the parent");
             helper.assertTrue(count(level, clerk, item) == before + 2, job + ": the items are free stock again");
-            ClerkStorage.stock(level, clerk, true).take(item, 2);
+            ClerkStorage.stock(level, clerk, true).take(ItemKey.of(item), 2);
         }
     }
 

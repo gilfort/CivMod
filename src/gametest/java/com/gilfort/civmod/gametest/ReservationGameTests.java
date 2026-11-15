@@ -71,7 +71,7 @@ public final class ReservationGameTests {
                 "Without access nothing is reachable");
         helper.assertTrue(ClerkStorage.stock(level, clerk, true, task.id()).count(stack -> stack.is(Items.BREAD)) == 10,
                 "The task holding the reservation sees all");
-        int taken = others.take(Items.BREAD, 10).stream().mapToInt(ItemStack::getCount).sum();
+        int taken = others.take(ItemKey.of(Items.BREAD), 10).stream().mapToInt(ItemStack::getCount).sum();
         helper.assertTrue(taken == 4, "A customer takes only the unreserved bread: " + taken);
 
         Stock rest = ClerkStorage.stock(level, clerk, true);

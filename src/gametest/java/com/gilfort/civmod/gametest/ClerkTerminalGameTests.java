@@ -126,7 +126,7 @@ public final class ClerkTerminalGameTests {
         terminal.click(player, level, ClerkGameTests.MORNING, ItemStack.EMPTY, StorageTerminal.Action.STORE);
         helper.assertTrue(player.containerMenu.getCarried().isEmpty(), "A click with an item stores it all");
         // Storing follows the delivery order of the linked containers.
-        helper.assertTrue(ClerkStorage.stock(level, clerk, true).count(Items.COBBLESTONE) == 100, "Everything is back");
+        helper.assertTrue(ClerkStorage.stock(level, clerk, true).count(ItemKey.of(Items.COBBLESTONE)) == 100, "Everything is back");
 
         terminal.click(player, level, ClerkGameTests.MORNING, cobble, StorageTerminal.Action.TAKE_HALF);
         helper.assertTrue(player.containerMenu.getCarried().getCount() == 32, "A right click takes half a stack");

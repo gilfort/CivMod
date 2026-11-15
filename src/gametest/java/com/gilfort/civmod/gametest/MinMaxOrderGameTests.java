@@ -347,10 +347,10 @@ public final class MinMaxOrderGameTests {
         helper.assertTrue(Requests.forRule(settlement, clerk, 0).isEmpty(), "Target 256 reached: withdrawn");
 
         // Between Min and the target: no new request.
-        ClerkStorage.stock(level, clerk, true).take(Items.TORCH, 156);
+        ClerkStorage.stock(level, clerk, true).take(ItemKey.of(Items.TORCH), 156);
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(Requests.forRule(settlement, clerk, 0).isEmpty(), "Stock 100 is not below Min 64: no request");
-        ClerkStorage.stock(level, clerk, true).take(Items.TORCH, 40);
+        ClerkStorage.stock(level, clerk, true).take(ItemKey.of(Items.TORCH), 40);
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(open(settlement, clerk) == 196, "Stock 60 below Min: one order up to the target, 196 " + open(settlement, clerk));
 

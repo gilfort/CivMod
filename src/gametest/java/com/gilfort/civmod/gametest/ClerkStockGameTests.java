@@ -87,7 +87,7 @@ public final class ClerkStockGameTests {
 
         helper.assertTrue(ClerkStorage.stock(level, clerk, true).insert(new ItemStack(Items.BREAD, 10)).isEmpty(), "Delivered");
         helper.assertTrue(bread(chest) == 10 && bread(level, clerk) == 10, "A delivery into the linked chest shows at once");
-        List<ItemStack> taken = ClerkStorage.stock(level, clerk, true).take(Items.BREAD, 4);
+        List<ItemStack> taken = ClerkStorage.stock(level, clerk, true).take(ItemKey.of(Items.BREAD), 4);
         helper.assertTrue(taken.stream().mapToInt(ItemStack::getCount).sum() == 4, "Taken: " + taken);
         helper.assertTrue(bread(chest) == 6 && bread(level, clerk) == 6, "A hand-out shows at once: " + bread(level, clerk));
         helper.succeed();
@@ -106,7 +106,7 @@ public final class ClerkStockGameTests {
 
         chest.setItem(0, ItemStack.EMPTY);
         helper.assertTrue(bread(level, clerk) == 5, "A foreign change is not re-read yet");
-        helper.assertTrue(ClerkStorage.stock(level, clerk, true).take(Items.BREAD, 5).isEmpty(), "Nothing to take in the real chest");
+        helper.assertTrue(ClerkStorage.stock(level, clerk, true).take(ItemKey.of(Items.BREAD), 5).isEmpty(), "Nothing to take in the real chest");
         helper.assertTrue(bread(level, clerk) == 0, "The stock is corrected at once");
         helper.succeed();
     }
