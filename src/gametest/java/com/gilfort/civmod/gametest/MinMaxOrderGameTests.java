@@ -377,7 +377,7 @@ public final class MinMaxOrderGameTests {
     /** A Minimum rule of an old save loads as Min X without Max and Order; the new fields are saved. */
     private static void oldMinimumRule(GameTestHelper helper) {
         com.google.gson.JsonObject old = com.google.gson.JsonParser.parseString(
-                "{\"slot\": 2, \"item\": \"minecraft:torch\", \"amount\": 48, \"priority\": 7, \"mode\": \"minimum\"}").getAsJsonObject();
+                "{\"slot\": 2, \"item\": {\"id\": \"minecraft:torch\"}, \"amount\": 48, \"priority\": 7, \"mode\": \"minimum\"}").getAsJsonObject();
         StockRule rule = StockRule.CODEC.parse(JsonOps.INSTANCE, old).getOrThrow();
         helper.assertTrue(rule.equals(new StockRule(2, ItemKey.of(Items.TORCH), 48, 0, 0, 7)), "Minimum 48 → Min 48: " + rule);
         StockRule band = new StockRule(3, ItemKey.of(Items.STICK), 64, 256, 192, -3);

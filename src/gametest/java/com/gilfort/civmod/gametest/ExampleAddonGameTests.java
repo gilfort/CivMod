@@ -426,10 +426,10 @@ public final class ExampleAddonGameTests {
         ResourceKey<Recipe<?>> sticks = ResourceKey.create(Registries.RECIPE, Identifier.withDefaultNamespace("stick"));
         List<ItemKey> stickGrid = List.of(ItemKey.EMPTY, ItemKey.of(Items.OAK_PLANKS), ItemKey.EMPTY, ItemKey.EMPTY, ItemKey.of(Items.OAK_PLANKS), ItemKey.EMPTY, ItemKey.EMPTY, ItemKey.EMPTY, ItemKey.EMPTY);
 
-        // The Smelter adds smelting (#110), the Smith smithing (#111), the Cook smoking and the Founder blasting (#129): their Patterns
+        // The Smelter adds smelting (#110), the Smith smithing (#111), the Cook smoking, the Founder blasting (#129) and the Alchemist brewing (#270): their Patterns
         // tabs get the JEI / REI transfer like the Craftsperson's.
         helper.assertTrue(Set.copyOf(Patterns.allRecipeTypes()).equals(Set.of(RecipeType.CRAFTING, RecipeType.SMELTING, RecipeType.SMITHING,
-                RecipeType.SMOKING, RecipeType.BLASTING, RecipeType.STONECUTTING)) && Patterns.allRecipeTypes().size() == 6,
+                RecipeType.SMOKING, RecipeType.BLASTING, RecipeType.STONECUTTING, RecipeType.BREWING)) && Patterns.allRecipeTypes().size() == 7,
                 "Recipe viewers offer the transfer for the recipe types of every Producing Job: " + Patterns.allRecipeTypes());
         Job craftsperson = ModJobs.CRAFTSPERSON.get();
         PatternsTabData tab = PatternsTabData.of(level, craft, craftsperson);
