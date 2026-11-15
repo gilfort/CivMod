@@ -129,6 +129,10 @@ public final class ModJobs {
             .parent(CRAFTSPERSON).icon(() -> Items.WOOL.white()).bubbleIcon(() -> ModClothing.piece(ClothSet.SIMPLE, ArmorType.CHESTPLATE).get())
             .displayItem(() -> ModClothing.piece(ClothSet.SIMPLE, ArmorType.CHESTPLATE).get()).hungerFactor(0.5)
             .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.WOOL.white()).profile(TailorProfile::new).build());
+    /** See vault {@code Jobs/Carpenter.md}; crafts everything made of wood at a crafting table, at full speed without a station extra. */
+    public static final DeferredHolder<Job, Job> CARPENTER = JOBS.register("carpenter", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.STRIPPED_OAK_LOG).bubbleIcon(() -> Items.OAK_DOOR).displayItem(() -> Items.OAK_DOOR).hungerFactor(0.5)
+            .baseExp(2).jobFactor(1.2).unlockItem(() -> Items.STRIPPED_OAK_LOG).profile(DomainProfile::carpenter).build());
     /** See vault {@code Jobs/Crusher.md}; breaks stone down into gravel, sand and more at a grindstone with innate recipes only. */
     public static final DeferredHolder<Job, Job> CRUSHER = JOBS.register("crusher", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.GRINDSTONE).bubbleIcon(() -> Items.GRAVEL).displayItem(() -> Items.GRAVEL).hungerFactor(0.5)
