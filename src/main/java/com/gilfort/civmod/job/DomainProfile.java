@@ -28,7 +28,9 @@ import net.minecraft.world.level.block.Block;
  * <li>{@link #baker()}: {@code crafting} at the Craftsperson's crafting table, food domain (everything with a food, crop,
  * egg, milk or sugar input; vault {@code Jobs/Baker.md});</li>
  * <li>{@link #tailor()}: the same at the crafting table with the textile domain (wool, carpets, beds, banners, leather,
- * string); the {@link TailorProfile} adds the colour of the cloth (vault {@code Jobs/Tailor.md}).</li>
+ * string); the {@link TailorProfile} adds the colour of the cloth (vault {@code Jobs/Tailor.md});</li>
+ * <li>{@link #carpenter()}: the same at the crafting table with the wood domain (logs, planks and everything made of
+ * wood; vault {@code Jobs/Carpenter.md}), at job factor 1.2 without a station extra.</li>
  * </ul>
  */
 public final class DomainProfile implements ProducingProfile {
@@ -70,6 +72,11 @@ public final class DomainProfile implements ProducingProfile {
     /** @return the Tailor's domain, station and recipe types: {@code crafting} at the Craftsperson's crafting tables, textile domain */
     static DomainProfile tailor() {
         return new DomainProfile(List.of(RecipeType.CRAFTING), CraftspersonProfile.STATION, "textile");
+    }
+
+    /** @return the Carpenter's profile: {@code crafting} at the Craftsperson's crafting tables, wood domain */
+    public static DomainProfile carpenter() {
+        return new DomainProfile(List.of(RecipeType.CRAFTING), CraftspersonProfile.STATION, "wood");
     }
 
     @Override

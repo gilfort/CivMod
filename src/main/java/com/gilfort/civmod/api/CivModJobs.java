@@ -53,6 +53,8 @@ public final class CivModJobs {
     public static final DeferredHolder<Job, Job> BAKER = job("baker");
     /** Producing: Specialization of the Craftsperson, sews the cloth sets and crafts everything of wool and leather at a crafting table; unlocked by white wool. */
     public static final DeferredHolder<Job, Job> TAILOR = job("tailor");
+    /** Producing: Specialization of the Craftsperson, crafts everything made of wood at a crafting table; unlocked by a stripped oak log. */
+    public static final DeferredHolder<Job, Job> CARPENTER = job("carpenter");
     /** Producing: Specialization of the Craftsperson, breaks stone down into gravel, sand and more at a grindstone; unlocked by a grindstone. */
     public static final DeferredHolder<Job, Job> CRUSHER = job("crusher");
     /** Producing: Specialization of the Craftsperson, turns concrete powder into concrete at a water cauldron; unlocked by a water bucket. */

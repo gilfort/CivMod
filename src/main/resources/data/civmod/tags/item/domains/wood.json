@@ -1,0 +1,23 @@
+{
+  "values": [
+    { "id": "#minecraft:logs", "required": false },
+    { "id": "#minecraft:planks", "required": false },
+    { "id": "#minecraft:wooden_slabs", "required": false },
+    { "id": "#minecraft:wooden_stairs", "required": false },
+    { "id": "#minecraft:wooden_doors", "required": false },
+    { "id": "#minecraft:wooden_fences", "required": false },
+    { "id": "#minecraft:wooden_trapdoors", "required": false },
+    { "id": "#minecraft:wooden_buttons", "required": false },
+    { "id": "#minecraft:wooden_pressure_plates", "required": false },
+    { "id": "#minecraft:wooden_shelves", "required": false },
+    { "id": "#minecraft:signs", "required": false },
+    { "id": "#minecraft:hanging_signs", "required": false },
+    { "id": "#minecraft:boats", "required": false },
+    { "id": "#c:fence_gates/wooden", "required": false },
+    { "id": "#c:chests/wooden", "required": false },
+    { "id": "#c:barrels/wooden", "required": false },
+    { "id": "#c:rods/wooden", "required": false },
+    { "id": "#c:stripped_logs", "required": false },
+    { "id": "#c:stripped_woods", "required": false }
+  ]
+}
