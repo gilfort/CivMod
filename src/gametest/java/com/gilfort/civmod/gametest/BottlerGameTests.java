@@ -10,6 +10,7 @@ import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.gametest.FletcherGameTests.Setup;
 import com.gilfort.civmod.job.JobStatus;
+import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Request;
@@ -32,6 +33,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.alchemy.Potions;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.Blocks;
@@ -52,8 +54,8 @@ public final class BottlerGameTests {
 
     /** Work time of the previous workday the request tests catch up: plenty for a few executions at job factor 1.0. */
     private static final long WORK_TICKS = 4000L;
-    /** How many innate recipes the Bottler has: water, lava and dragon's breath. */
-    private static final int RECIPES = 3;
+    /** How many innate recipes the Bottler has: water bucket, lava bucket, dragon's breath and water bottle. */
+    private static final int RECIPES = 4;
 
     private BottlerGameTests() {
     }
@@ -67,6 +69,7 @@ public final class BottlerGameTests {
             TestFunctions.register(helper, "bottler_lava_bucket", BottlerGameTests::lavaBucket);
             TestFunctions.register(helper, "bottler_water_without_cauldron", BottlerGameTests::waterWithoutCauldron);
             TestFunctions.register(helper, "bottler_dragons_breath", BottlerGameTests::dragonsBreath);
+            TestFunctions.register(helper, "bottler_water_bottle", BottlerGameTests::waterBottle);
             TestFunctions.register(helper, "bottler_missing_bucket", BottlerGameTests::missingBucket);
         });
     }
@@ -111,17 +114,24 @@ public final class BottlerGameTests {
     }
 
     /**
-     * Three innate recipes, each one input to one product: bucket to water bucket (no station of its own, so the main
+     * Four innate recipes, each one input to one product: bucket to water bucket (no station of its own, so the main
      * water cauldron), bucket to lava bucket at a lava cauldron that becomes an empty cauldron, glass bottle to dragon's
-     * breath at a dragon egg that stays. The block states survive the network codec (recipe viewers).
+     * breath at a dragon egg that stays, glass bottle to water bottle (a water potion) at a water cauldron that stays. The block states survive the network codec (recipe viewers).
      */
     private static void recipes(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         List<JobCraftingRecipe> recipes = InnateRecipes.of(level, bottler()).stream().map(RecipeHolder::value).toList();
-        helper.assertTrue(recipes.size() == RECIPES, "Three recipes: " + recipes.size());
+        helper.assertTrue(recipes.size() == RECIPES, "Four recipes: " + recipes.size());
         JobCraftingRecipe water = recipe(helper, recipes, Items.WATER_BUCKET);
         JobCraftingRecipe lava = recipe(helper, recipes, Items.LAVA_BUCKET);
         JobCraftingRecipe breath = recipe(helper, recipes, Items.DRAGON_BREATH);
+        JobCraftingRecipe bottle = recipes.stream().filter(recipe -> recipe.result().filter(made -> ItemKey.of(made.create()).equals(waterBottle())).isPresent())
+                .findFirst().orElse(null);
+        helper.assertTrue(bottle != null, "A recipe makes a water bottle");
+        helper.assertTrue(bottle.station().filter(tag -> tag.location().equals(CivMod.id("stations/water_cauldron"))).isPresent()
+                && bottle.stationAfter().isEmpty() && bottle.tool().isEmpty(), "Water bottle: water cauldron, left as it is, no tool");
+        helper.assertTrue(bottle.ingredients().size() == 1 && bottle.ingredients().getFirst().test(new ItemStack(Items.GLASS_BOTTLE)),
+                "A glass bottle makes the water bottle");
         helper.assertTrue(water.station().filter(tag -> tag.location().equals(CivMod.id("stations/water_cauldron"))).isPresent()
                 && water.stationAfter().isEmpty(), "Water: water cauldron, left as it is");
         helper.assertTrue(lava.station().filter(tag -> tag.location().equals(CivMod.id("stations/lava_cauldron"))).isPresent()
@@ -142,6 +152,36 @@ public final class BottlerGameTests {
         Optional<JobCraftingRecipe> found = recipes.stream().filter(recipe -> recipe.result().filter(made -> made.create().is(result)).isPresent()).findFirst();
         helper.assertTrue(found.isPresent(), "A recipe makes " + result);
         return found.orElseThrow();
+    }
+
+    /** The key of a water bottle: a potion item with water contents. */
+    static ItemKey waterBottle() {
+        return ItemKey.of(ItemKeyGameTests.potion(Potions.WATER));
+    }
+
+    /**
+     * A Clerk Min rule on water bottles, an awkward potion and a glass bottle in stock: the awkward potion does not meet the
+     * rule, the Bottler fills the glass bottle at a water cauldron that keeps its water, and the result is a real water bottle.
+     */
+    private static void waterBottle(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = FletcherGameTests.setup(helper, List.of(ItemKeyGameTests.potion(Potions.AWKWARD), new ItemStack(Items.GLASS_BOTTLE)),
+                List.of(ItemKeyGameTests.potion(Potions.WATER)));
+        BlockPos craft = bottlery(helper, new BlockPos(1, 1, 5));
+        BlockPos cauldron = new BlockPos(3, 1, 5);
+        BlockState filled = Blocks.WATER_CAULDRON.defaultBlockState().setValue(LayeredCauldronBlock.LEVEL, 2);
+        helper.setBlock(cauldron, filled);
+        helper.assertTrue(ClerkStorage.stock(level, setup.clerk(), true).count(waterBottle()::matches) == 0, "An awkward potion is no water bottle");
+        Settler settler = FletcherGameTests.worker(helper, setup, craft, bottler());
+        CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
+        helper.assertTrue(ClerkStorage.stock(level, setup.clerk(), true).count(waterBottle()::matches) == 1,
+                "The water bottle arrived (status " + settler.getWork().status(craft) + ")");
+        helper.assertTrue(ClerkStorage.stock(level, setup.clerk(), true).count(ItemKey.of(ItemKeyGameTests.potion(Potions.AWKWARD))::matches) == 1,
+                "The awkward potion is still there, untouched");
+        helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.GLASS_BOTTLE) == 0, "The glass bottle is used up");
+        helper.assertTrue(helper.getBlockState(cauldron).equals(filled), "The cauldron holds the same water level: " + helper.getBlockState(cauldron));
+        FletcherGameTests.cleanUp(setup, settler);
+        helper.succeed();
     }
 
     /** A Clerk Min rule on a water bucket, a bucket in stock: the Bottler fills it at a water cauldron that keeps its water. */

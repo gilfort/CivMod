@@ -1,0 +1,10 @@
+{
+  "type": "civmod:job_crafting",
+  "jobs": ["civmod:bottler"],
+  "ingredients": ["minecraft:glass_bottle"],
+  "result": {
+    "id": "minecraft:potion",
+    "components": { "minecraft:potion_contents": { "potion": "minecraft:water" } }
+  },
+  "station": "#civmod:stations/water_cauldron"
+}

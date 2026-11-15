@@ -2,6 +2,7 @@ package com.gilfort.civmod.gametest;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
@@ -14,13 +15,17 @@ import com.gilfort.civmod.logistics.PatternLayout;
 import com.gilfort.civmod.logistics.PatternRecipes;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.Patterns;
+import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Requests;
+import com.gilfort.civmod.settlement.TestAssignments;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -41,6 +46,8 @@ public final class AlchemistGameTests {
 
     /** Work time of the previous workday the request tests catch up: plenty for a few brewing rounds. */
     private static final long WORK_TICKS = 4000L;
+    /** Alternating passes of the Bottler and the Alchemist the chain test allows. */
+    private static final int MAX_PASSES = 4;
     /** Ticks of one vanilla brewing round. */
     private static final double BREWING_TICKS = 400.0;
     /** Ticks per operation of the shared speed formula (as the Smelter's). */
@@ -57,6 +64,7 @@ public final class AlchemistGameTests {
             TestFunctions.register(helper, "alchemist_brews_awkward", AlchemistGameTests::brewsAwkward);
             TestFunctions.register(helper, "alchemist_healing_chain", AlchemistGameTests::healingChain);
             TestFunctions.register(helper, "alchemist_missing_water_bottle", AlchemistGameTests::missingWaterBottle);
+            TestFunctions.register(helper, "alchemist_bottler_chain", AlchemistGameTests::bottlerChain);
             TestFunctions.register(helper, "alchemist_datapack_recipe", AlchemistGameTests::datapackRecipe);
         });
     }
@@ -203,6 +211,51 @@ public final class AlchemistGameTests {
         helper.assertTrue(missing.equals(List.of(new Request.Missing(water(), 1))), "Missing the water bottle: " + missing);
         helper.assertTrue(missing.getFirst().text().getString().endsWith("Water Bottle"), "Named: " + missing.getFirst().text().getString());
         FletcherGameTests.cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /**
+     * The chain: a Clerk asks for an awkward potion; only nether wart and a glass bottle are in stock. The Alchemist asks for
+     * the water bottle (a child request for the Clerk), the Bottler fills the glass bottle at a water cauldron, the Alchemist
+     * brews and the awkward potion arrives.
+     */
+    private static void bottlerChain(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Setup setup = FletcherGameTests.setup(helper, List.of(new ItemStack(Items.NETHER_WART), new ItemStack(Items.GLASS_BOTTLE)),
+                List.of(ItemKeyGameTests.potion(Potions.AWKWARD)));
+        UUID awkwardRequest = Requests.claimable(setup.settlement()).getFirst().id();
+        BlockPos craft = laboratory(helper, new BlockPos(1, 1, 5));
+        helper.setBlock(new BlockPos(3, 1, 5), Blocks.BREWING_STAND);
+        BlockPos bottlery = BottlerGameTests.bottlery(helper, new BlockPos(1, 1, 9));
+        helper.setBlock(new BlockPos(3, 1, 9), Blocks.WATER_CAULDRON);
+        Settler alchemist = FletcherGameTests.worker(helper, setup, craft, alchemist());
+        helper.assertTrue(Patterns.setOutput(level, craft, alchemist(), 0, awkward()).orElseThrow().checked(), "Awkward potion checked");
+        Settler bottler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 11), setup.data(), setup.settlement());
+        bottler.setCustomName(Component.literal("Bruno"));
+        bottler.getFood().setMorningDay(Math.floorDiv(level.getOverworldClockTime(), 24000L));
+        helper.assertTrue(TestAssignments.assign(setup.data(), bottlery, bottler.getUUID(), "Bruno",
+                setup.settlement().id(), List.of(), BottlerGameTests.bottler()) == JobAssignments.AssignResult.OK, "Bottler assigned");
+        bottler.addJob(new SettlerJob(BottlerGameTests.bottler(), bottlery));
+        Patterns.syncInnate(level);
+
+        // The Alchemist alone: no water bottle, so it asks for one and waits.
+        CraftspersonGameTests.catchUp(level, alchemist, WORK_TICKS);
+        List<Request> children = Requests.children(setup.settlement(), awkwardRequest);
+        helper.assertTrue(children.size() == 1 && children.getFirst().item().equals(water())
+                && children.getFirst().target().equals(Optional.of(setup.clerk())), "A child request for the water bottle at the Clerk: " + children);
+        helper.assertTrue(count(level, setup.clerk(), awkward()) == 0, "No awkward potion yet");
+
+        // The Bottler fills the bottle; then the Alchemist takes it and brews.
+        for (int pass = 0; pass < MAX_PASSES && count(level, setup.clerk(), awkward()) == 0; pass++) {
+            CraftspersonGameTests.catchUp(level, bottler, WORK_TICKS);
+            CraftspersonGameTests.catchUp(level, alchemist, WORK_TICKS);
+        }
+        helper.assertTrue(count(level, setup.clerk(), awkward()) == 1, "An awkward potion arrived (status " + alchemist.getWork().status(craft) + ")");
+        helper.assertTrue(count(level, setup.clerk(), ItemKey.of(Items.NETHER_WART)) == 0 && count(level, setup.clerk(), ItemKey.of(Items.GLASS_BOTTLE)) == 0,
+                "The wart and the glass bottle are used up");
+        TestAssignments.unassign(setup.data(), bottlery);
+        bottler.discard();
+        FletcherGameTests.cleanUp(setup, alchemist);
         helper.succeed();
     }
 
