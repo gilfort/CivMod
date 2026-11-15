@@ -310,6 +310,7 @@ final class PatternsTabView implements JobBlockTabView {
             case GRID -> GRID_X + (cell % 3) * 18;
             case SINGLE -> GRID_X + 36;
             case SMITHING -> GRID_X + cell * 18;
+            case BREWING -> GRID_X + (1 + cell) * 18;
             case ROW -> count <= 3 ? GRID_X + (3 - count + cell) * 18 : GRID_X + (cell % 3) * 18;
         };
     }

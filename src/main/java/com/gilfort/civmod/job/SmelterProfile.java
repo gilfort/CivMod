@@ -37,7 +37,7 @@ public final class SmelterProfile implements ProducingProfile {
      * Ticks of cooking time per operation of the shared speed formula: at level 20 (0.25 operations per second) an
      * item takes its cooking time.
      */
-    private static final double TICKS_PER_OPERATION = 80.0;
+    static final double TICKS_PER_OPERATION = 80.0;
 
     private final RecipeType<?> recipeType;
     private final TagKey<Block> station;

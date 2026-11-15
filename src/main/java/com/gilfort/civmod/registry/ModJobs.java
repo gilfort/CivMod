@@ -5,6 +5,7 @@ import com.gilfort.civmod.api.CategoryProfile;
 import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
+import com.gilfort.civmod.job.AlchemistProfile;
 import com.gilfort.civmod.job.AnimalFarmerProfile;
 import com.gilfort.civmod.job.BardProfile;
 import com.gilfort.civmod.job.BeekeeperProfile;
@@ -149,6 +150,10 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> BREWER = JOBS.register("brewer", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.BARREL).bubbleIcon(ModItems.BEER).displayItem(ModItems.BEER)
             .hungerFactor(0.5).baseExp(2).jobFactor(0.5).unlockItem(() -> Items.BARREL).profile(InnateProfile::brewer).build());
+    /** See vault {@code Jobs/Alchemist.md}; brews the recipes of the brewing recipe type at a brewing stand. */
+    public static final DeferredHolder<Job, Job> ALCHEMIST = JOBS.register("alchemist", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.BREWING_STAND).bubbleIcon(() -> Items.POTION).displayItem(() -> Items.POTION)
+            .hungerFactor(0.5).baseExp(2).jobFactor(0.5).unlockItem(() -> Items.BREWING_STAND).profile(AlchemistProfile::new).build());
     /** See vault {@code Jobs/Sifter.md}; sifts sand and gravel with a shovel at a hopper, drawing finds from a pool by skill level. */
     public static final DeferredHolder<Job, Job> SIFTER = JOBS.register("sifter", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.HOPPER).bubbleIcon(() -> Items.SAND).displayItem(() -> Items.SAND).hungerFactor(0.5)
