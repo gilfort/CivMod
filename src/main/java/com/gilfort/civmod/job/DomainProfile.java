@@ -28,7 +28,9 @@ import net.minecraft.world.level.block.Block;
  * <li>{@link #baker()}: {@code crafting} at the Craftsperson's crafting table, food domain (everything with a food, crop,
  * egg, milk or sugar input; vault {@code Jobs/Baker.md});</li>
  * <li>{@link #tailor()}: the same at the crafting table with the textile domain (wool, carpets, beds, banners, leather,
- * string); the {@link TailorProfile} adds the colour of the cloth (vault {@code Jobs/Tailor.md}).</li>
+ * string); the {@link TailorProfile} adds the colour of the cloth (vault {@code Jobs/Tailor.md});</li>
+ * <li>{@link #printer()}: the same at the crafting table with the print domain (paper, books, bookshelves, feathers, ink;
+ * vault {@code Jobs/Printer.md}), at job factor 1.2 from the start, without a station extra.</li>
  * </ul>
  */
 public final class DomainProfile implements ProducingProfile {
@@ -65,6 +67,11 @@ public final class DomainProfile implements ProducingProfile {
     /** @return the Baker's profile: {@code crafting} at the Craftsperson's crafting tables, food domain */
     public static DomainProfile baker() {
         return new DomainProfile(List.of(RecipeType.CRAFTING), CraftspersonProfile.STATION, "food");
+    }
+
+    /** @return the Printer's profile: {@code crafting} at the Craftsperson's crafting tables, print domain */
+    public static DomainProfile printer() {
+        return new DomainProfile(List.of(RecipeType.CRAFTING), CraftspersonProfile.STATION, "print");
     }
 
     /** @return the Tailor's domain, station and recipe types: {@code crafting} at the Craftsperson's crafting tables, textile domain */
