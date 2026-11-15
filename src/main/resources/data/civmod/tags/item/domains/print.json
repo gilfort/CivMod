@@ -1,0 +1,13 @@
+{
+  "values": [
+    { "id": "#minecraft:lectern_books", "required": false },
+    { "id": "#minecraft:bookshelf_books", "required": false },
+    { "id": "#minecraft:book_cloning_target", "required": false },
+    { "id": "#c:bookshelves", "required": false },
+    { "id": "#c:feathers", "required": false },
+    { "id": "minecraft:paper", "required": false },
+    { "id": "minecraft:book", "required": false },
+    { "id": "minecraft:lectern", "required": false },
+    { "id": "minecraft:ink_sac", "required": false }
+  ]
+}
