@@ -12,6 +12,7 @@ import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.gametest.FletcherGameTests.Setup;
 import com.gilfort.civmod.job.WoolColors;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.npc.Settler;
@@ -142,7 +143,7 @@ public final class TailorGameTests {
         for (int slot = 0; slot < INNATE_RECIPES; slot++) {
             var pattern = Patterns.pattern(block, tailor, slot);
             helper.assertTrue(pattern.isPresent(), "Innate recipe in slot " + slot);
-            made.add(pattern.get().output());
+            made.add(pattern.get().output().item());
         }
         helper.assertTrue(Patterns.pattern(block, tailor, INNATE_RECIPES).isEmpty(), "Exactly twelve innate recipes");
         for (ClothSet set : ClothSet.values()) {
@@ -268,8 +269,8 @@ public final class TailorGameTests {
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(delivered(level, setup, helmet).isEmpty(), "No helmet without lapis and dye");
         List<Request.Missing> missing = Requests.forRule(setup.settlement(), setup.clerk(), 0).orElseThrow().missing();
-        helper.assertTrue(missing.contains(new Request.Missing(Items.LAPIS_LAZULI, 1)), "Missing lapis lazuli: " + missing);
-        helper.assertTrue(missing.contains(new Request.Missing(Items.DYE.lightBlue(), 1)), "Missing light blue dye: " + missing);
+        helper.assertTrue(missing.contains(new Request.Missing(ItemKey.of(Items.LAPIS_LAZULI), 1)), "Missing lapis lazuli: " + missing);
+        helper.assertTrue(missing.contains(new Request.Missing(ItemKey.of(Items.DYE.lightBlue()), 1)), "Missing light blue dye: " + missing);
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.WOOL.red()) == 5, "The wool stays");
         ClerkStorage.stock(level, setup.clerk(), true).insert(new ItemStack(Items.LAPIS_LAZULI));
         ClerkStorage.stock(level, setup.clerk(), true).insert(new ItemStack(Items.DYE.lightBlue()));
@@ -288,8 +289,8 @@ public final class TailorGameTests {
         Job tailor = tailor();
         BlockPos craft = tailorShop(helper, new BlockPos(1, 1, 5));
         Patterns.syncInnate(level, craft, tailor);
-        helper.assertTrue(Patterns.setOutput(level, craft, tailor, INNATE_RECIPES, Items.CARPET.white()).orElseThrow().checked(), "A carpet pattern is checked");
-        helper.assertFalse(Patterns.setOutput(level, craft, tailor, INNATE_RECIPES + 1, Items.IRON_PICKAXE).orElseThrow().checked(), "A pickaxe is outside the domain");
+        helper.assertTrue(Patterns.setOutput(level, craft, tailor, INNATE_RECIPES, ItemKey.of(Items.CARPET.white())).orElseThrow().checked(), "A carpet pattern is checked");
+        helper.assertFalse(Patterns.setOutput(level, craft, tailor, INNATE_RECIPES + 1, ItemKey.of(Items.IRON_PICKAXE)).orElseThrow().checked(), "A pickaxe is outside the domain");
         helper.assertFalse(Patterns.toggleCheck(level, craft, tailor, INNATE_RECIPES + 1), "And cannot be checked");
         PatternsTabData tab = PatternsTabData.of(level, craft, tailor);
         helper.assertTrue(tab.filtered().equals(Set.of(INNATE_RECIPES + 1))
@@ -312,7 +313,7 @@ public final class TailorGameTests {
         }
         helper.assertTrue(PatternsTabData.of(level, craft, tailor).checked() == 0, "None of them counts");
         for (int i = 0; i < Patterns.BASE_CHECKMARKS + 1; i++) {
-            boolean checked = Patterns.setOutput(level, craft, tailor, INNATE_RECIPES + i, Items.CARPET.white()).orElseThrow().checked();
+            boolean checked = Patterns.setOutput(level, craft, tailor, INNATE_RECIPES + i, ItemKey.of(Items.CARPET.white())).orElseThrow().checked();
             helper.assertTrue(checked == (i < Patterns.BASE_CHECKMARKS), "Player pattern " + i + (checked ? " checked" : " unchecked at the limit"));
         }
         helper.succeed();
@@ -385,7 +386,7 @@ public final class TailorGameTests {
         var block = StationTypeGameTests.block(level, craft);
         for (int slot = 0; slot < INNATE_RECIPES; slot++) {
             var pattern = Patterns.pattern(block, tailor, slot).orElseThrow();
-            if (pattern.checked() != (pattern.output() == wanted)) {
+            if (pattern.checked() != pattern.output().is(wanted)) {
                 Patterns.toggleCheck(level, craft, tailor, slot);
             }
         }

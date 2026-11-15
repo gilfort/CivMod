@@ -9,6 +9,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.gametest.FletcherGameTests.Setup;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.PatternRecipes;
 import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.npc.Settler;
@@ -132,12 +133,12 @@ public final class StonemasonGameTests {
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.STONECUTTER);
         CraftspersonGameTests.placeTable(helper, new BlockPos(6, 1, 5));
         Settler settler = FletcherGameTests.worker(helper, setup, craft, stonemason());
-        helper.assertTrue(Patterns.setOutput(level, craft, stonemason(), 0, Items.STONE_BRICKS).filter(pattern -> pattern.checked()
+        helper.assertTrue(Patterns.setOutput(level, craft, stonemason(), 0, ItemKey.of(Items.STONE_BRICKS)).filter(pattern -> pattern.checked()
                 && pattern.recipe().flatMap(id -> PatternRecipes.holder(level, id))
                         .filter(holder -> holder.value().getType() == RecipeType.STONECUTTING).isPresent()).isPresent(),
                 "Stone bricks checked, cut at the stonecutter");
-        helper.assertTrue(Patterns.setOutput(level, craft, stonemason(), 1, Items.FURNACE).orElseThrow().checked(), "Furnace checked");
-        helper.assertFalse(Patterns.setOutput(level, craft, stonemason(), 2, Items.STICK).orElseThrow().checked(), "Sticks are outside the domain");
+        helper.assertTrue(Patterns.setOutput(level, craft, stonemason(), 1, ItemKey.of(Items.FURNACE)).orElseThrow().checked(), "Furnace checked");
+        helper.assertFalse(Patterns.setOutput(level, craft, stonemason(), 2, ItemKey.of(Items.STICK)).orElseThrow().checked(), "Sticks are outside the domain");
         helper.assertFalse(Patterns.toggleCheck(level, craft, stonemason(), 2), "And cannot be checked");
         PatternsTabData tab = PatternsTabData.of(level, craft, stonemason());
         helper.assertTrue(tab.filtered().equals(Set.of(2))
@@ -175,7 +176,7 @@ public final class StonemasonGameTests {
         BlockPos craft = masonry(helper, new BlockPos(1, 1, 5));
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.STONECUTTER);
         Settler settler = FletcherGameTests.worker(helper, setup, craft, stonemason());
-        helper.assertTrue(Patterns.setOutput(level, craft, stonemason(), 0, Items.STONE_BRICKS).orElseThrow().checked(), "Stone bricks checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, stonemason(), 0, ItemKey.of(Items.STONE_BRICKS)).orElseThrow().checked(), "Stone bricks checked");
         CraftspersonGameTests.catchUp(level, settler, SPEED_TICKS);
         helper.assertTrue(settler.getWork().jobFactor(level, craft) == factor, "Job factor of the day " + factor + ": "
                 + settler.getWork().jobFactor(level, craft));

@@ -10,6 +10,7 @@ import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.DeliveryTask;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -105,7 +106,7 @@ public final class InputDeliveryGameTests {
             helper.assertTrue(data.settlementAt(second).filter(settlement::equals).isPresent()
                     && JobBlockSite.blockAt(level, craft).orElseThrow().homeClerk().equals(Optional.of(home)), "Layout");
             helper.assertTrue(JobAssignments.setDelivery(data, craft, true), "Delivery: Deliveryman");
-            Request request = Requests.post(data, settlement, Items.STONE_PICKAXE, 1, Optional.of(home), Optional.empty());
+            Request request = Requests.post(data, settlement, ItemKey.of(Items.STONE_PICKAXE), 1, Optional.of(home), Optional.empty());
             Settler cora = CraftspersonGameTests.craftsperson(helper, craft, new BlockPos(3, 1, 5), "Cora");
             Settler dora = ClerkGameTests.settler(helper, new BlockPos(2, 1, 3), data, settlement);
             dora.setCustomName(Component.literal("Dora"));
@@ -163,8 +164,8 @@ public final class InputDeliveryGameTests {
                 "Waiting for inputs: " + layout.cora().getWork().status(layout.craft()));
         List<DeliveryTask> inputs = layout.inputs(level);
         helper.assertTrue(inputs.size() == 2, "Two input deliveries: " + inputs);
-        helper.assertTrue(layout.inputAt(level, layout.home()).input().orElseThrow().items().equals(java.util.Map.of(Items.OAK_LOG, 1))
-                && layout.inputAt(level, layout.second()).input().orElseThrow().items().equals(java.util.Map.of(Items.COBBLESTONE, 3)),
+        helper.assertTrue(layout.inputAt(level, layout.home()).input().orElseThrow().items().equals(java.util.Map.of(ItemKey.of(Items.OAK_LOG), 1))
+                && layout.inputAt(level, layout.second()).input().orElseThrow().items().equals(java.util.Map.of(ItemKey.of(Items.COBBLESTONE), 3)),
                 "The log from the Home Clerk, the cobblestone from the second store: " + inputs);
         helper.assertTrue(inputs.stream().allMatch(task -> Deliveries.destination(layout.settlement(level), task).equals(Optional.of(layout.craft()))),
                 "Into its collect inventory (the JobBlock)");
@@ -192,7 +193,7 @@ public final class InputDeliveryGameTests {
         long day = DayClock.day(level);
         Settlement settlement = layout.settlement(level);
         Deliveries.take(SettlementData.get(level), settlement, task.id(), layout.dora().getUUID(), "Dora", day);
-        helper.assertTrue(Reservations.reserved(settlement, layout.second(), day, null).equals(java.util.Map.of(Items.COBBLESTONE, 3)),
+        helper.assertTrue(Reservations.reserved(settlement, layout.second(), day, null).equals(java.util.Map.of(ItemKey.of(Items.COBBLESTONE), 3)),
                 "Reserved at the store: " + Reservations.reserved(settlement, layout.second(), day, null));
         helper.assertTrue(layout.cobblestoneFor(level, true, null) == 0, "Invisible to customers");
         helper.assertTrue(layout.cobblestoneFor(level, true, task.id()) == 3, "The task sees its inputs");
@@ -224,7 +225,7 @@ public final class InputDeliveryGameTests {
 
         layout.cora().getWork().decideNow(level);
         Request request = Requests.get(settlement, layout.request()).orElseThrow();
-        helper.assertTrue(request.missing().stream().anyMatch(missing -> missing.item() == Items.COBBLESTONE && missing.count() == 2),
+        helper.assertTrue(request.missing().stream().anyMatch(missing -> missing.item().is(Items.COBBLESTONE) && missing.count() == 2),
                 "Missing: 2× Cobblestone " + request.missing());
         helper.assertTrue(layout.inputs(level).isEmpty(), "The round's input deliveries are gone: " + layout.inputs(level));
         helper.assertTrue(request.crafting() == 0, "The claim is released");

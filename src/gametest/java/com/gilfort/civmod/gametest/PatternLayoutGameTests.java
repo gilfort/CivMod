@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.PatternLayout;
 import com.gilfort.civmod.logistics.PatternRecipes;
@@ -25,7 +26,6 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeType;
@@ -74,17 +74,17 @@ public final class PatternLayoutGameTests {
         PatternsTabData tab = PatternsTabData.of(level, pos, stonemason);
         helper.assertTrue(tab.layouts().equals(List.of(new PatternLayout(RecipeType.STONECUTTING, PatternLayout.Kind.SINGLE, Items.STONECUTTER),
                 new PatternLayout(RecipeType.CRAFTING, PatternLayout.Kind.GRID, Items.CRAFTING_TABLE))), "Stonecutter and crafting table: " + tab.layouts());
-        Pattern cut = Patterns.setInput(level, pos, stonemason, 0, 0, Items.STONE, Optional.of(RecipeType.STONECUTTING)).orElseThrow();
+        Pattern cut = Patterns.setInput(level, pos, stonemason, 0, 0, ItemKey.of(Items.STONE), Optional.of(RecipeType.STONECUTTING)).orElseThrow();
         helper.assertTrue(cut.exact() && cut.valid() && cut.layout().equals(Optional.of(RecipeType.STONECUTTING))
                 && cut.recipe().flatMap(id -> PatternRecipes.holder(level, id)).filter(holder -> holder.value().getType() == RecipeType.STONECUTTING)
                         .isPresent(), "One stone in the first cell matches a stonecutting recipe: " + cut);
-        helper.assertTrue(Patterns.setInput(level, pos, stonemason, 0, 1, Items.STONE, Optional.of(RecipeType.STONECUTTING)).isEmpty(),
+        helper.assertTrue(Patterns.setInput(level, pos, stonemason, 0, 1, ItemKey.of(Items.STONE), Optional.of(RecipeType.STONECUTTING)).isEmpty(),
                 "The stonecutter layout has one cell");
         helper.assertTrue(PatternsTabData.of(level, pos, stonemason).layout(0).equals(tab.layouts().getFirst()), "The slot shows the stonecutter layout");
-        Pattern crafted = Patterns.setInput(level, pos, stonemason, 0, 4, Items.COBBLESTONE, Optional.of(RecipeType.CRAFTING)).orElseThrow();
-        helper.assertTrue(crafted.grid().get(0) == Items.AIR && crafted.grid().get(4) == Items.COBBLESTONE
+        Pattern crafted = Patterns.setInput(level, pos, stonemason, 0, 4, ItemKey.of(Items.COBBLESTONE), Optional.of(RecipeType.CRAFTING)).orElseThrow();
+        helper.assertTrue(crafted.grid().get(0).is(Items.AIR) && crafted.grid().get(4).is(Items.COBBLESTONE)
                 && crafted.layout().equals(Optional.of(RecipeType.CRAFTING)), "Switching the layout clears the inputs: " + crafted.grid());
-        Pattern bricks = Patterns.setOutput(level, pos, stonemason, 1, Items.STONE_BRICKS).orElseThrow();
+        Pattern bricks = Patterns.setOutput(level, pos, stonemason, 1, ItemKey.of(Items.STONE_BRICKS)).orElseThrow();
         helper.assertTrue(bricks.layout().equals(Optional.of(RecipeType.STONECUTTING)), "Output first: the recipe sets the layout " + bricks);
 
         Job stonecutter = StationTypeGameTests.job(EXAMPLE_STONECUTTER);
@@ -104,12 +104,12 @@ public final class PatternLayoutGameTests {
         helper.assertTrue(tab.layouts().get(1).equals(new PatternLayout(RecipeType.SMITHING, PatternLayout.Kind.SMITHING, Items.SMITHING_TABLE)),
                 "Smithing table layout: " + tab.layouts());
         Optional<RecipeType<?>> smithing = Optional.of(RecipeType.SMITHING);
-        Patterns.setInput(level, pos, smith, 0, 0, Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE, smithing);
-        Patterns.setInput(level, pos, smith, 0, 1, Items.DIAMOND_SWORD, smithing);
-        Pattern upgrade = Patterns.setInput(level, pos, smith, 0, 2, Items.NETHERITE_INGOT, smithing).orElseThrow();
-        helper.assertTrue(upgrade.exact() && upgrade.output() == Items.NETHERITE_SWORD, "Template, base, addition: netherite sword " + upgrade);
-        helper.assertTrue(Patterns.setInput(level, pos, smith, 0, 3, Items.STICK, smithing).isEmpty(), "The smithing layout has three cells");
-        helper.assertTrue(Patterns.setOutput(level, pos, smith, 1, Items.NETHERITE_CHESTPLATE).orElseThrow().layout().equals(smithing),
+        Patterns.setInput(level, pos, smith, 0, 0, ItemKey.of(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE), smithing);
+        Patterns.setInput(level, pos, smith, 0, 1, ItemKey.of(Items.DIAMOND_SWORD), smithing);
+        Pattern upgrade = Patterns.setInput(level, pos, smith, 0, 2, ItemKey.of(Items.NETHERITE_INGOT), smithing).orElseThrow();
+        helper.assertTrue(upgrade.exact() && upgrade.output().is(Items.NETHERITE_SWORD), "Template, base, addition: netherite sword " + upgrade);
+        helper.assertTrue(Patterns.setInput(level, pos, smith, 0, 3, ItemKey.of(Items.STICK), smithing).isEmpty(), "The smithing layout has three cells");
+        helper.assertTrue(Patterns.setOutput(level, pos, smith, 1, ItemKey.of(Items.NETHERITE_CHESTPLATE)).orElseThrow().layout().equals(smithing),
                 "Output first: a smithing recipe sets the smithing layout");
         helper.assertTrue(PatternsTabData.of(level, pos, smith).layout(1).kind() == PatternLayout.Kind.SMITHING, "The slot shows it");
         helper.succeed();
@@ -126,10 +126,10 @@ public final class PatternLayoutGameTests {
         BlockPos craft = StonemasonGameTests.masonry(helper, new BlockPos(1, 1, 5));
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.STONECUTTER);
         Settler settler = FletcherGameTests.worker(helper, setup, craft, stonemason);
-        PatternRecipes.Shape shape = PatternRecipes.producing(level, List.of(RecipeType.STONECUTTING), Items.STONE_BRICKS).getFirst();
-        List<Item> grid = new ArrayList<>(Collections.nCopies(Pattern.GRID, Items.AIR));
-        grid.set(4, Items.STONE);
-        Pattern saved = new Pattern(0, Items.STONE_BRICKS, 1, grid, Optional.of(shape.id()), true, true);
+        PatternRecipes.Shape shape = PatternRecipes.producing(level, List.of(RecipeType.STONECUTTING), ItemKey.of(Items.STONE_BRICKS)).getFirst();
+        List<ItemKey> grid = new ArrayList<>(Collections.nCopies(Pattern.GRID, ItemKey.EMPTY));
+        grid.set(4, ItemKey.of(Items.STONE));
+        Pattern saved = new Pattern(0, ItemKey.of(Items.STONE_BRICKS), 1, grid, Optional.of(shape.id()), true, true);
         Tag encoded = Pattern.CODEC.encodeStart(NbtOps.INSTANCE, saved).getOrThrow();
         helper.assertFalse(encoded.toString().contains("layout"), "Saved without a layout: " + encoded);
         Pattern loaded = Pattern.CODEC.parse(NbtOps.INSTANCE, encoded).getOrThrow();

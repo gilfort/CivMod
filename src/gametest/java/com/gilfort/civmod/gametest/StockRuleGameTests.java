@@ -9,6 +9,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.logistics.StockRule;
@@ -85,10 +86,10 @@ public final class StockRuleGameTests {
         chest.setItem(0, new ItemStack(Items.STONE_PICKAXE, 1));
         chest.setItem(1, new ItemStack(Items.STONE_PICKAXE, 1));
 
-        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 5, 0)), "Rule set");
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.STONE_PICKAXE), 5, 0)), "Rule set");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         Request request = only(helper, settlement);
-        helper.assertTrue(request.item() == Items.STONE_PICKAXE && request.amount() == 3,
+        helper.assertTrue(request.item().is(Items.STONE_PICKAXE) && request.amount() == 3,
                 "Request for 5 − 2 in stock = 3: " + request.amount());
         helper.assertTrue(request.target().equals(Optional.of(clerk)) && request.rule().equals(Optional.of(0)), "Posted by the rule of that Clerk");
 
@@ -128,9 +129,9 @@ public final class StockRuleGameTests {
         BlockPos clerk = workingClerk(helper);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.TORCH, 32, 0));
-        StockRules.setRule(data, clerk, StockRule.minimum(1, Items.LANTERN, 16, 0));
-        StockRules.setRule(data, clerk, StockRule.minimum(2, Items.STICK, 8, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.TORCH), 32, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(1, ItemKey.of(Items.LANTERN), 16, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(2, ItemKey.of(Items.STICK), 8, 0));
         for (int i = 0; i < 3; i++) {
             StockRules.check(level, clerk, ClerkGameTests.MORNING);
         }
@@ -159,10 +160,10 @@ public final class StockRuleGameTests {
         BlockPos clerk = ClerkGameTests.clerkWithStorage(helper);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.BREAD, 10, 0));
-        helper.assertFalse(StockRules.setRule(data, clerk, StockRule.minimum(9, Items.APPLE, 10, 0)), "Level 1: slot 9 is inactive and takes no rule");
+        StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.BREAD), 10, 0));
+        helper.assertFalse(StockRules.setRule(data, clerk, StockRule.minimum(9, ItemKey.of(Items.APPLE), 10, 0)), "Level 1: slot 9 is inactive and takes no rule");
         SettlementManager.setLevel(data, clerk, 2, SettlementManager.Listener.NONE);
-        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(9, Items.APPLE, 10, 0)), "Level 2: slot 9 takes a rule");
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(9, ItemKey.of(Items.APPLE), 10, 0)), "Level 2: slot 9 takes a rule");
         SettlementManager.setLevel(data, clerk, 1, SettlementManager.Listener.NONE);
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "No Clerk settler: no request");
@@ -206,23 +207,23 @@ public final class StockRuleGameTests {
         BlockPos clerk = workingClerk(helper);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.BREAD, 4, -5));
-        StockRules.setRule(data, clerk, StockRule.minimum(1, Items.STONE_AXE, 1, 50));
-        StockRules.setRule(data, clerk, StockRule.minimum(2, Items.TORCH, 4, 10));
+        StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.BREAD), 4, -5));
+        StockRules.setRule(data, clerk, StockRule.minimum(1, ItemKey.of(Items.STONE_AXE), 1, 50));
+        StockRules.setRule(data, clerk, StockRule.minimum(2, ItemKey.of(Items.TORCH), 4, 10));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         Request axe = Requests.forRule(settlement, clerk, 1).orElseThrow();
-        Request other = Requests.post(data, settlement, Items.CHEST, 1, Optional.empty(), Optional.empty());
-        Request sticks = Requests.post(data, settlement, Items.STICK, 2, Optional.of(clerk), Optional.of(axe.id()));
+        Request other = Requests.post(data, settlement, ItemKey.of(Items.CHEST), 1, Optional.empty(), Optional.empty());
+        Request sticks = Requests.post(data, settlement, ItemKey.of(Items.STICK), 2, Optional.of(clerk), Optional.of(axe.id()));
         helper.assertTrue(other.priority() == 0, "Other sources: priority 0");
         helper.assertTrue(sticks.priority() == 50, "Sub-request inherits its parent's priority");
-        List<Item> order = Requests.claimable(settlement).stream().map(Request::item).toList();
+        List<Item> order = Requests.claimable(settlement).stream().map(request -> request.item().item()).toList();
         helper.assertTrue(order.equals(List.of(Items.STONE_AXE, Items.STICK, Items.TORCH, Items.CHEST, Items.BREAD)),
                 "Highest priority first: " + order);
 
-        StockRules.setRule(data, clerk, StockRule.minimum(1, Items.STONE_AXE, 1, -50));
+        StockRules.setRule(data, clerk, StockRule.minimum(1, ItemKey.of(Items.STONE_AXE), 1, -50));
         helper.assertTrue(Requests.get(settlement, axe.id()).orElseThrow().priority() == -50
                 && Requests.get(settlement, sticks.id()).orElseThrow().priority() == -50, "Priority change moves the request and its sub-requests");
-        helper.assertTrue(Requests.claimable(settlement).get(0).item() == Items.TORCH, "New order");
+        helper.assertTrue(Requests.claimable(settlement).get(0).item().is(Items.TORCH), "New order");
         Requests.withdraw(data, settlement, other.id());
         TestAssignments.unassign(data, clerk);
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
@@ -239,8 +240,8 @@ public final class StockRuleGameTests {
         BlockPos clerk = workingClerk(helper);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.TORCH, 16, 0));
-        StockRules.setRule(data, clerk, StockRule.minimum(1, Items.LADDER, 16, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.TORCH), 16, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(1, ItemKey.of(Items.LADDER), 16, 0));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(StockRules.removeRule(data, clerk, 0), "Rule deleted");
         helper.assertTrue(Requests.forRule(settlement, clerk, 0).isEmpty(), "Its request is gone at once");
@@ -256,12 +257,12 @@ public final class StockRuleGameTests {
         SubRequestGameTests.finishInFull(data, settlement, ladders.id(), CARL);
         helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "Delivered: gone");
 
-        StockRules.setRule(data, clerk, StockRule.minimum(2, Items.TORCH, 16, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(2, ItemKey.of(Items.TORCH), 16, 0));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
-        StockRules.setRule(data, clerk, StockRule.minimum(2, Items.LANTERN, 16, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(2, ItemKey.of(Items.LANTERN), 16, 0));
         helper.assertTrue(Requests.forRule(settlement, clerk, 2).isEmpty(), "New item: the old request is withdrawn");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
-        helper.assertTrue(Requests.forRule(settlement, clerk, 2).orElseThrow().item() == Items.LANTERN, "Next check: the new item");
+        helper.assertTrue(Requests.forRule(settlement, clerk, 2).orElseThrow().item().is(Items.LANTERN), "Next check: the new item");
         TestAssignments.unassign(data, clerk);
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.succeed();
@@ -289,9 +290,9 @@ public final class StockRuleGameTests {
                 && menu.slots.get(0).getItem().getCount() == 3, "Shift-click on the Stock tab moves nothing");
         menu.slots.get(0).set(ItemStack.EMPTY);
 
-        menu.tab(StockTab.class).orElseThrow().editRule(9, Optional.of(StockRule.minimum(9, Items.TORCH, 8, 0)));
+        menu.tab(StockTab.class).orElseThrow().editRule(9, Optional.of(StockRule.minimum(9, ItemKey.of(Items.TORCH), 8, 0)));
         helper.assertTrue(settlement.block(clerk).orElseThrow().stockRule(9).isEmpty(), "Level 1: slot 9 is inactive");
-        menu.tab(StockTab.class).orElseThrow().editRule(0, Optional.of(StockRule.minimum(0, Items.TORCH, 8, 0)));
+        menu.tab(StockTab.class).orElseThrow().editRule(0, Optional.of(StockRule.minimum(0, ItemKey.of(Items.TORCH), 8, 0)));
         helper.assertTrue(Requests.forRule(settlement, clerk, 0).map(Request::amount).orElse(0) == 8, "Set and checked at once");
         menu.tab(StockTab.class).orElseThrow().editRule(0, Optional.empty());
         helper.assertTrue(settlement.block(clerk).orElseThrow().stockRules().isEmpty() && Requests.byPriority(settlement).isEmpty(),
@@ -318,9 +319,9 @@ public final class StockRuleGameTests {
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
         // A second JobBlock keeps the settlement alive.
         CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
-        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 1, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.STONE_PICKAXE), 1, 0));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
-        Request other = Requests.post(data, settlement, Items.STICK, 4, Optional.of(clerk), Optional.empty());
+        Request other = Requests.post(data, settlement, ItemKey.of(Items.STICK), 4, Optional.of(clerk), Optional.empty());
         SettlementManager.remove(data, clerk, 0L, SettlementManager.Listener.NONE);
         helper.assertTrue(Requests.forRule(settlement, clerk, 0).isEmpty(), "Rule request withdrawn");
         helper.assertTrue(Requests.get(settlement, other.id()).map(Request::target).equals(Optional.of(Optional.empty())),
@@ -330,13 +331,13 @@ public final class StockRuleGameTests {
 
     /** Requests saved before the review fixes of #54 ("rule": -1, one "missing" input) still load. */
     private static void oldRequestSave(GameTestHelper helper) {
-        Request current = new Request(UUID.randomUUID(), Items.STICK, 4, 0, Optional.empty(), Optional.empty(), Optional.empty(), List.of(), List.of(), Optional.empty());
+        Request current = new Request(UUID.randomUUID(), ItemKey.of(Items.STICK), 4, 0, Optional.empty(), Optional.empty(), Optional.empty(), List.of(), List.of(), Optional.empty());
         com.google.gson.JsonObject json = Request.CODEC.encodeStart(JsonOps.INSTANCE, current).getOrThrow().getAsJsonObject();
         json.addProperty("rule", -1);
-        json.add("missing", com.google.gson.JsonParser.parseString("{\"item\": \"minecraft:oak_planks\", \"count\": 2}"));
+        json.add("missing", com.google.gson.JsonParser.parseString("{\"item\": {\"id\": \"minecraft:oak_planks\"}, \"count\": 2}"));
         Request request = Request.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
         helper.assertTrue(request.rule().isEmpty(), "-1: no rule " + request.rule());
-        helper.assertTrue(request.missing().equals(List.of(new Request.Missing(Items.OAK_PLANKS, 2))), "One missing input " + request.missing());
+        helper.assertTrue(request.missing().equals(List.of(new Request.Missing(ItemKey.of(Items.OAK_PLANKS), 2))), "One missing input " + request.missing());
         json.addProperty("rule", 3);
         helper.assertTrue(Request.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow().rule().equals(Optional.of(3)), "Rule 3");
         helper.succeed();

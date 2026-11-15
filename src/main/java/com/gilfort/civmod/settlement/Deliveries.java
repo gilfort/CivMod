@@ -13,12 +13,12 @@ import java.util.function.ToIntFunction;
 import java.util.function.UnaryOperator;
 
 import com.gilfort.civmod.logistics.DeliveryTask;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.ReservedFor;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.registry.ModJobs;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.item.Item;
 
 /**
  * The Delivery tasks of a settlement (vault {@code Jobs/Deliveryman.md}), kept in its {@link Settlement}. A pickup is
@@ -88,14 +88,14 @@ public final class Deliveries {
      * @param clerk      the requesting Clerk JobBlock
      * @param gameTime   the game time now
      */
-    public static void postResult(SettlementData data, Settlement settlement, BlockPos source, BlockPos jobBlock, Item item, int count,
+    public static void postResult(SettlementData data, Settlement settlement, BlockPos source, BlockPos jobBlock, ItemKey item, int count,
             BlockPos clerk, long gameTime) {
         if (count <= 0) {
             return;
         }
         Optional<DeliveryTask> waiting = settlement.deliveries().stream()
                 .filter(task -> task.source().equals(source) && !task.carried() && task.result()
-                        .filter(result -> !result.relayed() && result.item() == item && result.clerk().equals(clerk)).isPresent())
+                        .filter(result -> !result.relayed() && result.item().equals(item) && result.clerk().equals(clerk)).isPresent())
                 .findFirst();
         if (waiting.isPresent()) {
             DeliveryTask.Result result = waiting.get().result().orElseThrow();
@@ -123,7 +123,7 @@ public final class Deliveries {
      * @return the new task's id
      */
     public static UUID postInput(SettlementData data, Settlement settlement, BlockPos store, BlockPos jobBlock, BlockPos to,
-            Map<Item, Integer> items, boolean reserved, long gameTime) {
+            Map<ItemKey, Integer> items, boolean reserved, long gameTime) {
         UUID id = UUID.randomUUID();
         settlement.mutableDeliveries().add(new DeliveryTask(id, store.immutable(), jobBlock.immutable(), gameTime, false, Optional.empty(),
                 Optional.of(new DeliveryTask.Input(items, to.immutable(), Optional.empty(), reserved)), Optional.empty()));
@@ -145,7 +145,7 @@ public final class Deliveries {
      * @param gameTime   the game time now
      * @param day        the day now (a lock of an earlier day is over)
      */
-    public static void setSurplus(SettlementData data, Settlement settlement, BlockPos clerk, BlockPos warehouse, Item item, int count,
+    public static void setSurplus(SettlementData data, Settlement settlement, BlockPos clerk, BlockPos warehouse, ItemKey item, int count,
             long gameTime, long day) {
         Optional<DeliveryTask> free = freeSurplus(settlement, clerk, item, day);
         if (free.isPresent()) {
@@ -172,7 +172,7 @@ public final class Deliveries {
      * @param day        the day now
      * @return the surplus task of that Clerk and item no Deliveryman has taken today
      */
-    public static Optional<DeliveryTask> freeSurplus(Settlement settlement, BlockPos clerk, Item item, long day) {
+    public static Optional<DeliveryTask> freeSurplus(Settlement settlement, BlockPos clerk, ItemKey item, long day) {
         return settlement.deliveries().stream().filter(task -> task.surplus() && task.source().equals(clerk) && !task.carried()
                 && task.takerOn(day).isEmpty() && task.input().orElseThrow().items().containsKey(item)).findFirst();
     }
@@ -183,7 +183,7 @@ public final class Deliveries {
      * @param item       an item
      * @return how many of it surplus tasks bring into that Warehouse's store
      */
-    static int surplusTo(Settlement settlement, BlockPos warehouse, Item item) {
+    static int surplusTo(Settlement settlement, BlockPos warehouse, ItemKey item) {
         return settlement.deliveries().stream().filter(DeliveryTask::surplus).flatMap(task -> task.input().stream())
                 .filter(input -> input.to().equals(warehouse)).mapToInt(input -> input.items().getOrDefault(item, 0)).sum();
     }
@@ -295,9 +295,9 @@ public final class Deliveries {
      * @param item       an item
      * @return how many of it are on their way to that Clerk as results (stock rules count them as there)
      */
-    public static int inDelivery(Settlement settlement, BlockPos clerk, Item item) {
+    public static int inDelivery(Settlement settlement, BlockPos clerk, ItemKey item) {
         return settlement.deliveries().stream().flatMap(task -> task.result().stream())
-                .filter(result -> result.item() == item && result.clerk().equals(clerk)).mapToInt(DeliveryTask.Result::count).sum();
+                .filter(result -> result.item().equals(item) && result.clerk().equals(clerk)).mapToInt(DeliveryTask.Result::count).sum();
     }
 
     /**
@@ -305,8 +305,8 @@ public final class Deliveries {
      * @param source     a drop-off
      * @return the results waiting there for a Deliveryman, by item (a producer must not use them as inputs)
      */
-    public static Map<Item, Integer> waitingAt(Settlement settlement, BlockPos source) {
-        Map<Item, Integer> waiting = new HashMap<>();
+    public static Map<ItemKey, Integer> waitingAt(Settlement settlement, BlockPos source) {
+        Map<ItemKey, Integer> waiting = new HashMap<>();
         settlement.deliveries().stream().filter(task -> task.source().equals(source) && !task.carried()).flatMap(task -> task.result().stream())
                 .forEach(result -> waiting.merge(result.item(), result.count(), Integer::sum));
         return waiting;

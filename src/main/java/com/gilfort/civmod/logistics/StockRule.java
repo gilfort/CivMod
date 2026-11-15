@@ -6,12 +6,9 @@ import com.gilfort.civmod.settlement.SettlementRules;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.world.item.Item;
 
 /**
  * A Clerk's stock rule (vault {@code Jobs/Clerk.md}): one rule per item with the optional fields Min, Max and Order
@@ -20,13 +17,13 @@ import net.minecraft.world.item.Item;
  * stock above it is surplus for the Warehouse. Min = Max is "exact", both set a band.
  *
  * @param slot     the rule's place in the Stock tab (rows of 9; 9 rules per JobBlock level and per Ledger are active)
- * @param item     the item (a specific item, no tags)
+ * @param item     the thing (a specific item with its relevant components, no tags)
  * @param min      below this stock a request opens ({@value #NOT_SET}: never a request)
  * @param max      the cap ({@value #NOT_SET}: none)
  * @param order    how much a request orders on top of Min ({@value #NOT_SET}: up to Max, else up to Min)
  * @param priority the priority ({@value #MIN_PRIORITY}–{@value #MAX_PRIORITY}, higher first)
  */
-public record StockRule(int slot, Item item, int min, int max, int order, int priority) {
+public record StockRule(int slot, ItemKey item, int min, int max, int order, int priority) {
 
     /** Rules per row of the Stock tab: each JobBlock level and each Ledger activates one row. */
     public static final int RULES_PER_ROW = 9;
@@ -44,7 +41,7 @@ public record StockRule(int slot, Item item, int min, int max, int order, int pr
     /** Save codec; saves before Min / Max / Order have a Minimum rule's {@code amount}, loaded as Min. */
     public static final Codec<StockRule> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.INT.fieldOf("slot").forGetter(StockRule::slot),
-            BuiltInRegistries.ITEM.byNameCodec().fieldOf("item").forGetter(StockRule::item),
+            ItemKey.CODEC.fieldOf("item").forGetter(StockRule::item),
             Codec.INT.optionalFieldOf("min", NOT_SET).forGetter(StockRule::min),
             Codec.INT.optionalFieldOf("max", NOT_SET).forGetter(StockRule::max),
             Codec.INT.optionalFieldOf("order", NOT_SET).forGetter(StockRule::order),
@@ -56,7 +53,7 @@ public record StockRule(int slot, Item item, int min, int max, int order, int pr
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, StockRule> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.VAR_INT, StockRule::slot,
-            ByteBufCodecs.registry(Registries.ITEM), StockRule::item,
+            ItemKey.STREAM_CODEC, StockRule::item,
             ByteBufCodecs.VAR_INT, StockRule::min,
             ByteBufCodecs.VAR_INT, StockRule::max,
             ByteBufCodecs.VAR_INT, StockRule::order,
@@ -67,7 +64,7 @@ public record StockRule(int slot, Item item, int min, int max, int order, int pr
      * Fields out of range are clamped; a Max below Min is raised to Min; Order without Min is dropped.
      *
      * @param slot     the rule's place
-     * @param item     the item
+     * @param item     the thing (item and relevant components)
      * @param min      Min, {@value #NOT_SET} if not set
      * @param max      Max, {@value #NOT_SET} if not set
      * @param order    Order, {@value #NOT_SET} if not set
@@ -85,12 +82,12 @@ public record StockRule(int slot, Item item, int min, int max, int order, int pr
 
     /**
      * @param slot     the rule's place
-     * @param item     the item
+     * @param item     the thing (item and relevant components)
      * @param min      Min
      * @param priority the priority
      * @return a rule with Min only ("keep at least")
      */
-    public static StockRule minimum(int slot, Item item, int min, int priority) {
+    public static StockRule minimum(int slot, ItemKey item, int min, int priority) {
         return new StockRule(slot, item, min, NOT_SET, NOT_SET, priority);
     }
 
@@ -129,10 +126,10 @@ public record StockRule(int slot, Item item, int min, int max, int order, int pr
     }
 
     /**
-     * @param value the new item
+     * @param value the new thing
      * @return a copy for that item, with the same fields
      */
-    public StockRule withItem(Item value) {
+    public StockRule withItem(ItemKey value) {
         return new StockRule(slot, value, min, max, order, priority);
     }
 

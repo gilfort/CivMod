@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:item_identity_slip_and_saves",
+  "max_ticks": 400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -9,9 +9,9 @@ import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
 
 import com.gilfort.civmod.logistics.ItemCounts;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.mojang.serialization.Codec;
 
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -116,11 +116,11 @@ public final class JobBuffer {
     }
 
     /**
-     * @return how many of each item are stored
+     * @return how many of each thing (item and relevant components) are stored
      */
-    public Map<Item, Integer> counts() {
-        Map<Item, Integer> counts = new HashMap<>();
-        stacks.forEach(stack -> ItemCounts.add(counts, stack.getItem(), stack.getCount()));
+    public Map<ItemKey, Integer> counts() {
+        Map<ItemKey, Integer> counts = new HashMap<>();
+        stacks.forEach(stack -> ItemCounts.add(counts, ItemKey.of(stack), stack.getCount()));
         return counts;
     }
 

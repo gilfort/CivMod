@@ -8,6 +8,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.gametest.FletcherGameTests.Setup;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.npc.Settler;
@@ -104,7 +105,7 @@ public final class DyerGameTests {
                 "The job picker offers the Dyer");
         Patterns.syncInnate(level, pos, dyer);
         Optional<Pattern> bleach = Patterns.pattern(StationTypeGameTests.block(level, pos), dyer, 0);
-        helper.assertTrue(bleach.filter(pattern -> pattern.innate() && pattern.output() == Items.WOOL.white()).isPresent(),
+        helper.assertTrue(bleach.filter(pattern -> pattern.innate() && pattern.output().equals(ItemKey.of(Items.WOOL.white()))).isPresent(),
                 "Slot 0 holds the innate bleaching recipe: " + bleach);
         helper.setBlock(new BlockPos(3, 1, 1), Blocks.LOOM);
         helper.assertTrue(dyer.isValidWorkPlace(level, helper.absolutePos(new BlockPos(3, 1, 1))), "Works at a loom");
@@ -123,7 +124,7 @@ public final class DyerGameTests {
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.LOOM);
         helper.setBlock(new BlockPos(9, 1, 5), Blocks.WATER_CAULDRON);
         Settler settler = FletcherGameTests.worker(helper, setup, craft, dyer());
-        helper.assertTrue(Patterns.setOutput(level, craft, dyer(), 1, Items.DYE.yellow()).orElseThrow().checked(), "Yellow dye checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, dyer(), 1, ItemKey.of(Items.DYE.yellow())).orElseThrow().checked(), "Yellow dye checked");
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.DYE.yellow()) == 1,
                 "Yellow dye arrived (status " + settler.getWork().status(craft) + ")");
@@ -145,7 +146,7 @@ public final class DyerGameTests {
         BlockPos craft = dyehouse(helper, new BlockPos(1, 1, 5));
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.LOOM);
         Settler settler = FletcherGameTests.worker(helper, setup, craft, dyer());
-        helper.assertTrue(Patterns.setOutput(level, craft, dyer(), 1, Items.DYE.yellow()).orElseThrow().checked(), "Yellow dye checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, dyer(), 1, ItemKey.of(Items.DYE.yellow())).orElseThrow().checked(), "Yellow dye checked");
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.DYE.yellow()) == 1,
                 "Yellow dye arrived (status " + settler.getWork().status(craft) + ")");

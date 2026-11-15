@@ -10,6 +10,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.DeliveryTask;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.registry.ModJobs;
@@ -86,7 +87,7 @@ public final class ResultDeliveryGameTests {
             ((Container) level.getBlockEntity(craft)).setItem(1, new ItemStack(Items.STONE_PICKAXE, 1));
             ((Container) level.getBlockEntity(craft)).setItem(2, new ItemStack(Items.STONE_PICKAXE, 1));
             ((Container) level.getBlockEntity(craft)).setItem(3, new ItemStack(Items.STONE_PICKAXE, 1));
-            Deliveries.postResult(data, settlement, craft, craft, Items.STONE_PICKAXE, 4, requesting, level.getGameTime());
+            Deliveries.postResult(data, settlement, craft, craft, ItemKey.of(Items.STONE_PICKAXE), 4, requesting, level.getGameTime());
             Settler dora = courier(helper, home, new BlockPos(2, 1, 3), "Dora");
             Settler eve = courier(helper, requesting, new BlockPos(8, 1, 3), "Eve");
             // Eve is no staff of the Home Clerk: she is served at its counter, so a Clerk works there.
@@ -171,7 +172,7 @@ public final class ResultDeliveryGameTests {
         BlockPos clerk = StockRuleGameTests.workingClerk(helper);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 1, 0)), "Rule set");
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.STONE_PICKAXE), 1, 0)), "Rule set");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
 
         BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
@@ -261,17 +262,17 @@ public final class ResultDeliveryGameTests {
         long now = 5000L;
 
         // Same Warehouse: straight to the requesting Clerk; two results of the same kind share one task.
-        Deliveries.postResult(data, settlement, craft, craft, Items.STONE_PICKAXE, 2, served, now);
-        Deliveries.postResult(data, settlement, craft, craft, Items.STONE_PICKAXE, 1, served, now);
+        Deliveries.postResult(data, settlement, craft, craft, ItemKey.of(Items.STONE_PICKAXE), 2, served, now);
+        Deliveries.postResult(data, settlement, craft, craft, ItemKey.of(Items.STONE_PICKAXE), 1, served, now);
         List<DeliveryTask> results = settlement.deliveries().stream().filter(task -> task.result().isPresent()).toList();
         helper.assertTrue(results.size() == 1 && results.getFirst().result().orElseThrow().count() == 3, "One task for 3: " + results);
         DeliveryTask direct = results.getFirst();
         helper.assertTrue(Deliveries.destination(settlement, direct).equals(Optional.of(served)), "Straight to the Served Clerk");
-        helper.assertTrue(Deliveries.inDelivery(settlement, served, Items.STONE_PICKAXE) == 3, "In delivery for the Served Clerk");
+        helper.assertTrue(Deliveries.inDelivery(settlement, served, ItemKey.of(Items.STONE_PICKAXE)) == 3, "In delivery for the Served Clerk");
         Deliveries.done(data, settlement, direct.id());
 
         // Other Warehouse: into the Home Clerk first.
-        Deliveries.postResult(data, settlement, craft, craft, Items.STONE_PICKAXE, 4, other, now);
+        Deliveries.postResult(data, settlement, craft, craft, ItemKey.of(Items.STONE_PICKAXE), 4, other, now);
         DeliveryTask task = settlement.deliveries().stream().filter(found -> found.result().isPresent()).findFirst().orElseThrow();
         helper.assertTrue(Deliveries.destination(settlement, task).equals(Optional.of(home)), "Relayed through the Home Clerk");
         helper.assertTrue(Deliveries.warehouseOf(settlement, task).map(SettlementBlock::pos).equals(Optional.of(home)), "The producer's Warehouse");
@@ -283,7 +284,7 @@ public final class ResultDeliveryGameTests {
         Deliveries.carry(data, settlement, task.id(), dora, 4);
         Deliveries.releaseAll(data, dora);
         helper.assertTrue(Deliveries.pick(settlement, block(helper, home), home, now, day, Set.of()).isEmpty(), "A carried task is nobody else's");
-        helper.assertTrue(Deliveries.inDelivery(settlement, other, Items.STONE_PICKAXE) == 4, "Still in delivery while carried");
+        helper.assertTrue(Deliveries.inDelivery(settlement, other, ItemKey.of(Items.STONE_PICKAXE)) == 4, "Still in delivery while carried");
         Deliveries.arrived(data, settlement, dora, home);
         DeliveryTask relayed = Deliveries.get(settlement, task.id()).orElseThrow();
         helper.assertTrue(relayed.source().equals(home) && relayed.result().orElseThrow().relayed(), "Waits in the Home Clerk: " + relayed);
@@ -295,13 +296,13 @@ public final class ResultDeliveryGameTests {
         UUID eve = UUID.randomUUID();
         Deliveries.take(data, settlement, relayed.id(), eve, "Eve", day);
         Deliveries.carry(data, settlement, relayed.id(), eve, 3);
-        helper.assertTrue(Deliveries.inDelivery(settlement, other, Items.STONE_PICKAXE) == 3, "A shortfall at pickup shrinks the task");
+        helper.assertTrue(Deliveries.inDelivery(settlement, other, ItemKey.of(Items.STONE_PICKAXE)) == 3, "A shortfall at pickup shrinks the task");
         Deliveries.arrived(data, settlement, eve, other);
-        helper.assertTrue(Deliveries.get(settlement, relayed.id()).isEmpty() && Deliveries.inDelivery(settlement, other, Items.STONE_PICKAXE) == 0,
+        helper.assertTrue(Deliveries.get(settlement, relayed.id()).isEmpty() && Deliveries.inDelivery(settlement, other, ItemKey.of(Items.STONE_PICKAXE)) == 0,
                 "Arrived: done");
 
         // A removed requesting Clerk drops its result deliveries.
-        Deliveries.postResult(data, settlement, craft, craft, Items.STONE_PICKAXE, 1, other, now);
+        Deliveries.postResult(data, settlement, craft, craft, ItemKey.of(Items.STONE_PICKAXE), 1, other, now);
         remove(helper, other);
         helper.assertTrue(settlement.deliveries().stream().noneMatch(found -> found.result().isPresent()), "Gone with the requesting Clerk");
         remove(helper, home, craft, served);

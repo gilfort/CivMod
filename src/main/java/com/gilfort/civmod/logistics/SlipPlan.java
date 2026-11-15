@@ -12,8 +12,6 @@ import com.gilfort.civmod.settlement.DeliveryOrders;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
 
 /**
  * What a Deliveryman takes from the source of a Delivery Slip and where it goes (vault {@code Jobs/Deliveryman.md}),
@@ -29,13 +27,13 @@ public record SlipPlan(List<Leg> legs, int next) {
      * One stop of the trip.
      *
      * @param target the target container
-     * @param items  how many of each item it gets
+     * @param items  how many of each thing (item and relevant components) it gets
      */
-    public record Leg(BlockPos target, Map<Item, Integer> items) {
+    public record Leg(BlockPos target, Map<ItemKey, Integer> items) {
 
         /**
          * @param target the target container
-         * @param items  how many of each item it gets
+         * @param items  how many of each thing (item and relevant components) it gets
          */
         public Leg {
             items = Map.copyOf(items);
@@ -60,8 +58,8 @@ public record SlipPlan(List<Leg> legs, int next) {
     /**
      * @return how many of each item the Deliveryman takes at the source, in all legs
      */
-    public Map<Item, Integer> take() {
-        Map<Item, Integer> all = new LinkedHashMap<>();
+    public Map<ItemKey, Integer> take() {
+        Map<ItemKey, Integer> all = new LinkedHashMap<>();
         legs.forEach(leg -> leg.items().forEach((item, count) -> all.merge(item, count, Integer::sum)));
         return all;
     }
@@ -79,18 +77,18 @@ public record SlipPlan(List<Leg> legs, int next) {
      */
     public static SlipPlan of(DeliverySlip slip, DeliveryOrders.Clock clock, Stock source, Function<BlockPos, Stock> targetStock,
             int carryStacks, RandomSource random) {
-        Map<Item, Integer> spare = new LinkedHashMap<>();
+        Map<ItemKey, Integer> spare = new LinkedHashMap<>();
         source.counts().forEach((item, count) -> {
             int free = count - slip.keep();
-            if (free > 0 && slip.accepts(new ItemStack(item))) {
+            if (free > 0 && slip.accepts(item.toStack())) {
                 spare.put(item, free);
             }
         });
         List<BlockPos> order = targetOrder(slip, clock, random);
         List<Leg> legs = new ArrayList<>();
-        Map<Item, Integer> taken = new LinkedHashMap<>();
+        Map<ItemKey, Integer> taken = new LinkedHashMap<>();
         for (BlockPos target : order) {
-            Map<Item, Integer> items = fill(slip, targetStock.apply(target), spare, taken, carryStacks);
+            Map<ItemKey, Integer> items = fill(slip, targetStock.apply(target), spare, taken, carryStacks);
             if (!items.isEmpty()) {
                 legs.add(new Leg(target, items));
                 // One target per visit for the round robin variants, so the load spreads over the visits.
@@ -119,7 +117,7 @@ public record SlipPlan(List<Leg> legs, int next) {
                 continue;
             }
             if (slip.blacklist() || slip.filter().stream().anyMatch(item -> (slip.fillTo() <= 0 || target.count(item) < slip.fillTo())
-                    && target.fits(new ItemStack(item)) > 0)) {
+                    && target.fits(item.toStack()) > 0)) {
                 return true;
             }
         }
@@ -127,20 +125,20 @@ public record SlipPlan(List<Leg> legs, int next) {
     }
 
     /** What one target gets of the spare items, within what the Deliveryman can still carry. */
-    private static Map<Item, Integer> fill(DeliverySlip slip, Stock target, Map<Item, Integer> spare, Map<Item, Integer> taken,
+    private static Map<ItemKey, Integer> fill(DeliverySlip slip, Stock target, Map<ItemKey, Integer> spare, Map<ItemKey, Integer> taken,
             int carryStacks) {
-        Map<Item, Integer> items = new LinkedHashMap<>();
+        Map<ItemKey, Integer> items = new LinkedHashMap<>();
         if (target.isEmpty()) {
             return items;
         }
-        for (Map.Entry<Item, Integer> entry : spare.entrySet()) {
-            Item item = entry.getKey();
+        for (Map.Entry<ItemKey, Integer> entry : spare.entrySet()) {
+            ItemKey item = entry.getKey();
             int want = entry.getValue() - taken.getOrDefault(item, 0);
             if (slip.fillTo() > 0) {
                 want = Math.min(want, slip.fillTo() - target.count(item));
             }
             want = Math.min(want, carryRoom(taken, item, carryStacks));
-            int fit = want > 0 ? target.fits(new ItemStack(item, want)) : 0;
+            int fit = want > 0 ? target.fits(item.toStack(want)) : 0;
             if (fit > 0) {
                 items.put(item, fit);
                 taken.merge(item, fit, Integer::sum);
@@ -150,10 +148,10 @@ public record SlipPlan(List<Leg> legs, int next) {
     }
 
     /** How many more of an item fit the carry inventory next to what is taken already. */
-    private static int carryRoom(Map<Item, Integer> taken, Item item, int carryStacks) {
-        int maxStack = new ItemStack(item).getMaxStackSize();
-        int others = taken.entrySet().stream().filter(entry -> entry.getKey() != item)
-                .mapToInt(entry -> stacks(entry.getValue(), new ItemStack(entry.getKey()).getMaxStackSize())).sum();
+    private static int carryRoom(Map<ItemKey, Integer> taken, ItemKey item, int carryStacks) {
+        int maxStack = item.toStack().getMaxStackSize();
+        int others = taken.entrySet().stream().filter(entry -> !entry.getKey().equals(item))
+                .mapToInt(entry -> stacks(entry.getValue(), entry.getKey().toStack().getMaxStackSize())).sum();
         return Math.max(0, (carryStacks - others) * maxStack - taken.getOrDefault(item, 0));
     }
 

@@ -65,6 +65,8 @@ public final class CivModJobs {
     public static final DeferredHolder<Job, Job> BOTTLER = job("bottler");
     /** Producing: Specialization of the Craftsperson, brews beer at a barrel; unlocked by a barrel. */
     public static final DeferredHolder<Job, Job> BREWER = job("brewer");
+    /** Producing: Specialization of the Craftsperson, brews potions at a brewing stand; unlocked by a brewing stand. */
+    public static final DeferredHolder<Job, Job> ALCHEMIST = job("alchemist");
     /** Producing: Specialization of the Craftsperson, sifts sand and gravel for small finds; unlocked by a hopper. */
     public static final DeferredHolder<Job, Job> SIFTER = job("sifter");
     /** Producing: Specialization of the Craftsperson, turns anything compostable into bone meal at a composter; unlocked by a composter. */

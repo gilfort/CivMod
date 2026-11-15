@@ -247,6 +247,20 @@ How a recipe with `drops` runs:
 - **JEI and REI** show the possible stacks in the result slot of the "Job Recipes" category; the tooltip of a stack names its chance in percent and the level it needs (the chance counts the outcomes in the draw at that level).
 - **Tests** can script the draw: `DropPools.script(RandomSource)` replaces the random source of every draw until it is called with `null`, and `DropDraw.draw(outcomes, level, random)` is a pure function over any `RandomSource`. The draw asks the source once for a number below the total weight of the outcomes in the draw; the outcomes take turns in file order.
 
+## Relevant components
+
+All potions are the one item `minecraft:potion`, and an enchanted book is `minecraft:enchanted_book`; what they are is in a data component. Patterns, requests, stock, stock rules, Delivery tasks and the filter of a Delivery Slip therefore name a thing by its item plus its **relevant components** (the internal value type `ItemKey`). Two stacks are the same thing when the item and those components are equal. Every other component (custom name, damage, lore) is ignored, so a renamed Potion of Healing is still a Potion of Healing, and a water bottle is not.
+
+`potion_contents` is on the list. An addon whose items differ by another component adds it once while it loads, before any pattern is read:
+
+```java
+RelevantComponents.register(DataComponents.STORED_ENCHANTMENTS);
+```
+
+What this changes for an addon Job: a pattern for a potion stays apart from a pattern for another potion; an exact pattern with a Potion of Healing in its grid takes that potion only (recipe patterns still take whatever the recipe's ingredients accept); the recipe viewer transfer copies the relevant components of the shown stacks into the pattern; and an innate recipe with a `result` that has components (`{"id": "minecraft:potion", "components": {...}}`) makes a pattern for exactly that thing. The profile needs no code for any of this. Ingredient entries of an innate recipe stay item or tag based.
+
+`RelevantComponents` is experimental like the rest of the API.
+
 ## Checkmarks
 
 Only checked patterns are worked. Each library has its own checkmark limit; only checked patterns the Job can use count against it. A new pattern is checked automatically if it makes something, the profile can use it and a checkmark is free. At the limit it stays unchecked, and the Patterns tab shows "A Stonecutter masters only 6 recipes at once – choose which to check." until the player's next edit of the library. A pattern the filters reject stays unchecked without that line, and loses a checkmark it had. Replacing a pattern keeps its checkmark. Several settlers working the same Job at one JobBlock share its library; its limit is the one of the highest effective skill among them (`checkLimit` of the best settler). When the limit drops (the best settler leaves or switches Job), the last checked patterns the Job can use lose theirs.

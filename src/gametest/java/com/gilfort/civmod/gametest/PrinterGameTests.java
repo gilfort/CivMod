@@ -7,6 +7,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.gametest.FletcherGameTests.Setup;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.Patterns;
@@ -112,7 +113,7 @@ public final class PrinterGameTests {
         BlockPos craft = printingHouse(helper, new BlockPos(1, 1, 5));
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.CRAFTING_TABLE);
         Settler settler = FletcherGameTests.worker(helper, setup, craft, printer());
-        helper.assertTrue(Patterns.setOutput(level, craft, printer(), 0, Items.BOOK).orElseThrow().checked(), "Book checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, printer(), 0, ItemKey.of(Items.BOOK)).orElseThrow().checked(), "Book checked");
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.BOOK) == 1,
                 "Book arrived (status " + settler.getWork().status(craft) + ")");
@@ -125,8 +126,8 @@ public final class PrinterGameTests {
     private static void domain(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos craft = printingHouse(helper, new BlockPos(1, 1, 5));
-        helper.assertTrue(Patterns.setOutput(level, craft, printer(), 0, Items.BOOKSHELF).orElseThrow().checked(), "Bookshelf checked");
-        helper.assertTrue(Patterns.setOutput(level, craft, printer(), 2, Items.PAPER).orElseThrow().checked(),
+        helper.assertTrue(Patterns.setOutput(level, craft, printer(), 0, ItemKey.of(Items.BOOKSHELF)).orElseThrow().checked(), "Bookshelf checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, printer(), 2, ItemKey.of(Items.PAPER)).orElseThrow().checked(),
                 "Paper is inside the domain through its output although sugar cane is not print material");
         CraftingRounds.assertOutsideDomain(helper, craft, printer(), 1, Items.IRON_PICKAXE);
         helper.succeed();

@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.registry.ModJobs;
@@ -107,7 +108,7 @@ public final class CollectionRecipeGameTests {
     private static int collected(Settler settler, BlockPos jobBlock, List<Container> containers, Item... items) {
         int total = 0;
         for (Item item : items) {
-            total += settler.getWork().buffer(jobBlock).counts().getOrDefault(item, 0);
+            total += settler.getWork().buffer(jobBlock).counts().getOrDefault(ItemKey.of(item), 0);
             for (Container container : containers) {
                 total += count(container, item);
             }
@@ -197,7 +198,7 @@ public final class CollectionRecipeGameTests {
         TestSettlements.setBlock(helper, clerkRelative, ModBlocks.CLERK_BLOCK.get());
         BlockPos clerk = helper.absolutePos(clerkRelative);
         helper.assertValueEqual(JobBlockSite.blockAt(level, jobBlock).orElseThrow().homeClerk(), Optional.of(clerk), "Home Clerk");
-        helper.assertTrue(StockRules.setRule(SettlementData.get(level), clerk, new StockRule(0, Items.MILK_BUCKET, 0, 1, 0, 0)), "Max rule set");
+        helper.assertTrue(StockRules.setRule(SettlementData.get(level), clerk, new StockRule(0, ItemKey.of(Items.MILK_BUCKET), 0, 1, 0, 0)), "Max rule set");
         Container store = ClerkGameTests.linkChest(helper, clerkRelative, clerkRelative.south());
         store.setItem(0, new ItemStack(Items.MILK_BUCKET, 1));
         Container collect = (Container) level.getBlockEntity(jobBlock);

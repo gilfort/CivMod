@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.menu.JobBlockTab;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -13,7 +14,6 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeType;
@@ -158,7 +158,7 @@ interface JobBlockTabView {
      * @param doTransfer whether to transfer (false: only check)
      * @return empty if the view takes no recipes, else the reason it cannot (empty if it can)
      */
-    default Optional<Optional<Component>> transfer(RecipeType<?> type, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid,
+    default Optional<Optional<Component>> transfer(RecipeType<?> type, Optional<ResourceKey<Recipe<?>>> recipe, List<ItemKey> grid,
             boolean doTransfer) {
         return Optional.empty();
     }

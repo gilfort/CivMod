@@ -6,6 +6,7 @@ import java.util.function.Consumer;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.DeliveryTask;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.Deliveries;
@@ -61,16 +62,16 @@ public final class ReservationGameTests {
         chest.setItem(1, new ItemStack(Items.APPLE, 3));
         DeliveryTask task = takenTask(helper, clerk, DayClock.day(level));
         Settlement settlement = SettlementData.get(level).settlementAt(clerk).orElseThrow();
-        Reservations.reserve(settlement, clerk, task.id(), Items.BREAD, 6, DayClock.day(level));
+        Reservations.reserve(settlement, clerk, task.id(), ItemKey.of(Items.BREAD), 6, DayClock.day(level));
 
         Stock others = ClerkStorage.stock(level, clerk, true);
         helper.assertTrue(others.count(stack -> stack.is(Items.BREAD)) == 4, "Reserved bread is hidden: " + others.count(stack -> stack.is(Items.BREAD)));
-        helper.assertTrue(others.counts().get(Items.BREAD) == 4 && others.counts().get(Items.APPLE) == 3, "Counts: " + others.counts());
+        helper.assertTrue(others.counts().get(ItemKey.of(Items.BREAD)) == 4 && others.counts().get(ItemKey.of(Items.APPLE)) == 3, "Counts: " + others.counts());
         helper.assertTrue(ClerkStorage.stock(level, clerk, false).count(stack -> stack.is(Items.BREAD)) == 0,
                 "Without access nothing is reachable");
         helper.assertTrue(ClerkStorage.stock(level, clerk, true, task.id()).count(stack -> stack.is(Items.BREAD)) == 10,
                 "The task holding the reservation sees all");
-        int taken = others.take(Items.BREAD, 10).stream().mapToInt(ItemStack::getCount).sum();
+        int taken = others.take(ItemKey.of(Items.BREAD), 10).stream().mapToInt(ItemStack::getCount).sum();
         helper.assertTrue(taken == 4, "A customer takes only the unreserved bread: " + taken);
 
         Stock rest = ClerkStorage.stock(level, clerk, true);
@@ -91,7 +92,7 @@ public final class ReservationGameTests {
         DeliveryTask task = takenTask(helper, clerk, day);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        Reservations.reserve(settlement, clerk, task.id(), Items.BREAD, 6, day);
+        Reservations.reserve(settlement, clerk, task.id(), ItemKey.of(Items.BREAD), 6, day);
 
         Reservations.Pickup pickup = Reservations.pickUp(data, settlement, clerk, task.id(), ClerkStorage.stock(level, clerk, true, task.id()), day);
         helper.assertTrue(!pickup.failed() && pickup.taken().stream().mapToInt(ItemStack::getCount).sum() == 6, "Picked up: " + pickup);
@@ -112,14 +113,14 @@ public final class ReservationGameTests {
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
 
         DeliveryTask task = takenTask(helper, clerk, day);
-        Reservations.reserve(settlement, clerk, task.id(), Items.BREAD, 6, day);
+        Reservations.reserve(settlement, clerk, task.id(), ItemKey.of(Items.BREAD), 6, day);
         helper.assertTrue(breadFor(level, clerk) == 4, "Reserved");
         Deliveries.release(data, settlement, task.id());
         Deliveries.take(data, settlement, task.id(), DELIVERYMAN, "Dora", day);
         helper.assertTrue(breadFor(level, clerk) == 10, "Cancelled: all bread free again, also when the task is taken again");
 
         Deliveries.take(data, settlement, task.id(), DELIVERYMAN, "Dora", day - 1);
-        Reservations.reserve(settlement, clerk, task.id(), Items.BREAD, 6, day - 1);
+        Reservations.reserve(settlement, clerk, task.id(), ItemKey.of(Items.BREAD), 6, day - 1);
         helper.assertTrue(breadFor(level, clerk) == 10, "A reservation of yesterday is over");
         Deliveries.done(data, settlement, task.id());
         helper.succeed();
@@ -138,7 +139,7 @@ public final class ReservationGameTests {
         DeliveryTask task = takenTask(helper, clerk, day);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        Reservations.reserve(settlement, clerk, task.id(), Items.BREAD, 6, day);
+        Reservations.reserve(settlement, clerk, task.id(), ItemKey.of(Items.BREAD), 6, day);
         helper.assertTrue(breadFor(level, clerk) == 4, "Reserved");
         chest.setItem(0, new ItemStack(Items.BREAD, 3));
 

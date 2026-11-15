@@ -9,6 +9,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.job.WorkPlaceLock;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.ThoughtBubble;
@@ -231,7 +232,7 @@ public final class OccupiedGameTests {
         BlockPos table = CraftspersonGameTests.placeTable(helper, new BlockPos(4, 1, 6));
         CraftspersonGameTests.define(helper, craft, 0, Items.STICK);
         ((Container) level.getBlockEntity(craft)).setItem(0, new ItemStack(Items.OAK_PLANKS, 2));
-        Requests.post(data, data.settlementAt(clerk).orElseThrow(), Items.STICK, 4, Optional.of(clerk), Optional.empty());
+        Requests.post(data, data.settlementAt(clerk).orElseThrow(), ItemKey.of(Items.STICK), 4, Optional.of(clerk), Optional.empty());
         Settler settler = CraftspersonGameTests.craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
         settler.getWork().decideNow(level);
         helper.assertTrue(settler.getWork().status(craft) == JobStatus.FETCHING_INPUTS, "Fetching: " + settler.getWork().status(craft));

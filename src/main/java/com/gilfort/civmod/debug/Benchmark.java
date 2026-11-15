@@ -6,6 +6,7 @@ import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.block.JobBlockEntity;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.StockRules;
@@ -170,17 +171,17 @@ public final class Benchmark {
             }
             for (int slot = 0; slot < CRAFTED.size(); slot++) {
                 // New patterns are checked automatically (4 of the limit of 6).
-                Patterns.setOutput(level, craft, ModJobs.CRAFTSPERSON.get(), slot, CRAFTED.get(slot));
+                Patterns.setOutput(level, craft, ModJobs.CRAFTSPERSON.get(), slot, ItemKey.of(CRAFTED.get(slot)));
             }
             if (i >= CRAFTSPERSONS) {
                 JobAssignments.setDelivery(data, craft, true);
             }
             craftspersons.add(craft);
         }
-        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 8, 10));
-        StockRules.setRule(data, clerk, StockRule.minimum(1, Items.TORCH, 64, 5));
-        StockRules.setRule(data, second, StockRule.minimum(0, Items.STONE_PICKAXE, 4, 10));
-        StockRules.setRule(data, second, StockRule.minimum(1, Items.TORCH, 32, 5));
+        StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.STONE_PICKAXE), 8, 10));
+        StockRules.setRule(data, clerk, StockRule.minimum(1, ItemKey.of(Items.TORCH), 64, 5));
+        StockRules.setRule(data, second, StockRule.minimum(0, ItemKey.of(Items.STONE_PICKAXE), 4, 10));
+        StockRules.setRule(data, second, StockRule.minimum(1, ItemKey.of(Items.TORCH), 32, 5));
         int spawned = 0;
         for (int i = 0; i < SIZE; i++) {
             BlockPos jobBlock = origin.offset(i * SPACING, 0, 0);

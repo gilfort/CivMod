@@ -37,6 +37,12 @@ import net.minecraft.world.level.block.Block;
 @ApiStatus.Experimental
 public interface ProducingProfile extends CategoryProfile {
 
+    /**
+     * Ticks of a recipe's own time (cooking, brewing) per operation of the shared speed formula: at level 20 (0.25
+     * operations per second) a recipe takes its own time.
+     */
+    double TICKS_PER_OPERATION = 80.0;
+
     @Override
     default JobCategory category() {
         return JobCategory.PRODUCING;

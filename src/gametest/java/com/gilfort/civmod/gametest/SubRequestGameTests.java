@@ -12,6 +12,7 @@ import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.PatternRecipes;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.ReservedFor;
@@ -127,7 +128,7 @@ public final class SubRequestGameTests {
         BlockPos clerk = clerkWith(helper, List.of(new ItemStack(Items.IRON_INGOT, 3), new ItemStack(Items.OAK_LOG, 1)));
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.IRON_PICKAXE, 1, 0)), "Rule set");
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.IRON_PICKAXE), 1, 0)), "Rule set");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         UUID pickaxe = Requests.claimable(settlement).getFirst().id();
 
@@ -137,15 +138,15 @@ public final class SubRequestGameTests {
         CraftspersonGameTests.placeTable(helper, new BlockPos(3, 1, 9));
         Settler smith = worker(helper, data, settlement, smithy, new BlockPos(2, 1, 7), "Sigrun", SmithGameTests.smith());
         Settler crafter = worker(helper, data, settlement, workshop, new BlockPos(2, 1, 11), "Carl", CraftspersonGameTests.craftJob());
-        helper.assertTrue(Patterns.setOutput(level, smithy, SmithGameTests.smith(), 0, Items.IRON_PICKAXE).orElseThrow().checked(), "Pickaxe checked");
-        Patterns.setOutput(level, smithy, SmithGameTests.smith(), 1, Items.STICK);
+        helper.assertTrue(Patterns.setOutput(level, smithy, SmithGameTests.smith(), 0, ItemKey.of(Items.IRON_PICKAXE)).orElseThrow().checked(), "Pickaxe checked");
+        Patterns.setOutput(level, smithy, SmithGameTests.smith(), 1, ItemKey.of(Items.STICK));
         CraftspersonGameTests.define(helper, workshop, 0, Items.STICK);
         CraftspersonGameTests.define(helper, workshop, 1, Items.OAK_PLANKS);
 
         // The Smith alone: it lacks sticks, asks for them and waits.
         catchUp(level, smith);
         List<Request> children = Requests.children(settlement, pickaxe);
-        helper.assertTrue(children.size() == 1 && children.getFirst().item() == Items.STICK, "A child request for sticks: " + children);
+        helper.assertTrue(children.size() == 1 && children.getFirst().item().is(Items.STICK), "A child request for sticks: " + children);
         Request child = children.getFirst();
         helper.assertTrue(child.amount() == 2 && child.target().equals(Optional.of(clerk)) && child.parent().equals(Optional.of(pickaxe))
                 && child.rule().isEmpty(), "Two sticks for the Clerk, parent set: " + child);
@@ -154,7 +155,7 @@ public final class SubRequestGameTests {
         // The Craftsperson makes them; they stay at the Clerk for the pickaxe request.
         catchUp(level, crafter);
         helper.assertTrue(Requests.children(settlement, pickaxe).isEmpty(), "The child is done: " + Requests.children(settlement, pickaxe));
-        helper.assertTrue(Holds.heldFor(settlement, ReservedFor.request(pickaxe)).getOrDefault(clerk, Map.of()).getOrDefault(Items.STICK, 0) == 2,
+        helper.assertTrue(Holds.heldFor(settlement, ReservedFor.request(pickaxe)).getOrDefault(clerk, Map.of()).getOrDefault(ItemKey.of(Items.STICK), 0) == 2,
                 "Two sticks held for the pickaxe request: " + Holds.heldFor(settlement, ReservedFor.request(pickaxe)));
         // One craft of planks makes 4 sticks; the 2 that were asked for are held, the 2 left over are free stock.
         helper.assertTrue(count(level, clerk, Items.STICK) == 2, "Nobody else sees the 2 held sticks: " + count(level, clerk, Items.STICK));
@@ -208,8 +209,8 @@ public final class SubRequestGameTests {
     private static Optional<Item> makeableItem(ServerLevel level, BlockPos pos, Job job) {
         List<net.minecraft.world.item.crafting.RecipeType<?>> types = Patterns.profile(job).recipeTypes();
         for (Item item : BuiltInRegistries.ITEM) {
-            if (!PatternRecipes.producing(level, types, item).isEmpty()
-                    && Patterns.setOutput(level, pos, job, 0, item).filter(pattern -> pattern.checked() || Patterns.toggleCheck(level, pos, job, 0)).isPresent()) {
+            if (!PatternRecipes.producing(level, types, ItemKey.of(item)).isEmpty()
+                    && Patterns.setOutput(level, pos, job, 0, ItemKey.of(item)).filter(pattern -> pattern.checked() || Patterns.toggleCheck(level, pos, job, 0)).isPresent()) {
                 return Optional.of(item);
             }
         }
@@ -222,28 +223,28 @@ public final class SubRequestGameTests {
         UUID producer = UUID.randomUUID();
         int before = count(level, clerk, item);
         for (boolean withdrawn : new boolean[] {false, true}) {
-            Request parent = Requests.post(data, settlement, Items.BEDROCK, 1, Optional.of(clerk), Optional.empty());
-            helper.assertTrue(SubRequests.post(level, data, settlement, parent, List.of(new Request.Missing(item, 2))) == 1,
+            Request parent = Requests.post(data, settlement, ItemKey.of(Items.BEDROCK), 1, Optional.of(clerk), Optional.empty());
+            helper.assertTrue(SubRequests.post(level, data, settlement, parent, List.of(new Request.Missing(ItemKey.of(item), 2))) == 1,
                     job + ": a child request for " + item);
             Request child = Requests.children(settlement, parent.id()).getFirst();
-            helper.assertTrue(child.item() == item && child.amount() == 2 && child.priority() == parent.priority() && child.parent().equals(Optional.of(parent.id()))
+            helper.assertTrue(child.item().is(item) && child.amount() == 2 && child.priority() == parent.priority() && child.parent().equals(Optional.of(parent.id()))
                     && child.target().equals(Optional.of(clerk)), job + ": child of the parent: " + child);
             helper.assertTrue(Requests.claim(data, settlement, child.id(), producer, "Worker", 2) == 2, job + ": claimed");
             helper.assertTrue(ClerkStorage.dropOff(level, clerk).insert(new ItemStack(item, 2)).isEmpty(), job + ": result stored");
             SubRequestGameTests.finishInFull(data, settlement, child.id(), producer);
             helper.assertTrue(Requests.children(settlement, parent.id()).isEmpty(), job + ": child done");
             helper.assertTrue(count(level, clerk, item) == before, job + ": held for the parent, nobody else sees it");
-            helper.assertTrue(Holds.heldFor(settlement, ReservedFor.request(parent.id())).getOrDefault(clerk, Map.of()).getOrDefault(item, 0) == 2,
+            helper.assertTrue(Holds.heldFor(settlement, ReservedFor.request(parent.id())).getOrDefault(clerk, Map.of()).getOrDefault(ItemKey.of(item), 0) == 2,
                     job + ": held for the parent");
             if (withdrawn) {
                 Requests.withdraw(data, settlement, parent.id());
             } else {
-                Holds.consume(settlement, ReservedFor.request(parent.id()), Map.of(item, 2));
+                Holds.consume(settlement, ReservedFor.request(parent.id()), Map.of(ItemKey.of(item), 2));
                 Requests.withdraw(data, settlement, parent.id());
             }
             helper.assertTrue(Holds.held(settlement, clerk).isEmpty(), job + ": nothing held after the parent");
             helper.assertTrue(count(level, clerk, item) == before + 2, job + ": the items are free stock again");
-            ClerkStorage.stock(level, clerk, true).take(item, 2);
+            ClerkStorage.stock(level, clerk, true).take(ItemKey.of(item), 2);
         }
     }
 
@@ -259,9 +260,9 @@ public final class SubRequestGameTests {
         CraftspersonGameTests.define(helper, workshop, 0, Items.STICK);
         helper.assertTrue(TestAssignments.assign(data, workshop, UUID.randomUUID(), "Carl", settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
                 "Craftsperson assigned");
-        Request parent = Requests.post(data, settlement, Items.IRON_PICKAXE, 1, Optional.of(clerk), Optional.empty());
-        helper.assertTrue(SubRequests.post(level, data, settlement, parent, List.of(new Request.Missing(Items.STICK, 2))) == 1, "A child");
-        helper.assertTrue(SubRequests.post(level, data, settlement, parent, List.of(new Request.Missing(Items.STICK, 2))) == 0,
+        Request parent = Requests.post(data, settlement, ItemKey.of(Items.IRON_PICKAXE), 1, Optional.of(clerk), Optional.empty());
+        helper.assertTrue(SubRequests.post(level, data, settlement, parent, List.of(new Request.Missing(ItemKey.of(Items.STICK), 2))) == 1, "A child");
+        helper.assertTrue(SubRequests.post(level, data, settlement, parent, List.of(new Request.Missing(ItemKey.of(Items.STICK), 2))) == 0,
                 "Asking again posts no second child");
         Requests.withdraw(data, settlement, parent.id());
         helper.assertTrue(Requests.byPriority(settlement).isEmpty(), "Parent and child are gone: " + Requests.byPriority(settlement));
@@ -277,23 +278,23 @@ public final class SubRequestGameTests {
         BlockPos clerk = clerkWith(helper, List.of());
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        Request root = Requests.post(data, settlement, Items.IRON_PICKAXE, 1, Optional.of(clerk), Optional.empty());
-        helper.assertTrue(SubRequests.post(level, data, settlement, root, List.of(new Request.Missing(Items.STICK, 2))) == 0,
+        Request root = Requests.post(data, settlement, ItemKey.of(Items.IRON_PICKAXE), 1, Optional.of(clerk), Optional.empty());
+        helper.assertTrue(SubRequests.post(level, data, settlement, root, List.of(new Request.Missing(ItemKey.of(Items.STICK), 2))) == 0,
                 "Nobody makes sticks: no child");
         BlockPos workshop = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 9));
         CraftspersonGameTests.define(helper, workshop, 0, Items.STICK);
         helper.assertTrue(TestAssignments.assign(data, workshop, UUID.randomUUID(), "Carl", settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
                 "Craftsperson assigned");
-        Request sticks = Requests.post(data, settlement, Items.STICK, 2, Optional.of(clerk), Optional.of(root.id()));
-        helper.assertTrue(SubRequests.post(level, data, settlement, sticks, List.of(new Request.Missing(Items.STICK, 2))) == 0,
+        Request sticks = Requests.post(data, settlement, ItemKey.of(Items.STICK), 2, Optional.of(clerk), Optional.of(root.id()));
+        helper.assertTrue(SubRequests.post(level, data, settlement, sticks, List.of(new Request.Missing(ItemKey.of(Items.STICK), 2))) == 0,
                 "An item along the parent chain: no child (cycle)");
         Request deep = sticks;
         for (int depth = 2; depth <= 8; depth++) {
-            deep = Requests.post(data, settlement, Items.DIRT, 1, Optional.of(clerk), Optional.of(deep.id()));
+            deep = Requests.post(data, settlement, ItemKey.of(Items.DIRT), 1, Optional.of(clerk), Optional.of(deep.id()));
         }
-        helper.assertTrue(SubRequests.post(level, data, settlement, deep, List.of(new Request.Missing(Items.STICK, 1))) == 0,
+        helper.assertTrue(SubRequests.post(level, data, settlement, deep, List.of(new Request.Missing(ItemKey.of(Items.STICK), 1))) == 0,
                 "Eight parents above: no deeper child");
-        helper.assertTrue(SubRequests.post(level, data, settlement, root, List.of(new Request.Missing(Items.STICK, 2))) == 0,
+        helper.assertTrue(SubRequests.post(level, data, settlement, root, List.of(new Request.Missing(ItemKey.of(Items.STICK), 2))) == 0,
                 "The root already has its child");
         helper.succeed();
     }
@@ -310,10 +311,10 @@ public final class SubRequestGameTests {
         CraftspersonGameTests.define(helper, workshop, 0, Items.STICK);
         helper.assertTrue(TestAssignments.assign(data, workshop, UUID.randomUUID(), "Carl", settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
                 "Craftsperson assigned");
-        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.IRON_PICKAXE, 1, 0)), "Rule set");
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.IRON_PICKAXE), 1, 0)), "Rule set");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         Request parent = Requests.claimable(settlement).getFirst();
-        SubRequests.post(level, data, settlement, parent, List.of(new Request.Missing(Items.STICK, 2)));
+        SubRequests.post(level, data, settlement, parent, List.of(new Request.Missing(ItemKey.of(Items.STICK), 2)));
         List<ClerkTabData.TaskRow> rows = ClerkTabData.of(level, clerk).tasks();
         helper.assertTrue(rows.size() == 2 && rows.get(0).depth() == 0 && rows.get(1).depth() == 1 && rows.get(1).icon().is(Items.STICK),
                 "A main request with its sub-request below: " + rows);

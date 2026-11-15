@@ -4,7 +4,6 @@ import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.settlement.Settlement;
 
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.item.Item;
 
 /**
  * Which producers of a settlement can make an item (vault {@code Systems/Producing Jobs.md}). Decides the request
@@ -19,12 +18,12 @@ public final class Producers {
     /**
      * @param level      the level
      * @param settlement the settlement
-     * @param item       an item
+     * @param item       a thing (item and relevant components)
      * @return whether a producer of the settlement can make it
      */
-    public static boolean canMake(ServerLevel level, Settlement settlement, Item item) {
+    public static boolean canMake(ServerLevel level, Settlement settlement, ItemKey item) {
         return settlement.blocks().stream().anyMatch(block -> block.assignees().stream()
                 .anyMatch(assignee -> Patterns.hasLibrary(block, assignee.job())
-                        && Patterns.usable(level, block, assignee.job()).stream().anyMatch(pattern -> pattern.output() == item)));
+                        && Patterns.usable(level, block, assignee.job()).stream().anyMatch(pattern -> pattern.output().equals(item))));
     }
 }

@@ -11,6 +11,7 @@ import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.gametest.FletcherGameTests.Setup;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.logistics.InnateRecipes;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.JobPlaces;
@@ -128,7 +129,7 @@ public final class CrusherGameTests {
                     "Slot " + slot + " holds an innate recipe, checked: " + pattern);
         }
         helper.assertTrue(Patterns.pattern(StationTypeGameTests.block(level, pos), crusher, recipes).isEmpty(), "No tenth recipe");
-        Pattern planks = Patterns.setOutput(level, pos, crusher, recipes, Items.OAK_PLANKS).orElseThrow();
+        Pattern planks = Patterns.setOutput(level, pos, crusher, recipes, ItemKey.of(Items.OAK_PLANKS)).orElseThrow();
         helper.assertTrue(Patterns.unusable(level, StationTypeGameTests.block(level, pos), crusher, planks),
                 "A crafting pattern of a player is outside the Crusher's domain: " + planks);
         helper.succeed();

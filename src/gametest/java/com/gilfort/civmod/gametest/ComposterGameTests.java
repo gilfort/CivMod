@@ -152,7 +152,7 @@ public final class ComposterGameTests {
         BlockPos pos = composting(helper, new BlockPos(1, 1, 1));
         Patterns.syncInnate(level, pos, composter());
         Pattern pattern = PatternsTabData.of(level, pos, composter()).pattern(0).orElseThrow();
-        helper.assertTrue(pattern.innate() && pattern.checked() && pattern.output() == Items.BONE_MEAL, "Slot 0 is the checked innate recipe: " + pattern);
+        helper.assertTrue(pattern.innate() && pattern.checked() && pattern.output().is(Items.BONE_MEAL), "Slot 0 is the checked innate recipe: " + pattern);
         helper.succeed();
     }
 

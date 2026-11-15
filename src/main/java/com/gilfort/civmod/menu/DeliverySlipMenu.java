@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.function.UnaryOperator;
 
 import com.gilfort.civmod.logistics.DeliverySlip;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.registry.ModMenuTypes;
 
@@ -18,7 +19,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.inventory.SimpleContainerData;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -126,7 +126,7 @@ public final class DeliverySlipMenu extends CivMenu {
     private void readSlip() {
         DeliverySlip slip = slip().orElse(DeliverySlip.blank());
         for (int slot = 0; slot < DeliverySlip.FILTER_SLOTS; slot++) {
-            filter.setItem(slot, slot < slip.filter().size() ? new ItemStack(slip.filter().get(slot)) : ItemStack.EMPTY);
+            filter.setItem(slot, slot < slip.filter().size() ? slip.filter().get(slot).toStack() : ItemStack.EMPTY);
         }
         numbers.set(DATA_MODE, slip.blacklist() ? 1 : 0);
         numbers.set(DATA_VARIANT, slip.variant().ordinal());
@@ -170,10 +170,10 @@ public final class DeliverySlipMenu extends CivMenu {
         }
         ItemStack carried = getCarried();
         filter.setItem(slotId, carried.isEmpty() ? ItemStack.EMPTY : carried.copyWithCount(1));
-        List<Item> items = new ArrayList<>();
+        List<ItemKey> items = new ArrayList<>();
         for (int slot = 0; slot < DeliverySlip.FILTER_SLOTS; slot++) {
-            Item item = filter.getItem(slot).getItem();
-            if (!filter.getItem(slot).isEmpty() && !items.contains(item)) {
+            ItemKey item = ItemKey.of(filter.getItem(slot));
+            if (!item.isEmpty() && !items.contains(item)) {
                 items.add(item);
             }
         }

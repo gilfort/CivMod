@@ -5,6 +5,7 @@ import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.block.JobBlockEntity;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.ClerkTabData;
 import com.gilfort.civmod.registry.ModBlocks;
@@ -87,14 +88,14 @@ public final class LedgerGameTests {
         helper.assertTrue(helper.getBlockEntity(CLERK, JobBlockEntity.class).getLedgers() == 3, "The block holds 3 Ledgers");
 
         SettlementData data = SettlementData.get(level);
-        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(35, Items.BREAD, 4, 0)), "Slot 35 takes a rule");
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(35, ItemKey.of(Items.BREAD), 4, 0)), "Slot 35 takes a rule");
         helper.assertTrue(ClerkTabData.of(level, clerk).nextEmptyGhostSlot() == 0, "Slot 0 still empty");
-        helper.assertFalse(StockRules.setRule(data, clerk, StockRule.minimum(36, Items.TORCH, 4, 0)), "Lv 1 with 3 Ledgers: slot 36 is inactive");
+        helper.assertFalse(StockRules.setRule(data, clerk, StockRule.minimum(36, ItemKey.of(Items.TORCH), 4, 0)), "Lv 1 with 3 Ledgers: slot 36 is inactive");
 
         StationTypeGameTests.setLevel(helper, CLERK, SettlementRules.MAX_LEVEL);
         helper.assertTrue(ClerkTabData.of(level, clerk).slots() == 72, "Lv 5 with 3 Ledgers: 72 slots");
-        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(71, Items.TORCH, 4, 0)), "Slot 71 takes a rule");
-        helper.assertFalse(StockRules.setRule(data, clerk, StockRule.minimum(72, Items.STICK, 4, 0)), "Slot 72 does not exist");
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(71, ItemKey.of(Items.TORCH), 4, 0)), "Slot 71 takes a rule");
+        helper.assertFalse(StockRules.setRule(data, clerk, StockRule.minimum(72, ItemKey.of(Items.STICK), 4, 0)), "Slot 72 does not exist");
         helper.succeed();
     }
 

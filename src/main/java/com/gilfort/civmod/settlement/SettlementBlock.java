@@ -17,6 +17,7 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.job.SavedScan;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.mission.MissionOffer;
@@ -466,7 +467,7 @@ public final class SettlementBlock {
         this.standSpots.addAll(clerk.standSpots());
         this.spotOfDay = clerk.spotOfDay();
         // One rule per item and Clerk: an older save may hold more; the first one stays.
-        Set<Item> ruled = new HashSet<>();
+        Set<ItemKey> ruled = new HashSet<>();
         clerk.stockRules().stream().filter(rule -> ruled.add(rule.item())).forEach(this.stockRules::add);
         this.served.addAll(clerk.served());
         this.ledgers = Math.clamp(clerk.ledgers(), 0, SettlementRules.MAX_LEDGERS);

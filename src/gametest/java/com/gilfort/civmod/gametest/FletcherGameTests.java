@@ -8,6 +8,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.PatternsTabData;
@@ -218,7 +219,7 @@ public final class FletcherGameTests {
         helper.assertTrue(settler.getInventory().getItem(Settler.BELT_START).isEmpty(), "The shears broke");
         helper.assertTrue(count(level, setup.clerk(), Items.FLINT) == 1, "Flint arrived (status " + settler.getWork().status(craft) + ")");
         List<Request.Missing> missing = Requests.forRule(setup.settlement(), setup.clerk(), 0).map(Request::missing).orElse(List.of());
-        helper.assertTrue(missing.stream().noneMatch(entry -> entry.item() == Items.SHEARS), "The string request is not marked missing shears: " + missing);
+        helper.assertTrue(missing.stream().noneMatch(entry -> entry.item().is(Items.SHEARS)), "The string request is not marked missing shears: " + missing);
         PatternsTabData tab = PatternsTabData.of(level, craft, fletcher());
         Optional<String> line = Optional.ofNullable(tab.needs().get(1)).map(Component::getString);
         helper.assertTrue(line.equals(Optional.of("Needs Shears")), "The string recipe is marked: " + tab.needs());
@@ -249,7 +250,7 @@ public final class FletcherGameTests {
         BlockPos craft = fletchery(helper, new BlockPos(1, 1, 5));
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.FLETCHING_TABLE);
         Settler settler = worker(helper, setup, craft);
-        helper.assertTrue(com.gilfort.civmod.settlement.Patterns.setOutput(level, craft, fletcher(), 2, Items.ARROW).orElseThrow().checked(),
+        helper.assertTrue(com.gilfort.civmod.settlement.Patterns.setOutput(level, craft, fletcher(), 2, ItemKey.of(Items.ARROW)).orElseThrow().checked(),
                 "Arrows checked");
         CraftspersonGameTests.catchUp(level, settler, SPEED_TICKS);
         helper.assertTrue(settler.getWork().jobFactor(level, craft) == factor, "Job factor of the day " + factor + ": "
@@ -273,7 +274,7 @@ public final class FletcherGameTests {
             chest.setItem(i, stock.get(i).copy());
         }
         for (int i = 0; i < wanted.size(); i++) {
-            helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(i, wanted.get(i).getItem(), wanted.get(i).getCount(), 0)), "Rule set");
+            helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(i, ItemKey.of(wanted.get(i)), wanted.get(i).getCount(), 0)), "Rule set");
         }
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         return new Setup(clerk, data, settlement);

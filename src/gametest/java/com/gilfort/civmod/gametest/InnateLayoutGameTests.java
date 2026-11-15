@@ -7,6 +7,7 @@ import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.logistics.InnateLayout;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 
 import net.minecraft.core.registries.Registries;
@@ -45,11 +46,11 @@ public final class InnateLayoutGameTests {
     }
 
     private static Pattern player(int slot, Item output) {
-        return new Pattern(slot, output, 1, List.of(), Optional.empty(), false, true);
+        return new Pattern(slot, ItemKey.of(output), 1, List.of(), Optional.empty(), false, true);
     }
 
     private static Pattern innate(int slot, ResourceKey<Recipe<?>> recipe, boolean checked) {
-        return new Pattern(slot, Items.FLINT, 1, List.of(), Optional.of(recipe), false, checked, true);
+        return new Pattern(slot, ItemKey.of(Items.FLINT), 1, List.of(), Optional.of(recipe), false, checked, true);
     }
 
     /**

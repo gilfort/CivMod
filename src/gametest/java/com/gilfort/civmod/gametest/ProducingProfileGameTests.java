@@ -3,6 +3,7 @@ package com.gilfort.civmod.gametest;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.settlement.Patterns;
@@ -48,12 +49,12 @@ public final class ProducingProfileGameTests {
         BlockPos pos = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 1));
         Item[] outputs = {Items.STICK, Items.OAK_PLANKS, Items.TORCH, Items.CHEST, Items.STONE_PICKAXE, Items.STONE_AXE};
         for (int slot = 0; slot < outputs.length; slot++) {
-            Pattern pattern = Patterns.setOutput(level, pos, CraftspersonGameTests.craftJob(), slot, outputs[slot]).orElseThrow();
+            Pattern pattern = Patterns.setOutput(level, pos, CraftspersonGameTests.craftJob(), slot, ItemKey.of(outputs[slot])).orElseThrow();
             helper.assertTrue(pattern.checked(), "Below the limit of 6: " + outputs[slot] + " checked automatically");
         }
         helper.assertTrue(PatternsTabData.of(level, pos, CraftspersonGameTests.craftJob()).notice().isEmpty(), "No state line below the limit");
 
-        Pattern ladder = Patterns.setOutput(level, pos, CraftspersonGameTests.craftJob(), 6, Items.LADDER).orElseThrow();
+        Pattern ladder = Patterns.setOutput(level, pos, CraftspersonGameTests.craftJob(), 6, ItemKey.of(Items.LADDER)).orElseThrow();
         helper.assertFalse(ladder.checked(), "At the limit: the new pattern stays unchecked");
         String line = PatternsTabData.of(level, pos, CraftspersonGameTests.craftJob()).notice().map(component -> component.getString()).orElse("");
         helper.assertTrue(line.equals("All checkmarks used"), "State line: " + line);
@@ -61,9 +62,9 @@ public final class ProducingProfileGameTests {
         helper.assertFalse(Patterns.toggleCheck(level, pos, CraftspersonGameTests.craftJob(), 0), "Unchecking the sticks frees a checkmark");
         helper.assertTrue(PatternsTabData.of(level, pos, CraftspersonGameTests.craftJob()).notice().isEmpty(), "The line disappears on the next toggle");
 
-        helper.assertTrue(Patterns.setOutput(level, pos, CraftspersonGameTests.craftJob(), 1, Items.BOWL).orElseThrow().checked(), "Replacing a checked pattern keeps its checkmark");
-        helper.assertFalse(Patterns.setOutput(level, pos, CraftspersonGameTests.craftJob(), 6, Items.STICK).orElseThrow().checked(), "Replacing an unchecked pattern keeps it unchecked");
-        helper.assertTrue(Patterns.setOutput(level, pos, CraftspersonGameTests.craftJob(), 8, Items.LADDER).orElseThrow().checked(), "A free checkmark: the next new pattern is checked");
+        helper.assertTrue(Patterns.setOutput(level, pos, CraftspersonGameTests.craftJob(), 1, ItemKey.of(Items.BOWL)).orElseThrow().checked(), "Replacing a checked pattern keeps its checkmark");
+        helper.assertFalse(Patterns.setOutput(level, pos, CraftspersonGameTests.craftJob(), 6, ItemKey.of(Items.STICK)).orElseThrow().checked(), "Replacing an unchecked pattern keeps it unchecked");
+        helper.assertTrue(Patterns.setOutput(level, pos, CraftspersonGameTests.craftJob(), 8, ItemKey.of(Items.LADDER)).orElseThrow().checked(), "A free checkmark: the next new pattern is checked");
         helper.succeed();
     }
 }

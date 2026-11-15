@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobAssignments.PointResult;
@@ -69,7 +70,7 @@ public final class ClerkStockGameTests {
         chest.setItem(26, new ItemStack(Items.STONE_PICKAXE));
 
         Stock stock = ClerkStorage.stock(level, clerk, true);
-        helper.assertTrue(stock.counts().equals(Map.of(Items.BREAD, 7, Items.COBBLESTONE, 64, Items.APPLE, 3, Items.STONE_PICKAXE, 1)),
+        helper.assertTrue(stock.counts().equals(Map.of(ItemKey.of(Items.BREAD), 7, ItemKey.of(Items.COBBLESTONE), 64, ItemKey.of(Items.APPLE), 3, ItemKey.of(Items.STONE_PICKAXE), 1)),
                 "Counts of all containers: " + stock.counts());
         helper.assertTrue(stock.count(stack -> stack.is(Items.BREAD) || stack.is(Items.APPLE)) == 10, "Count of a kind");
         helper.assertTrue(stock.contains(stack -> stack.is(Items.APPLE)) && !stock.contains(stack -> stack.is(Items.DIAMOND)), "Contains");
@@ -86,7 +87,7 @@ public final class ClerkStockGameTests {
 
         helper.assertTrue(ClerkStorage.stock(level, clerk, true).insert(new ItemStack(Items.BREAD, 10)).isEmpty(), "Delivered");
         helper.assertTrue(bread(chest) == 10 && bread(level, clerk) == 10, "A delivery into the linked chest shows at once");
-        List<ItemStack> taken = ClerkStorage.stock(level, clerk, true).take(Items.BREAD, 4);
+        List<ItemStack> taken = ClerkStorage.stock(level, clerk, true).take(ItemKey.of(Items.BREAD), 4);
         helper.assertTrue(taken.stream().mapToInt(ItemStack::getCount).sum() == 4, "Taken: " + taken);
         helper.assertTrue(bread(chest) == 6 && bread(level, clerk) == 6, "A hand-out shows at once: " + bread(level, clerk));
         helper.succeed();
@@ -105,7 +106,7 @@ public final class ClerkStockGameTests {
 
         chest.setItem(0, ItemStack.EMPTY);
         helper.assertTrue(bread(level, clerk) == 5, "A foreign change is not re-read yet");
-        helper.assertTrue(ClerkStorage.stock(level, clerk, true).take(Items.BREAD, 5).isEmpty(), "Nothing to take in the real chest");
+        helper.assertTrue(ClerkStorage.stock(level, clerk, true).take(ItemKey.of(Items.BREAD), 5).isEmpty(), "Nothing to take in the real chest");
         helper.assertTrue(bread(level, clerk) == 0, "The stock is corrected at once");
         helper.succeed();
     }

@@ -200,11 +200,11 @@ final class DeliverymanLoop implements CategoryLoop {
     private static int stacksOf(ServerLevel level, DeliveryTask task) {
         if (task.input().isPresent()) {
             return task.input().get().items().entrySet().stream()
-                    .mapToInt(entry -> (int) Math.ceil(entry.getValue() / (double) new ItemStack(entry.getKey()).getMaxStackSize())).sum();
+                    .mapToInt(entry -> (int) Math.ceil(entry.getValue() / (double) entry.getKey().toStack().getMaxStackSize())).sum();
         }
         if (task.result().isPresent()) {
             DeliveryTask.Result result = task.result().get();
-            return (int) Math.ceil(result.count() / (double) new ItemStack(result.item()).getMaxStackSize());
+            return (int) Math.ceil(result.count() / (double) result.item().toStack().getMaxStackSize());
         }
         return JobBlockSite.at(level, task.jobBlock()).map(site -> Pickups.contents(level, site, task.source()).stacks()).orElse(0);
     }
@@ -326,7 +326,7 @@ final class DeliverymanLoop implements CategoryLoop {
             return;
         }
         Stock stock = visit.stockAt(task.source());
-        int want = Math.min(result.count(), load.room(new ItemStack(result.item()), capacity));
+        int want = Math.min(result.count(), load.room(result.item().toStack(), capacity));
         List<ItemStack> got = want > 0 ? stock.take(result.item(), want) : List.of();
         int taken = got.stream().mapToInt(ItemStack::getCount).sum();
         got.forEach(load::add);

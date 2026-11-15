@@ -10,6 +10,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.client.gui.CivGui;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.DeliveryTask;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Producers;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
@@ -282,7 +283,7 @@ public record ClerkTabData(int level, int ledgers, List<StockRule> rules, List<T
 
     private static TaskRow requestRow(ServerLevel level, Settlement settlement, BlockPos clerk, Request request, int depth) {
         int amount = request.amount() + request.crafting();
-        Component item = new ItemStack(request.item()).getHoverName();
+        Component item = request.item().toStack().getHoverName();
         Component text = request.claims().isEmpty() ? Component.translatable("civmod.gui.clerk.task.request.open", amount, item)
                 : Component.translatable("civmod.gui.clerk.task.request", producer(settlement, request.claims().get(0)), amount, item);
         TaskStatus status;
@@ -306,7 +307,7 @@ public record ClerkTabData(int level, int ledgers, List<StockRule> rules, List<T
         if (depth == 0 && !target.equals(clerk)) {
             details.add(gray(Component.translatable("civmod.gui.clerk.task.for", name(settlement, target))));
         }
-        return new TaskRow(new ItemStack(request.item(), amount), text, status, details, depth);
+        return new TaskRow(request.item().toStack(amount), text, status, details, depth);
     }
 
     /** The Job of the producer crafting a claim ("Smith"), its name if it holds none. */
@@ -343,14 +344,14 @@ public record ClerkTabData(int level, int ledgers, List<StockRule> rules, List<T
             if (task.input().isPresent()) {
                 DeliveryTask.Input input = task.input().get();
                 items = input.count();
-                icon = input.items().keySet().stream().findFirst().map(ItemStack::new).orElse(ItemStack.EMPTY);
+                icon = input.items().keySet().stream().findFirst().map(ItemKey::toStack).orElse(ItemStack.EMPTY);
                 Component storeName = name(settlement, task.source());
                 text = task.surplus() ? Component.translatable("civmod.gui.clerk.delivery.surplus", storeName, name(settlement, input.to()))
                         : Component.translatable("civmod.gui.clerk.delivery.input", storeName, source);
             } else if (task.result().isPresent()) {
                 DeliveryTask.Result result = task.result().get();
                 items = result.count();
-                icon = new ItemStack(result.item());
+                icon = result.item().toStack();
                 text = Component.translatable("civmod.gui.clerk.delivery.result", source, name(settlement, result.clerk()));
             } else {
                 // A pickup: the first item waiting at the drop-off; while it is unloaded or carried away the first item

@@ -7,6 +7,7 @@ import java.util.function.Consumer;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
@@ -28,7 +29,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -88,9 +88,9 @@ public final class MechanicGameTests {
         Job mechanic = mechanic();
         helper.assertTrue(mechanic != null && mechanic.parent().orElseThrow() == CraftspersonGameTests.craftJob(), "The Mechanic specializes the Craftsperson");
         BlockPos pos = workshop(helper, new BlockPos(1, 1, 1));
-        helper.assertTrue(Patterns.setOutput(level, pos, mechanic, 0, Items.PISTON).orElseThrow().checked(), "Piston: one redstone input is enough");
-        helper.assertTrue(Patterns.setOutput(level, pos, mechanic, 1, Items.REDSTONE_TORCH).orElseThrow().checked(), "Redstone torch checked");
-        Pattern sticks = Patterns.setOutput(level, pos, mechanic, 2, Items.STICK).orElseThrow();
+        helper.assertTrue(Patterns.setOutput(level, pos, mechanic, 0, ItemKey.of(Items.PISTON)).orElseThrow().checked(), "Piston: one redstone input is enough");
+        helper.assertTrue(Patterns.setOutput(level, pos, mechanic, 1, ItemKey.of(Items.REDSTONE_TORCH)).orElseThrow().checked(), "Redstone torch checked");
+        Pattern sticks = Patterns.setOutput(level, pos, mechanic, 2, ItemKey.of(Items.STICK)).orElseThrow();
         helper.assertFalse(sticks.checked(), "Sticks are outside the domain: unchecked");
         helper.assertFalse(Patterns.toggleCheck(level, pos, mechanic, 2), "And cannot be checked");
         PatternsTabData tab = PatternsTabData.of(level, pos, mechanic);
@@ -98,7 +98,7 @@ public final class MechanicGameTests {
                 "Greyed out: " + tab.filtered());
         helper.assertTrue(tab.filteredLine().equals(Component.translatable("civmod.gui.patterns.outside_domain")),
                 "Domain state line: " + tab.filteredLine());
-        helper.assertTrue(Patterns.setOutput(level, pos, CraftspersonGameTests.craftJob(), 0, Items.STICK).orElseThrow().checked(),
+        helper.assertTrue(Patterns.setOutput(level, pos, CraftspersonGameTests.craftJob(), 0, ItemKey.of(Items.STICK)).orElseThrow().checked(),
                 "The Craftsperson crafts sticks");
         helper.succeed();
     }
@@ -115,16 +115,16 @@ public final class MechanicGameTests {
         BlockPos craft = workshop(helper, new BlockPos(1, 1, 5));
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.CRAFTER);
         Settler settler = worker(helper, setup, craft, mechanic);
-        helper.assertTrue(Patterns.setOutput(level, craft, mechanic, 0, Items.REPEATER).orElseThrow().checked(), "Repeaters checked");
-        helper.assertTrue(Patterns.setOutput(level, craft, mechanic, 1, Items.REDSTONE_TORCH).orElseThrow().checked(), "Torches checked");
-        helper.assertFalse(Patterns.setOutput(level, craft, mechanic, 2, Items.STICK).orElseThrow().checked(), "Sticks stay unchecked");
+        helper.assertTrue(Patterns.setOutput(level, craft, mechanic, 0, ItemKey.of(Items.REPEATER)).orElseThrow().checked(), "Repeaters checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, mechanic, 1, ItemKey.of(Items.REDSTONE_TORCH)).orElseThrow().checked(), "Torches checked");
+        helper.assertFalse(Patterns.setOutput(level, craft, mechanic, 2, ItemKey.of(Items.STICK)).orElseThrow().checked(), "Sticks stay unchecked");
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
 
         helper.assertTrue(delivered(level, setup.clerk()) == 0, "No repeaters without sticks");
-        Request request = Requests.byPriority(setup.settlement()).stream().filter(found -> found.item() == Items.REPEATER).findFirst().orElseThrow();
-        List<Item> missing = request.missing().stream().map(Request.Missing::item).toList();
-        helper.assertTrue(missing.contains(Items.STICK), "Missing: Stick " + request.missing());
-        helper.assertFalse(missing.contains(Items.REDSTONE_TORCH), "Torches are made in the domain: " + request.missing());
+        Request request = Requests.byPriority(setup.settlement()).stream().filter(found -> found.item().is(Items.REPEATER)).findFirst().orElseThrow();
+        List<ItemKey> missing = request.missing().stream().map(Request.Missing::item).toList();
+        helper.assertTrue(missing.contains(ItemKey.of(Items.STICK)), "Missing: Stick " + request.missing());
+        helper.assertFalse(missing.contains(ItemKey.of(Items.REDSTONE_TORCH)), "Torches are made in the domain: " + request.missing());
         cleanUp(setup, settler);
         helper.succeed();
     }
@@ -163,7 +163,7 @@ public final class MechanicGameTests {
         BlockPos craft = job == mechanic() ? workshop(helper, relative) : CraftspersonGameTests.craftsperson(helper, relative);
         helper.setBlock(new BlockPos(3, 1, 5), station);
         Settler settler = worker(helper, setup, craft, job);
-        helper.assertTrue(Patterns.setOutput(level, craft, job, 0, Items.REPEATER).orElseThrow().checked(), "Repeaters checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, job, 0, ItemKey.of(Items.REPEATER)).orElseThrow().checked(), "Repeaters checked");
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         int delivered = delivered(level, setup.clerk());
         cleanUp(setup, settler);
@@ -183,7 +183,7 @@ public final class MechanicGameTests {
         for (int i = 0; i < stock.size(); i++) {
             chest.setItem(i, stock.get(i).copy());
         }
-        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.REPEATER, 4, 0)), "Rule set");
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.REPEATER), 4, 0)), "Rule set");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         return new Setup(clerk, data, settlement);
     }

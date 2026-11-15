@@ -3,6 +3,7 @@ package com.gilfort.civmod.registry;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.CompostableIngredient;
 import com.gilfort.civmod.api.JobCraftingRecipe;
+import com.gilfort.civmod.logistics.ItemKeyIngredient;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.crafting.RecipeSerializer;
@@ -34,6 +35,10 @@ public final class ModRecipes {
     /** The ingredient {@code civmod:compostable} of the Composter's recipe. */
     public static final DeferredHolder<IngredientType<?>, IngredientType<CompostableIngredient>> COMPOSTABLE = INGREDIENT_TYPES.register("compostable",
             () -> CompostableIngredient.TYPE);
+
+    /** The ingredient {@code civmod:item_key}: an item with its relevant components (exact patterns). */
+    public static final DeferredHolder<IngredientType<?>, IngredientType<ItemKeyIngredient>> ITEM_KEY = INGREDIENT_TYPES.register("item_key",
+            () -> ItemKeyIngredient.TYPE);
 
     private ModRecipes() {
     }

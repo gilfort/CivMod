@@ -12,6 +12,7 @@ import com.gilfort.civmod.debug.CivProfiler;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.DeliveryTask;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.Deliveries;
@@ -93,7 +94,7 @@ public final class BenchmarkGameTests {
             Deliveries.request(data, settlement, source, clerk, level.getGameTime(), false);
             UUID task = Deliveries.get(settlement, source).orElseThrow().id();
             Deliveries.take(data, settlement, task, UUID.randomUUID(), "Bench", day);
-            Reservations.reserve(settlement, clerk, task, i % 2 == 0 ? Items.BREAD : Items.OAK_LOG, 4, day);
+            Reservations.reserve(settlement, clerk, task, ItemKey.of(i % 2 == 0 ? Items.BREAD : Items.OAK_LOG), 4, day);
             tasks.add(task);
         }
         double with = stockReadMicros(level, clerk);

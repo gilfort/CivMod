@@ -17,6 +17,7 @@ import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.CraftPlan;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.Producers;
 import com.gilfort.civmod.logistics.Request;
@@ -121,27 +122,27 @@ public final class CraftspersonGameTests {
     private static void patternMatching(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos pos = craftsperson(helper, new BlockPos(1, 1, 1));
-        Pattern pickaxe = Patterns.setOutput(level, pos, craftJob(), 0, Items.STONE_PICKAXE).orElseThrow();
-        helper.assertTrue(!pickaxe.exact() && pickaxe.recipe().isPresent() && pickaxe.output() == Items.STONE_PICKAXE && pickaxe.count() == 1,
+        Pattern pickaxe = Patterns.setOutput(level, pos, craftJob(), 0, ItemKey.of(Items.STONE_PICKAXE)).orElseThrow();
+        helper.assertTrue(!pickaxe.exact() && pickaxe.recipe().isPresent() && pickaxe.output().is(Items.STONE_PICKAXE) && pickaxe.count() == 1,
                 "Output only: a recipe pattern " + pickaxe);
-        helper.assertTrue(pickaxe.grid().get(4) == Items.STICK && pickaxe.grid().get(7) == Items.STICK
-                && Collections.frequency(pickaxe.grid(), Items.AIR) == 4, "Grid: 3 stone heads, 2 sticks " + pickaxe.grid());
+        helper.assertTrue(pickaxe.grid().get(4).is(Items.STICK) && pickaxe.grid().get(7).is(Items.STICK)
+                && Collections.frequency(pickaxe.grid(), ItemKey.EMPTY) == 4, "Grid: 3 stone heads, 2 sticks " + pickaxe.grid());
         List<Ingredient> inputs = Patterns.inputs(level, profile(), pickaxe);
         helper.assertTrue(inputs.size() == 5, "Five inputs");
         helper.assertTrue(inputs.stream().anyMatch(input -> input.test(new ItemStack(Items.COBBLESTONE)) && input.test(new ItemStack(Items.BLACKSTONE))),
                 "Tag ingredients stay flexible");
 
-        Pattern stick = Patterns.setOutput(level, pos, craftJob(), 1, Items.STICK).orElseThrow();
+        Pattern stick = Patterns.setOutput(level, pos, craftJob(), 1, ItemKey.of(Items.STICK)).orElseThrow();
         Pattern other = Patterns.cycle(level, pos, craftJob(), 1, 1).orElseThrow();
         helper.assertFalse(other.recipe().equals(stick.recipe()), "Arrows cycle the alternatives: " + stick.recipe() + " / " + other.recipe());
-        helper.assertTrue(other.output() == Items.STICK, "Still sticks");
+        helper.assertTrue(other.output().is(Items.STICK), "Still sticks");
         helper.assertTrue(Patterns.cycle(level, pos, craftJob(), 1, -1).orElseThrow().recipe().equals(stick.recipe()), "And back");
 
-        Pattern exact = Patterns.setInput(level, pos, craftJob(), 2, 1, Items.STICK).orElseThrow();
-        helper.assertTrue(exact.exact() && exact.output() == Items.AIR, "One stick matches no recipe");
-        helper.assertTrue(Patterns.setInput(level, pos, craftJob(), 2, 1, Items.BIRCH_PLANKS).isPresent(), "Plank set");
-        exact = Patterns.setInput(level, pos, craftJob(), 2, 4, Items.BIRCH_PLANKS).orElseThrow();
-        helper.assertTrue(exact.exact() && exact.output() == Items.STICK && exact.count() == 4, "Two birch planks: 4 sticks " + exact);
+        Pattern exact = Patterns.setInput(level, pos, craftJob(), 2, 1, ItemKey.of(Items.STICK)).orElseThrow();
+        helper.assertTrue(exact.exact() && exact.output().is(Items.AIR), "One stick matches no recipe");
+        helper.assertTrue(Patterns.setInput(level, pos, craftJob(), 2, 1, ItemKey.of(Items.BIRCH_PLANKS)).isPresent(), "Plank set");
+        exact = Patterns.setInput(level, pos, craftJob(), 2, 4, ItemKey.of(Items.BIRCH_PLANKS)).orElseThrow();
+        helper.assertTrue(exact.exact() && exact.output().is(Items.STICK) && exact.count() == 4, "Two birch planks: 4 sticks " + exact);
         List<Ingredient> exactInputs = Patterns.inputs(level, profile(), exact);
         helper.assertTrue(exactInputs.size() == 2 && exactInputs.stream().noneMatch(input -> input.test(new ItemStack(Items.OAK_PLANKS))),
                 "Exactly those items");
@@ -170,23 +171,23 @@ public final class CraftspersonGameTests {
 
         Item[] outputs = {Items.STICK, Items.OAK_PLANKS, Items.TORCH, Items.CHEST, Items.STONE_PICKAXE, Items.STONE_AXE, Items.STONE_SHOVEL,
                 Items.LADDER, Items.BOWL};
-        Patterns.setOutput(level, pos, craftJob(), 1, Items.STICK);
+        Patterns.setOutput(level, pos, craftJob(), 1, ItemKey.of(Items.STICK));
         helper.assertFalse(Patterns.toggleCheck(level, pos, craftJob(), 1), "Unchecked by hand");
-        helper.assertFalse(Producers.canMake(level, settlement, Items.STICK), "Unchecked: nobody makes sticks");
+        helper.assertFalse(Producers.canMake(level, settlement, ItemKey.of(Items.STICK)), "Unchecked: nobody makes sticks");
         Patterns.clear(data, pos, craftJob(), 1);
         for (int slot = 0; slot < outputs.length; slot++) {
-            boolean checked = Patterns.setOutput(level, pos, craftJob(), slot * 2, outputs[slot]).orElseThrow().checked();
+            boolean checked = Patterns.setOutput(level, pos, craftJob(), slot * 2, ItemKey.of(outputs[slot])).orElseThrow().checked();
             helper.assertTrue(checked == slot < 6, "Checkmark " + slot + " within the limit of 6: " + checked);
         }
-        helper.assertFalse(Producers.canMake(level, settlement, Items.STICK), "No settler: nobody makes sticks");
+        helper.assertFalse(Producers.canMake(level, settlement, ItemKey.of(Items.STICK)), "No settler: nobody makes sticks");
         com.gilfort.civmod.settlement.TestAssignments.assign(data, pos, java.util.UUID.randomUUID(), "Cora", settlement.id(), List.of());
-        helper.assertTrue(Producers.canMake(level, settlement, Items.STICK), "Checked and staffed: sticks can be made");
-        helper.assertFalse(Producers.canMake(level, settlement, Items.LADDER), "Not checked: no ladders");
+        helper.assertTrue(Producers.canMake(level, settlement, ItemKey.of(Items.STICK)), "Checked and staffed: sticks can be made");
+        helper.assertFalse(Producers.canMake(level, settlement, ItemKey.of(Items.LADDER)), "Not checked: no ladders");
 
         helper.assertTrue(Patterns.enforceLimit(level, pos, craftJob(), 4) == 2, "Limit 4: two checkmarks removed");
         SettlementBlock block = settlement.block(pos).orElseThrow();
         helper.assertTrue(Patterns.checked(block, craftJob()).stream().map(Pattern::output).toList()
-                .equals(List.of(Items.STICK, Items.OAK_PLANKS, Items.TORCH, Items.CHEST)), "The last ones in list order lose theirs");
+                .equals(List.of(ItemKey.of(Items.STICK), ItemKey.of(Items.OAK_PLANKS), ItemKey.of(Items.TORCH), ItemKey.of(Items.CHEST))), "The last ones in list order lose theirs");
         helper.assertTrue(block.notice(craftJob()).equals(Optional.of(new SettlementBlock.Notice.Trimmed(2, 4))), "Notice: 2 removed, 4 left");
         helper.assertTrue(Patterns.enforceLimit(level, pos, craftJob(), 4) == 0, "Within the limit: nothing removed");
         helper.assertTrue(block.notice(craftJob()).isPresent(), "The notice stays while nothing changes");
@@ -209,31 +210,31 @@ public final class CraftspersonGameTests {
         define(helper, pos, 1, Items.OAK_PLANKS);
         SettlementData data = SettlementData.get(level);
         List<Pattern> checked = Patterns.checked(SettlementData.get(level).settlementAt(pos).flatMap(s -> s.block(pos)).orElseThrow(), craftJob());
-        Map<Item, Integer> stock = Map.of(Items.OAK_LOG, 1, Items.COBBLESTONE, 3);
+        Map<ItemKey, Integer> stock = Map.of(ItemKey.of(Items.OAK_LOG), 1, ItemKey.of(Items.COBBLESTONE), 3);
 
-        CraftPlan noSticks = CraftPlan.plan(level, profile(), checked, Items.STONE_PICKAXE, 1, Map.of(), stock);
-        helper.assertTrue(noSticks.missing().equals(List.of(new Request.Missing(Items.STICK, 2))),
+        CraftPlan noSticks = CraftPlan.plan(level, profile(), checked, ItemKey.of(Items.STONE_PICKAXE), 1, Map.of(), stock);
+        helper.assertTrue(noSticks.missing().equals(List.of(new Request.Missing(ItemKey.of(Items.STICK), 2))),
                 "No stick pattern: Missing 2× Stick " + noSticks.missing());
 
         define(helper, pos, 2, Items.STICK);
         checked = Patterns.checked(data.settlementAt(pos).flatMap(s -> s.block(pos)).orElseThrow(), craftJob());
-        CraftPlan one = CraftPlan.plan(level, profile(), checked, Items.STONE_PICKAXE, 1, Map.of(), stock);
+        CraftPlan one = CraftPlan.plan(level, profile(), checked, ItemKey.of(Items.STONE_PICKAXE), 1, Map.of(), stock);
         helper.assertTrue(one.missing().isEmpty(), "Everything there: " + one.missing());
-        helper.assertTrue(one.takes().equals(Map.of(Items.OAK_LOG, 1, Items.COBBLESTONE, 3)), "Takes a log and 3 cobblestone: " + one.takes());
+        helper.assertTrue(one.takes().equals(Map.of(ItemKey.of(Items.OAK_LOG), 1, ItemKey.of(Items.COBBLESTONE), 3)), "Takes a log and 3 cobblestone: " + one.takes());
         helper.assertTrue(one.steps().stream().map(step -> step.pattern().output()).toList()
-                .equals(List.of(Items.OAK_PLANKS, Items.STICK, Items.STONE_PICKAXE)), "Intermediates first: " + one.steps());
+                .equals(List.of(ItemKey.of(Items.OAK_PLANKS), ItemKey.of(Items.STICK), ItemKey.of(Items.STONE_PICKAXE))), "Intermediates first: " + one.steps());
         helper.assertTrue(one.operations() == 3, "Three operations: " + one.operations());
 
-        CraftPlan two = CraftPlan.plan(level, profile(), checked, Items.STONE_PICKAXE, 2, Map.of(), stock);
-        helper.assertTrue(two.missing().equals(List.of(new Request.Missing(Items.COBBLESTONE, 3))), "2 pickaxes: 3 cobblestone missing "
+        CraftPlan two = CraftPlan.plan(level, profile(), checked, ItemKey.of(Items.STONE_PICKAXE), 2, Map.of(), stock);
+        helper.assertTrue(two.missing().equals(List.of(new Request.Missing(ItemKey.of(Items.COBBLESTONE), 3))), "2 pickaxes: 3 cobblestone missing "
                 + two.missing());
-        helper.assertTrue(CraftPlan.plan(level, profile(), checked, Items.STONE_PICKAXE, 2, Map.of(), Map.of(Items.OAK_LOG, 1, Items.COBBLESTONE, 6))
+        helper.assertTrue(CraftPlan.plan(level, profile(), checked, ItemKey.of(Items.STONE_PICKAXE), 2, Map.of(), Map.of(ItemKey.of(Items.OAK_LOG), 1, ItemKey.of(Items.COBBLESTONE), 6))
                 .operations() == 4, "One log makes the sticks of two pickaxes: planks, sticks, 2 pickaxes");
 
-        CraftPlan held = CraftPlan.plan(level, profile(), checked, Items.STONE_PICKAXE, 1, Map.of(Items.STICK, 2), Map.of(Items.COBBLESTONE, 3));
-        helper.assertTrue(held.missing().isEmpty() && held.operations() == 1 && held.takes().equals(Map.of(Items.COBBLESTONE, 3)),
+        CraftPlan held = CraftPlan.plan(level, profile(), checked, ItemKey.of(Items.STONE_PICKAXE), 1, Map.of(ItemKey.of(Items.STICK), 2), Map.of(ItemKey.of(Items.COBBLESTONE), 3));
+        helper.assertTrue(held.missing().isEmpty() && held.operations() == 1 && held.takes().equals(Map.of(ItemKey.of(Items.COBBLESTONE), 3)),
                 "Held sticks are used first: " + held);
-        helper.assertTrue(CraftPlan.most(level, profile(), checked, Items.STONE_PICKAXE, 5, Map.of(), Map.of(Items.OAK_LOG, 2, Items.COBBLESTONE, 9), 256) == 3,
+        helper.assertTrue(CraftPlan.most(level, profile(), checked, ItemKey.of(Items.STONE_PICKAXE), 5, Map.of(), Map.of(ItemKey.of(Items.OAK_LOG), 2, ItemKey.of(Items.COBBLESTONE), 9), 256) == 3,
                 "As many as the materials allow: 3");
         helper.succeed();
     }
@@ -251,7 +252,7 @@ public final class CraftspersonGameTests {
         Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
         chest.setItem(0, new ItemStack(Items.OAK_LOG, 1));
         chest.setItem(1, new ItemStack(Items.COBBLESTONE, 3));
-        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 1, 0)), "Rule set");
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.STONE_PICKAXE), 1, 0)), "Rule set");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(Requests.claimable(settlement).size() == 1, "One request");
 
@@ -288,11 +289,11 @@ public final class CraftspersonGameTests {
         Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
         chest.setItem(0, new ItemStack(Items.COBBLESTONE, 2));
         chest.setItem(1, new ItemStack(Items.STICK, 2));
-        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 1, 30));
-        StockRules.setRule(data, clerk, StockRule.minimum(1, Items.STONE_AXE, 1, 20));
-        StockRules.setRule(data, clerk, StockRule.minimum(2, Items.TORCH, 4, 10));
-        StockRules.setRule(data, clerk, StockRule.minimum(3, Items.STONE_HOE, 1, 5));
-        StockRules.setRule(data, clerk, StockRule.minimum(4, Items.LADDER, 3, 50));
+        StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.STONE_PICKAXE), 1, 30));
+        StockRules.setRule(data, clerk, StockRule.minimum(1, ItemKey.of(Items.STONE_AXE), 1, 20));
+        StockRules.setRule(data, clerk, StockRule.minimum(2, ItemKey.of(Items.TORCH), 4, 10));
+        StockRules.setRule(data, clerk, StockRule.minimum(3, ItemKey.of(Items.STONE_HOE), 1, 5));
+        StockRules.setRule(data, clerk, StockRule.minimum(4, ItemKey.of(Items.LADDER), 3, 50));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
 
         BlockPos craft = craftsperson(helper, new BlockPos(1, 1, 5));
@@ -310,7 +311,7 @@ public final class CraftspersonGameTests {
 
         placeTable(helper, new BlockPos(3, 1, 5));
         settler.getWork().decideNow(level);
-        helper.assertTrue(Requests.forRule(settlement, clerk, 0).orElseThrow().missing().equals(List.of(new Request.Missing(Items.COBBLESTONE, 1))),
+        helper.assertTrue(Requests.forRule(settlement, clerk, 0).orElseThrow().missing().equals(List.of(new Request.Missing(ItemKey.of(Items.COBBLESTONE), 1))),
                 "Pickaxe: Missing 1× Cobblestone " + Requests.forRule(settlement, clerk, 0));
         helper.assertTrue(!Requests.forRule(settlement, clerk, 1).orElseThrow().missing().isEmpty()
                 && !Requests.forRule(settlement, clerk, 2).orElseThrow().missing().isEmpty(), "Axe and torches tried");
@@ -345,7 +346,7 @@ public final class CraftspersonGameTests {
         BlockPos clerk = StockRuleGameTests.workingClerk(helper);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 2, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.STONE_PICKAXE), 2, 0));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         BlockPos craft = craftsperson(helper, new BlockPos(1, 1, 5));
         placeTable(helper, new BlockPos(3, 1, 5));
@@ -353,8 +354,8 @@ public final class CraftspersonGameTests {
         Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
         settler.getWork().decideNow(level);
         List<Request.Missing> missing = Requests.forRule(settlement, clerk, 0).orElseThrow().missing();
-        helper.assertTrue(missing.size() == 2 && missing.contains(new Request.Missing(Items.COBBLESTONE, 6))
-                && missing.contains(new Request.Missing(Items.STICK, 4)), "Missing: 6× Cobblestone, 4× Stick " + missing);
+        helper.assertTrue(missing.size() == 2 && missing.contains(new Request.Missing(ItemKey.of(Items.COBBLESTONE), 6))
+                && missing.contains(new Request.Missing(ItemKey.of(Items.STICK), 4)), "Missing: 6× Cobblestone, 4× Stick " + missing);
         TestAssignments.unassign(data, clerk);
         settler.discard();
         helper.succeed();
@@ -373,8 +374,8 @@ public final class CraftspersonGameTests {
         for (int slot = 7; slot < 11; slot++) {
             chest.setItem(slot, new ItemStack(Items.STICK, 64));
         }
-        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 100, 0));
-        StockRules.setRule(data, clerk, StockRule.minimum(1, Items.COBBLESTONE, 500, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.STONE_PICKAXE), 100, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(1, ItemKey.of(Items.COBBLESTONE), 500, 0));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         UUID request = Requests.forRule(settlement, clerk, 0).orElseThrow().id();
         helper.assertTrue(Requests.forRule(settlement, clerk, 1).orElseThrow().amount() == 500 - 7 * 64,
@@ -425,7 +426,7 @@ public final class CraftspersonGameTests {
         define(helper, craft, 0, Items.STICK);
         Container own = (Container) level.getBlockEntity(craft);
         own.setItem(0, new ItemStack(Items.OAK_PLANKS, 2));
-        Request request = Requests.post(data, settlement, Items.STICK, 4, Optional.of(clerk), Optional.empty());
+        Request request = Requests.post(data, settlement, ItemKey.of(Items.STICK), 4, Optional.of(clerk), Optional.empty());
         Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
         catchUp(level, settler, 3000L);
         Container chest = (Container) level.getBlockEntity(dropOff);
@@ -436,7 +437,7 @@ public final class CraftspersonGameTests {
             chest.setItem(slot, new ItemStack(Items.DIRT, 64));
         }
         own.setItem(0, new ItemStack(Items.OAK_PLANKS, 2));
-        Requests.post(data, settlement, Items.STICK, 4, Optional.of(clerk), Optional.empty());
+        Requests.post(data, settlement, ItemKey.of(Items.STICK), 4, Optional.of(clerk), Optional.empty());
         catchUp(level, settler, 3000L);
         helper.assertTrue(settler.getWork().buffer(craft).stacks().stream().anyMatch(stack -> stack.is(Items.STICK) && stack.getCount() == 4),
                 "Everything full: the sticks stay in the buffer " + settler.getWork().buffer(craft).stacks());
@@ -469,7 +470,7 @@ public final class CraftspersonGameTests {
         placeTable(helper, new BlockPos(4, 1, 6));
         define(helper, craft, 0, Items.STICK);
         ((Container) level.getBlockEntity(craft)).setItem(0, new ItemStack(Items.OAK_PLANKS, 2));
-        Request request = Requests.post(data, settlement, Items.STICK, 4, Optional.of(clerk), Optional.empty());
+        Request request = Requests.post(data, settlement, ItemKey.of(Items.STICK), 4, Optional.of(clerk), Optional.empty());
         Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
         // Skilled up to the cap of a level 1 JobBlock (a bigger JobBlock would reach into the neighbouring tests).
         settler.getSkills().set(ModJobs.CRAFTSPERSON.get(), new com.gilfort.civmod.job.SettlerSkills.Skill(100, 0));
@@ -524,7 +525,7 @@ public final class CraftspersonGameTests {
         BlockPos craft = craftsperson(helper, new BlockPos(1, 1, distance));
         placeTable(helper, new BlockPos(4, 1, distance + 1));
         define(helper, craft, 0, Items.STICK);
-        Request request = Requests.post(data, settlement, Items.STICK, 4, Optional.of(clerk), Optional.empty());
+        Request request = Requests.post(data, settlement, ItemKey.of(Items.STICK), 4, Optional.of(clerk), Optional.empty());
         Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, distance + 2), "Cora");
         settler.getSkills().set(ModJobs.CRAFTSPERSON.get(), new com.gilfort.civmod.job.SettlerSkills.Skill(100, 0));
         settler.setNoAi(false);
@@ -566,7 +567,7 @@ public final class CraftspersonGameTests {
         define(helper, craft, 0, Items.STONE_AXE);
         ((Container) level.getBlockEntity(craft)).setItem(0, new ItemStack(Items.STICK, 4));
         // On shift a stock rule posts the request.
-        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_AXE, 2, 0)), "Rule set");
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.STONE_AXE), 2, 0)), "Rule set");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         UUID request = Requests.forRule(settlement, clerk, 0).orElseThrow().id();
         Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
@@ -605,11 +606,11 @@ public final class CraftspersonGameTests {
         placeTable(helper, new BlockPos(3, 1, 5));
         define(helper, craft, 0, Items.STONE_AXE);
         ((Container) level.getBlockEntity(craft)).setItem(0, new ItemStack(Items.STICK, 4));
-        UUID request = Requests.post(data, settlement, Items.STONE_AXE, 2, Optional.of(clerk), Optional.empty()).id();
+        UUID request = Requests.post(data, settlement, ItemKey.of(Items.STONE_AXE), 2, Optional.of(clerk), Optional.empty()).id();
         Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
         settler.getWork().decideNow(level);
         helper.assertTrue(settler.getWork().status(craft) == JobStatus.MISSING_INPUTS, "Missing inputs: " + settler.getWork().status(craft));
-        helper.assertTrue(Requests.get(settlement, request).orElseThrow().missing().equals(List.of(new Request.Missing(Items.COBBLESTONE, 6))),
+        helper.assertTrue(Requests.get(settlement, request).orElseThrow().missing().equals(List.of(new Request.Missing(ItemKey.of(Items.COBBLESTONE), 6))),
                 "Missing: 6× Cobblestone " + Requests.get(settlement, request));
         // The request is skipped for a while: still "Missing inputs", not "No request".
         settler.getWork().decideNow(level);
@@ -632,7 +633,7 @@ public final class CraftspersonGameTests {
         BlockPos craft = craftsperson(helper, new BlockPos(1, 1, 5));
         placeTable(helper, new BlockPos(3, 1, 5));
         define(helper, craft, 0, Items.STICK);
-        UUID request = Requests.post(data, settlement, Items.STICK, 4, Optional.of(clerk), Optional.empty()).id();
+        UUID request = Requests.post(data, settlement, ItemKey.of(Items.STICK), 4, Optional.of(clerk), Optional.empty()).id();
         Settler settler = craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
         // Mid-jump.
         settler.snapTo(settler.getX(), settler.getY() + 0.6, settler.getZ());
@@ -699,12 +700,12 @@ public final class CraftspersonGameTests {
         entity.clearContent();
         menu.setActiveTab(patterns.index());
 
-        patterns.edit(PatternsTabData.Edit.setOutput(1, craftJob(), 3, Items.TORCH));
-        patterns.edit(PatternsTabData.Edit.transfer(1, craftJob(), 5, Optional.empty(), List.of(Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.OAK_PLANKS,
-                Items.AIR, Items.AIR, Items.AIR, Items.AIR)));
+        patterns.edit(PatternsTabData.Edit.setOutput(1, craftJob(), 3, ItemKey.of(Items.TORCH)));
+        patterns.edit(PatternsTabData.Edit.transfer(1, craftJob(), 5, Optional.empty(), List.of(ItemKey.EMPTY, ItemKey.of(Items.OAK_PLANKS), ItemKey.EMPTY, ItemKey.EMPTY, ItemKey.of(Items.OAK_PLANKS),
+                ItemKey.EMPTY, ItemKey.EMPTY, ItemKey.EMPTY, ItemKey.EMPTY)));
         PatternsTabData tab = PatternsTabData.of(level, pos, craftJob());
-        helper.assertTrue(tab.pattern(3).filter(Pattern::checked).map(Pattern::output).equals(Optional.of(Items.TORCH)), "Torch pattern checked: " + tab);
-        helper.assertTrue(tab.pattern(5).map(Pattern::output).equals(Optional.of(Items.STICK)) && tab.pattern(5).orElseThrow().exact(),
+        helper.assertTrue(tab.pattern(3).filter(Pattern::checked).map(Pattern::output).equals(Optional.of(ItemKey.of(Items.TORCH))), "Torch pattern checked: " + tab);
+        helper.assertTrue(tab.pattern(5).map(Pattern::output).equals(Optional.of(ItemKey.of(Items.STICK))) && tab.pattern(5).orElseThrow().exact(),
                 "Transfer without a known recipe: exactly the shown items");
         helper.assertTrue(tab.limit() == Patterns.BASE_CHECKMARKS && tab.notice().isEmpty(), "Limit 6, nothing removed");
         patterns.edit(PatternsTabData.Edit.clear(1, craftJob(), 3));
@@ -719,12 +720,12 @@ public final class CraftspersonGameTests {
      */
     private static void editCodec(GameTestHelper helper) {
         List<PatternsTabData.Edit> edits = List.of(
-                PatternsTabData.Edit.setOutput(7, craftJob(), 3, Items.TORCH),
-                PatternsTabData.Edit.setInput(7, craftJob(), 4, 2, Items.STICK, RecipeType.CRAFTING),
+                PatternsTabData.Edit.setOutput(7, craftJob(), 3, ItemKey.of(Items.TORCH)),
+                PatternsTabData.Edit.setInput(7, craftJob(), 4, 2, ItemKey.of(Items.STICK), RecipeType.CRAFTING),
                 PatternsTabData.Edit.cycle(7, craftJob(), 5, -1),
                 PatternsTabData.Edit.toggleCheck(7, craftJob(), 6),
                 PatternsTabData.Edit.clear(7, craftJob(), 7),
-                PatternsTabData.Edit.transfer(7, craftJob(), 8, RecipeType.SMELTING, Optional.empty(), List.of(Items.COAL, Items.AIR)),
+                PatternsTabData.Edit.transfer(7, craftJob(), 8, RecipeType.SMELTING, Optional.empty(), List.of(ItemKey.of(Items.COAL), ItemKey.EMPTY)),
                 PatternsTabData.Edit.toggleAlways(7, craftJob(), 9),
                 PatternsTabData.Edit.setAtOnce(7, craftJob(), 10, 12));
         for (PatternsTabData.Edit edit : edits) {
@@ -749,16 +750,16 @@ public final class CraftspersonGameTests {
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(pos).orElseThrow();
         helper.assertTrue(Patterns.isMetal(Items.IRON_INGOT) && !Patterns.isMetal(Items.OAK_PLANKS), "The metals tag stays");
-        Pattern pickaxe = Patterns.setOutput(level, pos, craftJob(), 0, Items.IRON_PICKAXE).orElseThrow();
+        Pattern pickaxe = Patterns.setOutput(level, pos, craftJob(), 0, ItemKey.of(Items.IRON_PICKAXE)).orElseThrow();
         helper.assertTrue(pickaxe.checked(), "An iron pickaxe pattern is checked");
         SettlementBlock block = settlement.block(pos).orElseThrow();
         helper.assertFalse(Patterns.unusable(level, block, craftJob(), pickaxe), "Usable");
         helper.assertTrue(PatternsTabData.of(level, pos, craftJob()).filtered().isEmpty(), "Nothing filtered");
         define(helper, pos, 1, Items.IRON_NUGGET);
         TestAssignments.assign(data, pos, UUID.randomUUID(), "Cora", settlement.id(), List.of());
-        helper.assertTrue(Producers.canMake(level, settlement, Items.IRON_PICKAXE), "The Craftsperson makes iron pickaxes");
-        CraftPlan plan = CraftPlan.plan(level, profile(), Patterns.usable(level, block, craftJob()), Items.IRON_PICKAXE, 1, Map.of(),
-                Map.of(Items.IRON_INGOT, 3, Items.STICK, 2));
+        helper.assertTrue(Producers.canMake(level, settlement, ItemKey.of(Items.IRON_PICKAXE)), "The Craftsperson makes iron pickaxes");
+        CraftPlan plan = CraftPlan.plan(level, profile(), Patterns.usable(level, block, craftJob()), ItemKey.of(Items.IRON_PICKAXE), 1, Map.of(),
+                Map.of(ItemKey.of(Items.IRON_INGOT), 3, ItemKey.of(Items.STICK), 2));
         helper.assertTrue(plan.missing().isEmpty(), "Metal crafting with the ingots in stock: " + plan.missing());
         TestAssignments.unassign(data, pos);
         helper.succeed();
@@ -766,7 +767,7 @@ public final class CraftspersonGameTests {
 
     /** Puts a checked pattern for an item into a library slot. */
     static void define(GameTestHelper helper, BlockPos pos, int slot, Item output) {
-        Pattern pattern = Patterns.setOutput(helper.getLevel(), pos, craftJob(), slot, output).orElseThrow();
+        Pattern pattern = Patterns.setOutput(helper.getLevel(), pos, craftJob(), slot, ItemKey.of(output)).orElseThrow();
         helper.assertTrue(pattern.checked() || Patterns.toggleCheck(helper.getLevel(), pos, craftJob(), slot), "Checked " + output);
     }
 

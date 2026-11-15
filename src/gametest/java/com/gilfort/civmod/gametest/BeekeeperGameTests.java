@@ -11,6 +11,7 @@ import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.job.SavedScan;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModJobs;
@@ -111,7 +112,7 @@ public final class BeekeeperGameTests {
         Settler settler = beekeeper(helper, jobBlock);
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.SHEARS));
         helper.succeedWhen(() -> {
-            helper.assertTrue(settler.getWork().buffer(jobBlock).counts().getOrDefault(Items.HONEYCOMB, 0) > 0,
+            helper.assertTrue(settler.getWork().buffer(jobBlock).counts().getOrDefault(ItemKey.of(Items.HONEYCOMB), 0) > 0,
                     "No honeycomb yet (status " + settler.getWork().status(jobBlock) + ")");
             helper.assertValueEqual(honey(helper, HIVE), 3, "Hive honey level unchanged");
             helper.assertValueEqual(honey(helper, NEST), 0, "Nest honey level unchanged");

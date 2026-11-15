@@ -7,6 +7,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.gametest.FletcherGameTests.Setup;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.Patterns;
@@ -114,7 +115,7 @@ public final class CarpenterGameTests {
         BlockPos craft = workshop(helper, new BlockPos(1, 1, 5));
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.CRAFTING_TABLE);
         Settler settler = FletcherGameTests.worker(helper, setup, craft, carpenter());
-        helper.assertTrue(Patterns.setOutput(level, craft, carpenter(), 0, Items.OAK_DOOR).orElseThrow().checked(), "Door checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, carpenter(), 0, ItemKey.of(Items.OAK_DOOR)).orElseThrow().checked(), "Door checked");
         CraftingRounds.assertOutsideDomain(helper, craft, carpenter(), 1, Items.IRON_CHESTPLATE);
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.OAK_DOOR) >= 1,
@@ -133,7 +134,7 @@ public final class CarpenterGameTests {
         BlockPos craft = workshop(helper, new BlockPos(1, 1, 5));
         helper.assertTrue(Items.AMETHYST_SHARD.getDefaultInstance().is(carpenter().profile(ProducingProfile.class).orElseThrow().domain().orElseThrow()),
                 "The shard counts as a wooden chest through #c:chests/wooden");
-        helper.assertTrue(Patterns.setOutput(level, craft, carpenter(), 0, Items.SPYGLASS).orElseThrow().checked(),
+        helper.assertTrue(Patterns.setOutput(level, craft, carpenter(), 0, ItemKey.of(Items.SPYGLASS)).orElseThrow().checked(),
                 "A pattern with a tagged input is accepted");
         helper.succeed();
     }

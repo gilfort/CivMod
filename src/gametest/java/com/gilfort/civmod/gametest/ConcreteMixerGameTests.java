@@ -185,7 +185,7 @@ public final class ConcreteMixerGameTests {
         Patterns.syncInnate(level, craft, mixer);
         for (int slot = 0; slot < COLOURS; slot++) {
             Pattern pattern = Patterns.pattern(StationTypeGameTests.block(level, craft), mixer, slot).orElseThrow();
-            boolean wanted = pattern.output().equals(output);
+            boolean wanted = pattern.output().is(output);
             if (pattern.checked() != wanted) {
                 helper.assertTrue(Patterns.toggleCheck(level, craft, mixer, slot) == wanted, "Toggled slot " + slot);
             }

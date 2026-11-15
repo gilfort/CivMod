@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import com.gilfort.civmod.logistics.CraftPlan;
+import com.gilfort.civmod.logistics.ItemKey;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.TagKey;
@@ -32,10 +33,10 @@ final class Round {
 
     /** The claimed request, empty for an always-produce pattern. */
     final Optional<UUID> request;
-    final Item item;
+    final ItemKey item;
     final List<CraftPlan.Step> steps;
-    /** Inputs still to take, by item. */
-    final Map<Item, Integer> toTake;
+    /** Inputs still to take, by thing (item and relevant components). */
+    final Map<ItemKey, Integer> toTake;
     /** Places still to fetch from (collect inventory, then the Clerk; only the collect inventory after input deliveries). */
     final List<BlockPos> sources;
     /** The input deliveries the round waits for (on "Delivery: Deliveryman"). */
@@ -63,14 +64,14 @@ final class Round {
 
     /**
      * @param request the claimed request, empty for an always-produce pattern
-     * @param item    the item made
+     * @param item    the thing made (item and relevant components)
      * @param plan    how the claimed amount is made
      * @param takes   the inputs (and fuel) to fetch, by item
      * @param sources where the inputs are fetched (empty: everything is held already)
      * @param inputs  the input deliveries bringing inputs to the collect inventory first (empty: none)
      * @param tools   the tools of innate recipes to take at the collect inventory (empty: none)
      */
-    Round(Optional<UUID> request, Item item, CraftPlan plan, Map<Item, Integer> takes, List<BlockPos> sources, List<UUID> inputs, List<Ingredient> tools) {
+    Round(Optional<UUID> request, ItemKey item, CraftPlan plan, Map<ItemKey, Integer> takes, List<BlockPos> sources, List<UUID> inputs, List<Ingredient> tools) {
         this.request = request;
         this.item = item;
         this.steps = plan.steps();
@@ -98,7 +99,7 @@ final class Round {
      * @return the stacks to deliver
      */
     List<ItemStack> takeProduct(JobBuffer buffer) {
-        List<ItemStack> product = new ArrayList<>(buffer.takeAll(stack -> stack.is(item) || drawn.contains(stack.getItem())));
+        List<ItemStack> product = new ArrayList<>(buffer.takeAll(stack -> item.matches(stack) || drawn.contains(stack.getItem())));
         remainders.forEach((kind, count) -> {
             for (int left = count; left > 0; left--) {
                 ItemStack one = buffer.takeOne(stack -> stack.is(kind));

@@ -21,7 +21,7 @@ import net.minecraft.world.level.block.Block;
 /**
  * How the pattern editor lays out a pattern of one recipe type (vault {@code Systems/Producing Jobs.md}): crafting a
  * 3 × 3 grid, stonecutting and the furnaces one input with the station icon left of it, smithing three slots
- * (template, base, addition), innate recipes a row of inputs. A modded type gets one input if each of its recipes has
+ * (template, base, addition), brewing two (ingredient, potion), innate recipes a row of inputs. A modded type gets one input if each of its recipes has
  * one ingredient, else the 3 × 3 grid. The saved grid keeps 9 cells; short layouts use the first 1 or 3.
  *
  * @param type    the recipe type
@@ -40,7 +40,9 @@ public record PatternLayout(RecipeType<?> type, Kind kind, Item station) {
         /** Template, base, addition. */
         SMITHING(3),
         /** The inputs of an innate recipe in a row, without shape (read only). */
-        ROW(Pattern.GRID);
+        ROW(Pattern.GRID),
+        /** Ingredient, potion: the two inputs of a brewing recipe. */
+        BREWING(2);
 
         /** Network codec. */
         public static final StreamCodec<ByteBuf, Kind> STREAM_CODEC = ByteBufCodecs.idMapper(i -> values()[i], Kind::ordinal);
@@ -73,7 +75,8 @@ public record PatternLayout(RecipeType<?> type, Kind kind, Item station) {
             RecipeType.SMELTING, new PatternLayout(RecipeType.SMELTING, Kind.SINGLE, Items.FURNACE),
             RecipeType.SMOKING, new PatternLayout(RecipeType.SMOKING, Kind.SINGLE, Items.SMOKER),
             RecipeType.BLASTING, new PatternLayout(RecipeType.BLASTING, Kind.SINGLE, Items.BLAST_FURNACE),
-            RecipeType.SMITHING, new PatternLayout(RecipeType.SMITHING, Kind.SMITHING, Items.SMITHING_TABLE));
+            RecipeType.SMITHING, new PatternLayout(RecipeType.SMITHING, Kind.SMITHING, Items.SMITHING_TABLE),
+            RecipeType.BREWING, new PatternLayout(RecipeType.BREWING, Kind.BREWING, Items.BREWING_STAND));
 
     /**
      * @param level   the level

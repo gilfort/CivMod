@@ -12,6 +12,7 @@ import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.gametest.FletcherGameTests.Setup;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.InnateRecipes;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModItems;
@@ -222,7 +223,7 @@ public final class BrewerGameTests {
                 "Three beer arrived (status " + settler.getWork().status(craft) + ")");
         int delivered = FletcherGameTests.count(level, setup.clerk(), Items.BUCKET);
         helper.assertTrue(delivered == 1, "Only the bucket the brewing left was delivered: " + delivered);
-        int kept = settler.getWork().buffer(craft).counts().getOrDefault(Items.BUCKET, 0);
+        int kept = settler.getWork().buffer(craft).counts().getOrDefault(ItemKey.of(Items.BUCKET), 0);
         helper.assertTrue(kept == SPARE_BUCKETS, "The spare buckets stayed in the buffer: " + kept);
         FletcherGameTests.cleanUp(setup, settler);
         helper.succeed();
@@ -281,7 +282,7 @@ public final class BrewerGameTests {
         // The Brewer alone: no water bucket, so it asks for one and waits.
         CraftspersonGameTests.catchUp(level, brewer, WORK_TICKS);
         List<Request> children = Requests.children(setup.settlement(), beerRequest);
-        helper.assertTrue(children.size() == 1 && children.getFirst().item() == Items.WATER_BUCKET && children.getFirst().target().equals(Optional.of(setup.clerk())),
+        helper.assertTrue(children.size() == 1 && children.getFirst().item().is(Items.WATER_BUCKET) && children.getFirst().target().equals(Optional.of(setup.clerk())),
                 "A child request for the water bucket at the Clerk: " + children);
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), ModItems.BEER.get()) == 0, "No beer yet");
 

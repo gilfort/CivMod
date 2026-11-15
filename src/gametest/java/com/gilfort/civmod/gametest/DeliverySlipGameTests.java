@@ -15,6 +15,7 @@ import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.DeliverySlip;
 import com.gilfort.civmod.logistics.DeliverySlip.Variant;
 import com.gilfort.civmod.logistics.DeliveryTask;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.SlipPlan;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.menu.DeliveryOrdersTab;
@@ -120,7 +121,7 @@ public final class DeliverySlipGameTests {
     }
 
     private static DeliverySlip slip(BlockPos source, List<BlockPos> targets, List<Item> filter, Variant variant, int fillTo, int keep) {
-        return new DeliverySlip(UUID.randomUUID(), Optional.of(source), targets, false, filter, variant, fillTo, keep, DeliverySlip.Status.OK);
+        return new DeliverySlip(UUID.randomUUID(), Optional.of(source), targets, false, filter.stream().map(ItemKey::of).toList(), variant, fillTo, keep, DeliverySlip.Status.OK);
     }
 
     private static SlipPlan plan(GameTestHelper helper, DeliverySlip slip, int next, int carryStacks) {
@@ -128,8 +129,8 @@ public final class DeliverySlipGameTests {
                 helper.getLevel().getRandom());
     }
 
-    private static int count(Map<Item, Integer> items, Item item) {
-        return items.getOrDefault(item, 0);
+    private static int count(Map<ItemKey, Integer> items, Item item) {
+        return items.getOrDefault(ItemKey.of(item), 0);
     }
 
     // ---------------------------------------------------------------- writing a slip
@@ -163,7 +164,7 @@ public final class DeliverySlipGameTests {
         DeliverySlip written = stack.get(ModDataComponents.DELIVERY_SLIP.get());
         helper.assertTrue(written.source().equals(Optional.of(b)) && written.targets().equals(List.of(clerk)), "One source, the new source left the targets: " + written);
 
-        DeliverySlip full = new DeliverySlip(UUID.randomUUID(), Optional.of(a), List.of(b, clerk), true, List.of(Items.BREAD, Items.STONE), Variant.ROUND_ROBIN, 64, 8,
+        DeliverySlip full = new DeliverySlip(UUID.randomUUID(), Optional.of(a), List.of(b, clerk), true, List.of(ItemKey.of(Items.BREAD), ItemKey.of(Items.STONE)), Variant.ROUND_ROBIN, 64, 8,
                 DeliverySlip.Status.TARGET_MISSING);
         DeliverySlip loaded = DeliverySlip.CODEC.parse(NbtOps.INSTANCE, DeliverySlip.CODEC.encodeStart(NbtOps.INSTANCE, full).getOrThrow()).getOrThrow();
         helper.assertTrue(loaded.equals(full), "The slip keeps its data on the item: " + loaded);
@@ -200,7 +201,7 @@ public final class DeliverySlipGameTests {
         SlipPlan kept = plan(helper, slip(source, targets, List.of(Items.COBBLESTONE), Variant.NEAREST, 0, 30), 0, 9);
         helper.assertTrue(count(kept.take(), Items.COBBLESTONE) == 70, "Keep 30 at the source: " + kept.take());
 
-        DeliverySlip blacklist = new DeliverySlip(UUID.randomUUID(), Optional.of(source), targets, true, List.of(Items.COBBLESTONE), Variant.NEAREST, 0, 0,
+        DeliverySlip blacklist = new DeliverySlip(UUID.randomUUID(), Optional.of(source), targets, true, List.of(ItemKey.of(Items.COBBLESTONE)), Variant.NEAREST, 0, 0,
                 DeliverySlip.Status.OK);
         SlipPlan others = plan(helper, blacklist, 0, 9);
         helper.assertTrue(count(others.take(), Items.STONE) == 10 && count(others.take(), Items.COBBLESTONE) == 0, "A blacklist takes the other items: " + others.take());

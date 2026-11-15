@@ -11,6 +11,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.block.JobBlockSettlers;
 import com.gilfort.civmod.job.SettlerSkills;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Producers;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.SettlerInfo;
@@ -156,9 +157,9 @@ public final class JobSwitcherGameTests {
         helper.assertTrue(TestAssignments.assign(data, pos, UUID.randomUUID(), "Carl", settlement.id(), List.of(), craftsperson) == AssignResult.FULL,
                 "A third settler finds the block full");
 
-        helper.assertTrue(Patterns.setOutput(level, pos, craftsperson, 0, Items.STICK).orElseThrow().checked(), "Craftsperson: sticks");
-        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 1, Items.STONE_BRICKS).orElseThrow().checked(), "Stonecutter: bricks (slot 0 is innate)");
-        helper.assertTrue(Producers.canMake(level, settlement, Items.STICK) && Producers.canMake(level, settlement, Items.STONE_BRICKS),
+        helper.assertTrue(Patterns.setOutput(level, pos, craftsperson, 0, ItemKey.of(Items.STICK)).orElseThrow().checked(), "Craftsperson: sticks");
+        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 1, ItemKey.of(Items.STONE_BRICKS)).orElseThrow().checked(), "Stonecutter: bricks (slot 0 is innate)");
+        helper.assertTrue(Producers.canMake(level, settlement, ItemKey.of(Items.STICK)) && Producers.canMake(level, settlement, ItemKey.of(Items.STONE_BRICKS)),
                 "Workshop and Stonecutter at once");
         TestAssignments.unassign(data, pos);
         // Back to level 1: a level-3 block left in the settlement data would push later tests' blocks out.
@@ -182,7 +183,7 @@ public final class JobSwitcherGameTests {
         Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
         chest.setItem(0, new ItemStack(Items.COBBLESTONE, 3));
         chest.setItem(1, new ItemStack(Items.STICK, 2));
-        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_AXE, 1, 20));
+        StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.STONE_AXE), 1, 20));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
 
         BlockPos relative = new BlockPos(1, 1, 5);

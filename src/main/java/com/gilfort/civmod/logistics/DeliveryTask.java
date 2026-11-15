@@ -9,8 +9,6 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.item.Item;
 
 /**
  * A Delivery task of the settlement (vault {@code Jobs/Deliveryman.md}): a pickup – empty the drop-off {@code source}
@@ -81,17 +79,17 @@ public record DeliveryTask(UUID id, BlockPos source, BlockPos jobBlock, long cre
      * What a result delivery carries: {@code count} of {@code item} for the Clerk that requested it. It counts as in
      * delivery for that Clerk's stock rules until it arrives there.
      *
-     * @param item    the result
+     * @param item    the result (item and relevant components)
      * @param count   how many
      * @param clerk   the requesting Clerk JobBlock
      * @param relayed whether it waits in another store (the producer's Home Clerk) for the requesting Clerk's Warehouse
      * @param carrier the Deliveryman carrying it, empty while it waits at its source (saved: the load is saved too)
      */
-    public record Result(Item item, int count, BlockPos clerk, boolean relayed, Optional<UUID> carrier) {
+    public record Result(ItemKey item, int count, BlockPos clerk, boolean relayed, Optional<UUID> carrier) {
 
         /** Save codec. */
         public static final Codec<Result> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                BuiltInRegistries.ITEM.byNameCodec().fieldOf("item").forGetter(Result::item),
+                ItemKey.CODEC.fieldOf("item").forGetter(Result::item),
                 Codec.INT.fieldOf("count").forGetter(Result::count),
                 BlockPos.CODEC.fieldOf("clerk").forGetter(Result::clerk),
                 Codec.BOOL.optionalFieldOf("relayed", false).forGetter(Result::relayed),
@@ -109,11 +107,11 @@ public record DeliveryTask(UUID id, BlockPos source, BlockPos jobBlock, long cre
      * @param carrier  the Deliveryman carrying them, empty while they wait at the source (saved: the load is saved too)
      * @param reserved whether a Deliveryman taking the task reserves the inputs
      */
-    public record Input(Map<Item, Integer> items, BlockPos to, Optional<UUID> carrier, boolean reserved) {
+    public record Input(Map<ItemKey, Integer> items, BlockPos to, Optional<UUID> carrier, boolean reserved) {
 
         /** Save codec. */
         public static final Codec<Input> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                Codec.unboundedMap(BuiltInRegistries.ITEM.byNameCodec(), Codec.INT).fieldOf("items").forGetter(Input::items),
+                ItemCounts.CODEC.fieldOf("items").forGetter(Input::items),
                 BlockPos.CODEC.fieldOf("to").forGetter(Input::to),
                 UUIDUtil.CODEC.optionalFieldOf("carrier").forGetter(Input::carrier),
                 Codec.BOOL.optionalFieldOf("reserved", true).forGetter(Input::reserved)
@@ -126,7 +124,7 @@ public record DeliveryTask(UUID id, BlockPos source, BlockPos jobBlock, long cre
          * @param to      the producer's collect inventory
          * @param carrier the Deliveryman carrying them
          */
-        public Input(Map<Item, Integer> items, BlockPos to, Optional<UUID> carrier) {
+        public Input(Map<ItemKey, Integer> items, BlockPos to, Optional<UUID> carrier) {
             this(items, to, carrier, true);
         }
 

@@ -8,10 +8,10 @@ import java.util.UUID;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Stock;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -32,12 +32,12 @@ public final class Reservations {
     /**
      * An amount of an item in a Clerk's storage held for one Delivery task.
      *
-     * @param item  the item
+     * @param item  the thing (item and relevant components)
      * @param count how many
      * @param task  the Delivery task it is held for
      * @param day   the day it was made; it expires when that day ends
      */
-    record Reservation(Item item, int count, UUID task, long day) {
+    record Reservation(ItemKey item, int count, UUID task, long day) {
     }
 
     /**
@@ -55,11 +55,11 @@ public final class Reservations {
      * @param settlement the settlement
      * @param clerk      the Clerk JobBlock holding the items
      * @param task       the Delivery task
-     * @param item       the item
+     * @param item       the thing (item and relevant components)
      * @param count      how many
      * @param day        the day now
      */
-    public static void reserve(Settlement settlement, BlockPos clerk, UUID task, Item item, int count, long day) {
+    public static void reserve(Settlement settlement, BlockPos clerk, UUID task, ItemKey item, int count, long day) {
         if (count > 0) {
             settlement.mutableReservations().computeIfAbsent(clerk.immutable(), key -> new ArrayList<>())
                     .add(new Reservation(item, count, task, day));
@@ -75,12 +75,12 @@ public final class Reservations {
      * @param except     the task asking (it sees its own reservations), null for everybody else
      * @return the reserved amounts by item, empty if nothing is reserved
      */
-    public static Map<Item, Integer> reserved(Settlement settlement, BlockPos clerk, long day, @Nullable UUID except) {
+    public static Map<ItemKey, Integer> reserved(Settlement settlement, BlockPos clerk, long day, @Nullable UUID except) {
         List<Reservation> ledger = ledger(settlement, clerk, day);
         if (ledger.isEmpty()) {
             return Map.of();
         }
-        Map<Item, Integer> reserved = new HashMap<>();
+        Map<ItemKey, Integer> reserved = new HashMap<>();
         for (Reservation reservation : ledger) {
             if (!reservation.task().equals(except)) {
                 reserved.merge(reservation.item(), reservation.count(), Integer::sum);

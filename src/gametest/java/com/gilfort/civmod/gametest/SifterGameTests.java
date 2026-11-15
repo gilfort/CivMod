@@ -133,7 +133,7 @@ public final class SifterGameTests {
             helper.assertTrue(recipe.drops().isPresent() && recipe.result().isEmpty(), "Slot " + slot + " draws: " + recipe);
             helper.assertTrue(recipe.ingredients().getFirst().test(new ItemStack(inputs.get(slot))), "Slot " + slot + " takes " + inputs.get(slot));
             helper.assertTrue(recipe.tool().isPresent(), "Slot " + slot + " needs a shovel");
-            helper.assertTrue(pattern.output() != Items.AIR && pattern.count() == 1, "A drops pattern shows an item, one per execution: " + pattern);
+            helper.assertTrue(!pattern.output().isEmpty() && pattern.count() == 1, "A drops pattern shows an item, one per execution: " + pattern);
         }
         helper.succeed();
     }

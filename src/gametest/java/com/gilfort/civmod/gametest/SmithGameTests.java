@@ -10,6 +10,7 @@ import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.job.JobBalancing;
 import com.gilfort.civmod.job.StationExtras;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.PatternRecipes;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
@@ -128,8 +129,8 @@ public final class SmithGameTests {
         BlockPos craft = smithy(helper, new BlockPos(1, 1, 5));
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.SMITHING_TABLE);
         Settler settler = worker(helper, setup, craft);
-        helper.assertTrue(Patterns.setOutput(level, craft, smith(), 0, Items.IRON_PICKAXE).orElseThrow().checked(), "Iron pickaxe checked");
-        helper.assertFalse(Patterns.setOutput(level, craft, smith(), 1, Items.STICK).orElseThrow().checked(), "Sticks are outside the domain");
+        helper.assertTrue(Patterns.setOutput(level, craft, smith(), 0, ItemKey.of(Items.IRON_PICKAXE)).orElseThrow().checked(), "Iron pickaxe checked");
+        helper.assertFalse(Patterns.setOutput(level, craft, smith(), 1, ItemKey.of(Items.STICK)).orElseThrow().checked(), "Sticks are outside the domain");
         helper.assertFalse(Patterns.toggleCheck(level, craft, smith(), 1), "And cannot be checked");
         PatternsTabData tab = PatternsTabData.of(level, craft, smith());
         helper.assertTrue(tab.filtered().contains(1) && !tab.filtered().contains(0)
@@ -150,12 +151,12 @@ public final class SmithGameTests {
         BlockPos craft = smithy(helper, new BlockPos(1, 1, 5));
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.SMITHING_TABLE);
         Settler settler = worker(helper, setup, craft);
-        helper.assertTrue(Patterns.setOutput(level, craft, smith(), 0, Items.IRON_PICKAXE).orElseThrow().checked(), "Iron pickaxe checked");
-        Patterns.setOutput(level, craft, smith(), 1, Items.STICK);
+        helper.assertTrue(Patterns.setOutput(level, craft, smith(), 0, ItemKey.of(Items.IRON_PICKAXE)).orElseThrow().checked(), "Iron pickaxe checked");
+        Patterns.setOutput(level, craft, smith(), 1, ItemKey.of(Items.STICK));
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(count(level, setup.clerk(), Items.IRON_PICKAXE) == 0, "No pickaxe without sticks");
-        List<Item> missing = request(setup, Items.IRON_PICKAXE).missing().stream().map(Request.Missing::item).toList();
-        helper.assertTrue(missing.contains(Items.STICK), "Missing: Stick " + missing);
+        List<ItemKey> missing = request(setup, Items.IRON_PICKAXE).missing().stream().map(Request.Missing::item).toList();
+        helper.assertTrue(missing.contains(ItemKey.of(Items.STICK)), "Missing: Stick " + missing);
         cleanUp(setup, settler);
         helper.succeed();
     }
@@ -170,11 +171,11 @@ public final class SmithGameTests {
         BlockPos craft = smithy(helper, new BlockPos(1, 1, 5));
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.SMITHING_TABLE);
         Settler settler = worker(helper, setup, craft);
-        helper.assertTrue(Patterns.setOutput(level, craft, smith(), 0, Items.IRON_PICKAXE).orElseThrow().checked(), "Iron pickaxe checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, smith(), 0, ItemKey.of(Items.IRON_PICKAXE)).orElseThrow().checked(), "Iron pickaxe checked");
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         List<Request.Missing> missing = request(setup, Items.IRON_PICKAXE).missing();
-        helper.assertTrue(missing.contains(new Request.Missing(Items.IRON_INGOT, 2)), "Missing: 2× Iron Ingot " + missing);
-        helper.assertTrue(Requests.byPriority(setup.settlement()).stream().noneMatch(found -> found.item() == Items.IRON_INGOT),
+        helper.assertTrue(missing.contains(new Request.Missing(ItemKey.of(Items.IRON_INGOT), 2)), "Missing: 2× Iron Ingot " + missing);
+        helper.assertTrue(Requests.byPriority(setup.settlement()).stream().noneMatch(found -> found.item().is(Items.IRON_INGOT)),
                 "No request for ingots: " + Requests.byPriority(setup.settlement()));
         cleanUp(setup, settler);
         helper.succeed();
@@ -195,7 +196,7 @@ public final class SmithGameTests {
         BlockPos craft = smithy(helper, new BlockPos(1, 1, 5));
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.SMITHING_TABLE);
         Settler settler = worker(helper, setup, craft);
-        helper.assertTrue(Patterns.setOutput(level, craft, smith(), 0, Items.NETHERITE_SWORD).orElseThrow().checked(), "Netherite sword checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, smith(), 0, ItemKey.of(Items.NETHERITE_SWORD)).orElseThrow().checked(), "Netherite sword checked");
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         ItemStack made = ClerkStorage.stock(level, setup.clerk(), true).contents().stream().filter(stack -> stack.is(Items.NETHERITE_SWORD))
                 .findFirst().orElse(ItemStack.EMPTY);
@@ -210,12 +211,12 @@ public final class SmithGameTests {
     private static void noTrims(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         List<RecipeType<?>> types = smith().profile(ProducingProfile.class).orElseThrow().recipeTypes();
-        List<Item> trim = grid(Items.COAST_ARMOR_TRIM_SMITHING_TEMPLATE, Items.IRON_CHESTPLATE, Items.IRON_INGOT);
+        List<ItemKey> trim = grid(Items.COAST_ARMOR_TRIM_SMITHING_TEMPLATE, Items.IRON_CHESTPLATE, Items.IRON_INGOT);
         helper.assertTrue(PatternRecipes.matching(level, types, trim).isEmpty(), "No trim pattern: " + PatternRecipes.matching(level, types, trim));
-        List<Item> upgrade = grid(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE, Items.DIAMOND_CHESTPLATE, Items.NETHERITE_INGOT);
-        helper.assertTrue(PatternRecipes.matching(level, types, upgrade).filter(shape -> shape.output() == Items.NETHERITE_CHESTPLATE).isPresent(),
+        List<ItemKey> upgrade = grid(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE, Items.DIAMOND_CHESTPLATE, Items.NETHERITE_INGOT);
+        helper.assertTrue(PatternRecipes.matching(level, types, upgrade).filter(shape -> shape.output().is(Items.NETHERITE_CHESTPLATE)).isPresent(),
                 "The netherite upgrade is a pattern");
-        helper.assertTrue(PatternRecipes.producing(level, types, Items.IRON_CHESTPLATE).stream().noneMatch(shape -> shape.type() == RecipeType.SMITHING),
+        helper.assertTrue(PatternRecipes.producing(level, types, ItemKey.of(Items.IRON_CHESTPLATE)).stream().noneMatch(shape -> shape.type() == RecipeType.SMITHING),
                 "No trim recipe makes an iron chestplate");
         helper.succeed();
     }
@@ -250,7 +251,7 @@ public final class SmithGameTests {
         BlockPos craft = smithy(helper, new BlockPos(1, 1, 5));
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.SMITHING_TABLE);
         Settler settler = worker(helper, setup, craft);
-        helper.assertTrue(Patterns.setOutput(level, craft, smith(), 0, Items.IRON_TRAPDOOR).orElseThrow().checked(), "Trapdoors checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, smith(), 0, ItemKey.of(Items.IRON_TRAPDOOR)).orElseThrow().checked(), "Trapdoors checked");
         CraftspersonGameTests.catchUp(level, settler, SPEED_TICKS);
         helper.assertTrue(settler.getWork().jobFactor(level, craft) == factor, "Job factor of the day " + factor + ": "
                 + settler.getWork().jobFactor(level, craft));
@@ -292,7 +293,7 @@ public final class SmithGameTests {
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.SMITHING_TABLE);
         helper.setBlock(new BlockPos(3, 1, 7), Blocks.ANVIL);
         Settler settler = worker(helper, setup, craft);
-        helper.assertTrue(Patterns.setOutput(level, craft, smith(), 0, Items.IRON_TRAPDOOR).orElseThrow().checked(), "Trapdoors checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, smith(), 0, ItemKey.of(Items.IRON_TRAPDOOR)).orElseThrow().checked(), "Trapdoors checked");
         long end = SmelterGameTests.catchUpWork(level, settler, 2000L, 600);
         helper.assertTrue(settler.getWork().jobFactor(level, craft) == 1.2, "An anvil when the station was chosen: 1.2");
         helper.setBlock(new BlockPos(3, 1, 7), Blocks.AIR);
@@ -339,8 +340,9 @@ public final class SmithGameTests {
     }
 
     /** Three items in order in the 3×3 grid, the rest empty. */
-    private static List<Item> grid(Item first, Item second, Item third) {
-        return List.of(first, second, third, Items.AIR, Items.AIR, Items.AIR, Items.AIR, Items.AIR, Items.AIR);
+    private static List<ItemKey> grid(Item first, Item second, Item third) {
+        return List.of(ItemKey.of(first), ItemKey.of(second), ItemKey.of(third), ItemKey.EMPTY, ItemKey.EMPTY, ItemKey.EMPTY, ItemKey.EMPTY,
+                ItemKey.EMPTY, ItemKey.EMPTY);
     }
 
     private record Setup(BlockPos clerk, SettlementData data, Settlement settlement) {
@@ -361,7 +363,7 @@ public final class SmithGameTests {
         for (int i = 0; i < stock.size(); i++) {
             chest.setItem(i, stock.get(i).copy());
         }
-        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, wanted, amount, 0)), "Rule set");
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(wanted), amount, 0)), "Rule set");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         return new Setup(clerk, data, settlement);
     }
@@ -378,7 +380,7 @@ public final class SmithGameTests {
     }
 
     private static Request request(Setup setup, Item item) {
-        return Requests.byPriority(setup.settlement()).stream().filter(found -> found.item() == item).findFirst().orElseThrow();
+        return Requests.byPriority(setup.settlement()).stream().filter(found -> found.item().is(item)).findFirst().orElseThrow();
     }
 
     private static int count(ServerLevel level, BlockPos clerk, Item item) {

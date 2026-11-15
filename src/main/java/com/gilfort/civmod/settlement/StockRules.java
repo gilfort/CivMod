@@ -7,11 +7,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.ClerkTerminal;
 import com.gilfort.civmod.logistics.DeliveryTask;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.logistics.StockRule;
@@ -63,7 +65,7 @@ public final class StockRules {
         }
         Settlement settlement = found.get().settlement();
         SettlementBlock block = found.get().block();
-        if (block.stockRules().stream().anyMatch(other -> other.item() == rule.item() && other.slot() != rule.slot())) {
+        if (block.stockRules().stream().anyMatch(other -> other.item().equals(rule.item()) && other.slot() != rule.slot())) {
             // One rule per item and Clerk.
             return false;
         }
@@ -73,7 +75,7 @@ public final class StockRules {
         rules.add(rule);
         rules.sort((a, b) -> Integer.compare(a.slot(), b.slot()));
         Requests.forRule(settlement, clerk, rule.slot()).ifPresent(request -> {
-            if (previous.filter(old -> old.item() == rule.item()).isEmpty()) {
+            if (previous.filter(old -> old.item().equals(rule.item())).isEmpty()) {
                 Requests.withdraw(data, settlement, request.id());
             } else {
                 Requests.setPriority(data, settlement, request.id(), rule.priority());
@@ -119,7 +121,7 @@ public final class StockRules {
         Settlement settlement = found.get().settlement();
         SettlementBlock block = found.get().block();
         boolean working = ClerkStorage.working(block, DayClock.day(level), dayTime);
-        Map<Item, Integer> stock = null;
+        Map<ItemKey, Integer> stock = null;
         for (StockRule rule : block.stockRules()) {
             Optional<Request> request = Requests.forRule(settlement, clerk, rule.slot());
             if (!working || !rule.activeIn(block.stockSlots())) {
@@ -169,8 +171,8 @@ public final class StockRules {
         SettlementBlock block = found.get().block();
         long day = DayClock.day(level);
         Optional<BlockPos> warehouse = surplusTarget(settlement, clerk);
-        Map<Item, Integer> stock = null;
-        Set<Item> capped = new HashSet<>();
+        Map<ItemKey, Integer> stock = null;
+        Set<ItemKey> capped = new HashSet<>();
         for (StockRule rule : block.stockRules()) {
             if (!rule.hasMax() || !rule.activeIn(block.stockSlots())) {
                 continue;
@@ -190,7 +192,7 @@ public final class StockRules {
         // Free surplus tasks of rules without Max (or without Warehouse) any more.
         for (DeliveryTask task : List.copyOf(settlement.deliveries())) {
             if (task.surplus() && task.source().equals(clerk) && !task.carried() && task.takerOn(day).isEmpty()) {
-                for (Item item : task.input().orElseThrow().items().keySet()) {
+                for (ItemKey item : task.input().orElseThrow().items().keySet()) {
                     if (warehouse.isEmpty() || !capped.contains(item)) {
                         Deliveries.setSurplus(data, settlement, clerk, task.input().get().to(), item, 0, level.getGameTime(), day);
                     }
@@ -213,7 +215,7 @@ public final class StockRules {
         Settlement settlement = found.get().settlement();
         SettlementBlock block = found.get().block();
         Optional<BlockPos> warehouse = surplusTarget(settlement, clerk);
-        Map<Item, Integer> stock = count(level, clerk);
+        Map<ItemKey, Integer> stock = count(level, clerk);
         long day = DayClock.day(level);
         List<Integer> slots = new ArrayList<>();
         for (StockRule rule : block.stockRules()) {
@@ -234,10 +236,10 @@ public final class StockRules {
      * How much more of an item a Warehouse takes as surplus: unlimited without an active Max rule for it, else its Max
      * minus its stock minus the surplus already on its way (except the Clerk's own free task, which is being resized).
      */
-    private static int room(ServerLevel level, Settlement settlement, BlockPos clerk, BlockPos warehouse, Item item, long day) {
+    private static int room(ServerLevel level, Settlement settlement, BlockPos clerk, BlockPos warehouse, ItemKey item, long day) {
         Optional<SettlementBlock> block = settlement.block(warehouse);
         Optional<StockRule> rule = block.flatMap(found -> found.stockRules().stream()
-                .filter(candidate -> candidate.item() == item && candidate.hasMax() && candidate.activeIn(found.stockSlots())).findFirst());
+                .filter(candidate -> candidate.item().equals(item) && candidate.hasMax() && candidate.activeIn(found.stockSlots())).findFirst());
         if (rule.isEmpty()) {
             return Integer.MAX_VALUE;
         }
@@ -251,14 +253,15 @@ public final class StockRules {
 
     /**
      * The items a collecting JobBlock leaves out of its production (vault {@code Systems/Resource Collection Jobs.md}):
-     * those whose active stock rule at its Home Clerk has a Max that the Home Clerk's store holds.
+     * those whose active stock rule at its Home Clerk has a Max that the Home Clerk's store holds. A rule for an item with
+     * relevant components (a potion type) does not count: collecting jobs drop plain items.
      *
      * @param level the level
      * @param site  the JobBlock
      * @return the items at Max, empty without a Home Clerk, without Max rules there or while it is unloaded
      */
     public static Set<Item> atMax(ServerLevel level, JobBlockSite site) {
-        return atMax(level, site, false);
+        return atMax(level, site, false).stream().filter(key -> key.components().isEmpty()).map(ItemKey::item).collect(Collectors.toSet());
     }
 
     /**
@@ -269,17 +272,17 @@ public final class StockRules {
      * @param site  the JobBlock
      * @return the items at Max
      */
-    public static Set<Item> atMaxWithDeliveries(ServerLevel level, JobBlockSite site) {
+    public static Set<ItemKey> atMaxWithDeliveries(ServerLevel level, JobBlockSite site) {
         return atMax(level, site, true);
     }
 
-    private static Set<Item> atMax(ServerLevel level, JobBlockSite site, boolean deliveries) {
+    private static Set<ItemKey> atMax(ServerLevel level, JobBlockSite site, boolean deliveries) {
         Optional<SettlementBlock> clerk = site.block().homeClerk().flatMap(site.settlement()::block).filter(ClerkStorage::isClerk);
         if (clerk.isEmpty() || clerk.get().stockRules().stream().noneMatch(StockRule::hasMax) || !level.isLoaded(clerk.get().pos())) {
             return Set.of();
         }
         Stock stock = ClerkStorage.stock(level, clerk.get().pos(), true);
-        Set<Item> items = new HashSet<>();
+        Set<ItemKey> items = new HashSet<>();
         for (StockRule rule : clerk.get().stockRules()) {
             // A lookup in the Clerk's stock view per Max rule, no count of the whole store.
             if (rule.hasMax() && rule.activeIn(clerk.get().stockSlots()) && stock.count(rule.item())
@@ -313,14 +316,14 @@ public final class StockRules {
         grown.forEach((clerk, items) -> {
             Optional<ClerkAt> found = clerkAt(data, clerk);
             if (found.isPresent() && found.get().block().stockRules().stream()
-                    .anyMatch(rule -> rule.hasMax() && rule.activeIn(found.get().block().stockSlots()) && items.contains(rule.item()))) {
+                    .anyMatch(rule -> rule.hasMax() && rule.activeIn(found.get().block().stockSlots()) && items.contains(rule.item().item()))) {
                 checkSurplus(level, clerk);
             }
         });
     }
 
     /** Item counts over the Clerk's whole storage, counted once per check. */
-    private static Map<Item, Integer> count(ServerLevel level, BlockPos clerk) {
+    private static Map<ItemKey, Integer> count(ServerLevel level, BlockPos clerk) {
         // Stock.contents() has one item per slot; the counts are the real amounts.
         return ClerkStorage.stock(level, clerk, true).counts();
     }
