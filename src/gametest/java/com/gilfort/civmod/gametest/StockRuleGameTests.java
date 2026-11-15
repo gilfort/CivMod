@@ -334,7 +334,7 @@ public final class StockRuleGameTests {
         Request current = new Request(UUID.randomUUID(), ItemKey.of(Items.STICK), 4, 0, Optional.empty(), Optional.empty(), Optional.empty(), List.of(), List.of(), Optional.empty());
         com.google.gson.JsonObject json = Request.CODEC.encodeStart(JsonOps.INSTANCE, current).getOrThrow().getAsJsonObject();
         json.addProperty("rule", -1);
-        json.add("missing", com.google.gson.JsonParser.parseString("{\"item\": \"minecraft:oak_planks\", \"count\": 2}"));
+        json.add("missing", com.google.gson.JsonParser.parseString("{\"item\": {\"id\": \"minecraft:oak_planks\"}, \"count\": 2}"));
         Request request = Request.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
         helper.assertTrue(request.rule().isEmpty(), "-1: no rule " + request.rule());
         helper.assertTrue(request.missing().equals(List.of(new Request.Missing(ItemKey.of(Items.OAK_PLANKS), 2))), "One missing input " + request.missing());

@@ -29,6 +29,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.alchemy.PotionContents;
 import net.minecraft.world.item.alchemy.Potions;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
@@ -62,6 +63,7 @@ public final class AlchemistGameTests {
             TestFunctions.register(helper, "alchemist_unlock", AlchemistGameTests::unlock);
             TestFunctions.register(helper, "alchemist_recipes", AlchemistGameTests::recipes);
             TestFunctions.register(helper, "alchemist_brews_awkward", AlchemistGameTests::brewsAwkward);
+            TestFunctions.register(helper, "alchemist_brews_splash", AlchemistGameTests::brewsSplash);
             TestFunctions.register(helper, "alchemist_healing_chain", AlchemistGameTests::healingChain);
             TestFunctions.register(helper, "alchemist_missing_water_bottle", AlchemistGameTests::missingWaterBottle);
             TestFunctions.register(helper, "alchemist_bottler_chain", AlchemistGameTests::bottlerChain);
@@ -191,6 +193,32 @@ public final class AlchemistGameTests {
         helper.assertTrue(count(level, setup.clerk(), healing()) == 1, "A Potion of Healing arrived (status " + settler.getWork().status(craft) + ")");
         helper.assertTrue(count(level, setup.clerk(), awkward()) == 0 && count(level, setup.clerk(), ItemKey.of(Items.GLISTERING_MELON_SLICE)) == 0,
                 "The awkward potion and the melon slice are used up");
+        FletcherGameTests.cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /**
+     * A mix that changes the container (gunpowder on a potion makes the splash form): its library pattern brews, and the
+     * splash potion keeps the potion it was made from.
+     */
+    private static void brewsSplash(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        ProducingProfile profile = alchemist().profile(ProducingProfile.class).orElseThrow();
+        ItemKey splash = ItemKey.of(PotionContents.createItemStack(Items.SPLASH_POTION, Potions.AWKWARD));
+        List<PatternRecipes.Shape> shapes = PatternRecipes.producing(level, profile.recipeTypes(), splash);
+        helper.assertTrue(!shapes.isEmpty(), "A library pattern makes a splash awkward potion: " + shapes);
+        helper.assertTrue(shapes.getFirst().grid().get(0).equals(ItemKey.of(Items.GUNPOWDER)) && shapes.getFirst().grid().get(1).equals(awkward()),
+                "Gunpowder on the awkward potion: " + shapes.getFirst().grid());
+        Setup setup = FletcherGameTests.setup(helper, List.of(ItemKeyGameTests.potion(Potions.AWKWARD), new ItemStack(Items.GUNPOWDER)),
+                List.of(splash.toStack()));
+        BlockPos craft = laboratory(helper, new BlockPos(1, 1, 5));
+        helper.setBlock(new BlockPos(3, 1, 5), Blocks.BREWING_STAND);
+        Settler settler = FletcherGameTests.worker(helper, setup, craft, alchemist());
+        helper.assertTrue(Patterns.setOutput(level, craft, alchemist(), 0, splash).orElseThrow().checked(), "Splash potion checked");
+        CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
+        helper.assertTrue(count(level, setup.clerk(), splash) == 1, "A splash awkward potion arrived (status " + settler.getWork().status(craft) + ")");
+        helper.assertTrue(count(level, setup.clerk(), awkward()) == 0 && count(level, setup.clerk(), ItemKey.of(Items.GUNPOWDER)) == 0,
+                "The potion and the gunpowder are used up");
         FletcherGameTests.cleanUp(setup, settler);
         helper.succeed();
     }

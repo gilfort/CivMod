@@ -1,5 +1,6 @@
 package com.gilfort.civmod.api;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -38,6 +39,6 @@ public final class RelevantComponents {
      * @return the relevant component types, {@code potion_contents} first
      */
     public static List<DataComponentType<?>> types() {
-        return TYPES;
+        return Collections.unmodifiableList(TYPES);
     }
 }

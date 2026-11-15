@@ -36,9 +36,8 @@ public record ItemKey(Item item, DataComponentPatch components) {
             DataComponentPatch.CODEC.optionalFieldOf("components", DataComponentPatch.EMPTY).forGetter(ItemKey::components)
     ).apply(instance, ItemKey::new));
 
-    /** Save codec; a plain item id (the format before components) still loads. */
-    public static final Codec<ItemKey> CODEC = Codec.withAlternative(MAP_CODEC.codec(),
-            BuiltInRegistries.ITEM.byNameCodec().xmap(ItemKey::of, ItemKey::item));
+    /** Save codec. */
+    public static final Codec<ItemKey> CODEC = MAP_CODEC.codec();
 
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, ItemKey> STREAM_CODEC = StreamCodec.composite(
@@ -77,9 +76,10 @@ public record ItemKey(Item item, DataComponentPatch components) {
         return resource.isEmpty() ? EMPTY : of(resource.toStack());
     }
 
+    /** Copies a relevant component unless it is only the item's prototype default (a bare potion has empty potion contents). */
     private static <T> void copy(DataComponentPatch.Builder builder, ItemStack stack, DataComponentType<T> type) {
         T value = stack.get(type);
-        if (value != null) {
+        if (value != null && !value.equals(stack.getItem().components().get(type))) {
             builder.set(type, value);
         }
     }
@@ -105,6 +105,14 @@ public record ItemKey(Item item, DataComponentPatch components) {
      */
     public boolean matches(ItemStack stack) {
         return !stack.isEmpty() && equals(of(stack));
+    }
+
+    /**
+     * @param resource an item resource of a container
+     * @return whether the resource is this thing
+     */
+    public boolean matches(ItemResource resource) {
+        return !resource.isEmpty() && resource.getItem() == item && equals(of(resource));
     }
 
     /**

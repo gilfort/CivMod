@@ -34,12 +34,24 @@ public final class ItemKeyGameTests {
         event.register(Registries.TEST_FUNCTION, helper -> {
             TestFunctions.register(helper, "item_key_identity", ItemKeyGameTests::identity);
             TestFunctions.register(helper, "item_key_codec", ItemKeyGameTests::codec);
+            TestFunctions.register(helper, "item_key_prototype", ItemKeyGameTests::prototype);
         });
     }
 
     /** A potion stack of the one item {@code minecraft:potion}. */
     static ItemStack potion(Holder<Potion> type) {
         return PotionContents.createItemStack(Items.POTION, type);
+    }
+
+    /** Components a stack only has as the item's prototype defaults are no part of its key. */
+    private static void prototype(GameTestHelper helper) {
+        helper.assertTrue(ItemKey.of(new ItemStack(Items.POTION)).equals(ItemKey.of(Items.POTION)), "A bare potion stack is the plain potion key");
+        helper.assertTrue(ItemKey.of(new ItemStack(Items.POTION)).components().isEmpty(), "No components from prototype defaults");
+        ItemStack reset = new ItemStack(Items.POTION);
+        reset.set(DataComponents.POTION_CONTENTS, PotionContents.EMPTY);
+        helper.assertTrue(ItemKey.of(reset).equals(ItemKey.of(Items.POTION)), "Potion contents equal to the prototype's are dropped");
+        helper.assertTrue(!ItemKey.of(potion(Potions.WATER)).equals(ItemKey.of(Items.POTION)), "A water bottle still differs from the bare potion");
+        helper.succeed();
     }
 
     /** Potions of different types differ, a custom name does not matter, a plain item has no components. */
@@ -60,13 +72,16 @@ public final class ItemKeyGameTests {
         helper.succeed();
     }
 
-    /** The save codec round-trips a potion key and still reads the plain item id of older saves. */
+    /** The save codec round-trips a potion key and a plain item key; the plain item id of older saves is not read. */
     private static void codec(GameTestHelper helper) {
         ItemKey healing = ItemKey.of(potion(Potions.HEALING));
         JsonElement json = ItemKey.CODEC.encodeStart(JsonOps.INSTANCE, healing).getOrThrow();
         helper.assertTrue(ItemKey.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow().equals(healing), "Round trip: " + json);
-        ItemKey old = ItemKey.CODEC.parse(JsonOps.INSTANCE, new JsonPrimitive("minecraft:stick")).getOrThrow();
-        helper.assertTrue(old.equals(ItemKey.of(Items.STICK)), "Plain item id loads: " + old);
+        ItemKey stick = ItemKey.of(Items.STICK);
+        JsonElement plain = ItemKey.CODEC.encodeStart(JsonOps.INSTANCE, stick).getOrThrow();
+        helper.assertTrue(ItemKey.CODEC.parse(JsonOps.INSTANCE, plain).getOrThrow().equals(stick), "Plain item round trip: " + plain);
+        helper.assertTrue(ItemKey.CODEC.parse(JsonOps.INSTANCE, new JsonPrimitive("minecraft:stick")).result().isEmpty(),
+                "A plain item id is no longer read");
         helper.succeed();
     }
 }
