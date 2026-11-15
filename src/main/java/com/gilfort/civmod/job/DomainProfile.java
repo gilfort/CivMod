@@ -15,9 +15,9 @@ import net.minecraft.world.level.block.Block;
 /**
  * The Producing specifics of the crafting Specializations that work one domain: their main recipe type at their own
  * station ({@code civmod:stations/<job>}, the station of the day), {@code crafting} as a second type at a crafting
- * table nearby ({@code civmod:stations/craftsperson}), only recipes with an input in the domain
- * ({@code civmod:domains/<domain>}). Their base job factor 0.3 becomes 1.2 with the station extra of their job file;
- * their innate recipes come from {@code civmod:job_crafting} recipes in the datapack.
+ * table nearby ({@code civmod:stations/craftsperson}), only recipes with an input or output in the domain
+ * ({@code civmod:domains/<domain>}). Job factors and station extras live in {@code ModJobs} and
+ * {@code civmod_jobs/*.json}; innate recipes come from {@code civmod:job_crafting} recipes in the datapack.
  * <ul>
  * <li>{@link #fletcher()}: {@code crafting} at a fletching table, fletching domain (string, feathers, flint, arrows;
  * vault {@code Jobs/Fletcher.md});</li>
@@ -30,9 +30,9 @@ import net.minecraft.world.level.block.Block;
  * <li>{@link #tailor()}: the same at the crafting table with the textile domain (wool, carpets, beds, banners, leather,
  * string); the {@link TailorProfile} adds the colour of the cloth (vault {@code Jobs/Tailor.md});</li>
  * <li>{@link #carpenter()}: the same at the crafting table with the wood domain (logs, planks and everything made of
- * wood; vault {@code Jobs/Carpenter.md}), at job factor 1.2 without a station extra.</li>
+ * wood; vault {@code Jobs/Carpenter.md}).</li>
  * <li>{@link #printer()}: the same at the crafting table with the print domain (paper, books, bookshelves, feathers, ink;
- * vault {@code Jobs/Printer.md}), at job factor 1.2 from the start, without a station extra.</li>
+ * vault {@code Jobs/Printer.md}).</li>
  * </ul>
  */
 public final class DomainProfile implements ProducingProfile {
@@ -66,24 +66,29 @@ public final class DomainProfile implements ProducingProfile {
         return new DomainProfile(List.of(RecipeType.CRAFTING), stationOf("dyer"), "dye");
     }
 
-    /** @return the Baker's profile: {@code crafting} at the Craftsperson's crafting tables, food domain */
+    /** @return the Baker's domain, station and recipe types: {@code crafting} at the Craftsperson's crafting tables, food domain */
     public static DomainProfile baker() {
-        return new DomainProfile(List.of(RecipeType.CRAFTING), CraftspersonProfile.STATION, "food");
+        return crafting("food");
     }
 
-    /** @return the Printer's profile: {@code crafting} at the Craftsperson's crafting tables, print domain */
+    /** @return the Printer's domain, station and recipe types: {@code crafting} at the Craftsperson's crafting tables, print domain */
     public static DomainProfile printer() {
-        return new DomainProfile(List.of(RecipeType.CRAFTING), CraftspersonProfile.STATION, "print");
+        return crafting("print");
     }
 
     /** @return the Tailor's domain, station and recipe types: {@code crafting} at the Craftsperson's crafting tables, textile domain */
     static DomainProfile tailor() {
-        return new DomainProfile(List.of(RecipeType.CRAFTING), CraftspersonProfile.STATION, "textile");
+        return crafting("textile");
     }
 
-    /** @return the Carpenter's profile: {@code crafting} at the Craftsperson's crafting tables, wood domain */
+    /** @return the Carpenter's domain, station and recipe types: {@code crafting} at the Craftsperson's crafting tables, wood domain */
     public static DomainProfile carpenter() {
-        return new DomainProfile(List.of(RecipeType.CRAFTING), CraftspersonProfile.STATION, "wood");
+        return crafting("wood");
+    }
+
+    /** @return a profile of {@code crafting} at the Craftsperson's crafting tables in the given domain */
+    private static DomainProfile crafting(String domain) {
+        return new DomainProfile(List.of(RecipeType.CRAFTING), CraftspersonProfile.STATION, domain);
     }
 
     @Override
