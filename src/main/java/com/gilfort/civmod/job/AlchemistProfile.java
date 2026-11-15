@@ -35,6 +35,6 @@ public final class AlchemistProfile implements ProducingProfile {
 
     @Override
     public double workTime(RecipeHolder<?> recipe) {
-        return BREWING_TICKS / SmelterProfile.TICKS_PER_OPERATION;
+        return BREWING_TICKS / TICKS_PER_OPERATION;
     }
 }

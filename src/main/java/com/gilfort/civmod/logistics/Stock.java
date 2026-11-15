@@ -345,7 +345,7 @@ public final class Stock {
             ResourceHandler<ItemResource> handler = part.handler();
             for (int i = 0; i < handler.size() && rest > 0; i++) {
                 ItemResource resource = handler.getResource(i);
-                if (resource.isEmpty() || resource.getItem() != key.item() || !ItemKey.of(resource).equals(key)) {
+                if (!key.matches(resource)) {
                     continue;
                 }
                 long mark = part.tracker().mark();

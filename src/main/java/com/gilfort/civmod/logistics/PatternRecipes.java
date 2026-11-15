@@ -192,25 +192,13 @@ public final class PatternRecipes {
     /** A recipe of another type matches when its ingredients accept the grid items in order. */
     private static Optional<Shape> matchingInOrder(ServerLevel level, RecipeType<?> type, List<ItemKey> grid) {
         if (type == RecipeType.BREWING) {
-            return matchingBrewing(level, grid);
+            return Brewing.matching(level, grid);
         }
         List<ItemKey> items = grid.stream().filter(item -> !item.isEmpty()).toList();
         return recipes(level, type).stream().sorted(Comparator.comparing(holder -> holder.id().identifier().toString()))
                 .map(holder -> shape(level, holder)).flatMap(Optional::stream)
                 .filter(shape -> fits(shape.ingredients(), items)).findFirst()
                 .map(shape -> new Shape(shape.id(), type, exactCells(grid), shape.output(), shape.count()));
-    }
-
-    /** A brewing recipe matches when its own test accepts the ingredient (cell 0) and the potion (cell 1). */
-    private static Optional<Shape> matchingBrewing(ServerLevel level, List<ItemKey> grid) {
-        if (grid.get(0).isEmpty() || grid.get(1).isEmpty()) {
-            return Optional.empty();
-        }
-        BrewingInput input = new BrewingInput(grid.get(1).toStack(), grid.get(0).toStack());
-        return recipes(level, RecipeType.BREWING).stream().sorted(Comparator.comparing(holder -> holder.id().identifier().toString()))
-                .filter(holder -> holder.value() instanceof BrewingRecipe brewing && brewing.matches(input))
-                .map(holder -> shape(level, holder)).flatMap(Optional::stream).findFirst()
-                .map(shape -> new Shape(shape.id(), RecipeType.BREWING, exactCells(grid), shape.output(), shape.count()));
     }
 
     private static boolean fits(List<Ingredient> ingredients, List<ItemKey> items) {
@@ -237,7 +225,7 @@ public final class PatternRecipes {
     private static Optional<Shape> shape(ServerLevel level, RecipeHolder<?> holder) {
         Recipe<?> recipe = holder.value();
         if (recipe instanceof BrewingRecipe brewing) {
-            return brewingShape(holder.id(), brewing);
+            return Brewing.shape(holder.id(), brewing);
         }
         // An armor trim keeps its base item and changes only its components: no pattern (vault Jobs/Smith.md).
         if (recipe.isSpecial() || recipe instanceof SmithingTrimRecipe) {
@@ -278,24 +266,46 @@ public final class PatternRecipes {
     }
 
     /**
-     * A brewing recipe: the ingredient in cell 0, the potion in cell 1 (the first potion of a mix that accepts several), its
-     * output with the potion it makes.
+     * Everything special about brewing recipes in one place: they are special for the recipe book, have two inputs
+     * (ingredient and potion) and match through their own test.
      */
-    private static Optional<Shape> brewingShape(ResourceKey<Recipe<?>> id, BrewingRecipe recipe) {
-        Optional<ItemKey> potion = potionInput(recipe.getInput());
-        ItemKey output = ItemKey.of(recipe.getOutput().create());
-        if (first(recipe.getReagent().ingredient()).isEmpty() || potion.isEmpty() || output.isEmpty()) {
-            return Optional.empty();
-        }
-        List<Optional<Ingredient>> cells = emptyCells();
-        cells.set(0, Optional.of(recipe.getReagent().ingredient()));
-        cells.set(1, Optional.of(ItemKeyIngredient.of(potion.get())));
-        return Optional.of(new Shape(id, RecipeType.BREWING, cells, output, 1));
-    }
+    private static final class Brewing {
 
-    private static Optional<ItemKey> potionInput(PotionIngredient input) {
-        Optional<Holder<Potion>> type = input.potions().flatMap(predicate -> predicate.potions()).flatMap(set -> set.stream().findFirst());
-        return first(input.ingredient()).map(item -> type.map(potion -> ItemKey.of(PotionContents.createItemStack(item, potion))).orElse(ItemKey.of(item)));
+        private Brewing() {
+        }
+
+        /** A brewing recipe matches when its own test accepts the ingredient (cell 0) and the potion (cell 1). */
+        private static Optional<Shape> matching(ServerLevel level, List<ItemKey> grid) {
+            if (grid.get(0).isEmpty() || grid.get(1).isEmpty()) {
+                return Optional.empty();
+            }
+            BrewingInput input = new BrewingInput(grid.get(1).toStack(), grid.get(0).toStack());
+            return recipes(level, RecipeType.BREWING).stream().sorted(Comparator.comparing(holder -> holder.id().identifier().toString()))
+                    .filter(holder -> holder.value() instanceof BrewingRecipe brewing && brewing.matches(input))
+                    .map(holder -> PatternRecipes.shape(level, holder)).flatMap(Optional::stream).findFirst()
+                    .map(shape -> new Shape(shape.id(), RecipeType.BREWING, exactCells(grid), shape.output(), shape.count()));
+        }
+
+        /**
+         * A brewing recipe: the ingredient in cell 0, the potion in cell 1 (the first potion of a mix that accepts several),
+         * its output with the potion it makes.
+         */
+        private static Optional<Shape> shape(ResourceKey<Recipe<?>> id, BrewingRecipe recipe) {
+            Optional<ItemKey> potion = potionInput(recipe.getInput());
+            ItemKey output = ItemKey.of(recipe.getOutput().create());
+            if (first(recipe.getReagent().ingredient()).isEmpty() || potion.isEmpty() || output.isEmpty()) {
+                return Optional.empty();
+            }
+            List<Optional<Ingredient>> cells = emptyCells();
+            cells.set(0, Optional.of(recipe.getReagent().ingredient()));
+            cells.set(1, Optional.of(ItemKeyIngredient.of(potion.get())));
+            return Optional.of(new Shape(id, RecipeType.BREWING, cells, output, 1));
+        }
+
+        private static Optional<ItemKey> potionInput(PotionIngredient input) {
+            Optional<Holder<Potion>> type = input.potions().flatMap(predicate -> predicate.potions()).flatMap(set -> set.stream().findFirst());
+            return first(input.ingredient()).map(item -> type.map(potion -> ItemKey.of(PotionContents.createItemStack(item, potion))).orElse(ItemKey.of(item)));
+        }
     }
 
     /** A recipe of another type: its ingredients in order, its result from its first recipe book display. */

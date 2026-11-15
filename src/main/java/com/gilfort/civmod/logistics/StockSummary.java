@@ -78,7 +78,7 @@ final class StockSummary {
     long amount(ItemKey key) {
         long total = 0;
         for (Map.Entry<ItemResource, Entry> entry : entries.entrySet()) {
-            if (entry.getKey().getItem() == key.item() && entry.getValue().key(entry.getKey()).equals(key)) {
+            if (key.matches(entry.getKey())) {
                 total += entry.getValue().amount;
             }
         }

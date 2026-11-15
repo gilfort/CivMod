@@ -33,11 +33,6 @@ public final class SmelterProfile implements ProducingProfile {
 
     /** The Smelter's station: furnaces. */
     public static final TagKey<Block> STATION = station("smelter");
-    /**
-     * Ticks of cooking time per operation of the shared speed formula: at level 20 (0.25 operations per second) an
-     * item takes its cooking time.
-     */
-    static final double TICKS_PER_OPERATION = 80.0;
 
     private final RecipeType<?> recipeType;
     private final TagKey<Block> station;
