@@ -2,13 +2,11 @@ package com.gilfort.civmod.gametest;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.gametest.FletcherGameTests.Setup;
-import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.Patterns;
@@ -16,7 +14,6 @@ import com.gilfort.civmod.settlement.Patterns;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
@@ -122,11 +119,7 @@ public final class BakerGameTests {
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.CRAFTING_TABLE);
         Settler settler = FletcherGameTests.worker(helper, setup, craft, baker());
         helper.assertTrue(Patterns.setOutput(level, craft, baker(), 0, Items.BREAD).orElseThrow().checked(), "Bread checked");
-        helper.assertFalse(Patterns.setOutput(level, craft, baker(), 1, Items.IRON_PICKAXE).orElseThrow().checked(), "A pickaxe is outside the domain");
-        helper.assertFalse(Patterns.toggleCheck(level, craft, baker(), 1), "And cannot be checked");
-        PatternsTabData tab = PatternsTabData.of(level, craft, baker());
-        helper.assertTrue(tab.filtered().equals(Set.of(1))
-                && tab.filteredLine().equals(Component.translatable("civmod.gui.patterns.outside_domain")), "Greyed out: " + tab.filtered());
+        CraftingRounds.assertOutsideDomain(helper, craft, baker(), 1, Items.IRON_PICKAXE);
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.BREAD) == 1,
                 "Bread arrived (status " + settler.getWork().status(craft) + ")");
@@ -192,17 +185,7 @@ public final class BakerGameTests {
 
     /** Requests 4 breads (4 executions), lets a Baker work the work time and returns how many arrived. */
     private static int breads(GameTestHelper helper, double factor, long workTicks) {
-        ServerLevel level = helper.getLevel();
-        Setup setup = FletcherGameTests.setup(helper, List.of(new ItemStack(Items.WHEAT, 12)), List.of(new ItemStack(Items.BREAD, 4)));
-        BlockPos craft = bakery(helper, new BlockPos(1, 1, 5));
-        helper.setBlock(new BlockPos(3, 1, 5), Blocks.CRAFTING_TABLE);
-        Settler settler = FletcherGameTests.worker(helper, setup, craft, baker());
-        helper.assertTrue(Patterns.setOutput(level, craft, baker(), 0, Items.BREAD).orElseThrow().checked(), "Bread checked");
-        CraftspersonGameTests.catchUp(level, settler, workTicks);
-        helper.assertTrue(settler.getWork().jobFactor(level, craft) == factor, "Job factor of the day " + factor + ": "
-                + settler.getWork().jobFactor(level, craft));
-        int delivered = FletcherGameTests.count(level, setup.clerk(), Items.BREAD);
-        FletcherGameTests.cleanUp(setup, settler);
-        return delivered;
+        return CraftingRounds.deliver(helper, baker(), () -> bakery(helper, new BlockPos(1, 1, 5)), Blocks.CRAFTING_TABLE,
+                List.of(new ItemStack(Items.WHEAT, 12)), new ItemStack(Items.BREAD, BREADS), 0, workTicks, factor);
     }
 }

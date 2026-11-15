@@ -120,11 +120,19 @@ public final class ModJobs {
     public static final DeferredHolder<Job, Job> BAKER = JOBS.register("baker", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.HAY_BLOCK).bubbleIcon(() -> Items.BREAD).displayItem(() -> Items.BREAD).hungerFactor(0.5)
             .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.HAY_BLOCK).profile(DomainProfile::baker).build());
+    /** See vault {@code Jobs/Printer.md}; crafts paper, books and bookshelves at a crafting table, fast from the start (no station extra). */
+    public static final DeferredHolder<Job, Job> PRINTER = JOBS.register("printer", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.LECTERN).bubbleIcon(() -> Items.BOOK).displayItem(() -> Items.BOOK).hungerFactor(0.5)
+            .baseExp(2).jobFactor(1.2).unlockItem(() -> Items.LECTERN).profile(DomainProfile::printer).build());
     /** See vault {@code Jobs/Tailor.md}; sews the cloth sets and crafts everything of wool and leather at a crafting table, fast with a loom near it. */
     public static final DeferredHolder<Job, Job> TAILOR = JOBS.register("tailor", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.WOOL.white()).bubbleIcon(() -> ModClothing.piece(ClothSet.SIMPLE, ArmorType.CHESTPLATE).get())
             .displayItem(() -> ModClothing.piece(ClothSet.SIMPLE, ArmorType.CHESTPLATE).get()).hungerFactor(0.5)
             .baseExp(2).jobFactor(0.3).unlockItem(() -> Items.WOOL.white()).profile(TailorProfile::new).build());
+    /** See vault {@code Jobs/Carpenter.md}; crafts everything made of wood at a crafting table, at full speed without a station extra. */
+    public static final DeferredHolder<Job, Job> CARPENTER = JOBS.register("carpenter", () -> Job.builder(JobCategory.PRODUCING)
+            .parent(CRAFTSPERSON).icon(() -> Items.STRIPPED_OAK_LOG).bubbleIcon(() -> Items.OAK_DOOR).displayItem(() -> Items.OAK_DOOR).hungerFactor(0.5)
+            .baseExp(2).jobFactor(1.2).unlockItem(() -> Items.STRIPPED_OAK_LOG).profile(DomainProfile::carpenter).build());
     /** See vault {@code Jobs/Crusher.md}; breaks stone down into gravel, sand and more at a grindstone with innate recipes only. */
     public static final DeferredHolder<Job, Job> CRUSHER = JOBS.register("crusher", () -> Job.builder(JobCategory.PRODUCING)
             .parent(CRAFTSPERSON).icon(() -> Items.GRINDSTONE).bubbleIcon(() -> Items.GRAVEL).displayItem(() -> Items.GRAVEL).hungerFactor(0.5)

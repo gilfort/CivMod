@@ -175,17 +175,7 @@ public final class DyerGameTests {
 
     /** Requests 4 yellow dyes (4 executions), lets a Dyer work {@link #SPEED_TICKS} and returns how many arrived. */
     private static int dyes(GameTestHelper helper, double factor) {
-        ServerLevel level = helper.getLevel();
-        Setup setup = FletcherGameTests.setup(helper, List.of(new ItemStack(Items.DANDELION, 4)), List.of(new ItemStack(Items.DYE.yellow(), 4)));
-        BlockPos craft = dyehouse(helper, new BlockPos(1, 1, 5));
-        helper.setBlock(new BlockPos(3, 1, 5), Blocks.LOOM);
-        Settler settler = FletcherGameTests.worker(helper, setup, craft, dyer());
-        helper.assertTrue(Patterns.setOutput(level, craft, dyer(), 1, Items.DYE.yellow()).orElseThrow().checked(), "Yellow dye checked");
-        CraftspersonGameTests.catchUp(level, settler, SPEED_TICKS);
-        helper.assertTrue(settler.getWork().jobFactor(level, craft) == factor, "Job factor of the day " + factor + ": "
-                + settler.getWork().jobFactor(level, craft));
-        int delivered = FletcherGameTests.count(level, setup.clerk(), Items.DYE.yellow());
-        FletcherGameTests.cleanUp(setup, settler);
-        return delivered;
+        return CraftingRounds.deliver(helper, dyer(), () -> dyehouse(helper, new BlockPos(1, 1, 5)), Blocks.LOOM,
+                List.of(new ItemStack(Items.DANDELION, 4)), new ItemStack(Items.DYE.yellow(), 4), 1, SPEED_TICKS, factor);
     }
 }

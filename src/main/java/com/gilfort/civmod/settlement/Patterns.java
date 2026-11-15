@@ -47,7 +47,7 @@ import net.minecraft.world.level.block.Block;
  * A settler works only the library of its Job.
  * <p>
  * A pattern is usable if its recipe is of one of the Job's profile's types, the profile's filters let it through and
- * an input is in the profile's domain (if it has one); rejected alternatives of a tag input are skipped. A pattern of another recipe type ("foreign", a profile that changed)
+ * an input or its output is in the profile's domain (if it has one); rejected alternatives of a tag input are skipped. A pattern of another recipe type ("foreign", a profile that changed)
  * keeps its checkmark but is skipped. A filtered pattern loses its checkmark. A new pattern is checked automatically while
  * the limit allows. The library of a Job no longer unlocked at the JobBlock (a replaced Station Type) is kept but
  * "locked": unusable and not editable until the Job is unlocked again.
@@ -214,7 +214,7 @@ public final class Patterns {
      * @param profile a Producing profile
      * @param pattern a pattern
      * @return whether the profile's filters reject its output or an input (all its alternatives), or the pattern lies
-     *         outside the profile's domain (no input with an alternative in the domain tag); never for an innate pattern
+     *         outside the profile's domain (neither its output nor an input alternative is in the domain tag); never for an innate pattern
      */
     public static boolean filtered(ServerLevel level, ProducingProfile profile, Pattern pattern) {
         if (!pattern.valid() || pattern.innate()) {
@@ -223,7 +223,8 @@ public final class Patterns {
         List<Ingredient> inputs = allInputs(level, profile, pattern);
         return !profile.outputFilter().test(pattern.output())
                 || inputs.stream().anyMatch(input -> input.items().noneMatch(profile.inputFilter()::test))
-                || profile.domain().filter(domain -> inputs.stream().noneMatch(input -> input.items().anyMatch(item -> item.is(domain)))).isPresent();
+                || profile.domain().filter(domain -> !pattern.output().getDefaultInstance().is(domain)
+                        && inputs.stream().noneMatch(input -> input.items().anyMatch(item -> item.is(domain)))).isPresent();
     }
 
     /**
