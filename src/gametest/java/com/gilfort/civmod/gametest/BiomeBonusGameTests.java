@@ -17,6 +17,7 @@ import com.gilfort.civmod.job.BiomeBonuses;
 import com.gilfort.civmod.job.FishTable;
 import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -250,7 +251,7 @@ public final class BiomeBonusGameTests {
                 .thenExecute(() -> {
                     BiomeBonus atJobBlock = BiomeBonuses.at(level, ModJobs.MINER.get(), jobBlock);
                     helper.assertTrue(atJobBlock.isEmpty(), "The JobBlock " + jobBlock + " stands in plains: " + atJobBlock);
-                    Map<Item, Integer> counts = settler.getWork().buffer(jobBlock).counts();
+                    Map<ItemKey, Integer> counts = settler.getWork().buffer(jobBlock).counts();
                     helper.assertTrue(counts.values().stream().allMatch(count -> count % 2 == 0), "Every stone drop comes twice: " + counts);
                     BiomeBonus today = CivModApi.biomeBonus(settler, jobBlock);
                     helper.assertTrue(today.biome().equals(Optional.of(Biomes.MUSHROOM_FIELDS)) && near(today.rareChance().value(), 6.0),
@@ -360,10 +361,10 @@ public final class BiomeBonusGameTests {
         Settler settler = CatchUpGameTests.lumberjack(helper, forced);
         BlockPos jobBlock = settler.getJobs().get(0).jobBlock();
         helper.succeedWhen(() -> {
-            Map<Item, Integer> counts = settler.getWork().buffer(jobBlock).counts();
-            helper.assertTrue(counts.getOrDefault(Items.OAK_LOG, 0) >= 4,
+            Map<ItemKey, Integer> counts = settler.getWork().buffer(jobBlock).counts();
+            helper.assertTrue(counts.getOrDefault(ItemKey.of(Items.OAK_LOG), 0) >= 4,
                     "Not enough wood yet (status " + settler.getWork().status(jobBlock) + "): " + counts);
-            helper.assertTrue(counts.get(Items.OAK_LOG) % 2 == 0,
+            helper.assertTrue(counts.get(ItemKey.of(Items.OAK_LOG)) % 2 == 0,
                     "Every log comes twice: " + counts + " (" + CivModApi.biomeBonus(settler, jobBlock) + ")");
             settler.discard();
             fillBiome(helper, new BlockPos(0, -4, BEFORE_AREA), new BlockPos(12, 8, 12), Biomes.PLAINS);
@@ -393,7 +394,7 @@ public final class BiomeBonusGameTests {
                 List.of()) == JobAssignments.AssignResult.OK, "Assignment failed");
         settler.addJob(new SettlerJob(ModJobs.FISHERMAN.get(), jobBlock));
         helper.succeedWhen(() -> {
-            Map<Item, Integer> counts = settler.getWork().buffer(jobBlock).counts();
+            Map<ItemKey, Integer> counts = settler.getWork().buffer(jobBlock).counts();
             helper.assertTrue(counts.values().stream().mapToInt(Integer::intValue).sum() >= 4,
                     "Not enough fish yet (status " + settler.getWork().status(jobBlock) + "): " + counts);
             helper.assertTrue(counts.values().stream().allMatch(count -> count % 2 == 0),
@@ -423,7 +424,7 @@ public final class BiomeBonusGameTests {
         chest.setItem(0, new ItemStack(Items.OAK_LOG, 1));
         chest.setItem(1, new ItemStack(Items.COBBLESTONE, 3));
         helper.assertTrue(StockRules.setRule(data, clerk,
-                StockRule.minimum(0, Items.STONE_PICKAXE, 1, 0)), "Rule set");
+                StockRule.minimum(0, ItemKey.of(Items.STONE_PICKAXE), 1, 0)), "Rule set");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
         CraftspersonGameTests.placeTable(helper, new BlockPos(17, 1, 5));

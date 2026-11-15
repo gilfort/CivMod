@@ -15,6 +15,7 @@ import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.block.ScarecrowBlock;
 import com.gilfort.civmod.job.BlockCountScan;
 import com.gilfort.civmod.job.JobStatus;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.menu.JobBlockMenu;
@@ -248,7 +249,7 @@ public final class VeggyFarmerGameTests {
         Settler settler = veggyFarmer(helper, jobBlock);
         JobBlockMenu menu = StationTypeGameTests.menu(helper, helper.makeMockPlayer(GameType.CREATIVE), jobBlock);
         helper.startSequence()
-                .thenWaitUntil(() -> helper.assertTrue(settler.getWork().buffer(jobBlock).counts().getOrDefault(Items.WHEAT, 0) > 0,
+                .thenWaitUntil(() -> helper.assertTrue(settler.getWork().buffer(jobBlock).counts().getOrDefault(ItemKey.of(Items.WHEAT), 0) > 0,
                         "No wheat yet (status " + settler.getWork().status(jobBlock) + ")"))
                 .thenExecute(() -> {
                     helper.assertTrue(helper.getBlockState(new BlockPos(13, 1, 7)).equals(crop(Blocks.WHEAT, 7)), "The wheat is never harvested");

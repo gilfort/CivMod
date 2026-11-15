@@ -11,6 +11,7 @@ import com.gilfort.civmod.client.ClientInnateRecipes;
 import com.gilfort.civmod.client.ClientJobDrops;
 import com.gilfort.civmod.client.gui.JobBlockScreen;
 import com.gilfort.civmod.client.gui.SettlerScreen;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.PatternsTab;
@@ -38,9 +39,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.phys.shapes.Shapes;
 
@@ -151,10 +150,10 @@ public final class CivModReiPlugin implements REIClientPlugin {
                     || !(context.getContainerScreen() instanceof JobBlockScreen screen)) {
                 return Result.createNotApplicable();
             }
-            List<Item> grid = new ArrayList<>();
+            List<ItemKey> grid = new ArrayList<>();
             for (EntryIngredient input : context.getDisplay().getInputEntries()) {
                 grid.add(input.stream().map(entry -> entry.getValue()).filter(ItemStack.class::isInstance).map(ItemStack.class::cast)
-                        .findFirst().map(ItemStack::getItem).orElse(Items.AIR));
+                        .findFirst().map(ItemKey::of).orElse(ItemKey.EMPTY));
             }
             Optional<Component> error = screen.transferPattern(type, context.getDisplay().getDisplayLocation()
                     .map(id -> ResourceKey.create(Registries.RECIPE, id)), grid.subList(0, Math.min(Pattern.GRID, grid.size())),

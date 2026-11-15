@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobAssignments.PointResult;
@@ -69,7 +70,7 @@ public final class ClerkStockGameTests {
         chest.setItem(26, new ItemStack(Items.STONE_PICKAXE));
 
         Stock stock = ClerkStorage.stock(level, clerk, true);
-        helper.assertTrue(stock.counts().equals(Map.of(Items.BREAD, 7, Items.COBBLESTONE, 64, Items.APPLE, 3, Items.STONE_PICKAXE, 1)),
+        helper.assertTrue(stock.counts().equals(Map.of(ItemKey.of(Items.BREAD), 7, ItemKey.of(Items.COBBLESTONE), 64, ItemKey.of(Items.APPLE), 3, ItemKey.of(Items.STONE_PICKAXE), 1)),
                 "Counts of all containers: " + stock.counts());
         helper.assertTrue(stock.count(stack -> stack.is(Items.BREAD) || stack.is(Items.APPLE)) == 10, "Count of a kind");
         helper.assertTrue(stock.contains(stack -> stack.is(Items.APPLE)) && !stock.contains(stack -> stack.is(Items.DIAMOND)), "Contains");

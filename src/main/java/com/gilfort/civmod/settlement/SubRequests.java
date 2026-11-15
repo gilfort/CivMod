@@ -7,11 +7,11 @@ import java.util.Set;
 import java.util.UUID;
 
 import com.gilfort.civmod.logistics.CraftPlan;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Producers;
 import com.gilfort.civmod.logistics.Request;
 
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.item.Item;
 
 /**
  * Sub-requests of a producer (vault {@code Systems/Sub-Requests.md}): a producer that lacks an input it cannot make
@@ -40,10 +40,10 @@ public final class SubRequests {
         if (parent.target().isEmpty() || depth(settlement, parent) >= CraftPlan.MAX_DEPTH) {
             return 0;
         }
-        Set<Item> chain = chainItems(settlement, parent);
+        Set<ItemKey> chain = chainItems(settlement, parent);
         int posted = 0;
         for (Request.Missing lacking : missing) {
-            Item item = lacking.item();
+            ItemKey item = lacking.item();
             if (lacking.anyFuel() || lacking.count() <= 0 || chain.contains(item) || hasChildFor(settlement, parent, item)
                     || !Producers.canMake(level, settlement, item)) {
                 continue;
@@ -67,8 +67,8 @@ public final class SubRequests {
     }
 
     /** The items of a request and of every request above it. */
-    private static Set<Item> chainItems(Settlement settlement, Request request) {
-        Set<Item> items = new HashSet<>();
+    private static Set<ItemKey> chainItems(Settlement settlement, Request request) {
+        Set<ItemKey> items = new HashSet<>();
         Set<UUID> seen = new HashSet<>();
         Optional<Request> current = Optional.of(request);
         while (current.isPresent() && seen.add(current.get().id())) {
@@ -78,7 +78,7 @@ public final class SubRequests {
         return items;
     }
 
-    private static boolean hasChildFor(Settlement settlement, Request parent, Item item) {
-        return Requests.children(settlement, parent.id()).stream().anyMatch(child -> child.item() == item);
+    private static boolean hasChildFor(Settlement settlement, Request parent, ItemKey item) {
+        return Requests.children(settlement, parent.id()).stream().anyMatch(child -> child.item().equals(item));
     }
 }

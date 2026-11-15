@@ -23,6 +23,7 @@ import com.gilfort.civmod.menu.PatternsTab;
 import com.gilfort.civmod.menu.StationTypesTabData;
 import com.gilfort.civmod.menu.StationTypesTab;
 import com.gilfort.civmod.menu.StockTab;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.menu.StorageTab;
 import com.gilfort.civmod.menu.DeliveryOrdersTab;
 import com.gilfort.civmod.menu.TasksTab;
@@ -46,7 +47,6 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeType;
@@ -432,7 +432,7 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      * @param doTransfer whether to transfer (false: only check)
      * @return the reason it cannot, empty if it can
      */
-    public Optional<Component> transferPattern(RecipeType<?> type, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid, boolean doTransfer) {
+    public Optional<Component> transferPattern(RecipeType<?> type, Optional<ResourceKey<Recipe<?>>> recipe, List<ItemKey> grid, boolean doTransfer) {
         for (JobBlockTabView view : distinct) {
             Optional<Optional<Component>> result = view.transfer(type, recipe, grid, doTransfer);
             if (result.isPresent()) {

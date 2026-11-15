@@ -11,6 +11,7 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.client.ClientInnateRecipes;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.PatternLayout;
 import com.gilfort.civmod.logistics.PatternRecipes;
@@ -298,7 +299,7 @@ final class PatternsTabView implements JobBlockTabView {
     /** How many cells the open pattern's layout shows: an innate recipe's inputs, else the layout's cells. */
     private static int cellCount(PatternLayout layout, Optional<Pattern> pattern) {
         if (layout.kind() == PatternLayout.Kind.ROW) {
-            return (int) pattern.map(found -> found.grid().stream().filter(item -> item != Items.AIR).count()).orElse(0L).longValue();
+            return (int) pattern.map(found -> found.grid().stream().filter(item -> !item.isEmpty()).count()).orElse(0L).longValue();
         }
         return layout.kind().cells();
     }
@@ -442,11 +443,11 @@ final class PatternsTabView implements JobBlockTabView {
                 // Innate recipes are locked.
                 return false;
             }
-            sendPattern(PatternsTabData.Edit.setOutput(menu.containerId, job(), target, stack.getItem()));
+            sendPattern(PatternsTabData.Edit.setOutput(menu.containerId, job(), target, ItemKey.of(stack)));
         } else if (target == TARGET_OUTPUT) {
-            sendPattern(PatternsTabData.Edit.setOutput(menu.containerId, job(), editing, stack.getItem()));
+            sendPattern(PatternsTabData.Edit.setOutput(menu.containerId, job(), editing, ItemKey.of(stack)));
         } else {
-            sendPattern(PatternsTabData.Edit.setInput(menu.containerId, job(), editing, target - TARGET_CELL, stack.getItem(), layout(tab()).type()));
+            sendPattern(PatternsTabData.Edit.setInput(menu.containerId, job(), editing, target - TARGET_CELL, ItemKey.of(stack), layout(tab()).type()));
         }
         return true;
     }
@@ -496,7 +497,7 @@ final class PatternsTabView implements JobBlockTabView {
             return true;
         }
         if (right && target != TARGET_OUTPUT) {
-            sendPattern(PatternsTabData.Edit.setInput(menu.containerId, job(), editing, target - TARGET_CELL, Items.AIR, layout(tab()).type()));
+            sendPattern(PatternsTabData.Edit.setInput(menu.containerId, job(), editing, target - TARGET_CELL, ItemKey.EMPTY, layout(tab()).type()));
         }
         return true;
     }
@@ -512,12 +513,12 @@ final class PatternsTabView implements JobBlockTabView {
      * @return the reason it cannot, empty if it can (always present: Producing JobBlocks take recipes)
      */
     @Override
-    public Optional<Optional<Component>> transfer(RecipeType<?> type, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid,
+    public Optional<Optional<Component>> transfer(RecipeType<?> type, Optional<ResourceKey<Recipe<?>>> recipe, List<ItemKey> grid,
             boolean doTransfer) {
         return Optional.of(transferPattern(type, recipe, grid, doTransfer));
     }
 
-    private Optional<Component> transferPattern(RecipeType<?> type, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid, boolean doTransfer) {
+    private Optional<Component> transferPattern(RecipeType<?> type, Optional<ResourceKey<Recipe<?>>> recipe, List<ItemKey> grid, boolean doTransfer) {
         PatternsTabData tab = tab();
         if (!tab.follows(type)) {
             return Optional.of(Component.translatable(tab.locked() ? "civmod.gui.patterns.locked" : "civmod.gui.patterns.foreign"));
@@ -584,7 +585,7 @@ final class PatternsTabView implements JobBlockTabView {
             CivGui.slot(graphics, x, y);
             Optional<Pattern> pattern = tab.pattern(slot);
             pattern.filter(Pattern::valid).ifPresent(found -> {
-                ItemStack icon = new ItemStack(found.output(), found.count());
+                ItemStack icon = found.output().toStack(found.count());
                 graphics.item(icon, x, y);
                 graphics.itemDecorations(font, icon, x, y);
             });
@@ -634,7 +635,7 @@ final class PatternsTabView implements JobBlockTabView {
         Optional<Pattern> pattern = tab.pattern(slot);
         if (pattern.filter(Pattern::valid).isPresent()) {
             Pattern found = pattern.get();
-            lines.add(Component.translatable("civmod.gui.clerk.request.amount", found.count(), new ItemStack(found.output()).getHoverName()));
+            lines.add(Component.translatable("civmod.gui.clerk.request.amount", found.count(), found.output().toStack().getHoverName()));
             Item station = tab.layout(slot).station();
             if (station != Items.AIR) {
                 // Where it is made ("Stonecutter").
@@ -644,7 +645,7 @@ final class PatternsTabView implements JobBlockTabView {
                 // Its inputs, as no editor shows them: a tag input by its tag ("Any Wool"), not by the grid's first item.
                 List<Component> inputs = found.recipe().flatMap(ClientInnateRecipes::recipe)
                         .map(recipe -> recipe.inputs().stream().map(PatternsTabView::inputLine).toList())
-                        .orElseGet(() -> found.grid().stream().filter(item -> item != Items.AIR).map(item -> new ItemStack(item).getHoverName()).toList());
+                        .orElseGet(() -> found.grid().stream().filter(item -> !item.isEmpty()).map(item -> item.toStack().getHoverName()).toList());
                 inputs.forEach(input -> lines.add(Component.literal("  ").append(input).withStyle(ChatFormatting.GRAY)));
             }
             lines.add((found.innate() ? Component.translatable("civmod.gui.patterns.innate", job.displayName())
@@ -690,9 +691,9 @@ final class PatternsTabView implements JobBlockTabView {
             int y = cellY(layout.kind(), cell, count);
             CivGui.slot(graphics, x, y);
             int index = cell;
-            Item item = pattern.map(found -> found.grid().get(index)).orElse(Items.AIR);
-            if (item != Items.AIR) {
-                graphics.item(new ItemStack(item), x, y);
+            ItemKey item = pattern.map(found -> found.grid().get(index)).orElse(ItemKey.EMPTY);
+            if (!item.isEmpty()) {
+                graphics.item(item.toStack(), x, y);
             }
             if (TARGET_CELL + cell == hovered) {
                 CivGui.slotHover(graphics, x, y);
@@ -705,7 +706,7 @@ final class PatternsTabView implements JobBlockTabView {
         graphics.text(font, Component.literal("→"), GRID_X + 3 * 18 + 6, OUTPUT_Y + 4, CivGui.LABEL_COLOR, false);
         CivGui.slot(graphics, OUTPUT_X, OUTPUT_Y);
         pattern.filter(Pattern::valid).ifPresent(found -> {
-            ItemStack icon = new ItemStack(found.output(), found.count());
+            ItemStack icon = found.output().toStack(found.count());
             graphics.item(icon, OUTPUT_X, OUTPUT_Y);
             graphics.itemDecorations(font, icon, OUTPUT_X, OUTPUT_Y);
         });
@@ -737,9 +738,9 @@ final class PatternsTabView implements JobBlockTabView {
         }
         int cell = hovered >= TARGET_CELL && hovered < TARGET_CELL + Pattern.GRID ? hovered - TARGET_CELL : innateCellAt(layout, pattern, mouseX, mouseY);
         if (cell >= 0) {
-            Item item = pattern.map(found -> found.grid().get(cell)).orElse(Items.AIR);
-            if (item != Items.AIR) {
-                graphics.setComponentTooltipForNextFrame(font, List.of(new ItemStack(item).getHoverName()), mouseX, mouseY);
+            ItemKey item = pattern.map(found -> found.grid().get(cell)).orElse(ItemKey.EMPTY);
+            if (!item.isEmpty()) {
+                graphics.setComponentTooltipForNextFrame(font, List.of(item.toStack().getHoverName()), mouseX, mouseY);
             }
         }
     }

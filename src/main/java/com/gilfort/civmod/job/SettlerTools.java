@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.function.Predicate;
 
 import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 
@@ -234,7 +235,7 @@ final class SettlerTools {
         }
         ItemStack sample = stock.contents().get(index.get());
         ItemStack belt = ItemStack.EMPTY;
-        for (ItemStack taken : stock.take(sample.getItem(), sample.getMaxStackSize())) {
+        for (ItemStack taken : stock.take(ItemKey.of(sample), sample.getMaxStackSize())) {
             if (belt.isEmpty()) {
                 belt = taken.copy();
             } else if (ItemStack.isSameItemSameComponents(belt, taken) && belt.getCount() + taken.getCount() <= belt.getMaxStackSize()) {

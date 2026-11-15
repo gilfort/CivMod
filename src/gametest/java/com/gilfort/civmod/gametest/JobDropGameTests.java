@@ -13,6 +13,7 @@ import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.job.BlockCountScan;
 import com.gilfort.civmod.job.JobDrops;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -103,7 +104,7 @@ public final class JobDropGameTests {
         Settler settler = worker(helper, jobBlock, "Planter", ModJobs.PLANTATION_FARMER.get());
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_AXE));
         helper.succeedWhen(() -> {
-            helper.assertTrue(settler.getWork().buffer(jobBlock).counts().getOrDefault(Items.VINE, 0) > 0,
+            helper.assertTrue(settler.getWork().buffer(jobBlock).counts().getOrDefault(ItemKey.of(Items.VINE), 0) > 0,
                     "No vines yet (status " + settler.getWork().status(jobBlock) + ")");
             helper.assertTrue(helper.getBlockState(new BlockPos(5, 1, 5)).is(Blocks.VINE), "The vines stay");
             settler.discard();
@@ -199,9 +200,9 @@ public final class JobDropGameTests {
         collect.setItem(0, new ItemStack(Items.SHEARS));
         Settler settler = worker(helper, jobBlock, "Picker", ModJobs.GATHERER.get());
         helper.succeedWhen(() -> {
-            helper.assertTrue(settler.getWork().buffer(jobBlock).counts().getOrDefault(Items.PINK_PETALS, 0) > 0,
+            helper.assertTrue(settler.getWork().buffer(jobBlock).counts().getOrDefault(ItemKey.of(Items.PINK_PETALS), 0) > 0,
                     "No petals yet (status " + settler.getWork().status(jobBlock) + ")");
-            helper.assertTrue(settler.getWork().buffer(jobBlock).counts().getOrDefault(Items.SPORE_BLOSSOM, 0) == 0, "No blossom loot (replace)");
+            helper.assertTrue(settler.getWork().buffer(jobBlock).counts().getOrDefault(ItemKey.of(Items.SPORE_BLOSSOM), 0) == 0, "No blossom loot (replace)");
             ItemStack shears = collect.getItem(0);
             helper.assertTrue(shears.is(Items.SHEARS) && shears.getDamageValue() > 0, "The shears in the collect inventory wore: " + shears);
             for (int i = Settler.BELT_START; i < Settler.BELT_START + Settler.BELT_SIZE; i++) {

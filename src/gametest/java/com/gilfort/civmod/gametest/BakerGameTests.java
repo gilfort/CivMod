@@ -7,6 +7,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.gametest.FletcherGameTests.Setup;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.Patterns;
@@ -118,7 +119,7 @@ public final class BakerGameTests {
         BlockPos craft = bakery(helper, new BlockPos(1, 1, 5));
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.CRAFTING_TABLE);
         Settler settler = FletcherGameTests.worker(helper, setup, craft, baker());
-        helper.assertTrue(Patterns.setOutput(level, craft, baker(), 0, Items.BREAD).orElseThrow().checked(), "Bread checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, baker(), 0, ItemKey.of(Items.BREAD)).orElseThrow().checked(), "Bread checked");
         CraftingRounds.assertOutsideDomain(helper, craft, baker(), 1, Items.IRON_PICKAXE);
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.BREAD) == 1,
@@ -137,7 +138,7 @@ public final class BakerGameTests {
         BlockPos craft = bakery(helper, new BlockPos(1, 1, 5));
         helper.assertTrue(Items.FLINT.getDefaultInstance().is(baker().profile(ProducingProfile.class).orElseThrow().domain().orElseThrow()),
                 "Flint counts as food through #c:foods");
-        helper.assertTrue(Patterns.setOutput(level, craft, baker(), 0, Items.ARROW).orElseThrow().checked(), "An arrow pattern with a tagged input is accepted");
+        helper.assertTrue(Patterns.setOutput(level, craft, baker(), 0, ItemKey.of(Items.ARROW)).orElseThrow().checked(), "An arrow pattern with a tagged input is accepted");
         helper.succeed();
     }
 
@@ -152,8 +153,8 @@ public final class BakerGameTests {
         BlockPos craft = bakery(helper, new BlockPos(1, 1, 5));
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.CRAFTING_TABLE);
         Settler settler = FletcherGameTests.worker(helper, setup, craft, baker());
-        helper.assertTrue(Patterns.setOutput(level, craft, baker(), 0, Items.BEETROOT_SOUP).orElseThrow().checked(), "Soup checked");
-        helper.assertFalse(Patterns.setOutput(level, craft, baker(), 1, Items.BOWL).orElseThrow().checked(), "A bowl is outside the domain");
+        helper.assertTrue(Patterns.setOutput(level, craft, baker(), 0, ItemKey.of(Items.BEETROOT_SOUP)).orElseThrow().checked(), "Soup checked");
+        helper.assertFalse(Patterns.setOutput(level, craft, baker(), 1, ItemKey.of(Items.BOWL)).orElseThrow().checked(), "A bowl is outside the domain");
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.BEETROOT_SOUP) == 0, "No soup without a bowl");
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.OAK_PLANKS) == 2, "The planks stay");

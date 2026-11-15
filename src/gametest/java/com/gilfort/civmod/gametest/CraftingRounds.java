@@ -6,6 +6,7 @@ import java.util.function.Supplier;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.gametest.FletcherGameTests.Setup;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.Patterns;
@@ -52,7 +53,7 @@ final class CraftingRounds {
         BlockPos craft = workplace.get();
         helper.setBlock(STATION, station);
         Settler settler = FletcherGameTests.worker(helper, setup, craft, job);
-        helper.assertTrue(Patterns.setOutput(level, craft, job, slot, wanted.getItem()).orElseThrow().checked(), wanted.getItem() + " checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, job, slot, ItemKey.of(wanted)).orElseThrow().checked(), wanted.getItem() + " checked");
         CraftspersonGameTests.catchUp(level, settler, workTicks);
         helper.assertTrue(settler.getWork().jobFactor(level, craft) == factor, "Job factor of the day " + factor + ": "
                 + settler.getWork().jobFactor(level, craft));
@@ -64,7 +65,7 @@ final class CraftingRounds {
     /** A pattern for {@code item} in {@code slot} lies outside the Job's domain: unchecked, not checkable, greyed out with the domain line. */
     static void assertOutsideDomain(GameTestHelper helper, BlockPos craft, Job job, int slot, Item item) {
         ServerLevel level = helper.getLevel();
-        helper.assertFalse(Patterns.setOutput(level, craft, job, slot, item).orElseThrow().checked(), item + " is outside the domain");
+        helper.assertFalse(Patterns.setOutput(level, craft, job, slot, ItemKey.of(item)).orElseThrow().checked(), item + " is outside the domain");
         helper.assertFalse(Patterns.toggleCheck(level, craft, job, slot), "And cannot be checked");
         PatternsTabData tab = PatternsTabData.of(level, craft, job);
         helper.assertTrue(tab.filtered().equals(Set.of(slot))

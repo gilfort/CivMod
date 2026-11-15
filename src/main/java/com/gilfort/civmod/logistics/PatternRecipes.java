@@ -57,16 +57,16 @@ public final class PatternRecipes {
      * @param id     the recipe id
      * @param type   the recipe type
      * @param cells  the 9 cells, row by row (shaped recipes keep their shape, others fill the cells in order)
-     * @param output the made item
+     * @param output the made thing (item and relevant components)
      * @param count  how many one execution makes
      */
-    public record Shape(ResourceKey<Recipe<?>> id, RecipeType<?> type, List<Optional<Ingredient>> cells, Item output, int count) {
+    public record Shape(ResourceKey<Recipe<?>> id, RecipeType<?> type, List<Optional<Ingredient>> cells, ItemKey output, int count) {
 
         /**
-         * @return one item per cell: the first item of each ingredient, {@link Items#AIR} for empty cells
+         * @return one item per cell: the first item of each ingredient, {@link ItemKey#EMPTY} for empty cells
          */
-        public List<Item> grid() {
-            return cells.stream().map(cell -> cell.flatMap(PatternRecipes::first).orElse(Items.AIR)).toList();
+        public List<ItemKey> grid() {
+            return cells.stream().map(cell -> cell.map(PatternRecipes::representativeKey).orElse(ItemKey.EMPTY)).toList();
         }
 
         /**
@@ -84,14 +84,14 @@ public final class PatternRecipes {
      * @return the recipes of those types making it; the first one is the default: the first type's, the recipe named like
      *         the item, then by id
      */
-    public static List<Shape> producing(ServerLevel level, List<RecipeType<?>> types, Item item) {
+    public static List<Shape> producing(ServerLevel level, List<RecipeType<?>> types, ItemKey item) {
         List<Shape> shapes = new ArrayList<>();
         for (RecipeType<?> type : types) {
             for (RecipeHolder<?> holder : recipes(level, type)) {
-                shape(level, holder).filter(shape -> shape.output() == item).ifPresent(shapes::add);
+                shape(level, holder).filter(shape -> shape.output().equals(item)).ifPresent(shapes::add);
             }
         }
-        Identifier name = BuiltInRegistries.ITEM.getKey(item);
+        Identifier name = BuiltInRegistries.ITEM.getKey(item.item());
         shapes.sort(Comparator.<Shape>comparingInt(shape -> types.indexOf(shape.type()))
                 .thenComparingInt(shape -> shape.id().identifier().equals(name) ? 0 : 1)
                 .thenComparing(shape -> shape.id().identifier().toString()));
@@ -123,8 +123,8 @@ public final class PatternRecipes {
      * @param grid  9 items, row by row ({@link Items#AIR} for empty cells)
      * @return the recipe of the first type these exact items match, with its output
      */
-    public static Optional<Shape> matching(ServerLevel level, List<RecipeType<?>> types, List<Item> grid) {
-        if (grid.stream().allMatch(item -> item == Items.AIR)) {
+    public static Optional<Shape> matching(ServerLevel level, List<RecipeType<?>> types, List<ItemKey> grid) {
+        if (grid.stream().allMatch(ItemKey::isEmpty)) {
             return Optional.empty();
         }
         for (RecipeType<?> type : types) {
@@ -142,10 +142,10 @@ public final class PatternRecipes {
      * @param grid   9 items, row by row ({@link Items#AIR} for empty cells)
      * @return the recipe of the layout's type the items in its cells (the first 1, 3 or 9) match exactly
      */
-    public static Optional<Shape> matching(ServerLevel level, PatternLayout layout, List<Item> grid) {
-        List<Item> cells = new ArrayList<>(grid);
+    public static Optional<Shape> matching(ServerLevel level, PatternLayout layout, List<ItemKey> grid) {
+        List<ItemKey> cells = new ArrayList<>(grid);
         for (int i = layout.kind().cells(); i < cells.size(); i++) {
-            cells.set(i, Items.AIR);
+            cells.set(i, ItemKey.EMPTY);
         }
         return matching(level, List.of(layout.type()), cells);
     }
@@ -172,40 +172,40 @@ public final class PatternRecipes {
         }
     }
 
-    private static Optional<Shape> matchingCrafting(ServerLevel level, List<Item> grid) {
-        CraftingInput input = CraftingInput.of(3, 3, grid.stream().map(ItemStack::new).toList());
+    private static Optional<Shape> matchingCrafting(ServerLevel level, List<ItemKey> grid) {
+        CraftingInput input = CraftingInput.of(3, 3, grid.stream().map(ItemKey::toStack).toList());
         return level.recipeAccess().getRecipeFor(RecipeType.CRAFTING, input, level).flatMap(holder -> {
             ItemStack result = holder.value().assemble(input);
             if (result.isEmpty()) {
                 return Optional.empty();
             }
-            return Optional.of(new Shape(holder.id(), RecipeType.CRAFTING, exactCells(grid), result.getItem(), result.getCount()));
+            return Optional.of(new Shape(holder.id(), RecipeType.CRAFTING, exactCells(grid), ItemKey.of(result), result.getCount()));
         });
     }
 
     /** A recipe of another type matches when its ingredients accept the grid items in order. */
-    private static Optional<Shape> matchingInOrder(ServerLevel level, RecipeType<?> type, List<Item> grid) {
-        List<Item> items = grid.stream().filter(item -> item != Items.AIR).toList();
+    private static Optional<Shape> matchingInOrder(ServerLevel level, RecipeType<?> type, List<ItemKey> grid) {
+        List<ItemKey> items = grid.stream().filter(item -> !item.isEmpty()).toList();
         return recipes(level, type).stream().sorted(Comparator.comparing(holder -> holder.id().identifier().toString()))
                 .map(holder -> shape(level, holder)).flatMap(Optional::stream)
                 .filter(shape -> fits(shape.ingredients(), items)).findFirst()
                 .map(shape -> new Shape(shape.id(), type, exactCells(grid), shape.output(), shape.count()));
     }
 
-    private static boolean fits(List<Ingredient> ingredients, List<Item> items) {
+    private static boolean fits(List<Ingredient> ingredients, List<ItemKey> items) {
         if (ingredients.size() != items.size()) {
             return false;
         }
         for (int i = 0; i < items.size(); i++) {
-            if (!ingredients.get(i).test(new ItemStack(items.get(i)))) {
+            if (!ingredients.get(i).test(items.get(i).toStack())) {
                 return false;
             }
         }
         return true;
     }
 
-    private static List<Optional<Ingredient>> exactCells(List<Item> grid) {
-        return grid.stream().map(item -> item == Items.AIR ? Optional.<Ingredient>empty() : Optional.of(Ingredient.of(item))).toList();
+    private static List<Optional<Ingredient>> exactCells(List<ItemKey> grid) {
+        return grid.stream().map(item -> item.isEmpty() ? Optional.<Ingredient>empty() : Optional.of(ItemKeyIngredient.of(item))).toList();
     }
 
     @SuppressWarnings("unchecked")
@@ -239,18 +239,18 @@ public final class PatternRecipes {
         }
         List<ItemStack> sample = new ArrayList<>();
         for (Optional<Ingredient> cell : cells) {
-            Optional<Item> item = cell.flatMap(PatternRecipes::first);
-            if (cell.isPresent() && item.isEmpty()) {
+            Optional<ItemKey> key = cell.map(PatternRecipes::representativeKey).filter(found -> !found.isEmpty());
+            if (cell.isPresent() && key.isEmpty()) {
                 return Optional.empty();
             }
-            sample.add(item.map(ItemStack::new).orElse(ItemStack.EMPTY));
+            sample.add(key.map(ItemKey::toStack).orElse(ItemStack.EMPTY));
         }
         CraftingInput input = CraftingInput.of(3, 3, sample);
         if (!recipe.matches(input, level)) {
             return Optional.empty();
         }
         ItemStack result = recipe.assemble(input);
-        return result.isEmpty() ? Optional.empty() : Optional.of(new Shape(id, RecipeType.CRAFTING, cells, result.getItem(), result.getCount()));
+        return result.isEmpty() ? Optional.empty() : Optional.of(new Shape(id, RecipeType.CRAFTING, cells, ItemKey.of(result), result.getCount()));
     }
 
     /** A recipe of another type: its ingredients in order, its result from its first recipe book display. */
@@ -262,7 +262,7 @@ public final class PatternRecipes {
             return Optional.empty();
         }
         ItemStack result = displays.getFirst().result().resolveForFirstStack(SlotDisplayContext.fromLevel(level));
-        return result.isEmpty() ? Optional.empty() : Optional.of(new Shape(id, recipe.getType(), cells, result.getItem(), result.getCount()));
+        return result.isEmpty() ? Optional.empty() : Optional.of(new Shape(id, recipe.getType(), cells, ItemKey.of(result), result.getCount()));
     }
 
     private static boolean fillInOrder(List<Optional<Ingredient>> cells, PlacementInfo placement) {
@@ -298,10 +298,22 @@ public final class PatternRecipes {
 
     /**
      * @param ingredient an ingredient
+     * @return the thing standing for it: the key of an {@link ItemKeyIngredient} with its components, else its
+     *         {@link #representative item} without components, {@link ItemKey#EMPTY} if it has none
+     */
+    public static ItemKey representativeKey(Ingredient ingredient) {
+        if (ingredient.getCustomIngredient() instanceof ItemKeyIngredient exact) {
+            return exact.key();
+        }
+        return ItemKey.of(representative(ingredient));
+    }
+
+    /**
+     * @param ingredient an ingredient
      * @return its name: a tag ingredient as "Any Wool" ({@link #tagName}), else the name of its first alternative
      */
     public static Component name(Ingredient ingredient) {
-        Component first = new ItemStack(representative(ingredient)).getHoverName();
+        Component first = representativeKey(ingredient).toStack().getHoverName();
         Optional<TagKey<Item>> tag = ingredient.isCustom() ? Optional.empty() : ingredient.getValues().unwrapKey();
         return tag.<Component>map(found -> Component.translatable("civmod.gui.patterns.any_of", tagName(found, first))).orElse(first);
     }

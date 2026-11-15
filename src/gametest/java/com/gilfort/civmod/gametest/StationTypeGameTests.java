@@ -12,6 +12,7 @@ import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 import com.gilfort.civmod.job.CraftspersonProfile;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.Producers;
 import com.gilfort.civmod.menu.JobBlockInfo;
@@ -277,7 +278,7 @@ public final class StationTypeGameTests {
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 3), data, settlement);
         helper.assertTrue(SettlementWorld.assign(level, pos, settler, stonecutter) == JobAssignments.AssignResult.OK, "Stonecutter assigned");
         // Slot 0 holds the Stonecutter's innate recipe.
-        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 1, Items.STONE_BRICKS).orElseThrow().checked(), "Bricks checked");
+        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 1, ItemKey.of(Items.STONE_BRICKS)).orElseThrow().checked(), "Bricks checked");
 
         helper.assertTrue(unlock(helper, pos, 1, Items.SMITHING_TABLE), "The smithing table replaces the stonecutter");
         SettlementBlock block = block(level, pos);
@@ -291,7 +292,7 @@ public final class StationTypeGameTests {
         PatternsTabData tab = PatternsTabData.of(level, pos, stonecutter);
         helper.assertTrue(tab.locked() && tab.unusable(0) && tab.unusable(1) && !tab.follows(RecipeType.STONECUTTING), "Greyed out: " + tab);
         helper.assertTrue(Patterns.usable(level, block, stonecutter).isEmpty(), "Not usable");
-        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 2, Items.STONE_SLAB).isEmpty(), "Not editable");
+        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 2, ItemKey.of(Items.STONE_SLAB)).isEmpty(), "Not editable");
         helper.assertTrue(StationTypesTabData.of(level, pos).libraries().contains(stonecutter), "Its Patterns tab stays");
 
         // Level 2 only: a bigger JobBlock would reach into the neighbouring tests' settlements.
@@ -313,17 +314,17 @@ public final class StationTypeGameTests {
         Job stonecutter = job(STONECUTTER);
         BlockPos relative = new BlockPos(1, 1, 1);
         BlockPos pos = CraftspersonGameTests.craftsperson(helper, relative);
-        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 0, Items.STONE_BRICKS).isEmpty(), "Not unlocked: no Stonecutter library");
+        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 0, ItemKey.of(Items.STONE_BRICKS)).isEmpty(), "Not unlocked: no Stonecutter library");
         setLevel(helper, relative, 2);
         helper.assertTrue(unlock(helper, pos, 1, Items.STONECUTTER), "Stonecutter unlocked");
-        helper.assertTrue(Patterns.setOutput(level, pos, craftsperson, 0, Items.STICK).orElseThrow().checked(), "Craftsperson: sticks");
+        helper.assertTrue(Patterns.setOutput(level, pos, craftsperson, 0, ItemKey.of(Items.STICK)).orElseThrow().checked(), "Craftsperson: sticks");
         // Slot 0 of the Stonecutter's library holds its innate recipe: an innate pattern sits locked there.
-        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 0, Items.STONE_BRICKS).isEmpty(), "Stonecutter: slot 0 is innate");
-        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 1, Items.STONE_BRICKS).orElseThrow().checked(), "Stonecutter: bricks");
-        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 2, Items.STICK).isEmpty(), "No stonecutting recipe makes sticks");
+        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 0, ItemKey.of(Items.STONE_BRICKS)).isEmpty(), "Stonecutter: slot 0 is innate");
+        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 1, ItemKey.of(Items.STONE_BRICKS)).orElseThrow().checked(), "Stonecutter: bricks");
+        helper.assertTrue(Patterns.setOutput(level, pos, stonecutter, 2, ItemKey.of(Items.STICK)).isEmpty(), "No stonecutting recipe makes sticks");
         SettlementBlock block = block(level, pos);
-        helper.assertTrue(block.patterns(craftsperson).size() == 1 && block.patterns(craftsperson).getFirst().output() == Items.STICK
-                && block.patterns(stonecutter).size() == 2 && block.patterns(stonecutter).get(1).output() == Items.STONE_BRICKS,
+        helper.assertTrue(block.patterns(craftsperson).size() == 1 && block.patterns(craftsperson).getFirst().output().is(Items.STICK)
+                && block.patterns(stonecutter).size() == 2 && block.patterns(stonecutter).get(1).output().is(Items.STONE_BRICKS),
                 "Two libraries: " + block.patterns(craftsperson) + " / " + block.patterns(stonecutter));
         helper.assertTrue(PatternsTabData.of(level, pos, stonecutter).follows(RecipeType.STONECUTTING)
                 && PatternsTabData.of(level, pos, craftsperson).follows(RecipeType.CRAFTING), "Each tab follows its Job's recipe types");
@@ -332,8 +333,8 @@ public final class StationTypeGameTests {
         Settlement settlement = data.settlementAt(pos).orElseThrow();
         helper.assertTrue(TestAssignments.assign(data, pos, UUID.randomUUID(), "Stella", settlement.id(), List.of(), stonecutter)
                 == JobAssignments.AssignResult.OK, "Stonecutter assigned");
-        helper.assertTrue(Producers.canMake(level, settlement, Items.STONE_BRICKS), "The Stonecutter makes bricks");
-        helper.assertFalse(Producers.canMake(level, settlement, Items.STICK), "Not the Craftsperson's sticks");
+        helper.assertTrue(Producers.canMake(level, settlement, ItemKey.of(Items.STONE_BRICKS)), "The Stonecutter makes bricks");
+        helper.assertFalse(Producers.canMake(level, settlement, ItemKey.of(Items.STICK)), "Not the Craftsperson's sticks");
 
         JsonElement json = Settlement.CODEC.encodeStart(JsonOps.INSTANCE, settlement).getOrThrow();
         SettlementBlock loaded = Settlement.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow().block(pos).orElseThrow();

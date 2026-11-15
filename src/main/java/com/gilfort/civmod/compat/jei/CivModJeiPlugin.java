@@ -12,6 +12,7 @@ import com.gilfort.civmod.client.ClientInnateRecipes;
 import com.gilfort.civmod.client.ClientJobDrops;
 import com.gilfort.civmod.client.gui.JobBlockScreen;
 import com.gilfort.civmod.client.gui.SettlerScreen;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.PatternsTab;
@@ -42,9 +43,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.MenuType;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
@@ -182,9 +181,9 @@ public final class CivModJeiPlugin implements IModPlugin {
                 // Other JobBlocks have no patterns: no button.
                 return helper.createInternalError();
             }
-            List<Item> grid = new ArrayList<>();
+            List<ItemKey> grid = new ArrayList<>();
             for (IRecipeSlotView slot : slots.getSlotViews(RecipeIngredientRole.INPUT)) {
-                grid.add(slot.getDisplayedItemStack().map(ItemStack::getItem).orElse(Items.AIR));
+                grid.add(slot.getDisplayedItemStack().map(ItemKey::of).orElse(ItemKey.EMPTY));
             }
             Optional<Component> error = screen.transferPattern(recipe.value().getType(), Optional.of(recipe.id()),
                     grid.subList(0, Math.min(Pattern.GRID, grid.size())), doTransfer);

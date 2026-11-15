@@ -11,6 +11,7 @@ import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.gametest.FletcherGameTests.Setup;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.logistics.InnateRecipes;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.PatternsTabData;
@@ -177,7 +178,7 @@ public final class BottlerGameTests {
                 "The lava bucket arrived (status " + settler.getWork().status(craft) + ")");
         helper.assertTrue(helper.getBlockState(lava).is(Blocks.CAULDRON), "The lava cauldron is empty afterwards: " + helper.getBlockState(lava));
 
-        helper.assertTrue(StockRules.setRule(setup.data(), setup.clerk(), StockRule.minimum(0, Items.LAVA_BUCKET, 2, 0)), "Second lava bucket wanted");
+        helper.assertTrue(StockRules.setRule(setup.data(), setup.clerk(), StockRule.minimum(0, ItemKey.of(Items.LAVA_BUCKET), 2, 0)), "Second lava bucket wanted");
         StockRules.check(level, setup.clerk(), ClerkGameTests.MORNING);
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(settler.getWork().status(craft) == JobStatus.BLOCKED, "No station at all: " + settler.getWork().status(craft));
@@ -186,7 +187,7 @@ public final class BottlerGameTests {
         helper.setBlock(new BlockPos(9, 1, 5), Blocks.WATER_CAULDRON);
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         helper.assertTrue(FletcherGameTests.count(level, setup.clerk(), Items.LAVA_BUCKET) == 1, "No second lava bucket without lava");
-        helper.assertTrue(Requests.ofClerk(setup.settlement(), setup.clerk()).stream().anyMatch(request -> request.item() == Items.LAVA_BUCKET),
+        helper.assertTrue(Requests.ofClerk(setup.settlement(), setup.clerk()).stream().anyMatch(request -> request.item().is(Items.LAVA_BUCKET)),
                 "The request stays open");
         PatternsTabData tab = PatternsTabData.of(level, craft, bottler());
         helper.assertTrue(tab.needs().values().stream().map(Component::getString).toList().contains("Needs a station nearby: Lava Cauldron"),
@@ -249,7 +250,7 @@ public final class BottlerGameTests {
         Request lava = Requests.claimable(setup.settlement()).getFirst();
         CraftspersonGameTests.catchUp(level, settler, WORK_TICKS);
         List<Request> children = Requests.children(setup.settlement(), lava.id());
-        helper.assertTrue(children.size() == 1 && children.getFirst().item() == Items.BUCKET && children.getFirst().target().equals(Optional.of(setup.clerk())),
+        helper.assertTrue(children.size() == 1 && children.getFirst().item().is(Items.BUCKET) && children.getFirst().target().equals(Optional.of(setup.clerk())),
                 "A child request for the bucket at the Clerk: " + children);
         TestAssignments.unassign(setup.data(), workshop);
         FletcherGameTests.cleanUp(setup, settler);

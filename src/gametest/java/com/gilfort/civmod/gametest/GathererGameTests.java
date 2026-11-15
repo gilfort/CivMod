@@ -13,6 +13,7 @@ import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.job.BlockCountScan;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.job.SavedScan;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -121,7 +122,7 @@ public final class GathererGameTests {
         settler.addJob(new SettlerJob(ModJobs.GATHERER.get(), jobBlock));
         helper.onEachTick(() -> helper.assertTrue(settler.getWork().status(jobBlock) != JobStatus.NO_TOOL, "A Gatherer never lacks a tool"));
         helper.succeedWhen(() -> {
-            helper.assertTrue(settler.getWork().buffer(jobBlock).counts().getOrDefault(Items.SWEET_BERRIES, 0) > 0,
+            helper.assertTrue(settler.getWork().buffer(jobBlock).counts().getOrDefault(ItemKey.of(Items.SWEET_BERRIES), 0) > 0,
                     "No berries yet (status " + settler.getWork().status(jobBlock) + ")");
             for (int x = 5; x < 8; x++) {
                 helper.assertTrue(helper.getBlockState(new BlockPos(x, 1, 5)).equals(bush(3)), "The bushes stay ripe");

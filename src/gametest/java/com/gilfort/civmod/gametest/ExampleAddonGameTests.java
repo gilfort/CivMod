@@ -19,6 +19,7 @@ import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.job.MissionTrip;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.FoundTabData;
@@ -302,7 +303,7 @@ public final class ExampleAddonGameTests {
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
         Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
         chest.setItem(0, new ItemStack(Items.STONE, 4));
-        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_BRICKS, 4, 0)), "Rule set");
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.STONE_BRICKS), 4, 0)), "Rule set");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
 
         BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
@@ -318,8 +319,8 @@ public final class ExampleAddonGameTests {
         settler.addJob(new SettlerJob(stonecutter, craft));
 
         // Slot 0 holds the Stonecutter's innate recipe (cobblestone → mossy cobblestone).
-        Pattern bricks = Patterns.setOutput(level, craft, stonecutter, 1, Items.STONE_BRICKS).orElseThrow();
-        helper.assertTrue(bricks.checked() && bricks.grid().getFirst() == Items.STONE && bricks.count() == 1,
+        Pattern bricks = Patterns.setOutput(level, craft, stonecutter, 1, ItemKey.of(Items.STONE_BRICKS)).orElseThrow();
+        helper.assertTrue(bricks.checked() && bricks.grid().getFirst().is(Items.STONE) && bricks.count() == 1,
                 "A stonecutting pattern, checked automatically: " + bricks);
         CraftspersonGameTests.catchUp(level, settler, 4000L);
 
@@ -345,7 +346,7 @@ public final class ExampleAddonGameTests {
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
         Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
         chest.setItem(0, new ItemStack(Items.STONE, 4));
-        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_BRICKS, 4, 0)), "Rule set");
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.STONE_BRICKS), 4, 0)), "Rule set");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
 
         BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
@@ -369,7 +370,7 @@ public final class ExampleAddonGameTests {
         helper.assertTrue(TestAssignments.assign(data, craft, settler.getUUID(), "Stella", settlement.id(), List.of(), stonecutter)
                 == JobAssignments.AssignResult.OK, "Stonecutter assigned");
         settler.addJob(new SettlerJob(stonecutter, craft));
-        helper.assertTrue(Patterns.setOutput(level, craft, stonecutter, 1, Items.STONE_BRICKS).orElseThrow().checked(), "Bricks checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, stonecutter, 1, ItemKey.of(Items.STONE_BRICKS)).orElseThrow().checked(), "Bricks checked");
         CraftspersonGameTests.catchUp(level, settler, 4000L);
 
         helper.assertTrue(ClerkStorage.stock(level, clerk, true).count(stack -> stack.is(Items.STONE_BRICKS)) == 4,
@@ -396,7 +397,7 @@ public final class ExampleAddonGameTests {
         helper.setBlock(new BlockPos(3, 1, 5), Blocks.STONECUTTER);
         Patterns.syncInnate(level, craft, stonecutter);
         Pattern innate = PatternsTabData.of(level, craft, stonecutter).pattern(0).orElseThrow();
-        helper.assertTrue(innate.innate() && innate.output() == Items.MOSSY_COBBLESTONE && innate.checked()
+        helper.assertTrue(innate.innate() && innate.output().is(Items.MOSSY_COBBLESTONE) && innate.checked()
                 && innate.recipe().equals(Optional.of(ResourceKey.create(Registries.RECIPE, Identifier.fromNamespaceAndPath("civmod_example",
                         "stonecutter/mossy_cobblestone")))), "The innate recipe in slot 0, locked and checked: " + innate);
         Settler settler = FletcherGameTests.worker(helper, setup, craft, stonecutter);
@@ -423,7 +424,7 @@ public final class ExampleAddonGameTests {
         helper.assertTrue(StationTypeGameTests.unlock(helper, craft, 1, Items.STONECUTTER), "Stonecutter unlocked");
         ResourceKey<Recipe<?>> bricks = ResourceKey.create(Registries.RECIPE, Identifier.withDefaultNamespace("stone_bricks_from_stone_stonecutting"));
         ResourceKey<Recipe<?>> sticks = ResourceKey.create(Registries.RECIPE, Identifier.withDefaultNamespace("stick"));
-        List<Item> stickGrid = List.of(Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.OAK_PLANKS, Items.AIR, Items.AIR, Items.AIR, Items.AIR);
+        List<ItemKey> stickGrid = List.of(ItemKey.EMPTY, ItemKey.of(Items.OAK_PLANKS), ItemKey.EMPTY, ItemKey.EMPTY, ItemKey.of(Items.OAK_PLANKS), ItemKey.EMPTY, ItemKey.EMPTY, ItemKey.EMPTY, ItemKey.EMPTY);
 
         // The Smelter adds smelting (#110), the Smith smithing (#111), the Cook smoking and the Founder blasting (#129): their Patterns
         // tabs get the JEI / REI transfer like the Craftsperson's.
@@ -433,17 +434,17 @@ public final class ExampleAddonGameTests {
         Job craftsperson = ModJobs.CRAFTSPERSON.get();
         PatternsTabData tab = PatternsTabData.of(level, craft, craftsperson);
         helper.assertTrue(tab.follows(RecipeType.CRAFTING) && !tab.follows(RecipeType.STONECUTTING), "The Craftsperson's library follows crafting");
-        helper.assertTrue(Patterns.transfer(level, craft, craftsperson, 0, Optional.of(bricks), List.of(Items.STONE)).isEmpty(),
+        helper.assertTrue(Patterns.transfer(level, craft, craftsperson, 0, Optional.of(bricks), List.of(ItemKey.of(Items.STONE))).isEmpty(),
                 "The Craftsperson refuses a stonecutting recipe");
         helper.assertTrue(PatternsTabData.of(level, craft, craftsperson).pattern(0).isEmpty(), "Refused: the slot stays empty");
 
         tab = PatternsTabData.of(level, craft, stonecutter);
         helper.assertTrue(tab.follows(RecipeType.STONECUTTING) && !tab.follows(RecipeType.CRAFTING), "The Stonecutter's library follows stonecutting");
-        helper.assertTrue(Patterns.transfer(level, craft, stonecutter, 0, Optional.of(bricks), List.of(Items.STONE)).isEmpty(),
+        helper.assertTrue(Patterns.transfer(level, craft, stonecutter, 0, Optional.of(bricks), List.of(ItemKey.of(Items.STONE))).isEmpty(),
                 "The innate recipe in slot 0 refuses a transfer");
-        Pattern pattern = Patterns.transfer(level, craft, stonecutter, 1, Optional.of(bricks), List.of(Items.STONE)).orElseThrow();
-        helper.assertTrue(pattern.output() == Items.STONE_BRICKS && pattern.recipe().equals(Optional.of(bricks)) && !pattern.exact()
-                && pattern.grid().getFirst() == Items.STONE && pattern.checked(), "A stonecutting recipe pattern, checked automatically: " + pattern);
+        Pattern pattern = Patterns.transfer(level, craft, stonecutter, 1, Optional.of(bricks), List.of(ItemKey.of(Items.STONE))).orElseThrow();
+        helper.assertTrue(pattern.output().is(Items.STONE_BRICKS) && pattern.recipe().equals(Optional.of(bricks)) && !pattern.exact()
+                && pattern.grid().getFirst().is(Items.STONE) && pattern.checked(), "A stonecutting recipe pattern, checked automatically: " + pattern);
         helper.assertTrue(Patterns.transfer(level, craft, stonecutter, 2, Optional.of(sticks), stickGrid).isEmpty(),
                 "The Stonecutter refuses a crafting recipe");
         helper.assertTrue(PatternsTabData.of(level, craft, stonecutter).pattern(2).isEmpty(), "Refused: the slot stays empty");

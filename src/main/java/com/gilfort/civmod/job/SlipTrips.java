@@ -11,6 +11,7 @@ import java.util.Set;
 
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.DeliveryTask;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.SlipPlan;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
@@ -27,8 +28,6 @@ import com.gilfort.civmod.settlement.Warehouses;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -139,14 +138,15 @@ final class SlipTrips {
      */
     boolean unloadLeg(ServerLevel level, SettlerJob job, SlipPlan.Leg leg) {
         Stock stock = ClerkStorage.stock(level, leg.target(), true);
-        Map<Item, Integer> allowed = new HashMap<>(leg.items());
+        Map<ItemKey, Integer> allowed = new HashMap<>(leg.items());
         shell.workplace(job.jobBlock()).buffer().deliver(stack -> {
-            int part = Math.min(stack.getCount(), allowed.getOrDefault(stack.getItem(), 0));
+            ItemKey key = ItemKey.of(stack);
+            int part = Math.min(stack.getCount(), allowed.getOrDefault(key, 0));
             if (part <= 0) {
                 return 0;
             }
             int moved = part - stock.insert(stack.copyWithCount(part)).getCount();
-            allowed.merge(stack.getItem(), -moved, Integer::sum);
+            allowed.merge(key, -moved, Integer::sum);
             return moved;
         });
         int stacks = leg.items().entrySet().stream().mapToInt(entry -> stacksOf(entry.getKey(), entry.getValue() - allowed.getOrDefault(entry.getKey(), 0))).sum();
@@ -162,7 +162,7 @@ final class SlipTrips {
         return true;
     }
 
-    private static int stacksOf(Item item, int count) {
-        return (int) Math.ceil(count / (double) new ItemStack(item).getMaxStackSize());
+    private static int stacksOf(ItemKey item, int count) {
+        return (int) Math.ceil(count / (double) item.toStack().getMaxStackSize());
     }
 }

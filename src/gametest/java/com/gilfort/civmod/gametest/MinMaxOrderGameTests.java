@@ -8,6 +8,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.ClerkTabData;
@@ -107,7 +108,7 @@ public final class MinMaxOrderGameTests {
         BlockPos clerk = clerk(helper, new BlockPos(1, 1, 7));
         SettlementData data = SettlementData.get(level);
         helper.assertTrue(JobBlockSite.blockAt(level, jobBlock).orElseThrow().homeClerk().equals(Optional.of(clerk)), "Home Clerk");
-        helper.assertTrue(StockRules.setRule(data, clerk, new StockRule(0, Items.OAK_LOG, 0, 4, 0, 0)), "Max rule set");
+        helper.assertTrue(StockRules.setRule(data, clerk, new StockRule(0, ItemKey.of(Items.OAK_LOG), 0, 4, 0, 0)), "Max rule set");
         Container store = ClerkGameTests.store(level, clerk);
         store.setItem(0, new ItemStack(Items.OAK_LOG, 4));
         int[] before = new int[1];
@@ -153,7 +154,7 @@ public final class MinMaxOrderGameTests {
         BlockPos clerk = clerk(helper, new BlockPos(1, 1, 7));
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
-        StockRules.setRule(data, clerk, new StockRule(0, Items.COBBLESTONE, 0, 1, 0, 0));
+        StockRules.setRule(data, clerk, new StockRule(0, ItemKey.of(Items.COBBLESTONE), 0, 1, 0, 0));
         ClerkGameTests.store(level, clerk).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(3, 1, 3), data, settlement);
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_PICKAXE));
@@ -213,12 +214,12 @@ public final class MinMaxOrderGameTests {
         dora.addJob(new SettlerJob(ModJobs.DELIVERYMAN.get(), warehouse));
         helper.assertTrue(Warehouses.link(data, warehouse, served) == Warehouses.LinkResult.LINKED, "Served Clerk linked");
 
-        StockRules.setRule(data, served, new StockRule(0, Items.TORCH, 0, 10, 0, 0));
+        StockRules.setRule(data, served, new StockRule(0, ItemKey.of(Items.TORCH), 0, 10, 0, 0));
         Container servedStore = ClerkGameTests.store(level, served);
         Container warehouseStore = ClerkGameTests.store(level, warehouse);
         servedStore.setItem(0, new ItemStack(Items.TORCH, 30));
         StockRules.check(level, served, ClerkGameTests.MORNING);
-        helper.assertTrue(Deliveries.freeSurplus(settlement, served, Items.TORCH, DayClock.day(level))
+        helper.assertTrue(Deliveries.freeSurplus(settlement, served, ItemKey.of(Items.TORCH), DayClock.day(level))
                 .map(task -> task.input().orElseThrow().count()).orElse(0) == 20, "A surplus task for 30 − 10 = 20");
         helper.assertTrue(StockRules.surplusNowhere(level, served).isEmpty(), "The surplus has somewhere to go");
         dora.setNoAi(false);
@@ -230,7 +231,7 @@ public final class MinMaxOrderGameTests {
                     helper.assertTrue(count(servedStore, Items.TORCH) == 10, "Max stays at the Served Clerk");
                     helper.assertTrue(settlement.deliveries().stream().noneMatch(task -> task.surplus()), "Surplus task done");
                     // The Warehouse is at its own Max: more surplus has nowhere to go.
-                    StockRules.setRule(data, warehouse, new StockRule(0, Items.TORCH, 0, 20, 0, 0));
+                    StockRules.setRule(data, warehouse, new StockRule(0, ItemKey.of(Items.TORCH), 0, 20, 0, 0));
                     // Through CivMod's own transaction: a linked container is re-read only every few seconds.
                     ClerkStorage.stock(level, served, true).insert(new ItemStack(Items.TORCH, 5));
                     StockRules.check(level, served, ClerkGameTests.MORNING);
@@ -260,15 +261,15 @@ public final class MinMaxOrderGameTests {
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(warehouse).orElseThrow();
         helper.assertTrue(Warehouses.link(data, warehouse, served) == Warehouses.LinkResult.LINKED, "Served Clerk linked");
-        StockRules.setRule(data, served, new StockRule(0, Items.TORCH, 0, 10, 0, 0));
+        StockRules.setRule(data, served, new StockRule(0, ItemKey.of(Items.TORCH), 0, 10, 0, 0));
         ClerkStorage.stock(level, served, true).insert(new ItemStack(Items.TORCH, 30));
         ClerkStorage.stock(level, served, true).insert(new ItemStack(Items.STICK, 30));
         // The write-through runs at the end of the tick, long before the 30 s check comes round for most positions.
         helper.startSequence()
                 .thenExecuteAfter(2, () -> {
-                    helper.assertTrue(Deliveries.freeSurplus(settlement, served, Items.TORCH, DayClock.day(level))
+                    helper.assertTrue(Deliveries.freeSurplus(settlement, served, ItemKey.of(Items.TORCH), DayClock.day(level))
                             .map(task -> task.input().orElseThrow().count()).orElse(0) == 20, "A surplus task for 30 − 10 = 20 right away");
-                    helper.assertTrue(Deliveries.freeSurplus(settlement, served, Items.STICK, DayClock.day(level)).isEmpty(),
+                    helper.assertTrue(Deliveries.freeSurplus(settlement, served, ItemKey.of(Items.STICK), DayClock.day(level)).isEmpty(),
                             "No Max rule for sticks: no surplus");
                 })
                 .thenSucceed();
@@ -279,12 +280,12 @@ public final class MinMaxOrderGameTests {
         BlockPos clerk = clerk(helper, new BlockPos(1, 1, 1));
         SettlementData data = SettlementData.get(helper.getLevel());
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        StockRules.setRule(data, clerk, new StockRule(0, Items.TORCH, 0, 10, 0, 0));
-        StockRules.setRule(data, clerk, new StockRule(1, Items.STICK, 0, 20, 0, 0));
+        StockRules.setRule(data, clerk, new StockRule(0, ItemKey.of(Items.TORCH), 0, 10, 0, 0));
+        StockRules.setRule(data, clerk, new StockRule(1, ItemKey.of(Items.STICK), 0, 20, 0, 0));
         JsonObject saved = SettlementBlock.CODEC.encodeStart(JsonOps.INSTANCE, settlement.block(clerk).orElseThrow()).getOrThrow().getAsJsonObject();
-        saved.getAsJsonArray("stock_rules").add(StockRule.CODEC.encodeStart(JsonOps.INSTANCE, new StockRule(2, Items.TORCH, 5, 50, 0, 0)).getOrThrow());
+        saved.getAsJsonArray("stock_rules").add(StockRule.CODEC.encodeStart(JsonOps.INSTANCE, new StockRule(2, ItemKey.of(Items.TORCH), 5, 50, 0, 0)).getOrThrow());
         SettlementBlock loaded = SettlementBlock.CODEC.parse(JsonOps.INSTANCE, saved).getOrThrow();
-        helper.assertTrue(loaded.stockRules().equals(List.of(new StockRule(0, Items.TORCH, 0, 10, 0, 0), new StockRule(1, Items.STICK, 0, 20, 0, 0))),
+        helper.assertTrue(loaded.stockRules().equals(List.of(new StockRule(0, ItemKey.of(Items.TORCH), 0, 10, 0, 0), new StockRule(1, ItemKey.of(Items.STICK), 0, 20, 0, 0))),
                 "The first torch rule stays, the duplicate is dropped: " + loaded.stockRules());
         helper.succeed();
     }
@@ -315,25 +316,25 @@ public final class MinMaxOrderGameTests {
         stock(level, clerk, 10);
 
         // Min only: up to Min.
-        helper.assertTrue(StockRules.setRule(data, clerk, new StockRule(0, Items.TORCH, 64, 0, 0, 0)), "Min rule set");
+        helper.assertTrue(StockRules.setRule(data, clerk, new StockRule(0, ItemKey.of(Items.TORCH), 64, 0, 0, 0)), "Min rule set");
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(open(settlement, clerk) == 54, "Min 64, stock 10: 54 " + open(settlement, clerk));
 
         // Min + Max: up to Max.
-        StockRules.setRule(data, clerk, new StockRule(0, Items.TORCH, 64, 256, 0, 0));
+        StockRules.setRule(data, clerk, new StockRule(0, ItemKey.of(Items.TORCH), 64, 256, 0, 0));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(open(settlement, clerk) == 246, "Min 64, Max 256, stock 10: 246 " + open(settlement, clerk));
 
         // Min + Order: up to Min + Order.
-        StockRules.setRule(data, clerk, new StockRule(0, Items.TORCH, 64, 0, 100, 0));
+        StockRules.setRule(data, clerk, new StockRule(0, ItemKey.of(Items.TORCH), 64, 0, 100, 0));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(open(settlement, clerk) == 154, "Min 64, Order 100, stock 10: 154 " + open(settlement, clerk));
 
         // Min + Max + Order: up to min(Min + Order, Max).
-        StockRules.setRule(data, clerk, new StockRule(0, Items.TORCH, 64, 128, 192, 0));
+        StockRules.setRule(data, clerk, new StockRule(0, ItemKey.of(Items.TORCH), 64, 128, 192, 0));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(open(settlement, clerk) == 118, "Min 64, Max 128, Order 192, stock 10: 118 " + open(settlement, clerk));
-        StockRules.setRule(data, clerk, new StockRule(0, Items.TORCH, 64, 256, 192, 0));
+        StockRules.setRule(data, clerk, new StockRule(0, ItemKey.of(Items.TORCH), 64, 256, 192, 0));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(open(settlement, clerk) == 246, "Min 64, Max 256, Order 192, stock 10: 246 " + open(settlement, clerk));
 
@@ -354,18 +355,18 @@ public final class MinMaxOrderGameTests {
         helper.assertTrue(open(settlement, clerk) == 196, "Stock 60 below Min: one order up to the target, 196 " + open(settlement, clerk));
 
         // No Min: never a request.
-        StockRules.setRule(data, clerk, new StockRule(0, Items.TORCH, 0, 256, 0, 0));
+        StockRules.setRule(data, clerk, new StockRule(0, ItemKey.of(Items.TORCH), 0, 256, 0, 0));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         helper.assertTrue(Requests.forRule(settlement, clerk, 0).isEmpty(), "Max only: no request");
 
         // Invalid rules are refused.
-        helper.assertFalse(StockRules.setRule(data, clerk, new StockRule(1, Items.STICK, 0, 0, 0, 0)), "Neither Min nor Max: refused");
-        helper.assertFalse(StockRules.setRule(data, clerk, StockRule.minimum(1, Items.TORCH, 8, 0)), "One rule per item and Clerk");
-        StockRule clamped = new StockRule(1, Items.STICK, 0, 64, 32, 0);
+        helper.assertFalse(StockRules.setRule(data, clerk, new StockRule(1, ItemKey.of(Items.STICK), 0, 0, 0, 0)), "Neither Min nor Max: refused");
+        helper.assertFalse(StockRules.setRule(data, clerk, StockRule.minimum(1, ItemKey.of(Items.TORCH), 8, 0)), "One rule per item and Clerk");
+        StockRule clamped = new StockRule(1, ItemKey.of(Items.STICK), 0, 64, 32, 0);
         helper.assertTrue(clamped.order() == 0, "Order only with Min: " + clamped);
-        StockRule band = new StockRule(1, Items.STICK, 100, 50, 0, 0);
+        StockRule band = new StockRule(1, ItemKey.of(Items.STICK), 100, 50, 0, 0);
         helper.assertTrue(band.min() <= band.max(), "Min ≤ Max: " + band);
-        StockRule edited = new StockRule(1, Items.STICK, 64, 256, 0, 0);
+        StockRule edited = new StockRule(1, ItemKey.of(Items.STICK), 64, 256, 0, 0);
         helper.assertTrue(edited.withMin(300).min() == 256 && edited.withMax(10).max() == 64 && edited.withMax(0).max() == 0
                 && edited.withMin(0).withOrder(5).order() == 0, "Editor: Min and Max clamp against each other, Order needs Min");
         TestAssignments.unassign(data, clerk);
@@ -378,8 +379,8 @@ public final class MinMaxOrderGameTests {
         com.google.gson.JsonObject old = com.google.gson.JsonParser.parseString(
                 "{\"slot\": 2, \"item\": \"minecraft:torch\", \"amount\": 48, \"priority\": 7, \"mode\": \"minimum\"}").getAsJsonObject();
         StockRule rule = StockRule.CODEC.parse(JsonOps.INSTANCE, old).getOrThrow();
-        helper.assertTrue(rule.equals(new StockRule(2, Items.TORCH, 48, 0, 0, 7)), "Minimum 48 → Min 48: " + rule);
-        StockRule band = new StockRule(3, Items.STICK, 64, 256, 192, -3);
+        helper.assertTrue(rule.equals(new StockRule(2, ItemKey.of(Items.TORCH), 48, 0, 0, 7)), "Minimum 48 → Min 48: " + rule);
+        StockRule band = new StockRule(3, ItemKey.of(Items.STICK), 64, 256, 192, -3);
         StockRule loaded = StockRule.CODEC.parse(JsonOps.INSTANCE, StockRule.CODEC.encodeStart(JsonOps.INSTANCE, band).getOrThrow()).getOrThrow();
         helper.assertTrue(loaded.equals(band), "Min / Max / Order saved: " + loaded);
         helper.succeed();

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.logistics.ItemKey;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -47,7 +48,7 @@ public final class FurnacesGameTests {
         boolean paid = Furnaces.pay(level, furnace, Furnaces.STANDARD_HEAT, List.of(Items.DIRT, Items.COAL), buffer);
 
         helper.assertTrue(paid, "Paid with the coal");
-        helper.assertTrue(buffer.counts().getOrDefault(Items.DIRT, 0) == 1 && buffer.counts().getOrDefault(Items.COAL, 0) == 0,
+        helper.assertTrue(buffer.counts().getOrDefault(ItemKey.of(Items.DIRT), 0) == 1 && buffer.counts().getOrDefault(ItemKey.of(Items.COAL), 0) == 0,
                 "Dirt kept, coal burnt: " + buffer.stacks());
         helper.assertTrue(Furnaces.heat(level, furnace) == 1600 - Furnaces.STANDARD_HEAT, "Remaining Heat: " + Furnaces.heat(level, furnace));
         helper.succeed();

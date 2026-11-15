@@ -31,7 +31,7 @@ record ExecutionOutcome(ItemStack result, List<ItemStack> drawn) {
      */
     static ExecutionOutcome of(Optional<JobCraftingRecipe> innate, Pattern pattern, int level, List<ItemStack> inputs, RandomSource random) {
         boolean drawsOnly = innate.filter(JobCraftingRecipe::drawsOnly).isPresent();
-        ItemStack result = drawsOnly ? ItemStack.EMPTY : new ItemStack(pattern.output(), pattern.count());
+        ItemStack result = drawsOnly ? ItemStack.EMPTY : pattern.output().toStack(pattern.count());
         List<ItemStack> drawn = innate.flatMap(JobCraftingRecipe::drops).map(drops -> DropPools.draw(drops, level, random, inputs)).orElse(List.of());
         return new ExecutionOutcome(result, drawn);
     }

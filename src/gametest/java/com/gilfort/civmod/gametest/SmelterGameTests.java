@@ -14,6 +14,7 @@ import com.gilfort.civmod.job.JobBalancing;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.job.WorkPlaceLock;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
@@ -111,7 +112,7 @@ public final class SmelterGameTests {
     private static void blessedCatchUp(GameTestHelper helper, boolean blessed) {
         ServerLevel level = helper.getLevel();
         Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 1), new ItemStack(Items.COAL, 1)));
-        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 1, Optional.of(setup.clerk()), Optional.empty());
+        Requests.post(setup.data(), setup.settlement(), ItemKey.of(Items.IRON_INGOT), 1, Optional.of(setup.clerk()), Optional.empty());
         Settler settler = worker(helper, setup);
         double workTicks = 290.0;
         long dayStart = (Math.floorDiv(level.getOverworldClockTime(), 24000L) - 1) * 24000L;
@@ -140,7 +141,7 @@ public final class SmelterGameTests {
     private static void fillsRequest(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 4), new ItemStack(Items.COAL, 3)));
-        helper.assertTrue(StockRules.setRule(setup.data(), setup.clerk(), StockRule.minimum(0, Items.IRON_INGOT, 4, 0)), "Rule set");
+        helper.assertTrue(StockRules.setRule(setup.data(), setup.clerk(), StockRule.minimum(0, ItemKey.of(Items.IRON_INGOT), 4, 0)), "Rule set");
         StockRules.check(level, setup.clerk(), ClerkGameTests.MORNING);
         Settler settler = worker(helper, setup);
         CraftspersonGameTests.catchUp(level, settler, 6000L);
@@ -161,7 +162,7 @@ public final class SmelterGameTests {
         ServerLevel level = helper.getLevel();
         Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 8), new ItemStack(Items.COAL, 2)));
         for (int i = 0; i < 8; i++) {
-            Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 1, Optional.of(setup.clerk()), Optional.empty());
+            Requests.post(setup.data(), setup.settlement(), ItemKey.of(Items.IRON_INGOT), 1, Optional.of(setup.clerk()), Optional.empty());
         }
         Settler settler = worker(helper, setup);
         CraftspersonGameTests.catchUp(level, settler, 12000L);
@@ -186,7 +187,7 @@ public final class SmelterGameTests {
     /** Only coal listed and none in stock: job status and request name it ("Missing: 1× Coal"). */
     private static void missingSingleFuel(GameTestHelper helper) {
         assertMissingFuel(helper, setup -> helper.assertTrue(Fuels.clear(helper.getLevel(), setup.block(), 1), "Charcoal removed"),
-                "Missing: 1× Coal", List.of(new Request.Missing(Items.COAL, 1)));
+                "Missing: 1× Coal", List.of(new Request.Missing(ItemKey.of(Items.COAL), 1)));
     }
 
     /** An empty fuel list: nothing can burn, job status and request say "Missing: Fuel" (the player lists a fuel). */
@@ -202,7 +203,7 @@ public final class SmelterGameTests {
         ServerLevel level = helper.getLevel();
         Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 4), new ItemStack(Items.OAK_LOG, 4)));
         fuelList.accept(setup);
-        Request request = Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 2, Optional.of(setup.clerk()), Optional.empty());
+        Request request = Requests.post(setup.data(), setup.settlement(), ItemKey.of(Items.IRON_INGOT), 2, Optional.of(setup.clerk()), Optional.empty());
         Settler settler = worker(helper, setup);
         CraftspersonGameTests.catchUp(level, settler, 3000L);
 
@@ -223,7 +224,7 @@ public final class SmelterGameTests {
     private static void restoreReleasesOccupation(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 1), new ItemStack(Items.COAL, 1)));
-        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 1, Optional.of(setup.clerk()), Optional.empty());
+        Requests.post(setup.data(), setup.settlement(), ItemKey.of(Items.IRON_INGOT), 1, Optional.of(setup.clerk()), Optional.empty());
         Settler settler = worker(helper, setup);
         catchUpWork(level, settler, 0L, 150.0);
         long day = DayClock.day(level) - 1;
@@ -267,7 +268,7 @@ public final class SmelterGameTests {
         helper.assertTrue(Fuels.of(level, setup.block()).equals(List.of(Items.COAL, Items.CHARCOAL)), "Default: coal, then charcoal");
         helper.assertTrue(Fuels.move(level, setup.block(), 1, -1), "Charcoal moved left");
         helper.assertTrue(Fuels.of(level, setup.block()).equals(List.of(Items.CHARCOAL, Items.COAL)), "Charcoal first: " + Fuels.of(level, setup.block()));
-        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 4, Optional.of(setup.clerk()), Optional.empty());
+        Requests.post(setup.data(), setup.settlement(), ItemKey.of(Items.IRON_INGOT), 4, Optional.of(setup.clerk()), Optional.empty());
         Settler settler = worker(helper, setup);
         CraftspersonGameTests.catchUp(level, settler, 3000L);
 
@@ -293,7 +294,7 @@ public final class SmelterGameTests {
         StationTypeGameTests.setLevel(helper, BLOCK, 3);
         helper.setBlock(new BlockPos(3, 1, 7), Blocks.FURNACE);
         helper.setBlock(new BlockPos(3, 1, 3), Blocks.FURNACE);
-        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 6, Optional.of(setup.clerk()), Optional.empty());
+        Requests.post(setup.data(), setup.settlement(), ItemKey.of(Items.IRON_INGOT), 6, Optional.of(setup.clerk()), Optional.empty());
         Settler settler = worker(helper, setup);
         // Level 1: 314 ticks per item and furnace; 2 rounds of charges fit, 6 single charges would not.
         catchUpWork(level, settler, 0L, 800.0);
@@ -320,7 +321,7 @@ public final class SmelterGameTests {
         Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 1), new ItemStack(Items.COAL, 1)));
         Container own = (Container) level.getBlockEntity(helper.absolutePos(FURNACE));
         own.setItem(0, new ItemStack(Items.COBBLESTONE, 5));
-        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 1, Optional.of(setup.clerk()), Optional.empty());
+        Requests.post(setup.data(), setup.settlement(), ItemKey.of(Items.IRON_INGOT), 1, Optional.of(setup.clerk()), Optional.empty());
         Settler settler = worker(helper, setup);
         CraftspersonGameTests.catchUp(level, settler, 1000L);
         helper.assertTrue(settler.getWork().status(setup.block()) == JobStatus.NO_WORK_PLACE && count(level, setup.clerk(), Items.IRON_INGOT) == 0,
@@ -342,14 +343,14 @@ public final class SmelterGameTests {
     private static void brokenFurnace(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 1), new ItemStack(Items.COAL, 2)));
-        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 1, Optional.of(setup.clerk()), Optional.empty());
+        Requests.post(setup.data(), setup.settlement(), ItemKey.of(Items.IRON_INGOT), 1, Optional.of(setup.clerk()), Optional.empty());
         Settler settler = worker(helper, setup);
         long time = catchUpWork(level, settler, 0L, 150.0);
         helper.assertTrue(count(level, setup.clerk(), Items.COAL) == 1 && count(level, setup.clerk(), Items.RAW_IRON) == 0,
                 "Charge running: one coal and the raw iron fetched");
 
         helper.setBlock(FURNACE, Blocks.AIR);
-        helper.assertTrue(settler.getWork().buffer(setup.block()).counts().getOrDefault(Items.RAW_IRON, 0) == 1,
+        helper.assertTrue(settler.getWork().buffer(setup.block()).counts().getOrDefault(ItemKey.of(Items.RAW_IRON), 0) == 1,
                 "The charge's input is in the buffer: " + settler.getWork().buffer(setup.block()).stacks());
         helper.setBlock(new BlockPos(3, 1, 3), Blocks.FURNACE);
         catchUpWork(level, settler, time, 1000.0);
@@ -367,11 +368,11 @@ public final class SmelterGameTests {
     private static void speedAndExp(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Setup setup = setup(helper, List.of(new ItemStack(Items.RAW_IRON, 10), new ItemStack(Items.COAL, 2)));
-        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 10, Optional.of(setup.clerk()), Optional.empty());
+        Requests.post(setup.data(), setup.settlement(), ItemKey.of(Items.IRON_INGOT), 10, Optional.of(setup.clerk()), Optional.empty());
         Settler settler = worker(helper, setup);
         catchUpWork(level, settler, 0L, 700.0);
 
-        int made = settler.getWork().buffer(setup.block()).counts().getOrDefault(Items.IRON_INGOT, 0);
+        int made = settler.getWork().buffer(setup.block()).counts().getOrDefault(ItemKey.of(Items.IRON_INGOT), 0);
         helper.assertTrue(made == 2, "2 ingots after 700 ticks at level 1: " + made);
         int exp = settler.getSkills().get(smelter()).exp();
         helper.assertTrue(exp == 2, "EXP 1 per item: " + exp);
@@ -390,7 +391,7 @@ public final class SmelterGameTests {
         List<BlockPos> furnaces = List.of(FURNACE, new BlockPos(3, 1, 7), new BlockPos(3, 1, 3), new BlockPos(5, 1, 5));
         furnaces.forEach(furnace -> helper.setBlock(furnace, Blocks.FURNACE));
         for (int i = 0; i < 4; i++) {
-            Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 3, Optional.of(setup.clerk()), Optional.empty());
+            Requests.post(setup.data(), setup.settlement(), ItemKey.of(Items.IRON_INGOT), 3, Optional.of(setup.clerk()), Optional.empty());
         }
         Settler first = worker(helper, setup);
         Settler second = ClerkGameTests.settler(helper, new BlockPos(2, 1, 8), setup.data(), setup.settlement());
@@ -439,7 +440,7 @@ public final class SmelterGameTests {
         StationTypeGameTests.setLevel(helper, BLOCK, 2);
         BlockPos second = new BlockPos(3, 1, 3);
         helper.setBlock(second, Blocks.FURNACE);
-        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 4, Optional.of(setup.clerk()), Optional.empty());
+        Requests.post(setup.data(), setup.settlement(), ItemKey.of(Items.IRON_INGOT), 4, Optional.of(setup.clerk()), Optional.empty());
         Settler settler = worker(helper, setup);
         settler.setNoAi(false);
         helper.succeedWhen(() -> {
@@ -527,8 +528,8 @@ public final class SmelterGameTests {
     static void ironPattern(GameTestHelper helper, BlockPos block, int slot) {
         ResourceKey<net.minecraft.world.item.crafting.Recipe<?>> recipe = ResourceKey.create(Registries.RECIPE,
                 Identifier.withDefaultNamespace("iron_ingot_from_smelting_raw_iron"));
-        Pattern pattern = Patterns.transfer(helper.getLevel(), block, smelter(), slot, Optional.of(recipe), List.of(Items.RAW_IRON)).orElseThrow();
-        helper.assertTrue(pattern.output() == Items.IRON_INGOT && (pattern.checked() || Patterns.toggleCheck(helper.getLevel(), block, smelter(), slot)),
+        Pattern pattern = Patterns.transfer(helper.getLevel(), block, smelter(), slot, Optional.of(recipe), List.of(ItemKey.of(Items.RAW_IRON))).orElseThrow();
+        helper.assertTrue(pattern.output().is(Items.IRON_INGOT) && (pattern.checked() || Patterns.toggleCheck(helper.getLevel(), block, smelter(), slot)),
                 "Iron ingot pattern checked: " + pattern);
     }
 

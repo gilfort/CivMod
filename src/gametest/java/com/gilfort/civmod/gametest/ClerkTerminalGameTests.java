@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.ClerkTerminal;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.StorageTerminal;
 import com.gilfort.civmod.npc.Settler;
@@ -252,7 +253,7 @@ public final class ClerkTerminalGameTests {
         BlockPos clerk = StockRuleGameTests.workingClerk(helper);
         SettlementData data = SettlementData.get(level);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, Items.TORCH, 10, 0)), "Rule set");
+        helper.assertTrue(StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.TORCH), 10, 0)), "Rule set");
 
         ClerkTerminal.open(level, clerk, VIEWER);
         helper.assertTrue(ClerkTerminal.viewed(level, clerk), "Viewed");

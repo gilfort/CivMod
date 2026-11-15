@@ -6,6 +6,7 @@ import java.util.function.Consumer;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.npc.Settler;
@@ -88,7 +89,7 @@ public final class AlwaysProduceGameTests {
         for (int slot = 1; slot < Patterns.BASE_CHECKMARKS; slot++) {
             CraftspersonGameTests.define(helper, craft, slot, slot % 2 == 0 ? Items.TORCH : Items.OAK_PLANKS);
         }
-        Patterns.setOutput(level, craft, CraftspersonGameTests.craftJob(), 6, Items.LADDER);
+        Patterns.setOutput(level, craft, CraftspersonGameTests.craftJob(), 6, ItemKey.of(Items.LADDER));
         helper.assertFalse(library(level, craft, 6).checked() || always(level, craft, 6), "No free checkmark: the box stays off");
 
         Pattern saved = library(level, craft, 0);
@@ -139,7 +140,7 @@ public final class AlwaysProduceGameTests {
         Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
         chest.setItem(0, new ItemStack(Items.OAK_PLANKS, 2));
         chest.setItem(1, new ItemStack(Items.COAL, 1));
-        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.TORCH, 4, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.TORCH), 4, 0));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
         CraftspersonGameTests.placeTable(helper, new BlockPos(3, 1, 5));
@@ -162,7 +163,7 @@ public final class AlwaysProduceGameTests {
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
         Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
         chest.setItem(0, new ItemStack(Items.OAK_PLANKS, 2));
-        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.TORCH, 4, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.TORCH), 4, 0));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
         CraftspersonGameTests.placeTable(helper, new BlockPos(3, 1, 5));
@@ -184,7 +185,7 @@ public final class AlwaysProduceGameTests {
         SettlementData data = SettlementData.get(level);
         Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
         chest.setItem(0, new ItemStack(Items.OAK_PLANKS, 16));
-        helper.assertTrue(StockRules.setRule(data, clerk, new StockRule(0, Items.STICK, StockRule.NOT_SET, 12, StockRule.NOT_SET, 0)), "Max 12 sticks");
+        helper.assertTrue(StockRules.setRule(data, clerk, new StockRule(0, ItemKey.of(Items.STICK), StockRule.NOT_SET, 12, StockRule.NOT_SET, 0)), "Max 12 sticks");
         BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
         CraftspersonGameTests.placeTable(helper, new BlockPos(3, 1, 5));
         always(helper, craft, 0, Items.TORCH, 1);

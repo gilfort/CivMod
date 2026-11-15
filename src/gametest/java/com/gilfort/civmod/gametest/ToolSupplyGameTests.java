@@ -13,6 +13,7 @@ import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.DeliveryTask;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.ReservedFor;
 import com.gilfort.civmod.npc.Settler;
@@ -105,7 +106,7 @@ public final class ToolSupplyGameTests {
         helper.assertTrue(TestAssignments.assign(data, smithy, smith.getUUID(), "Sigrun", settlement.id(), List.of(), SmithGameTests.smith())
                 == JobAssignments.AssignResult.OK, "Smith assigned");
         smith.addJob(new SettlerJob(SmithGameTests.smith(), smithy));
-        helper.assertTrue(Patterns.setOutput(level, smithy, SmithGameTests.smith(), 0, Items.IRON_PICKAXE).orElseThrow().checked(), "Pickaxe checked");
+        helper.assertTrue(Patterns.setOutput(level, smithy, SmithGameTests.smith(), 0, ItemKey.of(Items.IRON_PICKAXE)).orElseThrow().checked(), "Pickaxe checked");
         return smith;
     }
 
@@ -224,7 +225,7 @@ public final class ToolSupplyGameTests {
         List<Request> asked = requestsOf(settlement, first);
         helper.assertTrue(asked.size() == 1, "One request for the first Miner: " + settlement.requests());
         Request pickaxe = asked.getFirst();
-        helper.assertTrue(pickaxe.item() == Items.IRON_PICKAXE && pickaxe.amount() == 1 && pickaxe.target().equals(Optional.of(clerk))
+        helper.assertTrue(pickaxe.item().is(Items.IRON_PICKAXE) && pickaxe.amount() == 1 && pickaxe.target().equals(Optional.of(clerk))
                 && pickaxe.parent().isEmpty() && pickaxe.rule().isEmpty(), "An iron pickaxe for the Home Clerk: " + pickaxe);
 
         // The job step of a Miner without a work place waits half a minute before it plans again.
@@ -323,13 +324,13 @@ public final class ToolSupplyGameTests {
         ResultDeliveryGameTests.deliveryman(helper, clerk, dora.getUUID());
         dora.addJob(new SettlerJob(ModJobs.DELIVERYMAN.get(), clerk));
         ReservedFor me = ReservedFor.settler(miner.getUUID());
-        Holds.hold(settlement, clerk, me, Items.IRON_PICKAXE, 1);
+        Holds.hold(settlement, clerk, me, ItemKey.of(Items.IRON_PICKAXE), 1);
         helper.assertTrue(free(level, clerk, Items.IRON_PICKAXE) == 0, "Nobody else sees the tool held for the Miner");
 
         ask(helper, miner);
         List<DeliveryTask> inputs = settlement.deliveries().stream().filter(task -> task.input().isPresent()).toList();
         helper.assertTrue(inputs.size() == 1 && inputs.getFirst().source().equals(clerk) && inputs.getFirst().input().orElseThrow().to().equals(chest)
-                && inputs.getFirst().input().orElseThrow().items().equals(Map.of(Items.IRON_PICKAXE, 1)),
+                && inputs.getFirst().input().orElseThrow().items().equals(Map.of(ItemKey.of(Items.IRON_PICKAXE), 1)),
                 "An input delivery from the Clerk into the chest: " + inputs);
         helper.assertTrue(settlement.requests().isEmpty(), "The tool is made already, so no request: " + settlement.requests());
         ReservedFor task = ReservedFor.delivery(inputs.getFirst().id());
@@ -374,8 +375,8 @@ public final class ToolSupplyGameTests {
         helper.setBlock(new BlockPos(8, 1, 17), Blocks.FURNACE);
         SmelterGameTests.ironPattern(helper, smelterBlock, 0);
         Settler smelter = worker(helper, data, settlement, smelterBlock, new BlockPos(7, 1, 18), "Ida", SmelterGameTests.smelter());
-        helper.assertTrue(Patterns.setOutput(level, smithy, SmithGameTests.smith(), 0, Items.IRON_PICKAXE).orElseThrow().checked(), "Pickaxe checked");
-        Patterns.setOutput(level, smithy, SmithGameTests.smith(), 1, Items.STICK);
+        helper.assertTrue(Patterns.setOutput(level, smithy, SmithGameTests.smith(), 0, ItemKey.of(Items.IRON_PICKAXE)).orElseThrow().checked(), "Pickaxe checked");
+        Patterns.setOutput(level, smithy, SmithGameTests.smith(), 1, ItemKey.of(Items.STICK));
         CraftspersonGameTests.define(helper, workshop, 0, Items.STICK);
         CraftspersonGameTests.define(helper, workshop, 1, Items.OAK_PLANKS);
 
@@ -404,7 +405,7 @@ public final class ToolSupplyGameTests {
         }
         helper.assertTrue(Requests.get(settlement, pickaxe).isEmpty(), "The pickaxe is made (Smith status " + smith.getWork().status(smithy) + "): "
                 + settlement.requests());
-        helper.assertTrue(Holds.heldFor(settlement, me).getOrDefault(clerk, Map.of()).getOrDefault(Items.IRON_PICKAXE, 0) == 1,
+        helper.assertTrue(Holds.heldFor(settlement, me).getOrDefault(clerk, Map.of()).getOrDefault(ItemKey.of(Items.IRON_PICKAXE), 0) == 1,
                 "The pickaxe waits for the Miner: " + Holds.heldFor(settlement, me));
         helper.assertTrue(free(level, clerk, Items.IRON_PICKAXE) == 0, "Nobody else sees it");
 
@@ -450,7 +451,7 @@ public final class ToolSupplyGameTests {
         helper.assertTrue(JobAssignments.cyclePoint(data, jobBlock(miner), clerk, false, true) == JobAssignments.PointResult.COLLECT,
                 "The Clerk is the collect point");
         ReservedFor me = ReservedFor.settler(miner.getUUID());
-        Holds.hold(settlement, clerk, me, Items.IRON_PICKAXE, 1);
+        Holds.hold(settlement, clerk, me, ItemKey.of(Items.IRON_PICKAXE), 1);
         helper.assertTrue(free(level, clerk, Items.IRON_PICKAXE) == 0, "Nobody else sees the tool held for the Miner");
 
         ask(helper, miner);
@@ -474,7 +475,7 @@ public final class ToolSupplyGameTests {
         helper.assertTrue(JobAssignments.cyclePoint(data, jobBlock(miner), chest, false, true) == JobAssignments.PointResult.COLLECT,
                 "The chest is the collect inventory");
         ReservedFor me = ReservedFor.settler(miner.getUUID());
-        Holds.hold(settlement, clerk, me, Items.IRON_PICKAXE, 1);
+        Holds.hold(settlement, clerk, me, ItemKey.of(Items.IRON_PICKAXE), 1);
 
         ask(helper, miner);
         helper.assertTrue(settlement.deliveries().stream().noneMatch(task -> task.input().isPresent()), "No delivery is posted: " + settlement.deliveries());

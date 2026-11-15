@@ -25,6 +25,7 @@ import com.gilfort.civmod.logistics.PatternRecipes;
 import com.gilfort.civmod.logistics.DeliveryTask;
 import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.logistics.ItemCounts;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.ReservedFor;
@@ -224,7 +225,7 @@ final class ProducingLoop implements CategoryLoop {
         List<Pattern> checked = workable(level, job, site, Patterns.usable(level, site.block(), job.jobType()), now, dayTime, catchUp);
         List<Pattern> requestable = requestable(level, checked);
         JobBuffer buffer = workplace.buffer();
-        Map<Item, Integer> held = buffer.counts();
+        Map<ItemKey, Integer> held = buffer.counts();
         int room = Math.max(0, JobBuffer.CAPACITY - buffer.count());
         int tries = 0;
         boolean more = false;
@@ -234,9 +235,9 @@ final class ProducingLoop implements CategoryLoop {
         Optional<FuelSupply> fuel = Fuels.forJob(job.jobType(), site.block())
                 .map(list -> new FuelSupply(list, new Furnaces.BurnTimes(level, stations.getFirst()), stations));
         // On "Deliveryman": every store, read once at the first try.
-        Map<BlockPos, Map<Item, Integer>> stores = null;
+        Map<BlockPos, Map<ItemKey, Integer>> stores = null;
         for (Request request : Requests.claimable(settlement)) {
-            if (requestable.stream().noneMatch(pattern -> pattern.output() == request.item())) {
+            if (requestable.stream().noneMatch(pattern -> pattern.output().equals(request.item()))) {
                 continue;
             }
             if (skips.containsKey(request.id())) {
@@ -253,7 +254,7 @@ final class ProducingLoop implements CategoryLoop {
             }
             ReservedFor holder = ReservedFor.request(request.id());
             Supplies supplies = supplies(level, site, request.target(), stores, dayTime, catchUp).withHeld(Holds.heldFor(settlement, holder));
-            Map<Item, Integer> available = supplies.available();
+            Map<ItemKey, Integer> available = supplies.available();
             int amount = CraftPlan.most(level, profile, requestable, request.item(), request.amount(), held, available, room);
             if (amount <= 0) {
                 // What the whole open request misses ("2× stone pickaxe" → "Missing: 6× Cobblestone").
@@ -305,22 +306,22 @@ final class ProducingLoop implements CategoryLoop {
      * @param stores    on "Deliveryman": what the settlement's Clerks hold, else null
      * @param available everything together
      */
-    private record Supplies(Map<Item, Integer> collect, Optional<BlockPos> clerk, @Nullable Map<BlockPos, Map<Item, Integer>> stores,
-            Map<Item, Integer> available) {
+    private record Supplies(Map<ItemKey, Integer> collect, Optional<BlockPos> clerk, @Nullable Map<BlockPos, Map<ItemKey, Integer>> stores,
+            Map<ItemKey, Integer> available) {
 
         /**
          * @param held what is held for the request being planned, by Clerk: it counts as stock where the round can fetch it
          * @return these supplies with it added
          */
-        Supplies withHeld(Map<BlockPos, Map<Item, Integer>> held) {
+        Supplies withHeld(Map<BlockPos, Map<ItemKey, Integer>> held) {
             if (held.isEmpty()) {
                 return this;
             }
-            Map<Item, Integer> all = new HashMap<>(available);
-            Map<BlockPos, Map<Item, Integer>> allStores = stores == null ? null : new LinkedHashMap<>(stores);
+            Map<ItemKey, Integer> all = new HashMap<>(available);
+            Map<BlockPos, Map<ItemKey, Integer>> allStores = stores == null ? null : new LinkedHashMap<>(stores);
             held.forEach((clerk, items) -> {
                 if (allStores != null && allStores.containsKey(clerk)) {
-                    Map<Item, Integer> merged = new HashMap<>(allStores.get(clerk));
+                    Map<ItemKey, Integer> merged = new HashMap<>(allStores.get(clerk));
                     ItemCounts.addAll(merged, items);
                     allStores.put(clerk, merged);
                     ItemCounts.addAll(all, items);
@@ -336,14 +337,14 @@ final class ProducingLoop implements CategoryLoop {
      * @param target the Clerk the round's item goes to
      * @param stores on "Deliveryman": what the settlement's Clerks hold, else null
      */
-    private Supplies supplies(ServerLevel level, JobBlockSite site, Optional<BlockPos> target, @Nullable Map<BlockPos, Map<Item, Integer>> stores,
+    private Supplies supplies(ServerLevel level, JobBlockSite site, Optional<BlockPos> target, @Nullable Map<BlockPos, Map<ItemKey, Integer>> stores,
             long dayTime, boolean catchUp) {
-        Map<Item, Integer> collect = new HashMap<>(stock(level, site.collect(), dayTime, catchUp).counts());
+        Map<ItemKey, Integer> collect = new HashMap<>(stock(level, site.collect(), dayTime, catchUp).counts());
         // Results waiting there for a Deliveryman (drop-off = collect inventory) are no inputs.
         Deliveries.waitingAt(site.settlement(), site.collect()).forEach((item, count) -> collect.computeIfPresent(item,
                 (key, there) -> there > count ? there - count : null));
         Optional<BlockPos> clerk = stores != null ? Optional.empty() : target.filter(found -> !found.equals(site.collect()));
-        Map<Item, Integer> available = new HashMap<>(collect);
+        Map<ItemKey, Integer> available = new HashMap<>(collect);
         clerk.ifPresent(found -> ItemCounts.addAll(available, stock(level, found, dayTime, catchUp).counts()));
         if (stores != null) {
             stores.values().forEach(counts -> ItemCounts.addAll(available, counts));
@@ -360,12 +361,12 @@ final class ProducingLoop implements CategoryLoop {
     private Round round(ServerLevel level, SettlerJob job, JobBlockSite site, Optional<UUID> request, CraftPlan plan, Optional<FuelSupply> fuel,
             Supplies supplies) {
         Workplace workplace = shell.workplace(job.jobBlock());
-        Map<Item, Integer> takes = new LinkedHashMap<>(plan.takes());
+        Map<ItemKey, Integer> takes = new LinkedHashMap<>(plan.takes());
         fuel.ifPresent(supply -> fuelNeed(level, job, supply, plan, workplace.buffer().counts(), supplies.available()).takes()
                 .forEach((item, count) -> ItemCounts.add(takes, item, count)));
         workplace.setMissingFuel(Optional.empty());
         List<BlockPos> sources = new ArrayList<>();
-        Map<Item, Integer> rest = new HashMap<>(takes);
+        Map<ItemKey, Integer> rest = new HashMap<>(takes);
         if (!allot(rest, supplies.collect()).isEmpty()) {
             sources.add(site.collect());
         }
@@ -375,8 +376,8 @@ final class ProducingLoop implements CategoryLoop {
         List<UUID> inputs = new ArrayList<>();
         if (supplies.stores() != null) {
             SettlementData data = SettlementData.get(level);
-            for (Map.Entry<BlockPos, Map<Item, Integer>> store : supplies.stores().entrySet()) {
-                Map<Item, Integer> items = allot(rest, store.getValue());
+            for (Map.Entry<BlockPos, Map<ItemKey, Integer>> store : supplies.stores().entrySet()) {
+                Map<ItemKey, Integer> items = allot(rest, store.getValue());
                 if (!items.isEmpty()) {
                     // Game time in catch-up too: Deliverymen rank tasks by how long they waited in game time.
                     inputs.add(Deliveries.postInput(data, site.settlement(), store.getKey(), job.jobBlock(), site.collect(), items, request.isPresent(),
@@ -419,7 +420,7 @@ final class ProducingLoop implements CategoryLoop {
         Workplace workplace = shell.workplace(job.jobBlock());
         Map<Integer, Long> skips = workplace.alwaysSkips();
         skips.values().removeIf(until -> until <= now || until - now > SKIP_TICKS);
-        Set<Item> atMax = StockRules.atMaxWithDeliveries(level, site);
+        Set<ItemKey> atMax = StockRules.atMaxWithDeliveries(level, site);
         int last = workplace.alwaysSlot();
         List<Pattern> turns = new ArrayList<>(always.stream().filter(pattern -> pattern.slot() > last).toList());
         turns.addAll(always.stream().filter(pattern -> pattern.slot() <= last).toList());
@@ -430,7 +431,7 @@ final class ProducingLoop implements CategoryLoop {
         }
         List<Pattern> requestable = requestable(level, checked);
         JobBuffer buffer = workplace.buffer();
-        Map<Item, Integer> held = buffer.counts();
+        Map<ItemKey, Integer> held = buffer.counts();
         int room = Math.max(0, JobBuffer.CAPACITY - buffer.count());
         ProducingProfile profile = profile(job);
         Supplies supplies = supplies(level, site, homeClerk(site), site.block().byDeliveryman() ? stores(level, site, dayTime) : null, dayTime, catchUp);
@@ -439,7 +440,7 @@ final class ProducingLoop implements CategoryLoop {
             List<Pattern> preferred = new ArrayList<>(requestable);
             preferred.remove(pattern);
             preferred.addFirst(pattern);
-            Item item = pattern.output();
+            ItemKey item = pattern.output();
             int amount = CraftPlan.most(level, profile, preferred, item, pattern.atOnce() * pattern.count(), held, supplies.available(), room);
             if (amount > 0 && fuel.isPresent()) {
                 amount = fuelCovered(level, job, fuel.get(), preferred, item, amount, held, supplies.available());
@@ -456,7 +457,7 @@ final class ProducingLoop implements CategoryLoop {
     /** Whether a request one of the patterns the settler can work now makes is open. */
     private static boolean requested(ServerLevel level, JobBlockSite site, List<Pattern> patterns) {
         List<Pattern> requestable = requestable(level, patterns);
-        return Requests.claimable(site.settlement()).stream().anyMatch(request -> requestable.stream().anyMatch(pattern -> pattern.output() == request.item()));
+        return Requests.claimable(site.settlement()).stream().anyMatch(request -> requestable.stream().anyMatch(pattern -> pattern.output().equals(request.item())));
     }
 
     /**
@@ -528,19 +529,19 @@ final class ProducingLoop implements CategoryLoop {
     }
 
     /** The fuel a plan needs: what to fetch by item, and how many of the first listed fuel are missing. */
-    private record FuelNeed(Map<Item, Integer> takes, int missing) {
+    private record FuelNeed(Map<ItemKey, Integer> takes, int missing) {
     }
 
     /**
      * What a request lacks of fuel when not even one item is covered: the one listed fuel by count ("Missing: 1×
      * Coal"), else fuel of any kind ("Missing: Fuel": any of several will do, or none is listed).
      */
-    private Request.Missing fuelMissing(ServerLevel level, SettlerJob job, FuelSupply fuel, CraftPlan one, Map<Item, Integer> held,
-            Map<Item, Integer> available) {
+    private Request.Missing fuelMissing(ServerLevel level, SettlerJob job, FuelSupply fuel, CraftPlan one, Map<ItemKey, Integer> held,
+            Map<ItemKey, Integer> available) {
         if (fuel.fuels().size() != 1 || fuel.burnTimes().of(fuel.fuels().getFirst()) <= 0) {
             return Request.Missing.ANY_FUEL;
         }
-        return new Request.Missing(fuel.fuels().getFirst(), Math.clamp(fuelNeed(level, job, fuel, one, held, available).missing(), 1, 64));
+        return new Request.Missing(ItemKey.of(fuel.fuels().getFirst()), Math.clamp(fuelNeed(level, job, fuel, one, held, available).missing(), 1, 64));
     }
 
     /**
@@ -549,8 +550,8 @@ final class ProducingLoop implements CategoryLoop {
      *
      * @return the amount to claim, 0 if not even one item is covered
      */
-    private int fuelCovered(ServerLevel level, SettlerJob job, FuelSupply fuel, List<Pattern> checked, Item item, int amount,
-            Map<Item, Integer> held, Map<Item, Integer> available) {
+    private int fuelCovered(ServerLevel level, SettlerJob job, FuelSupply fuel, List<Pattern> checked, ItemKey item, int amount,
+            Map<ItemKey, Integer> held, Map<ItemKey, Integer> available) {
         ProducingProfile profile = profile(job);
         int low = 0;
         int high = amount;
@@ -571,8 +572,8 @@ final class ProducingLoop implements CategoryLoop {
      * main recipe type go round the stations in order, other steps run at the first; a station short of heat burns the
      * next fuel unit, the listed fuels in priority order (the buffer's units of a fuel before the stock's).
      */
-    private FuelNeed fuelNeed(ServerLevel level, SettlerJob job, FuelSupply supply, CraftPlan plan, Map<Item, Integer> held,
-            Map<Item, Integer> available) {
+    private FuelNeed fuelNeed(ServerLevel level, SettlerJob job, FuelSupply supply, CraftPlan plan, Map<ItemKey, Integer> held,
+            Map<ItemKey, Integer> available) {
         List<Item> fuels = supply.fuels();
         int[] heat = supply.stations().stream().mapToInt(pos -> Furnaces.heat(level, pos)).toArray();
         Map<Item, Integer> inBuffer = new HashMap<>();
@@ -582,11 +583,11 @@ final class ProducingLoop implements CategoryLoop {
             int burnTime = supply.burnTimes().of(fuel);
             burn.put(fuel, burnTime);
             if (burnTime > 0) {
-                inBuffer.put(fuel, held.getOrDefault(fuel, 0));
-                inStock.put(fuel, Math.max(0, available.getOrDefault(fuel, 0) - plan.takes().getOrDefault(fuel, 0)));
+                inBuffer.put(fuel, held.getOrDefault(ItemKey.of(fuel), 0));
+                inStock.put(fuel, Math.max(0, available.getOrDefault(ItemKey.of(fuel), 0) - plan.takes().getOrDefault(ItemKey.of(fuel), 0)));
             }
         }
-        Map<Item, Integer> takes = new LinkedHashMap<>();
+        Map<ItemKey, Integer> takes = new LinkedHashMap<>();
         int missing = 0;
         RecipeType<?> main = profile(job).recipeTypes().getFirst();
         for (CraftPlan.Step step : plan.steps()) {
@@ -615,7 +616,7 @@ final class ProducingLoop implements CategoryLoop {
                         inBuffer.merge(fuel, -1, Integer::sum);
                     } else {
                         inStock.merge(fuel, -1, Integer::sum);
-                        ItemCounts.add(takes, fuel, 1);
+                        ItemCounts.add(takes, ItemKey.of(fuel), 1);
                     }
                     heat[lane] += burn.get(fuel);
                 }
@@ -626,9 +627,9 @@ final class ProducingLoop implements CategoryLoop {
     }
 
     /** Takes what a source has off the needed items; what it gives, by item. */
-    private static Map<Item, Integer> allot(Map<Item, Integer> needed, Map<Item, Integer> source) {
-        Map<Item, Integer> given = new LinkedHashMap<>();
-        for (Map.Entry<Item, Integer> entry : List.copyOf(needed.entrySet())) {
+    private static Map<ItemKey, Integer> allot(Map<ItemKey, Integer> needed, Map<ItemKey, Integer> source) {
+        Map<ItemKey, Integer> given = new LinkedHashMap<>();
+        for (Map.Entry<ItemKey, Integer> entry : List.copyOf(needed.entrySet())) {
             int used = Math.min(entry.getValue(), source.getOrDefault(entry.getKey(), 0));
             if (used > 0) {
                 given.put(entry.getKey(), used);
@@ -647,7 +648,7 @@ final class ProducingLoop implements CategoryLoop {
      * the whole storage of the Clerks their Warehouse handles (staff), the counter under the access rule elsewhere –
      * the Home Clerk first, then by distance. A Clerk that is the collect inventory is counted there already.
      */
-    private static Map<BlockPos, Map<Item, Integer>> stores(ServerLevel level, JobBlockSite site, long dayTime) {
+    private static Map<BlockPos, Map<ItemKey, Integer>> stores(ServerLevel level, JobBlockSite site, long dayTime) {
         Settlement settlement = site.settlement();
         Optional<BlockPos> home = site.block().homeClerk();
         List<BlockPos> staff = home.flatMap(clerk -> Warehouses.warehouseOf(settlement, clerk))
@@ -657,7 +658,7 @@ final class ProducingLoop implements CategoryLoop {
                 .sorted(Comparator.<BlockPos>comparingInt(pos -> home.filter(pos::equals).isPresent() ? 0 : 1)
                         .thenComparingDouble(pos -> pos.distSqr(site.pos())))
                 .toList();
-        Map<BlockPos, Map<Item, Integer>> stores = new LinkedHashMap<>();
+        Map<BlockPos, Map<ItemKey, Integer>> stores = new LinkedHashMap<>();
         for (BlockPos clerk : clerks) {
             Stock stock = staff.contains(clerk) ? ClerkStorage.stock(level, clerk, true) : ClerkStorage.stock(level, clerk, dayTime, true);
             stores.put(clerk, stock.counts());
@@ -688,7 +689,7 @@ final class ProducingLoop implements CategoryLoop {
             if (task.carried() || task.takerOn(day).isPresent()) {
                 continue;
             }
-            Map<Item, Integer> there = (Deliveries.staff(settlement, task) ? ClerkStorage.stock(level, task.source(), true)
+            Map<ItemKey, Integer> there = (Deliveries.staff(settlement, task) ? ClerkStorage.stock(level, task.source(), true)
                     : ClerkStorage.stock(level, task.source(), dayTime, true)).counts();
             task.input().orElseThrow().items().forEach((item, count) -> {
                 int missing = count - there.getOrDefault(item, 0);
@@ -814,7 +815,7 @@ final class ProducingLoop implements CategoryLoop {
     private void fetch(ServerLevel level, SettlerJob job, JobBlockSite site, Round round, BlockPos source, Stock stock, Moment moment) {
         JobBuffer buffer = shell.workplace(job.jobBlock()).buffer();
         boolean taken = false;
-        for (Map.Entry<Item, Integer> entry : List.copyOf(round.toTake.entrySet())) {
+        for (Map.Entry<ItemKey, Integer> entry : List.copyOf(round.toTake.entrySet())) {
             List<ItemStack> got = stock.take(entry.getKey(), entry.getValue());
             int count = got.stream().mapToInt(ItemStack::getCount).sum();
             got.forEach(buffer::add);
@@ -1034,7 +1035,7 @@ final class ProducingLoop implements CategoryLoop {
             ItemStack one = buffer.takeOne(input);
             if (one.isEmpty()) {
                 consumed.forEach(buffer::add);
-                fail(level, job.jobBlock(), round, List.of(new Request.Missing(PatternRecipes.representative(input), 1)), moment.now());
+                fail(level, job.jobBlock(), round, List.of(new Request.Missing(PatternRecipes.representativeKey(input), 1)), moment.now());
                 return false;
             }
             consumed.add(one);
@@ -1068,7 +1069,7 @@ final class ProducingLoop implements CategoryLoop {
             round.crafted = 0;
         }
         if (moment.live()) {
-            shell.hold(new ItemStack(pattern.output()));
+            shell.hold(pattern.output().toStack());
             handTimer = HAND_TICKS;
         }
         return true;
@@ -1104,12 +1105,12 @@ final class ProducingLoop implements CategoryLoop {
         rest.forEach(buffer::add);
         workplace.setRound(null);
         // Only what was made counts: a profile can make less than the round claimed, the rest of the claim stays open.
-        int delivered = product.stream().filter(stack -> stack.is(round.item)).mapToInt(ItemStack::getCount).sum();
+        int delivered = product.stream().filter(stack -> round.item.matches(stack)).mapToInt(ItemStack::getCount).sum();
         round.request.ifPresent(id -> settlementOf(data, id).ifPresent(found -> Requests.finish(data, found, id, settler.getUUID(), delivered)));
         if (dropOff.isPresent()) {
             // The whole result: what did not fit follows into the same drop-off with the buffer (in delivery as well).
-            Map<Item, Integer> counts = new LinkedHashMap<>();
-            product.forEach(stack -> ItemCounts.add(counts, stack.getItem(), stack.getCount()));
+            Map<ItemKey, Integer> counts = new LinkedHashMap<>();
+            product.forEach(stack -> ItemCounts.add(counts, ItemKey.of(stack), stack.getCount()));
             site.ifPresent(found -> counts.forEach((item, count) -> Deliveries.postResult(data, found.settlement(), dropOff.get(), found.pos(), item, count,
                     target.get(), level.getGameTime())));
         } else {

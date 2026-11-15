@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.ReservedFor;
 
 import net.minecraft.core.BlockPos;
@@ -31,11 +32,11 @@ public final class Holds {
     /**
      * An amount of an item in a Clerk's storage held for one holder.
      *
-     * @param item  the item
+     * @param item  the thing (item and relevant components)
      * @param count how many
      * @param owner who it is held for
      */
-    record Hold(Item item, int count, ReservedFor owner) {
+    record Hold(ItemKey item, int count, ReservedFor owner) {
     }
 
     /**
@@ -44,10 +45,10 @@ public final class Holds {
      * @param settlement the settlement
      * @param clerk      the Clerk JobBlock holding the items
      * @param owner      who it is held for
-     * @param item       the item
+     * @param item       the thing (item and relevant components)
      * @param count      how many
      */
-    public static void hold(Settlement settlement, BlockPos clerk, ReservedFor owner, Item item, int count) {
+    public static void hold(Settlement settlement, BlockPos clerk, ReservedFor owner, ItemKey item, int count) {
         if (count > 0) {
             settlement.mutableHolds().computeIfAbsent(clerk.immutable(), key -> new ArrayList<>()).add(new Hold(item, count, owner));
         }
@@ -60,12 +61,12 @@ public final class Holds {
      * @param clerk      the Clerk JobBlock
      * @return the held amounts by item, empty if nothing is held
      */
-    public static Map<Item, Integer> held(Settlement settlement, BlockPos clerk) {
+    public static Map<ItemKey, Integer> held(Settlement settlement, BlockPos clerk) {
         List<Hold> ledger = ledger(settlement, clerk);
         if (ledger.isEmpty()) {
             return Map.of();
         }
-        Map<Item, Integer> held = new HashMap<>();
+        Map<ItemKey, Integer> held = new HashMap<>();
         ledger.forEach(hold -> held.merge(hold.item(), hold.count(), Integer::sum));
         return held;
     }
@@ -77,8 +78,8 @@ public final class Holds {
      * @param owner      the holder
      * @return the amounts by Clerk and item, empty if nothing is held for it
      */
-    public static Map<BlockPos, Map<Item, Integer>> heldFor(Settlement settlement, ReservedFor owner) {
-        Map<BlockPos, Map<Item, Integer>> held = new HashMap<>();
+    public static Map<BlockPos, Map<ItemKey, Integer>> heldFor(Settlement settlement, ReservedFor owner) {
+        Map<BlockPos, Map<ItemKey, Integer>> held = new HashMap<>();
         for (BlockPos clerk : List.copyOf(settlement.mutableHolds().keySet())) {
             for (Hold hold : ledger(settlement, clerk)) {
                 if (hold.owner().equals(owner)) {
@@ -96,8 +97,8 @@ public final class Holds {
      * @param owner      the holder
      * @param takes      what it takes, by item
      */
-    public static void consume(Settlement settlement, ReservedFor owner, Map<Item, Integer> takes) {
-        Map<Item, Integer> rest = new HashMap<>(takes);
+    public static void consume(Settlement settlement, ReservedFor owner, Map<ItemKey, Integer> takes) {
+        Map<ItemKey, Integer> rest = new HashMap<>(takes);
         for (List<Hold> ledger : settlement.mutableHolds().values()) {
             List<Hold> kept = new ArrayList<>();
             for (Hold hold : ledger) {
@@ -121,7 +122,7 @@ public final class Holds {
      * @param kind       which items: only holds of items that pass
      */
     public static void release(Settlement settlement, ReservedFor owner, Predicate<Item> kind) {
-        settlement.mutableHolds().values().forEach(ledger -> ledger.removeIf(hold -> hold.owner().equals(owner) && kind.test(hold.item())));
+        settlement.mutableHolds().values().forEach(ledger -> ledger.removeIf(hold -> hold.owner().equals(owner) && kind.test(hold.item().item())));
         settlement.mutableHolds().values().removeIf(List::isEmpty);
     }
 
@@ -135,7 +136,7 @@ public final class Holds {
      * @param kind       which items: only holds of items that pass
      */
     public static void handOver(Settlement settlement, ReservedFor from, ReservedFor to, Predicate<Item> kind) {
-        settlement.mutableHolds().values().forEach(ledger -> ledger.replaceAll(hold -> hold.owner().equals(from) && kind.test(hold.item())
+        settlement.mutableHolds().values().forEach(ledger -> ledger.replaceAll(hold -> hold.owner().equals(from) && kind.test(hold.item().item())
                 ? new Hold(hold.item(), hold.count(), to) : hold));
     }
 

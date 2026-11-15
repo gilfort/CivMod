@@ -38,7 +38,7 @@ public final class Stock {
     private final List<Part> parts;
     private final @Nullable List<StockSummary> summaries;
     private final boolean counter;
-    private final Map<Item, Integer> reserved;
+    private final Map<ItemKey, Integer> reserved;
 
     /**
      * Keeps the stock view of one container right when CivMod changes the container.
@@ -118,7 +118,7 @@ public final class Stock {
         this(parts, summaries, counter, Map.of());
     }
 
-    private Stock(List<Part> parts, @Nullable List<StockSummary> summaries, boolean counter, Map<Item, Integer> reserved) {
+    private Stock(List<Part> parts, @Nullable List<StockSummary> summaries, boolean counter, Map<ItemKey, Integer> reserved) {
         this.parts = List.copyOf(parts);
         this.summaries = summaries == null ? null : List.copyOf(summaries);
         this.counter = counter;
@@ -129,11 +129,11 @@ public final class Stock {
      * @param more the amounts reserved or held for others, by item
      * @return this Stock without them (and without what it was already without)
      */
-    Stock without(Map<Item, Integer> more) {
+    Stock without(Map<ItemKey, Integer> more) {
         if (more.isEmpty()) {
             return this;
         }
-        Map<Item, Integer> all = new HashMap<>(reserved);
+        Map<ItemKey, Integer> all = new HashMap<>(reserved);
         more.forEach((item, count) -> all.merge(item, count, Integer::sum));
         return new Stock(parts, summaries, counter, all);
     }
@@ -160,13 +160,13 @@ public final class Stock {
      */
     public List<ItemStack> contents() {
         List<ItemStack> stacks = new ArrayList<>();
-        Set<Item> hidden = new HashSet<>();
+        Set<ItemKey> hidden = new HashSet<>();
         reserved.keySet().stream().filter(item -> available(item) <= 0).forEach(hidden::add);
         for (Part part : parts) {
             ResourceHandler<ItemResource> handler = part.handler();
             for (int i = 0; i < handler.size(); i++) {
                 ItemResource resource = handler.getResource(i);
-                stacks.add(resource.isEmpty() || hidden.contains(resource.getItem()) ? ItemStack.EMPTY : resource.toStack());
+                stacks.add(resource.isEmpty() || !hidden.isEmpty() && hidden.contains(ItemKey.of(resource)) ? ItemStack.EMPTY : resource.toStack());
             }
         }
         return stacks;
@@ -185,8 +185,8 @@ public final class Stock {
         for (StockSummary summary : summaries()) {
             total += summary.count(kind);
         }
-        for (Map.Entry<Item, Integer> entry : reserved.entrySet()) {
-            if (kind.test(new ItemStack(entry.getKey()))) {
+        for (Map.Entry<ItemKey, Integer> entry : reserved.entrySet()) {
+            if (kind.test(entry.getKey().toStack())) {
                 total -= Math.min(entry.getValue(), held(entry.getKey()));
             }
         }
@@ -194,15 +194,15 @@ public final class Stock {
     }
 
     /**
-     * @param item an item (components ignored)
+     * @param item a thing (item and relevant components)
      * @return how many of it are reachable: a lookup in the stock view, no predicate over every stack
      */
-    public int count(Item item) {
+    public int count(ItemKey item) {
         return available(item);
     }
 
-    /** How many of an item the containers hold, reserved ones included. */
-    private int held(Item item) {
+    /** How many of a thing the containers hold, reserved ones included. */
+    private int held(ItemKey item) {
         long total = 0;
         for (StockSummary summary : summaries()) {
             total += summary.amount(item);
@@ -211,15 +211,15 @@ public final class Stock {
     }
 
     /** How many of an item are reachable: held minus reserved. */
-    private int available(Item item) {
+    private int available(ItemKey item) {
         return Math.max(0, held(item) - reserved.getOrDefault(item, 0));
     }
 
     /**
      * @return how many of each item are reachable (components ignored)
      */
-    public Map<Item, Integer> counts() {
-        Map<Item, Integer> counts = new HashMap<>();
+    public Map<ItemKey, Integer> counts() {
+        Map<ItemKey, Integer> counts = new HashMap<>();
         summaries().forEach(summary -> summary.addCounts(counts));
         reserved.forEach((item, count) -> counts.computeIfPresent(item, (key, held) -> held > count ? held - count : null));
         return counts;
@@ -244,13 +244,13 @@ public final class Stock {
         }
         reserved.forEach((item, count) -> {
             long rest = count;
-            ItemResource plain = ItemResource.of(item);
+            ItemResource plain = ItemResource.of(item.toStack());
             rest = reduce(entries, plain, rest);
             for (ItemResource resource : List.copyOf(entries.keySet())) {
                 if (rest <= 0) {
                     break;
                 }
-                if (resource.getItem() == item) {
+                if (ItemKey.of(resource).equals(item)) {
                     rest = reduce(entries, resource, rest);
                 }
             }
@@ -282,8 +282,11 @@ public final class Stock {
      * @return the taken stack, empty if none
      */
     public ItemStack take(ItemResource resource, int count) {
-        Item item = resource.getItem();
-        int rest = reserved.containsKey(item) ? Math.min(count, available(item)) : count;
+        int rest = count;
+        if (!reserved.isEmpty()) {
+            ItemKey key = ItemKey.of(resource);
+            rest = reserved.containsKey(key) ? Math.min(count, available(key)) : count;
+        }
         int total = 0;
         for (Part part : parts) {
             if (rest <= 0) {
@@ -306,7 +309,7 @@ public final class Stock {
                 }
             }
             if (rest > 0) {
-                part.tracker().drained(item);
+                part.tracker().drained(resource.getItem());
             }
         }
         return total > 0 ? resource.toStack(total) : ItemStack.EMPTY;
@@ -328,13 +331,13 @@ public final class Stock {
      * container left behind with items still to take has none of them left; if its stock view still counts some, it is
      * re-read.
      *
-     * @param item  the item
+     * @param key   the thing (item and relevant components)
      * @param count how many at most
      * @return the taken stacks
      */
-    public List<ItemStack> take(Item item, int count) {
+    public List<ItemStack> take(ItemKey key, int count) {
         List<ItemStack> taken = new ArrayList<>();
-        int rest = reserved.containsKey(item) ? Math.min(count, available(item)) : count;
+        int rest = reserved.containsKey(key) ? Math.min(count, available(key)) : count;
         for (Part part : parts) {
             if (rest <= 0) {
                 break;
@@ -342,7 +345,7 @@ public final class Stock {
             ResourceHandler<ItemResource> handler = part.handler();
             for (int i = 0; i < handler.size() && rest > 0; i++) {
                 ItemResource resource = handler.getResource(i);
-                if (resource.isEmpty() || resource.getItem() != item) {
+                if (resource.isEmpty() || resource.getItem() != key.item() || !ItemKey.of(resource).equals(key)) {
                     continue;
                 }
                 long mark = part.tracker().mark();
@@ -357,7 +360,7 @@ public final class Stock {
                 }
             }
             if (rest > 0) {
-                part.tracker().drained(item);
+                part.tracker().drained(key.item());
             }
         }
         return taken;
@@ -379,7 +382,7 @@ public final class Stock {
                 continue;
             }
             ItemResource resource = handler.getResource(rest);
-            if (!resource.isEmpty() && reserved.containsKey(resource.getItem()) && available(resource.getItem()) <= 0) {
+            if (!resource.isEmpty() && !reserved.isEmpty() && reserved.containsKey(ItemKey.of(resource)) && available(ItemKey.of(resource)) <= 0) {
                 return ItemStack.EMPTY;
             }
             if (!resource.isEmpty()) {

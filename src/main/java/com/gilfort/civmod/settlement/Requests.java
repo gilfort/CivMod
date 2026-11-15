@@ -6,11 +6,11 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
 
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.ReservedFor;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.item.Item;
 
 /**
  * The requests of a settlement (vault {@code Jobs/Clerk.md}, {@code Systems/Producing Jobs.md}), kept in its
@@ -83,13 +83,13 @@ public final class Requests {
      *
      * @param data       the dimension's settlement data
      * @param settlement the settlement
-     * @param item       the requested item
+     * @param item       the requested thing (item and relevant components)
      * @param amount     the amount
      * @param target     the Clerk the result goes to, if any
      * @param parent     the request this is a sub-request of
      * @return the posted request
      */
-    public static Request post(SettlementData data, Settlement settlement, Item item, int amount, Optional<BlockPos> target,
+    public static Request post(SettlementData data, Settlement settlement, ItemKey item, int amount, Optional<BlockPos> target,
             Optional<UUID> parent) {
         int priority = parent.flatMap(id -> get(settlement, id)).map(Request::priority).orElse(DEFAULT_PRIORITY);
         Request request = new Request(UUID.randomUUID(), item, amount, priority, target, Optional.empty(), parent, List.of(), List.of(),
@@ -104,12 +104,12 @@ public final class Requests {
      *
      * @param data        the dimension's settlement data
      * @param settlement  the settlement
-     * @param item        the requested item
+     * @param item        the requested thing (item and relevant components)
      * @param clerk       the Clerk the result goes to
      * @param reservedFor who the result is held for
      * @return the posted request
      */
-    public static Request postReserved(SettlementData data, Settlement settlement, Item item, BlockPos clerk, ReservedFor reservedFor) {
+    public static Request postReserved(SettlementData data, Settlement settlement, ItemKey item, BlockPos clerk, ReservedFor reservedFor) {
         Request request = new Request(UUID.randomUUID(), item, 1, DEFAULT_PRIORITY, Optional.of(clerk), Optional.empty(), Optional.empty(),
                 List.of(), List.of(), Optional.of(reservedFor));
         add(data, settlement, request);

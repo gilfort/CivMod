@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.ClerkTabData;
@@ -52,15 +53,15 @@ public final class GhostSlotGameTests {
         SettlementData data = SettlementData.get(level);
         BlockPos clerk = ClerkGameTests.clerkWithStorage(helper);
         helper.assertTrue(ClerkTabData.of(level, clerk).nextEmptyGhostSlot() == 0, "No rules: the first slot");
-        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.BREAD, 4, 0));
-        StockRules.setRule(data, clerk, StockRule.minimum(2, Items.TORCH, 4, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.BREAD), 4, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(2, ItemKey.of(Items.TORCH), 4, 0));
         int next = ClerkTabData.of(level, clerk).nextEmptyGhostSlot();
         helper.assertTrue(next == 1, "The gap between the rules: " + next);
         int slots = ClerkTabData.of(level, clerk).slots();
         // One rule per item: a different item in every slot.
         List<Item> items = BuiltInRegistries.ITEM.stream().filter(item -> item != Items.AIR).limit(slots).toList();
         for (int slot = 0; slot < slots; slot++) {
-            StockRules.setRule(data, clerk, StockRule.minimum(slot, items.get(slot), 1, 0));
+            StockRules.setRule(data, clerk, StockRule.minimum(slot, ItemKey.of(items.get(slot)), 1, 0));
         }
         next = ClerkTabData.of(level, clerk).nextEmptyGhostSlot();
         helper.assertTrue(next == -1, "All " + slots + " slots full: none " + next);
@@ -80,12 +81,12 @@ public final class GhostSlotGameTests {
         helper.assertTrue(tab.nextEmptyGhostSlot() == 2, "Library: the next empty slot " + tab.nextEmptyGhostSlot());
         helper.assertTrue(tab.nextEmptyInEditor(5) == Pattern.GRID, "A new pattern: its output first " + tab.nextEmptyInEditor(5));
         helper.assertTrue(tab.nextEmptyInEditor(1) == 4, "Chest: the empty centre cell " + tab.nextEmptyInEditor(1));
-        Patterns.setOutput(level, craft, CraftspersonGameTests.craftJob(), 3, Items.IRON_BLOCK);
+        Patterns.setOutput(level, craft, CraftspersonGameTests.craftJob(), 3, ItemKey.of(Items.IRON_BLOCK));
         tab = PatternsTabData.of(level, craft, CraftspersonGameTests.craftJob());
         helper.assertTrue(tab.nextEmptyInEditor(3) == -1, "Iron block: all cells and the output full, none " + tab.nextEmptyInEditor(3)
                 + " " + tab.pattern(3));
         for (int slot = 0; slot < Pattern.SLOTS; slot++) {
-            Patterns.setOutput(level, craft, CraftspersonGameTests.craftJob(), slot, Items.STICK);
+            Patterns.setOutput(level, craft, CraftspersonGameTests.craftJob(), slot, ItemKey.of(Items.STICK));
         }
         tab = PatternsTabData.of(level, craft, CraftspersonGameTests.craftJob());
         helper.assertTrue(tab.nextEmptyGhostSlot() == -1, "Library full: none " + tab.nextEmptyGhostSlot());

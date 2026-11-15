@@ -10,6 +10,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.job.JobStatus;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.menu.FoundTab;
 import com.gilfort.civmod.menu.FoundTabData;
 import com.gilfort.civmod.menu.JobBlockMenu;
@@ -137,7 +138,7 @@ public final class PlantationFarmerGameTests {
         Settler settler = plantationFarmer(helper, jobBlock);
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_AXE));
         helper.succeedWhen(() -> {
-            helper.assertTrue(settler.getWork().buffer(jobBlock).counts().getOrDefault(Items.SUGAR_CANE, 0) > 0,
+            helper.assertTrue(settler.getWork().buffer(jobBlock).counts().getOrDefault(ItemKey.of(Items.SUGAR_CANE), 0) > 0,
                     "No sugar cane yet (status " + settler.getWork().status(jobBlock) + ")");
             helper.assertTrue(helper.getBlockState(new BlockPos(5, 3, 5)).is(Blocks.SUGAR_CANE), "The sugar cane is never cut");
             settler.discard();

@@ -14,6 +14,7 @@ import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.job.AnimalScan;
 import com.gilfort.civmod.job.SavedScan;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModJobs;
@@ -31,7 +32,6 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.animal.Animal;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -124,10 +124,10 @@ public final class AnimalFarmerGameTests {
         Settler settler = animalFarmer(helper, jobBlock);
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_AXE));
         helper.succeedWhen(() -> {
-            Map<Item, Integer> buffer = settler.getWork().buffer(jobBlock).counts();
-            helper.assertTrue(buffer.getOrDefault(Items.BEEF, 0) + buffer.getOrDefault(Items.LEATHER, 0) > 0,
+            Map<ItemKey, Integer> buffer = settler.getWork().buffer(jobBlock).counts();
+            helper.assertTrue(buffer.getOrDefault(ItemKey.of(Items.BEEF), 0) + buffer.getOrDefault(ItemKey.of(Items.LEATHER), 0) > 0,
                     "No cow loot yet (status " + settler.getWork().status(jobBlock) + ")");
-            helper.assertFalse(buffer.containsKey(Items.MUTTON) || buffer.keySet().stream().anyMatch(item -> item.getDefaultInstance().is(ItemTags.WOOL)), "The baby sheep gives nothing: " + buffer);
+            helper.assertFalse(buffer.containsKey(ItemKey.of(Items.MUTTON)) || buffer.keySet().stream().anyMatch(item -> item.toStack().is(ItemTags.WOOL)), "The baby sheep gives nothing: " + buffer);
             helper.assertTrue(animals.stream().allMatch(Animal::isAlive), "Every animal stays alive");
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));

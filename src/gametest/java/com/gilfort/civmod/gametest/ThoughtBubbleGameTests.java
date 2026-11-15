@@ -9,6 +9,7 @@ import java.util.function.Consumer;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.job.JobStatus;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.npc.Settler;
@@ -238,8 +239,8 @@ public final class ThoughtBubbleGameTests {
         Container chest = (Container) level.getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
         chest.setItem(0, new ItemStack(Items.COBBLESTONE, 2));
         chest.setItem(1, new ItemStack(Items.STICK, 2));
-        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.STONE_PICKAXE, 1, 30));
-        StockRules.setRule(data, clerk, StockRule.minimum(1, Items.STONE_HOE, 1, 5));
+        StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.STONE_PICKAXE), 1, 30));
+        StockRules.setRule(data, clerk, StockRule.minimum(1, ItemKey.of(Items.STONE_HOE), 1, 5));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
         CraftspersonGameTests.placeTable(helper, new BlockPos(3, 1, 5));
@@ -295,7 +296,7 @@ public final class ThoughtBubbleGameTests {
         CraftspersonGameTests.placeTable(helper, new BlockPos(4, 1, 6));
         CraftspersonGameTests.define(helper, craft, 0, Items.STICK);
         ((Container) level.getBlockEntity(craft)).setItem(0, new ItemStack(Items.OAK_PLANKS, 2));
-        Requests.post(data, settlement, Items.STICK, 4, Optional.of(clerk), Optional.empty());
+        Requests.post(data, settlement, ItemKey.of(Items.STICK), 4, Optional.of(clerk), Optional.empty());
         Settler settler = CraftspersonGameTests.craftsperson(helper, craft, new BlockPos(2, 1, 7), "Cora");
         settler.getSkills().set(ModJobs.CRAFTSPERSON.get(), new com.gilfort.civmod.job.SettlerSkills.Skill(100, 0));
         settler.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.FISHING_ROD));

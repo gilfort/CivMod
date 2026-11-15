@@ -14,8 +14,6 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeType;
 
@@ -31,9 +29,9 @@ import net.minecraft.world.item.crafting.RecipeType;
  * {@code Systems/Producing Jobs.md}).
  *
  * @param slot    the library slot (0–53)
- * @param output  the crafted item, {@link Items#AIR} while the inputs match no recipe
+ * @param output  the crafted thing (item and relevant components), {@link ItemKey#EMPTY} while the inputs match no recipe
  * @param count   how many one craft makes
- * @param grid    the 3×3 grid, row by row, {@link Items#AIR} for empty cells
+ * @param grid    the 3×3 grid, row by row, {@link ItemKey#EMPTY} for empty cells
  * @param recipe  the crafting recipe the pattern follows (or that its exact inputs match)
  * @param exact   whether exactly the grid items are used (substitutions off)
  * @param checked whether the Craftsperson crafts it
@@ -43,7 +41,7 @@ import net.minecraft.world.item.crafting.RecipeType;
  * @param always  whether it is worked without a request ("Always produce")
  * @param atOnce  crafts per round of "Always produce" ("Produce at once")
  */
-public record Pattern(int slot, Item output, int count, List<Item> grid, Optional<ResourceKey<Recipe<?>>> recipe, boolean exact,
+public record Pattern(int slot, ItemKey output, int count, List<ItemKey> grid, Optional<ResourceKey<Recipe<?>>> recipe, boolean exact,
         boolean checked, boolean innate, Optional<RecipeType<?>> layout, boolean always, int atOnce) {
 
     /** Library slots per Craftsperson JobBlock (a double chest), the same at every level. */
@@ -58,9 +56,9 @@ public record Pattern(int slot, Item output, int count, List<Item> grid, Optiona
     /** Save codec. */
     public static final Codec<Pattern> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.intRange(0, SLOTS - 1).fieldOf("slot").forGetter(Pattern::slot),
-            BuiltInRegistries.ITEM.byNameCodec().optionalFieldOf("output", Items.AIR).forGetter(Pattern::output),
+            ItemKey.CODEC.optionalFieldOf("output", ItemKey.EMPTY).forGetter(Pattern::output),
             Codec.INT.optionalFieldOf("count", 1).forGetter(Pattern::count),
-            BuiltInRegistries.ITEM.byNameCodec().listOf().optionalFieldOf("grid", List.of()).forGetter(Pattern::grid),
+            ItemKey.CODEC.listOf().optionalFieldOf("grid", List.of()).forGetter(Pattern::grid),
             ResourceKey.codec(Registries.RECIPE).optionalFieldOf("recipe").forGetter(Pattern::recipe),
             Codec.BOOL.optionalFieldOf("exact", false).forGetter(Pattern::exact),
             Codec.BOOL.optionalFieldOf("checked", false).forGetter(Pattern::checked),
@@ -73,9 +71,9 @@ public record Pattern(int slot, Item output, int count, List<Item> grid, Optiona
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, Pattern> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.VAR_INT, Pattern::slot,
-            ByteBufCodecs.registry(Registries.ITEM), Pattern::output,
+            ItemKey.STREAM_CODEC, Pattern::output,
             ByteBufCodecs.VAR_INT, Pattern::count,
-            ByteBufCodecs.registry(Registries.ITEM).apply(ByteBufCodecs.list(GRID)), Pattern::grid,
+            ItemKey.STREAM_CODEC.apply(ByteBufCodecs.list(GRID)), Pattern::grid,
             ByteBufCodecs.optional(ResourceKey.streamCodec(Registries.RECIPE)), Pattern::recipe,
             ByteBufCodecs.BOOL, Pattern::exact,
             ByteBufCodecs.BOOL, Pattern::checked,
@@ -89,14 +87,14 @@ public record Pattern(int slot, Item output, int count, List<Item> grid, Optiona
      * A pattern the player made (not innate).
      *
      * @param slot    the library slot
-     * @param output  the crafted item
+     * @param output  the crafted thing (item and relevant components)
      * @param count   how many one craft makes
      * @param grid    the grid (padded / cut to 9 cells)
      * @param recipe  the recipe
      * @param exact   whether exactly the grid items are used
      * @param checked whether it is crafted
      */
-    public Pattern(int slot, Item output, int count, List<Item> grid, Optional<ResourceKey<Recipe<?>>> recipe, boolean exact, boolean checked) {
+    public Pattern(int slot, ItemKey output, int count, List<ItemKey> grid, Optional<ResourceKey<Recipe<?>>> recipe, boolean exact, boolean checked) {
         this(slot, output, count, grid, recipe, exact, checked, false, Optional.empty());
     }
 
@@ -104,7 +102,7 @@ public record Pattern(int slot, Item output, int count, List<Item> grid, Optiona
      * A pattern without a layout of its own (an innate one, or one saved before layouts existed).
      *
      * @param slot    the library slot
-     * @param output  the crafted item
+     * @param output  the crafted thing (item and relevant components)
      * @param count   how many one craft makes
      * @param grid    the grid (padded / cut to 9 cells)
      * @param recipe  the recipe
@@ -112,7 +110,7 @@ public record Pattern(int slot, Item output, int count, List<Item> grid, Optiona
      * @param checked whether it is crafted
      * @param innate  whether it follows an innate recipe of the Job
      */
-    public Pattern(int slot, Item output, int count, List<Item> grid, Optional<ResourceKey<Recipe<?>>> recipe, boolean exact, boolean checked,
+    public Pattern(int slot, ItemKey output, int count, List<ItemKey> grid, Optional<ResourceKey<Recipe<?>>> recipe, boolean exact, boolean checked,
             boolean innate) {
         this(slot, output, count, grid, recipe, exact, checked, innate, Optional.empty());
     }
@@ -121,7 +119,7 @@ public record Pattern(int slot, Item output, int count, List<Item> grid, Optiona
      * A pattern worked only on request.
      *
      * @param slot    the library slot
-     * @param output  the crafted item
+     * @param output  the crafted thing (item and relevant components)
      * @param count   how many one craft makes
      * @param grid    the grid (padded / cut to 9 cells)
      * @param recipe  the recipe
@@ -130,14 +128,14 @@ public record Pattern(int slot, Item output, int count, List<Item> grid, Optiona
      * @param innate  whether it follows an innate recipe of the Job
      * @param layout  the recipe type whose layout the editor shows
      */
-    public Pattern(int slot, Item output, int count, List<Item> grid, Optional<ResourceKey<Recipe<?>>> recipe, boolean exact, boolean checked,
+    public Pattern(int slot, ItemKey output, int count, List<ItemKey> grid, Optional<ResourceKey<Recipe<?>>> recipe, boolean exact, boolean checked,
             boolean innate, Optional<RecipeType<?>> layout) {
         this(slot, output, count, grid, recipe, exact, checked, innate, layout, false, DEFAULT_AT_ONCE);
     }
 
     /**
      * @param slot    the library slot
-     * @param output  the crafted item
+     * @param output  the crafted thing (item and relevant components)
      * @param count   how many one craft makes
      * @param grid    the grid (padded / cut to 9 cells)
      * @param recipe  the recipe
@@ -149,9 +147,9 @@ public record Pattern(int slot, Item output, int count, List<Item> grid, Optiona
      * @param atOnce  crafts per round of "Always produce"
      */
     public Pattern {
-        List<Item> cells = new ArrayList<>(grid.subList(0, Math.min(GRID, grid.size())));
+        List<ItemKey> cells = new ArrayList<>(grid.subList(0, Math.min(GRID, grid.size())));
         while (cells.size() < GRID) {
-            cells.add(Items.AIR);
+            cells.add(ItemKey.EMPTY);
         }
         grid = Collections.unmodifiableList(cells);
         count = Math.max(1, count);
@@ -162,7 +160,7 @@ public record Pattern(int slot, Item output, int count, List<Item> grid, Optiona
      * @return whether the pattern makes something (an exact grid may match no recipe)
      */
     public boolean valid() {
-        return output != Items.AIR;
+        return !output.isEmpty();
     }
 
     /**

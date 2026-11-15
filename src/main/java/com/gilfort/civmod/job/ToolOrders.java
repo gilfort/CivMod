@@ -9,6 +9,7 @@ import java.util.function.Predicate;
 
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Producers;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.ReservedFor;
@@ -77,10 +78,10 @@ public final class ToolOrders {
             return held == Held.IN_COLLECT;
         }
         boolean onItsWay = settlement.deliveries().stream().anyMatch(task -> !task.surplus() && task.jobBlock().equals(job.jobBlock())
-                && task.input().filter(input -> input.to().equals(site.collect()) && input.items().keySet().stream().anyMatch(kind)).isPresent());
-        boolean asked = settlement.requests().stream().anyMatch(request -> request.reservedFor().filter(me::equals).isPresent() && kind.test(request.item()));
+                && task.input().filter(input -> input.to().equals(site.collect()) && input.items().keySet().stream().anyMatch(key -> kind.test(key.item()))).isPresent());
+        boolean asked = settlement.requests().stream().anyMatch(request -> request.reservedFor().filter(me::equals).isPresent() && kind.test(request.item().item()));
         if (!onItsWay && !asked) {
-            chooseTool(level, settlement, kind, rule).ifPresent(tool -> Requests.postReserved(SettlementData.get(level), settlement, tool, home.get(), me));
+            chooseTool(level, settlement, kind, rule).ifPresent(tool -> Requests.postReserved(SettlementData.get(level), settlement, ItemKey.of(tool), home.get(), me));
         }
         return false;
     }
@@ -107,9 +108,9 @@ public final class ToolOrders {
      */
     private static Held handOver(Need need) {
         Settlement settlement = need.settlement();
-        for (Map.Entry<BlockPos, Map<Item, Integer>> store : Holds.heldFor(settlement, need.me()).entrySet()) {
-            Optional<Map.Entry<Item, Integer>> tool = store.getValue().entrySet().stream()
-                    .filter(entry -> need.kind().test(entry.getKey()) && need.rule().meets(new ItemStack(entry.getKey()))).findFirst();
+        for (Map.Entry<BlockPos, Map<ItemKey, Integer>> store : Holds.heldFor(settlement, need.me()).entrySet()) {
+            Optional<Map.Entry<ItemKey, Integer>> tool = store.getValue().entrySet().stream()
+                    .filter(entry -> need.kind().test(entry.getKey().item()) && need.rule().meets(entry.getKey().toStack())).findFirst();
             if (tool.isEmpty()) {
                 continue;
             }
@@ -135,7 +136,7 @@ public final class ToolOrders {
      *
      * @return whether the tool is in the collect inventory now
      */
-    private static boolean carryYourself(Need need, BlockPos store, Item tool, int count) {
+    private static boolean carryYourself(Need need, BlockPos store, ItemKey tool, int count) {
         // Released first: a stock hides what is held for someone else.
         Holds.release(need.settlement(), need.me(), need.kind());
         Stock from = ClerkStorage.stock(need.level(), store, true);
@@ -145,7 +146,7 @@ public final class ToolOrders {
             left += to.insert(stack).getCount();
         }
         if (left > 0) {
-            from.insert(new ItemStack(tool, left));
+            from.insert(tool.toStack(left));
             Holds.hold(need.settlement(), store, need.me(), tool, left);
         }
         return left < count;
@@ -162,7 +163,7 @@ public final class ToolOrders {
                 .sorted(Comparator.comparingInt((Item item) -> ToolTiers.tier(new ItemStack(item)))
                         .thenComparing(item -> BuiltInRegistries.ITEM.getKey(item).toString()))
                 .toList();
-        return candidates.stream().filter(item -> Producers.canMake(level, settlement, item)).findFirst()
+        return candidates.stream().filter(item -> Producers.canMake(level, settlement, ItemKey.of(item))).findFirst()
                 .or(() -> candidates.stream().findFirst());
     }
 
@@ -211,7 +212,7 @@ public final class ToolOrders {
         SettlementData data = SettlementData.get(level);
         ReservedFor me = ReservedFor.settler(settler);
         for (Settlement settlement : data.settlements()) {
-            for (Request request : settlement.requests().stream().filter(found -> found.reservedFor().filter(me::equals).isPresent() && kind.test(found.item())).toList()) {
+            for (Request request : settlement.requests().stream().filter(found -> found.reservedFor().filter(me::equals).isPresent() && kind.test(found.item().item())).toList()) {
                 Requests.dropReservation(data, settlement, request.id());
                 Requests.withdraw(data, settlement, request.id());
             }

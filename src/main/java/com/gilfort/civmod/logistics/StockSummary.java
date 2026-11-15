@@ -25,6 +25,14 @@ final class StockSummary {
     private static final class Entry {
         private long amount;
         private @Nullable ItemStack stack;
+        private @Nullable ItemKey key;
+
+        private ItemKey key(ItemResource resource) {
+            if (key == null) {
+                key = ItemKey.of(resource);
+            }
+            return key;
+        }
 
         private ItemStack stack(ItemResource resource) {
             if (stack == null) {
@@ -64,13 +72,13 @@ final class StockSummary {
     }
 
     /**
-     * @param item an item
-     * @return how many of it are held (components ignored)
+     * @param key a thing (item and relevant components)
+     * @return how many of it are held, other components ignored
      */
-    long amount(Item item) {
+    long amount(ItemKey key) {
         long total = 0;
         for (Map.Entry<ItemResource, Entry> entry : entries.entrySet()) {
-            if (entry.getKey().getItem() == item) {
+            if (entry.getKey().getItem() == key.item() && entry.getValue().key(entry.getKey()).equals(key)) {
                 total += entry.getValue().amount;
             }
         }
@@ -178,9 +186,9 @@ final class StockSummary {
     }
 
     /**
-     * @param counts the counts to add how many of each item are held to (components ignored)
+     * @param counts the counts to add how many of each thing (item and relevant components) are held to
      */
-    void addCounts(Map<Item, Integer> counts) {
-        entries.forEach((resource, entry) -> ItemCounts.add(counts, resource.getItem(), entry.amount));
+    void addCounts(Map<ItemKey, Integer> counts) {
+        entries.forEach((resource, entry) -> ItemCounts.add(counts, entry.key(resource), entry.amount));
     }
 }

@@ -8,6 +8,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.job.JobBalancing;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.JobBlockMenu;
@@ -171,7 +172,7 @@ public final class SmelterSpecializationGameTests {
         Setup setup = setup(helper, job, Items.SMOKER, Blocks.SMOKER, "cooked_beef_from_smoking", Items.BEEF, List.of(new ItemStack(Items.BREAD, 32),
                 new ItemStack(Items.BEEF, 64), new ItemStack(Items.SALMON, 64), new ItemStack(Items.COAL, 16)));
         ResourceKey<Recipe<?>> salmon = ResourceKey.create(Registries.RECIPE, Identifier.withDefaultNamespace("cooked_salmon_from_smoking"));
-        helper.assertTrue(Patterns.transfer(level, setup.block(), job, 1, Optional.of(salmon), List.of(Items.SALMON)).isPresent(), "Salmon pattern");
+        helper.assertTrue(Patterns.transfer(level, setup.block(), job, 1, Optional.of(salmon), List.of(ItemKey.of(Items.SALMON))).isPresent(), "Salmon pattern");
         helper.assertTrue(Patterns.toggleAlways(level, setup.block(), job, 0) && Patterns.toggleAlways(level, setup.block(), job, 1), "Always produce");
         Patterns.setAtOnce(setup.data(), setup.block(), job, 0, 4);
         Patterns.setAtOnce(setup.data(), setup.block(), job, 1, 2);
@@ -199,7 +200,7 @@ public final class SmelterSpecializationGameTests {
         // Bread first: the settlers' provisions come from the first edible stack, not from the raw beef.
         Setup setup = setup(helper, job, unlock, station, recipe, input,
                 List.of(new ItemStack(Items.BREAD, 32), new ItemStack(input, 4), new ItemStack(Items.COAL, 3)));
-        helper.assertTrue(StockRules.setRule(setup.data(), setup.clerk(), StockRule.minimum(0, output, 4, 0)), "Rule set");
+        helper.assertTrue(StockRules.setRule(setup.data(), setup.clerk(), StockRule.minimum(0, ItemKey.of(output), 4, 0)), "Rule set");
         StockRules.check(level, setup.clerk(), ClerkGameTests.MORNING);
         Settler settler = worker(helper, setup, job);
         CraftspersonGameTests.catchUp(level, settler, 6000L);
@@ -230,7 +231,7 @@ public final class SmelterSpecializationGameTests {
         // A furnace is no station of the Founder.
         BlockPos furnace = new BlockPos(3, 1, 3);
         helper.setBlock(furnace, Blocks.FURNACE);
-        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 4, Optional.of(setup.clerk()), Optional.empty());
+        Requests.post(setup.data(), setup.settlement(), ItemKey.of(Items.IRON_INGOT), 4, Optional.of(setup.clerk()), Optional.empty());
         Settler settler = worker(helper, setup, founder());
         // Level 1: 157 ticks per item and blast furnace; 2 rounds of charges fit, 4 single charges would not.
         SmelterGameTests.catchUpWork(level, settler, 0L, 400.0);
@@ -260,11 +261,11 @@ public final class SmelterSpecializationGameTests {
         ServerLevel level = helper.getLevel();
         Setup setup = setup(helper, founder(), Items.BLAST_FURNACE, Blocks.BLAST_FURNACE, "iron_ingot_from_blasting_raw_iron", Items.RAW_IRON,
                 List.of(new ItemStack(Items.RAW_IRON, 10), new ItemStack(Items.COAL, 2)));
-        Requests.post(setup.data(), setup.settlement(), Items.IRON_INGOT, 10, Optional.of(setup.clerk()), Optional.empty());
+        Requests.post(setup.data(), setup.settlement(), ItemKey.of(Items.IRON_INGOT), 10, Optional.of(setup.clerk()), Optional.empty());
         Settler settler = worker(helper, setup, founder());
         SmelterGameTests.catchUpWork(level, settler, 0L, 700.0);
 
-        int made = settler.getWork().buffer(setup.block()).counts().getOrDefault(Items.IRON_INGOT, 0);
+        int made = settler.getWork().buffer(setup.block()).counts().getOrDefault(ItemKey.of(Items.IRON_INGOT), 0);
         helper.assertTrue(made == 4, "4 ingots after 700 ticks at level 1 (the Smelter makes 2): " + made + ", status "
                 + settler.getWork().status(setup.block()));
         int exp = settler.getSkills().get(founder()).exp();
@@ -296,7 +297,7 @@ public final class SmelterSpecializationGameTests {
         helper.assertTrue(StationTypeGameTests.unlock(helper, block, 1, unlock), "Unlocked by " + unlock);
         helper.setBlock(STATION, station);
         ResourceKey<Recipe<?>> key = ResourceKey.create(Registries.RECIPE, Identifier.withDefaultNamespace(recipe));
-        Pattern pattern = Patterns.transfer(level, block, job, 0, Optional.of(key), List.of(input)).orElseThrow();
+        Pattern pattern = Patterns.transfer(level, block, job, 0, Optional.of(key), List.of(ItemKey.of(input))).orElseThrow();
         helper.assertTrue(pattern.checked() || Patterns.toggleCheck(level, block, job, 0), "Pattern checked: " + pattern);
         return new Setup(clerk, block, data, settlement);
     }

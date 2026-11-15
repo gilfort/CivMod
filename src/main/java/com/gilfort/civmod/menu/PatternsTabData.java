@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ProducingProfile;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.PatternLayout;
 import com.gilfort.civmod.settlement.Patterns;
@@ -30,7 +31,6 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.RecipeType;
@@ -217,9 +217,9 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
         if (open.get().innate()) {
             return -1;
         }
-        List<Item> grid = open.get().grid();
+        List<ItemKey> grid = open.get().grid();
         for (int cell = 0; cell < layout(slot).kind().cells(); cell++) {
-            if (grid.get(cell) == Items.AIR) {
+            if (grid.get(cell).isEmpty()) {
                 return cell;
             }
         }
@@ -333,16 +333,16 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
          * @param containerId the menu's container id
          * @param job         the Job whose library it is
          * @param slot        the library slot
-         * @param output      the item to craft
+         * @param output      the thing to craft (item and relevant components)
          */
-        record SetOutput(int containerId, Job job, int slot, Item output) implements Edit {
+        record SetOutput(int containerId, Job job, int slot, ItemKey output) implements Edit {
 
             /** Network codec. */
             public static final StreamCodec<RegistryFriendlyByteBuf, SetOutput> CODEC = StreamCodec.composite(
                     ByteBufCodecs.VAR_INT, SetOutput::containerId,
                     Job.STREAM_CODEC, SetOutput::job,
                     ByteBufCodecs.VAR_INT, SetOutput::slot,
-                    ByteBufCodecs.registry(Registries.ITEM), SetOutput::output,
+                    ItemKey.STREAM_CODEC, SetOutput::output,
                     SetOutput::new);
         }
 
@@ -353,10 +353,10 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
          * @param job         the Job whose library it is
          * @param slot        the library slot
          * @param cell        the grid cell
-         * @param item        the item, {@link Items#AIR} empties the cell
+         * @param item        the thing, {@link ItemKey#EMPTY} empties the cell
          * @param layout      the recipe type of the editor's layout
          */
-        record SetInput(int containerId, Job job, int slot, int cell, Item item, RecipeType<?> layout) implements Edit {
+        record SetInput(int containerId, Job job, int slot, int cell, ItemKey item, RecipeType<?> layout) implements Edit {
 
             /** Network codec. */
             public static final StreamCodec<RegistryFriendlyByteBuf, SetInput> CODEC = StreamCodec.composite(
@@ -364,7 +364,7 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
                     Job.STREAM_CODEC, SetInput::job,
                     ByteBufCodecs.VAR_INT, SetInput::slot,
                     ByteBufCodecs.INT, SetInput::cell,
-                    ByteBufCodecs.registry(Registries.ITEM), SetInput::item,
+                    ItemKey.STREAM_CODEC, SetInput::item,
                     ByteBufCodecs.registry(Registries.RECIPE_TYPE), SetInput::layout,
                     SetInput::new);
         }
@@ -429,10 +429,10 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
          * @param job         the Job whose library it is
          * @param slot        the library slot
          * @param recipe      the recipe the viewer showed
-         * @param grid        the items the viewer showed, row by row
+         * @param grid        the things the viewer showed, row by row
          * @param layout      the recipe type of the viewer's recipe (empty: the Job's first type)
          */
-        record Transfer(int containerId, Job job, int slot, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid,
+        record Transfer(int containerId, Job job, int slot, Optional<ResourceKey<Recipe<?>>> recipe, List<ItemKey> grid,
                 Optional<RecipeType<?>> layout) implements Edit {
 
             /** Network codec. */
@@ -441,7 +441,7 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
                     Job.STREAM_CODEC, Transfer::job,
                     ByteBufCodecs.VAR_INT, Transfer::slot,
                     ByteBufCodecs.optional(ResourceKey.streamCodec(Registries.RECIPE)), Transfer::recipe,
-                    ByteBufCodecs.registry(Registries.ITEM).apply(ByteBufCodecs.list(Pattern.GRID)), Transfer::grid,
+                    ItemKey.STREAM_CODEC.apply(ByteBufCodecs.list(Pattern.GRID)), Transfer::grid,
                     ByteBufCodecs.optional(ByteBufCodecs.registry(Registries.RECIPE_TYPE)), Transfer::layout,
                     Transfer::new);
         }
@@ -486,10 +486,10 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
          * @param containerId the menu's container id
          * @param job         the Job whose library it is
          * @param slot        the library slot
-         * @param output      the item to craft
+         * @param output      the thing to craft (item and relevant components)
          * @return the edit
          */
-        static Edit setOutput(int containerId, Job job, int slot, Item output) {
+        static Edit setOutput(int containerId, Job job, int slot, ItemKey output) {
             return new SetOutput(containerId, job, slot, output);
         }
 
@@ -498,11 +498,11 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
          * @param job         the Job whose library it is
          * @param slot        the library slot
          * @param index       the grid cell
-         * @param item        the item, {@link Items#AIR} to empty the cell
+         * @param item        the thing, {@link ItemKey#EMPTY} to empty the cell
          * @param layout      the recipe type of the editor's layout
          * @return the edit
          */
-        static Edit setInput(int containerId, Job job, int slot, int index, Item item, RecipeType<?> layout) {
+        static Edit setInput(int containerId, Job job, int slot, int index, ItemKey item, RecipeType<?> layout) {
             return new SetInput(containerId, job, slot, index, item, layout);
         }
 
@@ -563,10 +563,10 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
          * @param job         the Job whose library it is
          * @param slot        the library slot
          * @param recipe      the recipe the viewer showed
-         * @param grid        the items it showed, row by row
+         * @param grid        the things it showed, row by row
          * @return the edit
          */
-        static Edit transfer(int containerId, Job job, int slot, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid) {
+        static Edit transfer(int containerId, Job job, int slot, Optional<ResourceKey<Recipe<?>>> recipe, List<ItemKey> grid) {
             return new Transfer(containerId, job, slot, recipe, grid, Optional.empty());
         }
 
@@ -576,10 +576,10 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
          * @param slot        the library slot
          * @param type        the recipe type of the recipe the viewer showed (the layout of an unknown recipe)
          * @param recipe      the recipe the viewer showed
-         * @param grid        the items it showed, row by row
+         * @param grid        the things it showed, row by row
          * @return the edit
          */
-        static Edit transfer(int containerId, Job job, int slot, RecipeType<?> type, Optional<ResourceKey<Recipe<?>>> recipe, List<Item> grid) {
+        static Edit transfer(int containerId, Job job, int slot, RecipeType<?> type, Optional<ResourceKey<Recipe<?>>> recipe, List<ItemKey> grid) {
             return new Transfer(containerId, job, slot, recipe, grid, Optional.of(type));
         }
     }

@@ -7,6 +7,7 @@ import java.util.function.Consumer;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.job.SettlerWork;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Pickups;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
@@ -82,8 +83,8 @@ public final class ClerkTasksGameTests {
         SettlementData data = SettlementData.get(level);
         BlockPos clerk = StockRuleGameTests.workingClerk(helper);
         Settlement settlement = data.settlementAt(clerk).orElseThrow();
-        StockRules.setRule(data, clerk, StockRule.minimum(0, Items.TORCH, 5, 3));
-        StockRules.setRule(data, clerk, StockRule.minimum(1, Items.STONE_PICKAXE, 8, 0));
+        StockRules.setRule(data, clerk, StockRule.minimum(0, ItemKey.of(Items.TORCH), 5, 3));
+        StockRules.setRule(data, clerk, StockRule.minimum(1, ItemKey.of(Items.STONE_PICKAXE), 8, 0));
         StockRules.check(level, clerk, ClerkGameTests.MORNING);
         Request torches = Requests.forRule(settlement, clerk, 0).orElseThrow();
         helper.assertTrue(Requests.claim(data, settlement, torches.id(), CARL, "Carl", 5) == 5, "Carl claims the torches");
@@ -170,8 +171,8 @@ public final class ClerkTasksGameTests {
         helper.assertTrue(TestAssignments.assign(data, served, SAM, "Sam", settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
                 "Served Clerk assigned");
         helper.assertTrue(Warehouses.link(data, warehouse, served) == Warehouses.LinkResult.LINKED, "Linked as Served Clerk");
-        StockRules.setRule(data, warehouse, StockRule.minimum(0, Items.TORCH, 5, 0));
-        StockRules.setRule(data, served, StockRule.minimum(0, Items.LANTERN, 4, 0));
+        StockRules.setRule(data, warehouse, StockRule.minimum(0, ItemKey.of(Items.TORCH), 5, 0));
+        StockRules.setRule(data, served, StockRule.minimum(0, ItemKey.of(Items.LANTERN), 4, 0));
         StockRules.check(level, warehouse, ClerkGameTests.MORNING);
         StockRules.check(level, served, ClerkGameTests.MORNING);
 

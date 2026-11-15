@@ -9,6 +9,7 @@ import java.util.function.UnaryOperator;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.ClerkTabData;
 import com.gilfort.civmod.menu.JobBlockMenu;
@@ -313,8 +314,8 @@ final class StockTabView implements JobBlockTabView {
             return false;
         }
         StockRule rule = clerk().rule(slot)
-                .map(found -> found.withItem(stack.getItem()))
-                .orElseGet(() -> StockRule.minimum(slot, stack.getItem(), Math.max(1, stack.getCount()), 0));
+                .map(found -> found.withItem(ItemKey.of(stack)))
+                .orElseGet(() -> StockRule.minimum(slot, ItemKey.of(stack), Math.max(1, stack.getCount()), 0));
         sendStockRule(slot, Optional.of(rule));
         screen.clickSound();
         showEditor(slot);
@@ -467,7 +468,7 @@ final class StockTabView implements JobBlockTabView {
                 CivGui.slot(graphics, x, y);
                 Optional<StockRule> rule = tab.rule(slot);
                 if (rule.isPresent()) {
-                    ItemStack icon = new ItemStack(rule.get().item());
+                    ItemStack icon = rule.get().item().toStack();
                     graphics.item(icon, x, y);
                     // Min, or Max for a rule without Min.
                     graphics.itemDecorations(font, icon, x, y, Integer.toString(rule.get().hasMin() ? rule.get().min() : rule.get().max()));
@@ -492,9 +493,9 @@ final class StockTabView implements JobBlockTabView {
         ClerkTabData tab = clerk();
         Optional<StockRule> selected = selectedStockRule();
         CivGui.slot(graphics, CivGui.PADDING, ITEM_Y);
-        Component name = selected.map(rule -> new ItemStack(rule.item()).getHoverName())
+        Component name = selected.map(rule -> rule.item().toStack().getHoverName())
                 .orElseGet(() -> Component.translatable("civmod.gui.clerk.stock.empty_slot"));
-        selected.ifPresent(rule -> graphics.item(new ItemStack(rule.item()), CivGui.PADDING, ITEM_Y));
+        selected.ifPresent(rule -> graphics.item(rule.item().toStack(), CivGui.PADDING, ITEM_Y));
         graphics.text(font, CivGui.fit(font, name, screen.panelWidth() - 2 * CivGui.PADDING - 22), CivGui.PADDING + 22, ITEM_Y + 4,
                 CivGui.LABEL_COLOR, false);
         boolean min = selected.filter(StockRule::hasMin).isPresent();
@@ -522,7 +523,7 @@ final class StockTabView implements JobBlockTabView {
         List<Component> lines = new ArrayList<>();
         Optional<StockRule> rule = clerk().rule(slot);
         if (rule.isPresent()) {
-            lines.add(new ItemStack(rule.get().item()).getHoverName());
+            lines.add(rule.get().item().toStack().getHoverName());
             StockRule found = rule.get();
             // One line per set field.
             if (found.hasMin()) {

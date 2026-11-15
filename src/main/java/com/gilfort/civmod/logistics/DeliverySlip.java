@@ -10,12 +10,10 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.util.StringRepresentable;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -33,7 +31,7 @@ import net.minecraft.world.item.ItemStack;
  * @param keep     this many of an item stay at the source, 0: none
  * @param status   what the Warehouse found out about the containers (written by it, not by the player)
  */
-public record DeliverySlip(UUID id, Optional<BlockPos> source, List<BlockPos> targets, boolean blacklist, List<Item> filter,
+public record DeliverySlip(UUID id, Optional<BlockPos> source, List<BlockPos> targets, boolean blacklist, List<ItemKey> filter,
         Variant variant, int fillTo, int keep, Status status) {
 
     /** Slots of the filter. */
@@ -106,7 +104,7 @@ public record DeliverySlip(UUID id, Optional<BlockPos> source, List<BlockPos> ta
             BlockPos.CODEC.optionalFieldOf("source").forGetter(DeliverySlip::source),
             BlockPos.CODEC.listOf().optionalFieldOf("targets", List.of()).forGetter(DeliverySlip::targets),
             Codec.BOOL.optionalFieldOf("blacklist", false).forGetter(DeliverySlip::blacklist),
-            BuiltInRegistries.ITEM.byNameCodec().listOf().optionalFieldOf("filter", List.of()).forGetter(DeliverySlip::filter),
+            ItemKey.CODEC.listOf().optionalFieldOf("filter", List.of()).forGetter(DeliverySlip::filter),
             Variant.CODEC.optionalFieldOf("variant", Variant.NEAREST).forGetter(DeliverySlip::variant),
             Codec.intRange(0, MAX_LIMIT).optionalFieldOf("fill_to", 0).forGetter(DeliverySlip::fillTo),
             Codec.intRange(0, MAX_LIMIT).optionalFieldOf("keep", 0).forGetter(DeliverySlip::keep),
@@ -152,7 +150,7 @@ public record DeliverySlip(UUID id, Optional<BlockPos> source, List<BlockPos> ta
      *         blacklist everything but the listed items
      */
     public boolean accepts(ItemStack stack) {
-        return !stack.isEmpty() && filter.contains(stack.getItem()) != blacklist;
+        return !stack.isEmpty() && filter.contains(ItemKey.of(stack)) != blacklist;
     }
 
     /**
@@ -186,7 +184,7 @@ public record DeliverySlip(UUID id, Optional<BlockPos> source, List<BlockPos> ta
      * @param changed the new filter items
      * @return a copy with that filter
      */
-    public DeliverySlip withFilter(List<Item> changed) {
+    public DeliverySlip withFilter(List<ItemKey> changed) {
         return new DeliverySlip(id, source, targets, blacklist, changed, variant, fillTo, keep, status);
     }
 

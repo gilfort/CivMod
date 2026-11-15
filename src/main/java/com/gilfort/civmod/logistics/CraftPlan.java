@@ -13,8 +13,6 @@ import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.settlement.Patterns;
 
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 
 /**
@@ -24,14 +22,14 @@ import net.minecraft.world.item.crafting.Ingredient;
  * has a pattern for is crafted first in its own buffer (intermediates, never put into storage), a missing base input
  * without a pattern is reported ("Missing: 6× Cobblestone").
  *
- * @param item       the requested item
+ * @param item       the requested thing (item and relevant components)
  * @param amount     how many of it are made
  * @param steps      the crafts in order (intermediates first)
  * @param takes      what is taken from the stock
  * @param missing    every base input that is missing, empty if the plan can be done
  * @param operations crafting operations (one craft each, intermediates count)
  */
-public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integer> takes, List<Request.Missing> missing, int operations) {
+public record CraftPlan(ItemKey item, int amount, List<Step> steps, Map<ItemKey, Integer> takes, List<Request.Missing> missing, int operations) {
 
     /** Patterns deeper than this are not followed (guards against long or cyclic chains); sub-requests stop here too. */
     public static final int MAX_DEPTH = 8;
@@ -56,8 +54,8 @@ public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integ
      * @param stock   what it can take from its collect inventory and the Clerk storage
      * @return the plan, with {@link #missing()} set if it cannot be done
      */
-    public static CraftPlan plan(ServerLevel level, ProducingProfile profile, List<Pattern> checked, Item item, int amount,
-            Map<Item, Integer> held, Map<Item, Integer> stock) {
+    public static CraftPlan plan(ServerLevel level, ProducingProfile profile, List<Pattern> checked, ItemKey item, int amount,
+            Map<ItemKey, Integer> held, Map<ItemKey, Integer> stock) {
         Planner planner = new Planner(level, profile, checked, held, stock);
         planner.craft(item, amount, 0);
         List<Request.Missing> missing = planner.missing.entrySet().stream()
@@ -80,8 +78,8 @@ public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integ
      * @param room    how many items it can still take into its buffer
      * @return the amount, 0 if not even one can be made
      */
-    public static int most(ServerLevel level, ProducingProfile profile, List<Pattern> checked, Item item, int wanted, Map<Item, Integer> held,
-            Map<Item, Integer> stock, int room) {
+    public static int most(ServerLevel level, ProducingProfile profile, List<Pattern> checked, ItemKey item, int wanted, Map<ItemKey, Integer> held,
+            Map<ItemKey, Integer> stock, int room) {
         int low = 0;
         int high = Math.max(0, wanted);
         while (low < high) {
@@ -110,14 +108,14 @@ public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integ
         private final ProducingProfile profile;
         private final List<Pattern> checked;
         /** Items held or crafted and not used yet. */
-        private final Map<Item, Integer> pool;
-        private final Map<Item, Integer> stock;
-        private final Map<Item, Integer> takes = new LinkedHashMap<>();
-        private final Map<Item, Integer> missing = new LinkedHashMap<>();
+        private final Map<ItemKey, Integer> pool;
+        private final Map<ItemKey, Integer> stock;
+        private final Map<ItemKey, Integer> takes = new LinkedHashMap<>();
+        private final Map<ItemKey, Integer> missing = new LinkedHashMap<>();
         private final List<Step> steps = new ArrayList<>();
-        private final Set<Item> crafting = new HashSet<>();
+        private final Set<ItemKey> crafting = new HashSet<>();
 
-        Planner(ServerLevel level, ProducingProfile profile, List<Pattern> checked, Map<Item, Integer> held, Map<Item, Integer> stock) {
+        Planner(ServerLevel level, ProducingProfile profile, List<Pattern> checked, Map<ItemKey, Integer> held, Map<ItemKey, Integer> stock) {
             this.level = level;
             this.profile = profile;
             this.checked = checked;
@@ -126,8 +124,8 @@ public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integ
         }
 
         /** Crafts {@code amount} of an item into the pool (always crafted, never taken). */
-        void craft(Item item, int amount, int depth) {
-            Optional<Pattern> pattern = checked.stream().filter(found -> found.output() == item).findFirst();
+        void craft(ItemKey item, int amount, int depth) {
+            Optional<Pattern> pattern = checked.stream().filter(found -> found.output().equals(item)).findFirst();
             if (pattern.isEmpty() || depth > MAX_DEPTH || !crafting.add(item)) {
                 missing.merge(item, amount, Integer::sum);
                 return;
@@ -150,23 +148,23 @@ public record CraftPlan(Item item, int amount, List<Step> steps, Map<Item, Integ
                 return;
             }
             Optional<Pattern> pattern = checked.stream().filter(found -> found.valid() && !crafting.contains(found.output())
-                    && input.test(new ItemStack(found.output()))).findFirst();
+                    && input.test(found.output().toStack())).findFirst();
             if (pattern.isPresent() && depth < MAX_DEPTH) {
                 craft(pattern.get().output(), rest, depth + 1);
                 rest = use(pool, input, rest, null);
             }
             if (rest > 0) {
-                missing.merge(PatternRecipes.representative(input), rest, Integer::sum);
+                missing.merge(PatternRecipes.representativeKey(input), rest, Integer::sum);
             }
         }
 
         /** Takes up to {@code amount} matching items out of a store, the biggest stack of a kind first. */
-        private static int use(Map<Item, Integer> store, Ingredient input, int amount, Map<Item, Integer> record) {
+        private static int use(Map<ItemKey, Integer> store, Ingredient input, int amount, Map<ItemKey, Integer> record) {
             int rest = amount;
-            List<Map.Entry<Item, Integer>> matching = store.entrySet().stream()
-                    .filter(entry -> entry.getValue() > 0 && input.test(new ItemStack(entry.getKey())))
-                    .sorted(Comparator.comparingInt((Map.Entry<Item, Integer> entry) -> entry.getValue()).reversed()).toList();
-            for (Map.Entry<Item, Integer> entry : matching) {
+            List<Map.Entry<ItemKey, Integer>> matching = store.entrySet().stream()
+                    .filter(entry -> entry.getValue() > 0 && input.test(entry.getKey().toStack()))
+                    .sorted(Comparator.comparingInt((Map.Entry<ItemKey, Integer> entry) -> entry.getValue()).reversed()).toList();
+            for (Map.Entry<ItemKey, Integer> entry : matching) {
                 if (rest <= 0) {
                     break;
                 }

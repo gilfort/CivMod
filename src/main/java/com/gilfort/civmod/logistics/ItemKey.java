@@ -2,6 +2,7 @@ package com.gilfort.civmod.logistics;
 
 import com.gilfort.civmod.api.RelevantComponents;
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.component.DataComponentPatch;
@@ -14,6 +15,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.neoforged.neoforge.transfer.item.ItemResource;
 
 /**
  * What a stack is for patterns, ingredient matching, stock, Clerk rules, requests, deliveries and Delivery Slips: its item
@@ -29,13 +31,13 @@ public record ItemKey(Item item, DataComponentPatch components) {
     /** Nothing: an empty grid cell, or a pattern without an output. */
     public static final ItemKey EMPTY = new ItemKey(Items.AIR, DataComponentPatch.EMPTY);
 
-    private static final Codec<ItemKey> KEY_CODEC = RecordCodecBuilder.create(instance -> instance.group(
+    public static final MapCodec<ItemKey> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
             BuiltInRegistries.ITEM.byNameCodec().fieldOf("id").forGetter(ItemKey::item),
             DataComponentPatch.CODEC.optionalFieldOf("components", DataComponentPatch.EMPTY).forGetter(ItemKey::components)
     ).apply(instance, ItemKey::new));
 
     /** Save codec; a plain item id (the format before components) still loads. */
-    public static final Codec<ItemKey> CODEC = Codec.withAlternative(KEY_CODEC,
+    public static final Codec<ItemKey> CODEC = Codec.withAlternative(MAP_CODEC.codec(),
             BuiltInRegistries.ITEM.byNameCodec().xmap(ItemKey::of, ItemKey::item));
 
     /** Network codec. */
@@ -65,6 +67,14 @@ public record ItemKey(Item item, DataComponentPatch components) {
             copy(builder, stack, type);
         }
         return new ItemKey(stack.getItem(), builder.build());
+    }
+
+    /**
+     * @param resource an item resource of a container
+     * @return its key
+     */
+    public static ItemKey of(ItemResource resource) {
+        return resource.isEmpty() ? EMPTY : of(resource.toStack());
     }
 
     private static <T> void copy(DataComponentPatch.Builder builder, ItemStack stack, DataComponentType<T> type) {

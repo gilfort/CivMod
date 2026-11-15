@@ -161,8 +161,8 @@ public final class InnateRecipes {
         ItemStack shown = recipe.result().or(() -> recipe.drops().flatMap(DropPools::representative)).map(ItemStackTemplate::create)
                 .orElseGet(() -> new ItemStack(UNKNOWN_DROP));
         int count = recipe.result().isPresent() ? shown.getCount() : 1;
-        List<Item> grid = recipe.inputs().stream().map(input -> PatternRecipes.representative(input.ingredient())).toList();
-        return new Pattern(slot, shown.getItem(), count, grid, Optional.of(holder.id()), false, checked, true);
+        List<ItemKey> grid = recipe.inputs().stream().map(input -> PatternRecipes.representativeKey(input.ingredient())).toList();
+        return new Pattern(slot, ItemKey.of(shown), count, grid, Optional.of(holder.id()), false, checked, true);
     }
 
     /**

@@ -11,11 +11,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
 /**
  * A request of the settlement (vault {@code Jobs/Clerk.md}, {@code Systems/Producing Jobs.md}): "produce
@@ -24,7 +20,7 @@ import net.minecraft.world.item.Items;
  * ({@link Claim}); {@link #amount()} is what is still open, {@link #crafting()} what is being crafted.
  *
  * @param id       the request id
- * @param item     the requested item
+ * @param item     the requested thing (item and relevant components)
  * @param amount   the open amount nobody claimed yet
  * @param priority the priority (higher first)
  * @param target   the Clerk the result is delivered to, empty if the poster has none
@@ -36,7 +32,7 @@ import net.minecraft.world.item.Items;
  * @param reservedFor who the result is held for once it is in the Clerk (the tool supply: the settler the tool is for),
  *                 empty for a request whose result is free stock
  */
-public record Request(UUID id, Item item, int amount, int priority, Optional<BlockPos> target, Optional<Integer> rule, Optional<UUID> parent,
+public record Request(UUID id, ItemKey item, int amount, int priority, Optional<BlockPos> target, Optional<Integer> rule, Optional<UUID> parent,
         List<Claim> claims, List<Missing> missing, Optional<ReservedFor> reservedFor) {
 
     /**
@@ -59,16 +55,16 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
     /**
      * An input a producer misses for a request.
      *
-     * @param item  the missing item
+     * @param item  the missing thing
      * @param count how many are missing
      */
-    public record Missing(Item item, int count) {
+    public record Missing(ItemKey item, int count) {
 
         /**
          * Fuel of any kind (vault {@code Jobs/Smelter.md}): a producer burning fuel with several or no fuels listed
          * misses fuel, not one item ("Missing: Fuel").
          */
-        public static final Missing ANY_FUEL = new Missing(Items.AIR, 0);
+        public static final Missing ANY_FUEL = new Missing(ItemKey.EMPTY, 0);
 
         /**
          * @return whether this is {@link #ANY_FUEL}
@@ -82,12 +78,12 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
          */
         public Component text() {
             return anyFuel() ? Component.translatable("civmod.gui.clerk.request.missing_fuel")
-                    : Component.translatable("civmod.gui.clerk.request.missing_input", count, new ItemStack(item).getHoverName());
+                    : Component.translatable("civmod.gui.clerk.request.missing_input", count, item.toStack().getHoverName());
         }
 
         /** Save codec. */
         public static final Codec<Missing> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                BuiltInRegistries.ITEM.byNameCodec().fieldOf("item").forGetter(Missing::item),
+                ItemKey.CODEC.fieldOf("item").forGetter(Missing::item),
                 Codec.INT.fieldOf("count").forGetter(Missing::count)
         ).apply(instance, Missing::new));
     }
@@ -95,7 +91,7 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
     /** Save codec. */
     public static final Codec<Request> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             UUIDUtil.CODEC.fieldOf("id").forGetter(Request::id),
-            BuiltInRegistries.ITEM.byNameCodec().fieldOf("item").forGetter(Request::item),
+            ItemKey.CODEC.fieldOf("item").forGetter(Request::item),
             Codec.INT.fieldOf("amount").forGetter(Request::amount),
             Codec.INT.optionalFieldOf("priority", 0).forGetter(Request::priority),
             BlockPos.CODEC.optionalFieldOf("target").forGetter(Request::target),
@@ -111,7 +107,7 @@ public record Request(UUID id, Item item, int amount, int priority, Optional<Blo
 
     /**
      * @param id       the request id
-     * @param item     the requested item
+     * @param item     the requested thing (item and relevant components)
      * @param amount   the open amount
      * @param priority the priority
      * @param target   the Clerk the result is delivered to
