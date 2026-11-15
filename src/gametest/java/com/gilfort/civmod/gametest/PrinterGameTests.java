@@ -129,6 +129,8 @@ public final class PrinterGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos craft = printingHouse(helper, new BlockPos(1, 1, 5));
         helper.assertTrue(Patterns.setOutput(level, craft, printer(), 0, Items.BOOKSHELF).orElseThrow().checked(), "Bookshelf checked");
+        helper.assertTrue(Patterns.setOutput(level, craft, printer(), 2, Items.PAPER).orElseThrow().checked(),
+                "Paper is inside the domain through its output although sugar cane is not print material");
         helper.assertFalse(Patterns.setOutput(level, craft, printer(), 1, Items.IRON_PICKAXE).orElseThrow().checked(), "A pickaxe is outside the domain");
         helper.assertFalse(Patterns.toggleCheck(level, craft, printer(), 1), "And cannot be checked");
         PatternsTabData tab = PatternsTabData.of(level, craft, printer());
