@@ -377,7 +377,7 @@ One execution a station of a Producing Job works at a time in the CRAFT phase; a
 _Avoid_: Batch
 
 **Domain**:
-The item tag a crafting Specialization is limited to (`ProducingProfile.domain`): a recipe belongs to it if any input has an alternative in the tag, so mixed recipes (a piston) fit several domains. Patterns outside it are filtered ("Outside this Job's domain", not checkable), and the chain resolution makes no intermediates outside it: they are taken from stock or reported "Missing". Code: `Patterns.filtered`.
+The item tag a crafting Specialization is limited to (`ProducingProfile.domain`): a recipe belongs to it if any input has an alternative in the tag or its output is in the tag (paper through `minecraft:paper`, though sugar cane is no print material), so mixed recipes (a piston) fit several domains. Patterns outside it are filtered ("Outside this Job's domain", not checkable), and the chain resolution makes no intermediates outside it: they are taken from stock or reported "Missing". Code: `Patterns.filtered`.
 _Avoid_: Material set, category
 
 **Pattern**:
@@ -403,6 +403,12 @@ The crafting Specialization of the Craftsperson for stone: unlocked by a stonecu
 
 **Dyer**:
 The crafting Specialization of the Craftsperson for dyes and dyed blocks: unlocked by a loom, works at a loom (`civmod:stations/dyer`), `crafting` recipes in the domain `civmod:domains/dye`; innate recipe dyed wool (`civmod:dyed_wool`) → white wool at a water cauldron (`civmod:stations/water_cauldron`). Job factor 0.3, raised to 1.2 by its Station Extra (`minecraft:water_cauldron` within 4 blocks); base EXP 2. Code: `ModJobs.DYER`, profile `DomainProfile.dyer()`, `civmod_jobs/dyer.json`, `recipe/dyer/`.
+
+**Carpenter**:
+The crafting Specialization of the Craftsperson for wood: unlocked by a stripped oak log, works at the Craftsperson's crafting table (`civmod:stations/craftsperson`), `crafting` recipes in the domain `civmod:domains/wood`; no innate recipe. Job factor 1.2 from the start, no Station Extra; base EXP 2. Code: `ModJobs.CARPENTER`, profile `DomainProfile.carpenter()`, `civmod_jobs/carpenter.json`.
+
+**Printer**:
+The crafting Specialization of the Craftsperson for paper and books: unlocked by a lectern, works at the Craftsperson's crafting table (`civmod:stations/craftsperson`), `crafting` recipes in the domain `civmod:domains/print`; no innate recipe. Job factor 1.2 from the start, no Station Extra; base EXP 2. Code: `ModJobs.PRINTER`, profile `DomainProfile.printer()`, `civmod_jobs/printer.json`.
 
 **Drops**:
 The optional `drops` field of an innate recipe of a Producing Job: weighted outcomes (`DropOutcome`: `weight`, `min_level`, a list of stacks that may be empty), listed in the recipe or named as a **Drop pool** by id. Each execution draws one outcome among those whose `min_level` is at most the settler's effective skill; an outcome stays in the draw at higher levels. A recipe with `drops` cannot serve a request (the result is not known beforehand): `ProducingLoop.requestable` leaves it out of the request pick, it runs only as an "Always produce" pattern and ignores the Max rule; its drawn stacks are delivered together with the round's item (`Round.drawn`). Without `result` the pattern's icon is the first stack any outcome gives (`DropPools.representative`). Code: `Drops`, `DropOutcome` (API), `DropDraw` (pure draw over a `RandomSource`), `DropPools.draw`, `ProducingLoop.made`, `InnateRecipes.drops`; recipe viewers show chance and level (`InnateRecipeLayout.dropLines`).
