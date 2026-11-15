@@ -2,13 +2,11 @@ package com.gilfort.civmod.gametest;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.gametest.FletcherGameTests.Setup;
-import com.gilfort.civmod.menu.PatternsTabData;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.Patterns;
@@ -16,7 +14,6 @@ import com.gilfort.civmod.settlement.Patterns;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
@@ -131,42 +128,30 @@ public final class PrinterGameTests {
         helper.assertTrue(Patterns.setOutput(level, craft, printer(), 0, Items.BOOKSHELF).orElseThrow().checked(), "Bookshelf checked");
         helper.assertTrue(Patterns.setOutput(level, craft, printer(), 2, Items.PAPER).orElseThrow().checked(),
                 "Paper is inside the domain through its output although sugar cane is not print material");
-        helper.assertFalse(Patterns.setOutput(level, craft, printer(), 1, Items.IRON_PICKAXE).orElseThrow().checked(), "A pickaxe is outside the domain");
-        helper.assertFalse(Patterns.toggleCheck(level, craft, printer(), 1), "And cannot be checked");
-        PatternsTabData tab = PatternsTabData.of(level, craft, printer());
-        helper.assertTrue(tab.filtered().equals(Set.of(1))
-                && tab.filteredLine().equals(Component.translatable("civmod.gui.patterns.outside_domain")), "Greyed out: " + tab.filtered());
+        CraftingRounds.assertOutsideDomain(helper, craft, printer(), 1, Items.IRON_PICKAXE);
         helper.succeed();
     }
 
     /** The Printer works at job factor 1.2: 4 books in the time the Craftsperson (0.3) cannot finish them. */
     private static void fourTimesFaster(GameTestHelper helper) {
         helper.assertTrue(printer().jobFactor() == 4 * CraftspersonGameTests.craftJob().jobFactor(), "Four times the Craftsperson's job factor");
-        int delivered = books(helper, printer(), SPEED_TICKS);
+        int delivered = books(helper, printer(), 1.2);
         helper.assertTrue(delivered == BOOKS, "The Printer delivered " + BOOKS + " books: " + delivered);
         helper.succeed();
     }
 
     /** The same request in the same work time: the Craftsperson is not done yet. */
     private static void craftspersonSlower(GameTestHelper helper) {
-        int delivered = books(helper, CraftspersonGameTests.craftJob(), SPEED_TICKS);
+        int delivered = books(helper, CraftspersonGameTests.craftJob(), 0.3);
         helper.assertTrue(delivered < BOOKS, "The Craftsperson is slower: " + delivered);
         helper.succeed();
     }
 
-    /** Requests 4 books (4 executions), lets a settler of the Job work the work time and returns how many arrived. */
-    private static int books(GameTestHelper helper, Job job, long workTicks) {
-        ServerLevel level = helper.getLevel();
-        Setup setup = FletcherGameTests.setup(helper, List.of(new ItemStack(Items.PAPER, PAPER_PER_BOOK * BOOKS), new ItemStack(Items.LEATHER, BOOKS)),
-                List.of(new ItemStack(Items.BOOK, BOOKS)));
+    /** Requests 4 books (4 executions), lets a settler of the Job work the speed time and returns how many arrived. */
+    private static int books(GameTestHelper helper, Job job, double factor) {
         BlockPos relative = new BlockPos(1, 1, 5);
-        BlockPos craft = job == printer() ? printingHouse(helper, relative) : CraftspersonGameTests.craftsperson(helper, relative);
-        helper.setBlock(new BlockPos(3, 1, 5), Blocks.CRAFTING_TABLE);
-        Settler settler = FletcherGameTests.worker(helper, setup, craft, job);
-        helper.assertTrue(Patterns.setOutput(level, craft, job, 0, Items.BOOK).orElseThrow().checked(), "Book checked");
-        CraftspersonGameTests.catchUp(level, settler, workTicks);
-        int delivered = FletcherGameTests.count(level, setup.clerk(), Items.BOOK);
-        FletcherGameTests.cleanUp(setup, settler);
-        return delivered;
+        return CraftingRounds.deliver(helper, job, () -> job == printer() ? printingHouse(helper, relative) : CraftspersonGameTests.craftsperson(helper, relative),
+                Blocks.CRAFTING_TABLE, List.of(new ItemStack(Items.PAPER, PAPER_PER_BOOK * BOOKS), new ItemStack(Items.LEATHER, BOOKS)),
+                new ItemStack(Items.BOOK, BOOKS), 0, SPEED_TICKS, factor);
     }
 }
