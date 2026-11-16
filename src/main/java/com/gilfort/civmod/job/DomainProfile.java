@@ -15,7 +15,7 @@ import net.minecraft.world.level.block.Block;
 /**
  * The Producing specifics of the crafting Specializations that work one domain: their main recipe type at their own
  * station ({@code civmod:stations/<job>}, the station of the day), {@code crafting} as a second type at a crafting
- * table nearby ({@code civmod:stations/craftsperson}), only recipes with an input or output in the domain
+ * table nearby ({@code civmod:stations/craftsperson}), only recipes whose output or at least half of whose ingredient slots are in the domain
  * ({@code civmod:domains/<domain>}). Job factors and station extras live in {@code ModJobs} and
  * {@code civmod_jobs/*.json}; innate recipes come from {@code civmod:job_crafting} recipes in the datapack.
  * <ul>

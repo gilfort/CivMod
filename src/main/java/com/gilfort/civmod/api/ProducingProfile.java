@@ -83,7 +83,8 @@ public interface ProducingProfile extends CategoryProfile {
 
     /**
      * The domain of a crafting Specialization (vault {@code Systems/Producing Jobs.md}): a recipe belongs to it if
-     * <b>any</b> input or its output is in the tag (a piston is in the domain of several Specializations). Recipes outside the domain
+     * its output is in the tag or at least half of its ingredient slots are (the share is a datapack value, see
+     * {@link com.gilfort.civmod.settlement.DomainRule}). Recipes outside the domain
      * cannot be checked, and intermediates outside it are not made but reported missing.
      *
      * @return the domain item tag (none by default: every recipe)

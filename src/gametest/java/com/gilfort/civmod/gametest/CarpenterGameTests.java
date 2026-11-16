@@ -1,18 +1,28 @@
 package com.gilfort.civmod.gametest;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.gametest.FletcherGameTests.Setup;
+import com.gilfort.civmod.job.JobBalancing;
 import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.DomainRule;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.Patterns;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
@@ -20,6 +30,7 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -49,6 +60,9 @@ public final class CarpenterGameTests {
             TestFunctions.register(helper, "carpenter_unlock", CarpenterGameTests::unlock);
             TestFunctions.register(helper, "carpenter_crafts_door", CarpenterGameTests::craftsDoor);
             TestFunctions.register(helper, "carpenter_modded_chest", CarpenterGameTests::moddedChest);
+            TestFunctions.register(helper, "carpenter_domain_share", CarpenterGameTests::domainShare);
+            TestFunctions.register(helper, "carpenter_domain_tags", CarpenterGameTests::domainTags);
+            TestFunctions.register(helper, "carpenter_domain_lists", CarpenterGameTests::domainLists);
             TestFunctions.register(helper, "carpenter_faster", CarpenterGameTests::faster);
             TestFunctions.register(helper, "carpenter_craftsperson_slower", CarpenterGameTests::craftspersonSlower);
         });
@@ -134,9 +148,87 @@ public final class CarpenterGameTests {
         BlockPos craft = workshop(helper, new BlockPos(1, 1, 5));
         helper.assertTrue(Items.AMETHYST_SHARD.getDefaultInstance().is(carpenter().profile(ProducingProfile.class).orElseThrow().domain().orElseThrow()),
                 "The shard counts as a wooden chest through #c:chests/wooden");
-        helper.assertTrue(Patterns.setOutput(level, craft, carpenter(), 0, ItemKey.of(Items.SPYGLASS)).orElseThrow().checked(),
+        helper.assertTrue(Patterns.setOutput(level, craft, carpenter(), 0, ItemKey.of(Items.AMETHYST_BLOCK)).orElseThrow().checked(),
                 "A pattern with a tagged input is accepted");
         helper.succeed();
+    }
+
+    /**
+     * A pattern is in the Carpenter's domain when its output or half of its ingredient slots are wooden: a ladder (all
+     * sticks), a chest (all planks) and a torch (a stick and coal, exactly 50 %) pass. A wooden pickaxe and a stone shovel
+     * (2 of 3 slots wooden) fall to the {@code #c:tools} deny list, an iron pickaxe (2 of 5 slots) to the share.
+     */
+    private static void domainShare(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos craft = workshop(helper, new BlockPos(1, 1, 1));
+        int slot = 0;
+        for (Item item : List.of(Items.LADDER, Items.CHEST, Items.TORCH)) {
+            helper.assertTrue(Patterns.setOutput(level, craft, carpenter(), slot++, ItemKey.of(item)).orElseThrow().checked(), item + " is in the domain");
+        }
+        for (Item item : List.of(Items.WOODEN_PICKAXE, Items.STONE_SHOVEL, Items.IRON_PICKAXE)) {
+            helper.assertFalse(Patterns.setOutput(level, craft, carpenter(), slot, ItemKey.of(item)).orElseThrow().checked(), item + " is outside the domain");
+            helper.assertFalse(Patterns.toggleCheck(level, craft, carpenter(), slot++), item + " cannot be checked");
+        }
+        helper.succeed();
+    }
+
+    /**
+     * A tag ingredient counts only when everything it accepts is wooden: with a plank-or-cobblestone slot, 1 of 3 slots
+     * is wooden and the pattern is outside; a plank-only tag in its place reaches 2 of 3.
+     */
+    private static void domainTags(GameTestHelper helper) {
+        DomainRule rule = DomainRule.of(carpenter().profile(ProducingProfile.class).orElseThrow(), JobBalancing.of(carpenter()));
+        Ingredient mixed = Ingredient.of(HolderSet.direct(holder(Items.OAK_PLANKS), holder(Items.COBBLESTONE)));
+        Ingredient wooden = Ingredient.of(HolderSet.direct(holder(Items.OAK_PLANKS), holder(Items.BIRCH_PLANKS)));
+        Ingredient stick = Ingredient.of(Items.STICK);
+        Ingredient iron = Ingredient.of(Items.IRON_INGOT);
+        helper.assertTrue(rule.outside(Items.IRON_BLOCK, List.of(mixed, stick, iron)), "A mixed tag does not count: 1 of 3");
+        helper.assertFalse(rule.outside(Items.IRON_BLOCK, List.of(wooden, stick, iron)), "A wooden-only tag counts: 2 of 3");
+        helper.assertTrue(rule.outside(Items.IRON_BLOCK, List.of(iron, iron, stick, stick, iron)), "40 % is too little");
+        helper.assertFalse(rule.outside(Items.IRON_BLOCK, List.of(iron, stick)), "Exactly 50 % passes");
+        helper.assertTrue(rule.outside(Items.IRON_BLOCK, List.of()), "No slots, no share");
+        helper.succeed();
+    }
+
+    /**
+     * A datapack changes the rule without code: {@code recipe_allow} lets an iron pickaxe through although only 40 % of its
+     * slots are wooden, deny wins when the item is on both lists, a lower {@code domain_input_share} lets it through too and
+     * a higher one rejects the torch.
+     */
+    private static void domainLists(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos craft = workshop(helper, new BlockPos(1, 1, 1));
+        Map<Job, JobBalancing> before = new HashMap<>();
+        ModJobs.REGISTRY.stream().forEach(job -> before.put(job, JobBalancing.of(job)));
+        try {
+            install(before, "{\"recipe_allow\": [\"minecraft:iron_pickaxe\", \"#c:tools\"]}");
+            helper.assertTrue(Patterns.setOutput(level, craft, carpenter(), 0, ItemKey.of(Items.IRON_PICKAXE)).orElseThrow().checked(),
+                    "An allowed output passes although the share is too low");
+            install(before, "{\"recipe_allow\": \"minecraft:iron_pickaxe\", \"recipe_deny\": \"#c:tools\"}");
+            helper.assertFalse(Patterns.setOutput(level, craft, carpenter(), 1, ItemKey.of(Items.IRON_PICKAXE)).orElseThrow().checked(),
+                    "The same output on both lists is rejected");
+            install(before, "{\"domain_input_share\": 0.4}");
+            helper.assertTrue(Patterns.setOutput(level, craft, carpenter(), 2, ItemKey.of(Items.IRON_PICKAXE)).orElseThrow().checked(),
+                    "A share of 40 % lets the iron pickaxe through");
+            install(before, "{\"domain_input_share\": 0.6}");
+            helper.assertFalse(Patterns.setOutput(level, craft, carpenter(), 3, ItemKey.of(Items.TORCH)).orElseThrow().checked(),
+                    "A share of 60 % rejects the torch");
+            helper.assertTrue(Patterns.setOutput(level, craft, carpenter(), 4, ItemKey.of(Items.OAK_DOOR)).orElseThrow().checked(),
+                    "A door is a wooden output whatever the share");
+        } finally {
+            JobBalancing.install(before);
+        }
+        helper.succeed();
+    }
+
+    private static Holder<Item> holder(Item item) {
+        return BuiltInRegistries.ITEM.wrapAsHolder(item);
+    }
+
+    private static void install(Map<Job, JobBalancing> before, String file) {
+        Map<Job, JobBalancing> loaded = new HashMap<>(before);
+        loaded.put(carpenter(), JobBalancing.merge(List.<JsonElement>of(JsonParser.parseString(file))));
+        JobBalancing.install(loaded);
     }
 
     /** The Carpenter works at job factor 1.2 straight away: 4 chests in time, with no station extra. */

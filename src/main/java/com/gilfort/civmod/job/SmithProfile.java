@@ -16,7 +16,7 @@ import net.minecraft.world.level.block.Block;
 /**
  * The Smith's Producing specifics (vault {@code Jobs/Smith.md}): {@code crafting} and {@code smithing} recipes (netherite
  * upgrades, no armor trims) at a smithing table ({@code civmod:stations/smith}), only in the metal domain
- * ({@code civmod:metals}, any input in the tag). Its base job factor 0.3 becomes 1.2 with an anvil near the smithing
+ * ({@code civmod:metals}, output or half of the slots in the tag; smithing recipes are exempt). Its base job factor 0.3 becomes 1.2 with an anvil near the smithing
  * table (the station extra of {@code civmod_jobs/smith.json}).
  */
 public final class SmithProfile implements ProducingProfile {

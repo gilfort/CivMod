@@ -130,15 +130,15 @@ public final class BakerGameTests {
     }
 
     /**
-     * The GameTest datapack tags flint {@code #c:foods} as a stand-in for modded food: an arrow, which the flint is
-     * an input of, lies inside the Baker's domain.
+     * The GameTest datapack tags flint {@code #c:foods} as a stand-in for modded food: flint and steel, which is
+     * half flint, lies inside the Baker's domain.
      */
     private static void moddedFood(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos craft = bakery(helper, new BlockPos(1, 1, 5));
         helper.assertTrue(Items.FLINT.getDefaultInstance().is(baker().profile(ProducingProfile.class).orElseThrow().domain().orElseThrow()),
                 "Flint counts as food through #c:foods");
-        helper.assertTrue(Patterns.setOutput(level, craft, baker(), 0, ItemKey.of(Items.ARROW)).orElseThrow().checked(), "An arrow pattern with a tagged input is accepted");
+        helper.assertTrue(Patterns.setOutput(level, craft, baker(), 0, ItemKey.of(Items.FLINT_AND_STEEL)).orElseThrow().checked(), "A flint and steel pattern with a tagged input is accepted");
         helper.succeed();
     }
 
