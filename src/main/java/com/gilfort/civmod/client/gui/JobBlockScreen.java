@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import org.jspecify.annotations.Nullable;
 
@@ -127,6 +128,20 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
     @Override
     protected void extractTabBackground(GuiGraphicsExtractor graphics, int tab, int mouseX, int mouseY) {
         views.get(tab).extractBackground(graphics, menu.tabs().get(tab));
+        extractFittingItems(graphics, menu.tabs().get(tab));
+    }
+
+    /** While Shift is held, lights up the inventory slots whose item the tab takes (only a tab where not every item fits). */
+    private void extractFittingItems(GuiGraphicsExtractor graphics, JobBlockTab tab) {
+        Optional<Predicate<ItemStack>> accepts = tab.accepts();
+        if (accepts.isEmpty() || !minecraft.hasShiftDown()) {
+            return;
+        }
+        for (Slot slot : menu.slots) {
+            if (slot.isActive() && slot.container instanceof Inventory && slot.hasItem() && accepts.get().test(slot.getItem())) {
+                CivGui.slotFits(graphics, leftPos + slot.x, topPos + slot.y);
+            }
+        }
     }
 
     @Override
@@ -188,26 +203,26 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        return ghostInput(event) || activeView().mouseClicked(event) || super.mouseClicked(event, doubleClick);
+        return quickMoveInput(event) || activeView().mouseClicked(event) || super.mouseClicked(event, doubleClick);
     }
 
     /**
-     * Shift + right-click on an item in the player inventory puts a copy into the next empty ghost slot of the open tab
-     * (every tab with ghost slots); with every ghost slot set nothing happens.
+     * Shift + click on an item in the player inventory (left, or right on a tab with ghost slots) goes to the open tab
+     * ({@link JobBlockTabView#quickMove}).
      *
-     * @return whether the click was taken (on a tab with ghost slots)
+     * @return whether the click was taken (a tab with ghost slots takes it even with every ghost slot set)
      */
-    private boolean ghostInput(MouseButtonEvent event) {
+    private boolean quickMoveInput(MouseButtonEvent event) {
         Slot slot = getHoveredSlot();
-        if (event.button() != InputConstants.MOUSE_BUTTON_RIGHT || !event.hasShiftDown() || slot == null
-                || !(slot.container instanceof Inventory) || !slot.hasItem() || activeView().ghostTargets().isEmpty()) {
+        boolean left = event.button() == InputConstants.MOUSE_BUTTON_LEFT;
+        boolean right = event.button() == InputConstants.MOUSE_BUTTON_RIGHT;
+        if (!(left || right) || !event.hasShiftDown() || slot == null || !(slot.container instanceof Inventory) || !slot.hasItem()) {
             return false;
         }
-        int target = activeView().nextEmptyGhost();
-        if (target >= 0) {
-            activeView().acceptGhost(target, slot.getItem().copy());
+        if (right && activeView().ghostTargets().isEmpty()) {
+            return false;
         }
-        return true;
+        return activeView().quickMove(slot.getItem());
     }
 
     @Override

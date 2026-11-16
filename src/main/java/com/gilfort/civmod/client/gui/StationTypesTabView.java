@@ -119,6 +119,24 @@ final class StationTypesTabView implements JobBlockTabView {
         return true;
     }
 
+    /**
+     * Shift + left click on an inventory item: shows the refusal line for an item that unlocks nothing or is in a slot
+     * already; the menu moves an accepted one into a free slot on the server.
+     *
+     * @return {@code false}: the menu takes the click
+     */
+    @Override
+    public boolean quickMove(ItemStack stack) {
+        StationTypesTabData tab = stations.data().get();
+        notice = Optional.empty();
+        if (tab.jobsOf(stack.getItem()).isEmpty()) {
+            notice = Optional.of(Component.translatable("civmod.gui.station_types.unlocks_nothing", stack.getHoverName()));
+        } else if (tab.slots().contains(stack.getItem())) {
+            notice = Optional.of(Component.translatable("civmod.gui.station_types.already", stack.getHoverName()));
+        }
+        return false;
+    }
+
     /** Scrolls the job blocks. */
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
@@ -156,7 +174,8 @@ final class StationTypesTabView implements JobBlockTabView {
     @Override
     public List<Component> helpLines(JobBlockTab shown) {
         StationTypesTabData tab = stations.data().get();
-        List<Component> lines = new ArrayList<>(List.of(Component.translatable("civmod.gui.station_types.help.put")));
+        List<Component> lines = new ArrayList<>(List.of(Component.translatable("civmod.gui.station_types.help.put"),
+                Component.translatable("civmod.gui.station_types.help.shift")));
         for (StationTypes.Unlock unlock : tab.overview()) {
             Component item = new ItemStack(unlock.item()).getHoverName();
             for (Job job : unlock.jobs()) {

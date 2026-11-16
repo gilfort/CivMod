@@ -150,6 +150,26 @@ interface JobBlockTabView {
     }
 
     /**
+     * Shift + left click on a player inventory item (Shift + right click too, on a tab with ghost slots). A view with
+     * ghost slots puts a copy of the item into the next empty one, so the click is taken and the stack stays. Other
+     * views leave the click to the menu, which moves the item on the server ({@link JobBlockTab#quickMove}); they may
+     * show a notice first.
+     *
+     * @param stack the clicked stack
+     * @return whether the click was taken
+     */
+    default boolean quickMove(ItemStack stack) {
+        if (ghostTargets().isEmpty()) {
+            return false;
+        }
+        int target = nextEmptyGhost();
+        if (target >= 0) {
+            acceptGhost(target, stack.copy());
+        }
+        return true;
+    }
+
+    /**
      * Takes a recipe from a recipe viewer's transfer button, from any tab of the window.
      *
      * @param type       the recipe type of the recipe the viewer shows
