@@ -4,7 +4,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
+import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
@@ -20,13 +23,12 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
-import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.neoforged.neoforge.network.codec.NeoForgeStreamCodecs;
 
 /**
@@ -40,6 +42,12 @@ import net.neoforged.neoforge.network.codec.NeoForgeStreamCodecs;
  * @param extra   the station extra that raises its job factor
  */
 public record JobNeeds(Job job, Line station, Line tool, Line extra) {
+
+    /** The skill level the tool line is judged for when no settler works the Job at the block. */
+    private static final int NEW_SETTLER_SKILL = 1;
+
+    /** Empty block tags already logged, so a window opened again does not repeat the warning. */
+    private static final Set<Identifier> EMPTY_TAGS_LOGGED = ConcurrentHashMap.newKeySet();
 
     /** How one need stands. */
     public enum State {
@@ -131,14 +139,20 @@ public record JobNeeds(Job job, Line station, Line tool, Line extra) {
         if (tag.isEmpty()) {
             return Line.none("civmod.gui.station_types.need.station");
         }
-        return line("civmod.gui.station_types.need.station", firstBlock(tag.get()), found.isPresent());
+        return firstBlock(tag.get())
+                .map(shown -> line("civmod.gui.station_types.need.station", shown, found.isPresent()))
+                .orElseGet(() -> Line.none("civmod.gui.station_types.need.station"));
     }
 
     // ---------------------------------------------------------------- tool
 
+    /** The worker whose tool rule counts for a tool line: the one with the highest allowed tier. */
+    private record Worker(ToolStaircase.Rule rule, boolean carries) {
+    }
+
     /**
      * The tool a Resource Collection Job asks for first: the tier the tool supply orders ({@link ToolStaircase#askedTier}) for
-     * the Job's worker at this block with the highest allowed tier, or for skill 1 without a worker. Ticked when that
+     * the Job's worker at this block with the highest allowed tier, or for a new settler without a worker. Ticked when that
      * worker carries an allowed tool. A Job outside the tool staircase names none.
      */
     private static Line toolLine(ServerLevel level, JobBlockSite site, Job job) {
@@ -146,25 +160,29 @@ public record JobNeeds(Job job, Line station, Line tool, Line extra) {
         if (profile.isEmpty()) {
             return Line.none("civmod.gui.station_types.need.tool");
         }
-        ToolStaircase.Rule rule = ToolStaircase.rule(profile.get(), 1);
-        int strongest = -1;
-        boolean carries = false;
+        Worker worker = strongestWorker(level, site, job, profile.get())
+                .orElseGet(() -> new Worker(ToolStaircase.rule(profile.get(), NEW_SETTLER_SKILL), false));
+        int tier = ToolStaircase.askedTier(ToolOrders.kindOf(profile.get()), worker.rule());
+        String tierKey = tier == ToolStaircase.NO_TIER ? "civmod.gui.station_types.tier.none" : "civmod.gui.station_types.tier." + tier;
+        return new Line(Component.translatable("civmod.gui.station_types.need.tool", Component.translatable(tierKey)),
+                new ItemStack(profile.get().toolIcon()), worker.carries() ? State.PRESENT : State.MISSING);
+    }
+
+    private static Optional<Worker> strongestWorker(ServerLevel level, JobBlockSite site, Job job, ResourceCollectionProfile profile) {
+        Optional<Worker> strongest = Optional.empty();
         for (SettlementBlock.Assignee assignee : site.block().assignees()) {
             if (assignee.job() != job || !(level.getEntity(assignee.id()) instanceof Settler settler)) {
                 continue;
             }
             for (SettlerJob held : settler.getJobs()) {
-                ToolStaircase.Rule workerRule = settler.getWork().toolRule(held, profile.get());
-                if (held.jobType() == job && held.jobBlock().equals(site.pos()) && workerRule.allowed() > strongest) {
-                    strongest = workerRule.allowed();
-                    rule = workerRule;
-                    carries = settler.getWork().tool(held).isPresent();
+                ToolStaircase.Rule rule = settler.getWork().toolRule(held, profile);
+                boolean here = held.jobType() == job && held.jobBlock().equals(site.pos());
+                if (here && strongest.map(worker -> rule.allowed() > worker.rule().allowed()).orElse(true)) {
+                    strongest = Optional.of(new Worker(rule, settler.getWork().tool(held).isPresent()));
                 }
             }
         }
-        int tier = ToolStaircase.askedTier(ToolOrders.kindOf(profile.get()), rule);
-        return new Line(Component.translatable("civmod.gui.station_types.need.tool", Component.translatable("civmod.gui.station_types.tier." + tier)),
-                new ItemStack(profile.get().toolIcon()), carries ? State.PRESENT : State.MISSING);
+        return strongest;
     }
 
     // ---------------------------------------------------------------- extra station
@@ -176,9 +194,10 @@ public record JobNeeds(Job job, Line station, Line tool, Line extra) {
             return Line.none("civmod.gui.station_types.need.extra");
         }
         Either<TagKey<Block>, Block> entry = extra.get().blocks().getFirst();
-        Block shown = entry.map(JobNeeds::firstBlock, block -> block);
+        Optional<Block> shown = entry.map(JobNeeds::firstBlock, Optional::of);
         boolean near = station.isPresent() && StationExtras.near(level, station.get(), extra.get());
-        return line("civmod.gui.station_types.need.extra", shown, near);
+        return shown.map(block -> line("civmod.gui.station_types.need.extra", block, near))
+                .orElseGet(() -> Line.none("civmod.gui.station_types.need.extra"));
     }
 
     // ---------------------------------------------------------------- shared
@@ -187,8 +206,15 @@ public record JobNeeds(Job job, Line station, Line tool, Line extra) {
         return new Line(Component.translatable(key, shown.getName()), new ItemStack(shown), present ? State.PRESENT : State.MISSING);
     }
 
-    /** The block of a tag that stands for it on a line: the first by registry order. */
-    private static Block firstBlock(TagKey<Block> tag) {
-        return BuiltInRegistries.BLOCK.stream().filter(block -> block.defaultBlockState().is(tag)).findFirst().orElse(Blocks.AIR);
+    /**
+     * The block of a tag that stands for it on a line: the first by registry order. An empty tag is logged once and gives
+     * no block, so the line reads "none" instead of naming air.
+     */
+    private static Optional<Block> firstBlock(TagKey<Block> tag) {
+        Optional<Block> first = BuiltInRegistries.BLOCK.stream().filter(block -> block.defaultBlockState().is(tag)).findFirst();
+        if (first.isEmpty() && EMPTY_TAGS_LOGGED.add(tag.location())) {
+            CivMod.LOGGER.warn("The block tag {} holds no block: a job block line that names it shows none", tag.location());
+        }
+        return first;
     }
 }

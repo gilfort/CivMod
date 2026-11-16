@@ -141,10 +141,10 @@ public final class ToolStaircase {
     /**
      * @param kind which items are the Job's tool
      * @param rule what the settler's skill allows
-     * @return the tier the tool supply asks for first: the highest tier of an orderable item, 0 if there is none
+     * @return the tier the tool supply asks for first: the highest tier of an orderable item, {@link #NO_TIER} if there is none
      */
     static int askedTier(Predicate<Item> kind, Rule rule) {
-        return orderable(kind, rule).mapToInt(item -> ToolTiers.tier(new ItemStack(item))).max().orElse(0);
+        return orderable(kind, rule).mapToInt(item -> ToolTiers.tier(new ItemStack(item))).max().orElse(NO_TIER);
     }
 
     /**
