@@ -9,6 +9,7 @@ import com.gilfort.civmod.settlement.StationTypes;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -22,9 +23,11 @@ import net.minecraft.world.item.Items;
 public final class StationTypesTab extends JobBlockTab {
 
     private final TabData<StationTypesTabData> data = new TabData<>(StationTypesTabData.EMPTY, (menu, level, pos) -> read(level, pos),
-            StationTypesTabData.Sync::new);
+            this::payload);
     /** What the Jobs need, read with the first sync and kept while the window is open ({@link JobNeeds}). */
     private Optional<List<JobNeeds>> needs = Optional.empty();
+    /** Whether the needs went to the client already: the first sync carries them, the later ones do not. */
+    private boolean needsSent;
     private final boolean specializations;
 
     /**
@@ -39,6 +42,13 @@ public final class StationTypesTab extends JobBlockTab {
             needs = Optional.of(JobNeeds.of(level, pos));
         }
         return StationTypesTabData.of(level, pos, needs.get());
+    }
+
+    /** The sync payload: the needs travel with the first one only, so the client keeps them without a second read. */
+    private CustomPacketPayload payload(int containerId, StationTypesTabData tab) {
+        StationTypesTabData sent = needsSent ? tab.withoutNeeds() : tab;
+        needsSent = true;
+        return new StationTypesTabData.Sync(containerId, sent);
     }
 
     @Override
@@ -97,13 +107,13 @@ public final class StationTypesTab extends JobBlockTab {
     }
 
     /**
-     * @return the unlock items that are not in a slot yet
+     * @return the unlock items that are not in a slot yet, while an open slot is free to take one
      */
     @Override
     public Optional<Predicate<ItemStack>> accepts() {
         return Optional.of(stack -> {
             StationTypesTabData tab = data.get();
-            return !tab.jobsOf(stack.getItem()).isEmpty() && !tab.slots().contains(stack.getItem());
+            return !tab.jobsOf(stack.getItem()).isEmpty() && !tab.slots().contains(stack.getItem()) && tab.firstFreeSlot().isPresent();
         });
     }
 
@@ -119,15 +129,12 @@ public final class StationTypesTab extends JobBlockTab {
             return;
         }
         StationTypesTabData tab = StationTypesTabData.of(site.get().level(), site.get().pos(), List.of());
-        for (int slot = 0; slot < StationTypes.SLOTS; slot++) {
-            if (tab.isOpen(slot) && tab.item(slot) == Items.AIR) {
-                StationTypes.PutResult result = StationTypes.put(site.get().level(), site.get().pos(), slot, stack);
-                if (result == StationTypes.PutResult.UNLOCKED) {
-                    menu.resend();
-                }
-                return;
+        tab.firstFreeSlot().ifPresent(slot -> {
+            StationTypes.PutResult result = StationTypes.put(site.get().level(), site.get().pos(), slot, stack);
+            if (result == StationTypes.PutResult.UNLOCKED) {
+                menu.resend();
             }
-        }
+        });
     }
 
     /**

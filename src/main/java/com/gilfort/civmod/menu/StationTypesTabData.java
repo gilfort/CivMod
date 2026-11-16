@@ -2,6 +2,8 @@ package com.gilfort.civmod.menu;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.stream.IntStream;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
@@ -31,7 +33,8 @@ import net.minecraft.world.item.Items;
  * @param unlocked  the Jobs of its Base Job the JobBlock offers (the Base Job first)
  * @param libraries the Jobs whose library holds a pattern (a locked one keeps its Patterns tab)
  * @param overview  every unlock item of the Base Job's Specializations with the Jobs it unlocks
- * @param needs     what each Job it can offer needs here, read when the window opened ({@link JobNeeds}, no live update)
+ * @param needs     what each Job it can offer needs here, read when the window opened and sent with the first sync only
+ *                  ({@link JobNeeds}, no live update; empty in the later syncs)
  */
 public record StationTypesTabData(List<Item> slots, int open, List<Job> unlocked, List<Job> libraries, List<StationTypes.Unlock> overview,
         List<JobNeeds> needs) {
@@ -98,6 +101,22 @@ public record StationTypesTabData(List<Item> slots, int open, List<Job> unlocked
     }
 
     /**
+     * @return this tab without the needs of the Jobs: what a sync after the first one sends ({@link JobNeeds}: sent once
+     *         when the window opens, no live update)
+     */
+    public StationTypesTabData withoutNeeds() {
+        return new StationTypesTabData(slots, open, unlocked, libraries, overview, List.of());
+    }
+
+    /**
+     * @param earlier the tab the client held before
+     * @return this tab, with the needs of the earlier one when this one carries none (a sync after the first)
+     */
+    public StationTypesTabData keepingNeedsOf(StationTypesTabData earlier) {
+        return needs.isEmpty() ? new StationTypesTabData(slots, open, unlocked, libraries, overview, earlier.needs) : this;
+    }
+
+    /**
      * @return the job blocks to show: the needs of the Jobs unlocked at this JobBlock, the Base Job first
      */
     public List<JobNeeds> blocks() {
@@ -110,6 +129,13 @@ public record StationTypesTabData(List<Item> slots, int open, List<Job> unlocked
      */
     public Item item(int slot) {
         return slot >= 0 && slot < slots.size() ? slots.get(slot) : Items.AIR;
+    }
+
+    /**
+     * @return the first open slot that holds no item, empty when every open slot is full
+     */
+    public OptionalInt firstFreeSlot() {
+        return IntStream.range(0, StationTypes.SLOTS).filter(slot -> isOpen(slot) && item(slot) == Items.AIR).findFirst();
     }
 
     /**

@@ -42,6 +42,8 @@ final class StationTypesTabView implements JobBlockTabView {
     private static final int BLOCK_GAP = 4;
     private static final int ICON_X = 18;
     private static final int TEXT_X = 38;
+    /** Edge of an item icon. */
+    private static final int ITEM_SIZE = 16;
 
     private final JobBlockScreen screen;
     private final JobBlockMenu menu;
@@ -81,7 +83,7 @@ final class StationTypesTabView implements JobBlockTabView {
         int x = (int) Math.floor(mouseX - screen.left());
         int y = (int) Math.floor(mouseY - screen.top());
         for (int slot = 0; slot < StationTypes.SLOTS; slot++) {
-            if (x >= slotX(slot) && x < slotX(slot) + 16 && y >= SLOTS_Y && y < SLOTS_Y + 16) {
+            if (x >= slotX(slot) && x < slotX(slot) + ITEM_SIZE && y >= SLOTS_Y && y < SLOTS_Y + ITEM_SIZE) {
                 return slot;
             }
         }
@@ -120,8 +122,8 @@ final class StationTypesTabView implements JobBlockTabView {
     }
 
     /**
-     * Shift + left click on an inventory item: shows the refusal line for an item that unlocks nothing or is in a slot
-     * already; the menu moves an accepted one into a free slot on the server.
+     * Shift + left click on an inventory item: shows the refusal line for an item that unlocks nothing, is in a slot
+     * already or finds no free open slot; the menu moves an accepted one into a free slot on the server.
      *
      * @return {@code false}: the menu takes the click
      */
@@ -133,6 +135,8 @@ final class StationTypesTabView implements JobBlockTabView {
             notice = Optional.of(Component.translatable("civmod.gui.station_types.unlocks_nothing", stack.getHoverName()));
         } else if (tab.slots().contains(stack.getItem())) {
             notice = Optional.of(Component.translatable("civmod.gui.station_types.already", stack.getHoverName()));
+        } else if (tab.firstFreeSlot().isEmpty()) {
+            notice = Optional.of(Component.translatable("civmod.gui.station_types.no_free_slot"));
         }
         return false;
     }
@@ -243,7 +247,7 @@ final class StationTypesTabView implements JobBlockTabView {
     }
 
     private static void extractLine(GuiGraphicsExtractor graphics, Font font, JobNeeds.Line line, int y, int right) {
-        int textY = y + (16 - font.lineHeight) / 2;
+        int textY = y + (ITEM_SIZE - font.lineHeight) / 2;
         int color = switch (line.state()) {
             case NOT_NEEDED -> CivGui.HINT_COLOR;
             case PRESENT -> CivGui.NEED_MET_COLOR;

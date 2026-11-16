@@ -372,7 +372,13 @@ public class JobBlockScreen extends CivContainerScreen<JobBlockMenu> {
      * @param context the payload context
      */
     public static void handleStationTypeTab(StationTypesTabData.Sync payload, IPayloadContext context) {
-        receive(payload.containerId(), open -> open.tab(StationTypesTab.class).map(StationTypesTab::data), payload.tab());
+        // Only the first sync carries the needs of the Jobs; a later one keeps what the client has.
+        StationTypesTabData[] merged = {payload.tab()};
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player != null && minecraft.player.containerMenu instanceof JobBlockMenu open) {
+            open.tab(StationTypesTab.class).ifPresent(tab -> merged[0] = payload.tab().keepingNeedsOf(tab.data().get()));
+        }
+        receive(payload.containerId(), open -> open.tab(StationTypesTab.class).map(StationTypesTab::data), merged[0]);
     }
 
     /**

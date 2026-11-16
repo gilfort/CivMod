@@ -54,6 +54,7 @@ public final class JobBlocksGameTests {
             TestFunctions.register(helper, "job_blocks_baker_ticks", JobBlocksGameTests::bakerTicks);
             TestFunctions.register(helper, "job_blocks_tool_line", JobBlocksGameTests::toolLine);
             TestFunctions.register(helper, "job_blocks_read_once", JobBlocksGameTests::readOnce);
+            TestFunctions.register(helper, "job_blocks_needs_sent_once", JobBlocksGameTests::needsSentOnce);
         });
     }
 
@@ -140,6 +141,24 @@ public final class JobBlocksGameTests {
         miner = blockOf(JobNeeds.of(level, pos), ModJobs.MINER.get());
         helper.assertTrue(miner.tool().state() == JobNeeds.State.PRESENT, "A stone pickaxe on the belt is an allowed tool: " + miner.tool());
         settler.discard();
+        helper.succeed();
+    }
+
+    /**
+     * The needs travel with the first sync only: a later sync carries none and the client keeps the ones it has, while
+     * the rest of the tab (slots, unlocked Jobs) follows the later sync.
+     */
+    private static void needsSentOnce(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos pos = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 1));
+        StationTypesTabData first = StationTypesTabData.of(level, pos);
+        helper.assertFalse(first.needs().isEmpty(), "The first sync carries the needs");
+        helper.assertTrue(StationTypeGameTests.unlock(helper, pos, 0, Items.HAY_BLOCK), "A hay bale unlocks the Baker");
+        StationTypesTabData later = StationTypesTabData.of(level, pos).withoutNeeds();
+        helper.assertTrue(later.needs().isEmpty(), "A later sync carries none");
+        StationTypesTabData merged = later.keepingNeedsOf(first);
+        helper.assertTrue(merged.needs().equals(first.needs()), "The client keeps the needs it had");
+        helper.assertTrue(merged.unlocked().contains(BakerGameTests.baker()), "The rest follows the later sync: " + merged.unlocked());
         helper.succeed();
     }
 
