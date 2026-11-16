@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.job.JobNeeds;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.JobBlockTab;
 import com.gilfort.civmod.menu.StationTypesTabData;
@@ -33,10 +34,19 @@ final class StationTypesTabView implements JobBlockTabView {
     private static final int SLOTS_Y = 30;
     private static final int LINES_Y = 56;
     private static final int LINE_HEIGHT = 11;
+    /** The job blocks: the window under the offered-Jobs line, down to the label of the inventory. */
+    private static final int BLOCKS_TOP = 80;
+    private static final int BLOCKS_BOTTOM = 166;
+    /** A block line: the tick, the icon and the text. */
+    private static final int BLOCK_LINE = 17;
+    private static final int BLOCK_GAP = 4;
+    private static final int ICON_X = 18;
+    private static final int TEXT_X = 38;
 
     private final JobBlockScreen screen;
     private final JobBlockMenu menu;
     private final StationTypesTab stations;
+    private final ListScroller scroller;
     /** The state line after a refused item ("Unlocks nothing here"), until the next click. */
     private Optional<Component> notice = Optional.empty();
 
@@ -48,6 +58,12 @@ final class StationTypesTabView implements JobBlockTabView {
         this.screen = screen;
         this.menu = screen.getMenu();
         this.stations = tab;
+        this.scroller = new ListScroller(screen);
+    }
+
+    @Override
+    public void onTabChanged() {
+        scroller.reset();
     }
 
     /** New Station Types change which Patterns tabs the tab bar shows. */
@@ -79,6 +95,9 @@ final class StationTypesTabView implements JobBlockTabView {
      */
     @Override
     public boolean mouseClicked(MouseButtonEvent event) {
+        if (scroller.press(event.x(), event.y(), scrollbarX(), BLOCKS_TOP, BLOCKS_BOTTOM - BLOCKS_TOP, maxOffset())) {
+            return true;
+        }
         int slot = slotAt(event.x(), event.y());
         if (slot < 0) {
             return false;
@@ -98,6 +117,37 @@ final class StationTypesTabView implements JobBlockTabView {
             screen.clickSound();
         }
         return true;
+    }
+
+    /** Scrolls the job blocks. */
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
+        return scroller.wheel(scrollY, maxOffset(), BLOCK_LINE);
+    }
+
+    /** Drags the scrollbar of the job blocks. */
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event) {
+        return scroller.drag(event.y(), BLOCKS_TOP, BLOCKS_BOTTOM - BLOCKS_TOP, maxOffset());
+    }
+
+    @Override
+    public boolean mouseReleased() {
+        return scroller.release();
+    }
+
+    private int scrollbarX() {
+        return screen.panelWidth() - CivGui.PADDING - CivGui.SCROLLBAR_WIDTH;
+    }
+
+    private static int blockHeight() {
+        return LINE_HEIGHT + 3 * BLOCK_LINE + BLOCK_GAP;
+    }
+
+    /** How far the job blocks scroll, in pixels: 0 while they fit. */
+    private int maxOffset() {
+        int content = stations.data().get().blocks().size() * blockHeight();
+        return Math.max(0, content - (BLOCKS_BOTTOM - BLOCKS_TOP));
     }
 
     /**
@@ -146,9 +196,47 @@ final class StationTypesTabView implements JobBlockTabView {
         graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.station_types.offered", jobs), width), CivGui.PADDING, y,
                 CivGui.LABEL_COLOR, false);
         notice.ifPresent(line -> graphics.text(font, CivGui.fit(font, line, width), CivGui.PADDING, y + LINE_HEIGHT, CivGui.ERROR_COLOR, false));
+        extractBlocks(graphics, tab);
         if (hovered >= 0) {
             graphics.setComponentTooltipForNextFrame(font, tooltip(tab, hovered), mouseX, mouseY);
         }
+    }
+
+    /** One block per unlocked Job in the look of the Needs rows: a name, then a tick or a cross, an icon and a text per need. */
+    private void extractBlocks(GuiGraphicsExtractor graphics, StationTypesTabData tab) {
+        Font font = screen.getFont();
+        int maxOffset = maxOffset();
+        int offset = scroller.offset(maxOffset);
+        int right = screen.panelWidth() - CivGui.PADDING - (maxOffset > 0 ? CivGui.SCROLLBAR_WIDTH + 2 : 0);
+        graphics.enableScissor(CivGui.PADDING - 2, BLOCKS_TOP, right + 2, BLOCKS_BOTTOM);
+        int y = BLOCKS_TOP - offset;
+        for (JobNeeds need : tab.blocks()) {
+            graphics.text(font, CivGui.fit(font, need.job().displayName(), right - CivGui.PADDING), CivGui.PADDING, y, CivGui.LABEL_COLOR, false);
+            y += LINE_HEIGHT;
+            for (JobNeeds.Line line : List.of(need.station(), need.tool(), need.extra())) {
+                extractLine(graphics, font, line, y, right);
+                y += BLOCK_LINE;
+            }
+            y += BLOCK_GAP;
+        }
+        graphics.disableScissor();
+        scroller.extract(graphics, scrollbarX(), BLOCKS_TOP, BLOCKS_BOTTOM - BLOCKS_TOP, maxOffset);
+    }
+
+    private static void extractLine(GuiGraphicsExtractor graphics, Font font, JobNeeds.Line line, int y, int right) {
+        int textY = y + (16 - font.lineHeight) / 2;
+        int color = switch (line.state()) {
+            case NOT_NEEDED -> CivGui.HINT_COLOR;
+            case PRESENT -> CivGui.NEED_MET_COLOR;
+            case MISSING -> CivGui.ERROR_COLOR;
+        };
+        if (line.state() != JobNeeds.State.NOT_NEEDED) {
+            graphics.text(font, Component.literal(line.present() ? "✓" : "✗"), CivGui.PADDING, textY, color, false);
+        }
+        if (!line.icon().isEmpty()) {
+            graphics.item(line.icon(), ICON_X, y);
+        }
+        graphics.text(font, CivGui.fit(font, line.text(), right - TEXT_X), TEXT_X, textY, CivGui.LABEL_COLOR, false);
     }
 
     private static List<Component> tooltip(StationTypesTabData tab, int slot) {

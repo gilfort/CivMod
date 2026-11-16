@@ -1,10 +1,14 @@
 package com.gilfort.civmod.menu;
 
+import java.util.List;
 import java.util.Optional;
 
+import com.gilfort.civmod.job.JobNeeds;
 import com.gilfort.civmod.settlement.StationTypes;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -16,8 +20,10 @@ import net.minecraft.world.item.Items;
  */
 public final class StationTypesTab extends JobBlockTab {
 
-    private final TabData<StationTypesTabData> data = new TabData<>(StationTypesTabData.EMPTY,
-            (menu, level, pos) -> StationTypesTabData.of(level, pos), StationTypesTabData.Sync::new);
+    private final TabData<StationTypesTabData> data = new TabData<>(StationTypesTabData.EMPTY, (menu, level, pos) -> read(level, pos),
+            StationTypesTabData.Sync::new);
+    /** What the Jobs need, read with the first sync and kept while the window is open ({@link JobNeeds}). */
+    private Optional<List<JobNeeds>> needs = Optional.empty();
     private final boolean specializations;
 
     /**
@@ -25,6 +31,13 @@ public final class StationTypesTab extends JobBlockTab {
      */
     StationTypesTab(boolean specializations) {
         this.specializations = specializations;
+    }
+
+    private StationTypesTabData read(ServerLevel level, BlockPos pos) {
+        if (needs.isEmpty()) {
+            needs = Optional.of(JobNeeds.of(level, pos));
+        }
+        return StationTypesTabData.of(level, pos, needs.get());
     }
 
     @Override

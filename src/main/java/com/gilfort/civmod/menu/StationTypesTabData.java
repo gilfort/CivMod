@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.job.JobNeeds;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.StationTypes;
@@ -21,8 +22,8 @@ import net.minecraft.world.item.Items;
 
 /**
  * What the "Station Types" tab of a JobBlock shows (vault {@code Systems/JobBlock.md}, {@link StationTypes}): its 5
- * slots, how many are open, the Jobs unlocked there, the Jobs that keep a library and the "?" overview of every unlock
- * item. The server sends it while the menu is open whenever it changed ({@link Sync}); the client puts an item into a
+ * slots, how many are open, the Jobs unlocked there, the Jobs that keep a library, the needs of the Jobs it can offer (shown as job blocks for the unlocked ones) and
+ * the "?" overview of every unlock item. The server sends it while the menu is open whenever it changed ({@link Sync}); the client puts an item into a
  * slot with a menu button ({@link StationTypesTab#slotButtonId}).
  *
  * @param slots     the unlock items in the slots ({@value StationTypes#SLOTS} entries, {@link Items#AIR}: empty)
@@ -30,11 +31,13 @@ import net.minecraft.world.item.Items;
  * @param unlocked  the Jobs of its Base Job the JobBlock offers (the Base Job first)
  * @param libraries the Jobs whose library holds a pattern (a locked one keeps its Patterns tab)
  * @param overview  every unlock item of the Base Job's Specializations with the Jobs it unlocks
+ * @param needs     what each Job it can offer needs here, read when the window opened ({@link JobNeeds}, no live update)
  */
-public record StationTypesTabData(List<Item> slots, int open, List<Job> unlocked, List<Job> libraries, List<StationTypes.Unlock> overview) {
+public record StationTypesTabData(List<Item> slots, int open, List<Job> unlocked, List<Job> libraries, List<StationTypes.Unlock> overview,
+        List<JobNeeds> needs) {
 
     /** Nothing (before the first sync). */
-    public static final StationTypesTabData EMPTY = new StationTypesTabData(List.of(), 1, List.of(), List.of(), List.of());
+    public static final StationTypesTabData EMPTY = new StationTypesTabData(List.of(), 1, List.of(), List.of(), List.of(), List.of());
 
     private static final StreamCodec<RegistryFriendlyByteBuf, Item> ITEM_CODEC = ByteBufCodecs.registry(Registries.ITEM);
 
@@ -50,6 +53,7 @@ public record StationTypesTabData(List<Item> slots, int open, List<Job> unlocked
             Job.STREAM_CODEC.apply(ByteBufCodecs.list()), StationTypesTabData::unlocked,
             Job.STREAM_CODEC.apply(ByteBufCodecs.list()), StationTypesTabData::libraries,
             UNLOCK_CODEC.apply(ByteBufCodecs.list()), StationTypesTabData::overview,
+            JobNeeds.STREAM_CODEC.apply(ByteBufCodecs.list()), StationTypesTabData::needs,
             StationTypesTabData::new);
 
     /**
@@ -58,12 +62,14 @@ public record StationTypesTabData(List<Item> slots, int open, List<Job> unlocked
      * @param unlocked  the Jobs the JobBlock offers
      * @param libraries the Jobs whose library holds a pattern
      * @param overview  every unlock item with its Jobs
+     * @param needs     what each Job it can offer needs
      */
     public StationTypesTabData {
         slots = List.copyOf(slots);
         unlocked = List.copyOf(unlocked);
         libraries = List.copyOf(libraries);
         overview = List.copyOf(overview);
+        needs = List.copyOf(needs);
     }
 
     /**
@@ -72,13 +78,30 @@ public record StationTypesTabData(List<Item> slots, int open, List<Job> unlocked
      * @return the current tab of that JobBlock ({@link #EMPTY} if it has no Station Types)
      */
     public static StationTypesTabData of(ServerLevel level, BlockPos pos) {
+        return of(level, pos, JobNeeds.of(level, pos));
+    }
+
+    /**
+     * @param level the level
+     * @param pos   the JobBlock position
+     * @param needs the needs of the Jobs, read earlier (they are read once per window)
+     * @return the current tab of that JobBlock with those needs ({@link #EMPTY} if it has no Station Types)
+     */
+    static StationTypesTabData of(ServerLevel level, BlockPos pos, List<JobNeeds> needs) {
         Optional<SettlementBlock> found = JobBlockSite.blockAt(level, pos).filter(block -> StationTypes.hasStationTypes(block.jobType()));
         if (found.isEmpty()) {
             return EMPTY;
         }
         SettlementBlock block = found.get();
         return new StationTypesTabData(block.stationTypes(), StationTypes.open(block.level()), StationTypes.unlocked(block), block.libraryJobs(),
-                StationTypes.overview(block.jobType()));
+                StationTypes.overview(block.jobType()), needs);
+    }
+
+    /**
+     * @return the job blocks to show: the needs of the Jobs unlocked at this JobBlock, the Base Job first
+     */
+    public List<JobNeeds> blocks() {
+        return unlocked.stream().flatMap(job -> needs.stream().filter(need -> need.job() == job)).toList();
     }
 
     /**

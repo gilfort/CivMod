@@ -41,7 +41,7 @@ public final class StationExtras {
     }
 
     /** Whether a block of the entry stands within its radius of the station (loaded blocks only). */
-    private static boolean near(Level level, BlockPos station, StationExtra extra) {
+    static boolean near(Level level, BlockPos station, StationExtra extra) {
         int radius = extra.radius();
         for (BlockPos pos : BlockPos.betweenClosed(station.offset(-radius, -radius, -radius), station.offset(radius, radius, radius))) {
             if (level.isLoaded(pos) && extra.matches(level.getBlockState(pos))) {
