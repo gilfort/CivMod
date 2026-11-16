@@ -88,7 +88,7 @@ public final class Requests {
     }
 
     /**
-     * Posts a request from a source other than a stock rule:priority {@value #DEFAULT_PRIORITY}, a sub-request the
+     * Posts a request from a source other than a stock rule: priority {@value #DEFAULT_PRIORITY}, a sub-request the
      * priority of its parent.
      *
      * @param data       the dimension's settlement data

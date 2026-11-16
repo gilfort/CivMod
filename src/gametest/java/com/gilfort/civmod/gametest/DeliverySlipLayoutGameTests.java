@@ -3,7 +3,7 @@ package com.gilfort.civmod.gametest;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
-import com.gilfort.civmod.menu.DeliverySlipMenu;
+import com.gilfort.civmod.menu.DeliverySlipLayout;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -36,15 +36,15 @@ public final class DeliverySlipLayoutGameTests {
 
     /** From the filter down to the inventory, each row ends above the top of the next element. */
     private static void noOverlap(GameTestHelper helper) {
-        int filterBottom = DeliverySlipMenu.FILTER_Y + DeliverySlipMenu.SLOT_SIZE;
-        int fillBottom = DeliverySlipMenu.FILL_Y + DeliverySlipMenu.STEP_ROW_OFFSET + DeliverySlipMenu.STEP_BUTTON_HEIGHT;
-        int keepBottom = DeliverySlipMenu.KEEP_Y + DeliverySlipMenu.STEP_ROW_OFFSET + DeliverySlipMenu.STEP_BUTTON_HEIGHT;
-        int firstSlotTop = DeliverySlipMenu.HEIGHT - 82;
-        helper.assertTrue(filterBottom <= DeliverySlipMenu.FILL_Y, "The fill row starts below the filter: " + filterBottom + " / " + DeliverySlipMenu.FILL_Y);
-        helper.assertTrue(fillBottom <= DeliverySlipMenu.KEEP_Y, "The keep row starts below the fill buttons: " + fillBottom + " / " + DeliverySlipMenu.KEEP_Y);
-        helper.assertTrue(keepBottom <= DeliverySlipMenu.INVENTORY_LABEL_Y, "The keep buttons end above the Inventory label: " + keepBottom
-                + " / " + DeliverySlipMenu.INVENTORY_LABEL_Y);
-        helper.assertTrue(DeliverySlipMenu.INVENTORY_LABEL_Y + LABEL_HEIGHT <= firstSlotTop, "The label sits above the first slots");
+        int filterBottom = DeliverySlipLayout.FILTER_Y + DeliverySlipLayout.SLOT_SIZE;
+        int fillBottom = DeliverySlipLayout.FILL_Y + DeliverySlipLayout.STEP_ROW_OFFSET + DeliverySlipLayout.STEP_BUTTON_HEIGHT;
+        int keepBottom = DeliverySlipLayout.KEEP_Y + DeliverySlipLayout.STEP_ROW_OFFSET + DeliverySlipLayout.STEP_BUTTON_HEIGHT;
+        int firstSlotTop = DeliverySlipLayout.INVENTORY_Y;
+        helper.assertTrue(filterBottom <= DeliverySlipLayout.FILL_Y, "The fill row starts below the filter: " + filterBottom + " / " + DeliverySlipLayout.FILL_Y);
+        helper.assertTrue(fillBottom <= DeliverySlipLayout.KEEP_Y, "The keep row starts below the fill buttons: " + fillBottom + " / " + DeliverySlipLayout.KEEP_Y);
+        helper.assertTrue(keepBottom <= DeliverySlipLayout.INVENTORY_LABEL_Y, "The keep buttons end above the Inventory label: " + keepBottom
+                + " / " + DeliverySlipLayout.INVENTORY_LABEL_Y);
+        helper.assertTrue(DeliverySlipLayout.INVENTORY_LABEL_Y + LABEL_HEIGHT <= firstSlotTop, "The label sits above the first slots");
         helper.succeed();
     }
 }

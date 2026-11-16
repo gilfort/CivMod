@@ -282,7 +282,7 @@ public record ClerkTabData(int level, int ledgers, List<StockRule> rules, List<T
     private static List<TaskRow> requests(ServerLevel level, Settlement settlement, BlockPos clerk, List<BlockPos> clerks) {
         List<TaskRow> rows = new ArrayList<>();
         Requests.byPriority(settlement).stream()
-                .filter(request -> (request.rule().isPresent() || request.oneTime()) && request.target().filter(clerks::contains).isPresent())
+                .filter(request -> request.isPlayerOrder() && request.target().filter(clerks::contains).isPresent())
                 .forEach(request -> {
                     rows.add(requestRow(level, settlement, clerk, request, 0));
                     addSubRequests(rows, level, settlement, clerk, request, 1);

@@ -374,7 +374,7 @@ final class WorkersTabView implements JobBlockTabView {
         }
         worker.away().ifPresent(away -> {
             if (over(x, y, levelRight - x, ROW_HEIGHT, mouseX, mouseY)) {
-                Component mission = MissionsTabView.title(away.mission(), MissionsTabView.mission(away.mission()));
+                Component mission = MissionRows.title(away.mission(), MissionRows.mission(away.mission()));
                 graphics.setComponentTooltipForNextFrame(font, List.of(Component.translatable("civmod.gui.job_block.worker.away_tooltip", mission,
                         WorkersTabData.Worker.daysLeft(clockNow(), away.returnTime()))), mouseX, mouseY);
             }

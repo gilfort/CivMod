@@ -178,6 +178,14 @@ public record Request(UUID id, ItemKey item, int amount, int priority, Optional<
     }
 
     /**
+     * @return whether a player placed the request at its Clerk, by a stock rule or as a one-time order; a sub-request or
+     *         the tool supply posts the others
+     */
+    public boolean isPlayerOrder() {
+        return rule.isPresent() || oneTime;
+    }
+
+    /**
      * @param newAmount the open amount
      * @return a copy with another open amount
      */

@@ -41,30 +41,11 @@ public final class DeliverySlipMenu extends CivMenu {
     /** First button id of "keep at the source" (one per step). */
     public static final int BUTTON_KEEP = BUTTON_FILL + LIMIT_STEPS.length;
 
-    /** Panel height. */
-    public static final int HEIGHT = 218;
-    /** Panel y of the "Inventory" label: the vanilla position, {@code imageHeight - 94}. */
-    public static final int INVENTORY_LABEL_Y = HEIGHT - 94;
-    /** Top of the "fill target up to" row (panel coordinates): its text line, the buttons follow below. */
-    public static final int FILL_Y = 60;
-    /** Top of the "keep at the source" row (panel coordinates). */
-    public static final int KEEP_Y = 90;
-    /** Panel y offset of the step buttons below the text line of their limit. */
-    public static final int STEP_ROW_OFFSET = 12;
-    /** Height of a step button. */
-    public static final int STEP_BUTTON_HEIGHT = 14;
     private static final int DATA_MODE = 0;
     private static final int DATA_VARIANT = 1;
     private static final int DATA_FILL = 2;
     private static final int DATA_KEEP = 3;
     private static final int DATA_COUNT = 4;
-    /** Left edge of the filter slots (panel coordinates). */
-    private static final int FILTER_X = 8;
-    /** Top edge of the filter slots (panel coordinates). */
-    public static final int FILTER_Y = 38;
-    /** Size of a slot. */
-    public static final int SLOT_SIZE = 18;
-
     private final Player player;
     private final InteractionHand hand;
     private final Container filter = new SimpleContainer(DeliverySlip.FILTER_SLOTS);
@@ -93,9 +74,9 @@ public final class DeliverySlipMenu extends CivMenu {
         this.player = inventory.player;
         this.hand = hand;
         for (int slot = 0; slot < DeliverySlip.FILTER_SLOTS; slot++) {
-            addTabSlot(filter, slot, FILTER_X + slot * 18, FILTER_Y, ALL_TABS);
+            addTabSlot(filter, slot, DeliverySlipLayout.FILTER_X + slot * DeliverySlipLayout.SLOT_SIZE, DeliverySlipLayout.FILTER_Y, ALL_TABS);
         }
-        addPlayerInventory(inventory, 8, HEIGHT - 82, ALL_TABS);
+        addPlayerInventory(inventory, 8, DeliverySlipLayout.INVENTORY_Y, ALL_TABS);
         addDataSlots(numbers);
         readSlip();
     }

@@ -15,11 +15,8 @@ import com.gilfort.civmod.menu.ClerkTabData;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.JobBlockTab;
 import com.gilfort.civmod.menu.StockTab;
-import com.gilfort.civmod.settlement.OneTimeOrders;
-import com.gilfort.civmod.settlement.SettlementRules;
 import com.mojang.blaze3d.platform.InputConstants;
 
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -53,14 +50,10 @@ final class StockTabView implements JobBlockTabView {
     /** Gap between the grid and its scrollbar. */
     private static final int SCROLLBAR_GAP = 4;
 
-    /** The "Once" area below the grid: label, ghost slot, amount field and "Order" button. */
-    private static final int ONCE_Y = GRID_Y + GRID_ROWS * SLOT + 6;
-    private static final int ONCE_SLOT_X = 40;
-    private static final int ONCE_AMOUNT_X = 66;
-    private static final int ONCE_AMOUNT_WIDTH = 36;
-    private static final int ONCE_ORDER_X = 108;
-    private static final int ONCE_ORDER_WIDTH = 48;
-    private static final int ONCE_AMOUNT_MAX_LENGTH = 4;
+    /** Gap between the grid and the Once area below it. */
+    private static final int ONCE_GAP = 6;
+    /** The "Once" area below the grid ({@link StockOnceArea}). */
+    private static final int ONCE_Y = GRID_Y + GRID_ROWS * SLOT + ONCE_GAP;
     /** The ghost target id of the Once slot: the first id after the rule slots. */
     private static final int ONCE_TARGET = GRID_SLOTS;
 
@@ -124,12 +117,7 @@ final class StockTabView implements JobBlockTabView {
     private int selectedSlot = -1;
     private final List<FieldWidgets> fields = new ArrayList<>();
     private @Nullable Button delete;
-    /** The item in the Once ghost slot, null while it is empty. */
-    private @Nullable ItemKey onceItem;
-    /** The amount typed into the Once field, 0 while it is empty or no number. */
-    private int onceAmount = 1;
-    private @Nullable EditBox onceBox;
-    private @Nullable Button orderButton;
+    private final StockOnceArea once;
 
     /**
      * @param screen the screen showing the tab
@@ -140,6 +128,7 @@ final class StockTabView implements JobBlockTabView {
         this.menu = screen.getMenu();
         this.stock = tab;
         this.scroller = new ListScroller(screen);
+        this.once = new StockOnceArea(screen, tab, ONCE_Y);
     }
 
     private Font font() {
@@ -183,10 +172,9 @@ final class StockTabView implements JobBlockTabView {
     public void init() {
         fields.clear();
         delete = null;
-        onceBox = null;
-        orderButton = null;
+        once.forgetWidgets();
         if (!editing()) {
-            initOnce();
+            once.init();
             return;
         }
         int y = screen.top() + EDIT_Y;
@@ -201,42 +189,6 @@ final class StockTabView implements JobBlockTabView {
         screen.addWidget(stock.index(), Button.builder(Component.literal("◀ ").append(Component.translatable("gui.back")), button -> showGrid())
                 .bounds(x + CivGui.PADDING, screen.top() + BACK_Y, BACK_WIDTH, 20).build());
         update();
-    }
-
-    /** The amount field and the "Order" button of the Once area (grid view). */
-    private void initOnce() {
-        int y = screen.top() + ONCE_Y;
-        EditBox box = screen.addWidget(stock.index(),
-                new EditBox(font(), screen.left() + ONCE_AMOUNT_X, y, ONCE_AMOUNT_WIDTH, SLOT - 2, Component.translatable("civmod.gui.clerk.stock.once.amount")));
-        box.setMaxLength(ONCE_AMOUNT_MAX_LENGTH);
-        box.setValue(onceAmount > 0 ? Integer.toString(onceAmount) : "");
-        box.setResponder(text -> {
-            onceAmount = parse(text).orElse(0);
-            updateOrderButton();
-        });
-        onceBox = box;
-        orderButton = screen.addWidget(stock.index(), Button.builder(Component.translatable("civmod.gui.clerk.stock.once.order"), button -> placeOrder())
-                .bounds(screen.left() + ONCE_ORDER_X, y - 1, ONCE_ORDER_WIDTH, SLOT).build());
-        updateOrderButton();
-    }
-
-    /** "Order" works with an item in the slot and an amount the server takes. */
-    private void updateOrderButton() {
-        if (orderButton != null) {
-            orderButton.active = onceItem != null && onceAmount >= 1 && onceAmount <= OneTimeOrders.MAX_AMOUNT;
-        }
-    }
-
-    /** Sends the order, then empties the slot and sets the amount back to 1. */
-    private void placeOrder() {
-        if (onceItem == null || orderButton == null || !orderButton.active) {
-            return;
-        }
-        ClientPacketDistributor.sendToServer(new ClerkTabData.Order(menu.containerId, onceItem, onceAmount));
-        screen.clickSound();
-        onceItem = null;
-        onceAmount = 1;
-        screen.rebuild();
     }
 
     private FieldWidgets field(Field field, int x, int y, int boxWidth) {
@@ -288,7 +240,7 @@ final class StockTabView implements JobBlockTabView {
     }
 
     /** A typed value; an empty field is 0 ("not set"), anything else that is no number is ignored. */
-    private static Optional<Integer> parse(String text) {
+    static Optional<Integer> parse(String text) {
         String trimmed = text.trim();
         if (trimmed.isEmpty()) {
             return Optional.of(StockRule.NOT_SET);
@@ -368,7 +320,7 @@ final class StockTabView implements JobBlockTabView {
     @Override
     public boolean acceptGhost(int slot, ItemStack stack) {
         if (slot == ONCE_TARGET) {
-            return setOnceItem(stack);
+            return !editing() && once.setItem(stack);
         }
         if (stack.isEmpty() || slot < 0 || slot >= clerk().slots()) {
             return false;
@@ -382,22 +334,6 @@ final class StockTabView implements JobBlockTabView {
         return true;
     }
 
-    /** Puts an item into the Once ghost slot, as a ghost: the item is not taken (grid view only). */
-    private boolean setOnceItem(ItemStack stack) {
-        if (stack.isEmpty() || editing()) {
-            return false;
-        }
-        onceItem = ItemKey.of(stack);
-        updateOrderButton();
-        screen.clickSound();
-        return true;
-    }
-
-    /** The Once ghost slot's area, absolute. */
-    private Rect2i onceSlotArea() {
-        return new Rect2i(screen.left() + ONCE_SLOT_X, screen.top() + ONCE_Y, 16, 16);
-    }
-
     /** Shift + click: the first rule slot without a rule, then the Once slot while it is empty (grid view only). */
     @Override
     public int nextEmptyGhost() {
@@ -405,12 +341,12 @@ final class StockTabView implements JobBlockTabView {
             return -1;
         }
         int slot = clerk().nextEmptyGhostSlot();
-        return slot >= 0 ? slot : onceItem == null ? ONCE_TARGET : -1;
+        return slot >= 0 ? slot : once.isEmpty() ? ONCE_TARGET : -1;
     }
 
     /**
      * The screen areas that take a dragged item as a rule item (for JEI / REI ghost drag): the visible active rule slots
-     * of the grid view.
+     * of the grid view and the Once slot ({@link #ONCE_TARGET}).
      *
      * @return rule slot → absolute area
      */
@@ -429,7 +365,7 @@ final class StockTabView implements JobBlockTabView {
                 }
             }
         }
-        targets.put(ONCE_TARGET, onceSlotArea());
+        targets.put(ONCE_TARGET, once.slotArea());
         return targets;
     }
 
@@ -443,7 +379,7 @@ final class StockTabView implements JobBlockTabView {
         if (editing()) {
             return -1;
         }
-        if (onceSlotArea().contains((int) Math.floor(x), (int) Math.floor(y))) {
+        if (once.slotArea().contains((int) Math.floor(x), (int) Math.floor(y))) {
             return ONCE_TARGET;
         }
         int column = (int) Math.floor((x - screen.left() - GRID_X + 1) / (double) SLOT);
@@ -474,7 +410,7 @@ final class StockTabView implements JobBlockTabView {
             return true;
         }
         if (slot == ONCE_TARGET) {
-            return clearOnceItem(event);
+            return once.mouseClicked(event);
         }
         if (clerk().rule(slot).isEmpty()) {
             return true;
@@ -486,16 +422,6 @@ final class StockTabView implements JobBlockTabView {
         }
         screen.clickSound();
         showEditor(slot);
-        return true;
-    }
-
-    /** A right click on the Once slot empties it. */
-    private boolean clearOnceItem(MouseButtonEvent event) {
-        if (event.button() == InputConstants.MOUSE_BUTTON_RIGHT && onceItem != null) {
-            onceItem = null;
-            updateOrderButton();
-            screen.clickSound();
-        }
         return true;
     }
 
@@ -527,8 +453,7 @@ final class StockTabView implements JobBlockTabView {
                 return true;
             }
         }
-        if (onceBox != null && onceBox.isFocused() && onceBox.visible && !event.isEscape()) {
-            onceBox.keyPressed(event);
+        if (once.keyPressed(event)) {
             return true;
         }
         if (editing() && event.isEscape()) {
@@ -582,26 +507,10 @@ final class StockTabView implements JobBlockTabView {
             }
         }
         scroller.extract(graphics, scrollbarX(), GRID_Y, GRID_ROWS * SLOT, maxOffset());
-        extractOnce(graphics, hovered == ONCE_TARGET, mouseX, mouseY);
+        once.extract(graphics, hovered == ONCE_TARGET, mouseX, mouseY);
         // Slots beyond the highest level with every Ledger never hold a rule: no tooltip.
         if (hovered >= 0 && hovered < StockRule.MAX_SLOTS) {
-            graphics.setComponentTooltipForNextFrame(font, stockTooltip(hovered, active), mouseX, mouseY);
-        }
-    }
-
-    /** The Once area's label and ghost slot; the slot's item name is the tooltip of a hovered, filled slot. */
-    private void extractOnce(GuiGraphicsExtractor graphics, boolean hovered, int mouseX, int mouseY) {
-        Font font = font();
-        graphics.text(font, Component.translatable("civmod.gui.clerk.stock.once"), CivGui.PADDING, ONCE_Y + 4, CivGui.LABEL_COLOR, false);
-        CivGui.slot(graphics, ONCE_SLOT_X, ONCE_Y);
-        if (onceItem != null) {
-            graphics.item(onceItem.toStack(), ONCE_SLOT_X, ONCE_Y);
-        }
-        if (hovered) {
-            CivGui.slotHover(graphics, ONCE_SLOT_X, ONCE_Y);
-            if (onceItem != null) {
-                graphics.setComponentTooltipForNextFrame(font, List.of(onceItem.toStack().getHoverName()), mouseX, mouseY);
-            }
+            graphics.setComponentTooltipForNextFrame(font, StockTooltips.rule(clerk(), hovered), mouseX, mouseY);
         }
     }
 
@@ -628,56 +537,13 @@ final class StockTabView implements JobBlockTabView {
         int y = STATE_Y;
         int width = screen.panelWidth() - 2 * CivGui.PADDING;
         if (selectedSlot >= tab.slots()) {
-            graphics.text(font, CivGui.fit(font, locked(tab), width), CivGui.PADDING, y, CivGui.ERROR_COLOR, false);
+            graphics.text(font, CivGui.fit(font, StockTooltips.locked(tab), width), CivGui.PADDING, y, CivGui.ERROR_COLOR, false);
             y += 11;
         }
         if (selected.isPresent() && tab.nowhere().contains(selectedSlot)) {
             graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.clerk.stock.surplus_nowhere"), width), CivGui.PADDING, y,
                     CivGui.ERROR_COLOR, false);
         }
-    }
-
-    private List<Component> stockTooltip(int slot, int active) {
-        List<Component> lines = new ArrayList<>();
-        Optional<StockRule> rule = clerk().rule(slot);
-        if (rule.isPresent()) {
-            lines.add(rule.get().item().toStack().getHoverName());
-            StockRule found = rule.get();
-            // One line per set field.
-            if (found.hasMin()) {
-                lines.add(Component.translatable("civmod.gui.clerk.stock.min", found.min()).withStyle(ChatFormatting.GRAY));
-            }
-            if (found.hasMax()) {
-                lines.add(Component.translatable("civmod.gui.clerk.stock.max", found.max()).withStyle(ChatFormatting.GRAY));
-            }
-            if (found.order() != StockRule.NOT_SET) {
-                lines.add(Component.translatable("civmod.gui.clerk.stock.order", found.order()).withStyle(ChatFormatting.GRAY));
-            }
-            if (found.hasMin()) {
-                lines.add(Component.translatable("civmod.gui.clerk.stock.priority_value", found.priority()).withStyle(ChatFormatting.GRAY));
-            }
-            if (clerk().nowhere().contains(slot)) {
-                lines.add(Component.translatable("civmod.gui.clerk.stock.surplus_nowhere").withStyle(ChatFormatting.RED));
-            }
-        } else {
-            lines.add(Component.translatable("civmod.gui.clerk.stock.empty_slot"));
-        }
-        if (slot >= active) {
-            lines.add(locked(clerk()).copy().withStyle(ChatFormatting.RED));
-        }
-        return lines;
-    }
-
-    /**
-     * Why a row is locked, naming only the ways still open: an upgrade and a Ledger, only a Ledger at Lv 5, only an
-     * upgrade with every Ledger used.
-     */
-    private static Component locked(ClerkTabData tab) {
-        boolean upgrade = tab.level() < SettlementRules.MAX_LEVEL;
-        boolean ledger = tab.ledgers() < SettlementRules.MAX_LEDGERS;
-        String key = upgrade && ledger ? "civmod.gui.clerk.stock.locked.both"
-                : ledger ? "civmod.gui.clerk.stock.locked.ledger" : "civmod.gui.clerk.stock.locked.upgrade";
-        return Component.translatable(key);
     }
 
     @Override

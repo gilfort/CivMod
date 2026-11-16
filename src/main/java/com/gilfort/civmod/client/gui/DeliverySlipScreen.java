@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.gilfort.civmod.logistics.DeliverySlip;
 import com.gilfort.civmod.menu.CivMenu;
+import com.gilfort.civmod.menu.DeliverySlipLayout;
 import com.gilfort.civmod.menu.DeliverySlipMenu;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -36,7 +37,7 @@ public final class DeliverySlipScreen extends CivContainerScreen<DeliverySlipMen
      * @param title     the title
      */
     public DeliverySlipScreen(DeliverySlipMenu menu, Inventory inventory, Component title) {
-        super(menu, inventory, title, 176, DeliverySlipMenu.HEIGHT, List.of());
+        super(menu, inventory, title, 176, DeliverySlipLayout.HEIGHT, List.of());
     }
 
     @Override
@@ -48,8 +49,8 @@ public final class DeliverySlipScreen extends CivContainerScreen<DeliverySlipMen
         int variantX = x + MODE_WIDTH + STEP_GAP;
         variant = addTabWidget(CivMenu.ALL_TABS, Button.builder(Component.empty(), button -> press(DeliverySlipMenu.BUTTON_VARIANT))
                 .bounds(variantX, y, imageWidth - 2 * CivGui.PADDING - MODE_WIDTH - STEP_GAP, BUTTON_HEIGHT).build());
-        addSteps(DeliverySlipMenu.BUTTON_FILL, DeliverySlipMenu.FILL_Y + DeliverySlipMenu.STEP_ROW_OFFSET);
-        addSteps(DeliverySlipMenu.BUTTON_KEEP, DeliverySlipMenu.KEEP_Y + DeliverySlipMenu.STEP_ROW_OFFSET);
+        addSteps(DeliverySlipMenu.BUTTON_FILL, DeliverySlipLayout.FILL_Y + DeliverySlipLayout.STEP_ROW_OFFSET);
+        addSteps(DeliverySlipMenu.BUTTON_KEEP, DeliverySlipLayout.KEEP_Y + DeliverySlipLayout.STEP_ROW_OFFSET);
     }
 
     private void addSteps(int firstButton, int panelY) {
@@ -58,7 +59,7 @@ public final class DeliverySlipScreen extends CivContainerScreen<DeliverySlipMen
             int amount = DeliverySlipMenu.LIMIT_STEPS[step];
             int id = firstButton + step;
             addTabWidget(CivMenu.ALL_TABS, Button.builder(Component.literal(amount > 0 ? "+" + amount : String.valueOf(amount)), button -> press(id))
-                    .bounds(x + step * (STEP_BUTTON_WIDTH + STEP_GAP), topPos + panelY, STEP_BUTTON_WIDTH, DeliverySlipMenu.STEP_BUTTON_HEIGHT).build());
+                    .bounds(x + step * (STEP_BUTTON_WIDTH + STEP_GAP), topPos + panelY, STEP_BUTTON_WIDTH, DeliverySlipLayout.STEP_BUTTON_HEIGHT).build());
         }
     }
 
@@ -78,8 +79,8 @@ public final class DeliverySlipScreen extends CivContainerScreen<DeliverySlipMen
 
     @Override
     protected void extractTabLabels(GuiGraphicsExtractor graphics, int tab, int mouseX, int mouseY) {
-        graphics.text(font, limit("civmod.gui.slip.fill", menu.fillTo()), CivGui.PADDING, DeliverySlipMenu.FILL_Y, CivGui.LABEL_COLOR, false);
-        graphics.text(font, limit("civmod.gui.slip.keep", menu.keep()), CivGui.PADDING, DeliverySlipMenu.KEEP_Y, CivGui.LABEL_COLOR, false);
+        graphics.text(font, limit("civmod.gui.slip.fill", menu.fillTo()), CivGui.PADDING, DeliverySlipLayout.FILL_Y, CivGui.LABEL_COLOR, false);
+        graphics.text(font, limit("civmod.gui.slip.keep", menu.keep()), CivGui.PADDING, DeliverySlipLayout.KEEP_Y, CivGui.LABEL_COLOR, false);
     }
 
     /** "Fill target up to: 64", or "off" for 0. */
