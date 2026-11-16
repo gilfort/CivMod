@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:job_blocks_tool_line",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

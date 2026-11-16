@@ -244,10 +244,9 @@ public final class ToolOrders {
         record Rated(Item item, int tier) {
         }
         Comparator<ItemKey> order = bestFirst(need.rule());
-        return BuiltInRegistries.ITEM.stream().filter(need.kind())
+        return ToolStaircase.orderable(need.kind(), need.rule())
                 .map(item -> new Rated(item, ToolTiers.tier(new ItemStack(item))))
                 .filter(rated -> rated.tier() > need.floor() && rated.tier() < below)
-                .filter(rated -> need.rule().allows(new ItemStack(rated.item())) && !ToolTiers.isGolden(new ItemStack(rated.item())))
                 .sorted(Comparator.comparingInt((Rated rated) -> -rated.tier())
                         .thenComparing((first, second) -> order.compare(ItemKey.of(first.item()), ItemKey.of(second.item()))))
                 .map(Rated::item)
@@ -320,7 +319,7 @@ public final class ToolOrders {
         }
     }
 
-    private static Predicate<Item> kindOf(ResourceCollectionProfile profile) {
+    static Predicate<Item> kindOf(ResourceCollectionProfile profile) {
         return item -> profile.isTool(new ItemStack(item));
     }
 }
