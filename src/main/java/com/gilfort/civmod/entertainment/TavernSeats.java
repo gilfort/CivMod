@@ -39,6 +39,9 @@ public final class TavernSeats {
     private static final String ENTITY_KEY = "e:";
     private static final String BLOCK_KEY = "b:";
 
+    /** A settler on a seat entity sits this much higher than the top of its hitbox, so its body does not sink into the cushion. */
+    private static final double CUSHION_RAISE = 0.15;
+
     private TavernSeats() {
     }
 
@@ -128,7 +131,7 @@ public final class TavernSeats {
     }
 
     private static Seat entitySeat(Entity entity) {
-        return new Seat(ENTITY_KEY + entity.getUUID(), new Vec3(entity.getX(), entity.getBoundingBox().maxY, entity.getZ()),
+        return new Seat(ENTITY_KEY + entity.getUUID(), new Vec3(entity.getX(), entity.getBoundingBox().maxY + CUSHION_RAISE, entity.getZ()),
                 entity.getYRot(), entity.blockPosition(), Optional.of(entity));
     }
 

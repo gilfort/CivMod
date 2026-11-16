@@ -18,12 +18,16 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.HumanoidMobRenderer;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.core.ClientAsset;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.PlayerModelType;
 import net.minecraft.world.entity.player.PlayerSkin;
+import net.minecraft.world.item.ItemDisplayContext;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -58,6 +62,8 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
      * down to the back of the forward legs (2 px).
      */
     private static final float SIT_DROP = (12.0F - 2.0F) / 16.0F * 0.9375F;
+    /** The item model of a rod with the line out (an item definition of this mod that points at vanilla's cast model). */
+    private static final Identifier CAST_ROD_MODEL = CivMod.id("fishing_rod_cast");
     private static final PlayerSkin[] SKINS = new PlayerSkin[SettlerSkins.COUNT];
 
     static {
@@ -96,6 +102,9 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
         settlerState.roll = null;
         settlerState.line = FishingLineRenderer.extract(settler, partialTicks);
         settlerState.drop = settler.isSitting() ? SIT_DROP : 0.0F;
+        if (settler.castTarget().isPresent() && settler.getMainHandItem().is(Items.FISHING_ROD)) {
+            showCastRod(settler, state);
+        }
         state.isPassenger |= settler.isSitting();
         Direction bed = state.bedOrientation;
         if (!settler.hasPose(Pose.SLEEPING) || bed == null) {
@@ -110,6 +119,20 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
         float angle = (float) Math.toRadians(pose == SleepingPose.LEFT_SIDE ? 90.0 : -90.0);
         settlerState.roll = new Quaternionf().rotationAxis(angle, bed.getStepX(), 0.0F, bed.getStepZ());
         settlerState.lift = (state.skin.model() == PlayerModelType.SLIM ? ARM_REACH_SLIM : ARM_REACH_WIDE) - HALF_DEPTH - ARM_SINK;
+    }
+
+    /**
+     * Vanilla picks the cast model of the rod only for a player with a hook out, so a settler with its line out gets the
+     * cast model through a copy of the rod that names it.
+     */
+    private static void showCastRod(Settler settler, AvatarRenderState state) {
+        ItemStack cast = settler.getMainHandItem().copy();
+        cast.set(DataComponents.ITEM_MODEL, CAST_ROD_MODEL);
+        boolean right = settler.getMainArm() == HumanoidArm.RIGHT;
+        Minecraft minecraft = Minecraft.getInstance();
+        minecraft.getItemModelResolver().updateForTopItem(right ? state.rightHandItemState : state.leftHandItemState, cast,
+                right ? ItemDisplayContext.THIRD_PERSON_RIGHT_HAND : ItemDisplayContext.THIRD_PERSON_LEFT_HAND, minecraft.level, settler,
+                settler.getId());
     }
 
     @Override

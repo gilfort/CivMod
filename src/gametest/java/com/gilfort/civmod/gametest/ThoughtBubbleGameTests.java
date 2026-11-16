@@ -33,6 +33,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Item;
@@ -63,7 +64,30 @@ public final class ThoughtBubbleGameTests {
             register(helper, "thought_bubble_missing_inputs", ThoughtBubbleGameTests::missingInputs);
             register(helper, "thought_bubble_live_round", ThoughtBubbleGameTests::liveRound);
             register(helper, "thought_bubble_problem_after_catch_up", ThoughtBubbleGameTests::problemAfterCatchUp);
+            register(helper, "thought_bubble_need_unmet_chance", ThoughtBubbleGameTests::needUnmetChance);
         });
+    }
+
+    /** The need bubble shows in about 40 % of the rolls; every other bubble shows every time. */
+    private static void needUnmetChance(GameTestHelper helper) {
+        RandomSource random = RandomSource.create(294L);
+        int rolls = 10_000;
+        int shown = 0;
+        for (int i = 0; i < rolls; i++) {
+            if (ThoughtBubble.NEED_UNMET.showsThisTime(random)) {
+                shown++;
+            }
+        }
+        helper.assertTrue(shown > rolls * 0.37 && shown < rolls * 0.43, "About 40 % of " + rolls + " rolls show the need bubble: " + shown);
+        for (ThoughtBubble bubble : ThoughtBubble.values()) {
+            if (bubble == ThoughtBubble.NEED_UNMET) {
+                continue;
+            }
+            for (int i = 0; i < 100; i++) {
+                helper.assertTrue(bubble.showsThisTime(random), bubble + " shows every time");
+            }
+        }
+        helper.succeed();
     }
 
     private static void register(RegisterEvent.RegisterHelper<Consumer<GameTestHelper>> helper, String name, Consumer<GameTestHelper> test) {

@@ -116,6 +116,10 @@ public final class CivNetwork {
             JobBlockMenu.open(context.player(), payload.containerId()).flatMap(menu -> menu.tab(MissionsTab.class))
                     .ifPresent(tab -> tab.mark(payload.index(), payload.mission(), payload.marked()));
         });
+        registrar.playToServer(MissionsTabData.AutoMission.TYPE, MissionsTabData.AutoMission.STREAM_CODEC, (payload, context) -> {
+            JobBlockMenu.open(context.player(), payload.containerId()).flatMap(menu -> menu.tab(MissionsTab.class))
+                    .ifPresent(tab -> tab.setAuto(payload.mission(), payload.enabled()));
+        });
         registrar.playToServer(MissionsTabData.Assign.TYPE, MissionsTabData.Assign.STREAM_CODEC, (payload, context) -> {
             JobBlockMenu.open(context.player(), payload.containerId()).flatMap(menu -> menu.tab(MissionsTab.class))
                     .ifPresent(tab -> tab.assign(payload.index(), payload.mission(), payload.settler()));
