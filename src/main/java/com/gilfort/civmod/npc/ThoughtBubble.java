@@ -8,6 +8,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.Item;
 
 /**
@@ -54,10 +55,26 @@ public enum ThoughtBubble {
     /** Network codec. */
     public static final StreamCodec<ByteBuf, ThoughtBubble> STREAM_CODEC = ByteBufCodecs.idMapper(i -> values()[i], ThoughtBubble::ordinal);
 
+    /**
+     * Chance in percent that the need bubble shows when it comes up. It keeps all settlers from blinking at once before the
+     * first night.
+     */
+    private static final int NEED_UNMET_SHOW_PERCENT = 40;
+
     private final boolean problem;
 
     ThoughtBubble(boolean problem) {
         this.problem = problem;
+    }
+
+    /**
+     * The client rolls this each time a bubble would show: on its first appearance and on every repeat of a problem.
+     *
+     * @param random the client's random source
+     * @return whether the bubble shows this time; only the need bubble is ever skipped
+     */
+    public boolean showsThisTime(RandomSource random) {
+        return this != NEED_UNMET || random.nextInt(100) < NEED_UNMET_SHOW_PERCENT;
     }
 
     /**

@@ -41,7 +41,17 @@ public final class DeliverySlipMenu extends CivMenu {
     public static final int BUTTON_KEEP = BUTTON_FILL + LIMIT_STEPS.length;
 
     /** Panel height. */
-    public static final int HEIGHT = 206;
+    public static final int HEIGHT = 218;
+    /** Panel y of the "Inventory" label: the vanilla position, {@code imageHeight - 94}. */
+    public static final int INVENTORY_LABEL_Y = HEIGHT - 94;
+    /** Top of the "fill target up to" row (panel coordinates): its text line, the buttons follow below. */
+    public static final int FILL_Y = 60;
+    /** Top of the "keep at the source" row (panel coordinates). */
+    public static final int KEEP_Y = 90;
+    /** Panel y offset of the step buttons below the text line of their limit. */
+    public static final int STEP_ROW_OFFSET = 12;
+    /** Height of a step button. */
+    public static final int STEP_BUTTON_HEIGHT = 14;
     private static final int DATA_MODE = 0;
     private static final int DATA_VARIANT = 1;
     private static final int DATA_FILL = 2;
@@ -50,7 +60,9 @@ public final class DeliverySlipMenu extends CivMenu {
     /** Left edge of the filter slots (panel coordinates). */
     private static final int FILTER_X = 8;
     /** Top edge of the filter slots (panel coordinates). */
-    private static final int FILTER_Y = 38;
+    public static final int FILTER_Y = 38;
+    /** Size of a slot. */
+    public static final int SLOT_SIZE = 18;
 
     private final Player player;
     private final InteractionHand hand;

@@ -83,6 +83,8 @@ public final class CivGui {
     private static final int HELP_MARGIN = 4;
     /** Width the help lines are wrapped to. */
     private static final int HELP_WIDTH = 200;
+    /** Width tooltips wrap to (vanilla's {@code Tooltip} value). */
+    private static final int TOOLTIP_WIDTH = 170;
     /** Room the help icon takes from the right end of the title row (icon, margin and a gap). */
     static final int HELP_ROOM = HELP_MARGIN + HELP_SIZE + 2;
 
@@ -305,6 +307,24 @@ public final class CivGui {
             }
             graphics.setTooltipForNextFrame(font, wrapped, mouseX, mouseY);
         }
+    }
+
+    /**
+     * Shows a tooltip in the vanilla look for a text that may hold line feeds and long lines: each line feed starts a new
+     * line, and each line wraps to the tooltip width, so the tooltip stays on the screen.
+     *
+     * @param graphics the graphics extractor
+     * @param font     the font
+     * @param text     the text
+     * @param mouseX   the mouse x position
+     * @param mouseY   the mouse y position
+     */
+    public static void tooltip(GuiGraphicsExtractor graphics, Font font, Component text, int mouseX, int mouseY) {
+        List<FormattedCharSequence> wrapped = new ArrayList<>();
+        for (String line : text.getString().split("\n", -1)) {
+            wrapped.addAll(font.split(Component.literal(line), TOOLTIP_WIDTH));
+        }
+        graphics.setTooltipForNextFrame(font, wrapped, mouseX, mouseY);
     }
 
     /**
