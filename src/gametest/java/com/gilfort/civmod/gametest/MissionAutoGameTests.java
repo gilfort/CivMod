@@ -51,6 +51,7 @@ public final class MissionAutoGameTests {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "mission_auto_lists_unlocked", MissionAutoGameTests::listsUnlocked);
             register(helper, "mission_auto_tick_marks_offer", MissionAutoGameTests::tickMarksOffer);
+            register(helper, "mission_auto_tick_keeps_order", MissionAutoGameTests::tickKeepsOrder);
             register(helper, "mission_auto_refill", MissionAutoGameTests::refill);
             register(helper, "mission_auto_untick_keeps_marks", MissionAutoGameTests::untickKeepsMarks);
             register(helper, "mission_auto_per_board_persistence", MissionAutoGameTests::perBoardPersistence);
@@ -115,6 +116,19 @@ public final class MissionAutoGameTests {
         helper.assertTrue(marked(now, ticked) == count(now, ticked) && count(now, ticked) > 0, "Every entry of the ticked mission is marked: " + now);
         helper.assertTrue(marked(now, other) == 0, "Entries of other missions stay unmarked: " + now);
         helper.assertTrue(offer(data, BOARD).auto().contains(ticked), "The tick is kept");
+        helper.succeed();
+    }
+
+    /** Ticking keeps the order of the offer, so the entry indexes a client holds stay valid (a mission can be offered twice). */
+    private static void tickKeepsOrder(GameTestHelper helper) {
+        SettlementData data = board(BOARD, 3);
+        Map<Identifier, Mission> pool = pool();
+        List<MissionOffer.Entry> before = MissionOffers.refresh(data, BOARD, 10L, pool, RandomSource.create(3L));
+        Identifier last = before.getLast().mission();
+        helper.assertTrue(MissionOffers.setAuto(data, BOARD, last, true, pool), "Ticking is taken");
+        List<Identifier> order = offer(data, BOARD).entries().stream().map(MissionOffer.Entry::mission).toList();
+        helper.assertTrue(order.equals(before.stream().map(MissionOffer.Entry::mission).toList()),
+                "The entries keep their places: " + before + " -> " + order);
         helper.succeed();
     }
 

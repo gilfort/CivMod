@@ -11,6 +11,7 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.ToIntFunction;
+import java.util.stream.Stream;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.MissionProfile;
@@ -105,22 +106,25 @@ public final class MissionRules {
     }
 
     /**
-     * Marks every entry of a ticked mission (auto-enable); marked entries come first, in their order. An assignment or lock
-     * on an entry stays.
+     * Marks every entry of a ticked mission (auto-enable). The order of the entries stays, so the indexes a client holds of
+     * the offer stay valid; an assignment or lock on an entry stays too.
      *
      * @param entries the offer entries
      * @param auto    the ticked missions
-     * @return the entries with the marks set, marked ones first
+     * @return the entries with the marks set, in the same order
      */
     public static List<MissionOffer.Entry> markAuto(List<MissionOffer.Entry> entries, Set<Identifier> auto) {
-        List<MissionOffer.Entry> marked = new ArrayList<>();
-        List<MissionOffer.Entry> unmarked = new ArrayList<>();
-        for (MissionOffer.Entry entry : entries) {
-            MissionOffer.Entry result = auto.contains(entry.mission()) ? entry.withMarked(true) : entry;
-            (result.marked() ? marked : unmarked).add(result);
-        }
-        marked.addAll(unmarked);
-        return List.copyOf(marked);
+        return entries.stream().map(entry -> auto.contains(entry.mission()) ? entry.withMarked(true) : entry).toList();
+    }
+
+    /**
+     * Puts the marked entries first, each group in its order: the offer of a new day, which no client holds an index of yet.
+     *
+     * @param entries the offer entries
+     * @return the marked entries, then the unmarked ones
+     */
+    public static List<MissionOffer.Entry> markedFirst(List<MissionOffer.Entry> entries) {
+        return Stream.concat(entries.stream().filter(MissionOffer.Entry::marked), entries.stream().filter(entry -> !entry.marked())).toList();
     }
 
     /** One weighted draw among the missions below their maximum; empty if every one is at it. */

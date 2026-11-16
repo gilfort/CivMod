@@ -52,7 +52,7 @@ public final class MissionOffers {
             List<MissionOffer.Entry> entries = MissionRules.refill(entry.missionOffer().entries(), pool,
                     MissionRules.quotas(StationTypes.unlocked(entry), entry.level(), StationTypes.emptySlots(entry)), random);
             MissionOffer old = entry.missionOffer();
-            entry.setMissionOffer(new MissionOffer(MissionRules.markAuto(entries, old.auto()), day, old.auto()));
+            entry.setMissionOffer(new MissionOffer(MissionRules.markedFirst(MissionRules.markAuto(entries, old.auto())), day, old.auto()));
             data.setDirty();
         }
         return entry.missionOffer().entries();
