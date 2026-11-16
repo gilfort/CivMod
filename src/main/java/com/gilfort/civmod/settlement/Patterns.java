@@ -226,7 +226,12 @@ public final class Patterns {
         List<Ingredient> inputs = allInputs(level, profile, pattern);
         return !profile.outputFilter().test(pattern.output().item())
                 || inputs.stream().anyMatch(input -> input.items().noneMatch(profile.inputFilter()::test))
-                || DomainRule.of(profile, JobBalancing.of(job)).outside(pattern.output().item(), inputs);
+                || !smithing(level, pattern) && DomainRule.of(profile, JobBalancing.of(job)).outside(pattern.output().item(), inputs);
+    }
+
+    /** Smithing recipes are exempt from the domain and the lists: the Smith is the only Job at the smithing table and works every one of them. */
+    private static boolean smithing(ServerLevel level, Pattern pattern) {
+        return pattern.recipe().flatMap(id -> PatternRecipes.holder(level, id)).filter(holder -> holder.value().getType() == RecipeType.SMITHING).isPresent();
     }
 
     /**
