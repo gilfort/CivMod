@@ -87,6 +87,14 @@ public final class CivNetwork {
             JobBlockMenu.open(context.player(), payload.containerId()).flatMap(menu -> menu.tab(StockTab.class))
                     .ifPresent(tab -> tab.editRule(payload.slot(), payload.rule()));
         });
+        registrar.playToServer(ClerkTabData.Order.TYPE, ClerkTabData.Order.STREAM_CODEC, (payload, context) -> {
+            JobBlockMenu.open(context.player(), payload.containerId()).flatMap(menu -> menu.tab(StockTab.class))
+                    .ifPresent(tab -> tab.order(payload.item(), payload.amount()));
+        });
+        registrar.playToServer(ClerkTabData.Withdraw.TYPE, ClerkTabData.Withdraw.STREAM_CODEC, (payload, context) -> {
+            JobBlockMenu.open(context.player(), payload.containerId()).flatMap(menu -> menu.tab(StockTab.class))
+                    .ifPresent(tab -> tab.withdrawOrder(payload.request()));
+        });
         registrar.playToServer(PatternsTabData.Edit.TYPE, PatternsTabData.Edit.STREAM_CODEC, (payload, context) -> {
             JobBlockMenu.open(context.player(), payload.containerId()).flatMap(menu -> PatternsTab.of(menu, payload.job()))
                     .ifPresent(tab -> tab.edit(payload));

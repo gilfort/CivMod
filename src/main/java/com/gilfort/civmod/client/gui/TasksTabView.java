@@ -1,6 +1,8 @@
 package com.gilfort.civmod.client.gui;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 import com.gilfort.civmod.menu.ClerkTabData;
 import com.gilfort.civmod.menu.JobBlockTab;
@@ -11,6 +13,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 /**
  * The Clerk's "Tasks" tab of the {@link JobBlockScreen} (vault {@code Jobs/Clerk.md}); the client side of
@@ -78,10 +81,30 @@ final class TasksTabView implements JobBlockTabView {
         scroller.release();
     }
 
+    /** Left click: drags the scrollbar. Right click on a one-time order: withdraws it. */
     @Override
     public boolean mouseClicked(MouseButtonEvent event) {
+        if (event.button() == InputConstants.MOUSE_BUTTON_RIGHT) {
+            return withdrawAt(event.x(), event.y());
+        }
         return event.button() == InputConstants.MOUSE_BUTTON_LEFT
                 && scroller.press(event.x(), event.y(), scrollbarX(), rowsY(), visible() * ROW_HEIGHT, maxOffset());
+    }
+
+    private boolean withdrawAt(double mouseX, double mouseY) {
+        double rowY = mouseY - screen.top() - rowsY();
+        double rowX = mouseX - screen.left();
+        int row = (int) Math.floor(rowY / ROW_HEIGHT);
+        int index = scroller.offset(maxOffset()) + row;
+        if (rowY < 0 || row >= visible() || index >= rows().size() || rowX < CivGui.PADDING || rowX >= screen.panelWidth() - CivGui.PADDING) {
+            return false;
+        }
+        Optional<UUID> order = rows().get(index).order();
+        order.ifPresent(request -> {
+            ClientPacketDistributor.sendToServer(new ClerkTabData.Withdraw(screen.getMenu().containerId, request));
+            screen.clickSound();
+        });
+        return order.isPresent();
     }
 
     @Override
@@ -102,7 +125,7 @@ final class TasksTabView implements JobBlockTabView {
     @Override
     public List<Component> helpLines(JobBlockTab shown) {
         return List.of(Component.translatable("civmod.gui.clerk.tasks.help.what"), Component.translatable("civmod.gui.clerk.tasks.help.in_progress"),
-                Component.translatable("civmod.gui.clerk.tasks.help.waiting"), Component.translatable("civmod.gui.clerk.tasks.help.blocked"),
+                Component.translatable("civmod.gui.clerk.tasks.help.waiting"), Component.translatable("civmod.gui.clerk.tasks.help.blocked"), Component.translatable("civmod.gui.clerk.tasks.help.withdraw"),
                 Component.translatable("civmod.gui.clerk.deliveries.help.what"), Component.translatable("civmod.gui.clerk.deliveries.help.results"),
                 Component.translatable("civmod.gui.clerk.deliveries.help.warehouse"));
     }

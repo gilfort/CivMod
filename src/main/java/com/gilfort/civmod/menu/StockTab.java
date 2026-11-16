@@ -1,9 +1,12 @@
 package com.gilfort.civmod.menu;
 
 import java.util.Optional;
+import java.util.UUID;
 
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.settlement.DayClock;
+import com.gilfort.civmod.settlement.OneTimeOrders;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
 
@@ -13,7 +16,8 @@ import net.minecraft.world.item.Items;
 
 /**
  * The Clerk's "Stock" tab (vault {@code Jobs/Clerk.md}): its stock rules, with the player inventory to pick items
- * from; the client edits a rule with {@link ClerkTabData.Edit}. Shows the Clerk's data ({@link ClerkTabData}), shared
+ * from; the client edits a rule with {@link ClerkTabData.Edit} and places or withdraws a one-time order with
+ * {@link ClerkTabData.Order} / {@link ClerkTabData.Withdraw}. Shows the Clerk's data ({@link ClerkTabData}), shared
  * with the Tasks tab.
  */
 public final class StockTab extends JobBlockTab {
@@ -90,5 +94,32 @@ public final class StockTab extends JobBlockTab {
             StockRules.check(site.get().level(), site.get().pos(), DayClock.dayTime(site.get().level()));
             menu.syncSoon();
         }
+    }
+
+    /**
+     * Server: places a one-time order at this Clerk (no rule slot, no timeout).
+     *
+     * @param item   the item
+     * @param amount the amount
+     */
+    public void order(ItemKey item, int amount) {
+        menu().validSite().ifPresent(site -> {
+            if (OneTimeOrders.place(SettlementData.get(site.level()), site.pos(), item, amount).isPresent()) {
+                menu().syncSoon();
+            }
+        });
+    }
+
+    /**
+     * Server: withdraws an open one-time order of this Clerk.
+     *
+     * @param request the request id
+     */
+    public void withdrawOrder(UUID request) {
+        menu().validSite().ifPresent(site -> {
+            if (OneTimeOrders.withdraw(SettlementData.get(site.level()), site.pos(), request)) {
+                menu().syncSoon();
+            }
+        });
     }
 }

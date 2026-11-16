@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:one_time_order_refuses_bad_input",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

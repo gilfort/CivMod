@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.client.gui.CivGui;
@@ -30,6 +31,7 @@ import com.gilfort.civmod.settlement.StockRules;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
@@ -142,8 +144,10 @@ public record ClerkTabData(int level, int ledgers, List<StockRule> rules, List<T
      * @param details the tooltip lines: the text, then amount, reason, Deliveryman or producer
      * @param depth   how deep the row sits under its main request: 0 for a main request or a delivery, 1 and more for the
      *                sub-requests below it (drawn indented and smaller)
+     * @param order   the request id of a one-time order, which the player can withdraw; empty for every other row (the
+     *                six components are the row's whole state, so they stay one record)
      */
-    public record TaskRow(ItemStack icon, Component text, TaskStatus status, List<Component> details, int depth) {
+    public record TaskRow(ItemStack icon, Component text, TaskStatus status, List<Component> details, int depth, Optional<UUID> order) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, TaskRow> STREAM_CODEC = StreamCodec.composite(
@@ -152,6 +156,7 @@ public record ClerkTabData(int level, int ledgers, List<StockRule> rules, List<T
                 TaskStatus.STREAM_CODEC, TaskRow::status,
                 ComponentSerialization.STREAM_CODEC.apply(ByteBufCodecs.list()), TaskRow::details,
                 ByteBufCodecs.VAR_INT, TaskRow::depth,
+                UUIDUtil.STREAM_CODEC.apply(ByteBufCodecs::optional), TaskRow::order,
                 TaskRow::new);
 
         /**
@@ -160,9 +165,23 @@ public record ClerkTabData(int level, int ledgers, List<StockRule> rules, List<T
          * @param status  the status
          * @param details the tooltip lines
          * @param depth   the depth under the main request
+         * @param order   the id of a one-time order
          */
         public TaskRow {
             details = List.copyOf(details);
+        }
+
+        /**
+         * A row that is no one-time order.
+         *
+         * @param icon    the icon
+         * @param text    the short text
+         * @param status  the status
+         * @param details the tooltip lines
+         * @param depth   the depth under the main request
+         */
+        public TaskRow(ItemStack icon, Component text, TaskStatus status, List<Component> details, int depth) {
+            this(icon, text, status, details, depth, Optional.empty());
         }
 
         /**
@@ -181,12 +200,12 @@ public record ClerkTabData(int level, int ledgers, List<StockRule> rules, List<T
         @Override
         public boolean equals(Object other) {
             return other instanceof TaskRow row && ItemStack.matches(icon, row.icon) && text.equals(row.text) && status == row.status
-                    && details.equals(row.details) && depth == row.depth;
+                    && details.equals(row.details) && depth == row.depth && order.equals(row.order);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(icon.getItem(), text, status, details, depth);
+            return Objects.hash(icon.getItem(), text, status, details, depth, order);
         }
     }
 
@@ -263,7 +282,7 @@ public record ClerkTabData(int level, int ledgers, List<StockRule> rules, List<T
     private static List<TaskRow> requests(ServerLevel level, Settlement settlement, BlockPos clerk, List<BlockPos> clerks) {
         List<TaskRow> rows = new ArrayList<>();
         Requests.byPriority(settlement).stream()
-                .filter(request -> request.rule().isPresent() && request.target().filter(clerks::contains).isPresent())
+                .filter(request -> (request.rule().isPresent() || request.oneTime()) && request.target().filter(clerks::contains).isPresent())
                 .forEach(request -> {
                     rows.add(requestRow(level, settlement, clerk, request, 0));
                     addSubRequests(rows, level, settlement, clerk, request, 1);
@@ -307,7 +326,9 @@ public record ClerkTabData(int level, int ledgers, List<StockRule> rules, List<T
         if (depth == 0 && !target.equals(clerk)) {
             details.add(gray(Component.translatable("civmod.gui.clerk.task.for", name(settlement, target))));
         }
-        return new TaskRow(request.item().toStack(amount), text, status, details, depth);
+        // Only the Clerk's own window withdraws its orders; a Warehouse lists those of its Served Clerks read-only.
+        Optional<UUID> order = request.oneTime() && target.equals(clerk) ? Optional.of(request.id()) : Optional.empty();
+        return new TaskRow(request.item().toStack(amount), text, status, details, depth, order);
     }
 
     /** The Job of the producer crafting a claim ("Smith"), its name if it holds none. */
@@ -460,6 +481,54 @@ public record ClerkTabData(int level, int ledgers, List<StockRule> rules, List<T
 
         @Override
         public Type<Edit> type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * Client → server: place a one-time order at the open Clerk.
+     *
+     * @param containerId the menu's container id
+     * @param item        the item
+     * @param amount      the amount
+     */
+    public record Order(int containerId, ItemKey item, int amount) implements CustomPacketPayload {
+
+        /** Payload type. */
+        public static final Type<Order> TYPE = new Type<>(CivMod.id("order_once"));
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, Order> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, Order::containerId,
+                ItemKey.STREAM_CODEC, Order::item,
+                ByteBufCodecs.VAR_INT, Order::amount,
+                Order::new);
+
+        @Override
+        public Type<Order> type() {
+            return TYPE;
+        }
+    }
+
+    /**
+     * Client → server: withdraw an open one-time order of the open Clerk.
+     *
+     * @param containerId the menu's container id
+     * @param request     the request id
+     */
+    public record Withdraw(int containerId, UUID request) implements CustomPacketPayload {
+
+        /** Payload type. */
+        public static final Type<Withdraw> TYPE = new Type<>(CivMod.id("withdraw_order"));
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, Withdraw> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, Withdraw::containerId,
+                UUIDUtil.STREAM_CODEC, Withdraw::request,
+                Withdraw::new);
+
+        @Override
+        public Type<Withdraw> type() {
             return TYPE;
         }
     }
