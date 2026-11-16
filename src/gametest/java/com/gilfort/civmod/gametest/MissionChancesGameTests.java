@@ -101,7 +101,8 @@ public final class MissionChancesGameTests {
 
         OutcomeRules rules = new OutcomeRules(0.5, 0.01, 0.1, 0.9, 0.05, 0.02, 0.02, 0.5, 3.0, 1.0);
         MissionsTabData tab = new MissionsTabData(List.of(marked("lv5")), List.of(),
-                List.of(new MissionsTabData.MissionSettler(ALICE, "Alice", ModJobs.ADVENTURER.get(), 7)), rules);
+                List.of(new MissionsTabData.MissionSettler(ALICE, "Alice", ModJobs.ADVENTURER.get(), 7)), rules,
+                List.of(CivMod.id("lv5"), CivMod.id("lv6")), List.of(CivMod.id("lv5")));
         RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), helper.getLevel().registryAccess());
         MissionsTabData.STREAM_CODEC.encode(buffer, tab);
         MissionsTabData read = MissionsTabData.STREAM_CODEC.decode(buffer);

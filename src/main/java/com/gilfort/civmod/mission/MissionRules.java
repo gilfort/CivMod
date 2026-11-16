@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.ToIntFunction;
 
@@ -101,6 +102,25 @@ public final class MissionRules {
             }
         }
         return List.copyOf(result);
+    }
+
+    /**
+     * Marks every entry of a ticked mission (auto-enable); marked entries come first, in their order. An assignment or lock
+     * on an entry stays.
+     *
+     * @param entries the offer entries
+     * @param auto    the ticked missions
+     * @return the entries with the marks set, marked ones first
+     */
+    public static List<MissionOffer.Entry> markAuto(List<MissionOffer.Entry> entries, Set<Identifier> auto) {
+        List<MissionOffer.Entry> marked = new ArrayList<>();
+        List<MissionOffer.Entry> unmarked = new ArrayList<>();
+        for (MissionOffer.Entry entry : entries) {
+            MissionOffer.Entry result = auto.contains(entry.mission()) ? entry.withMarked(true) : entry;
+            (result.marked() ? marked : unmarked).add(result);
+        }
+        marked.addAll(unmarked);
+        return List.copyOf(marked);
     }
 
     /** One weighted draw among the missions below their maximum; empty if every one is at it. */

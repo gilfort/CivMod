@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:mission_auto_untick_keeps_marks",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 4
+}
