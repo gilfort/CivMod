@@ -134,6 +134,8 @@ public final class ShiftClickGameTests {
         helper.assertTrue(StationTypes.put(helper.getLevel(), pos, 0, new ItemStack(Items.STONECUTTER)) == StationTypes.PutResult.UNLOCKED, "Unlocked");
         tab.data().set(StationTypesTabData.of(helper.getLevel(), pos));
         helper.assertFalse(tab.accepts().orElseThrow().test(new ItemStack(Items.STONECUTTER)), "An item in a slot no longer fits");
+        helper.assertTrue(tab.data().get().firstFreeSlot().isEmpty() && !tab.accepts().orElseThrow().test(new ItemStack(Items.SMITHING_TABLE)),
+                "With the only open slot full, no item fits: " + tab.data().get().firstFreeSlot());
         helper.assertTrue(menu.tabs().stream().filter(t -> t.accepts().isPresent()).count() == 1, "Only tabs where not everything fits take part");
         helper.succeed();
     }
