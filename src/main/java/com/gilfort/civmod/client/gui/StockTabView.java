@@ -398,10 +398,14 @@ final class StockTabView implements JobBlockTabView {
         return new Rect2i(screen.left() + ONCE_SLOT_X, screen.top() + ONCE_Y, 16, 16);
     }
 
-    /** Shift + right-click: the first rule slot without a rule (grid view only). */
+    /** Shift + click: the first rule slot without a rule, then the Once slot while it is empty (grid view only). */
     @Override
     public int nextEmptyGhost() {
-        return editing() ? -1 : clerk().nextEmptyGhostSlot();
+        if (editing()) {
+            return -1;
+        }
+        int slot = clerk().nextEmptyGhostSlot();
+        return slot >= 0 ? slot : onceItem == null ? ONCE_TARGET : -1;
     }
 
     /**

@@ -19,6 +19,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.inventory.SimpleContainerData;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -182,6 +183,11 @@ public final class DeliverySlipMenu extends CivMenu {
         }
         ItemStack carried = getCarried();
         filter.setItem(slotId, carried.isEmpty() ? ItemStack.EMPTY : carried.copyWithCount(1));
+        writeFilter();
+    }
+
+    /** Saves the filter slots into the slip, each item once, and shows the slip's data. */
+    private void writeFilter() {
         List<ItemKey> items = new ArrayList<>();
         for (int slot = 0; slot < DeliverySlip.FILTER_SLOTS; slot++) {
             ItemKey item = ItemKey.of(filter.getItem(slot));
@@ -193,9 +199,29 @@ public final class DeliverySlipMenu extends CivMenu {
         readSlip();
     }
 
-    /** Nothing moves by shift-click: the player inventory is only there to pick items from. */
+    /**
+     * Shift + left click on a player inventory item sets a copy of it in the first empty filter slot; the stack stays.
+     * An item the filter has already, or a full filter, changes nothing.
+     */
     @Override
     public ItemStack quickMoveStack(Player clicker, int slotIndex) {
+        Slot slot = slots.get(slotIndex);
+        if (slotIndex < DeliverySlip.FILTER_SLOTS || !slot.hasItem() || slip().isEmpty()) {
+            return ItemStack.EMPTY;
+        }
+        ItemKey item = ItemKey.of(slot.getItem());
+        for (int target = 0; target < DeliverySlip.FILTER_SLOTS; target++) {
+            if (item.equals(ItemKey.of(filter.getItem(target)))) {
+                return ItemStack.EMPTY;
+            }
+        }
+        for (int target = 0; target < DeliverySlip.FILTER_SLOTS; target++) {
+            if (filter.getItem(target).isEmpty()) {
+                filter.setItem(target, slot.getItem().copyWithCount(1));
+                writeFilter();
+                break;
+            }
+        }
         return ItemStack.EMPTY;
     }
 

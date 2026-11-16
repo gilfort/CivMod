@@ -2,6 +2,7 @@ package com.gilfort.civmod.menu;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 import com.gilfort.civmod.job.JobNeeds;
 import com.gilfort.civmod.settlement.StationTypes;
@@ -93,6 +94,40 @@ public final class StationTypesTab extends JobBlockTab {
      */
     public int slotButtonId(int slot) {
         return buttonId(slot);
+    }
+
+    /**
+     * @return the unlock items that are not in a slot yet
+     */
+    @Override
+    public Optional<Predicate<ItemStack>> accepts() {
+        return Optional.of(stack -> {
+            StationTypesTabData tab = data.get();
+            return !tab.jobsOf(stack.getItem()).isEmpty() && !tab.slots().contains(stack.getItem());
+        });
+    }
+
+    /**
+     * Puts one of the clicked items into the first open, empty slot ({@link StationTypes#put}); the stack of the
+     * inventory slot shrinks by one if the item unlocks something new. Without a free slot nothing happens.
+     */
+    @Override
+    void quickMove(ItemStack stack) {
+        JobBlockMenu menu = menu();
+        Optional<JobBlockMenu.Site> site = menu.validSite();
+        if (site.isEmpty()) {
+            return;
+        }
+        StationTypesTabData tab = StationTypesTabData.of(site.get().level(), site.get().pos(), List.of());
+        for (int slot = 0; slot < StationTypes.SLOTS; slot++) {
+            if (tab.isOpen(slot) && tab.item(slot) == Items.AIR) {
+                StationTypes.PutResult result = StationTypes.put(site.get().level(), site.get().pos(), slot, stack);
+                if (result == StationTypes.PutResult.UNLOCKED) {
+                    menu.resend();
+                }
+                return;
+            }
+        }
     }
 
     /**

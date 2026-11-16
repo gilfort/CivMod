@@ -89,7 +89,7 @@ public final class DeliverySlipScreen extends CivContainerScreen<DeliverySlipMen
 
     @Override
     protected List<Component> helpLines(int tab) {
-        return List.of(Component.translatable("civmod.gui.slip.help.filter"), Component.translatable("civmod.gui.slip.help.filter_clear"),
+        return List.of(Component.translatable("civmod.gui.slip.help.filter"), Component.translatable("civmod.gui.slip.help.filter_clear"), Component.translatable("civmod.gui.slip.help.shift"),
                 Component.translatable("civmod.gui.slip.help.source"),
                 Component.translatable("civmod.gui.slip.help.target"), Component.translatable("civmod.gui.slip.help.orders"),
                 Component.translatable("civmod.gui.slip.help.limits", DeliverySlip.MAX_LIMIT));

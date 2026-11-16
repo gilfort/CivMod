@@ -1,6 +1,7 @@
 package com.gilfort.civmod.menu;
 
 import java.util.Optional;
+import java.util.function.Predicate;
 
 import com.gilfort.civmod.settlement.Fuels;
 
@@ -59,6 +60,14 @@ public final class FuelTab extends JobBlockTab {
      */
     public TabData<FuelTabData> data() {
         return data;
+    }
+
+    /**
+     * @return the items that burn in a furnace
+     */
+    @Override
+    public Optional<Predicate<ItemStack>> accepts() {
+        return Optional.of(Fuels::isFuel);
     }
 
     /**

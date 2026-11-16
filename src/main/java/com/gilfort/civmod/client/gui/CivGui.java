@@ -70,6 +70,8 @@ public final class CivGui {
     /** Vanilla slot highlight under the mouse. */
     private static final int HOVER_TINT = 0x80FFFFFF;
     /** Tint over a slot whose slip cannot be worked (a container is gone). */
+    /** Tint of an inventory slot whose item the open tab takes. */
+    private static final int FITS_TINT = 0x8055FF55;
     static final int MISSING_TINT = 0x80FF0000;
     /** Colour of a bonus star (vanilla gold). */
     static final int STAR_COLOR = 0xFFFFAA00;
@@ -123,6 +125,17 @@ public final class CivGui {
      */
     public static void slotHover(GuiGraphicsExtractor graphics, int itemX, int itemY) {
         graphics.fill(itemX, itemY, itemX + 16, itemY + 16, HOVER_TINT);
+    }
+
+    /**
+     * Lights up a slot whose item the open tab takes (while Shift is held).
+     *
+     * @param graphics the graphics extractor
+     * @param itemX    the x position of the item (slot position)
+     * @param itemY    the y position of the item (slot position)
+     */
+    public static void slotFits(GuiGraphicsExtractor graphics, int itemX, int itemY) {
+        graphics.fill(itemX, itemY, itemX + 16, itemY + 16, FITS_TINT);
     }
 
     /**
