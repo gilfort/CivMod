@@ -54,6 +54,17 @@ public final class ToolTiers {
     }
 
     /**
+     * @param stack a tool
+     * @return whether it is a golden tool (mining level of gold, so as low as wood): the tool supply never orders one, it
+     *         uses one only when it already lies in the Clerk store
+     */
+    public static boolean isGolden(ItemStack stack) {
+        Tool tool = stack.get(DataComponents.TOOL);
+        return tool != null && tool.rules().stream().anyMatch(rule -> rule.correctForDrops().filter(correct -> !correct).isPresent()
+                && rule.blocks().unwrapKey().filter(BlockTags.INCORRECT_FOR_GOLD_TOOL::equals).isPresent());
+    }
+
+    /**
      * @param tier a tool tier
      * @return the speed multiplier of that tier (T0 ×0.5, T1 ×1, T2 ×1.2, T3 ×1.5, T4 ×2)
      */

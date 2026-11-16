@@ -11,6 +11,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.job.CatchUp;
 import com.gilfort.civmod.job.SettlerSkills;
+import com.gilfort.civmod.job.ToolTiers;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.DeliveryTask;
 import com.gilfort.civmod.logistics.ItemKey;
@@ -33,9 +34,11 @@ import com.gilfort.civmod.settlement.TestAssignments;
 import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.server.level.ServerLevel;
@@ -44,6 +47,7 @@ import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.ToolMaterial;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -66,6 +70,9 @@ public final class ToolSupplyGameTests {
     /** Most passes a producer needs for the pickaxe: post, make, then the parent. */
     private static final int MAX_PASSES = 4;
 
+    /** A pickaxe of another "mod" with the iron mining level, in {@code #minecraft:pickaxes} by the test datapack. */
+    private static final Identifier MODDED_PICKAXE = CivMod.id("test_modded_pickaxe");
+
     private ToolSupplyGameTests() {
     }
 
@@ -87,7 +94,12 @@ public final class ToolSupplyGameTests {
             register(helper, "tool_supply_steps_down", ToolSupplyGameTests::stepsDown);
             register(helper, "tool_supply_no_step_down_with_ore", ToolSupplyGameTests::noStepDownWithOre);
             register(helper, "tool_supply_later_tool_changes_nothing", ToolSupplyGameTests::laterToolChangesNothing);
+            register(helper, "tool_supply_dead_end_missing_input", ToolSupplyGameTests::deadEndMissingInput);
+            register(helper, "tool_supply_modded_tool", ToolSupplyGameTests::moddedTool);
+            register(helper, "tool_supply_golden_in_store", ToolSupplyGameTests::goldenInStore);
         });
+        event.register(Registries.ITEM, helper -> helper.register(MODDED_PICKAXE, new Item(new Item.Properties()
+                .setId(ResourceKey.create(Registries.ITEM, MODDED_PICKAXE)).pickaxe(ToolMaterial.IRON, 1.0F, -2.8F))));
     }
 
     private static void register(RegisterEvent.RegisterHelper<Consumer<GameTestHelper>> helper, String name, Consumer<GameTestHelper> test) {
@@ -527,18 +539,19 @@ public final class ToolSupplyGameTests {
         List<Request> asked = requestsOf(settlement, miner);
         helper.assertTrue(asked.size() == 1 && asked.getFirst().target().equals(Optional.of(clerk)) && asked.getFirst().amount() == 1,
                 "A request is posted although nobody makes it: " + settlement.requests());
+        helper.assertTrue(asked.getFirst().item().is(Items.DIAMOND_PICKAXE), "No pattern anywhere: the highest allowed tier is asked: " + asked);
         finish(helper, miner);
     }
 
-    /** A Miner of skill 1 without a tool asks for a pickaxe; the first band used to post nothing. */
+    /** A Miner of skill 1 without a tool asks for a stone pickaxe (its highest allowed tier, no pattern needed); the first band used to post nothing. */
     private static void skillOne(GameTestHelper helper) {
         BlockPos clerk = clerkWith(helper, List.of());
         Settlement settlement = settlement(helper, clerk);
         Settler miner = toolWorker(helper, new BlockPos(1, 1, 13), ModJobs.MINER.get(), 1, ItemStack.EMPTY);
         ask(helper, miner);
         List<Request> asked = requestsOf(settlement, miner);
-        helper.assertTrue(asked.size() == 1 && asked.getFirst().item().toStack().is(ItemTags.PICKAXES) && asked.getFirst().target().equals(Optional.of(clerk)),
-                "A skill-1 Miner asks for a pickaxe: " + settlement.requests());
+        helper.assertTrue(asked.size() == 1 && asked.getFirst().item().is(Items.STONE_PICKAXE) && asked.getFirst().target().equals(Optional.of(clerk)),
+                "A skill-1 Miner asks for a stone pickaxe: " + settlement.requests());
         finish(helper, miner);
     }
 
@@ -711,5 +724,78 @@ public final class ToolSupplyGameTests {
             helper.assertTrue(free(level, clerk, Items.STONE_PICKAXE) == 1, "The pickaxe that arrived is not taken");
             cleanUp(helper, miner);
         }).thenSucceed();
+    }
+
+    /**
+     * The Smith misses ingots (the Smelter has ore and coal, so that sub-request is working) and sticks (nobody makes them):
+     * the tree has a dead end although the ingot request is not stuck, so the Miner steps down to the stone pickaxe.
+     */
+    private static void deadEndMissingInput(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerk = clerkWith(helper, List.of(new ItemStack(Items.RAW_IRON, 3), new ItemStack(Items.COAL, 2)));
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = settlement(helper, clerk);
+        Settler smith = smith(helper, data, settlement, new BlockPos(1, 1, 5));
+        helper.setBlock(new BlockPos(3, 1, 5), Blocks.SMITHING_TABLE);
+        Settler mason = stonemason(helper, data, settlement, new BlockPos(1, 1, 9));
+        BlockPos smelterBlock = SmelterGameTests.smelterBlock(helper, new BlockPos(6, 1, 17));
+        helper.setBlock(new BlockPos(8, 1, 17), Blocks.FURNACE);
+        SmelterGameTests.ironPattern(helper, smelterBlock, 0);
+        Settler smelter = worker(helper, data, settlement, smelterBlock, new BlockPos(7, 1, 18), "Ida", SmelterGameTests.smelter());
+        Settler miner = toolWorker(helper, new BlockPos(1, 1, 13), ModJobs.MINER.get(), IRON_SKILL, ItemStack.EMPTY);
+
+        ask(helper, miner);
+        UUID iron = openFor(settlement, miner).getFirst().id();
+        catchUp(level, smith);
+        helper.assertTrue(Requests.children(settlement, iron).stream().anyMatch(child -> child.item().is(Items.IRON_INGOT) && open(child)),
+                "The Smith asked for the ingots: " + settlement.requests());
+        helper.assertTrue(Requests.deadEnd(settlement, iron), "The sticks have no sub-request: " + settlement.requests());
+
+        helper.startSequence().thenIdle(WAIT).thenExecute(() -> {
+            ask(helper, miner);
+            List<Request> asked = openFor(settlement, miner);
+            helper.assertTrue(asked.size() == 1 && asked.getFirst().item().is(Items.STONE_PICKAXE), "One tier lower is asked for: " + settlement.requests());
+            cleanUp(helper, smith, mason, smelter, miner);
+        }).thenSucceed();
+    }
+
+    /**
+     * A tool of another mod counts when its mining level fits: an iron-level pickaxe in the Clerk store (found by the tag
+     * and the tool component, not by item id) is carried to the collect inventory of a skill-45 Miner and nothing is ordered.
+     */
+    private static void moddedTool(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Item modded = BuiltInRegistries.ITEM.getValue(MODDED_PICKAXE);
+        helper.assertTrue(modded != Items.AIR && new ItemStack(modded).is(ItemTags.PICKAXES), "The test pickaxe is registered and a pickaxe");
+        helper.assertTrue(ToolTiers.tier(new ItemStack(modded)) == 2, "Its mining level is iron");
+        BlockPos clerk = clerkWith(helper, List.of(new ItemStack(modded)));
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = settlement(helper, clerk);
+        Settler miner = toolWorker(helper, new BlockPos(1, 1, 13), ModJobs.MINER.get(), IRON_SKILL, ItemStack.EMPTY);
+        helper.setBlock(new BlockPos(3, 1, 13), Blocks.CHEST);
+        BlockPos chest = helper.absolutePos(new BlockPos(3, 1, 13));
+        helper.assertTrue(JobAssignments.cyclePoint(data, jobBlock(miner), chest, false, true) == JobAssignments.PointResult.COLLECT,
+                "The chest is the collect inventory");
+        ask(helper, miner);
+        helper.assertTrue(settlement.requests().isEmpty(), "The modded tool is in the store, nothing is ordered: " + settlement.requests());
+        helper.assertTrue(((Container) level.getBlockEntity(chest)).hasAnyMatching(stack -> stack.is(modded)), "The modded pickaxe is in the chest");
+        finish(helper, miner);
+    }
+
+    /** A golden tool lying in the Clerk store is used (it meets a skill-1 requirement); nothing is ordered. */
+    private static void goldenInStore(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerk = clerkWith(helper, List.of(new ItemStack(Items.GOLDEN_PICKAXE)));
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = settlement(helper, clerk);
+        Settler miner = toolWorker(helper, new BlockPos(1, 1, 13), ModJobs.MINER.get(), 1, ItemStack.EMPTY);
+        helper.setBlock(new BlockPos(3, 1, 13), Blocks.CHEST);
+        BlockPos chest = helper.absolutePos(new BlockPos(3, 1, 13));
+        helper.assertTrue(JobAssignments.cyclePoint(data, jobBlock(miner), chest, false, true) == JobAssignments.PointResult.COLLECT,
+                "The chest is the collect inventory");
+        ask(helper, miner);
+        helper.assertTrue(settlement.requests().isEmpty(), "The golden pickaxe is in the store, nothing is ordered: " + settlement.requests());
+        helper.assertTrue(((Container) level.getBlockEntity(chest)).hasAnyMatching(stack -> stack.is(Items.GOLDEN_PICKAXE)), "The golden pickaxe is in the chest");
+        finish(helper, miner);
     }
 }

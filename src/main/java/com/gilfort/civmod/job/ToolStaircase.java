@@ -72,13 +72,6 @@ public final class ToolStaircase {
         }
 
         /**
-         * @return whether the requirement can be missed at all
-         */
-        public boolean requiresTool() {
-            return required != NO_TIER;
-        }
-
-        /**
          * Orders tools: one that meets the requirement beats one that does not, then the higher tier, then an enchanted tool.
          *
          * @param stack a tool

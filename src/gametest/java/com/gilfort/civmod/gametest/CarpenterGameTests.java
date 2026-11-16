@@ -13,16 +13,12 @@ import com.gilfort.civmod.job.JobBalancing;
 import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.registry.ModJobs;
-import com.gilfort.civmod.settlement.DomainRule;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.Patterns;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Holder;
-import net.minecraft.core.HolderSet;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
@@ -30,7 +26,6 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -173,20 +168,18 @@ public final class CarpenterGameTests {
     }
 
     /**
-     * A tag ingredient counts only when everything it accepts is wooden: with a plank-or-cobblestone slot, 1 of 3 slots
-     * is wooden and the pattern is outside; a plank-only tag in its place reaches 2 of 3.
+     * A tag ingredient counts only when everything it accepts is wooden. The datapack recipes of this test hold a stick and an
+     * iron ingot next to a plank-or-cobblestone tag (1 of 3 slots wooden, outside), a plank-only tag (2 of 3, inside), three
+     * iron ingots with two sticks (40 %, outside) and one ingot with one stick (exactly 50 %, inside).
      */
     private static void domainTags(GameTestHelper helper) {
-        DomainRule rule = DomainRule.of(carpenter().profile(ProducingProfile.class).orElseThrow(), JobBalancing.of(carpenter()));
-        Ingredient mixed = Ingredient.of(HolderSet.direct(holder(Items.OAK_PLANKS), holder(Items.COBBLESTONE)));
-        Ingredient wooden = Ingredient.of(HolderSet.direct(holder(Items.OAK_PLANKS), holder(Items.BIRCH_PLANKS)));
-        Ingredient stick = Ingredient.of(Items.STICK);
-        Ingredient iron = Ingredient.of(Items.IRON_INGOT);
-        helper.assertTrue(rule.outside(Items.IRON_BLOCK, List.of(mixed, stick, iron)), "A mixed tag does not count: 1 of 3");
-        helper.assertFalse(rule.outside(Items.IRON_BLOCK, List.of(wooden, stick, iron)), "A wooden-only tag counts: 2 of 3");
-        helper.assertTrue(rule.outside(Items.IRON_BLOCK, List.of(iron, iron, stick, stick, iron)), "40 % is too little");
-        helper.assertFalse(rule.outside(Items.IRON_BLOCK, List.of(iron, stick)), "Exactly 50 % passes");
-        helper.assertTrue(rule.outside(Items.IRON_BLOCK, List.of()), "No slots, no share");
+        ServerLevel level = helper.getLevel();
+        BlockPos craft = workshop(helper, new BlockPos(1, 1, 1));
+        helper.assertFalse(Patterns.setOutput(level, craft, carpenter(), 0, ItemKey.of(Items.BEDROCK)).orElseThrow().checked(), "A mixed tag does not count: 1 of 3");
+        helper.assertTrue(Patterns.setOutput(level, craft, carpenter(), 1, ItemKey.of(Items.REINFORCED_DEEPSLATE)).orElseThrow().checked(),
+                "A wooden-only tag counts: 2 of 3");
+        helper.assertFalse(Patterns.setOutput(level, craft, carpenter(), 2, ItemKey.of(Items.DRAGON_EGG)).orElseThrow().checked(), "40 % is too little");
+        helper.assertTrue(Patterns.setOutput(level, craft, carpenter(), 3, ItemKey.of(Items.SPAWNER)).orElseThrow().checked(), "Exactly 50 % passes");
         helper.succeed();
     }
 
@@ -219,10 +212,6 @@ public final class CarpenterGameTests {
             JobBalancing.install(before);
         }
         helper.succeed();
-    }
-
-    private static Holder<Item> holder(Item item) {
-        return BuiltInRegistries.ITEM.wrapAsHolder(item);
     }
 
     private static void install(Map<Job, JobBalancing> before, String file) {

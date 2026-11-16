@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": ["#civmod:test_mixed_wood", "minecraft:stick", "minecraft:iron_ingot"],
+  "result": { "id": "minecraft:bedrock", "count": 1 }
+}
