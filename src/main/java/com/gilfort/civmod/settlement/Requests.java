@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
 
+import com.gilfort.civmod.logistics.CraftPlan;
 import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.ReservedFor;
@@ -205,6 +206,32 @@ public final class Requests {
     }
 
     /**
+     * Whether a request's tree has a dead end: a request somewhere in it shows "Missing: ..." while nobody crafts it and
+     * some missing item is covered by no open sub-request, so nobody is working on getting it. A missing input that an
+     * open sub-request makes is no dead end, as long as every other missing input has one too. A request nobody has
+     * looked at yet (nothing missing shown) is none either.
+     *
+     * @param settlement a settlement
+     * @param id         the request id
+     * @return whether the request or one of its sub-requests is stuck
+     */
+    public static boolean deadEnd(Settlement settlement, UUID id) {
+        return get(settlement, id).filter(request -> deadEnd(settlement, request, 0)).isPresent();
+    }
+
+    private static boolean deadEnd(Settlement settlement, Request request, int depth) {
+        // The depth limit also stops a loop in broken data.
+        if (depth > CraftPlan.MAX_DEPTH) {
+            return false;
+        }
+        List<Request> open = children(settlement, request.id()).stream().filter(child -> child.amount() + child.crafting() > 0).toList();
+        // Inputs made for the request wait in the Clerk until its producer looks again; "Missing" may be out of date.
+        boolean stuck = !request.missing().isEmpty() && request.claims().isEmpty() && Holds.heldFor(settlement, ReservedFor.request(request.id())).isEmpty()
+                && request.missing().stream().anyMatch(missing -> open.stream().noneMatch(child -> child.item().equals(missing.item())));
+        return stuck || open.stream().anyMatch(child -> deadEnd(settlement, child, depth + 1));
+    }
+
+    /**
      * Sets what a producer misses to work on a request (shown as "Missing: 6× Cobblestone, 4× Stick"); empty clears it.
      *
      * @param data       the dimension's settlement data
@@ -232,14 +259,16 @@ public final class Requests {
     }
 
     /**
-     * A request no longer needs its result held for someone: the result is free stock once it is made.
+     * Ends a request that was reserved for someone: it is withdrawn like {@link #withdraw}, and a result a producer is
+     * still crafting is no longer held for anybody, so it becomes free stock once it is made.
      *
      * @param data       the dimension's settlement data
      * @param settlement the settlement
      * @param id         the request id
      */
-    public static void dropReservation(SettlementData data, Settlement settlement, UUID id) {
+    public static void withdrawReserved(SettlementData data, Settlement settlement, UUID id) {
         update(data, settlement, id, Request::withoutReservation);
+        withdraw(data, settlement, id);
     }
 
     /**

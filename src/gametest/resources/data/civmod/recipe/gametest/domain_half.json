@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": ["minecraft:iron_ingot", "minecraft:stick"],
+  "result": { "id": "minecraft:spawner", "count": 1 }
+}

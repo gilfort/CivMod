@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": ["#civmod:test_only_wood", "minecraft:stick", "minecraft:iron_ingot"],
+  "result": { "id": "minecraft:reinforced_deepslate", "count": 1 }
+}

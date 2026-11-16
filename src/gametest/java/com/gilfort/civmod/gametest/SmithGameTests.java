@@ -72,6 +72,7 @@ public final class SmithGameTests {
             register(helper, "smith_missing_ingots", SmithGameTests::missingIngots);
             register(helper, "smith_netherite_upgrade", SmithGameTests::netheriteUpgrade);
             register(helper, "smith_no_trims", SmithGameTests::noTrims);
+            register(helper, "smith_smithing_exempt", SmithGameTests::smithingExempt);
             register(helper, "smith_anvil_faster", SmithGameTests::anvilFaster);
             register(helper, "smith_without_anvil_slower", SmithGameTests::withoutAnvilSlower);
             register(helper, "smith_chipped_anvil", SmithGameTests::chippedAnvil);
@@ -204,6 +205,30 @@ public final class SmithGameTests {
         helper.assertTrue(EnchantmentHelper.getItemEnchantmentLevel(sharpness, made) == 3 && made.getDamageValue() == 10,
                 "Enchantments and damage kept: " + made.getEnchantments() + ", damage " + made.getDamageValue());
         cleanUp(setup, settler);
+        helper.succeed();
+    }
+
+    /**
+     * Smithing recipes ignore the domain test and the lists: with a deny list on tools and a share of 100 %, a crafting
+     * pattern for an iron pickaxe is rejected, the netherite sword (a smithing recipe, output and 1 of 3 slots outside
+     * the strict rule) is still checked.
+     */
+    private static void smithingExempt(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos craft = smithy(helper, new BlockPos(1, 1, 1));
+        java.util.Map<Job, JobBalancing> before = new java.util.HashMap<>();
+        com.gilfort.civmod.registry.ModJobs.REGISTRY.stream().forEach(job -> before.put(job, JobBalancing.of(job)));
+        try {
+            java.util.Map<Job, JobBalancing> loaded = new java.util.HashMap<>(before);
+            loaded.put(smith(), JobBalancing.merge(List.<com.google.gson.JsonElement>of(
+                    JsonParser.parseString("{\"domain_input_share\": 1.0, \"recipe_deny\": \"#c:tools\"}"))));
+            JobBalancing.install(loaded);
+            helper.assertFalse(Patterns.setOutput(level, craft, smith(), 0, ItemKey.of(Items.IRON_PICKAXE)).orElseThrow().checked(), "The lists still block a crafting pattern");
+            helper.assertTrue(Patterns.setOutput(level, craft, smith(), 1, ItemKey.of(Items.NETHERITE_SWORD)).orElseThrow().checked(),
+                    "A smithing recipe passes the domain test and the lists");
+        } finally {
+            JobBalancing.install(before);
+        }
         helper.succeed();
     }
 

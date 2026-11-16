@@ -13,6 +13,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.JobCraftingRecipe;
 import com.gilfort.civmod.api.ProducingProfile;
+import com.gilfort.civmod.job.JobBalancing;
 import com.gilfort.civmod.logistics.InnateLayout;
 import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.logistics.ItemKey;
@@ -48,7 +49,7 @@ import net.minecraft.world.level.block.Block;
  * A settler works only the library of its Job.
  * <p>
  * A pattern is usable if its recipe is of one of the Job's profile's types, the profile's filters let it through and
- * an input or its output is in the profile's domain (if it has one); rejected alternatives of a tag input are skipped. A pattern of another recipe type ("foreign", a profile that changed)
+ * the Job's domain test ({@link DomainRule}) passes; rejected alternatives of a tag input are skipped. A pattern of another recipe type ("foreign", a profile that changed)
  * keeps its checkmark but is skipped. A filtered pattern loses its checkmark. A new pattern is checked automatically while
  * the limit allows. The library of a Job no longer unlocked at the JobBlock (a replaced Station Type) is kept but
  * "locked": unusable and not editable until the Job is unlocked again.
@@ -153,7 +154,7 @@ public final class Patterns {
             return List.of();
         }
         ProducingProfile profile = profile(job);
-        return checked(block, job).stream().filter(pattern -> allowed(level, profile, pattern)).toList();
+        return checked(block, job).stream().filter(pattern -> allowed(level, job, pattern)).toList();
     }
 
     /**
@@ -177,13 +178,13 @@ public final class Patterns {
 
     /**
      * @param level   the level
-     * @param profile a Producing profile
+     * @param job     a Producing Job
      * @param pattern a pattern
-     * @return whether the profile can use it: it makes something, follows a recipe of the profile's types and passes its
-     *         filters
+     * @return whether the Job can use it: it makes something, follows a recipe of its profile's types and passes its
+     *         filters and domain
      */
-    static boolean allowed(ServerLevel level, ProducingProfile profile, Pattern pattern) {
-        return pattern.valid() && (pattern.innate() || !foreign(level, profile, pattern) && !filtered(level, profile, pattern));
+    static boolean allowed(ServerLevel level, Job job, Pattern pattern) {
+        return pattern.valid() && (pattern.innate() || !foreign(level, profile(job), pattern) && !filtered(level, job, pattern));
     }
 
     /**
@@ -195,7 +196,7 @@ public final class Patterns {
      *         or filtered)
      */
     public static boolean unusable(ServerLevel level, SettlementBlock block, Job job, Pattern pattern) {
-        return pattern.valid() && (locked(block, job) || !allowed(level, profile(job), pattern));
+        return pattern.valid() && (locked(block, job) || !allowed(level, job, pattern));
     }
 
     /**
@@ -212,20 +213,25 @@ public final class Patterns {
 
     /**
      * @param level   the level
-     * @param profile a Producing profile
+     * @param job     a Producing Job
      * @param pattern a pattern
-     * @return whether the profile's filters reject its output or an input (all its alternatives), or the pattern lies
-     *         outside the profile's domain (neither its output nor an input alternative is in the domain tag); never for an innate pattern
+     * @return whether the Job's filters reject its output or an input (all its alternatives), or the pattern lies
+     *         outside the Job's domain ({@link DomainRule}); never for an innate pattern
      */
-    public static boolean filtered(ServerLevel level, ProducingProfile profile, Pattern pattern) {
+    public static boolean filtered(ServerLevel level, Job job, Pattern pattern) {
         if (!pattern.valid() || pattern.innate()) {
             return false;
         }
+        ProducingProfile profile = profile(job);
         List<Ingredient> inputs = allInputs(level, profile, pattern);
         return !profile.outputFilter().test(pattern.output().item())
                 || inputs.stream().anyMatch(input -> input.items().noneMatch(profile.inputFilter()::test))
-                || profile.domain().filter(domain -> !pattern.output().item().getDefaultInstance().is(domain)
-                        && inputs.stream().noneMatch(input -> input.items().anyMatch(item -> item.is(domain)))).isPresent();
+                || !smithing(level, pattern) && DomainRule.of(profile, JobBalancing.of(job)).outside(pattern.output().item(), inputs);
+    }
+
+    /** Smithing recipes are exempt from the domain and the lists: the Smith is the only Job at the smithing table and works every one of them. */
+    private static boolean smithing(ServerLevel level, Pattern pattern) {
+        return pattern.recipe().flatMap(id -> PatternRecipes.holder(level, id)).filter(holder -> holder.value().getType() == RecipeType.SMITHING).isPresent();
     }
 
     /**
@@ -424,7 +430,7 @@ public final class Patterns {
         SettlementBlock.Library library = block.library(job);
         library.setNotice(Optional.empty());
         boolean check = !pattern.get().checked();
-        if (check && (!allowed(level, profile(job), pattern.get()) || atLimit(level, block, job, pattern.get()))) {
+        if (check && (!allowed(level, job, pattern.get()) || atLimit(level, block, job, pattern.get()))) {
             return false;
         }
         replace(data, library, pattern.get().withChecked(check));
@@ -461,7 +467,7 @@ public final class Patterns {
             replace(data, library, current.withAlways(false, current.atOnce()));
             return false;
         }
-        if (!allowed(level, profile(job), current) || (!current.checked() && atLimit(level, block, job, current))) {
+        if (!allowed(level, job, current) || (!current.checked() && atLimit(level, block, job, current))) {
             return false;
         }
         replace(data, library, current.withChecked(true).withAlways(true, current.atOnce()));
@@ -598,7 +604,7 @@ public final class Patterns {
         ProducingProfile profile = profile(job);
         SettlementBlock.Library library = block.library(job);
         List<Pattern> filtered = library.patterns().stream()
-                .filter(pattern -> pattern.checked() && !foreign(level, profile, pattern) && filtered(level, profile, pattern)).toList();
+                .filter(pattern -> pattern.checked() && !foreign(level, profile, pattern) && filtered(level, job, pattern)).toList();
         filtered.forEach(pattern -> replace(data, library, pattern.withChecked(false)));
         return filtered.size();
     }
@@ -776,7 +782,7 @@ public final class Patterns {
             return Optional.empty();
         }
         SettlementBlock.Library library = block.library(job);
-        boolean allowed = allowed(level, profile(job), pattern);
+        boolean allowed = allowed(level, job, pattern);
         Optional<Pattern> replaced = pattern(block, job, slot).filter(Pattern::valid);
         boolean checked;
         if (replaced.isPresent() || !allowed) {

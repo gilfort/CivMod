@@ -125,7 +125,7 @@ public record PatternsTabData(Optional<Job> job, boolean locked, int limit, List
         ProducingProfile profile = Patterns.profile(job);
         List<Pattern> patterns = block.patterns(job);
         Set<Integer> foreign = slots(patterns, pattern -> Patterns.foreign(level, profile, pattern));
-        Set<Integer> filtered = slots(patterns, pattern -> !foreign.contains(pattern.slot()) && Patterns.filtered(level, profile, pattern));
+        Set<Integer> filtered = slots(patterns, pattern -> !foreign.contains(pattern.slot()) && Patterns.filtered(level, job, pattern));
         Optional<Component> notice = block.notice(job).map(found -> switch (found) {
             case SettlementBlock.Notice.AtLimit _ -> Component.translatable("civmod.gui.patterns.at_limit");
             case SettlementBlock.Notice.Trimmed trimmed -> Component.translatable("civmod.gui.patterns.trimmed", trimmed.removed(), trimmed.limit());

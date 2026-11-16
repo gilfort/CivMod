@@ -9,6 +9,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ProducingProfile;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.ItemKey;
+import com.gilfort.civmod.settlement.Patterns;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.StockRule;
 import com.gilfort.civmod.menu.PatternsTabData;
@@ -62,6 +63,7 @@ public final class FletcherGameTests {
     static void onRegister(RegisterEvent event) {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "fletcher_unlock", FletcherGameTests::unlock);
+            register(helper, "fletcher_allows_rod_and_crossbow", FletcherGameTests::allowsRodAndCrossbow);
             register(helper, "fletcher_string_from_wool", FletcherGameTests::stringFromWool);
             register(helper, "fletcher_without_shears", FletcherGameTests::withoutShears);
             register(helper, "fletcher_unbreaking_shears", FletcherGameTests::unbreakingShears);
@@ -79,6 +81,15 @@ public final class FletcherGameTests {
     /** The Fletcher. */
     static Job fletcher() {
         return StationTypeGameTests.job(CivMod.id("fletcher"));
+    }
+
+    /** The fishing rod (2 of 5 slots) and the crossbow (2 of 7) are below the 50 % share; the Fletcher's {@code recipe_allow} lets them through. */
+    private static void allowsRodAndCrossbow(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos pos = fletchery(helper, new BlockPos(1, 1, 1));
+        helper.assertTrue(Patterns.setOutput(level, pos, fletcher(), 2, ItemKey.of(Items.FISHING_ROD)).orElseThrow().checked(), "The fishing rod is checked");
+        helper.assertTrue(Patterns.setOutput(level, pos, fletcher(), 3, ItemKey.of(Items.CROSSBOW)).orElseThrow().checked(), "The crossbow is checked");
+        helper.succeed();
     }
 
     /** A level-2 Craftsperson JobBlock with the Fletcher unlocked by a fletching table in its second Station Types slot. */
