@@ -14,7 +14,7 @@ import net.minecraft.world.level.block.Block;
 
 /**
  * The Mechanic's Producing specifics (vault {@code Jobs/Mechanic.md}): {@code crafting} recipes at a Crafter
- * ({@code civmod:stations/mechanic}), only in the redstone domain ({@code civmod:domains/redstone}, any input in the tag),
+ * ({@code civmod:stations/mechanic}), only in the redstone domain ({@code civmod:domains/redstone}, output or half of the slots in the tag),
  * four times as fast as the Craftsperson (job factor 1.2).
  */
 public final class MechanicProfile implements ProducingProfile {
