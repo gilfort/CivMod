@@ -97,6 +97,7 @@ public final class ToolSupplyGameTests {
             register(helper, "tool_supply_dead_end_missing_input", ToolSupplyGameTests::deadEndMissingInput);
             register(helper, "tool_supply_modded_tool", ToolSupplyGameTests::moddedTool);
             register(helper, "tool_supply_golden_in_store", ToolSupplyGameTests::goldenInStore);
+            register(helper, "tool_supply_steps_down_to_wooden", ToolSupplyGameTests::stepsDownToWooden);
         });
         event.register(Registries.ITEM, helper -> helper.register(MODDED_PICKAXE, new Item(new Item.Properties()
                 .setId(ResourceKey.create(Registries.ITEM, MODDED_PICKAXE)).pickaxe(ToolMaterial.IRON, 1.0F, -2.8F))));
@@ -797,5 +798,31 @@ public final class ToolSupplyGameTests {
         helper.assertTrue(settlement.requests().isEmpty(), "The golden pickaxe is in the store, nothing is ordered: " + settlement.requests());
         helper.assertTrue(((Container) level.getBlockEntity(chest)).hasAnyMatching(stack -> stack.is(Items.GOLDEN_PICKAXE)), "The golden pickaxe is in the chest");
         finish(helper, miner);
+    }
+
+    /**
+     * Nothing to make the stone pickaxe from: the Stonemason misses cobblestone and sticks and nobody supplies them. The
+     * request steps down from stone straight to wooden; the golden pickaxe, the same tier, is skipped.
+     */
+    private static void stepsDownToWooden(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerk = clerkWith(helper, List.of());
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = settlement(helper, clerk);
+        Settler mason = stonemason(helper, data, settlement, new BlockPos(1, 1, 9));
+        helper.setBlock(new BlockPos(3, 1, 10), Blocks.STONECUTTER);
+        Settler miner = toolWorker(helper, new BlockPos(1, 1, 13), ModJobs.MINER.get(), 15, ItemStack.EMPTY);
+        ask(helper, miner);
+        UUID stone = openFor(settlement, miner).getFirst().id();
+        helper.assertTrue(openFor(settlement, miner).getFirst().item().is(Items.STONE_PICKAXE), "The stone pickaxe is asked for first");
+        catchUp(level, mason);
+        catchUp(level, mason);
+        helper.assertTrue(Requests.deadEnd(settlement, stone), "The stone pickaxe cannot be made (status " + mason.getWork().status(mason.getJobs().getFirst().jobBlock()) + "): " + settlement.requests());
+        helper.startSequence().thenIdle(WAIT).thenExecute(() -> {
+            ask(helper, miner);
+            List<Request> asked = openFor(settlement, miner);
+            helper.assertTrue(asked.size() == 1 && asked.getFirst().item().is(Items.WOODEN_PICKAXE), "Wooden, not golden: " + settlement.requests());
+            cleanUp(helper, mason, miner);
+        }).thenSucceed();
     }
 }
