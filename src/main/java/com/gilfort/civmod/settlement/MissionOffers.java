@@ -1,9 +1,11 @@
 package com.gilfort.civmod.settlement;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -29,7 +31,7 @@ public final class MissionOffers {
 
     /**
      * Refills the board's offer once per day ({@link MissionRules#refill}): marked entries stay, unmarked ones are
-     * replaced; each Mission Job's share follows the board level and Station Types at the time of the refill
+     * replaced and new entries of ticked missions ({@link #setAuto}) are marked at once; each Mission Job's share follows the board level and Station Types at the time of the refill
      * ({@link MissionRules#quotas}).
      *
      * @param data   the dimension's settlement data
@@ -49,10 +51,59 @@ public final class MissionOffers {
         if (entry.missionOffer().day() != day) {
             List<MissionOffer.Entry> entries = MissionRules.refill(entry.missionOffer().entries(), pool,
                     MissionRules.quotas(StationTypes.unlocked(entry), entry.level(), StationTypes.emptySlots(entry)), random);
-            entry.setMissionOffer(new MissionOffer(entries, day));
+            MissionOffer old = entry.missionOffer();
+            entry.setMissionOffer(new MissionOffer(MissionRules.markAuto(entries, old.auto()), day, old.auto()));
             data.setDirty();
         }
         return entry.missionOffer().entries();
+    }
+
+    /**
+     * The missions the board may take on: those of the pool that one of the Mission Jobs unlocked at this board may take,
+     * in pool order. These are the missions the player can tick for auto-enable.
+     *
+     * @param data  the dimension's settlement data
+     * @param board the Mission Board position
+     * @param pool  all missions by id
+     * @return the mission ids, empty if there is no Mission Board at that position
+     */
+    public static List<Identifier> available(SettlementData data, BlockPos board, Map<Identifier, Mission> pool) {
+        Optional<SettlementBlock> block = missionBoard(data, board);
+        if (block.isEmpty()) {
+            return List.of();
+        }
+        List<Job> unlocked = StationTypes.unlocked(block.get());
+        return pool.entrySet().stream().filter(mission -> mission.getValue().jobs().stream().anyMatch(unlocked::contains))
+                .map(Map.Entry::getKey).toList();
+    }
+
+    /**
+     * Ticks or unticks a mission for auto-enable. Ticking marks the entries of that mission on offer now (an assignment or
+     * lock stays); unticking leaves every entry as it is. Every refill marks new entries of ticked missions
+     * ({@link #refresh}).
+     *
+     * @param data    the dimension's settlement data
+     * @param board   the Mission Board position
+     * @param mission the mission
+     * @param enabled the wanted tick
+     * @param pool    all missions by id
+     * @return whether the request was valid: the board exists and, for ticking, one of its unlocked Mission Jobs may take
+     *         the mission
+     */
+    public static boolean setAuto(SettlementData data, BlockPos board, Identifier mission, boolean enabled, Map<Identifier, Mission> pool) {
+        Optional<SettlementBlock> block = missionBoard(data, board);
+        if (block.isEmpty() || enabled && !available(data, board, pool).contains(mission)) {
+            return false;
+        }
+        MissionOffer offer = block.get().missionOffer();
+        Set<Identifier> auto = new HashSet<>(offer.auto());
+        if (enabled ? !auto.add(mission) : !auto.remove(mission)) {
+            return true;
+        }
+        MissionOffer changed = offer.withAuto(auto);
+        block.get().setMissionOffer(enabled ? changed.withEntries(MissionRules.markAuto(offer.entries(), Set.of(mission))) : changed);
+        data.setDirty();
+        return true;
     }
 
     /**
@@ -91,7 +142,7 @@ public final class MissionOffers {
         }
         List<MissionOffer.Entry> entries = new ArrayList<>(offer.entries());
         entries.remove(index);
-        block.get().setMissionOffer(new MissionOffer(entries, offer.day()));
+        block.get().setMissionOffer(offer.withEntries(entries));
         data.setDirty();
         return true;
     }
@@ -150,7 +201,7 @@ public final class MissionOffers {
         }
         MissionOffer offer = block.get().missionOffer();
         List<MissionOffer.Entry> entries = offer.entries().stream().map(entry -> affected.test(entry) ? entry.withoutAssignee() : entry).toList();
-        block.get().setMissionOffer(new MissionOffer(entries, offer.day()));
+        block.get().setMissionOffer(offer.withEntries(entries));
         data.setDirty();
     }
 
@@ -175,7 +226,7 @@ public final class MissionOffers {
             index++;
         }
         entries.add(index, new MissionOffer.Entry(mission, true, assignee, locked));
-        block.get().setMissionOffer(new MissionOffer(entries, offer.day()));
+        block.get().setMissionOffer(offer.withEntries(entries));
         data.setDirty();
     }
 
@@ -199,7 +250,7 @@ public final class MissionOffers {
         }
         List<MissionOffer.Entry> entries = new ArrayList<>(offer.entries());
         entries.set(index, changed.get());
-        block.get().setMissionOffer(new MissionOffer(entries, offer.day()));
+        block.get().setMissionOffer(offer.withEntries(entries));
         data.setDirty();
         return true;
     }

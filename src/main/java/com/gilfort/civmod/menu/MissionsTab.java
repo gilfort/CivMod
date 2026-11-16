@@ -65,6 +65,24 @@ public final class MissionsTab extends JobBlockTab {
     }
 
     /**
+     * Server: ticks or unticks a mission for auto-enable. Ticking marks the entries of that mission on offer now.
+     *
+     * @param mission the mission
+     * @param enabled the wanted tick
+     * @return whether the request was valid (false for a mission the board's unlocked Mission Jobs may not take)
+     */
+    public boolean setAuto(Identifier mission, boolean enabled) {
+        JobBlockMenu menu = menu();
+        Optional<JobBlockMenu.Site> site = menu.validSite();
+        if (site.isEmpty() || !MissionOffers.setAuto(SettlementData.get(site.get().level()), site.get().pos(), mission, enabled,
+                Missions.all(site.get().level().registryAccess()))) {
+            return false;
+        }
+        menu.resend();
+        return true;
+    }
+
+    /**
      * Server: assigns an offered mission to a settler of the board or unlocks it. The caller names the mission it saw at
      * that index; if the offer changed since, nothing happens.
      *
