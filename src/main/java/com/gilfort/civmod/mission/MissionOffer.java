@@ -2,6 +2,7 @@ package com.gilfort.civmod.mission;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import com.mojang.serialization.Codec;
@@ -18,11 +19,12 @@ import net.minecraft.resources.Identifier;
  *
  * @param entries the offered missions (a refill puts the marked ones first)
  * @param day     the day of the last refill, {@code -1} before the first one
+ * @param auto    the missions the player ticked for auto-enable: a refill marks their new entries at once
  */
-public record MissionOffer(List<Entry> entries, long day) {
+public record MissionOffer(List<Entry> entries, long day, Set<Identifier> auto) {
 
     /** An offer that was never filled. */
-    public static final MissionOffer EMPTY = new MissionOffer(List.of(), -1L);
+    public static final MissionOffer EMPTY = new MissionOffer(List.of(), -1L, Set.of());
 
     /**
      * One offered mission. The same mission may be offered several times (up to its {@link Mission#maxPerOffer()}).
@@ -108,14 +110,34 @@ public record MissionOffer(List<Entry> entries, long day) {
     /** Save codec. */
     public static final Codec<MissionOffer> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Entry.CODEC.listOf().optionalFieldOf("entries", List.of()).forGetter(MissionOffer::entries),
-            Codec.LONG.optionalFieldOf("day", -1L).forGetter(MissionOffer::day)
+            Codec.LONG.optionalFieldOf("day", -1L).forGetter(MissionOffer::day),
+            Identifier.CODEC.listOf().<Set<Identifier>>xmap(Set::copyOf, List::copyOf).optionalFieldOf("auto", Set.of())
+                    .forGetter(MissionOffer::auto)
     ).apply(instance, MissionOffer::new));
 
     /**
      * @param entries the offered missions
      * @param day     the day of the last refill
+     * @param auto    the ticked missions
      */
     public MissionOffer {
         entries = List.copyOf(entries);
+        auto = Set.copyOf(auto);
+    }
+
+    /**
+     * @param entries the new entries
+     * @return this offer with those entries, the same day and ticks
+     */
+    public MissionOffer withEntries(List<Entry> entries) {
+        return new MissionOffer(entries, day, auto);
+    }
+
+    /**
+     * @param auto the new ticks
+     * @return this offer with those ticks, the same entries and day
+     */
+    public MissionOffer withAuto(Set<Identifier> auto) {
+        return new MissionOffer(entries, day, auto);
     }
 }
