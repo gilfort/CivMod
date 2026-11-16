@@ -433,7 +433,7 @@ public final class TavernGameTests {
         guest.setNoAi(false);
         helper.succeedWhen(() -> {
             helper.assertTrue(guest.isSitting(), "Sits down at its seat, now at " + guest.position());
-            Vec3 seat = new Vec3(cushion.getX(), cushion.getBoundingBox().maxY, cushion.getZ());
+            Vec3 seat = new Vec3(cushion.getX(), cushion.getBoundingBox().maxY + 0.15, cushion.getZ());
             helper.assertTrue(guest.position().distanceToSqr(seat) < 1.0E-6, "On the Cushion: " + guest.position() + " instead of " + seat);
             helper.assertTrue(guest.getYRot() == 90.0F && guest.yBodyRot == 90.0F, "Facing the way of the Cushion: " + guest.yBodyRot);
             helper.assertTrue(cushion.getPassengers().isEmpty(), "Nobody rides the Cushion");
