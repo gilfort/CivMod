@@ -48,7 +48,7 @@ public abstract class CivScreen extends Screen {
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
         super.extractBackground(graphics, mouseX, mouseY, a);
         CivGui.panel(graphics, leftPos, topPos, imageWidth, imageHeight);
-        graphics.text(font, title, leftPos + CivGui.PADDING, topPos + 6, CivGui.LABEL_COLOR, false);
+        graphics.text(font, CivGui.fit(font, title, imageWidth - 2 * CivGui.PADDING), leftPos + CivGui.PADDING, topPos + 6, CivGui.LABEL_COLOR, false);
         extractPanelContent(graphics, mouseX, mouseY);
     }
 

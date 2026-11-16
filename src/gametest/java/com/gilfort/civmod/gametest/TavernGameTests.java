@@ -314,8 +314,8 @@ public final class TavernGameTests {
         helper.assertTrue(seats.size() == 4, "Cushion, edge cushion, armor stand of the test tag, stairs of the test tag: " + seats.size());
         TavernSeats.Seat seat = TavernSeats.find(level, pantry, 12, "e:" + near.getUUID()).orElseThrow();
         helper.assertTrue(seat.facing() == 90.0F, "A guest looks the way the Cushion does: " + seat.facing());
-        helper.assertTrue(Math.abs(seat.position().y - (near.getY() + 0.25)) < 1.0E-6 && Math.abs(seat.position().x - near.getX()) < 1.0E-6,
-                "It sits on the surface of the Cushion: " + seat.position());
+        helper.assertTrue(Math.abs(seat.position().y - (near.getY() + 0.25 + 0.15)) < 1.0E-6 && Math.abs(seat.position().x - near.getX()) < 1.0E-6,
+                "It sits a little above the surface of the Cushion: " + seat.position());
         helper.assertTrue(TavernSeats.find(level, pantry, 12, "e:" + edge.getUUID()).isPresent(), "12 blocks away is a seat");
         helper.assertTrue(TavernSeats.find(level, pantry, 12, "e:" + far.getUUID()).isEmpty(), "13 blocks away is none");
         TavernSeats.Seat stairs = seats.stream().filter(found -> found.key().startsWith("b:")).findFirst().orElseThrow();
