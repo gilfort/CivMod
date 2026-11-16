@@ -64,6 +64,9 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
     private static final float SIT_DROP = (12.0F - 2.0F) / 16.0F * 0.9375F;
     /** The item model of a rod with the line out (an item definition of this mod that points at vanilla's cast model). */
     private static final Identifier CAST_ROD_MODEL = CivMod.id("fishing_rod_cast");
+    /** The rod the cast copy was made from, and that copy (render thread only). */
+    private static ItemStack lastRod = ItemStack.EMPTY;
+    private static ItemStack lastCastRod = ItemStack.EMPTY;
     private static final PlayerSkin[] SKINS = new PlayerSkin[SettlerSkins.COUNT];
 
     static {
@@ -126,13 +129,22 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
      * cast model through a copy of the rod that names it.
      */
     private static void showCastRod(Settler settler, AvatarRenderState state) {
-        ItemStack cast = settler.getMainHandItem().copy();
-        cast.set(DataComponents.ITEM_MODEL, CAST_ROD_MODEL);
+        ItemStack cast = castRodOf(settler.getMainHandItem());
         boolean right = settler.getMainArm() == HumanoidArm.RIGHT;
         Minecraft minecraft = Minecraft.getInstance();
         minecraft.getItemModelResolver().updateForTopItem(right ? state.rightHandItemState : state.leftHandItemState, cast,
                 right ? ItemDisplayContext.THIRD_PERSON_RIGHT_HAND : ItemDisplayContext.THIRD_PERSON_LEFT_HAND, minecraft.level, settler,
                 settler.getId());
+    }
+
+    /** The cast-model copy of a rod; kept for the last rod seen, so a frame does not copy the stack again. */
+    private static ItemStack castRodOf(ItemStack rod) {
+        if (lastRod.isEmpty() || !ItemStack.isSameItemSameComponents(lastRod, rod)) {
+            lastRod = rod.copy();
+            lastCastRod = rod.copy();
+            lastCastRod.set(DataComponents.ITEM_MODEL, CAST_ROD_MODEL);
+        }
+        return lastCastRod;
     }
 
     @Override
