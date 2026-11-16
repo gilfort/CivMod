@@ -5,9 +5,19 @@ import java.util.List;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.job.JobNeeds;
+import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.menu.JobBlockMenu;
+import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.settlement.Settlement;
+import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.TestAssignments;
+import com.gilfort.civmod.settlement.TestSettlements;
+import net.minecraft.world.entity.EntitySpawnReason;
 import com.gilfort.civmod.menu.StationTypesTab;
 import com.gilfort.civmod.menu.StationTypesTabData;
+import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
 
 import net.minecraft.core.BlockPos;
@@ -15,6 +25,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
@@ -29,6 +40,9 @@ import net.neoforged.neoforge.registries.RegisterEvent;
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class JobBlocksGameTests {
+
+    /** Skill 45 allows diamond tools. */
+    private static final int WORKER_SKILL = 45;
 
     private JobBlocksGameTests() {
     }
@@ -48,7 +62,11 @@ public final class JobBlocksGameTests {
     }
 
     private static JobNeeds blockOf(StationTypesTabData tab, Job job) {
-        return tab.blocks().stream().filter(block -> block.job() == job).findFirst().orElseThrow();
+        return blockOf(tab.blocks(), job);
+    }
+
+    private static JobNeeds blockOf(List<JobNeeds> needs, Job job) {
+        return needs.stream().filter(block -> block.job() == job).findFirst().orElseThrow();
     }
 
     /**
@@ -89,19 +107,39 @@ public final class JobBlocksGameTests {
     }
 
     /**
-     * A Resource Collection Job with a tool shows its icon and the tier of the skill; without a worker at the block it is
-     * the first tier and crossed. Such a Job works no station.
+     * A Resource Collection Job with a tool shows its icon and the tier the tool supply asks for. Without a worker it is
+     * the tier of a skill-1 settler and crossed. A worker of skill 45 raises it to diamond; it is ticked once the worker
+     * carries an allowed tool. Such a Job works no station.
      */
     private static void toolLine(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        BlockPos relative = GathererGameTests.gathererBlock(helper);
+        BlockPos relative = new BlockPos(1, 1, 1);
         BlockPos pos = helper.absolutePos(relative);
-        helper.assertTrue(StationTypeGameTests.unlock(helper, pos, 0, Items.COMPOSTER), "A composter unlocks the Veggy Farmer");
-        JobNeeds veggy = blockOf(StationTypesTabData.of(level, pos), ModJobs.VEGGY_FARMER.get());
-        helper.assertTrue(veggy.tool().state() == JobNeeds.State.MISSING && !veggy.tool().icon().isEmpty(), "A tool, crossed: " + veggy.tool());
-        helper.assertTrue(veggy.tool().text().getString().equals("Tool: any – Stone"), "The first tier: " + veggy.tool().text().getString());
-        helper.assertTrue(veggy.station().state() == JobNeeds.State.NOT_NEEDED && veggy.extra().state() == JobNeeds.State.NOT_NEEDED,
-                "A collecting Job has no station: " + veggy);
+        TestSettlements.place(helper, pos, ModJobs.MINER.get(), 5);
+        JobNeeds miner = blockOf(JobNeeds.of(level, pos), ModJobs.MINER.get());
+        helper.assertTrue(miner.tool().state() == JobNeeds.State.MISSING && !miner.tool().icon().isEmpty(), "A tool, crossed: " + miner.tool());
+        helper.assertTrue(miner.tool().text().getString().equals("Tool: Stone"), "Skill 1 asks for stone: " + miner.tool().text().getString());
+        helper.assertTrue(miner.station().state() == JobNeeds.State.NOT_NEEDED && miner.extra().state() == JobNeeds.State.NOT_NEEDED,
+                "A collecting Job has no station: " + miner);
+
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(pos).orElseThrow();
+        Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
+        settler.snapTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, 0.0F, 0.0F);
+        settler.setNoAi(true);
+        level.addFreshEntity(settler);
+        settler.joinSettlement(data, settlement);
+        settler.getSkills().set(ModJobs.MINER.get(), new SettlerSkills.Skill(WORKER_SKILL, 0));
+        helper.assertTrue(TestAssignments.assign(data, pos, settler.getUUID(), "Worker", settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
+                "Miner assigned");
+        settler.addJob(new SettlerJob(ModJobs.MINER.get(), pos));
+        miner = blockOf(JobNeeds.of(level, pos), ModJobs.MINER.get());
+        helper.assertTrue(miner.tool().text().getString().equals("Tool: Diamond") && miner.tool().state() == JobNeeds.State.MISSING,
+                "Skill 45 allows diamond, no tool carried: " + miner.tool().text().getString() + " " + miner.tool().state());
+        settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_PICKAXE));
+        miner = blockOf(JobNeeds.of(level, pos), ModJobs.MINER.get());
+        helper.assertTrue(miner.tool().state() == JobNeeds.State.PRESENT, "A stone pickaxe on the belt is an allowed tool: " + miner.tool());
+        settler.discard();
         helper.succeed();
     }
 

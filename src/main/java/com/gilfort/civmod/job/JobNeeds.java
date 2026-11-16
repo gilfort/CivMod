@@ -137,28 +137,34 @@ public record JobNeeds(Job job, Line station, Line tool, Line extra) {
     // ---------------------------------------------------------------- tool
 
     /**
-     * The tool a Resource Collection Job asks for: the tier of the strongest settler working it here (the first tier
-     * without one), a tick when one of them carries a usable tool. A Job outside the tool staircase names none.
+     * The tool a Resource Collection Job asks for first: the tier the tool supply orders ({@link ToolStaircase#askedTier}) for
+     * the Job's worker at this block with the highest allowed tier, or for skill 1 without a worker. Ticked when that
+     * worker carries an allowed tool. A Job outside the tool staircase names none.
      */
     private static Line toolLine(ServerLevel level, JobBlockSite site, Job job) {
         Optional<ResourceCollectionProfile> profile = job.profile(ResourceCollectionProfile.class).filter(ToolStaircase::appliesTo);
         if (profile.isEmpty()) {
             return Line.none("civmod.gui.station_types.need.tool");
         }
-        int band = 1;
+        ToolStaircase.Rule rule = ToolStaircase.rule(profile.get(), 1);
+        int strongest = -1;
         boolean carries = false;
         for (SettlementBlock.Assignee assignee : site.block().assignees()) {
-            if (assignee.job() == job && level.getEntity(assignee.id()) instanceof Settler settler) {
-                Optional<SettlerJob> held = settler.getJobs().stream()
-                        .filter(entry -> entry.jobType() == job && entry.jobBlock().equals(site.pos())).findFirst();
-                if (held.isPresent()) {
-                    band = Math.max(band, settler.getWork().toolBand(held.get()));
-                    carries |= settler.getWork().tool(held.get()).isPresent();
+            if (assignee.job() != job || !(level.getEntity(assignee.id()) instanceof Settler settler)) {
+                continue;
+            }
+            for (SettlerJob held : settler.getJobs()) {
+                ToolStaircase.Rule workerRule = settler.getWork().toolRule(held, profile.get());
+                if (held.jobType() == job && held.jobBlock().equals(site.pos()) && workerRule.allowed() > strongest) {
+                    strongest = workerRule.allowed();
+                    rule = workerRule;
+                    carries = settler.getWork().tool(held).isPresent();
                 }
             }
         }
-        return new Line(Component.translatable("civmod.gui.settler.tool.band." + band), new ItemStack(profile.get().toolIcon()),
-                carries ? State.PRESENT : State.MISSING);
+        int tier = ToolStaircase.askedTier(ToolOrders.kindOf(profile.get()), rule);
+        return new Line(Component.translatable("civmod.gui.station_types.need.tool", Component.translatable("civmod.gui.station_types.tier." + tier)),
+                new ItemStack(profile.get().toolIcon()), carries ? State.PRESENT : State.MISSING);
     }
 
     // ---------------------------------------------------------------- extra station
