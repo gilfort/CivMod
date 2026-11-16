@@ -209,7 +209,7 @@ public final class InnateRecipeGameTests {
         ServerLevel level = helper.getLevel();
         Job fletcher = FletcherGameTests.fletcher();
         BlockPos pos = FletcherGameTests.fletchery(helper, new BlockPos(1, 1, 1));
-        List<Item> outputs = List.of(Items.ARROW, Items.BOW, Items.FISHING_ROD, Items.LEAD, Items.CROSSBOW, Items.ARROW, Items.ARROW);
+        List<Item> outputs = List.of(Items.ARROW, Items.BOW, Items.SPECTRAL_ARROW, Items.LEAD, Items.BOW, Items.ARROW, Items.ARROW);
         for (int i = 0; i < outputs.size(); i++) {
             Pattern pattern = Patterns.setOutput(level, pos, fletcher, 2 + i, ItemKey.of(outputs.get(i))).orElseThrow();
             helper.assertTrue(pattern.checked() == (i < 6), outputs.get(i) + (i < 6 ? " checked" : " unchecked at the limit"));
