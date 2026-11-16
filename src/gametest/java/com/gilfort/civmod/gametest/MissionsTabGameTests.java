@@ -58,7 +58,7 @@ public final class MissionsTabGameTests {
     }
 
     /** The Mission Board window as the server opens it for a player at the block. */
-    private static JobBlockMenu menu(GameTestHelper helper) {
+    static JobBlockMenu menu(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos pos = helper.absolutePos(MissionRunGameTests.BOARD);
         Player player = helper.makeMockPlayer(GameType.SURVIVAL);
@@ -68,12 +68,12 @@ public final class MissionsTabGameTests {
     }
 
     /** What the window holds now (what the server last sent its client). */
-    private static MissionsTabData shown(JobBlockMenu menu) {
+    static MissionsTabData shown(JobBlockMenu menu) {
         return menu.tab(MissionsTab.class).orElseThrow().data().get();
     }
 
     /** What the window holds after its next broadcast: the server reads the board again. */
-    private static MissionsTabData sees(JobBlockMenu menu) {
+    static MissionsTabData sees(JobBlockMenu menu) {
         menu.resend();
         return shown(menu);
     }
