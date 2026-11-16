@@ -15,7 +15,6 @@ import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.StationTypes;
 import com.mojang.datafixers.util.Either;
 
-import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -52,7 +51,7 @@ public record JobNeeds(Job job, Line station, Line tool, Line extra) {
         MISSING;
 
         /** Network codec. */
-        public static final StreamCodec<ByteBuf, State> STREAM_CODEC = NeoForgeStreamCodecs.enumCodec(State.class);
+        public static final StreamCodec<RegistryFriendlyByteBuf, State> STREAM_CODEC = NeoForgeStreamCodecs.enumCodec(State.class);
     }
 
     /**
