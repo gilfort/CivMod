@@ -26,22 +26,26 @@ import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.Warehouses;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * The automatic tool supply (vault {@code Systems/Needs.md}, decisions of 2026-11-13): a settler whose collect inventory
- * has no tool of the tier its skill requires asks the settlement for one. The request goes to the Home Clerk of its
- * JobBlock and is reserved for that settler; the chain of producers makes the tool ({@code Systems/Sub-Requests.md}),
- * the result waits in the Clerk for the settler ({@link Holds}), and an input delivery carries it into the collect
- * inventory. With the Clerk as collect inventory nothing needs to be carried.
+ * The automatic tool supply (vault {@code Systems/Needs.md}, decisions of 2026-11-15): a settler of any Job with a tool
+ * (fishing rod and shears included) that has no tool meeting its requirement asks the settlement for one, from skill 1.
+ * A fitting tool in the Home Clerk's store is held for it and nothing is ordered. Otherwise the request goes to the Home
+ * Clerk of its JobBlock, reserved for that settler, for the highest tier its skill allows for which a producer has a
+ * checked pattern. The chain of producers makes the tool ({@code Systems/Sub-Requests.md}), the result waits in the Clerk
+ * for the settler ({@link Holds}), and an input delivery carries it into the collect inventory. With the Clerk as collect
+ * inventory nothing needs to be carried.
  * <p>
  * The check runs inside the hourly search of the collect inventory ({@link ToolNeeds#search}) and only after a search that
- * found nothing, so it adds no polling. Tiers that need an enchanted tool stay manual until the Enchanter exists. A
- * request ends when the tool is on the belt, the Job goes away or the settler is gone ({@link #cancel}).
+ * found nothing, so it adds no polling. The same check looks at an open request: when its tree has a dead end
+ * ({@link Requests#deadEnd}), the request is withdrawn and the next lower tier with a pattern is asked. A settler is never
+ * offered a tool that is not better than the one it carries. Tiers that need an enchanted tool stay manual until the
+ * Enchanter exists. A request ends when the tool is on the belt, the Job goes away or the settler is gone
+ * ({@link #cancel}).
  */
 public final class ToolOrders {
 
@@ -62,7 +66,7 @@ public final class ToolOrders {
      */
     static boolean supply(ServerLevel level, Settler settler, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site) {
         ToolStaircase.Rule rule = settler.getWork().toolRule(job, profile);
-        if (!rule.requiresTool() || rule.enchanted() || !ToolStaircase.appliesTo(profile)) {
+        if (rule.enchanted()) {
             return false;
         }
         Settlement settlement = site.settlement();
@@ -72,23 +76,74 @@ public final class ToolOrders {
         }
         ReservedFor me = ReservedFor.settler(settler.getUUID());
         Predicate<Item> kind = kindOf(profile);
-        Need need = new Need(level, settlement, site, job, me, kind, rule);
+        // What the settler may still gain: a tool must rank above the best allowed one it carries, so a settler never moves up
+        // or gets the same kind twice.
+        int floor = settler.getWork().tool(job, profile).map(ToolTiers::tier).orElse(NO_TOOL);
+        Need need = new Need(level, settlement, site, job, me, kind, rule, home.get(), floor);
         Held held = handOver(need);
         if (held != Held.NOTHING) {
             return held == Held.IN_COLLECT;
         }
         boolean onItsWay = settlement.deliveries().stream().anyMatch(task -> !task.surplus() && task.jobBlock().equals(job.jobBlock())
                 && task.input().filter(input -> input.to().equals(site.collect()) && input.items().keySet().stream().anyMatch(key -> kind.test(key.item()))).isPresent());
-        boolean asked = settlement.requests().stream().anyMatch(request -> request.reservedFor().filter(me::equals).isPresent() && kind.test(request.item().item()));
-        if (!onItsWay && !asked) {
-            chooseTool(level, settlement, kind, rule).ifPresent(tool -> Requests.postReserved(SettlementData.get(level), settlement, ItemKey.of(tool), home.get(), me));
+        if (onItsWay) {
+            return false;
         }
+        Optional<Request> asked = settlement.requests().stream()
+                .filter(request -> request.reservedFor().filter(me::equals).isPresent() && kind.test(request.item().item())).findFirst();
+        if (asked.isPresent()) {
+            stepDown(need, asked.get());
+            return false;
+        }
+        if (reserveFromStore(need)) {
+            return handOver(need) == Held.IN_COLLECT;
+        }
+        chooseTool(need).ifPresent(tool -> Requests.postReserved(SettlementData.get(level), settlement, ItemKey.of(tool), home.get(), me));
         return false;
     }
 
-    /** What the tool supply works with: the settler's need and where it stands. */
+    /** The tier of a settler without a tool of the kind. */
+    private static final int NO_TOOL = -1;
+
+    /**
+     * What the tool supply works with: the settler's need and where it stands.
+     *
+     * @param floor the tier of the best allowed tool the settler carries, {@link #NO_TOOL} if it has none; only a better one is asked for
+     */
     private record Need(ServerLevel level, Settlement settlement, JobBlockSite site, SettlerJob job, ReservedFor me, Predicate<Item> kind,
-            ToolStaircase.Rule rule) {
+            ToolStaircase.Rule rule, BlockPos home, int floor) {
+    }
+
+    /**
+     * A tool of the kind that lies in the Home Clerk's store and meets the rule is held for the settler, the best one if
+     * there are several. Nothing is ordered then.
+     *
+     * @return whether a tool is held for the settler now
+     */
+    private static boolean reserveFromStore(Need need) {
+        Stock store = ClerkStorage.stock(need.level(), need.home(), true);
+        Optional<ItemKey> best = store.counts().keySet().stream()
+                .filter(key -> need.kind().test(key.item()) && need.rule().meets(key.toStack()) && ToolTiers.tier(key.toStack()) > need.floor())
+                .max(Comparator.comparingInt((ItemKey key) -> need.rule().rank(key.toStack())).thenComparing(key -> BuiltInRegistries.ITEM.getKey(key.item()).toString()));
+        best.ifPresent(key -> Holds.hold(need.settlement(), need.home(), need.me(), key, 1));
+        return best.isPresent();
+    }
+
+    /**
+     * The hourly check of an open request: when its tree has a dead end, nobody can make the tool, so the request is
+     * withdrawn and one tier lower is asked. Where nothing lower exists, the request stays open with "Missing: ...".
+     */
+    private static void stepDown(Need need, Request asked) {
+        if (!Requests.deadEnd(need.settlement(), asked.id())) {
+            return;
+        }
+        int tier = ToolTiers.tier(asked.item().toStack());
+        lowerTool(need, tier).ifPresent(tool -> {
+            SettlementData data = SettlementData.get(need.level());
+            Requests.dropReservation(data, need.settlement(), asked.id());
+            Requests.withdraw(data, need.settlement(), asked.id());
+            Requests.postReserved(data, need.settlement(), ItemKey.of(tool), need.home(), need.me());
+        });
     }
 
     /** What became of a tool held for the settler. */
@@ -153,18 +208,43 @@ public final class ToolOrders {
     }
 
     /**
-     * The tool to ask for: the weakest item of the Job's tool kind that meets the requirement and that a producer of the
-     * settlement can make, so a settler gets the cheapest tool its skill asks for. When no producer can make any, the
-     * weakest one is asked for anyway: the request stays open with "Missing: ..." until somebody can (no timeout).
+     * The first tool to ask for: the highest tier the skill allows for which a producer of the settlement has a checked
+     * pattern. Several tools of one tier: the one with a pattern first, then by id with {@code minecraft} first. When no
+     * producer can make any, the weakest tool that meets the requirement is asked for anyway (the weakest allowed one if
+     * none does): the request stays open with "Missing: ..." until somebody can (no timeout).
      */
-    private static Optional<Item> chooseTool(ServerLevel level, Settlement settlement, Predicate<Item> kind, ToolStaircase.Rule rule) {
-        List<Item> candidates = BuiltInRegistries.ITEM.stream().filter(item -> new ItemStack(item).has(DataComponents.TOOL) && kind.test(item)
-                        && rule.meets(new ItemStack(item)))
-                .sorted(Comparator.comparingInt((Item item) -> ToolTiers.tier(new ItemStack(item)))
+    private static Optional<Item> chooseTool(Need need) {
+        List<Item> ladder = ladder(need, Integer.MAX_VALUE);
+        return ladder.stream().filter(item -> Producers.canMake(need.level(), need.settlement(), ItemKey.of(item))).findFirst()
+                .or(() -> weakest(ladder.stream().filter(item -> need.rule().meets(new ItemStack(item))).toList()))
+                .or(() -> weakest(ladder));
+    }
+
+    /** The first of the weakest tier in a ladder. */
+    private static Optional<Item> weakest(List<Item> ladder) {
+        return ladder.isEmpty() ? Optional.empty()
+                : ladder.stream().filter(item -> ToolTiers.tier(new ItemStack(item)) == ToolTiers.tier(new ItemStack(ladder.getLast()))).findFirst();
+    }
+
+    /**
+     * The tool to ask for after a dead end: the highest tier below the dead one for which a producer has a checked
+     * pattern. Nothing when no lower tier has one: a tool nobody can make is no way out.
+     */
+    private static Optional<Item> lowerTool(Need need, int below) {
+        return ladder(need, below).stream().filter(item -> Producers.canMake(need.level(), need.settlement(), ItemKey.of(item))).findFirst();
+    }
+
+    /**
+     * The items the settler may be given, best first: of the Job's tool kind, not above the tier its skill allows, better
+     * than the tool it carries and below the given tier. Within a tier by id, {@code minecraft} first.
+     */
+    private static List<Item> ladder(Need need, int below) {
+        return BuiltInRegistries.ITEM.stream().filter(item -> need.kind().test(item) && need.rule().allows(new ItemStack(item))
+                        && ToolTiers.tier(new ItemStack(item)) > need.floor() && ToolTiers.tier(new ItemStack(item)) < below)
+                .sorted(Comparator.comparingInt((Item item) -> -ToolTiers.tier(new ItemStack(item)))
+                        .thenComparing(item -> !BuiltInRegistries.ITEM.getKey(item).getNamespace().equals("minecraft"))
                         .thenComparing(item -> BuiltInRegistries.ITEM.getKey(item).toString()))
                 .toList();
-        return candidates.stream().filter(item -> Producers.canMake(level, settlement, ItemKey.of(item))).findFirst()
-                .or(() -> candidates.stream().findFirst());
     }
 
     /**
@@ -190,7 +270,7 @@ public final class ToolOrders {
      * @param job     the Job that goes away
      */
     public static void jobGone(ServerLevel level, Settler settler, SettlerJob job) {
-        job.jobType().profile(ResourceCollectionProfile.class).filter(ToolStaircase::appliesTo)
+        job.jobType().profile(ResourceCollectionProfile.class).filter(ResourceCollectionProfile::needsTool)
                 .ifPresent(profile -> cancel(level, settler.getUUID(), kindOf(profile)));
     }
 

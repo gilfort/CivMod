@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
 
+import com.gilfort.civmod.logistics.CraftPlan;
 import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.ReservedFor;
@@ -202,6 +203,32 @@ public final class Requests {
      */
     public static List<Request> children(Settlement settlement, UUID id) {
         return settlement.requests().stream().filter(request -> request.parent().filter(id::equals).isPresent()).toList();
+    }
+
+    /**
+     * Whether a request's tree has a dead end: a request that shows "Missing: ..." while nobody crafts it and no
+     * sub-request of it is open. A missing input that a sub-request is already working on is no dead end. A request nobody
+     * has looked at yet (nothing missing shown) is none either.
+     *
+     * @param settlement a settlement
+     * @param id         the request id
+     * @return whether the request or one of its sub-requests is stuck
+     */
+    public static boolean deadEnd(Settlement settlement, UUID id) {
+        return get(settlement, id).filter(request -> deadEnd(settlement, request, 0)).isPresent();
+    }
+
+    private static boolean deadEnd(Settlement settlement, Request request, int depth) {
+        // The depth limit also stops a loop in broken data.
+        if (depth > CraftPlan.MAX_DEPTH) {
+            return false;
+        }
+        List<Request> open = children(settlement, request.id()).stream().filter(child -> child.amount() + child.crafting() > 0).toList();
+        if (open.isEmpty()) {
+            // Inputs made for the request wait in the Clerk until its producer looks again; "Missing" may be out of date.
+            return !request.missing().isEmpty() && request.claims().isEmpty() && Holds.heldFor(settlement, ReservedFor.request(request.id())).isEmpty();
+        }
+        return open.stream().anyMatch(child -> deadEnd(settlement, child, depth + 1));
     }
 
     /**
