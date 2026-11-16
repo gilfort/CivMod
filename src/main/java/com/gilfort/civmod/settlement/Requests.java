@@ -79,6 +79,15 @@ public final class Requests {
     }
 
     /**
+     * @param settlement a settlement
+     * @param clerk      a Clerk JobBlock
+     * @return the one-time orders of that Clerk, highest priority first
+     */
+    public static List<Request> oneTime(Settlement settlement, BlockPos clerk) {
+        return byPriority(settlement).stream().filter(request -> request.oneTime() && request.target().filter(clerk::equals).isPresent()).toList();
+    }
+
+    /**
      * Posts a request from a source other than a stock rule: priority {@value #DEFAULT_PRIORITY}, a sub-request the
      * priority of its parent.
      *
@@ -95,6 +104,24 @@ public final class Requests {
         int priority = parent.flatMap(id -> get(settlement, id)).map(Request::priority).orElse(DEFAULT_PRIORITY);
         Request request = new Request(UUID.randomUUID(), item, amount, priority, target, Optional.empty(), parent, List.of(), List.of(),
                 Optional.empty());
+        add(data, settlement, request);
+        return request;
+    }
+
+    /**
+     * Posts a one-time order of a Clerk ({@link OneTimeOrders}): priority {@value #DEFAULT_PRIORITY}, the result goes to
+     * that Clerk.
+     *
+     * @param data       the dimension's settlement data
+     * @param settlement the settlement
+     * @param item       the requested thing (item and relevant components)
+     * @param amount     the amount
+     * @param clerk      the Clerk the result goes to
+     * @return the posted request
+     */
+    static Request postOneTime(SettlementData data, Settlement settlement, ItemKey item, int amount, BlockPos clerk) {
+        Request request = new Request(UUID.randomUUID(), item, amount, DEFAULT_PRIORITY, Optional.of(clerk), Optional.empty(), Optional.empty(),
+                List.of(), List.of(), Optional.empty(), true);
         add(data, settlement, request);
         return request;
     }

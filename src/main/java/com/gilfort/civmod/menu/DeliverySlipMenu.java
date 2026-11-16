@@ -19,6 +19,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.inventory.SimpleContainerData;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -40,18 +41,11 @@ public final class DeliverySlipMenu extends CivMenu {
     /** First button id of "keep at the source" (one per step). */
     public static final int BUTTON_KEEP = BUTTON_FILL + LIMIT_STEPS.length;
 
-    /** Panel height. */
-    public static final int HEIGHT = 206;
     private static final int DATA_MODE = 0;
     private static final int DATA_VARIANT = 1;
     private static final int DATA_FILL = 2;
     private static final int DATA_KEEP = 3;
     private static final int DATA_COUNT = 4;
-    /** Left edge of the filter slots (panel coordinates). */
-    private static final int FILTER_X = 8;
-    /** Top edge of the filter slots (panel coordinates). */
-    private static final int FILTER_Y = 38;
-
     private final Player player;
     private final InteractionHand hand;
     private final Container filter = new SimpleContainer(DeliverySlip.FILTER_SLOTS);
@@ -80,9 +74,9 @@ public final class DeliverySlipMenu extends CivMenu {
         this.player = inventory.player;
         this.hand = hand;
         for (int slot = 0; slot < DeliverySlip.FILTER_SLOTS; slot++) {
-            addTabSlot(filter, slot, FILTER_X + slot * 18, FILTER_Y, ALL_TABS);
+            addTabSlot(filter, slot, DeliverySlipLayout.FILTER_X + slot * DeliverySlipLayout.SLOT_SIZE, DeliverySlipLayout.FILTER_Y, ALL_TABS);
         }
-        addPlayerInventory(inventory, 8, HEIGHT - 82, ALL_TABS);
+        addPlayerInventory(inventory, 8, DeliverySlipLayout.INVENTORY_Y, ALL_TABS);
         addDataSlots(numbers);
         readSlip();
     }
@@ -170,6 +164,11 @@ public final class DeliverySlipMenu extends CivMenu {
         }
         ItemStack carried = getCarried();
         filter.setItem(slotId, carried.isEmpty() ? ItemStack.EMPTY : carried.copyWithCount(1));
+        writeFilter();
+    }
+
+    /** Saves the filter slots into the slip, each item once, and shows the slip's data. */
+    private void writeFilter() {
         List<ItemKey> items = new ArrayList<>();
         for (int slot = 0; slot < DeliverySlip.FILTER_SLOTS; slot++) {
             ItemKey item = ItemKey.of(filter.getItem(slot));
@@ -181,9 +180,29 @@ public final class DeliverySlipMenu extends CivMenu {
         readSlip();
     }
 
-    /** Nothing moves by shift-click: the player inventory is only there to pick items from. */
+    /**
+     * Shift + left click on a player inventory item sets a copy of it in the first empty filter slot; the stack stays.
+     * An item the filter has already, or a full filter, changes nothing.
+     */
     @Override
     public ItemStack quickMoveStack(Player clicker, int slotIndex) {
+        Slot slot = slots.get(slotIndex);
+        if (slotIndex < DeliverySlip.FILTER_SLOTS || !slot.hasItem() || slip().isEmpty()) {
+            return ItemStack.EMPTY;
+        }
+        ItemKey item = ItemKey.of(slot.getItem());
+        for (int target = 0; target < DeliverySlip.FILTER_SLOTS; target++) {
+            if (item.equals(ItemKey.of(filter.getItem(target)))) {
+                return ItemStack.EMPTY;
+            }
+        }
+        for (int target = 0; target < DeliverySlip.FILTER_SLOTS; target++) {
+            if (filter.getItem(target).isEmpty()) {
+                filter.setItem(target, slot.getItem().copyWithCount(1));
+                writeFilter();
+                break;
+            }
+        }
         return ItemStack.EMPTY;
     }
 

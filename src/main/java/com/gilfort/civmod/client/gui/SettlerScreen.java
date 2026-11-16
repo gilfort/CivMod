@@ -260,7 +260,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                                     CivGui.HINT_COLOR, false);
                             if (mouseX >= leftPos + CivGui.PADDING && mouseX < leftPos + CivGui.PADDING + width && mouseY >= topPos + rowY + 20
                                     && mouseY < topPos + rowY + 20 + font.lineHeight) {
-                                graphics.setTooltipForNextFrame(font, ToolTexts.lineTooltip(), mouseX, mouseY);
+                                CivGui.tooltip(graphics, font, ToolTexts.lineTooltip(), mouseX, mouseY);
                             }
                         }
                     });
@@ -347,7 +347,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                 // Only a row that is shown has a tooltip: the mouse is inside the window and over the row.
                 if (!row.tooltip().getString().isEmpty() && mouseInView && mouseX >= leftPos + CivGui.PADDING && mouseX < leftPos + right
                         && mouseY >= topPos + y && mouseY < topPos + y + rowHeight) {
-                    graphics.setTooltipForNextFrame(font, row.tooltip(), mouseX, mouseY);
+                    CivGui.tooltip(graphics, font, row.tooltip(), mouseX, mouseY);
                 }
                 y += rowHeight;
             }

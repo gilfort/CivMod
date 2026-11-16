@@ -265,13 +265,22 @@ public class JobBlockMenu extends CivMenu {
     }
 
     /**
-     * Shift-click moves between the player inventory and the JobBlock storage on the Storage tab only; on the other
-     * tabs (Stock, Patterns, Station Types: the player inventory is there to pick items from) it does nothing.
+     * Shift + left click: on the Storage tab it moves between the player inventory and the JobBlock storage; on any other
+     * tab the active tab decides what it does with an inventory item ({@link JobBlockTab#quickMove}, e.g. Station Types
+     * puts an unlock item into a free slot). Only the active tab sees the click, so a click never reaches the slot of a
+     * tab that is not open.
      */
     @Override
     public ItemStack quickMoveStack(Player player, int slotIndex) {
         Slot slot = slots.get(slotIndex);
-        if (!(activeTab() instanceof StorageTab) || !slot.hasItem()) {
+        if (!slot.hasItem()) {
+            return ItemStack.EMPTY;
+        }
+        if (!(activeTab() instanceof StorageTab)) {
+            if (slot.container instanceof Inventory) {
+                activeTab().quickMove(slot.getItem());
+                slot.setChanged();
+            }
             return ItemStack.EMPTY;
         }
         ItemStack stack = slot.getItem();

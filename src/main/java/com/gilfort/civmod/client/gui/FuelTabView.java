@@ -192,7 +192,7 @@ final class FuelTabView implements JobBlockTabView {
 
     @Override
     public List<Component> helpLines(JobBlockTab tab) {
-        return List.of(Component.translatable("civmod.gui.fuel.help.set"), Component.translatable("civmod.gui.fuel.help.move"),
+        return List.of(Component.translatable("civmod.gui.fuel.help.set"), Component.translatable("civmod.gui.fuel.help.shift"), Component.translatable("civmod.gui.fuel.help.move"),
                 Component.translatable("civmod.gui.fuel.help.clear"));
     }
 

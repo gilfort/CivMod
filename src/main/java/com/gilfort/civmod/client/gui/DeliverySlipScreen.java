@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.gilfort.civmod.logistics.DeliverySlip;
 import com.gilfort.civmod.menu.CivMenu;
+import com.gilfort.civmod.menu.DeliverySlipLayout;
 import com.gilfort.civmod.menu.DeliverySlipMenu;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -20,18 +21,11 @@ public final class DeliverySlipScreen extends CivContainerScreen<DeliverySlipMen
 
     private static final int BUTTON_HEIGHT = 18;
     private static final int STEP_BUTTON_WIDTH = 24;
-    private static final int STEP_BUTTON_HEIGHT = 14;
     private static final int STEP_GAP = 2;
     /** Panel y of the first row of buttons. */
     private static final int CONTENT_TOP = 17;
-    /** Panel y of the step buttons below the label of their limit. */
-    private static final int STEP_ROW_OFFSET = 12;
     /** Pixels the variant name keeps free inside its button. */
     private static final int LABEL_MARGIN = 8;
-    /** Top of the "fill target up to" row (panel coordinates): its text line, the buttons follow below. */
-    private static final int FILL_Y = 62;
-    /** Top of the "keep at the source" row (panel coordinates). */
-    private static final int KEEP_Y = 96;
     private static final int MODE_WIDTH = 72;
 
     private Button mode;
@@ -43,7 +37,7 @@ public final class DeliverySlipScreen extends CivContainerScreen<DeliverySlipMen
      * @param title     the title
      */
     public DeliverySlipScreen(DeliverySlipMenu menu, Inventory inventory, Component title) {
-        super(menu, inventory, title, 176, DeliverySlipMenu.HEIGHT, List.of());
+        super(menu, inventory, title, 176, DeliverySlipLayout.HEIGHT, List.of());
     }
 
     @Override
@@ -55,8 +49,8 @@ public final class DeliverySlipScreen extends CivContainerScreen<DeliverySlipMen
         int variantX = x + MODE_WIDTH + STEP_GAP;
         variant = addTabWidget(CivMenu.ALL_TABS, Button.builder(Component.empty(), button -> press(DeliverySlipMenu.BUTTON_VARIANT))
                 .bounds(variantX, y, imageWidth - 2 * CivGui.PADDING - MODE_WIDTH - STEP_GAP, BUTTON_HEIGHT).build());
-        addSteps(DeliverySlipMenu.BUTTON_FILL, FILL_Y + STEP_ROW_OFFSET);
-        addSteps(DeliverySlipMenu.BUTTON_KEEP, KEEP_Y + STEP_ROW_OFFSET);
+        addSteps(DeliverySlipMenu.BUTTON_FILL, DeliverySlipLayout.FILL_Y + DeliverySlipLayout.STEP_ROW_OFFSET);
+        addSteps(DeliverySlipMenu.BUTTON_KEEP, DeliverySlipLayout.KEEP_Y + DeliverySlipLayout.STEP_ROW_OFFSET);
     }
 
     private void addSteps(int firstButton, int panelY) {
@@ -65,7 +59,7 @@ public final class DeliverySlipScreen extends CivContainerScreen<DeliverySlipMen
             int amount = DeliverySlipMenu.LIMIT_STEPS[step];
             int id = firstButton + step;
             addTabWidget(CivMenu.ALL_TABS, Button.builder(Component.literal(amount > 0 ? "+" + amount : String.valueOf(amount)), button -> press(id))
-                    .bounds(x + step * (STEP_BUTTON_WIDTH + STEP_GAP), topPos + panelY, STEP_BUTTON_WIDTH, STEP_BUTTON_HEIGHT).build());
+                    .bounds(x + step * (STEP_BUTTON_WIDTH + STEP_GAP), topPos + panelY, STEP_BUTTON_WIDTH, DeliverySlipLayout.STEP_BUTTON_HEIGHT).build());
         }
     }
 
@@ -85,8 +79,8 @@ public final class DeliverySlipScreen extends CivContainerScreen<DeliverySlipMen
 
     @Override
     protected void extractTabLabels(GuiGraphicsExtractor graphics, int tab, int mouseX, int mouseY) {
-        graphics.text(font, limit("civmod.gui.slip.fill", menu.fillTo()), CivGui.PADDING, FILL_Y, CivGui.LABEL_COLOR, false);
-        graphics.text(font, limit("civmod.gui.slip.keep", menu.keep()), CivGui.PADDING, KEEP_Y, CivGui.LABEL_COLOR, false);
+        graphics.text(font, limit("civmod.gui.slip.fill", menu.fillTo()), CivGui.PADDING, DeliverySlipLayout.FILL_Y, CivGui.LABEL_COLOR, false);
+        graphics.text(font, limit("civmod.gui.slip.keep", menu.keep()), CivGui.PADDING, DeliverySlipLayout.KEEP_Y, CivGui.LABEL_COLOR, false);
     }
 
     /** "Fill target up to: 64", or "off" for 0. */
@@ -96,7 +90,7 @@ public final class DeliverySlipScreen extends CivContainerScreen<DeliverySlipMen
 
     @Override
     protected List<Component> helpLines(int tab) {
-        return List.of(Component.translatable("civmod.gui.slip.help.filter"), Component.translatable("civmod.gui.slip.help.filter_clear"),
+        return List.of(Component.translatable("civmod.gui.slip.help.filter"), Component.translatable("civmod.gui.slip.help.filter_clear"), Component.translatable("civmod.gui.slip.help.shift"),
                 Component.translatable("civmod.gui.slip.help.source"),
                 Component.translatable("civmod.gui.slip.help.target"), Component.translatable("civmod.gui.slip.help.orders"),
                 Component.translatable("civmod.gui.slip.help.limits", DeliverySlip.MAX_LIMIT));

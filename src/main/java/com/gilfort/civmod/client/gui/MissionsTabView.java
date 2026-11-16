@@ -38,21 +38,30 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
  */
 final class MissionsTabView implements JobBlockTabView {
 
-    private static final int MISSION_LIST_Y = 34;
     private static final int MISSION_ROWS = 5;
     /** Settler rows of the assignment view (the buttons take the place of the last row). */
     private static final int ASSIGN_ROWS = 4;
-    private static final int TOOLTIP_WIDTH = 200;
+    /** Panel y of the line above the list (its title or count). */
+    static final int TITLE_Y = 22;
+    private static final int AUTO_BUTTON_WIDTH = 36;
+    private static final int AUTO_BUTTON_HEIGHT = 13;
+    /** Panel y of the Auto button, on the line above the list. */
+    private static final int AUTO_BUTTON_Y = 19;
+    /** Gap between two neighbouring buttons or a button and the text next to it. */
+    private static final int GAP = 4;
 
     private final JobBlockScreen screen;
     private final JobBlockMenu menu;
     private final MissionsTab missions;
+    private final MissionsAutoView auto;
     private int missionOffset;
     /** The offer entry whose assignment view is open, {@code -1} while the offer is shown. */
     private int assigning = -1;
     /** The mission of that entry when the view opened. */
     private Identifier assigningMission;
     private int settlerOffset;
+    /** Whether the Auto view (the missions ticked for auto-enable) is shown instead of the offer. */
+    private boolean autoView;
 
     /**
      * @param screen the screen showing the tab
@@ -62,6 +71,7 @@ final class MissionsTabView implements JobBlockTabView {
         this.screen = screen;
         this.menu = screen.getMenu();
         this.missions = tab;
+        this.auto = new MissionsAutoView(screen, tab);
     }
 
     private Font font() {
@@ -75,18 +85,26 @@ final class MissionsTabView implements JobBlockTabView {
     /** Adds the buttons of the assignment view while it is open (called on every widget rebuild). */
     @Override
     public void init() {
-        if (assigning < 0) {
+        int left = screen.left();
+        if (autoView) {
+            screen.addWidget(missions.index(), Button.builder(Component.translatable("gui.back"), button -> showOffer())
+                    .bounds(left + CivGui.PADDING, screen.top() + screen.panelHeight() - 28, screen.panelWidth() - 2 * CivGui.PADDING, 20).build());
             return;
         }
-        int buttonWidth = (screen.panelWidth() - 2 * CivGui.PADDING - 4) / 2;
+        if (assigning < 0) {
+            Button auto = screen.addWidget(missions.index(), Button.builder(Component.translatable("civmod.gui.mission.auto"), button -> showAuto())
+                    .bounds(left + screen.panelWidth() - CivGui.PADDING - AUTO_BUTTON_WIDTH, screen.top() + AUTO_BUTTON_Y, AUTO_BUTTON_WIDTH, AUTO_BUTTON_HEIGHT).build());
+            auto.setTooltip(Tooltip.create(Component.translatable("civmod.gui.mission.auto.tooltip")));
+            return;
+        }
+        int buttonWidth = (screen.panelWidth() - 2 * CivGui.PADDING - GAP) / 2;
         int y = screen.top() + screen.panelHeight() - 28;
-        int left = screen.left();
         Button unlock = screen.addWidget(missions.index(), Button.builder(Component.translatable("civmod.gui.mission.assign.unlock"),
                 button -> assign(Optional.empty())).bounds(left + CivGui.PADDING, y, buttonWidth, 20).build());
         unlock.active = assigning < board().offer().size() && board().offer().get(assigning).locked();
         unlock.setTooltip(Tooltip.create(Component.translatable("civmod.gui.mission.assign.unlock.tooltip")));
         screen.addWidget(missions.index(), Button.builder(Component.translatable("gui.back"), button -> showOffer())
-                .bounds(left + CivGui.PADDING + buttonWidth + 4, y, buttonWidth, 20).build());
+                .bounds(left + CivGui.PADDING + buttonWidth + GAP, y, buttonWidth, 20).build());
     }
 
     /** The missions the server sent last. */
@@ -109,7 +127,7 @@ final class MissionsTabView implements JobBlockTabView {
     /** Another tab was selected: the assignment view closes. */
     @Override
     public void onTabChanged() {
-        if (assigning >= 0) {
+        if (assigning >= 0 || autoView) {
             showOffer();
         }
     }
@@ -117,15 +135,17 @@ final class MissionsTabView implements JobBlockTabView {
     /** Draws the list inset (absolute coordinates). */
     @Override
     public void extractBackground(GuiGraphicsExtractor graphics, JobBlockTab shown) {
-        int height = assigning >= 0 ? ASSIGN_ROWS * JobBlockScreen.ROW_HEIGHT + 2 * CivGui.INSET_PADDING
-                : screen.panelHeight() - MISSION_LIST_Y - CivGui.PADDING;
-        CivGui.inset(graphics, screen.left() + CivGui.PADDING, screen.top() + MISSION_LIST_Y, screen.panelWidth() - 2 * CivGui.PADDING, height);
+        int height = assigning >= 0 || autoView ? ASSIGN_ROWS * JobBlockScreen.ROW_HEIGHT + 2 * CivGui.INSET_PADDING
+                : screen.panelHeight() - MissionRows.LIST_Y - CivGui.PADDING;
+        CivGui.inset(graphics, screen.left() + CivGui.PADDING, screen.top() + MissionRows.LIST_Y, screen.panelWidth() - 2 * CivGui.PADDING, height);
     }
 
     /** Draws the offer or the assignment view (coordinates relative to the panel). */
     @Override
     public void extractLabels(GuiGraphicsExtractor graphics, JobBlockTab shown, int mouseX, int mouseY) {
-        if (assigning >= 0) {
+        if (autoView) {
+            auto.extract(graphics, mouseX, mouseY);
+        } else if (assigning >= 0) {
             extractAssignment(graphics, mouseX, mouseY);
         } else {
             extractMissions(graphics, mouseX, mouseY);
@@ -143,52 +163,48 @@ final class MissionsTabView implements JobBlockTabView {
         List<MissionsTabData.TakenMission> taken = board().taken();
         int rows = offer.size() + taken.size();
         long marked = offer.stream().filter(MissionOffer.Entry::marked).count();
-        graphics.text(font, Component.translatable("civmod.gui.job_block.missions"), CivGui.PADDING, 22, CivGui.LABEL_COLOR, false);
+        graphics.text(font, Component.translatable("civmod.gui.job_block.missions"), CivGui.PADDING, TITLE_Y, CivGui.LABEL_COLOR, false);
         Component count = Component.translatable("civmod.gui.job_block.missions.marked", marked, offer.size());
-        graphics.text(font, count, screen.panelWidth() - CivGui.PADDING - font.width(count), 22, CivGui.LABEL_COLOR, false);
+        graphics.text(font, count, screen.panelWidth() - CivGui.PADDING - AUTO_BUTTON_WIDTH - GAP - font.width(count), TITLE_Y, CivGui.LABEL_COLOR, false);
         int left = CivGui.PADDING + CivGui.INSET_PADDING;
         int width = screen.panelWidth() - 2 * left;
         if (rows == 0) {
             graphics.textWithWordWrap(font, Component.translatable("civmod.gui.job_block.missions.none"), left,
-                    MISSION_LIST_Y + CivGui.INSET_PADDING, width, CivGui.HINT_COLOR, false);
+                    MissionRows.LIST_Y + CivGui.INSET_PADDING, width, CivGui.HINT_COLOR, false);
             return;
         }
         missionOffset = Math.clamp(missionOffset, 0, Math.max(0, rows - MISSION_ROWS));
         if (rows > MISSION_ROWS) {
             // Scroll arrows in a column on the right.
             width -= JobBlockScreen.SCROLL_COLUMN;
-            int arrowX = left + width + 1;
-            int color = CivGui.LABEL_COLOR;
-            graphics.text(font, Component.literal("▲"), arrowX, MISSION_LIST_Y + CivGui.INSET_PADDING, missionOffset > 0 ? color : CivGui.HINT_COLOR, false);
-            graphics.text(font, Component.literal("▼"), arrowX, MISSION_LIST_Y + CivGui.INSET_PADDING + MISSION_ROWS * JobBlockScreen.ROW_HEIGHT - font.lineHeight,
-                    missionOffset + MISSION_ROWS < rows ? color : CivGui.HINT_COLOR, false);
+            MissionRows.scrollArrows(graphics, font, left + width + 1, missionOffset, MISSION_ROWS, rows);
         }
         int box = Checkbox.getBoxSize(font);
         int hovered = rowAt(mouseX, mouseY);
         for (int row = 0; row < Math.min(MISSION_ROWS, rows - missionOffset); row++) {
             int index = missionOffset + row;
-            int y = MISSION_LIST_Y + CivGui.INSET_PADDING + row * JobBlockScreen.ROW_HEIGHT;
+            int y = MissionRows.LIST_Y + CivGui.INSET_PADDING + row * JobBlockScreen.ROW_HEIGHT;
             if (index >= offer.size()) {
                 MissionsTabData.TakenMission entry = taken.get(index - offer.size());
-                Optional<Mission> mission = mission(entry.mission());
+                Optional<Mission> mission = MissionRows.mission(entry.mission());
                 graphics.item(mission.map(Mission::iconStack).orElse(ItemStack.EMPTY), left, y + 2);
-                graphics.text(font, CivGui.fit(font, title(entry.mission(), mission), width - 20), left + 20, y + 1, CivGui.HINT_COLOR, false);
+                graphics.text(font, CivGui.fit(font, MissionRows.title(entry.mission(), mission), width - 20), left + 20, y + 1, CivGui.HINT_COLOR, false);
                 graphics.text(font, CivGui.fit(font, takenText(entry), width - 20), left + 20, y + 11, CivGui.HINT_COLOR, false);
                 continue;
             }
             MissionOffer.Entry entry = offer.get(index);
-            Optional<Mission> mission = mission(entry.mission());
+            Optional<Mission> mission = MissionRows.mission(entry.mission());
             graphics.item(mission.map(Mission::iconStack).orElse(ItemStack.EMPTY), left, y + 2);
             int textWidth = width - 20 - box - 2;
-            graphics.text(font, CivGui.fit(font, title(entry.mission(), mission), textWidth), left + 20, y + 1, CivGui.LABEL_COLOR, false);
+            graphics.text(font, CivGui.fit(font, MissionRows.title(entry.mission(), mission), textWidth), left + 20, y + 1, CivGui.LABEL_COLOR, false);
             if (entry.locked()) {
                 // An assigned or locked mission shows who takes it instead of the details (still in the tooltip).
                 graphics.text(font, CivGui.fit(font, lockText(entry), textWidth), left + 20, y + 11, CivGui.HINT_COLOR, false);
             } else {
-                mission.ifPresent(found -> graphics.text(font, CivGui.fit(font, details(found), textWidth), left + 20, y + 11,
+                mission.ifPresent(found -> graphics.text(font, CivGui.fit(font, MissionRows.details(found), textWidth), left + 20, y + 11,
                         CivGui.HINT_COLOR, false));
             }
-            checkbox(graphics, entry.marked(), index == hovered, left + width - box, y);
+            MissionRows.checkbox(graphics, font, entry.marked(), index == hovered, left + width - box, y);
         }
         if (hovered >= 0) {
             graphics.setTooltipForNextFrame(font, hovered < offer.size() ? missionTooltip(hovered)
@@ -196,60 +212,13 @@ final class MissionsTabView implements JobBlockTabView {
         }
     }
 
-    /** Draws a vanilla checkbox at the right end of a list row. */
-    private void checkbox(GuiGraphicsExtractor graphics, boolean selected, boolean hovered, int x, int rowY) {
-        int box = Checkbox.getBoxSize(font());
-        CivGui.checkbox(graphics, selected, hovered, x, rowY + (JobBlockScreen.ROW_HEIGHT - box) / 2 - 1, box);
-    }
-
-    /**
-     * @param id a mission id
-     * @return the mission, if the client knows it
-     */
-    static Optional<Mission> mission(Identifier id) {
-        return minecraft().level.registryAccess().lookup(Missions.KEY).flatMap(registry -> registry.getOptional(id));
-    }
-
-    /**
-     * @param id      a mission id
-     * @param mission the mission, if known
-     * @return the mission title, or its id if the client does not know the mission
-     */
-    static Component title(Identifier id, Optional<Mission> mission) {
-        return mission.map(Mission::title).orElseGet(() -> Component.literal(id.toString()));
-    }
-
     private static Component takenText(MissionsTabData.TakenMission entry) {
         return Component.translatable(entry.departed() ? "civmod.gui.mission.taken.departed" : "civmod.gui.mission.taken.reserved", entry.settler());
     }
 
-    /** Title, description, recommended level, duration and rolls of a mission. */
-    private List<FormattedCharSequence> missionLines(Identifier id) {
-        List<FormattedCharSequence> lines = new ArrayList<>();
-        Optional<Mission> mission = mission(id);
-        lines.add(title(id, mission).getVisualOrderText());
-        mission.ifPresent(found -> {
-            if (!found.description().getString().isEmpty()) {
-                lines.addAll(font().split(found.description().copy().withStyle(ChatFormatting.GRAY), TOOLTIP_WIDTH));
-            }
-            lines.add(Component.translatable("civmod.gui.mission.recommended_level", found.recommendedLevel()).getVisualOrderText());
-            lines.add(Component.translatable("civmod.gui.mission.duration", found.days()).getVisualOrderText());
-            lines.add(found.villagers().map(villagers -> Component.translatable("civmod.gui.mission.villagers", villagers.count()))
-                    .orElseGet(() -> Component.translatable("civmod.gui.mission.rolls", found.rolls())).getVisualOrderText());
-        });
-        return lines;
-    }
-
-    /** The details line of a mission: level, days and its result (loot rolls or Villagers). */
-    private static Component details(Mission mission) {
-        return mission.villagers().map(villagers -> Component.translatable("civmod.gui.mission.details.villagers", mission.recommendedLevel(),
-                mission.days(), villagers.count()))
-                .orElseGet(() -> Component.translatable("civmod.gui.mission.details", mission.recommendedLevel(), mission.days(), mission.rolls()));
-    }
-
     private List<FormattedCharSequence> missionTooltip(int index) {
         MissionOffer.Entry entry = board().offer().get(index);
-        List<FormattedCharSequence> lines = missionLines(entry.mission());
+        List<FormattedCharSequence> lines = MissionRows.missionLines(font(), entry.mission());
         if (entry.locked()) {
             lines.add(lockText(entry).copy().withStyle(ChatFormatting.GOLD).getVisualOrderText());
         }
@@ -264,6 +233,9 @@ final class MissionsTabView implements JobBlockTabView {
      */
     @Override
     public List<Component> helpLines(JobBlockTab shown) {
+        if (autoView) {
+            return List.of(Component.translatable("civmod.gui.mission.help.auto"));
+        }
         if (assigning >= 0) {
             return List.of(Component.translatable("civmod.gui.mission.help.assign"));
         }
@@ -284,7 +256,7 @@ final class MissionsTabView implements JobBlockTabView {
      */
     private List<FormattedCharSequence> pickerLines(int index) {
         MissionsTabData board = board();
-        Optional<Mission> mission = mission(board.offer().get(index).mission());
+        Optional<Mission> mission = MissionRows.mission(board.offer().get(index).mission());
         if (mission.isEmpty()) {
             return List.of();
         }
@@ -338,6 +310,16 @@ final class MissionsTabView implements JobBlockTabView {
     /** Back to the offer. */
     private void showOffer() {
         assigning = -1;
+        autoView = false;
+        screen.rebuild();
+    }
+
+    // ---------------------------------------------------------------- Auto view
+
+    /** Opens the Auto view. */
+    private void showAuto() {
+        autoView = true;
+        auto.reset();
         screen.rebuild();
     }
 
@@ -350,7 +332,7 @@ final class MissionsTabView implements JobBlockTabView {
         if (assigning < 0 || assigning >= board.offer().size()) {
             return List.of();
         }
-        Optional<Mission> mission = mission(board.offer().get(assigning).mission());
+        Optional<Mission> mission = MissionRows.mission(board.offer().get(assigning).mission());
         List<Integer> eligible = new ArrayList<>();
         for (int i = 0; i < board.settlers().size(); i++) {
             MissionsTabData.MissionSettler settler = board.settlers().get(i);
@@ -379,32 +361,29 @@ final class MissionsTabView implements JobBlockTabView {
             return;
         }
         MissionOffer.Entry entry = board.offer().get(assigning);
-        Optional<Mission> mission = mission(entry.mission());
-        Component title = Component.translatable("civmod.gui.mission.assign.title", title(entry.mission(), mission));
-        graphics.text(font, CivGui.fit(font, title, screen.panelWidth() - 2 * CivGui.PADDING), CivGui.PADDING, 22, CivGui.LABEL_COLOR, false);
+        Optional<Mission> mission = MissionRows.mission(entry.mission());
+        Component title = Component.translatable("civmod.gui.mission.assign.title", MissionRows.title(entry.mission(), mission));
+        graphics.text(font, CivGui.fit(font, title, screen.panelWidth() - 2 * CivGui.PADDING), CivGui.PADDING, TITLE_Y, CivGui.LABEL_COLOR, false);
         int left = CivGui.PADDING + CivGui.INSET_PADDING;
         int width = screen.panelWidth() - 2 * left;
         List<Integer> eligible = eligible();
         if (eligible.isEmpty()) {
             graphics.textWithWordWrap(font, Component.translatable("civmod.gui.mission.assign.none"), left,
-                    MISSION_LIST_Y + CivGui.INSET_PADDING, width, CivGui.HINT_COLOR, false);
+                    MissionRows.LIST_Y + CivGui.INSET_PADDING, width, CivGui.HINT_COLOR, false);
             return;
         }
         settlerOffset = Math.clamp(settlerOffset, 0, Math.max(0, eligible.size() - ASSIGN_ROWS));
         if (eligible.size() > ASSIGN_ROWS) {
             width -= JobBlockScreen.SCROLL_COLUMN;
             int arrowX = left + width + 1;
-            graphics.text(font, Component.literal("▲"), arrowX, MISSION_LIST_Y + CivGui.INSET_PADDING,
-                    settlerOffset > 0 ? CivGui.LABEL_COLOR : CivGui.HINT_COLOR, false);
-            graphics.text(font, Component.literal("▼"), arrowX, MISSION_LIST_Y + CivGui.INSET_PADDING + ASSIGN_ROWS * JobBlockScreen.ROW_HEIGHT - font.lineHeight,
-                    settlerOffset + ASSIGN_ROWS < eligible.size() ? CivGui.LABEL_COLOR : CivGui.HINT_COLOR, false);
+            MissionRows.scrollArrows(graphics, font, arrowX, settlerOffset, ASSIGN_ROWS, eligible.size());
         }
         int box = Checkbox.getBoxSize(font);
         int hovered = settlerRowAt(mouseX, mouseY);
         for (int row = 0; row < Math.min(ASSIGN_ROWS, eligible.size() - settlerOffset); row++) {
             int index = settlerOffset + row;
             MissionsTabData.MissionSettler settler = board.settlers().get(eligible.get(index));
-            int y = MISSION_LIST_Y + CivGui.INSET_PADDING + row * JobBlockScreen.ROW_HEIGHT;
+            int y = MissionRows.LIST_Y + CivGui.INSET_PADDING + row * JobBlockScreen.ROW_HEIGHT;
             int textWidth = width - box - 2;
             int nameWidth = textWidth;
             if (mission.isPresent()) {
@@ -416,7 +395,7 @@ final class MissionsTabView implements JobBlockTabView {
             graphics.text(font, CivGui.fit(font, Component.literal(settler.name()), nameWidth), left, y + 1, CivGui.LABEL_COLOR, false);
             graphics.text(font, CivGui.fit(font, Component.translatable("civmod.gui.mission.assign.settler", settler.job().displayName(),
                     settler.skill()), textWidth), left, y + 11, CivGui.HINT_COLOR, false);
-            checkbox(graphics, entry.assignee().filter(settler.id()::equals).isPresent(), index == hovered, left + width - box, y);
+            MissionRows.checkbox(graphics, font, entry.assignee().filter(settler.id()::equals).isPresent(), index == hovered, left + width - box, y);
         }
         if (hovered >= 0 && mission.isPresent()) {
             MissionsTabData.MissionSettler settler = board.settlers().get(eligible.get(hovered));
@@ -431,23 +410,11 @@ final class MissionsTabView implements JobBlockTabView {
      * @return the index (in the eligible settlers) of the settler row under the mouse, {@code -1} if none
      */
     private int settlerRowAt(double mouseX, double mouseY) {
-        if (assigning < 0) {
-            return -1;
-        }
-        int rows = eligible().size();
-        int left = screen.left() + CivGui.PADDING + CivGui.INSET_PADDING;
-        int top = screen.top() + MISSION_LIST_Y + CivGui.INSET_PADDING;
-        int right = screen.left() + screen.panelWidth() - CivGui.PADDING - CivGui.INSET_PADDING - (rows > ASSIGN_ROWS ? JobBlockScreen.SCROLL_COLUMN : 0);
-        if (mouseX < left || mouseX >= right || mouseY < top) {
-            return -1;
-        }
-        int row = (int) ((mouseY - top) / JobBlockScreen.ROW_HEIGHT);
-        int index = settlerOffset + row;
-        return row < ASSIGN_ROWS && index < rows ? index : -1;
+        return assigning < 0 ? -1 : MissionRows.rowAt(screen, mouseX, mouseY, settlerOffset, ASSIGN_ROWS, eligible().size());
     }
 
     private List<FormattedCharSequence> takenTooltip(MissionsTabData.TakenMission entry) {
-        List<FormattedCharSequence> lines = missionLines(entry.mission());
+        List<FormattedCharSequence> lines = MissionRows.missionLines(font(), entry.mission());
         lines.add(takenText(entry).copy().withStyle(ChatFormatting.DARK_GRAY).getVisualOrderText());
         return lines;
     }
@@ -456,19 +423,10 @@ final class MissionsTabView implements JobBlockTabView {
      * @return the index of the mission row under the mouse (offer entries first, then taken missions), {@code -1} if none
      */
     private int rowAt(double mouseX, double mouseY) {
-        if (assigning >= 0) {
+        if (assigning >= 0 || autoView) {
             return -1;
         }
-        int rows = board().offer().size() + board().taken().size();
-        int left = screen.left() + CivGui.PADDING + CivGui.INSET_PADDING;
-        int top = screen.top() + MISSION_LIST_Y + CivGui.INSET_PADDING;
-        int right = screen.left() + screen.panelWidth() - CivGui.PADDING - CivGui.INSET_PADDING - (rows > MISSION_ROWS ? JobBlockScreen.SCROLL_COLUMN : 0);
-        if (mouseX < left || mouseX >= right || mouseY < top) {
-            return -1;
-        }
-        int row = (int) ((mouseY - top) / JobBlockScreen.ROW_HEIGHT);
-        int index = missionOffset + row;
-        return row < MISSION_ROWS && index < rows ? index : -1;
+        return MissionRows.rowAt(screen, mouseX, mouseY, missionOffset, MISSION_ROWS, board().offer().size() + board().taken().size());
     }
 
     /**
@@ -479,6 +437,9 @@ final class MissionsTabView implements JobBlockTabView {
      */
     @Override
     public boolean mouseClicked(MouseButtonEvent event) {
+        if (autoView) {
+            return auto.mouseClicked(event);
+        }
         int settler = event.button() == InputConstants.MOUSE_BUTTON_LEFT ? settlerRowAt(event.x(), event.y()) : -1;
         if (settler >= 0) {
             screen.clickSound();
@@ -507,6 +468,10 @@ final class MissionsTabView implements JobBlockTabView {
      */
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
+        if (autoView) {
+            auto.mouseScrolled(scrollY);
+            return true;
+        }
         if (assigning >= 0) {
             settlerOffset = Math.clamp(settlerOffset - (int) Math.signum(scrollY), 0, Math.max(0, eligible().size() - ASSIGN_ROWS));
             return true;

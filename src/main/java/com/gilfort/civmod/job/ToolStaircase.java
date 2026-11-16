@@ -2,10 +2,12 @@ package com.gilfort.civmod.job;
 
 import java.util.Optional;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 
 import net.minecraft.core.Holder;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.EnchantmentTags;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.Item;
@@ -121,6 +123,28 @@ public final class ToolStaircase {
         ItemStack sample = new ItemStack(icon);
         return !sample.isEmpty() && profile.isTool(sample) && (sample.is(ItemTags.AXES) || sample.is(ItemTags.HOES)
                 || sample.is(ItemTags.SHOVELS) || sample.is(ItemTags.PICKAXES));
+    }
+
+    /**
+     * The items a settler may be ordered for a tool kind: of the kind, allowed by the rule and not golden. The one filter
+     * of the tool supply's ladder ({@link ToolOrders}) and of the tier the job blocks show.
+     *
+     * @param kind which items are the Job's tool
+     * @param rule what the settler's skill allows
+     * @return the orderable items
+     */
+    static Stream<Item> orderable(Predicate<Item> kind, Rule rule) {
+        return BuiltInRegistries.ITEM.stream().filter(kind)
+                .filter(item -> rule.allows(new ItemStack(item)) && !ToolTiers.isGolden(new ItemStack(item)));
+    }
+
+    /**
+     * @param kind which items are the Job's tool
+     * @param rule what the settler's skill allows
+     * @return the tier the tool supply asks for first: the highest tier of an orderable item, {@link #NO_TIER} if there is none
+     */
+    static int askedTier(Predicate<Item> kind, Rule rule) {
+        return orderable(kind, rule).mapToInt(item -> ToolTiers.tier(new ItemStack(item))).max().orElse(NO_TIER);
     }
 
     /**

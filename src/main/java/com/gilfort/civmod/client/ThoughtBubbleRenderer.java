@@ -24,6 +24,7 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.util.LightCoordsUtil;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemDisplayContext;
@@ -63,6 +64,7 @@ public final class ThoughtBubbleRenderer {
     private static final float ICON_SCALE = 0.3F;
     private static final float MARKER_SCALE = 0.25F;
 
+    private static final RandomSource RANDOM = RandomSource.create();
     private static final Map<Integer, Thoughts> THOUGHTS = new HashMap<>();
     private static @Nullable ClientLevel lastLevel;
     private static List<Frame> frame = List.of();
@@ -210,7 +212,9 @@ public final class ThoughtBubbleRenderer {
         thoughts.problems.forEach((type, problem) -> {
             if (problem.nextRepeat <= now) {
                 problem.nextRepeat = now + REPEAT_TICKS;
-                thoughts.add(new Bubble(type, problem.icon));
+                if (type.showsThisTime(RANDOM)) {
+                    thoughts.add(new Bubble(type, problem.icon));
+                }
             }
         });
         while (thoughts.current == null && !thoughts.queue.isEmpty()) {

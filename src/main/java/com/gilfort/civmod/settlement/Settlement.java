@@ -444,9 +444,9 @@ public final class Settlement {
     }
 
     SettlementBlock remove(BlockPos pos) {
-        // The requests of a removed Clerk's rules go with it; other requests delivering to it go to the producer's own
-        // drop-off, like requests without a Clerk.
-        requests.removeIf(request -> request.rule().isPresent() && request.target().filter(pos::equals).isPresent());
+        // The requests of a removed Clerk's rules and its one-time orders go with it; other requests delivering to it go
+        // to the producer's own drop-off, like requests without a Clerk.
+        requests.removeIf(request -> request.isPlayerOrder() && request.target().filter(pos::equals).isPresent());
         requests.replaceAll(request -> request.target().filter(pos::equals).isPresent() ? request.withoutTarget() : request);
         // Its pickups and result deliveries go with it (also those to a removed requesting Clerk); a removed Clerk is no
         // Served Clerk any more.

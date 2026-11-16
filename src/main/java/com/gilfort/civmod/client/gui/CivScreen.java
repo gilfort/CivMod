@@ -12,6 +12,9 @@ import net.minecraft.network.chat.Component;
  */
 public abstract class CivScreen extends Screen {
 
+    /** Distance of the title's top from the top of the panel. */
+    protected static final int TITLE_Y = 6;
+
     /** Panel width. */
     protected final int imageWidth;
     /** Panel height. */
@@ -48,8 +51,17 @@ public abstract class CivScreen extends Screen {
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
         super.extractBackground(graphics, mouseX, mouseY, a);
         CivGui.panel(graphics, leftPos, topPos, imageWidth, imageHeight);
-        graphics.text(font, title, leftPos + CivGui.PADDING, topPos + 6, CivGui.LABEL_COLOR, false);
+        extractTitle(graphics);
         extractPanelContent(graphics, mouseX, mouseY);
+    }
+
+    /**
+     * Draws the title at the top of the panel: one line, shortened to fit. A screen with a long title overrides it.
+     *
+     * @param graphics the graphics extractor
+     */
+    protected void extractTitle(GuiGraphicsExtractor graphics) {
+        graphics.text(font, CivGui.fit(font, title, imageWidth - 2 * CivGui.PADDING), leftPos + CivGui.PADDING, topPos + TITLE_Y, CivGui.LABEL_COLOR, false);
     }
 
     /**

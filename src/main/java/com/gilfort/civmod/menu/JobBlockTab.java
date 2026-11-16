@@ -1,6 +1,7 @@
 package com.gilfort.civmod.menu;
 
 import java.util.Optional;
+import java.util.function.Predicate;
 
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
@@ -102,6 +103,26 @@ public abstract sealed class JobBlockTab permits StorageTab, WorkersTab, FoundTa
      */
     boolean clickButton(Player player, int button) {
         return false;
+    }
+
+    /**
+     * Which inventory items the tab takes, for the highlight while Shift is held. A tab that takes every item (or none
+     * from the inventory) returns empty and gets no highlight. Reads the tab's synced data, so it is meant for the client.
+     *
+     * @return the test for an inventory item, empty if the tab takes every item
+     */
+    public Optional<Predicate<ItemStack>> accepts() {
+        return Optional.empty();
+    }
+
+    /**
+     * Server: Shift + left click on an inventory item while the tab is open. The tab uses the stack as it sees fit; a
+     * ghost slot takes a copy and leaves the stack alone. The menu never repeats the move, so one click moves at most
+     * one item.
+     *
+     * @param stack the clicked inventory stack (do not keep it)
+     */
+    void quickMove(ItemStack stack) {
     }
 
     /**

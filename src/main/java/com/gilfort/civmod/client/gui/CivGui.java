@@ -2,6 +2,7 @@ package com.gilfort.civmod.client.gui;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import com.gilfort.civmod.CivMod;
 
@@ -9,6 +10,8 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.FormattedCharSequence;
 
@@ -69,6 +72,8 @@ public final class CivGui {
     private static final int INACTIVE_TINT = 0xA0000000 | (INSET_FILL & 0xFFFFFF);
     /** Vanilla slot highlight under the mouse. */
     private static final int HOVER_TINT = 0x80FFFFFF;
+    /** Tint of an inventory slot whose item the open tab takes. */
+    private static final int FITS_TINT = 0x8055FF55;
     /** Tint over a slot whose slip cannot be worked (a container is gone). */
     static final int MISSING_TINT = 0x80FF0000;
     /** Colour of a bonus star (vanilla gold). */
@@ -83,6 +88,8 @@ public final class CivGui {
     private static final int HELP_MARGIN = 4;
     /** Width the help lines are wrapped to. */
     private static final int HELP_WIDTH = 200;
+    /** Width tooltips wrap to (vanilla's {@code Tooltip} value). */
+    private static final int TOOLTIP_WIDTH = 170;
     /** Room the help icon takes from the right end of the title row (icon, margin and a gap). */
     static final int HELP_ROOM = HELP_MARGIN + HELP_SIZE + 2;
 
@@ -121,6 +128,17 @@ public final class CivGui {
      */
     public static void slotHover(GuiGraphicsExtractor graphics, int itemX, int itemY) {
         graphics.fill(itemX, itemY, itemX + 16, itemY + 16, HOVER_TINT);
+    }
+
+    /**
+     * Lights up a slot whose item the open tab takes (while Shift is held).
+     *
+     * @param graphics the graphics extractor
+     * @param itemX    the x position of the item (slot position)
+     * @param itemY    the y position of the item (slot position)
+     */
+    public static void slotFits(GuiGraphicsExtractor graphics, int itemX, int itemY) {
+        graphics.fill(itemX, itemY, itemX + 16, itemY + 16, FITS_TINT);
     }
 
     /**
@@ -305,6 +323,49 @@ public final class CivGui {
             }
             graphics.setTooltipForNextFrame(font, wrapped, mouseX, mouseY);
         }
+    }
+
+    /**
+     * Shows a tooltip in the vanilla look for a text that may hold line feeds and long lines: each line feed starts a new
+     * line, and each line wraps to the tooltip width, so the tooltip stays on the screen. The styles (colours, gray detail
+     * lines) of the text are kept.
+     *
+     * @param graphics the graphics extractor
+     * @param font     the font
+     * @param text     the text
+     * @param mouseX   the mouse x position
+     * @param mouseY   the mouse y position
+     */
+    public static void tooltip(GuiGraphicsExtractor graphics, Font font, Component text, int mouseX, int mouseY) {
+        List<FormattedCharSequence> wrapped = new ArrayList<>();
+        for (Component line : splitLines(text)) {
+            wrapped.addAll(font.split(line, TOOLTIP_WIDTH));
+        }
+        graphics.setTooltipForNextFrame(font, wrapped, mouseX, mouseY);
+    }
+
+    /**
+     * @param text a text that may hold line feeds
+     * @return one component per line, each piece keeping the style it had in the text
+     */
+    static List<Component> splitLines(Component text) {
+        List<Component> lines = new ArrayList<>();
+        MutableComponent[] current = {Component.empty()};
+        text.visit((style, content) -> {
+            String[] pieces = content.split("\n", -1);
+            for (int i = 0; i < pieces.length; i++) {
+                if (i > 0) {
+                    lines.add(current[0]);
+                    current[0] = Component.empty();
+                }
+                if (!pieces[i].isEmpty()) {
+                    current[0].append(Component.literal(pieces[i]).withStyle(style));
+                }
+            }
+            return Optional.empty();
+        }, Style.EMPTY);
+        lines.add(current[0]);
+        return lines;
     }
 
     /**

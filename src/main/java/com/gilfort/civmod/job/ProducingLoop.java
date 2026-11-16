@@ -1400,7 +1400,7 @@ final class ProducingLoop implements CategoryLoop {
     }
 
     /** Every station of a tag within {@value #STATION_RADIUS} blocks of the JobBlock inside the border, nearest first. */
-    private static List<BlockPos> stationsAround(ServerLevel level, JobBlockSite site, TagKey<Block> tag) {
+    static List<BlockPos> stationsAround(ServerLevel level, JobBlockSite site, TagKey<Block> tag) {
         BlockPos center = site.pos();
         List<BlockPos> found = new ArrayList<>();
         double radius = STATION_RADIUS * STATION_RADIUS + 1.0;
