@@ -1,6 +1,7 @@
 {
   "job_factor": 0.3,
   "base_exp": 2,
+  "recipe_allow": ["minecraft:fishing_rod", "minecraft:crossbow"],
   "station_extras": [
     {
       "blocks": "minecraft:target",
