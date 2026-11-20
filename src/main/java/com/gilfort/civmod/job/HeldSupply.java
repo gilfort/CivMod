@@ -26,7 +26,7 @@ import net.minecraft.world.item.ItemStack;
 /**
  * Takes what the settlement made for a settler (vault {@code Systems/Needs.md}) from the Clerk where it waits to the
  * settler's collect inventory. The tool supply ({@link ToolOrders}) and the Animal Farmer's food supply
- * ({@link FoodOrders}) hand their requests over the same way.
+ * ({@link ConsumableOrders}) hand their requests over the same way.
  */
 final class HeldSupply {
 

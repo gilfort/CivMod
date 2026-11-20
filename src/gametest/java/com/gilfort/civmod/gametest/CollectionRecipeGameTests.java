@@ -67,6 +67,7 @@ public final class CollectionRecipeGameTests {
     static void onRegister(RegisterEvent event) {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "collection_recipe_milk", CollectionRecipeGameTests::milk);
+            register(helper, "collection_recipe_milk_without_food", CollectionRecipeGameTests::milkWithoutFood);
             register(helper, "collection_recipe_no_input", CollectionRecipeGameTests::noInput);
             register(helper, "collection_recipe_max", CollectionRecipeGameTests::atMax);
             register(helper, "collection_recipe_honey_needs_full_hive", CollectionRecipeGameTests::honeyNeedsFullHive);
@@ -159,6 +160,30 @@ public final class CollectionRecipeGameTests {
                     int milk = collected(settler, jobBlock, List.of(collect), Items.MILK_BUCKET);
                     helper.assertTrue(milk > 0, "No milk in a day (buffer " + settler.getWork().buffer(jobBlock).counts() + ")");
                     helper.assertValueEqual(count(collect, Items.BUCKET) + belt(settler, Items.BUCKET) + milk, 16, "Each milk bucket used up one bucket");
+                    cleanUp(helper, settler, forced);
+                })
+                .thenSucceed();
+    }
+
+    /**
+     * Milk costs no food: a farmer with a cow and buckets but no wheat is not stopped by "No food". It fetches buckets and
+     * milks, and gives no cow loot (that would cost food).
+     */
+    private static void milkWithoutFood(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        BlockPos jobBlock = AnimalFarmerGameTests.pen(helper);
+        Container collect = (Container) level.getBlockEntity(jobBlock);
+        Settler settler = milkingFarmer(helper, jobBlock, 16);
+        collect.setItem(1, ItemStack.EMPTY);
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(belt(settler, Items.BUCKET) > 0,
+                        "No buckets fetched without food (status " + settler.getWork().status(jobBlock) + ")"))
+                .thenExecute(() -> {
+                    catchUpDay(level, settler);
+                    helper.assertTrue(collected(settler, jobBlock, List.of(collect), Items.MILK_BUCKET) > 0,
+                            "No milk without food (status " + settler.getWork().status(jobBlock) + ")");
+                    helper.assertValueEqual(collected(settler, jobBlock, List.of(collect), Items.BEEF, Items.LEATHER), 0, "No cow loot without food");
                     cleanUp(helper, settler, forced);
                 })
                 .thenSucceed();

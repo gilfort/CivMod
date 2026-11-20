@@ -127,23 +127,8 @@ public final class Requests {
     }
 
     /**
-     * Posts a request for one item whose result is held for someone once it is in the Clerk (the tool supply, vault
-     * {@code Systems/Needs.md}).
-     *
-     * @param data        the dimension's settlement data
-     * @param settlement  the settlement
-     * @param item        the requested thing (item and relevant components)
-     * @param clerk       the Clerk the result goes to
-     * @param reservedFor who the result is held for
-     * @return the posted request
-     */
-    public static Request postReserved(SettlementData data, Settlement settlement, ItemKey item, BlockPos clerk, ReservedFor reservedFor) {
-        return postReserved(data, settlement, item, 1, clerk, reservedFor);
-    }
-
-    /**
-     * Posts a request for several items whose result is held for someone once it is in the Clerk (the Animal Farmer's food
-     * supply, vault {@code Jobs/Animal Farmer.md}).
+     * Posts a request for items whose result is held for someone once it is in the Clerk (the tool supply, vault
+     * {@code Systems/Needs.md}, and the Animal Farmer's food and shears, vault {@code Jobs/Animal Farmer.md}).
      *
      * @param data        the dimension's settlement data
      * @param settlement  the settlement

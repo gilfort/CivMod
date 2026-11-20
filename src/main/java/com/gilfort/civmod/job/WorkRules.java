@@ -84,7 +84,7 @@ final class WorkRules {
         MAX_REACHED,
         /** Every main resource the scan found is excluded or at its Max, some of each. */
         NOTHING_TO_PRODUCE,
-        /** The Job's rolls cost food ({@link FoodCostProfile}) and the collect inventory has none for any rollable type. */
+        /** The Job's rolls cost food ({@link ConsumablesProfile}) and the collect inventory has none for any rollable type. */
         NO_FOOD,
         /** The profile reports a blocking reason ({@link ResourceCollectionProfile#blockingReason}). */
         BLOCKED;
@@ -222,20 +222,26 @@ final class WorkRules {
             ResourceCollectionProfile.Context context = new ResourceCollectionProfile.Context(level, settler, scan, poi, rollTool,
                     excluded, skillLevel, atMax, type -> workplace.dropped(level, profile, poi, type, rollTool),
                     bonus.rareChance().value(), site.level());
-            // Food that is missing is asked for; without any the roll waits and the work time is not used up.
-            if (profile instanceof FoodCostProfile fed && FoodOrders.noFood(level, settler, job, site, fed, context, collect)) {
-                end = End.NO_FOOD;
-                break;
-            }
-            ticks -= (1.0 - accumulated) / perTick;
-            accumulated = 0.0;
             List<CollectionRecipes.Offer> allowed = CollectionRecipes.allowed(offered, excluded, atMax);
             if (supply.collect().isPresent() && CollectionRecipes.refill(settler, allowed, supply.collect().get())
                     && supply.collect().get().counter()) {
                 supply.handedOut().run();
             }
+            // Food that is missing is asked for. Without any, the recipes (which cost none) still run; with none ready the roll
+            // waits and the work time is not used up.
+            // One view of the collect inventory serves the whole roll.
+            CollectTools tools = CollectTools.of(level, settler, collect);
+            boolean noFood = profile instanceof ConsumablesProfile fed
+                    && ConsumableOrders.orderMissing(new ConsumableOrders.Worker(level, settler, job, site), fed, context, tools).stuck();
+            if (noFood && !CollectionRecipes.anyReady(settler, allowed)) {
+                end = End.NO_FOOD;
+                break;
+            }
+            ticks -= (1.0 - accumulated) / perTick;
+            accumulated = 0.0;
             // An innate recipe ready on the belt competes with the found types; it wears no tool and is never doubled.
-            Optional<ItemStack> crafted = CollectionRecipes.roll(settler, profile, context, allowed);
+            Optional<ItemStack> crafted = noFood ? CollectionRecipes.rollRecipe(settler, context, allowed)
+                    : CollectionRecipes.roll(settler, profile, context, allowed);
             Optional<ResourceCollectionProfile.Produced> produced;
             if (crafted.isPresent()) {
                 produced = Optional.of(new ResourceCollectionProfile.Produced(List.of(crafted.get()), ItemStack.EMPTY));
@@ -244,7 +250,7 @@ final class WorkRules {
             } else if (profile instanceof FishingProfile fishing) {
                 produced = fishing.produce(context, TreasureOption.of(site.block().treasure()));
             } else if (profile instanceof DropPoolProfile pooled) {
-                produced = pooled.produce(context, JobDrops.Tools.of(level, settler, collect));
+                produced = pooled.produce(context, tools);
             } else {
                 produced = profile.produce(context);
             }

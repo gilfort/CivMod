@@ -189,14 +189,56 @@ public final class CollectionRecipes {
         if (scan == null) {
             return Optional.empty();
         }
-        List<Offer> ready = allowed.stream()
-                .filter(offer -> missing(settler, offer.holder().value()).isEmpty()).toList();
+        List<Offer> ready = ready(settler, allowed);
         if (ready.isEmpty()) {
             return Optional.empty();
         }
         List<Identifier> types = scan.foundBlocks();
         Set<Identifier> leftOut = profile.leftOut(context, types);
         int found = types.stream().filter(type -> !leftOut.contains(type)).mapToInt(type -> Math.max(0, profile.weight(scan, type))).sum();
+        return pick(settler, context, ready, found);
+    }
+
+    /**
+     * The roll when the found types cannot be rolled (the Animal Farmer without food): the recipes ready on the belt among
+     * themselves, so one of them always wins.
+     *
+     * @param settler the settler
+     * @param context the production context
+     * @param allowed the recipes that may join the roll ({@link #allowed})
+     * @return the result of the rolled recipe, empty when no recipe is ready
+     */
+    static Optional<ItemStack> rollRecipe(Settler settler, ResourceCollectionProfile.Context context, List<Offer> allowed) {
+        List<Offer> ready = ready(settler, allowed);
+        return ready.isEmpty() ? Optional.empty() : pick(settler, context, ready, 0);
+    }
+
+    /**
+     * @param settler the settler
+     * @param allowed the recipes that may join the roll ({@link #allowed})
+     * @return whether a recipe is ready on the belt
+     */
+    static boolean anyReady(Settler settler, List<Offer> allowed) {
+        return !ready(settler, allowed).isEmpty();
+    }
+
+    /**
+     * @param settler the settler
+     * @param allowed the recipes that may join the roll ({@link #allowed})
+     * @param collect what the settler reaches at its collect inventory
+     * @return whether a recipe can run: every ingredient is on the belt or in the collect inventory
+     */
+    static boolean anyPossible(Settler settler, List<Offer> allowed, Stock collect) {
+        return allowed.stream().anyMatch(offer -> missing(settler, offer.holder().value()).stream()
+                .allMatch(input -> SettlerTools.find(collect, input::test).isPresent()));
+    }
+
+    private static List<Offer> ready(Settler settler, List<Offer> allowed) {
+        return allowed.stream().filter(offer -> missing(settler, offer.holder().value()).isEmpty()).toList();
+    }
+
+    /** Rolls among the ready recipes against the weight of the found types; a recipe that wins is used up and its result returned. */
+    private static Optional<ItemStack> pick(Settler settler, ResourceCollectionProfile.Context context, List<Offer> ready, int found) {
         int pick = context.level().getRandom().nextInt(found + ready.stream().mapToInt(Offer::weight).sum());
         if (pick < found) {
             return Optional.empty();
