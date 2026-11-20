@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import org.jspecify.annotations.Nullable;
 
@@ -83,6 +84,8 @@ final class WorkRules {
         MAX_REACHED,
         /** Every main resource the scan found is excluded or at its Max, some of each. */
         NOTHING_TO_PRODUCE,
+        /** The Job's rolls cost food ({@link FoodCostProfile}) and the collect inventory has none for any rollable type. */
+        NO_FOOD,
         /** The profile reports a blocking reason ({@link ResourceCollectionProfile#blockingReason}). */
         BLOCKED;
 
@@ -94,6 +97,7 @@ final class WorkRules {
                 case ALL_EXCLUDED -> Optional.of(JobStatus.ALL_EXCLUDED);
                 case MAX_REACHED -> Optional.of(JobStatus.MAX_REACHED);
                 case NOTHING_TO_PRODUCE -> Optional.of(JobStatus.NOTHING_TO_PRODUCE);
+                case NO_FOOD -> Optional.of(JobStatus.NO_FOOD);
                 default -> Optional.empty();
             };
         }
@@ -192,6 +196,8 @@ final class WorkRules {
         double speedFactor = SettlerSpeed.speedFactor(settler.getWork(), level, span);
         double accumulated = workplace.production();
         double ticks = workTicks;
+        // Entries with their own tool and the food of the rolls come from the collect inventory, read only when one asks.
+        Supplier<Stock> collect = () -> supply.collect().orElseGet(() -> ClerkStorage.stock(level, site.collect(), DayClock.dayTime(level), true));
         int rolls = 0;
         int items = 0;
         int wear = 0;
@@ -213,11 +219,16 @@ final class WorkRules {
                 end = pause;
                 break;
             }
-            ticks -= (1.0 - accumulated) / perTick;
-            accumulated = 0.0;
             ResourceCollectionProfile.Context context = new ResourceCollectionProfile.Context(level, settler, scan, poi, rollTool,
                     excluded, skillLevel, atMax, type -> workplace.dropped(level, profile, poi, type, rollTool),
                     bonus.rareChance().value(), site.level());
+            // Food that is missing is asked for; without any the roll waits and the work time is not used up.
+            if (profile instanceof FoodCostProfile fed && FoodOrders.noFood(level, settler, job, site, fed, context, collect)) {
+                end = End.NO_FOOD;
+                break;
+            }
+            ticks -= (1.0 - accumulated) / perTick;
+            accumulated = 0.0;
             List<CollectionRecipes.Offer> allowed = CollectionRecipes.allowed(offered, excluded, atMax);
             if (supply.collect().isPresent() && CollectionRecipes.refill(settler, allowed, supply.collect().get())
                     && supply.collect().get().counter()) {
@@ -233,9 +244,7 @@ final class WorkRules {
             } else if (profile instanceof FishingProfile fishing) {
                 produced = fishing.produce(context, TreasureOption.of(site.block().treasure()));
             } else if (profile instanceof DropPoolProfile pooled) {
-                // Entries with their own tool use it from the collect inventory, read only when one asks.
-                produced = pooled.produce(context, JobDrops.Tools.of(level, settler, () -> supply.collect()
-                        .orElseGet(() -> ClerkStorage.stock(level, site.collect(), DayClock.dayTime(level), true))));
+                produced = pooled.produce(context, JobDrops.Tools.of(level, settler, collect));
             } else {
                 produced = profile.produce(context);
             }

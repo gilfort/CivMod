@@ -12,6 +12,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.job.BlockCountScan;
+import com.gilfort.civmod.job.DropPoolProfile;
 import com.gilfort.civmod.job.JobDrops;
 import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.menu.FoundTabData;
@@ -260,8 +261,8 @@ public final class JobDropGameTests {
         Map<Item, Integer> drops = new HashMap<>();
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
         for (int i = 0; i < 200; i++) {
-            profile.produce(new ResourceCollectionProfile.Context(level, settler, scan, hay, new ItemStack(Items.STONE_AXE), Set.of(), 1, Set.of(),
-                    type -> profile.droppedItems(level, hay, type, ItemStack.EMPTY))).ifPresent(produced -> produced.stacks()
+            ((DropPoolProfile) profile).produce(new ResourceCollectionProfile.Context(level, settler, scan, hay, new ItemStack(Items.STONE_AXE), Set.of(), 1, Set.of(),
+                    type -> profile.droppedItems(level, hay, type, ItemStack.EMPTY)), AnimalFarmerFoodGameTests.endless()).ifPresent(produced -> produced.stacks()
                     .forEach(stack -> drops.merge(stack.getItem(), stack.getCount(), Integer::sum)));
         }
         settler.discard();

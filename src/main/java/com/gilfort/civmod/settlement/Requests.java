@@ -138,7 +138,23 @@ public final class Requests {
      * @return the posted request
      */
     public static Request postReserved(SettlementData data, Settlement settlement, ItemKey item, BlockPos clerk, ReservedFor reservedFor) {
-        Request request = new Request(UUID.randomUUID(), item, 1, DEFAULT_PRIORITY, Optional.of(clerk), Optional.empty(), Optional.empty(),
+        return postReserved(data, settlement, item, 1, clerk, reservedFor);
+    }
+
+    /**
+     * Posts a request for several items whose result is held for someone once it is in the Clerk (the Animal Farmer's food
+     * supply, vault {@code Jobs/Animal Farmer.md}).
+     *
+     * @param data        the dimension's settlement data
+     * @param settlement  the settlement
+     * @param item        the requested thing (item and relevant components)
+     * @param amount      how many
+     * @param clerk       the Clerk the result goes to
+     * @param reservedFor who the result is held for
+     * @return the posted request
+     */
+    public static Request postReserved(SettlementData data, Settlement settlement, ItemKey item, int amount, BlockPos clerk, ReservedFor reservedFor) {
+        Request request = new Request(UUID.randomUUID(), item, amount, DEFAULT_PRIORITY, Optional.of(clerk), Optional.empty(), Optional.empty(),
                 List.of(), List.of(), Optional.of(reservedFor));
         add(data, settlement, request);
         return request;

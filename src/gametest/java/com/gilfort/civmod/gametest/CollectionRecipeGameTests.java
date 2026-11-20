@@ -127,9 +127,10 @@ public final class CollectionRecipeGameTests {
         forced.forEach(chunk -> helper.getLevel().setChunkForced((int) chunk[0], (int) chunk[1], false));
     }
 
-    /** An Animal Farmer in a pen with one cow and a stone axe; {@code buckets} buckets in its collect inventory. */
+    /** An Animal Farmer in a pen with one cow and a stone axe; {@code buckets} buckets and food for the cow in its collect inventory. */
     private static Settler milkingFarmer(GameTestHelper helper, BlockPos jobBlock, int buckets) {
         AnimalFarmerGameTests.animal(helper, EntityTypes.COW, new BlockPos(6, 1, 6), false);
+        ((Container) helper.getLevel().getBlockEntity(jobBlock)).setItem(1, new ItemStack(Items.WHEAT, 64));
         if (buckets > 0) {
             ((Container) helper.getLevel().getBlockEntity(jobBlock)).setItem(0, new ItemStack(Items.BUCKET, buckets));
         }
