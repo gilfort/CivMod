@@ -30,6 +30,8 @@ import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.animal.chicken.Chicken;
+import net.minecraft.world.entity.animal.sheep.Sheep;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -56,6 +58,9 @@ import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
  * <li>Food: every roll takes {@link AnimalFood#PER_ROLL} of the breeding food of the rolled type from the collect inventory; a type
  * without food leaves the roll, and without food for every type the Job stops with "No food" ({@link FoodCostProfile},
  * {@link FoodOrders}).</li>
+ * <li>Shearing: while a sheep is counted the roll has one more entry, {@link #SHEAR_SHEEP}, weighted like the sheep. With
+ * shears in the collect inventory it gives 1 to 3 wool for no food and wears the shears, not the axe; without shears, or
+ * switched off, it leaves the roll. {@link FoodOrders} asks for missing shears.</li>
  * <li>Speed: the shared formula × the farm curve of the counted animals.</li>
  * <li>NPC drop pool ({@link JobDrops}): the scan also counts the adult animals of the Job's entries; their entries add to
  * the loot of a rolled type (or replace it).</li>
@@ -64,6 +69,17 @@ import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 public final class AnimalFarmerProfile extends FarmProfile implements FoodCostProfile {
 
     private static final Identifier JOB = CivMod.id("animal_farmer");
+
+    /**
+     * The shear entry of the sheep ("Wool (shear)" in the Found tab): the key of its exclusion at the JobBlock. It is
+     * no entity type; it is listed while the scan counts a sheep.
+     */
+    public static final Identifier SHEAR_SHEEP = CivMod.id("animal_farmer/shear_sheep");
+    private static final Predicate<ItemStack> SHEARS = stack -> stack.is(Items.SHEARS);
+    private static final Identifier SHEEP = Identifier.withDefaultNamespace("sheep");
+    /** How many wool a shearing gives, like vanilla. */
+    private static final int SHEAR_MIN = 1;
+    private static final int SHEAR_MAX = 3;
 
     /** The chance that a rolled chicken gives an egg instead of its loot. */
     public static final double EGG_CHANCE = 0.2;
@@ -149,24 +165,30 @@ public final class AnimalFarmerProfile extends FarmProfile implements FoodCostPr
             return Optional.empty();
         }
         List<Identifier> group = rollable(context, scan, tools);
-        if (group.isEmpty()) {
+        boolean shear = shearing(context, scan, tools);
+        if (group.isEmpty() && !shear) {
             // Every type excluded or at Max: an empty roll still counts as work (EXP, tool wear).
             return Optional.of(new Produced(List.of(), context.tool()));
         }
         List<Identifier> fed = group.stream().filter(type -> foodOf(context, type).filter(food -> hasFood(food, tools)).isPresent()).toList();
-        if (fed.isEmpty()) {
+        if (fed.isEmpty() && !shear) {
             // Nothing can be rolled without food: no loot, no work (the loop shows "No food", see noFood).
             return Optional.empty();
         }
         ServerLevel level = context.level();
-        int pick = level.getRandom().nextInt(fed.stream().mapToInt(type -> scan.counts().get(type)).sum());
-        Identifier rolled = fed.getLast();
+        // The shear entry weighs as much as the sheep it shears, like the sheep's slaughter entry.
+        int shearWeight = shear ? scan.counts().get(SHEEP) : 0;
+        int pick = level.getRandom().nextInt(fed.stream().mapToInt(type -> scan.counts().get(type)).sum() + shearWeight);
+        Identifier rolled = null;
         for (Identifier type : fed) {
             pick -= scan.counts().get(type);
             if (pick < 0) {
                 rolled = type;
                 break;
             }
+        }
+        if (rolled == null) {
+            return Optional.of(shear(context, tools));
         }
         EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(rolled);
         Optional<Animal> sample = AnimalScan.sample(level, AnimalScan.box(context.poi(), scanRadius(context.jobBlockLevel()), HALF_HEIGHT), type, level.getRandom());
@@ -191,6 +213,46 @@ public final class AnimalFarmerProfile extends FarmProfile implements FoodCostPr
 
     /**
      * @param context the production context
+     * @param scan    the scan
+     * @param tools   the collect inventory
+     * @return whether the shear entry takes part in the roll: a sheep is counted, the entry is on and its wool is not at Max,
+     *         and the collect inventory holds shears
+     */
+    private boolean shearing(Context context, AnimalScan.Result scan, JobDrops.Tools tools) {
+        return wantsShears(context, scan) && tools.find(SHEARS).isPresent();
+    }
+
+    /** Whether the shear entry is switched on, a sheep is counted and the wool is not at Max. */
+    private boolean wantsShears(Context context, AnimalScan.Result scan) {
+        return scan.counts().getOrDefault(SHEEP, 0) > 0 && !leftOut(context, List.of(SHEAR_SHEEP)).contains(SHEAR_SHEEP);
+    }
+
+    /**
+     * @param context the production context
+     * @param tools   the collect inventory
+     * @return whether the shear entry would work but the collect inventory holds no shears: the tool supply orders them
+     */
+    @Override
+    public boolean noShears(Context context, JobDrops.Tools tools) {
+        return wantsShears(context, animals(context.scan())) && tools.find(SHEARS).isEmpty();
+    }
+
+    /** One shearing: 1 to 3 wool of a live adult sheep's colour; the shears wear, the sheep is not changed. */
+    private Produced shear(Context context, JobDrops.Tools tools) {
+        ServerLevel level = context.level();
+        Optional<Animal> sample = AnimalScan.sample(level, AnimalScan.box(context.poi(), scanRadius(context.jobBlockLevel()), HALF_HEIGHT),
+                EntityTypes.SHEEP, level.getRandom());
+        if (sample.isEmpty() || !(sample.get() instanceof Sheep sheep)) {
+            // A sheep that walked off since the scan: the work is done, nothing to collect this time.
+            return new Produced(List.of(), ItemStack.EMPTY);
+        }
+        tools.wear(SHEARS);
+        Item wool = BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(sheep.getColor().getName() + "_wool"));
+        return new Produced(List.of(new ItemStack(wool, SHEAR_MIN + level.getRandom().nextInt(SHEAR_MAX - SHEAR_MIN + 1))), ItemStack.EMPTY);
+    }
+
+    /**
+     * @param context the production context
      * @param tools   the collect inventory
      * @return whether the scan holds animals that could be rolled but none of their types has food in the collect inventory:
      *         the farmer shows "No food"
@@ -198,7 +260,8 @@ public final class AnimalFarmerProfile extends FarmProfile implements FoodCostPr
     @Override
     public boolean noFood(Context context, JobDrops.Tools tools) {
         List<Identifier> group = rollable(context, animals(context.scan()), tools);
-        return !group.isEmpty() && group.stream().noneMatch(type -> foodOf(context, type).filter(food -> hasFood(food, tools)).isPresent());
+        return !group.isEmpty() && group.stream().noneMatch(type -> foodOf(context, type).filter(food -> hasFood(food, tools)).isPresent())
+                && !shearing(context, animals(context.scan()), tools);
     }
 
     @Override
@@ -273,7 +336,19 @@ public final class AnimalFarmerProfile extends FarmProfile implements FoodCostPr
      */
     @Override
     public Set<Item> droppedItems(ServerLevel level, BlockPos pos, Identifier type, ItemStack tool) {
+        if (type.equals(SHEAR_SHEEP)) {
+            return woolItems();
+        }
         return pool().droppedItems(type, true, () -> lootItems(level, type));
+    }
+
+    /** Every wool a shearing can give, one per dye color. */
+    private static Set<Item> woolItems() {
+        Set<Item> wool = new LinkedHashSet<>();
+        for (DyeColor color : DyeColor.values()) {
+            wool.add(BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(color.getName() + "_wool")));
+        }
+        return Collections.unmodifiableSet(wool);
     }
 
     private Set<Item> lootItems(ServerLevel level, Identifier type) {
@@ -295,16 +370,34 @@ public final class AnimalFarmerProfile extends FarmProfile implements FoodCostPr
         return items;
     }
 
-    /** Each animal type as its spawn egg, named with its count. */
+    /** The counted animal types and, while a sheep is counted, its shear entry. */
+    @Override
+    public List<Identifier> mainResources(ScanResult scan) {
+        List<Identifier> types = animals(scan).foundBlocks();
+        if (!types.contains(SHEEP)) {
+            return types;
+        }
+        List<Identifier> main = new ArrayList<>(types);
+        main.add(SHEAR_SHEEP);
+        return main;
+    }
+
+    /** Each animal type as its spawn egg, named with its count; the sheep's shear entry as shears after the types. */
     @Override
     public List<Found> found(ScanResult scan, Optional<Worker> worker) {
         AnimalScan.Result animals = animals(scan);
-        return animals.foundBlocks().stream().map(type -> {
+        List<Found> found = new ArrayList<>(animals.foundBlocks().stream().map(type -> {
             EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.getValue(type);
             ItemStack icon = SpawnEggItem.byId(entityType).map(ItemStack::new).orElseGet(() -> new ItemStack(Items.HAY_BLOCK));
             icon.set(DataComponents.ITEM_NAME, Component.translatable("civmod.gui.found.animal", entityType.getDescription(), animals.counts().get(type)));
             return new Found(type, icon, true);
-        }).toList();
+        }).toList());
+        if (animals.counts().getOrDefault(SHEEP, 0) > 0) {
+            ItemStack icon = new ItemStack(Items.SHEARS);
+            icon.set(DataComponents.ITEM_NAME, Component.translatable("civmod.gui.found.shear", animals.counts().get(SHEEP)));
+            found.add(new Found(SHEAR_SHEEP, icon, true));
+        }
+        return found;
     }
 
     @Override

@@ -112,7 +112,7 @@ public final class AnimalFarmerFoodGameTests {
     }
 
     /** A chest at the edge of the pen holding the given stacks: the collect inventory of these tests. */
-    private static BlockPos chest(GameTestHelper helper, ItemStack... stock) {
+    static BlockPos chest(GameTestHelper helper, ItemStack... stock) {
         helper.setBlock(CHEST, Blocks.CHEST);
         Container chest = (Container) helper.getLevel().getBlockEntity(helper.absolutePos(CHEST));
         chest.clearContent();
@@ -122,7 +122,7 @@ public final class AnimalFarmerFoodGameTests {
         return helper.absolutePos(CHEST);
     }
 
-    private static int inChest(GameTestHelper helper, Predicate<ItemStack> kind) {
+    static int inChest(GameTestHelper helper, Predicate<ItemStack> kind) {
         Container chest = (Container) helper.getLevel().getBlockEntity(helper.absolutePos(CHEST));
         int count = 0;
         for (int i = 0; i < chest.getContainerSize(); i++) {
@@ -133,16 +133,16 @@ public final class AnimalFarmerFoodGameTests {
         return count;
     }
 
-    private static int inChest(GameTestHelper helper, Item item) {
+    static int inChest(GameTestHelper helper, Item item) {
         return inChest(helper, stack -> stack.is(item));
     }
 
-    private static JobDrops.Tools collect(GameTestHelper helper, BlockPos chest) {
+    static JobDrops.Tools collect(GameTestHelper helper, BlockPos chest) {
         ServerLevel level = helper.getLevel();
         return JobDrops.Tools.of(level, null, () -> ClerkStorage.stock(level, chest, true));
     }
 
-    private static ScanResult scan(GameTestHelper helper) {
+    static ScanResult scan(GameTestHelper helper) {
         return AnimalFarmerGameTests.profile().createScan(helper.absolutePos(AnimalFarmerGameTests.HAY), 10).runAll(helper.getLevel());
     }
 
@@ -259,7 +259,7 @@ public final class AnimalFarmerFoodGameTests {
     private static final BlockPos COLLECT_CHEST = new BlockPos(3, 1, 13);
 
     /** The live set-up: a working Clerk with its chest, a Gatherer JobBlock 12 blocks away and a pen with a hay bale. */
-    private record Farm(Settler settler, BlockPos jobBlock, BlockPos clerk, Settlement settlement, List<long[]> forced) {
+    record Farm(Settler settler, BlockPos jobBlock, BlockPos clerk, Settlement settlement, List<long[]> forced) {
 
         ReservedFor me() {
             return ReservedFor.settler(settler.getUUID());
@@ -281,7 +281,7 @@ public final class AnimalFarmerFoodGameTests {
      *
      * @param chestAsCollect whether the farmer collects at a chest next to its JobBlock instead of at the Clerk
      */
-    private static Farm farm(GameTestHelper helper, EntityType<? extends Animal> type, boolean chestAsCollect, ItemStack... store) {
+    static Farm farm(GameTestHelper helper, EntityType<? extends Animal> type, boolean chestAsCollect, ItemStack... store) {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         BlockPos clerk = StockRuleGameTests.workingClerk(helper);
@@ -318,7 +318,7 @@ public final class AnimalFarmerFoodGameTests {
         return new Farm(settler, jobBlock, clerk, settlement, forced);
     }
 
-    private static boolean gaveLoot(Farm farm, Item... items) {
+    static boolean gaveLoot(Farm farm, Item... items) {
         return Arrays.stream(items).anyMatch(item -> farm.settler().getWork().buffer(farm.jobBlock()).counts().containsKey(ItemKey.of(item)));
     }
 
