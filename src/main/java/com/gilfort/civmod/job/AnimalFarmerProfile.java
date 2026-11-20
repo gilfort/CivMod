@@ -53,12 +53,15 @@ import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
  * <li>Roll: an animal type weighted by its count, then the loot table of a live adult of that type in the box of the
  * scan (one small, bounded query per output) with the settler as attacker; a chicken lays an egg instead 20 % of the time.
  * No animal is hurt, no XP drops.</li>
+ * <li>Food: every roll takes {@link AnimalFood#PER_ROLL} of the breeding food of the rolled type from the collect inventory; a type
+ * without food leaves the roll, and without food for every type the Job stops with "No food" ({@link FoodCostProfile},
+ * {@link FoodOrders}).</li>
  * <li>Speed: the shared formula × the farm curve of the counted animals.</li>
  * <li>NPC drop pool ({@link JobDrops}): the scan also counts the adult animals of the Job's entries; their entries add to
  * the loot of a rolled type (or replace it).</li>
  * </ul>
  */
-public final class AnimalFarmerProfile extends FarmProfile implements DropPoolProfile {
+public final class AnimalFarmerProfile extends FarmProfile implements FoodCostProfile {
 
     private static final Identifier JOB = CivMod.id("animal_farmer");
 
@@ -145,17 +148,20 @@ public final class AnimalFarmerProfile extends FarmProfile implements DropPoolPr
         if (types.isEmpty()) {
             return Optional.empty();
         }
-        Set<Identifier> leftOut = leftOut(context, types);
-        JobDrops.Pool pool = pool();
-        List<Identifier> group = types.stream().filter(type -> !leftOut.contains(type) && !pool.exhausted(type, true, context.atMax(), tools)).toList();
+        List<Identifier> group = rollable(context, scan, tools);
         if (group.isEmpty()) {
             // Every type excluded or at Max: an empty roll still counts as work (EXP, tool wear).
             return Optional.of(new Produced(List.of(), context.tool()));
         }
+        List<Identifier> fed = group.stream().filter(type -> foodOf(context, type).filter(food -> hasFood(food, tools)).isPresent()).toList();
+        if (fed.isEmpty()) {
+            // Nothing can be rolled without food: no loot, no work (the loop shows "No food", see noFood).
+            return Optional.empty();
+        }
         ServerLevel level = context.level();
-        int pick = level.getRandom().nextInt(group.stream().mapToInt(type -> scan.counts().get(type)).sum());
-        Identifier rolled = group.getLast();
-        for (Identifier type : group) {
+        int pick = level.getRandom().nextInt(fed.stream().mapToInt(type -> scan.counts().get(type)).sum());
+        Identifier rolled = fed.getLast();
+        for (Identifier type : fed) {
             pick -= scan.counts().get(type);
             if (pick < 0) {
                 rolled = type;
@@ -169,13 +175,58 @@ public final class AnimalFarmerProfile extends FarmProfile implements DropPoolPr
             return Optional.of(new Produced(List.of(), context.tool()));
         }
         Animal animal = sample.get();
-        List<JobDrops.Drop> entries = pool.of(type);
+        // Every roll costs the breeding food of its type; the check above made sure it is there.
+        Set<Item> food = Set.copyOf(foodOf(context, rolled).orElseThrow());
+        if (!tools.take(stack -> food.contains(stack.getItem()), AnimalFood.PER_ROLL)) {
+            return Optional.empty();
+        }
+        List<JobDrops.Drop> entries = pool().of(type);
         List<ItemStack> drops = new ArrayList<>();
         if (!JobDrops.replaces(entries)) {
             drops.addAll(animal instanceof Chicken && level.getRandom().nextDouble() < EGG_CHANCE ? egg(level, animal) : loot(level, animal, context.settler()));
         }
         drops.addAll(JobDrops.roll(level, entries, context.tool(), context.atMax(), tools, ItemStack.EMPTY));
         return Optional.of(new Produced(drops, context.tool()));
+    }
+
+    /**
+     * @param context the production context
+     * @param tools   the collect inventory
+     * @return whether the scan holds animals that could be rolled but none of their types has food in the collect inventory:
+     *         the farmer shows "No food"
+     */
+    @Override
+    public boolean noFood(Context context, JobDrops.Tools tools) {
+        List<Identifier> group = rollable(context, animals(context.scan()), tools);
+        return !group.isEmpty() && group.stream().noneMatch(type -> foodOf(context, type).filter(food -> hasFood(food, tools)).isPresent());
+    }
+
+    @Override
+    public List<List<Item>> unfed(Context context, JobDrops.Tools tools) {
+        return rollable(context, animals(context.scan()), tools).stream().map(type -> foodOf(context, type)).flatMap(Optional::stream)
+                .filter(food -> !food.isEmpty() && !hasFood(food, tools)).distinct().toList();
+    }
+
+    /** The found types that are not excluded, at Max or used up by a replacing entry. */
+    private List<Identifier> rollable(Context context, AnimalScan.Result scan, JobDrops.Tools tools) {
+        List<Identifier> types = scan.foundBlocks();
+        Set<Identifier> leftOut = leftOut(context, types);
+        JobDrops.Pool pool = pool();
+        return types.stream().filter(type -> !leftOut.contains(type) && !pool.exhausted(type, true, context.atMax(), tools)).toList();
+    }
+
+    /** The foods of a type, worked out at a live animal of it in the box of the scan when they are not known yet. */
+    private Optional<List<Item>> foodOf(Context context, Identifier type) {
+        EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.getValue(type);
+        ServerLevel level = context.level();
+        return AnimalFood.of(entityType,
+                () -> AnimalScan.sample(level, AnimalScan.box(context.poi(), scanRadius(context.jobBlockLevel()), HALF_HEIGHT), entityType, level.getRandom()));
+    }
+
+    /** Whether the collect inventory holds the food of one roll of a type. */
+    private static boolean hasFood(List<Item> food, JobDrops.Tools tools) {
+        Set<Item> items = Set.copyOf(food);
+        return tools.count(stack -> items.contains(stack.getItem())) >= AnimalFood.PER_ROLL;
     }
 
     /** The loot of an animal as if the settler had killed it (Looting from the settler's main hand). */

@@ -72,8 +72,8 @@ public final class ToolOrders {
             return false;
         }
         Settlement settlement = site.settlement();
-        Optional<BlockPos> home = site.block().homeClerk();
-        if (home.isEmpty() || settlement.block(home.get()).filter(SettlementBlock::autoToolSupply).isEmpty()) {
+        Optional<BlockPos> home = supplyClerk(site);
+        if (home.isEmpty()) {
             return false;
         }
         ReservedFor me = ReservedFor.settler(settler.getUUID());
@@ -86,13 +86,10 @@ public final class ToolOrders {
         if (held != HeldSupply.Held.NOTHING) {
             return held == HeldSupply.Held.IN_COLLECT;
         }
-        boolean onItsWay = settlement.deliveries().stream().anyMatch(task -> !task.surplus() && task.jobBlock().equals(job.jobBlock())
-                && task.input().filter(input -> input.to().equals(site.collect()) && input.items().keySet().stream().anyMatch(key -> kind.test(key.item()))).isPresent());
-        if (onItsWay) {
+        if (HeldSupply.onItsWay(need.want())) {
             return false;
         }
-        Optional<Request> asked = settlement.requests().stream()
-                .filter(request -> request.reservedFor().filter(me::equals).isPresent() && kind.test(request.item().item())).findFirst();
+        Optional<Request> asked = HeldSupply.asked(need.want());
         if (asked.isPresent()) {
             stepDown(need, asked.get());
             return false;
@@ -102,6 +99,14 @@ public final class ToolOrders {
         }
         chooseTool(need).ifPresent(tool -> Requests.postReserved(SettlementData.get(level), settlement, ItemKey.of(tool), home.get(), me));
         return false;
+    }
+
+    /**
+     * @param site the JobBlock of a settler
+     * @return its Home Clerk, empty when it has none or the Clerk's switch "Auto tool supply" is off
+     */
+    static Optional<BlockPos> supplyClerk(JobBlockSite site) {
+        return site.block().homeClerk().filter(home -> site.settlement().block(home).filter(SettlementBlock::autoToolSupply).isPresent());
     }
 
     /**
@@ -233,6 +238,7 @@ public final class ToolOrders {
     public static void jobGone(ServerLevel level, Settler settler, SettlerJob job) {
         job.jobType().profile(ResourceCollectionProfile.class).filter(ResourceCollectionProfile::needsTool)
                 .ifPresent(profile -> cancel(level, settler.getUUID(), kindOf(profile)));
+        job.jobType().profile(FoodCostProfile.class).ifPresent(profile -> FoodOrders.cancel(level, settler.getUUID()));
     }
 
     /**
@@ -249,7 +255,7 @@ public final class ToolOrders {
      * Ends the requests reserved for a settler and the stock held for it: a request nobody works on is withdrawn, one a
      * producer is crafting loses its reservation, so the finished tool stays as normal stock.
      */
-    private static void cancel(ServerLevel level, UUID settler, Predicate<Item> kind) {
+    static void cancel(ServerLevel level, UUID settler, Predicate<Item> kind) {
         SettlementData data = SettlementData.get(level);
         ReservedFor me = ReservedFor.settler(settler);
         for (Settlement settlement : data.settlements()) {

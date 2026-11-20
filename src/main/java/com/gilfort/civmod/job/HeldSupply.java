@@ -7,6 +7,7 @@ import java.util.function.Predicate;
 
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.ItemKey;
+import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.ReservedFor;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -84,6 +85,23 @@ final class HeldSupply {
             return Held.ON_ITS_WAY;
         }
         return Held.NOTHING;
+    }
+
+    /**
+     * @return whether an input delivery carries something of the kind to the collect inventory of the Job already
+     */
+    static boolean onItsWay(Want want) {
+        return want.settlement().deliveries().stream().anyMatch(task -> !task.surplus() && task.jobBlock().equals(want.job().jobBlock())
+                && task.input().filter(input -> input.to().equals(want.site().collect())
+                        && input.items().keySet().stream().anyMatch(key -> want.kind().test(key.item()))).isPresent());
+    }
+
+    /**
+     * @return the open request of the settler for an item of the kind, if it asked for one
+     */
+    static Optional<Request> asked(Want want) {
+        return want.settlement().requests().stream()
+                .filter(request -> request.reservedFor().filter(want.me()::equals).isPresent() && want.kind().test(request.item().item())).findFirst();
     }
 
     /**

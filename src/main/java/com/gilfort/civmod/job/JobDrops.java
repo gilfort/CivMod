@@ -20,6 +20,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.logistics.PatternRecipes;
+import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.registry.ModJobs;
 import com.google.gson.JsonElement;
@@ -430,6 +431,16 @@ public final class JobDrops {
             @Override
             public void wear(Predicate<ItemStack> kind) {
             }
+
+            @Override
+            public int count(Predicate<ItemStack> kind) {
+                return 0;
+            }
+
+            @Override
+            public boolean take(Predicate<ItemStack> kind, int amount) {
+                return false;
+            }
         };
 
         /**
@@ -444,6 +455,21 @@ public final class JobDrops {
          * @param kind the kind of tool
          */
         void wear(Predicate<ItemStack> kind);
+
+        /**
+         * @param kind the kind of item
+         * @return how many such items the collect inventory holds free (what is held for others does not count)
+         */
+        int count(Predicate<ItemStack> kind);
+
+        /**
+         * Uses up items of a kind from the collect inventory, all or nothing.
+         *
+         * @param kind   the kind of item
+         * @param amount how many
+         * @return whether that many were there and are gone now
+         */
+        boolean take(Predicate<ItemStack> kind, int amount);
 
         /**
          * @param level   the level
@@ -484,6 +510,25 @@ public final class JobDrops {
                             settler.spawnAtLocation(level, rest);
                         }
                     }
+                }
+
+                @Override
+                public int count(Predicate<ItemStack> kind) {
+                    return stock().count(kind);
+                }
+
+                @Override
+                public boolean take(Predicate<ItemStack> kind, int amount) {
+                    if (stock().count(kind) < amount) {
+                        return false;
+                    }
+                    int left = amount;
+                    for (Map.Entry<ItemKey, Integer> held : stock().counts().entrySet()) {
+                        if (left > 0 && kind.test(held.getKey().toStack())) {
+                            left -= stock().take(held.getKey(), Math.min(left, held.getValue())).stream().mapToInt(ItemStack::getCount).sum();
+                        }
+                    }
+                    return left <= 0;
                 }
             };
         }

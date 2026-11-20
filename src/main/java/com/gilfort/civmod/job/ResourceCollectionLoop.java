@@ -126,6 +126,9 @@ final class ResourceCollectionLoop implements CategoryLoop {
         if (paused.isPresent()) {
             return JobStep.blocked(paused.get());
         }
+        if (lacksFood(level, job, profile, site, workplace, poi, tool, atMax, dayTime)) {
+            return JobStep.blocked(JobStatus.NO_FOOD);
+        }
         // The inputs of the innate recipes are fetched like a tool; without them the recipes just leave the roll.
         Optional<Predicate<ItemStack>> input = CollectionRecipes.missingInput(settler,
                 CollectionRecipes.allowed(offered, site.block().excluded(job.jobType()), atMax), collect);
@@ -135,6 +138,21 @@ final class ResourceCollectionLoop implements CategoryLoop {
         step = Step.WORK;
         showTool(job, profile);
         return JobStep.walk(standTarget(level, profile, site, workplace, poi, day), profile.reach(), JobStatus.WORKING);
+    }
+
+    /**
+     * Whether a job whose rolls cost food has none for any type it could roll. Food a type lacks is asked for at the Home
+     * Clerk on the way ({@link FoodOrders}).
+     */
+    private boolean lacksFood(ServerLevel level, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site, Workplace workplace, BlockPos poi,
+            ItemStack tool, Set<Item> atMax, long dayTime) {
+        if (!(profile instanceof FoodCostProfile fed) || workplace.scan() == null) {
+            return false;
+        }
+        ResourceCollectionProfile.Context context = new ResourceCollectionProfile.Context(level, settler, workplace.scan(), poi, tool,
+                site.block().excluded(job.jobType()), settler.getWork().effectiveLevel(job), atMax, type -> workplace.dropped(level, profile, poi, type, tool),
+                1.0, site.level());
+        return FoodOrders.noFood(level, settler, job, site, fed, context, () -> ClerkStorage.stock(level, site.collect(), dayTime, true));
     }
 
     /**

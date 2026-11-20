@@ -28,6 +28,8 @@ public enum JobStatus {
     PRAYING("praying"),
     /** No usable tool in the belt or the collect inventory. */
     NO_TOOL("no_tool"),
+    /** The Animal Farmer has no food for any animal type it could roll. */
+    NO_FOOD("no_food"),
     /** No (reachable) work place. */
     NO_WORK_PLACE("no_work_place"),
     /** Every work place of the job is occupied by another settler today. */
@@ -94,7 +96,7 @@ public enum JobStatus {
      */
     public boolean isBlocked() {
         // NO_REQUEST and MISSING_INPUTS do not block: the next decision tries again (vault Jobs/Craftsperson.md).
-        return this == NO_TOOL || this == NO_WORK_PLACE || this == NO_FREE_WORK_PLACE || this == DROP_OFF_FULL || this == NO_RESOURCES || this == ALL_EXCLUDED || this == MAX_REACHED
+        return this == NO_TOOL || this == NO_FOOD || this == NO_WORK_PLACE || this == NO_FREE_WORK_PLACE || this == DROP_OFF_FULL || this == NO_RESOURCES || this == ALL_EXCLUDED || this == MAX_REACHED
                 || this == NOTHING_TO_PRODUCE || this == NO_MISSION || this == STORAGE_FULL || this == BLOCKED || this == UNCONNECTED;
     }
 
