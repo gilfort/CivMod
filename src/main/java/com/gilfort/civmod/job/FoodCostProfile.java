@@ -25,4 +25,12 @@ interface FoodCostProfile extends DropPoolProfile {
      *         (types with the same foods give one list)
      */
     List<List<Item>> unfed(Context context, JobDrops.Tools tools);
+
+    /**
+     * @param context the production context
+     * @param tools   the collect inventory
+     * @return whether the Job's shear entry is on and would work but the collect inventory holds no shears: {@link FoodOrders}
+     *         asks for them like for food
+     */
+    boolean noShears(Context context, JobDrops.Tools tools);
 }

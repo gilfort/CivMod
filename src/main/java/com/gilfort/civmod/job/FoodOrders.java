@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import com.gilfort.civmod.api.ResourceCollectionProfile;
@@ -23,6 +24,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 
 /**
  * The food supply of the Animal Farmer (vault {@code Jobs/Animal Farmer.md}, decisions of 2026-11-15): food for a type it
@@ -39,6 +41,7 @@ final class FoodOrders {
     /** How many rolls of food one request asks for. */
     private static final int REQUEST_ROLLS = 8;
     private static final int REQUEST_ITEMS = REQUEST_ROLLS * AnimalFood.PER_ROLL;
+    private static final Predicate<Item> SHEARS = item -> item == Items.SHEARS;
 
     private FoodOrders() {
     }
@@ -63,7 +66,33 @@ final class FoodOrders {
             // Food reached the collect inventory: look again with a fresh view of it.
             tools = JobDrops.Tools.of(level, settler, collect);
         }
+        if (profile.noShears(context, tools) && supplyShears(level, settler, job, site)) {
+            tools = JobDrops.Tools.of(level, settler, collect);
+        }
         return profile.noFood(context, tools);
+    }
+
+    /** @return whether a pair of shears reached the collect inventory */
+    private static boolean supplyShears(ServerLevel level, Settler settler, SettlerJob job, JobBlockSite site) {
+        Optional<BlockPos> home = ToolOrders.supplyClerk(site);
+        if (home.isEmpty()) {
+            return false;
+        }
+        Settlement settlement = site.settlement();
+        ReservedFor me = ReservedFor.settler(settler.getUUID());
+        HeldSupply.Want want = new HeldSupply.Want(level, settlement, site, job, me, SHEARS, stack -> true);
+        HeldSupply.Held held = HeldSupply.handOver(want);
+        if (held != HeldSupply.Held.NOTHING) {
+            return held == HeldSupply.Held.IN_COLLECT;
+        }
+        if (HeldSupply.onItsWay(want) || HeldSupply.asked(want).isPresent()) {
+            return false;
+        }
+        if (reserveFromStore(level, settlement, home.get(), me, List.of(Items.SHEARS), 1)) {
+            return HeldSupply.handOver(want) == HeldSupply.Held.IN_COLLECT;
+        }
+        Requests.postReserved(SettlementData.get(level), settlement, ItemKey.of(Items.SHEARS), 1, home.get(), me);
+        return false;
     }
 
     /** @return whether food reached the collect inventory */
@@ -91,7 +120,7 @@ final class FoodOrders {
         if (HeldSupply.onItsWay(want) || HeldSupply.asked(want).isPresent()) {
             return false;
         }
-        if (reserveFromStore(level, settlement, home, me, foods)) {
+        if (reserveFromStore(level, settlement, home, me, foods, REQUEST_ITEMS)) {
             return HeldSupply.handOver(want) == HeldSupply.Held.IN_COLLECT;
         }
         Item food = foods.stream().filter(item -> Producers.canMake(level, settlement, ItemKey.of(item))).findFirst().orElse(foods.getFirst());
@@ -103,11 +132,11 @@ final class FoodOrders {
      * Food of the type that lies in the Home Clerk's store is held for the settler, the first one in registry order. One
      * kind at a time, so the hand-over carries it whole.
      */
-    private static boolean reserveFromStore(ServerLevel level, Settlement settlement, BlockPos home, ReservedFor me, List<Item> foods) {
+    private static boolean reserveFromStore(ServerLevel level, Settlement settlement, BlockPos home, ReservedFor me, List<Item> foods, int most) {
         Stock store = ClerkStorage.stock(level, home, true);
         for (Item food : foods) {
             ItemKey key = ItemKey.of(food);
-            int count = Math.min(store.count(key), REQUEST_ITEMS);
+            int count = Math.min(store.count(key), most);
             if (count > 0) {
                 Holds.hold(settlement, home, me, key, count);
                 return true;
@@ -123,6 +152,6 @@ final class FoodOrders {
      * @param settler the settler
      */
     static void cancel(ServerLevel level, UUID settler) {
-        ToolOrders.cancel(level, settler, AnimalFood::isFood);
+        ToolOrders.cancel(level, settler, item -> AnimalFood.isFood(item) || SHEARS.test(item));
     }
 }
