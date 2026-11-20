@@ -20,6 +20,7 @@ import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.PositionAndRotation;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -191,8 +192,29 @@ public class Settler extends PathfinderMob {
     @Override
     public void onSyncedDataUpdated(EntityDataAccessor<?> accessor) {
         super.onSyncedDataUpdated(accessor);
-        if (CAST_TARGET.equals(accessor) && level().isClientSide() && castTarget().isPresent()) {
+        if (!level().isClientSide()) {
+            return;
+        }
+        if (CAST_TARGET.equals(accessor) && castTarget().isPresent()) {
             fishingCast.start(level().getGameTime());
+        }
+        if (DATA_POSE.equals(accessor) && getPose() == Pose.SLEEPING) {
+            stopSlidingToBed();
+        }
+    }
+
+    /**
+     * The server moves a settler from where it stopped walking (up to {@code SettlerWork.REACH} away) onto its bed in a
+     * single tick. The move packet arrives before the pose, so the client would draw the body lying down while it slides
+     * through the air to the bed. For a real bed it gets worse: vanilla then puts the body on the bed, and the slide adds
+     * that jump to its target a second time, so the settler floats past the bed until the next full position sync. The
+     * pose is synced before the sleeping position (lower data id), so ending the slide here also stops the double jump.
+     */
+    private void stopSlidingToBed() {
+        PositionAndRotation target = getInterpolation().target();
+        if (target != null) {
+            getInterpolation().cancel();
+            snapTo(target.position(), target.yRot(), target.xRot());
         }
     }
 
