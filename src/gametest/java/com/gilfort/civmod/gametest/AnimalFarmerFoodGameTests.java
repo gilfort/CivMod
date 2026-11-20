@@ -293,7 +293,7 @@ public final class AnimalFarmerFoodGameTests {
     static Farm farm(GameTestHelper helper, EntityType<? extends Animal> type, boolean chestAsCollect, ItemStack... store) {
         ServerLevel level = helper.getLevel();
         // The farm reaches from the Clerk at the origin to z 20: every block of it must lie in an entity-ticking chunk.
-        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper, FARM_FAR_CORNER);
         BlockPos clerk = StockRuleGameTests.workingClerk(helper);
         Container chest = (Container) level.getBlockEntity(helper.absolutePos(STORE));
         for (int i = 0; i < store.length; i++) {
