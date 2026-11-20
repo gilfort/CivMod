@@ -14,6 +14,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.job.AnimalFarmerProfile;
+import com.gilfort.civmod.job.AnimalFood;
 import com.gilfort.civmod.job.JobDrops;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.logistics.ClerkStorage;
@@ -26,6 +27,7 @@ import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Holds;
 import com.gilfort.civmod.settlement.Patterns;
+import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
@@ -76,6 +78,7 @@ public final class AnimalFarmerFoodGameTests {
             register(helper, "animal_farmer_food_held_for_farmer", AnimalFarmerFoodGameTests::heldForFarmer);
             register(helper, "animal_farmer_food_from_store", AnimalFarmerFoodGameTests::fromStore);
             register(helper, "animal_farmer_food_asks_what_can_be_made", AnimalFarmerFoodGameTests::asksWhatCanBeMade);
+            register(helper, "animal_farmer_food_job_removed", AnimalFarmerFoodGameTests::jobRemoved);
         });
     }
 
@@ -257,6 +260,8 @@ public final class AnimalFarmerFoodGameTests {
     private static final BlockPos FARM_HAY = new BlockPos(4, 1, 15);
     private static final BlockPos FARM_ANIMAL = new BlockPos(6, 1, 16);
     private static final BlockPos COLLECT_CHEST = new BlockPos(3, 1, 13);
+    /** The corner of the farm that is furthest from the test origin. */
+    private static final BlockPos FARM_FAR_CORNER = new BlockPos(9, 1, 21);
 
     /** The live set-up: a working Clerk with its chest, a Gatherer JobBlock 12 blocks away and a pen with a hay bale. */
     record Farm(Settler settler, BlockPos jobBlock, BlockPos clerk, Settlement settlement, List<long[]> forced) {
@@ -283,6 +288,7 @@ public final class AnimalFarmerFoodGameTests {
      */
     static Farm farm(GameTestHelper helper, EntityType<? extends Animal> type, boolean chestAsCollect, ItemStack... store) {
         ServerLevel level = helper.getLevel();
+        // The farm reaches from the Clerk at the origin to z 20: every block of it must lie in an entity-ticking chunk.
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         BlockPos clerk = StockRuleGameTests.workingClerk(helper);
         Container chest = (Container) level.getBlockEntity(helper.absolutePos(STORE));
@@ -385,6 +391,25 @@ public final class AnimalFarmerFoodGameTests {
             helper.assertTrue(farm.requests().size() == 1, "One request: " + farm.requests());
             farm.close(level);
         });
+    }
+
+    /**
+     * The farmer loses its Job: its requests for food and what is held for it end, also when the foods of the animal types
+     * are not known (after a restart or a tag reload the cache is empty).
+     */
+    private static void jobRemoved(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Farm farm = farm(helper, EntityTypes.COW, false);
+        SettlementData data = SettlementData.get(level);
+        Requests.postReserved(data, farm.settlement(), ItemKey.of(Items.WHEAT), 16, farm.clerk(), farm.me());
+        Holds.hold(farm.settlement(), farm.clerk(), farm.me(), ItemKey.of(Items.CARROT), 4);
+        helper.assertFalse(farm.requests().isEmpty() || Holds.heldFor(farm.settlement(), farm.me()).isEmpty(), "Set-up: a request and a hold");
+        AnimalFood.forget();
+        farm.settler().removeJob(farm.jobBlock());
+        helper.assertTrue(farm.requests().isEmpty(), "The request for food is withdrawn: " + farm.requests());
+        helper.assertTrue(Holds.heldFor(farm.settlement(), farm.me()).isEmpty(), "Nothing is held for the settler: " + Holds.heldFor(farm.settlement(), farm.me()));
+        farm.close(level);
+        helper.succeed();
     }
 
     /**

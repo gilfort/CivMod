@@ -146,12 +146,14 @@ final class FoodOrders {
     }
 
     /**
-     * The settler is gone or its Job ended: its requests for food end, and what is held for it goes back to the store.
+     * The farmer's Job ended: everything it asked for ends, food and shears alike, and what is held for it goes back to the
+     * store. The check does not ask which items count as food: that is known only for the animal types seen since the
+     * last start or tag reload. A farmer asks for nothing but what its Job needs, so every request reserved for it goes.
      *
      * @param level   the level
      * @param settler the settler
      */
     static void cancel(ServerLevel level, UUID settler) {
-        ToolOrders.cancel(level, settler, item -> AnimalFood.isFood(item) || SHEARS.test(item));
+        ToolOrders.cancel(level, settler, item -> true);
     }
 }

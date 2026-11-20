@@ -26,7 +26,7 @@ import net.neoforged.neoforge.event.TagsUpdatedEvent;
  * are worked out once at a live animal and kept per entity type until the tags reload.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
-final class AnimalFood {
+public final class AnimalFood {
 
     /** What every loot roll costs: the amount that breeds a new animal. */
     static final int PER_ROLL = 2;
@@ -63,17 +63,14 @@ final class AnimalFood {
         return Collections.unmodifiableList(foods);
     }
 
-    /**
-     * @param item an item
-     * @return whether it feeds an animal type whose foods are known
-     */
-    static boolean isFood(Item item) {
-        return FOODS.values().stream().anyMatch(foods -> foods.contains(item));
+    /** Forgets every known food: they are worked out again at the next roll. */
+    public static void forget() {
+        FOODS.clear();
     }
 
-    /** A tag reload can change what feeds an animal: the foods are worked out again at the next roll. */
+    /** A tag reload can change what feeds an animal. */
     @SubscribeEvent
     static void onTagsUpdated(TagsUpdatedEvent event) {
-        FOODS.clear();
+        forget();
     }
 }
