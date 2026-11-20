@@ -97,7 +97,7 @@ public final class ToolOrders {
         if (reserveFromStore(need)) {
             return HeldSupply.handOver(need.want()) == HeldSupply.Held.IN_COLLECT;
         }
-        chooseTool(need).ifPresent(tool -> Requests.postReserved(SettlementData.get(level), settlement, ItemKey.of(tool), home.get(), me));
+        chooseTool(need).ifPresent(tool -> Requests.postReserved(SettlementData.get(level), settlement, ItemKey.of(tool), 1, home.get(), me));
         return false;
     }
 
@@ -151,7 +151,7 @@ public final class ToolOrders {
         lowerTool(need, tier).ifPresent(tool -> {
             SettlementData data = SettlementData.get(need.level());
             Requests.withdrawReserved(data, need.settlement(), asked.id());
-            Requests.postReserved(data, need.settlement(), ItemKey.of(tool), need.home(), need.me());
+            Requests.postReserved(data, need.settlement(), ItemKey.of(tool), 1, need.home(), need.me());
         });
     }
 
@@ -238,7 +238,9 @@ public final class ToolOrders {
     public static void jobGone(ServerLevel level, Settler settler, SettlerJob job) {
         job.jobType().profile(ResourceCollectionProfile.class).filter(ResourceCollectionProfile::needsTool)
                 .ifPresent(profile -> cancel(level, settler.getUUID(), kindOf(profile)));
-        job.jobType().profile(FoodCostProfile.class).ifPresent(profile -> FoodOrders.cancel(level, settler.getUUID()));
+        // A farmer asks for nothing but what its Job needs (food, shears), and which items count as food is known only for
+        // the animal types seen since the last start: so everything reserved for it goes.
+        job.jobType().profile(ConsumablesProfile.class).ifPresent(profile -> cancel(level, settler.getUUID(), item -> true));
     }
 
     /**

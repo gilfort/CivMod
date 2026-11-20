@@ -2,7 +2,6 @@ package com.gilfort.civmod.job;
 
 import java.io.Reader;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -21,7 +20,6 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.logistics.PatternRecipes;
-import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.registry.ModJobs;
 import com.google.gson.JsonElement;
@@ -479,62 +477,7 @@ public final class JobDrops {
          * @return the tools of the collect inventory
          */
         static Tools of(ServerLevel level, @Nullable LivingEntity settler, Supplier<Stock> collect) {
-            return new Tools() {
-                private @Nullable Stock stock;
-
-                private Stock stock() {
-                    if (stock == null) {
-                        stock = collect.get();
-                    }
-                    return stock;
-                }
-
-                @Override
-                public Optional<ItemStack> find(Predicate<ItemStack> kind) {
-                    return SettlerTools.find(stock(), kind).map(index -> stock().contents().get(index));
-                }
-
-                @Override
-                public void wear(Predicate<ItemStack> kind) {
-                    Optional<Integer> index = SettlerTools.find(stock(), kind);
-                    if (settler == null || index.isEmpty()) {
-                        return;
-                    }
-                    ItemStack tool = stock().takeOne(index.get());
-                    if (tool.isEmpty()) {
-                        return;
-                    }
-                    tool.hurtAndBreak(1, level, settler, item -> { });
-                    if (!tool.isEmpty()) {
-                        ItemStack rest = stock().insert(tool);
-                        if (!rest.isEmpty()) {
-                            settler.spawnAtLocation(level, rest);
-                        }
-                    }
-                }
-
-                @Override
-                public int count(Predicate<ItemStack> kind) {
-                    return stock().count(kind);
-                }
-
-                @Override
-                public boolean take(Predicate<ItemStack> kind, int amount) {
-                    if (stock().count(kind) < amount) {
-                        return false;
-                    }
-                    int left = amount;
-                    // Registry order, so the same stock always pays the same way.
-                    List<Map.Entry<ItemKey, Integer>> entries = new ArrayList<>(stock().counts().entrySet());
-                    entries.sort(Comparator.comparingInt(entry -> BuiltInRegistries.ITEM.getId(entry.getKey().item())));
-                    for (Map.Entry<ItemKey, Integer> held : entries) {
-                        if (left > 0 && kind.test(held.getKey().toStack())) {
-                            left -= stock().take(held.getKey(), Math.min(left, held.getValue())).stream().mapToInt(ItemStack::getCount).sum();
-                        }
-                    }
-                    return left <= 0;
-                }
-            };
+            return CollectTools.of(level, settler, collect);
         }
     }
 

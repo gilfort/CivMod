@@ -90,6 +90,16 @@ public final class AnimalFarmerFoodGameTests {
         return (AnimalFarmerProfile) AnimalFarmerGameTests.profile();
     }
 
+    /** Whether the farmer could roll something but has no food for any of it. */
+    static boolean noFood(ResourceCollectionProfile.Context context, JobDrops.Tools tools) {
+        return farmer().needs(context, tools).stuck();
+    }
+
+    /** Whether the farmer would ask for shears. */
+    static boolean asksShears(ResourceCollectionProfile.Context context, JobDrops.Tools tools) {
+        return farmer().needs(context, tools).missing().stream().anyMatch(need -> need.items().contains(Items.SHEARS));
+    }
+
     /** Food for every roll without end: for tests that look at the loot and not at the cost. */
     static JobDrops.Tools endless() {
         return new JobDrops.Tools() {
@@ -157,13 +167,13 @@ public final class AnimalFarmerFoodGameTests {
         Settler settler = GathererGameTests.settler(helper, jobBlock, new BlockPos(3, 1, 2), "Herder");
         ResourceCollectionProfile.Context context = AnimalFarmerGameTests.context(helper, settler, scan(helper), Set.of());
         JobDrops.Tools tools = collect(helper, chest);
-        helper.assertFalse(farmer().noFood(context, tools), "Wheat is there");
+        helper.assertFalse(noFood(context, tools), "Wheat is there");
         for (int expected = 3; expected >= 1; expected -= FOOD_PER_ROLL) {
             List<ItemStack> loot = farmer().produce(context, tools).orElseThrow().stacks();
             helper.assertFalse(loot.isEmpty(), "A roll with food gives loot");
             helper.assertValueEqual(inChest(helper, Items.WHEAT), expected, "A roll uses up 2 wheat");
         }
-        helper.assertTrue(farmer().noFood(context, tools), "One wheat is not enough for a roll");
+        helper.assertTrue(noFood(context, tools), "One wheat is not enough for a roll");
         helper.assertTrue(farmer().produce(context, tools).isEmpty(), "Without food no loot is given");
         helper.assertValueEqual(inChest(helper, Items.WHEAT), 1, "Nothing is used up without a roll");
         settler.discard();
@@ -188,7 +198,7 @@ public final class AnimalFarmerFoodGameTests {
         ResourceCollectionProfile.Context context = AnimalFarmerGameTests.context(helper, settler, scan(helper), Set.of());
         String name = type.getDescriptionId();
         BlockPos chest = chest(helper, new ItemStack(other, 10));
-        helper.assertTrue(farmer().noFood(context, collect(helper, chest)), name + " is not fed with " + other);
+        helper.assertTrue(noFood(context, collect(helper, chest)), name + " is not fed with " + other);
         helper.assertTrue(farmer().produce(context, collect(helper, chest)).isEmpty(), name + " gives nothing for " + other);
         chest = chest(helper, new ItemStack(food, FOOD_PER_ROLL));
         helper.assertTrue(farmer().produce(context, collect(helper, chest)).filter(produced -> !produced.stacks().isEmpty()).isPresent(),
@@ -248,7 +258,7 @@ public final class AnimalFarmerFoodGameTests {
         Settler settler = GathererGameTests.settler(helper, jobBlock, new BlockPos(3, 1, 2), "Herder");
         ResourceCollectionProfile.Context context = AnimalFarmerGameTests.context(helper, settler, scan(helper), Set.of());
         BlockPos chest = chest(helper, new ItemStack(Items.WHEAT, 10));
-        helper.assertTrue(farmer().noFood(context, collect(helper, chest)), "Wheat does not feed an armadillo");
+        helper.assertTrue(noFood(context, collect(helper, chest)), "Wheat does not feed an armadillo");
         chest = chest(helper, new ItemStack(Items.SPIDER_EYE, FOOD_PER_ROLL));
         List<ItemStack> loot = farmer().produce(context, collect(helper, chest)).orElseThrow().stacks();
         helper.assertTrue(loot.stream().anyMatch(stack -> stack.is(Items.ARMADILLO_SCUTE)), "A scute for two spider eyes: " + loot);
@@ -266,6 +276,14 @@ public final class AnimalFarmerFoodGameTests {
     private static final BlockPos COLLECT_CHEST = new BlockPos(3, 1, 13);
     /** The corner of the farm that is furthest from the test origin. */
     private static final BlockPos FARM_FAR_CORNER = new BlockPos(9, 1, 21);
+
+    /** Where the farmer of a {@link #farm} collects. */
+    enum Collect {
+        /** At the Home Clerk. */
+        CLERK,
+        /** At a chest next to its JobBlock. */
+        CHEST
+    }
 
     /** The live set-up: a working Clerk with its chest, a Gatherer JobBlock 12 blocks away and a pen with a hay bale. */
     record Farm(Settler settler, BlockPos jobBlock, BlockPos clerk, Settlement settlement, List<long[]> forced) {
@@ -288,9 +306,9 @@ public final class AnimalFarmerFoodGameTests {
     /**
      * An Animal Farmer with an axe and one animal of the given type in its pen; the Clerk's store holds the given stacks.
      *
-     * @param chestAsCollect whether the farmer collects at a chest next to its JobBlock instead of at the Clerk
+     * @param where where the farmer collects
      */
-    static Farm farm(GameTestHelper helper, EntityType<? extends Animal> type, boolean chestAsCollect, ItemStack... store) {
+    static Farm farm(GameTestHelper helper, EntityType<? extends Animal> type, Collect where, ItemStack... store) {
         ServerLevel level = helper.getLevel();
         // The farm reaches from the Clerk at the origin to z 20: every block of it must lie in an entity-ticking chunk.
         List<long[]> forced = LumberjackGameTests.forceChunks(helper, FARM_FAR_CORNER);
@@ -320,7 +338,7 @@ public final class AnimalFarmerFoodGameTests {
         settler.getFood().setMorningDay(Math.floorDiv(level.getOverworldClockTime(), 24000L));
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_AXE));
         BlockPos collect = clerk;
-        if (chestAsCollect) {
+        if (where == Collect.CHEST) {
             helper.setBlock(COLLECT_CHEST, Blocks.CHEST);
             collect = helper.absolutePos(COLLECT_CHEST);
         }
@@ -338,7 +356,7 @@ public final class AnimalFarmerFoodGameTests {
      */
     private static void noFoodBubble(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        Farm farm = farm(helper, EntityTypes.COW, false);
+        Farm farm = farm(helper, EntityTypes.COW, Collect.CLERK);
         // The job is blocked for half a minute at a time and the status falls back to idle in between: remember that it showed.
         AtomicBoolean sawStatus = new AtomicBoolean();
         helper.onEachTick(() -> {
@@ -364,7 +382,7 @@ public final class AnimalFarmerFoodGameTests {
      */
     private static void heldForFarmer(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        Farm farm = farm(helper, EntityTypes.COW, false, new ItemStack(Items.WHEAT, 8));
+        Farm farm = farm(helper, EntityTypes.COW, Collect.CLERK, new ItemStack(Items.WHEAT, 8));
         Holds.hold(farm.settlement(), farm.clerk(), farm.me(), ItemKey.of(Items.WHEAT), 8);
         helper.succeedWhen(() -> {
             helper.assertTrue(gaveLoot(farm, Items.BEEF, Items.LEATHER), "No loot yet, status " + farm.settler().getWork().status(farm.jobBlock()));
@@ -382,7 +400,7 @@ public final class AnimalFarmerFoodGameTests {
      */
     private static void asksWhatCanBeMade(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        Farm farm = farm(helper, EntityTypes.CHICKEN, false);
+        Farm farm = farm(helper, EntityTypes.CHICKEN, Collect.CLERK);
         SettlementData data = SettlementData.get(level);
         BlockPos craft = CraftspersonGameTests.craftsperson(helper, new BlockPos(1, 1, 5));
         helper.assertTrue(TestAssignments.assign(data, craft, UUID.randomUUID(), "Maker", farm.settlement().id(), List.of(), CraftspersonGameTests.craftJob())
@@ -403,7 +421,7 @@ public final class AnimalFarmerFoodGameTests {
      */
     private static void jobRemoved(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        Farm farm = farm(helper, EntityTypes.COW, false);
+        Farm farm = farm(helper, EntityTypes.COW, Collect.CLERK);
         SettlementData data = SettlementData.get(level);
         Requests.postReserved(data, farm.settlement(), ItemKey.of(Items.WHEAT), 16, farm.clerk(), farm.me());
         Holds.hold(farm.settlement(), farm.clerk(), farm.me(), ItemKey.of(Items.CARROT), 4);
@@ -422,7 +440,7 @@ public final class AnimalFarmerFoodGameTests {
      */
     private static void fromStore(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        Farm farm = farm(helper, EntityTypes.PIG, true, new ItemStack(Items.POTATO, 8));
+        Farm farm = farm(helper, EntityTypes.PIG, Collect.CHEST, new ItemStack(Items.POTATO, 8));
         helper.succeedWhen(() -> {
             helper.assertTrue(gaveLoot(farm, Items.PORKCHOP), "No loot yet, status " + farm.settler().getWork().status(farm.jobBlock()));
             helper.assertTrue(farm.settlement().requests().isEmpty(), "Nothing is asked for: " + farm.settlement().requests());

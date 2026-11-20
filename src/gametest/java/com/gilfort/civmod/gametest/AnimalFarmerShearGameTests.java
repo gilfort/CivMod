@@ -80,7 +80,7 @@ public final class AnimalFarmerShearGameTests {
         ServerLevel level = helper.getLevel();
         // With the settler, so the shears wear.
         JobDrops.Tools tools = JobDrops.Tools.of(level, settler, () -> ClerkStorage.stock(level, chest, true));
-        helper.assertFalse(farmer().noFood(context, tools), "Shearing needs no food");
+        helper.assertFalse(AnimalFarmerFoodGameTests.noFood(context, tools), "Shearing needs no food");
         int fewest = Integer.MAX_VALUE;
         int most = 0;
         for (int i = 0; i < 60; i++) {
@@ -112,7 +112,7 @@ public final class AnimalFarmerShearGameTests {
             helper.assertTrue(produced.stacks().stream().anyMatch(stack -> stack.is(Items.MUTTON)), "Every roll slaughters: " + produced.stacks());
         }
         helper.assertValueEqual(AnimalFarmerFoodGameTests.inChest(helper, Items.WHEAT), 0, "Every roll cost its food");
-        helper.assertTrue(farmer().noFood(context, tools), "Without shears and food the farmer is out of food");
+        helper.assertTrue(AnimalFarmerFoodGameTests.noFood(context, tools), "Without shears and food the farmer is out of food");
         helper.assertTrue(farmer().produce(context, tools).isEmpty(), "and rolls nothing");
         settler.discard();
         helper.succeed();
@@ -132,14 +132,14 @@ public final class AnimalFarmerShearGameTests {
             helper.assertTrue(produced.stacks().stream().anyMatch(stack -> stack.is(Items.MUTTON)), "Every roll slaughters: " + produced.stacks());
         }
         helper.assertValueEqual(AnimalFarmerFoodGameTests.inChest(helper, Items.WHEAT), 0, "Every roll cost its food");
-        helper.assertTrue(farmer().noFood(context, tools), "Shears do not keep the farmer working while the entry is off");
+        helper.assertTrue(AnimalFarmerFoodGameTests.noFood(context, tools), "Shears do not keep the farmer working while the entry is off");
         helper.assertTrue(farmer().produce(context, tools).isEmpty(), "and nothing is rolled");
         // Excluding the sheep instead leaves the shear entry alone.
         ResourceCollectionProfile.Context slaughterOff = AnimalFarmerGameTests.context(helper, settler, AnimalFarmerFoodGameTests.scan(helper),
                 Set.of(SHEEP_TYPE));
         ResourceCollectionProfile.Produced shorn = farmer().produce(slaughterOff, tools).orElseThrow();
         helper.assertTrue(wool(shorn.stacks()) >= 1 && shorn.stacks().stream().noneMatch(stack -> stack.is(Items.MUTTON)), "Only the slaughter is off: " + shorn.stacks());
-        helper.assertFalse(farmer().noShears(context, AnimalFarmerFoodGameTests.collect(helper, AnimalFarmerFoodGameTests.chest(helper))), "No shears are asked for while the entry is off");
+        helper.assertFalse(AnimalFarmerFoodGameTests.asksShears(context, AnimalFarmerFoodGameTests.collect(helper, AnimalFarmerFoodGameTests.chest(helper))), "No shears are asked for while the entry is off");
         settler.discard();
         helper.succeed();
     }
@@ -169,7 +169,7 @@ public final class AnimalFarmerShearGameTests {
      */
     private static void ordersShears(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        AnimalFarmerFoodGameTests.Farm farm = AnimalFarmerFoodGameTests.farm(helper, EntityTypes.SHEEP, false, new ItemStack(Items.WHEAT, 8));
+        AnimalFarmerFoodGameTests.Farm farm = AnimalFarmerFoodGameTests.farm(helper, EntityTypes.SHEEP, AnimalFarmerFoodGameTests.Collect.CLERK, new ItemStack(Items.WHEAT, 8));
         Holds.hold(farm.settlement(), farm.clerk(), farm.me(), ItemKey.of(Items.WHEAT), 8);
         helper.succeedWhen(() -> {
             helper.assertTrue(farm.requests().stream().anyMatch(request -> request.item().is(Items.SHEARS) && request.amount() == 1

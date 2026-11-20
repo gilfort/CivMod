@@ -128,7 +128,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
         }
         List<CollectionRecipes.Offer> allowed = CollectionRecipes.allowed(offered, site.block().excluded(job.jobType()), atMax);
         if (!CollectionRecipes.anyPossible(settler, allowed, collect)
-                && lacksFood(level, job, profile, site, workplace, poi, tool, atMax, dayTime)) {
+                && lacksFood(level, job, profile, site, new Place(workplace, poi, tool, atMax))) {
             return JobStep.blocked(JobStatus.NO_FOOD);
         }
         // The inputs of the innate recipes are fetched like a tool; without them the recipes just leave the roll.
@@ -141,20 +141,23 @@ final class ResourceCollectionLoop implements CategoryLoop {
         return JobStep.walk(standTarget(level, profile, site, workplace, poi, day), profile.reach(), JobStatus.WORKING);
     }
 
+    /** Where the roll happens: the facts of the decision that the food check needs. */
+    private record Place(Workplace workplace, BlockPos poi, ItemStack tool, Set<Item> atMax) {
+    }
+
     /**
      * Whether a job whose rolls cost food has none for any type it could roll. Food a type lacks is asked for at the Home
-     * Clerk on the way ({@link FoodOrders}). Asked only where no recipe can run: recipes cost no food, so the farmer goes on
-     * and the roll itself decides.
+     * Clerk on the way ({@link ConsumableOrders}).
      */
-    private boolean lacksFood(ServerLevel level, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site, Workplace workplace, BlockPos poi,
-            ItemStack tool, Set<Item> atMax, long dayTime) {
-        if (!(profile instanceof FoodCostProfile fed) || workplace.scan() == null) {
+    private boolean lacksFood(ServerLevel level, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site, Place place) {
+        if (!(profile instanceof ConsumablesProfile fed) || place.workplace().scan() == null) {
             return false;
         }
-        ResourceCollectionProfile.Context context = new ResourceCollectionProfile.Context(level, settler, workplace.scan(), poi, tool,
-                site.block().excluded(job.jobType()), settler.getWork().effectiveLevel(job), atMax, type -> workplace.dropped(level, profile, poi, type, tool),
-                1.0, site.level());
-        return FoodOrders.noFood(level, settler, job, site, fed, context, () -> ClerkStorage.stock(level, site.collect(), dayTime, true));
+        ResourceCollectionProfile.Context context = new ResourceCollectionProfile.Context(level, settler, place.workplace().scan(), place.poi(),
+                place.tool(), site.block().excluded(job.jobType()), settler.getWork().effectiveLevel(job), place.atMax(),
+                type -> place.workplace().dropped(level, profile, place.poi(), type, place.tool()), 1.0, site.level());
+        CollectTools tools = CollectTools.of(level, settler, () -> ClerkStorage.stock(level, site.collect(), DayClock.dayTime(level), true));
+        return ConsumableOrders.orderMissing(new ConsumableOrders.Worker(level, settler, job, site), fed, context, tools).stuck();
     }
 
     /**

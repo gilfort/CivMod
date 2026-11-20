@@ -1,7 +1,9 @@
 package com.gilfort.civmod.job;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -56,17 +58,17 @@ import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
  * scan (one small, bounded query per output) with the settler as attacker; a chicken lays an egg instead 20 % of the time.
  * No animal is hurt, no XP drops.</li>
  * <li>Food: every roll takes {@link AnimalFood#PER_ROLL} of the breeding food of the rolled type from the collect inventory; a type
- * without food leaves the roll, and without food for every type the Job stops with "No food" ({@link FoodCostProfile},
- * {@link FoodOrders}).</li>
+ * without food leaves the roll, and when nothing is possible (no fed type, no shearing, no recipe) the Job stops with "No
+ * food" ({@link ConsumablesProfile}, {@link ConsumableOrders}).</li>
  * <li>Shearing: while a sheep is counted the roll has one more entry, {@link #SHEAR_SHEEP}, weighted like the sheep. With
  * shears in the collect inventory it gives 1 to 3 wool for no food and wears the shears, not the axe; without shears, or
- * switched off, it leaves the roll. {@link FoodOrders} asks for missing shears.</li>
+ * switched off, it leaves the roll. {@link ConsumableOrders} asks for missing shears.</li>
  * <li>Speed: the shared formula × the farm curve of the counted animals.</li>
  * <li>NPC drop pool ({@link JobDrops}): the scan also counts the adult animals of the Job's entries; their entries add to
  * the loot of a rolled type (or replace it).</li>
  * </ul>
  */
-public final class AnimalFarmerProfile extends FarmProfile implements FoodCostProfile {
+public final class AnimalFarmerProfile extends FarmProfile implements ConsumablesProfile {
 
     private static final Identifier JOB = CivMod.id("animal_farmer");
 
@@ -160,8 +162,7 @@ public final class AnimalFarmerProfile extends FarmProfile implements FoodCostPr
     @Override
     public Optional<Produced> produce(Context context, JobDrops.Tools tools) {
         AnimalScan.Result scan = animals(context.scan());
-        List<Identifier> types = scan.foundBlocks();
-        if (types.isEmpty()) {
+        if (scan.foundBlocks().isEmpty()) {
             return Optional.empty();
         }
         List<Identifier> group = rollable(context, scan, tools);
@@ -170,35 +171,27 @@ public final class AnimalFarmerProfile extends FarmProfile implements FoodCostPr
             // Every type excluded or at Max: an empty roll still counts as work (EXP, tool wear).
             return Optional.of(new Produced(List.of(), context.tool()));
         }
-        List<Identifier> fed = group.stream().filter(type -> foodOf(context, type).filter(food -> hasFood(food, tools)).isPresent()).toList();
+        Map<Identifier, List<Item>> fed = fedTypes(context, group, tools);
         if (fed.isEmpty() && !shear) {
-            // Nothing can be rolled without food: no loot, no work (the loop shows "No food", see noFood).
+            // Nothing can be rolled without food: no loot, no work (the loop shows "No food", see needs).
             return Optional.empty();
         }
         ServerLevel level = context.level();
         // The shear entry weighs as much as the sheep it shears, like the sheep's slaughter entry.
         int shearWeight = shear ? scan.counts().get(SHEEP) : 0;
-        int pick = level.getRandom().nextInt(fed.stream().mapToInt(type -> scan.counts().get(type)).sum() + shearWeight);
-        Identifier rolled = null;
-        for (Identifier type : fed) {
-            pick -= scan.counts().get(type);
-            if (pick < 0) {
-                rolled = type;
-                break;
-            }
-        }
-        if (rolled == null) {
+        Optional<Identifier> rolled = rollType(level, scan, fed.keySet(), shearWeight);
+        if (rolled.isEmpty()) {
             return Optional.of(shear(context, tools));
         }
-        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(rolled);
-        Optional<Animal> sample = AnimalScan.sample(level, AnimalScan.box(context.poi(), scanRadius(context.jobBlockLevel()), HALF_HEIGHT), type, level.getRandom());
+        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(rolled.get());
+        Optional<Animal> sample = sampleOf(context, type);
         if (sample.isEmpty()) {
             // An animal that walked off since the scan: the work is done, nothing to collect this time.
             return Optional.of(new Produced(List.of(), context.tool()));
         }
         Animal animal = sample.get();
         // Every roll costs the breeding food of its type; the check above made sure it is there.
-        Set<Item> food = Set.copyOf(foodOf(context, rolled).orElseThrow());
+        List<Item> food = fed.get(rolled.get());
         if (!tools.take(stack -> food.contains(stack.getItem()), AnimalFood.PER_ROLL)) {
             return Optional.empty();
         }
@@ -209,6 +202,28 @@ public final class AnimalFarmerProfile extends FarmProfile implements FoodCostPr
         }
         drops.addAll(JobDrops.roll(level, entries, context.tool(), context.atMax(), tools, ItemStack.EMPTY));
         return Optional.of(new Produced(drops, context.tool()));
+    }
+
+    /**
+     * The roll between the fed types, weighted by their counts, and the shear entry.
+     *
+     * @return the rolled type, empty when the shear entry won
+     */
+    private static Optional<Identifier> rollType(ServerLevel level, AnimalScan.Result scan, Collection<Identifier> fed, int shearWeight) {
+        int pick = level.getRandom().nextInt(fed.stream().mapToInt(type -> scan.counts().get(type)).sum() + shearWeight);
+        for (Identifier type : fed) {
+            pick -= scan.counts().get(type);
+            if (pick < 0) {
+                return Optional.of(type);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** A live adult of the type in the box of the scan (one small, bounded query). */
+    private Optional<Animal> sampleOf(Context context, EntityType<?> type) {
+        ServerLevel level = context.level();
+        return AnimalScan.sample(level, AnimalScan.box(context.poi(), scanRadius(context.jobBlockLevel()), HALF_HEIGHT), type, level.getRandom());
     }
 
     /**
@@ -227,47 +242,50 @@ public final class AnimalFarmerProfile extends FarmProfile implements FoodCostPr
         return scan.counts().getOrDefault(SHEEP, 0) > 0 && !leftOut(context, List.of(SHEAR_SHEEP)).contains(SHEAR_SHEEP);
     }
 
-    /**
-     * @param context the production context
-     * @param tools   the collect inventory
-     * @return whether the shear entry would work but the collect inventory holds no shears: the tool supply orders them
-     */
-    @Override
-    public boolean noShears(Context context, JobDrops.Tools tools) {
-        return wantsShears(context, animals(context.scan())) && tools.find(SHEARS).isEmpty();
-    }
-
     /** One shearing: 1 to 3 wool of a live adult sheep's colour; the shears wear, the sheep is not changed. */
     private Produced shear(Context context, JobDrops.Tools tools) {
         ServerLevel level = context.level();
-        Optional<Animal> sample = AnimalScan.sample(level, AnimalScan.box(context.poi(), scanRadius(context.jobBlockLevel()), HALF_HEIGHT),
-                EntityTypes.SHEEP, level.getRandom());
+        Optional<Animal> sample = sampleOf(context, EntityTypes.SHEEP);
         if (sample.isEmpty() || !(sample.get() instanceof Sheep sheep)) {
             // A sheep that walked off since the scan: the work is done, nothing to collect this time.
             return new Produced(List.of(), ItemStack.EMPTY);
         }
         tools.wear(SHEARS);
-        Item wool = BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(sheep.getColor().getName() + "_wool"));
-        return new Produced(List.of(new ItemStack(wool, SHEAR_MIN + level.getRandom().nextInt(SHEAR_MAX - SHEAR_MIN + 1))), ItemStack.EMPTY);
+        return new Produced(List.of(new ItemStack(woolOf(sheep.getColor()), SHEAR_MIN + level.getRandom().nextInt(SHEAR_MAX - SHEAR_MIN + 1))), ItemStack.EMPTY);
+    }
+
+    private static Item woolOf(DyeColor color) {
+        return BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(color.getName() + "_wool"));
     }
 
     /**
-     * @param context the production context
-     * @param tools   the collect inventory
-     * @return whether the scan holds animals that could be rolled but none of their types has food in the collect inventory:
-     *         the farmer shows "No food"
+     * What the farmer lacks: the food of every rollable type that has none in the collect inventory, and shears while the
+     * shear entry would work. Stuck while animals could be rolled but no type has food and no shearing is possible: the
+     * farmer shows "No food".
      */
     @Override
-    public boolean noFood(Context context, JobDrops.Tools tools) {
-        List<Identifier> group = rollable(context, animals(context.scan()), tools);
-        return !group.isEmpty() && group.stream().noneMatch(type -> foodOf(context, type).filter(food -> hasFood(food, tools)).isPresent())
-                && !shearing(context, animals(context.scan()), tools);
-    }
-
-    @Override
-    public List<List<Item>> unfed(Context context, JobDrops.Tools tools) {
-        return rollable(context, animals(context.scan()), tools).stream().map(type -> foodOf(context, type)).flatMap(Optional::stream)
-                .filter(food -> !food.isEmpty() && !hasFood(food, tools)).distinct().toList();
+    public Needs needs(Context context, JobDrops.Tools tools) {
+        AnimalScan.Result scan = animals(context.scan());
+        List<Identifier> group = rollable(context, scan, tools);
+        boolean wantsShears = wantsShears(context, scan);
+        boolean hasShears = wantsShears && tools.find(SHEARS).isPresent();
+        List<Need> missing = new ArrayList<>();
+        boolean anyFed = false;
+        for (Identifier type : group) {
+            Optional<List<Item>> foods = foodOf(context, type);
+            if (foods.isEmpty()) {
+                continue;
+            }
+            if (hasFood(foods.get(), tools)) {
+                anyFed = true;
+            } else if (!foods.get().isEmpty() && missing.stream().noneMatch(need -> need.items().equals(foods.get()))) {
+                missing.add(new Need(foods.get(), AnimalFood.REQUEST_ITEMS));
+            }
+        }
+        if (wantsShears && !hasShears) {
+            missing.add(new Need(List.of(Items.SHEARS), 1));
+        }
+        return new Needs(missing, !group.isEmpty() && !anyFed && !hasShears);
     }
 
     /** The found types that are not excluded, at Max or used up by a replacing entry. */
@@ -278,18 +296,24 @@ public final class AnimalFarmerProfile extends FarmProfile implements FoodCostPr
         return types.stream().filter(type -> !leftOut.contains(type) && !pool.exhausted(type, true, context.atMax(), tools)).toList();
     }
 
+    /** The types of the group that have the food of a roll in the collect inventory, with that food. */
+    private Map<Identifier, List<Item>> fedTypes(Context context, List<Identifier> group, JobDrops.Tools tools) {
+        Map<Identifier, List<Item>> fed = new LinkedHashMap<>();
+        for (Identifier type : group) {
+            foodOf(context, type).filter(food -> hasFood(food, tools)).ifPresent(food -> fed.put(type, food));
+        }
+        return fed;
+    }
+
     /** The foods of a type, worked out at a live animal of it in the box of the scan when they are not known yet. */
     private Optional<List<Item>> foodOf(Context context, Identifier type) {
         EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.getValue(type);
-        ServerLevel level = context.level();
-        return AnimalFood.of(entityType,
-                () -> AnimalScan.sample(level, AnimalScan.box(context.poi(), scanRadius(context.jobBlockLevel()), HALF_HEIGHT), entityType, level.getRandom()));
+        return AnimalFood.of(entityType, () -> sampleOf(context, entityType));
     }
 
     /** Whether the collect inventory holds the food of one roll of a type. */
     private static boolean hasFood(List<Item> food, JobDrops.Tools tools) {
-        Set<Item> items = Set.copyOf(food);
-        return tools.count(stack -> items.contains(stack.getItem())) >= AnimalFood.PER_ROLL;
+        return tools.count(stack -> food.contains(stack.getItem())) >= AnimalFood.PER_ROLL;
     }
 
     /** The loot of an animal as if the settler had killed it (Looting from the settler's main hand). */
@@ -346,7 +370,7 @@ public final class AnimalFarmerProfile extends FarmProfile implements FoodCostPr
     private static Set<Item> woolItems() {
         Set<Item> wool = new LinkedHashSet<>();
         for (DyeColor color : DyeColor.values()) {
-            wool.add(BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(color.getName() + "_wool")));
+            wool.add(woolOf(color));
         }
         return Collections.unmodifiableSet(wool);
     }

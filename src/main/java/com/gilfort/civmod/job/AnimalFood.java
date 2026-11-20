@@ -31,6 +31,12 @@ public final class AnimalFood {
     /** What every loot roll costs: the amount that breeds a new animal. */
     static final int PER_ROLL = 2;
 
+    /** How many rolls of food one request asks for. */
+    private static final int REQUEST_ROLLS = 8;
+
+    /** How many items one request for food asks for. */
+    static final int REQUEST_ITEMS = REQUEST_ROLLS * PER_ROLL;
+
     /** The foods of each entity type in registry order. The tag reload event may come from the client thread. */
     private static final Map<EntityType<?>, List<Item>> FOODS = new ConcurrentHashMap<>();
 

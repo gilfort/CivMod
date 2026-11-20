@@ -84,7 +84,7 @@ final class WorkRules {
         MAX_REACHED,
         /** Every main resource the scan found is excluded or at its Max, some of each. */
         NOTHING_TO_PRODUCE,
-        /** The Job's rolls cost food ({@link FoodCostProfile}) and the collect inventory has none for any rollable type. */
+        /** The Job's rolls cost food ({@link ConsumablesProfile}) and the collect inventory has none for any rollable type. */
         NO_FOOD,
         /** The profile reports a blocking reason ({@link ResourceCollectionProfile#blockingReason}). */
         BLOCKED;
@@ -229,7 +229,10 @@ final class WorkRules {
             }
             // Food that is missing is asked for. Without any, the recipes (which cost none) still run; with none ready the roll
             // waits and the work time is not used up.
-            boolean noFood = profile instanceof FoodCostProfile fed && FoodOrders.noFood(level, settler, job, site, fed, context, collect);
+            // One view of the collect inventory serves the whole roll.
+            CollectTools tools = CollectTools.of(level, settler, collect);
+            boolean noFood = profile instanceof ConsumablesProfile fed
+                    && ConsumableOrders.orderMissing(new ConsumableOrders.Worker(level, settler, job, site), fed, context, tools).stuck();
             if (noFood && !CollectionRecipes.anyReady(settler, allowed)) {
                 end = End.NO_FOOD;
                 break;
@@ -247,7 +250,7 @@ final class WorkRules {
             } else if (profile instanceof FishingProfile fishing) {
                 produced = fishing.produce(context, TreasureOption.of(site.block().treasure()));
             } else if (profile instanceof DropPoolProfile pooled) {
-                produced = pooled.produce(context, JobDrops.Tools.of(level, settler, collect));
+                produced = pooled.produce(context, tools);
             } else {
                 produced = profile.produce(context);
             }
