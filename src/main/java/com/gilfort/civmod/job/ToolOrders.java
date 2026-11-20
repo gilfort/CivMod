@@ -2,7 +2,6 @@ package com.gilfort.civmod.job;
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Predicate;
@@ -16,14 +15,12 @@ import com.gilfort.civmod.logistics.ReservedFor;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
-import com.gilfort.civmod.settlement.Deliveries;
 import com.gilfort.civmod.settlement.Holds;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
-import com.gilfort.civmod.settlement.Warehouses;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -75,8 +72,8 @@ public final class ToolOrders {
             return false;
         }
         Settlement settlement = site.settlement();
-        Optional<BlockPos> home = site.block().homeClerk();
-        if (home.isEmpty() || settlement.block(home.get()).filter(SettlementBlock::autoToolSupply).isEmpty()) {
+        Optional<BlockPos> home = supplyClerk(site);
+        if (home.isEmpty()) {
             return false;
         }
         ReservedFor me = ReservedFor.settler(settler.getUUID());
@@ -85,26 +82,31 @@ public final class ToolOrders {
         // tool that is not better (and never moves down).
         int floor = settler.getWork().tool(job, profile).map(ToolTiers::tier).orElse(NO_TOOL);
         Need need = new Need(level, settlement, site, job, me, kind, rule, home.get(), floor);
-        Held held = handOver(need);
-        if (held != Held.NOTHING) {
-            return held == Held.IN_COLLECT;
+        HeldSupply.Held held = HeldSupply.handOver(need.want());
+        if (held != HeldSupply.Held.NOTHING) {
+            return held == HeldSupply.Held.IN_COLLECT;
         }
-        boolean onItsWay = settlement.deliveries().stream().anyMatch(task -> !task.surplus() && task.jobBlock().equals(job.jobBlock())
-                && task.input().filter(input -> input.to().equals(site.collect()) && input.items().keySet().stream().anyMatch(key -> kind.test(key.item()))).isPresent());
-        if (onItsWay) {
+        if (HeldSupply.onItsWay(need.want())) {
             return false;
         }
-        Optional<Request> asked = settlement.requests().stream()
-                .filter(request -> request.reservedFor().filter(me::equals).isPresent() && kind.test(request.item().item())).findFirst();
+        Optional<Request> asked = HeldSupply.asked(need.want());
         if (asked.isPresent()) {
             stepDown(need, asked.get());
             return false;
         }
         if (reserveFromStore(need)) {
-            return handOver(need) == Held.IN_COLLECT;
+            return HeldSupply.handOver(need.want()) == HeldSupply.Held.IN_COLLECT;
         }
-        chooseTool(need).ifPresent(tool -> Requests.postReserved(SettlementData.get(level), settlement, ItemKey.of(tool), home.get(), me));
+        chooseTool(need).ifPresent(tool -> Requests.postReserved(SettlementData.get(level), settlement, ItemKey.of(tool), 1, home.get(), me));
         return false;
+    }
+
+    /**
+     * @param site the JobBlock of a settler
+     * @return its Home Clerk, empty when it has none or the Clerk's switch "Auto tool supply" is off
+     */
+    static Optional<BlockPos> supplyClerk(JobBlockSite site) {
+        return site.block().homeClerk().filter(home -> site.settlement().block(home).filter(SettlementBlock::autoToolSupply).isPresent());
     }
 
     /**
@@ -114,6 +116,11 @@ public final class ToolOrders {
      */
     private record Need(ServerLevel level, Settlement settlement, JobBlockSite site, SettlerJob job, ReservedFor me, Predicate<Item> kind,
             ToolStaircase.Rule rule, BlockPos home, int floor) {
+
+        /** What of the settler's tools waits in the Clerk and where it goes. */
+        HeldSupply.Want want() {
+            return new HeldSupply.Want(level, settlement, site, job, me, kind, rule::allows);
+        }
     }
 
     /**
@@ -144,69 +151,8 @@ public final class ToolOrders {
         lowerTool(need, tier).ifPresent(tool -> {
             SettlementData data = SettlementData.get(need.level());
             Requests.withdrawReserved(data, need.settlement(), asked.id());
-            Requests.postReserved(data, need.settlement(), ItemKey.of(tool), need.home(), need.me());
+            Requests.postReserved(data, need.settlement(), ItemKey.of(tool), 1, need.home(), need.me());
         });
-    }
-
-    /** What became of a tool held for the settler. */
-    private enum Held {
-        /** Nothing is held for it. */
-        NOTHING,
-        /** A delivery carries it, or it waits for one. */
-        ON_ITS_WAY,
-        /** It is free stock in the collect inventory now. */
-        IN_COLLECT
-    }
-
-    /**
-     * A tool held for the settler: at the collect inventory it is released to the settler. Elsewhere an input delivery
-     * carries it and the Delivery task holds it from then on; where no Deliveryman serves the Clerk, the settler carries
-     * it over to its collect inventory itself on this search (no walk is simulated), so the tool arrives in every mode.
-     */
-    private static Held handOver(Need need) {
-        Settlement settlement = need.settlement();
-        for (Map.Entry<BlockPos, Map<ItemKey, Integer>> store : Holds.heldFor(settlement, need.me()).entrySet()) {
-            Optional<Map.Entry<ItemKey, Integer>> tool = store.getValue().entrySet().stream()
-                    .filter(entry -> need.kind().test(entry.getKey().item()) && need.rule().allows(entry.getKey().toStack())).findFirst();
-            if (tool.isEmpty()) {
-                continue;
-            }
-            BlockPos collect = need.site().collect();
-            if (store.getKey().equals(collect)) {
-                Holds.release(settlement, need.me(), need.kind());
-                return Held.IN_COLLECT;
-            }
-            if (Warehouses.warehouseOf(settlement, store.getKey()).isEmpty()) {
-                return carryYourself(need, store.getKey(), tool.get().getKey(), tool.get().getValue()) ? Held.IN_COLLECT : Held.ON_ITS_WAY;
-            }
-            UUID task = Deliveries.postInput(SettlementData.get(need.level()), settlement, store.getKey(), need.job().jobBlock(), collect,
-                    Map.of(tool.get().getKey(), tool.get().getValue()), true, need.level().getGameTime());
-            Holds.handOver(settlement, need.me(), ReservedFor.delivery(task), need.kind());
-            return Held.ON_ITS_WAY;
-        }
-        return Held.NOTHING;
-    }
-
-    /**
-     * Self mode: the settler takes the held tool out of the Clerk and puts it into its collect inventory. What does not fit
-     * goes back and the tool stays held, so the next search tries again.
-     *
-     * @return whether the tool is in the collect inventory now
-     */
-    private static boolean carryYourself(Need need, BlockPos store, ItemKey tool, int count) {
-        // Released first: a stock hides what is held for someone else.
-        Holds.release(need.settlement(), need.me(), need.kind());
-        Stock from = ClerkStorage.stock(need.level(), store, true);
-        Stock to = ClerkStorage.stock(need.level(), need.site().collect(), true);
-        int left = 0;
-        for (ItemStack stack : from.take(tool, count)) {
-            left += to.insert(stack).getCount();
-        }
-        if (left > 0) {
-            from.insert(tool.toStack(left));
-            Holds.hold(need.settlement(), store, need.me(), tool, left);
-        }
-        return left < count;
     }
 
     /**
@@ -292,6 +238,9 @@ public final class ToolOrders {
     public static void jobGone(ServerLevel level, Settler settler, SettlerJob job) {
         job.jobType().profile(ResourceCollectionProfile.class).filter(ResourceCollectionProfile::needsTool)
                 .ifPresent(profile -> cancel(level, settler.getUUID(), kindOf(profile)));
+        // A farmer asks for nothing but what its Job needs (food, shears), and which items count as food is known only for
+        // the animal types seen since the last start: so everything reserved for it goes.
+        job.jobType().profile(ConsumablesProfile.class).ifPresent(profile -> cancel(level, settler.getUUID(), item -> true));
     }
 
     /**
@@ -308,7 +257,7 @@ public final class ToolOrders {
      * Ends the requests reserved for a settler and the stock held for it: a request nobody works on is withdrawn, one a
      * producer is crafting loses its reservation, so the finished tool stays as normal stock.
      */
-    private static void cancel(ServerLevel level, UUID settler, Predicate<Item> kind) {
+    static void cancel(ServerLevel level, UUID settler, Predicate<Item> kind) {
         SettlementData data = SettlementData.get(level);
         ReservedFor me = ReservedFor.settler(settler);
         for (Settlement settlement : data.settlements()) {

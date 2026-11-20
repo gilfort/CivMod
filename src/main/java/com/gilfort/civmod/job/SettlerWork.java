@@ -1156,6 +1156,7 @@ public final class SettlerWork {
             switch (status(job.jobBlock())) {
                 case NO_TOOL -> on.putIfAbsent(ThoughtBubble.NO_TOOL,
                         type.profile(ResourceCollectionProfile.class).map(ResourceCollectionProfile::toolIcon).orElseGet(() -> type.bubbleIcon().getItem()));
+                case NO_FOOD -> on.putIfAbsent(ThoughtBubble.NO_FOOD, SettlerThoughts.problemIcon(ThoughtBubble.NO_FOOD));
                 case DROP_OFF_FULL, STORAGE_FULL -> on.putIfAbsent(ThoughtBubble.DROP_OFF_FULL,
                         SettlerThoughts.problemIcon(ThoughtBubble.DROP_OFF_FULL));
                 case NO_WORK_PLACE, NO_FREE_WORK_PLACE -> on.putIfAbsent(ThoughtBubble.NO_WORK_PLACE, type.icon().getItem());

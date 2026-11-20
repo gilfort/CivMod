@@ -430,6 +430,16 @@ public final class JobDrops {
             @Override
             public void wear(Predicate<ItemStack> kind) {
             }
+
+            @Override
+            public int count(Predicate<ItemStack> kind) {
+                return 0;
+            }
+
+            @Override
+            public boolean take(Predicate<ItemStack> kind, int amount) {
+                return false;
+            }
         };
 
         /**
@@ -446,46 +456,28 @@ public final class JobDrops {
         void wear(Predicate<ItemStack> kind);
 
         /**
+         * @param kind the kind of item
+         * @return how many such items the collect inventory holds free (what is held for others does not count)
+         */
+        int count(Predicate<ItemStack> kind);
+
+        /**
+         * Uses up items of a kind from the collect inventory, all or nothing.
+         *
+         * @param kind   the kind of item
+         * @param amount how many
+         * @return whether that many were there and are gone now
+         */
+        boolean take(Predicate<ItemStack> kind, int amount);
+
+        /**
          * @param level   the level
          * @param settler the settler using the tools (null: the tools are only looked at, never worn)
          * @param collect what the settler reaches at its collect inventory, read when an entry first asks for a tool
          * @return the tools of the collect inventory
          */
         static Tools of(ServerLevel level, @Nullable LivingEntity settler, Supplier<Stock> collect) {
-            return new Tools() {
-                private @Nullable Stock stock;
-
-                private Stock stock() {
-                    if (stock == null) {
-                        stock = collect.get();
-                    }
-                    return stock;
-                }
-
-                @Override
-                public Optional<ItemStack> find(Predicate<ItemStack> kind) {
-                    return SettlerTools.find(stock(), kind).map(index -> stock().contents().get(index));
-                }
-
-                @Override
-                public void wear(Predicate<ItemStack> kind) {
-                    Optional<Integer> index = SettlerTools.find(stock(), kind);
-                    if (settler == null || index.isEmpty()) {
-                        return;
-                    }
-                    ItemStack tool = stock().takeOne(index.get());
-                    if (tool.isEmpty()) {
-                        return;
-                    }
-                    tool.hurtAndBreak(1, level, settler, item -> { });
-                    if (!tool.isEmpty()) {
-                        ItemStack rest = stock().insert(tool);
-                        if (!rest.isEmpty()) {
-                            settler.spawnAtLocation(level, rest);
-                        }
-                    }
-                }
-            };
+            return CollectTools.of(level, settler, collect);
         }
     }
 

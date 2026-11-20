@@ -13,6 +13,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.api.ScanResult;
 import com.gilfort.civmod.job.AnimalScan;
+import com.gilfort.civmod.job.DropPoolProfile;
 import com.gilfort.civmod.job.SavedScan;
 import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.npc.Settler;
@@ -31,6 +32,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.tags.ItemTags;
+import net.minecraft.world.Container;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -51,7 +53,7 @@ public final class AnimalFarmerGameTests {
     private static final Identifier SHEEP = Identifier.withDefaultNamespace("sheep");
     private static final Identifier CHICKEN = Identifier.withDefaultNamespace("chicken");
     /** Where the test pens put the hay bale (relative). */
-    private static final BlockPos HAY = new BlockPos(4, 1, 4);
+    static final BlockPos HAY = new BlockPos(4, 1, 4);
 
     private AnimalFarmerGameTests() {
     }
@@ -72,7 +74,7 @@ public final class AnimalFarmerGameTests {
         helper.register(ResourceKey.create(Registries.TEST_FUNCTION, CivMod.id(name)), test);
     }
 
-    private static ResourceCollectionProfile profile() {
+    static ResourceCollectionProfile profile() {
         return ModJobs.ANIMAL_FARMER.get().profile(ResourceCollectionProfile.class).orElseThrow();
     }
 
@@ -112,6 +114,8 @@ public final class AnimalFarmerGameTests {
         ServerLevel level = helper.getLevel();
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         BlockPos jobBlock = pen(helper);
+        // The JobBlock is the collect inventory here: its cows get fed from it.
+        ((Container) level.getBlockEntity(jobBlock)).setItem(0, new ItemStack(Items.WHEAT, 64));
         List<Animal> animals = List.of(animal(helper, EntityTypes.COW, new BlockPos(6, 1, 6), false),
                 animal(helper, EntityTypes.COW, new BlockPos(6, 1, 3), false), animal(helper, EntityTypes.SHEEP, new BlockPos(3, 1, 6), true));
         Job job = ModJobs.ANIMAL_FARMER.get();
@@ -135,7 +139,7 @@ public final class AnimalFarmerGameTests {
     }
 
     /** A production context at the hay bale with a settler holding a stone axe. */
-    private static ResourceCollectionProfile.Context context(GameTestHelper helper, Settler settler, ScanResult scan, Set<Identifier> excluded) {
+    static ResourceCollectionProfile.Context context(GameTestHelper helper, Settler settler, ScanResult scan, Set<Identifier> excluded) {
         ServerLevel level = helper.getLevel();
         BlockPos poi = helper.absolutePos(HAY);
         ItemStack axe = new ItemStack(Items.STONE_AXE);
@@ -147,7 +151,7 @@ public final class AnimalFarmerGameTests {
     private static List<List<ItemStack>> roll(GameTestHelper helper, ResourceCollectionProfile.Context context, int rolls) {
         List<List<ItemStack>> outputs = new ArrayList<>();
         for (int i = 0; i < rolls; i++) {
-            outputs.add(profile().produce(context).orElseThrow().stacks());
+            outputs.add(((DropPoolProfile) profile()).produce(context, AnimalFarmerFoodGameTests.endless()).orElseThrow().stacks());
         }
         return outputs;
     }
@@ -229,10 +233,10 @@ public final class AnimalFarmerGameTests {
         List<ItemStack> levelOne = new ArrayList<>();
         List<ItemStack> levelTwo = new ArrayList<>();
         for (int i = 0; i < 50; i++) {
-            levelOne.addAll(profile().produce(new ResourceCollectionProfile.Context(level, settler, scan, poi, axe, Set.of(), 1, Set.of(),
-                    type -> profile().droppedItems(level, poi, type, axe), 1.0, 1)).orElseThrow().stacks());
-            levelTwo.addAll(profile().produce(new ResourceCollectionProfile.Context(level, settler, scan, poi, axe, Set.of(), 1, Set.of(),
-                    type -> profile().droppedItems(level, poi, type, axe), 1.0, 2)).orElseThrow().stacks());
+            levelOne.addAll(((DropPoolProfile) profile()).produce(new ResourceCollectionProfile.Context(level, settler, scan, poi, axe, Set.of(), 1, Set.of(),
+                    type -> profile().droppedItems(level, poi, type, axe), 1.0, 1), AnimalFarmerFoodGameTests.endless()).orElseThrow().stacks());
+            levelTwo.addAll(((DropPoolProfile) profile()).produce(new ResourceCollectionProfile.Context(level, settler, scan, poi, axe, Set.of(), 1, Set.of(),
+                    type -> profile().droppedItems(level, poi, type, axe), 1.0, 2), AnimalFarmerFoodGameTests.endless()).orElseThrow().stacks());
         }
         helper.assertTrue(levelOne.isEmpty(), "The cow is outside the level-1 box: " + levelOne);
         helper.assertFalse(levelTwo.isEmpty(), "The cow is inside the level-2 box");

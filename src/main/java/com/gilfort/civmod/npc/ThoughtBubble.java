@@ -39,6 +39,8 @@ public enum ThoughtBubble {
     PLAYING(false),
     /** Problem: no usable tool (the needed tool). */
     NO_TOOL(true),
+    /** Problem: the Animal Farmer has no food for its animals (wheat). */
+    NO_FOOD(true),
     /** Problem: the drop-off or the Deliveryman's store is full (the drop-off marker). */
     DROP_OFF_FULL(true),
     /** Problem: no work place (the JobBlock). */

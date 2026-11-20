@@ -159,6 +159,7 @@ final class SettlerThoughts {
             case COLLECT -> ModItems.COLLECT_MARKER.get();
             case CRAFTING, MISSING_INPUTS -> Items.CRAFTING_TABLE;
             case EATING, HUNGRY_NO_FOOD -> Items.BREAD;
+            case NO_FOOD -> Items.WHEAT;
             case BED -> ModItems.BED_ICON.get();
             case MISSION -> Items.MAP;
             case RECORD -> Items.MUSIC_DISC_CAT;
