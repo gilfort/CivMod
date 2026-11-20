@@ -126,12 +126,13 @@ final class ResourceCollectionLoop implements CategoryLoop {
         if (paused.isPresent()) {
             return JobStep.blocked(paused.get());
         }
-        if (lacksFood(level, job, profile, site, workplace, poi, tool, atMax, dayTime)) {
+        List<CollectionRecipes.Offer> allowed = CollectionRecipes.allowed(offered, site.block().excluded(job.jobType()), atMax);
+        if (!CollectionRecipes.anyPossible(settler, allowed, collect)
+                && lacksFood(level, job, profile, site, workplace, poi, tool, atMax, dayTime)) {
             return JobStep.blocked(JobStatus.NO_FOOD);
         }
         // The inputs of the innate recipes are fetched like a tool; without them the recipes just leave the roll.
-        Optional<Predicate<ItemStack>> input = CollectionRecipes.missingInput(settler,
-                CollectionRecipes.allowed(offered, site.block().excluded(job.jobType()), atMax), collect);
+        Optional<Predicate<ItemStack>> input = CollectionRecipes.missingInput(settler, allowed, collect);
         if (input.isPresent()) {
             return fetchTool(level, site, new WorkRules.MissingTool(input.get(), true), dayTime, JobStatus.FETCHING_INPUTS);
         }
@@ -142,7 +143,8 @@ final class ResourceCollectionLoop implements CategoryLoop {
 
     /**
      * Whether a job whose rolls cost food has none for any type it could roll. Food a type lacks is asked for at the Home
-     * Clerk on the way ({@link FoodOrders}).
+     * Clerk on the way ({@link FoodOrders}). Asked only where no recipe can run: recipes cost no food, so the farmer goes on
+     * and the roll itself decides.
      */
     private boolean lacksFood(ServerLevel level, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site, Workplace workplace, BlockPos poi,
             ItemStack tool, Set<Item> atMax, long dayTime) {
