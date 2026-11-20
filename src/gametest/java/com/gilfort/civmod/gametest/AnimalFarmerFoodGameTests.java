@@ -230,6 +230,10 @@ public final class AnimalFarmerFoodGameTests {
         chest = chest(helper, new ItemStack(Items.CARROT), new ItemStack(Items.POTATO));
         helper.assertTrue(farmer().produce(context, collect(helper, chest)).isPresent(), "A carrot and a potato together are two feeds");
         helper.assertValueEqual(inChest(helper, stack -> !stack.isEmpty()), 0, "Both are used up");
+        chest = chest(helper, new ItemStack(Items.POTATO, FOOD_PER_ROLL), new ItemStack(Items.CARROT, FOOD_PER_ROLL));
+        helper.assertTrue(farmer().produce(context, collect(helper, chest)).isPresent(), "Enough of either");
+        helper.assertValueEqual(inChest(helper, Items.CARROT), 0, "The carrots come first in registry order, wherever they lie");
+        helper.assertValueEqual(inChest(helper, Items.POTATO), FOOD_PER_ROLL, "The potatoes stay");
         settler.discard();
         helper.succeed();
     }

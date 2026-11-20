@@ -2,6 +2,7 @@ package com.gilfort.civmod.job;
 
 import java.io.Reader;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -523,7 +524,10 @@ public final class JobDrops {
                         return false;
                     }
                     int left = amount;
-                    for (Map.Entry<ItemKey, Integer> held : stock().counts().entrySet()) {
+                    // Registry order, so the same stock always pays the same way.
+                    List<Map.Entry<ItemKey, Integer>> entries = new ArrayList<>(stock().counts().entrySet());
+                    entries.sort(Comparator.comparingInt(entry -> BuiltInRegistries.ITEM.getId(entry.getKey().item())));
+                    for (Map.Entry<ItemKey, Integer> held : entries) {
                         if (left > 0 && kind.test(held.getKey().toStack())) {
                             left -= stock().take(held.getKey(), Math.min(left, held.getValue())).stream().mapToInt(ItemStack::getCount).sum();
                         }
