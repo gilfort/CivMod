@@ -42,17 +42,17 @@ public record MasteryRules(double chancePerLevel, double maxChance, int maxHits,
 
     private static MasteryRules current = FALLBACK;
 
-    private record Part(Optional<Double> chancePerLevel, Optional<Double> maxChance, Optional<Integer> maxHits, Optional<Double> savingShare,
+    private record FileContent(Optional<Double> chancePerLevel, Optional<Double> maxChance, Optional<Integer> maxHits, Optional<Double> savingShare,
             Optional<Integer> savingMinimum, Optional<Integer> savingMinIngredients) {
 
-        static final Codec<Part> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                Codec.doubleRange(0.0, 1.0).optionalFieldOf("chance_per_level").forGetter(Part::chancePerLevel),
-                Codec.doubleRange(0.0, 1.0).optionalFieldOf("max_chance").forGetter(Part::maxChance),
-                Codec.intRange(0, 16).optionalFieldOf("max_hits").forGetter(Part::maxHits),
-                Codec.doubleRange(0.0, 1.0).optionalFieldOf("saving_share").forGetter(Part::savingShare),
-                Codec.intRange(0, 64).optionalFieldOf("saving_minimum").forGetter(Part::savingMinimum),
-                Codec.intRange(1, 64).optionalFieldOf("saving_min_ingredients").forGetter(Part::savingMinIngredients)
-        ).apply(instance, Part::new));
+        static final Codec<FileContent> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                Codec.doubleRange(0.0, 1.0).optionalFieldOf("chance_per_level").forGetter(FileContent::chancePerLevel),
+                Codec.doubleRange(0.0, 1.0).optionalFieldOf("max_chance").forGetter(FileContent::maxChance),
+                Codec.intRange(0, 16).optionalFieldOf("max_hits").forGetter(FileContent::maxHits),
+                Codec.doubleRange(0.0, 1.0).optionalFieldOf("saving_share").forGetter(FileContent::savingShare),
+                Codec.intRange(0, 64).optionalFieldOf("saving_minimum").forGetter(FileContent::savingMinimum),
+                Codec.intRange(1, 64).optionalFieldOf("saving_min_ingredients").forGetter(FileContent::savingMinIngredients)
+        ).apply(instance, FileContent::new));
     }
 
     /**
@@ -120,10 +120,10 @@ public record MasteryRules(double chancePerLevel, double maxChance, int maxHits,
     public static MasteryRules merge(List<JsonElement> files) {
         MasteryRules merged = FALLBACK;
         for (JsonElement file : files) {
-            Part part = Part.CODEC.parse(JsonOps.INSTANCE, file).getOrThrow();
-            merged = new MasteryRules(part.chancePerLevel().orElse(merged.chancePerLevel()), part.maxChance().orElse(merged.maxChance()),
-                    part.maxHits().orElse(merged.maxHits()), part.savingShare().orElse(merged.savingShare()),
-                    part.savingMinimum().orElse(merged.savingMinimum()), part.savingMinIngredients().orElse(merged.savingMinIngredients()));
+            FileContent content = FileContent.CODEC.parse(JsonOps.INSTANCE, file).getOrThrow();
+            merged = new MasteryRules(content.chancePerLevel().orElse(merged.chancePerLevel()), content.maxChance().orElse(merged.maxChance()),
+                    content.maxHits().orElse(merged.maxHits()), content.savingShare().orElse(merged.savingShare()),
+                    content.savingMinimum().orElse(merged.savingMinimum()), content.savingMinIngredients().orElse(merged.savingMinIngredients()));
         }
         return merged;
     }
@@ -133,6 +133,7 @@ public record MasteryRules(double chancePerLevel, double maxChance, int maxHits,
         event.addListener(ID, new Loader());
     }
 
+    // Stays a copy of the loader in MasterworkRules: two copies are allowed, and the files differ in type, file name and error text.
     private static final class Loader extends SimplePreparableReloadListener<MasteryRules> {
 
         @Override

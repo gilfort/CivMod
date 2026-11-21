@@ -7,7 +7,7 @@ import java.util.Map;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.mastery.MasterworkRules.Effect;
-import com.gilfort.civmod.mastery.MasterworkRules.Part;
+import com.gilfort.civmod.mastery.MasterworkRules.EffectPart;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.Holder;
@@ -51,7 +51,7 @@ public final class Masterwork {
             double miningSpeed = 0.0;
             Map<Holder<Attribute>, Double> attributes = new LinkedHashMap<>();
             for (Effect effect : effects) {
-                for (Part part : effect.parts()) {
+                for (EffectPart part : effect.parts()) {
                     switch (part.type()) {
                         case DURABILITY -> durability += part.amount();
                         case MINING_SPEED -> miningSpeed += part.amount();
@@ -71,7 +71,7 @@ public final class Masterwork {
      * @param effects the effects of the hits, one per hit, at least one
      * @param maker   the name of the settler who made it
      */
-    public static void apply(ItemStack stack, List<Effect> effects, String maker) {
+    public static void turnInto(ItemStack stack, List<Effect> effects, String maker) {
         if (effects.isEmpty()) {
             throw new IllegalArgumentException("A masterwork needs at least one effect: " + stack);
         }
@@ -96,6 +96,9 @@ public final class Masterwork {
      * @return yellow for one, aqua for two, light purple for three or more: the rarities from uncommon up
      */
     static Rarity rarity(int effects) {
+        if (effects < 1) {
+            throw new IllegalArgumentException("A masterwork has at least one effect, not " + effects);
+        }
         return switch (effects) {
             case 1 -> Rarity.UNCOMMON;
             case 2 -> Rarity.RARE;

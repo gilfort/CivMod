@@ -283,7 +283,7 @@ public final class MasterworkGameTests {
     private static void anvilKeepsBonuses(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         ItemStack masterwork = new ItemStack(Items.IRON_PICKAXE);
-        Masterwork.apply(masterwork, MasterworkRules.get().draw(masterwork, 2, MasteryRolls.always()), MAKER);
+        Masterwork.turnInto(masterwork, MasterworkRules.get().draw(masterwork, 2, MasteryRolls.always()), MAKER);
         Holder<Enchantment> unbreaking = level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.UNBREAKING);
         masterwork.enchant(unbreaking, 1);
         masterwork.setDamageValue(100);
