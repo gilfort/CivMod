@@ -149,17 +149,21 @@ final class ChronicleTabView {
         scroller.extract(graphics, scrollbarX(), VIEW_TOP, viewHeight(), maxOffset());
     }
 
+    private boolean isActive() {
+        return menu.getActiveTab() == SettlerMenu.TAB_CHRONICLE;
+    }
+
     boolean mouseClicked(MouseButtonEvent event) {
-        return event.button() == InputConstants.MOUSE_BUTTON_LEFT
+        return isActive() && event.button() == InputConstants.MOUSE_BUTTON_LEFT
                 && scroller.press(event.x(), event.y(), scrollbarX(), VIEW_TOP, viewHeight(), maxOffset());
     }
 
     boolean mouseScrolled(double scrollY) {
-        return scroller.wheel(scrollY, maxOffset(), LINE_HEIGHT);
+        return isActive() && scroller.wheel(scrollY, maxOffset(), LINE_HEIGHT);
     }
 
     boolean mouseDragged(MouseButtonEvent event) {
-        return scroller.drag(event.y(), VIEW_TOP, viewHeight(), maxOffset());
+        return isActive() && scroller.drag(event.y(), VIEW_TOP, viewHeight(), maxOffset());
     }
 
     boolean mouseReleased() {
