@@ -8,9 +8,11 @@ import java.util.Map;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.mastery.MasterworkRules.Effect;
 import com.gilfort.civmod.mastery.MasterworkRules.EffectPart;
+import com.gilfort.civmod.registry.ModDataComponents;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -26,14 +28,15 @@ import net.minecraft.world.item.component.Tool;
 import net.minecraft.world.item.equipment.Equippable;
 
 /**
- * Turns an item into a masterwork: the effects of the hits as vanilla data components on the one stack (vault
- * {@code Systems/Producing Jobs.md}). Item identity does not change: none of these components is a relevant component, so
- * the Clerk, stock rules, requests, the tool tier and recipe ingredients still see the plain item.
+ * Turns an item into a masterwork: the effects of the hits, stored with the maker in one {@link MasterworkData} component, and
+ * the vanilla data components that show them (vault {@code Systems/Producing Jobs.md}). Item identity does not change: none of
+ * these components is a relevant component, so the Clerk, stock rules, requests, the tool tier and recipe ingredients still see
+ * the plain item.
  *
- * <p>Every value is worked out from the item's own defaults, never from what the stack carries, so a masterwork made from
- * another one (a smithing upgrade keeps the components of its base) is made fresh and nothing adds up twice. The same effect
- * drawn twice adds up before it is applied, so every attribute gets one modifier. Anvil, Mending and enchanting leave the
- * components alone.
+ * <p>Every value is worked out from the item's own defaults and the stored effects, never from what the stack carries, so the
+ * bonuses always sit on top of the item's own stats. A smithing upgrade keeps the components of its base: {@link #refresh} works
+ * them out again over the new item, and a new hit on the upgrade adds its effect to the stored ones. The same effect twice adds
+ * up before it is applied, so every attribute gets one modifier. Anvil, Mending and enchanting leave the components alone.
  */
 public final class Masterwork {
 
@@ -64,35 +67,72 @@ public final class Masterwork {
     }
 
     /**
-     * Gives the stack the effects, the prefix "Masterwork", the rarity of the number of effects and the lore. The stack is
-     * changed in place.
+     * Gives the stack the effects of the hits, the prefix "Masterwork", the rarity of the number of effects and the lore. A
+     * stack that already is a masterwork (the upgrade of one) keeps its effects and its maker and gets the hits on top. The
+     * stack is changed in place.
      *
-     * @param stack   the finished item
-     * @param effects the effects of the hits, one per hit, at least one
-     * @param maker   the name of the settler who made it
+     * @param stack the finished item
+     * @param hits  the effects of the hits, one per hit, at least one
+     * @param maker the name of the settler who made it, used unless the stack already has a maker
      */
-    public static void turnInto(ItemStack stack, List<Effect> effects, String maker) {
-        if (effects.isEmpty()) {
+    public static void turnInto(ItemStack stack, List<Effect> hits, String maker) {
+        if (hits.isEmpty()) {
             throw new IllegalArgumentException("A masterwork needs at least one effect: " + stack);
         }
-        Totals totals = Totals.of(effects);
-        ItemStack defaults = stack.getItem().getDefaultInstance();
-        if (totals.durability() > 0.0) {
-            stack.set(DataComponents.MAX_DAMAGE, (int) Math.floor(defaults.getMaxDamage() * (1.0 + totals.durability())));
-        }
-        if (totals.miningSpeed() > 0.0 && defaults.get(DataComponents.TOOL) != null) {
-            stack.set(DataComponents.TOOL, fasterTool(defaults.get(DataComponents.TOOL), totals.miningSpeed()));
-        }
-        if (!totals.attributes().isEmpty()) {
-            stack.set(DataComponents.ATTRIBUTE_MODIFIERS, withAttributes(defaults, totals.attributes()));
-        }
-        stack.set(DataComponents.ITEM_NAME, Component.translatable("civmod.masterwork.name", defaults.getItemName()));
-        stack.set(DataComponents.RARITY, rarity(effects.size()));
-        stack.set(DataComponents.LORE, lore(totals, maker));
+        MasterworkData carried = stack.get(ModDataComponents.MASTERWORK.get());
+        apply(stack, carried == null ? new MasterworkData(stack.typeHolder(), hits, maker) : carried.with(hits));
     }
 
     /**
-     * @param effects how many effects the masterwork has, at least one
+     * Works the components of a masterwork out again if they are stale: a smithing upgrade makes another item from the base's
+     * components, so the durability, the tool speed and the attributes are still the old item's. Does nothing to a stack that
+     * is no masterwork or whose components are current.
+     *
+     * @param stack the stack to check, changed in place
+     */
+    public static void refresh(ItemStack stack) {
+        MasterworkData carried = stack.get(ModDataComponents.MASTERWORK.get());
+        if (carried != null && !stack.is(carried.madeFor())) {
+            apply(stack, carried);
+        }
+    }
+
+    private static void apply(ItemStack stack, MasterworkData data) {
+        Totals totals = Totals.of(data.effects());
+        ItemStack defaults = stack.getItem().getDefaultInstance();
+        stack.set(ModDataComponents.MASTERWORK.get(), data.madeFor(stack.typeHolder()));
+        if (totals.durability() > 0.0) {
+            stack.set(DataComponents.MAX_DAMAGE, (int) Math.floor(defaults.getMaxDamage() * (1.0 + totals.durability())));
+        } else {
+            restore(stack, defaults, DataComponents.MAX_DAMAGE);
+        }
+        if (totals.miningSpeed() > 0.0 && defaults.get(DataComponents.TOOL) != null) {
+            stack.set(DataComponents.TOOL, fasterTool(defaults.get(DataComponents.TOOL), totals.miningSpeed()));
+        } else {
+            restore(stack, defaults, DataComponents.TOOL);
+        }
+        if (totals.attributes().isEmpty()) {
+            restore(stack, defaults, DataComponents.ATTRIBUTE_MODIFIERS);
+        } else {
+            stack.set(DataComponents.ATTRIBUTE_MODIFIERS, withAttributes(defaults, totals.attributes()));
+        }
+        stack.set(DataComponents.ITEM_NAME, Component.translatable("civmod.masterwork.name", defaults.getItemName()));
+        stack.set(DataComponents.RARITY, rarity(data.effects().size()));
+        stack.set(DataComponents.LORE, lore(totals, data.maker()));
+    }
+
+    /** Gives the stack the item's own value of a component back: the value of the item the masterwork was before an upgrade is gone. */
+    private static <T> void restore(ItemStack stack, ItemStack defaults, DataComponentType<T> type) {
+        T own = defaults.get(type);
+        if (own == null) {
+            stack.remove(type);
+        } else {
+            stack.set(type, own);
+        }
+    }
+
+    /**
+     * @param effects how many effects the masterwork has, at least one; upgrades can bring it above the three hits of a craft
      * @return yellow for one, aqua for two, light purple for three or more: the rarities from uncommon up
      */
     static Rarity rarity(int effects) {

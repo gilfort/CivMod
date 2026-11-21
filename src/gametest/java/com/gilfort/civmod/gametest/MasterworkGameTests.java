@@ -11,9 +11,11 @@ import com.gilfort.civmod.job.ToolStaircase;
 import com.gilfort.civmod.job.ToolTiers;
 import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.mastery.Masterwork;
+import com.gilfort.civmod.mastery.MasterworkData;
 import com.gilfort.civmod.mastery.MasterworkNotice;
 import com.gilfort.civmod.mastery.MasterworkRules;
 import com.gilfort.civmod.mastery.MasterworkRules.Effect;
+import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.StockRules;
 import com.mojang.authlib.GameProfile;
@@ -41,8 +43,11 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlotGroup;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AnvilMenu;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.ContainerLevelAccess;
+import net.minecraft.world.inventory.SmithingMenu;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -96,6 +101,11 @@ public final class MasterworkGameTests {
             register(helper, "mastery_masterwork_message_range", MasterworkGameTests::messageRange);
             register(helper, "mastery_masterwork_catch_up_is_silent", MasterworkGameTests::catchUpIsSilent);
             register(helper, "mastery_masterwork_anvil_keeps_bonuses", MasterworkGameTests::anvilKeepsBonuses);
+            register(helper, "mastery_masterwork_upgrade_keeps_bonuses", MasterworkGameTests::upgradeKeepsBonuses);
+            register(helper, "mastery_masterwork_upgrade_keeps_attributes", MasterworkGameTests::upgradeKeepsAttributes);
+            register(helper, "mastery_masterwork_upgrade_with_hits_adds", MasterworkGameTests::upgradeWithHitsAdds);
+            register(helper, "mastery_masterwork_player_upgrade", MasterworkGameTests::playerUpgrade);
+            register(helper, "mastery_masterwork_player_upgrade_quick", MasterworkGameTests::playerUpgradeQuick);
         });
     }
 
@@ -372,6 +382,117 @@ public final class MasterworkGameTests {
         helper.assertTrue(result.get(DataComponents.ITEM_NAME).equals(masterwork.get(DataComponents.ITEM_NAME)) && result.get(DataComponents.LORE).equals(masterwork.get(DataComponents.LORE))
                 && result.get(DataComponents.RARITY) == Rarity.RARE, "The prefix, the lore and the rarity stay");
         helper.assertTrue(result.has(DataComponents.ENCHANTMENTS), "The enchantment stays");
+        helper.succeed();
+    }
+
+    private static final String UPGRADER_MAKER = "Gilda";
+
+    /** A masterwork of the item with the options at the indices drawn, made by the maker. */
+    private static ItemStack masterwork(Item item, String maker, int... picks) {
+        ItemStack stack = new ItemStack(item);
+        Masterwork.turnInto(stack, MasterworkRules.get().draw(stack, picks.length, MasteryRolls.drawing(picks.length, picks)), maker);
+        return stack;
+    }
+
+    private static List<ItemStack> upgradeStock(ItemStack base) {
+        return List.of(new ItemStack(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE), base, new ItemStack(Items.NETHERITE_INGOT));
+    }
+
+    /** What the masterwork carries: how many effects and who made it, and that its name is the one of this item, not of the old one. */
+    private static void assertCarries(GameTestHelper helper, ItemStack stack, int effects, String maker) {
+        MasterworkData data = stack.get(ModDataComponents.MASTERWORK.get());
+        helper.assertTrue(data != null && data.effects().size() == effects && data.maker().equals(maker), "Carries " + effects + " effects by " + maker + ": " + data);
+        Component made = (Component) ((TranslatableContents) lore(stack).getFirst().getContents()).getArgs()[0];
+        helper.assertTrue(made.getString().equals(maker), "The lore names " + maker + ": " + lore(stack));
+        helper.assertTrue(((TranslatableContents) stack.get(DataComponents.ITEM_NAME).getContents()).getArgs()[0].equals(new ItemStack(stack.getItem()).getItemName()),
+                "The name is the prefix and the name of this item: " + stack.get(DataComponents.ITEM_NAME));
+    }
+
+    /**
+     * A Smith upgrades a masterwork diamond pickaxe (durability +25 %, mining speed +10 %) to netherite without a hit: the
+     * netherite pickaxe has its own durability and mining speeds with the same bonuses on top, the name of the netherite item,
+     * the maker and the rarity of two effects.
+     */
+    private static void upgradeKeepsBonuses(GameTestHelper helper) {
+        Run run = MasteryGameTests.smith(helper, upgradeStock(masterwork(Items.DIAMOND_PICKAXE, MAKER, DURABILITY, OTHER)), Items.NETHERITE_PICKAXE, MasteryRolls.never());
+        ItemStack stack = craft(helper, run, Items.NETHERITE_PICKAXE);
+        assertDurability(helper, stack, Items.NETHERITE_PICKAXE, 25);
+        assertToolSpeed(helper, stack, 1.1F);
+        helper.assertTrue(stack.getMaxDamage() != new ItemStack(Items.DIAMOND_PICKAXE).getMaxDamage() * 125 / 100, "Not the durability of the diamond pickaxe: " + stack.getMaxDamage());
+        assertLook(helper, stack, Rarity.RARE);
+        assertCarries(helper, stack, 2, MAKER);
+        helper.assertTrue(loreKeys(stack).equals(List.of("civmod.masterwork.made_by", "civmod.masterwork.durability", "civmod.masterwork.mining_speed")),
+                "Lore: made by, durability, mining speed: " + lore(stack));
+        MasteryGameTests.finish(helper, run);
+    }
+
+    /** The attack damage bonus of a masterwork sword comes on top of the netherite sword's own attack damage, not the diamond sword's. */
+    private static void upgradeKeepsAttributes(GameTestHelper helper) {
+        Run run = MasteryGameTests.smith(helper, upgradeStock(masterwork(Items.DIAMOND_SWORD, MAKER, OTHER)), Items.NETHERITE_SWORD, MasteryRolls.never());
+        ItemStack stack = craft(helper, run, Items.NETHERITE_SWORD);
+        assertBonus(helper, stack, Attributes.ATTACK_DAMAGE, 1.0, EquipmentSlotGroup.MAINHAND);
+        helper.assertTrue(stack.getMaxDamage() == new ItemStack(Items.NETHERITE_SWORD).getMaxDamage(), "No durability bonus on this one: " + stack.getMaxDamage());
+        assertLook(helper, stack, Rarity.UNCOMMON);
+        assertCarries(helper, stack, 1, MAKER);
+        MasteryGameTests.finish(helper, run);
+    }
+
+    /**
+     * An upgrade with hits adds to the effects the sword carries and keeps the first maker: a masterwork sword with durability
+     * and attack damage, upgraded with two more hits of attack damage, has +25 % durability and +3 attack damage, four effects,
+     * light purple, and still names the settler who made the diamond sword.
+     */
+    private static void upgradeWithHitsAdds(GameTestHelper helper) {
+        Run run = MasteryGameTests.smith(helper, upgradeStock(masterwork(Items.DIAMOND_SWORD, UPGRADER_MAKER, DURABILITY, OTHER)), Items.NETHERITE_SWORD,
+                MasteryRolls.drawing(2, OTHER, OTHER));
+        ItemStack stack = craft(helper, run, Items.NETHERITE_SWORD);
+        assertDurability(helper, stack, Items.NETHERITE_SWORD, 25);
+        assertBonus(helper, stack, Attributes.ATTACK_DAMAGE, 3.0, EquipmentSlotGroup.MAINHAND);
+        assertCarries(helper, stack, 4, UPGRADER_MAKER);
+        helper.assertTrue(stack.getRarity() == Rarity.EPIC, "Light purple above three effects: " + stack.getRarity());
+        MasteryGameTests.finish(helper, run);
+    }
+
+    /** A menu of a player at the smithing table with the inputs of a netherite upgrade of the base, the result already offered. */
+    private static SmithingMenu smithingTable(GameTestHelper helper, Player player, ItemStack base) {
+        SmithingMenu menu = new SmithingMenu(0, player.getInventory(), ContainerLevelAccess.create(helper.getLevel(), helper.absolutePos(BlockPos.ZERO)));
+        menu.getSlot(SmithingMenu.TEMPLATE_SLOT).set(new ItemStack(Items.NETHERITE_UPGRADE_SMITHING_TEMPLATE));
+        menu.getSlot(SmithingMenu.BASE_SLOT).set(base);
+        menu.getSlot(SmithingMenu.ADDITIONAL_SLOT).set(new ItemStack(Items.NETHERITE_INGOT));
+        helper.assertTrue(menu.getSlot(SmithingMenu.RESULT_SLOT).getItem().is(Items.NETHERITE_PICKAXE), "The table offers the netherite pickaxe");
+        return menu;
+    }
+
+    private static void assertUpgraded(GameTestHelper helper, ItemStack stack) {
+        helper.assertTrue(stack.is(Items.NETHERITE_PICKAXE), "A netherite pickaxe: " + stack);
+        assertDurability(helper, stack, Items.NETHERITE_PICKAXE, 25);
+        assertToolSpeed(helper, stack, 1.1F);
+        assertLook(helper, stack, Rarity.RARE);
+        assertCarries(helper, stack, 2, MAKER);
+    }
+
+    /** A player takes the upgrade out of the smithing table with a click: the pickaxe on the cursor has the bonuses on top of the netherite base. */
+    private static void playerUpgrade(GameTestHelper helper) {
+        Player player = helper.makeMockPlayer(GameType.SURVIVAL);
+        SmithingMenu menu = smithingTable(helper, player, masterwork(Items.DIAMOND_PICKAXE, MAKER, DURABILITY, OTHER));
+        menu.clicked(SmithingMenu.RESULT_SLOT, 0, ContainerInput.PICKUP, player);
+        assertUpgraded(helper, menu.getCarried());
+        helper.succeed();
+    }
+
+    /** A player shift-clicks the upgrade out of the smithing table: the pickaxe in the inventory has the bonuses on top of the netherite base. */
+    private static void playerUpgradeQuick(GameTestHelper helper) {
+        Player player = helper.makeMockPlayer(GameType.SURVIVAL);
+        SmithingMenu menu = smithingTable(helper, player, masterwork(Items.DIAMOND_PICKAXE, MAKER, DURABILITY, OTHER));
+        menu.quickMoveStack(player, SmithingMenu.RESULT_SLOT);
+        ItemStack stack = ItemStack.EMPTY;
+        for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
+            if (player.getInventory().getItem(slot).is(Items.NETHERITE_PICKAXE)) {
+                stack = player.getInventory().getItem(slot);
+            }
+        }
+        helper.assertTrue(!stack.isEmpty(), "The pickaxe landed in the inventory");
+        assertUpgraded(helper, stack);
         helper.succeed();
     }
 
