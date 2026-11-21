@@ -13,6 +13,7 @@ import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.mastery.Masterwork;
 import com.gilfort.civmod.mastery.MasterworkNotice;
 import com.gilfort.civmod.mastery.MasterworkRules;
+import com.gilfort.civmod.mastery.MasterworkRules.Effect;
 import com.gilfort.civmod.settlement.Requests;
 import com.gilfort.civmod.settlement.StockRules;
 import com.mojang.authlib.GameProfile;
@@ -32,6 +33,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.RandomSource;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.world.Container;
@@ -51,6 +53,7 @@ import net.minecraft.world.item.component.Tool;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.levelgen.LegacyRandomSource;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.registries.RegisterEvent;
@@ -58,8 +61,8 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 /**
  * GameTests for the masterworks of gear (spec #304, story #303, vault {@code Systems/Producing Jobs.md}): a Smith with a
  * scripted roll crafts gear in catch-up and the stack in the Clerk shows the components. The global {@link QuietMastery}
- * keeps every other test free of the roll. The scripted source answers every pool draw with the first effect, so a pool of one
- * effect (the tools' mining speed) is drawn again and again.
+ * keeps every other test free of the roll. The scripted source answers each pool draw with the index of the option it is
+ * told to pick, so a test chooses the effects of the hits.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class MasterworkGameTests {
@@ -70,6 +73,10 @@ public final class MasterworkGameTests {
     /** Where the players of the message tests stand from the settler, in blocks. */
     private static final double NEAR_BLOCKS = 10.0;
     private static final double FAR_BLOCKS = 40.0;
+    /** The index of durability +25 % in the options of every item of the default file: the pool for all items comes first. */
+    private static final int DURABILITY = 0;
+    /** The index of the effect of the item's kind: it follows the pool for all items. */
+    private static final int OTHER = 1;
 
     private MasterworkGameTests() {
     }
@@ -80,6 +87,9 @@ public final class MasterworkGameTests {
             register(helper, "mastery_masterwork_one_effect", MasterworkGameTests::oneEffect);
             register(helper, "mastery_masterwork_two_effects", MasterworkGameTests::twoEffects);
             register(helper, "mastery_masterwork_same_effect_twice", MasterworkGameTests::sameEffectTwice);
+            register(helper, "mastery_masterwork_free_draw", MasterworkGameTests::freeDraw);
+            register(helper, "mastery_masterwork_first_hit_is_free", MasterworkGameTests::firstHitIsFree);
+            register(helper, "mastery_masterwork_free_combinations", MasterworkGameTests::freeCombinations);
             register(helper, "mastery_masterwork_weapon", MasterworkGameTests::weapon);
             register(helper, "mastery_masterwork_armour", MasterworkGameTests::armour);
             register(helper, "mastery_masterwork_counts_as_plain_item", MasterworkGameTests::countsAsPlainItem);
@@ -128,8 +138,9 @@ public final class MasterworkGameTests {
         return crafted.getFirst();
     }
 
-    private static Run smith(GameTestHelper helper, List<ItemStack> stock, Item item, int hits) {
-        return MasteryGameTests.smith(helper, stock, item, MasteryRolls.hits(hits));
+    /** A Smith whose craft has the hits; the pool draws take the picks (indices into the item's options, see {@link MasteryRolls#drawing}). */
+    private static Run smith(GameTestHelper helper, List<ItemStack> stock, Item item, int hits, int... picks) {
+        return MasteryGameTests.smith(helper, stock, item, MasteryRolls.drawing(hits, picks));
     }
 
     private static String key(Component component) {
@@ -207,7 +218,7 @@ public final class MasterworkGameTests {
 
     /** Two hits on a tool: durability, then the tool pool's mining speed +10 %; aqua, and a lore line for the mining speed. */
     private static void twoEffects(GameTestHelper helper) {
-        Run run = smith(helper, pickaxeStock(), Items.IRON_PICKAXE, 2);
+        Run run = smith(helper, pickaxeStock(), Items.IRON_PICKAXE, 2, DURABILITY, OTHER);
         ItemStack stack = craft(helper, run, Items.IRON_PICKAXE);
         assertDurability(helper, stack, Items.IRON_PICKAXE, 25);
         assertToolSpeed(helper, stack, 1.1F);
@@ -219,7 +230,7 @@ public final class MasterworkGameTests {
 
     /** Three hits on a tool: the tool pool has one effect, so the mining speed is drawn twice and adds up to +20 %; light purple. */
     private static void sameEffectTwice(GameTestHelper helper) {
-        Run run = smith(helper, pickaxeStock(), Items.IRON_PICKAXE, 3);
+        Run run = smith(helper, pickaxeStock(), Items.IRON_PICKAXE, 3, DURABILITY, OTHER, OTHER);
         ItemStack stack = craft(helper, run, Items.IRON_PICKAXE);
         assertDurability(helper, stack, Items.IRON_PICKAXE, 25);
         assertToolSpeed(helper, stack, 1.2F);
@@ -229,9 +240,70 @@ public final class MasterworkGameTests {
         MasteryGameTests.finish(helper, run);
     }
 
+    /** The kinds of change of the parts of an effect, in order. */
+    private static List<MasterworkRules.EffectPart.Type> types(Effect effect) {
+        return effect.parts().stream().map(MasterworkRules.EffectPart::type).toList();
+    }
+
+    /**
+     * Every hit draws from one list of all the options of the item: the pool for all items and the pool of its kind. A pickaxe
+     * has durability and mining speed, each as likely as the other (the draw asks for a number below the number of options) and
+     * each reachable. Armour +1 and toughness +0.5 stay one option of two parts. An item of no kind draws from the pool for all
+     * items alone.
+     */
+    private static void freeDraw(GameTestHelper helper) {
+        MasterworkRules rules = MasterworkRules.get();
+        ItemStack pickaxe = new ItemStack(Items.IRON_PICKAXE);
+        List<Effect> options = rules.options(pickaxe);
+        helper.assertTrue(options.size() == 2 && types(options.get(0)).equals(List.of(MasterworkRules.EffectPart.Type.DURABILITY))
+                && types(options.get(1)).equals(List.of(MasterworkRules.EffectPart.Type.MINING_SPEED)), "A pickaxe has durability and mining speed: " + options);
+        List<Integer> bounds = new ArrayList<>();
+        RandomSource asking = new LegacyRandomSource(0L) {
+            @Override
+            public int nextInt(int bound) {
+                bounds.add(bound);
+                return 1;
+            }
+        };
+        helper.assertTrue(rules.draw(pickaxe, 1, asking).equals(List.of(options.get(1))), "The draw can pick the second option");
+        helper.assertTrue(bounds.equals(List.of(options.size())), "One draw over all options, equal chance for each: " + bounds);
+        for (int pick = 0; pick < options.size(); pick++) {
+            helper.assertTrue(rules.draw(pickaxe, 1, MasteryRolls.drawing(1, pick)).equals(List.of(options.get(pick))), "Option " + pick + " is reachable");
+        }
+        List<Effect> armour = rules.options(new ItemStack(Items.IRON_CHESTPLATE));
+        helper.assertTrue(armour.size() == 2 && armour.get(1).parts().size() == 2, "Armour +1 and toughness +0.5 are one option of two parts: " + armour);
+        helper.assertTrue(rules.options(new ItemStack(Items.BOW)).equals(rules.all()), "A bow has no kind: the pool for all items alone");
+        helper.succeed();
+    }
+
+    /** Nothing is fixed on the first hit: a single hit that draws mining speed gives mining speed and no durability. */
+    private static void firstHitIsFree(GameTestHelper helper) {
+        Run run = smith(helper, pickaxeStock(), Items.IRON_PICKAXE, 1, OTHER);
+        ItemStack stack = craft(helper, run, Items.IRON_PICKAXE);
+        helper.assertTrue(stack.getMaxDamage() == new ItemStack(Items.IRON_PICKAXE).getMaxDamage(), "No durability bonus: " + stack.getMaxDamage());
+        assertToolSpeed(helper, stack, 1.1F);
+        assertLook(helper, stack, Rarity.UNCOMMON);
+        helper.assertTrue(loreKeys(stack).equals(List.of("civmod.masterwork.made_by", "civmod.masterwork.mining_speed")), "Lore: made by, mining speed: " + lore(stack));
+        MasteryGameTests.finish(helper, run);
+    }
+
+    /** Every combination is possible: three mining speeds add up to +30 % with the durability untouched, and a bow, which has only the pool for all items, gets +75 % durability from three hits. */
+    private static void freeCombinations(GameTestHelper helper) {
+        MasterworkRules rules = MasterworkRules.get();
+        ItemStack pickaxe = new ItemStack(Items.IRON_PICKAXE);
+        Masterwork.turnInto(pickaxe, rules.draw(pickaxe, 3, MasteryRolls.drawing(3, OTHER, OTHER, OTHER)), MAKER);
+        helper.assertTrue(pickaxe.getMaxDamage() == new ItemStack(Items.IRON_PICKAXE).getMaxDamage(), "No durability bonus");
+        assertToolSpeed(helper, pickaxe, 1.3F);
+        assertLook(helper, pickaxe, Rarity.EPIC);
+        ItemStack bow = new ItemStack(Items.BOW);
+        Masterwork.turnInto(bow, rules.draw(bow, 3, MasteryRolls.drawing(3, 0, 1, 2)), MAKER);
+        assertDurability(helper, bow, Items.BOW, 75);
+        helper.succeed();
+    }
+
     /** Two hits on a weapon: durability, then attack damage +1 on top of the sword's own modifiers, in the main hand. */
     private static void weapon(GameTestHelper helper) {
-        Run run = smith(helper, swordStock(), Items.IRON_SWORD, 2);
+        Run run = smith(helper, swordStock(), Items.IRON_SWORD, 2, DURABILITY, OTHER);
         ItemStack stack = craft(helper, run, Items.IRON_SWORD);
         assertDurability(helper, stack, Items.IRON_SWORD, 25);
         assertBonus(helper, stack, Attributes.ATTACK_DAMAGE, 1.0, EquipmentSlotGroup.MAINHAND);
@@ -242,7 +314,7 @@ public final class MasterworkGameTests {
 
     /** Two hits on armour: durability, then armour +1 and toughness +0.5 together, in the armour's own slot. */
     private static void armour(GameTestHelper helper) {
-        Run run = smith(helper, chestplateStock(), Items.IRON_CHESTPLATE, 2);
+        Run run = smith(helper, chestplateStock(), Items.IRON_CHESTPLATE, 2, DURABILITY, OTHER);
         ItemStack stack = craft(helper, run, Items.IRON_CHESTPLATE);
         assertDurability(helper, stack, Items.IRON_CHESTPLATE, 25);
         assertBonus(helper, stack, Attributes.ARMOR, 1.0, EquipmentSlotGroup.CHEST);
@@ -283,7 +355,7 @@ public final class MasterworkGameTests {
     private static void anvilKeepsBonuses(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         ItemStack masterwork = new ItemStack(Items.IRON_PICKAXE);
-        Masterwork.turnInto(masterwork, MasterworkRules.get().draw(masterwork, 2, MasteryRolls.always()), MAKER);
+        Masterwork.turnInto(masterwork, MasterworkRules.get().draw(masterwork, 2, MasteryRolls.drawing(2, DURABILITY, OTHER)), MAKER);
         Holder<Enchantment> unbreaking = level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.UNBREAKING);
         masterwork.enchant(unbreaking, 1);
         masterwork.setDamageValue(100);

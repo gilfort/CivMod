@@ -52,6 +52,37 @@ final class MasteryRolls {
         return scripted(rolls);
     }
 
+    /**
+     * A source for a craft of gear: {@code hits} hits, then a miss, and every pool draw answers with the next of the picks
+     * (the index of the option in the pool, the last one repeats). With no picks every draw takes the first option.
+     *
+     * @param hits  how many hits the craft has, at most the cap
+     * @param picks the index each effect draw takes, one per hit
+     * @return the random source
+     */
+    static RandomSource drawing(int hits, int... picks) {
+        double[] rolls = new double[hits + 1];
+        for (int i = 0; i < hits; i++) {
+            rolls[i] = HIT;
+        }
+        rolls[hits] = MISS;
+        int[] answers = picks.length == 0 ? new int[] {0} : picks;
+        return new LegacyRandomSource(0L) {
+            private int nextRoll;
+            private int nextPick;
+
+            @Override
+            public double nextDouble() {
+                return rolls[Math.min(nextRoll++, rolls.length - 1)];
+            }
+
+            @Override
+            public int nextInt(int bound) {
+                return answers[Math.min(nextPick++, answers.length - 1)] % bound;
+            }
+        };
+    }
+
     /** @return a random source that hits at every roll: three hits at every craft */
     static RandomSource always() {
         return scripted(HIT);
