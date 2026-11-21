@@ -217,3 +217,20 @@ A seat is taken while another settler has booked it for the evening or an entity
 ## Social life
 
 Settlers greet each other and the players near them. In its normal 5 second decision step a settler that can be interrupted (awake and visible; not away on a Mission, leading Villagers, serving a customer at a counter, eating or playing as a Bard) looks for other settlers of its settlement and for players within the radius and rolls once for each: a conversation (20 %, settlers only), a greeting (30 %) or nothing. A greeting is a head turn and one arm swing, needs line of sight and gives no points; the same pair greets again after 60 seconds at the earliest. In a conversation the settler whose roll succeeded walks up to the other, who stops and turns; they talk for 6 seconds with a speech bubble above both and each gets 0.5 Entertainment. A settler talks again after 2000 ticks and at most twice per day, and the walk gives up after 5 seconds without a way. The numbers are datapack values in `data/<namespace>/civmod_social/rules.json`: `conversation_chance`, `greeting_chance`, `radius` (blocks), `greeting_cooldown_ticks`, `conversation_ticks`, `walk_give_up_ticks`, `conversation_cooldown_ticks`, `daily_limit` and `points`. Later packs override earlier ones per value. The server config `socialLife` (default `true`) switches the whole check off.
+
+## Diary entries
+
+Every settler keeps a diary of at most 20 entries, shown in the Chronicle tab of its window. An entry saves only the id of its type, a list of text parameters and the settler day; the words are built from the type when somebody reads it, in the reader's language. The registry is `civmod:diary_entry_type` (static, synced to clients).
+
+```java
+public static final DeferredRegister<DiaryEntryType> TYPES = CivModApi.diaryEntryTypes("examplemod");
+public static final DeferredHolder<DiaryEntryType, DiaryEntryType> FIRST_CATCH =
+        TYPES.register("first_catch", () -> DiaryEntryType.of("diary.examplemod.first_catch"));
+
+// somewhere on the server, with a loaded settler:
+CivModApi.addDiaryEntry(settler, FIRST_CATCH, List.of("pike"));
+```
+
+`DiaryEntryType.of(langKey)` builds the text from a language key with the parameters as its arguments; write the text in the first person ("I caught a %s."). `asBeforeArrival()` lists the type under "Before day X" in the tab, and `asPermanent()` keeps its entries when the diary is full. Without it the oldest entry that is not permanent drops out; the arrival entry is permanent. For words that need more than one key, build the type with its constructor, which takes a function from the parameters to a `Component`. That function runs on the client and must not touch the world.
+
+`addDiaryEntry` returns `false` for anything but a settler on the server, and it writes into the diary of a loaded settler only.

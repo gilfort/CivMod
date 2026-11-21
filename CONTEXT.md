@@ -44,7 +44,7 @@ Lv 1–20 / 21–40 / 41–60 / 61–80 / 81+. A settler's tier follows the high
 _Avoid_: Reading `SettlerSkills.effectiveLevel` for the level a settler works at (`SettlerWork.effectiveLevel` includes the need limit)
 
 **Entertainment**:
-A value from 0 to 10 per settler, starting at 0 and losing 1 point per in-game day (the decay is taken at the first need check of a day, so live play and catch-up take it the same way). It is a need of tier 2 (more than 5) and tier 3 (more than 8) and it speeds up work by 2 % per point at every tier, added to the Priest blessing's share (full Entertainment and a blessing: 1.4). Numbers come from `civmod_entertainment/rules.json`. A conversation gives 0.5 (`Entertainment.talked`), and its marks (day count, cooldown tick, the day's points for the Needs tooltip) are one nested record `Entertainment.Talk`. Code: `Entertainment` (saved with the settler), `EntertainmentRules` (plain rules and datapack values), one `Need` per tier in `Needs.ALL`, `SettlerWork.speedFactor` (the one place where speed bonuses add up).
+A value from 0 to 10 per settler, starting at 0 and losing 1 point per in-game day (the decay is taken at the first need check of a day, so live play and catch-up take it the same way). It is a need of tier 2 (more than 5) and tier 3 (more than 8) and it speeds up work by 2 % per point at every tier, added to the Priest blessing's share (full Entertainment and a blessing: 1.4). Numbers come from `civmod_entertainment/rules.json`. A talk with a player gives 0.5 once per day and settler (`Entertainment.talkedToPlayer`, the day in `playerTalkDay`). A conversation gives 0.5 (`Entertainment.talked`), and its marks (day count, cooldown tick, the day's points for the Needs tooltip) are one nested record `Entertainment.Talk`. Code: `Entertainment` (saved with the settler), `EntertainmentRules` (plain rules and datapack values), one `Need` per tier in `Needs.ALL`, `SettlerWork.speedFactor` (the one place where speed bonuses add up).
 _Avoid_: Multiplying the blessing factor with the Entertainment bonus; reading `blessingFactor` for a work speed
 
 **Meeting check**:
@@ -503,6 +503,17 @@ The real region a settler comes from: the nearest biome of a biome type of its r
 **Rescuer**:
 The player who took a settler in: id, name when it happened and the settler day (`Rescuer`). For every settlement channel it is the founder of the settlement, the player who placed its Center Block (`SettlementOrigins.founder`, recorded in `SettlementWorld`); a Center Block placed by a command, a structure or a dispenser has no founder, and the spawn egg has none. Display only, no control rights.
 _Avoid_: Owner
+
+**Diary**:
+The list of first-person entries a settler keeps, at most 20 (`Chronicle.CAP`), written on events only: its arrival, the loss of its settlement and the parts of its origin it has told. An entry is a type id, a list of text parameters and the settler day (`DiaryEntry`); the words are built from the type (`DiaryEntryType`, registry `civmod:diary_entry_type`) when somebody reads it. A full diary drops its oldest entry that is not permanent; the arrival entry is permanent. Origin lines are "before arrival" entries: the Chronicle tab lists them under "Before day X". Addons write through `CivModApi.addDiaryEntry`. Code: `Diary` (the writes), `Chronicle`, `ModDiaryEntryTypes`.
+_Avoid_: Journal, log
+
+**Chronicle**:
+The story of a settler: its diary plus the marks that must outlive the entries, which origin lines it has told and whether its talent is confirmed. Saved with the settler as one `Chronicle` value, so it can move to another settler as a whole. Shown in the Chronicle tab of the settler window (`ChronicleTabView`, `SettlerInfo.Person`). The settlement record at the Administrator is a different, later thing.
+
+**Talk**:
+A player's Shift + right-click with an empty hand on a settler (`PlayerTalk`): the settler turns its head, greets, shows the conversation bubble and says one line in chat to that player only. The first three talks tell place, upbringing and turning point in random order, each once, and write each into the diary; after that it makes small talk about the weather (good or bad mood) or, from its own bed, fire and food needs, about the settlement. A sleeping settler does not talk: the click opens the window. The first talk of a day per settler gives 0.5 Entertainment (`Entertainment.talkedToPlayer`, own mark `playerTalkDay`). The told lines belong to the settler, not to a player.
+_Avoid_: Conversation (that is between two settlers)
 
 **Surname type**:
 One rule a race has to make a surname: `patronymic` (men only), `matronymic` (women only), `trade`, `place`, `trait`, `clan` or `none`, each with a weight in the race's data. A type that has nothing to offer a settler (wrong gender, no place, no entries) drops out; with none left the settler has no surname. Code: `SurnameType`, `RaceDefinition.SurnameRule`.
