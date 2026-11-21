@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
+import com.gilfort.civmod.CivMod;
 import com.mojang.serialization.Codec;
 
 import net.minecraft.network.chat.Component;
@@ -123,10 +124,12 @@ public final class OriginLine {
         return new Place(kind, id == null ? Place.FAR_AWAY_ID : id, direction, parseDays(params.get(4)));
     }
 
+    /** The days of walking come from a saved diary entry; a value that is not a number is logged and shown as no distance. */
     private static int parseDays(String days) {
         try {
             return Integer.parseInt(days);
         } catch (NumberFormatException e) {
+            CivMod.LOGGER.warn("A saved origin line has \"{}\" as its days of walking; showing none", days, e);
             return 0;
         }
     }
