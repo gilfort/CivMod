@@ -40,9 +40,9 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
 /**
  * Brings the starting settlers to new settlements (vault {@code Systems/NPC Population.md}).
  * <p>
- * Checked once per second per dimension. When a settlement's timer has run out and its anchor JobBlock is loaded,
- * the missing settlers up to the configured starting count spawn near the anchor; then the settlers name the
- * settlement and nearby players are told.
+ * Checked once per second per dimension. When a settlement's timer has run out, the places of its origins are looked up
+ * ({@link #startersDue}) and its anchor JobBlock is loaded, the missing settlers up to the configured starting count spawn near
+ * the anchor; then the settlers name the settlement and nearby players are told.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class SettlerSpawner {
@@ -51,6 +51,12 @@ public final class SettlerSpawner {
     private static final int SPAWN_RADIUS = 5;
     private static final int SPAWN_ATTEMPTS = 16;
     private static final double ANNOUNCE_DISTANCE = 64.0;
+    /**
+     * How long after the timer the starters wait for the lookup of the places of their origins at most. The lookup needs a few ticks
+     * after the founding; the wait only matters when the world was not ticking in between, and a settlement the lookup cannot reach
+     * (no JobBlock to measure from) must not block its starters for good.
+     */
+    public static final long LOOKUP_WAIT_TICKS = 200L;
 
     private SettlerSpawner() {
     }
@@ -65,11 +71,23 @@ public final class SettlerSpawner {
     private static void tick(ServerLevel level) {
         SettlementData data = SettlementData.get(level);
         for (Settlement settlement : List.copyOf(data.settlements())) {
-            long due = settlement.settlersDue();
-            if (due != Settlement.SETTLERS_ARRIVED && level.getGameTime() >= due) {
+            if (startersDue(settlement, level.getGameTime())) {
                 settlement.anchor().map(SettlementBlock::pos).filter(level::isLoaded).ifPresent(anchor -> arrive(level, data, settlement, anchor));
             }
         }
+    }
+
+    /**
+     * Whether the starting settlers of a settlement come now: its timer has run out and the places of the origins are looked up,
+     * or the wait for the lookup is over. Starters that came before the lookup was done would all come "from far away".
+     *
+     * @param settlement the settlement
+     * @param gameTime   the game time now
+     * @return whether the starters are due
+     */
+    public static boolean startersDue(Settlement settlement, long gameTime) {
+        long due = settlement.settlersDue();
+        return due != Settlement.SETTLERS_ARRIVED && gameTime >= due && (settlement.origins().lookupDone() || gameTime >= due + LOOKUP_WAIT_TICKS);
     }
 
     /**

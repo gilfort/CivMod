@@ -88,6 +88,7 @@ public final class OriginArrivalGameTests {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "origin_starting_settlers", OriginArrivalGameTests::startingSettlers);
             register(helper, "origin_starting_settlers_far_away", OriginArrivalGameTests::startingSettlersFarAway);
+            register(helper, "origin_starters_wait_for_lookup", OriginArrivalGameTests::startersWaitForLookup);
             register(helper, "origin_pilgrim", OriginArrivalGameTests::pilgrim);
             register(helper, "origin_converted_villager", OriginArrivalGameTests::convertedVillager);
             register(helper, "origin_converted_villager_keeps_name", OriginArrivalGameTests::convertedVillagerKeepsName);
@@ -190,6 +191,26 @@ public final class OriginArrivalGameTests {
         } finally {
             settlers.forEach(Settler::discard);
         }
+    }
+
+    /** The starters wait until the places are looked up, but never longer than the wait; settlers that have arrived are not due again. */
+    private static void startersWaitForLookup(GameTestHelper helper) {
+        SettlementData data = new SettlementData();
+        Settlement settlement = standalone(helper, data, helper.absolutePos(new BlockPos(2, 1, 2)));
+        long due = settlement.settlersDue();
+        long giveUp = due + SettlerSpawner.LOOKUP_WAIT_TICKS;
+        helper.assertFalse(SettlerSpawner.startersDue(settlement, due - 1), "Not before the timer");
+        helper.assertFalse(SettlerSpawner.startersDue(settlement, due), "The timer ran out, the lookup has not started");
+        helper.assertFalse(SettlerSpawner.startersDue(settlement, giveUp - 1), "Still waiting for the lookup");
+        helper.assertTrue(SettlerSpawner.startersDue(settlement, giveUp), "No settler waits for ever for a lookup that does not come");
+        data.updateOrigins(settlement, origins -> origins.withLookup(List.of(PLAINS, STEPPE)));
+        helper.assertFalse(SettlerSpawner.startersDue(settlement, due), "A lookup that is half done is not enough");
+        data.updateOrigins(settlement, origins -> origins.searched(Optional.empty()).searched(Optional.empty()));
+        helper.assertFalse(SettlerSpawner.startersDue(settlement, due - 1), "A finished lookup does not bring them before the timer");
+        helper.assertTrue(SettlerSpawner.startersDue(settlement, due), "The timer ran out and the lookup is done");
+        data.settlersArrived(settlement);
+        helper.assertFalse(SettlerSpawner.startersDue(settlement, giveUp), "Settlers that have arrived are not due again");
+        helper.succeed();
     }
 
     /** A pilgrim of the Priest's prayer comes from a biome type with a hit and was taken in by the founder. */
