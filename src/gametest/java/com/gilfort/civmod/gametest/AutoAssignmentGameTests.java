@@ -69,7 +69,7 @@ public final class AutoAssignmentGameTests {
     }
 
     /** Places a JobBlock on a stone floor and returns its settlement. */
-    private static Settlement jobBlock(GameTestHelper helper, BlockPos pos, net.minecraft.world.level.block.Block block) {
+    static Settlement jobBlock(GameTestHelper helper, BlockPos pos, net.minecraft.world.level.block.Block block) {
         for (int x = 0; x < 9; x++) {
             for (int z = 0; z < 9; z++) {
                 helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
@@ -84,7 +84,7 @@ public final class AutoAssignmentGameTests {
     }
 
     /** A settler of the settlement at a relative position, jobless. */
-    private static Settler settler(GameTestHelper helper, Settlement settlement, String name, BlockPos at) {
+    static Settler settler(GameTestHelper helper, Settlement settlement, String name, BlockPos at) {
         ServerLevel level = helper.getLevel();
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
         Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(at));
@@ -101,23 +101,23 @@ public final class AutoAssignmentGameTests {
         helper.assertTrue(holds(helper, settler, pos, job), settler.getName().getString() + " hired as " + job);
     }
 
-    private static boolean holds(GameTestHelper helper, Settler settler, BlockPos pos, Job job) {
+    static boolean holds(GameTestHelper helper, Settler settler, BlockPos pos, Job job) {
         BlockPos abs = helper.absolutePos(pos);
         boolean entity = settler.getJobs().stream().anyMatch(held -> held.jobBlock().equals(abs) && held.jobType() == job);
         boolean block = block(helper, pos).assignee(settler.getUUID()).filter(assignee -> assignee.job() == job).isPresent();
         return entity && block;
     }
 
-    private static SettlementBlock block(GameTestHelper helper, BlockPos pos) {
+    static SettlementBlock block(GameTestHelper helper, BlockPos pos) {
         BlockPos abs = helper.absolutePos(pos);
         return SettlementData.get(helper.getLevel()).settlementAt(abs).flatMap(settlement -> settlement.block(abs)).orElseThrow();
     }
 
-    private static void toggle(GameTestHelper helper, BlockPos pos, Job job, boolean on) {
+    static void toggle(GameTestHelper helper, BlockPos pos, Job job, boolean on) {
         AutoAssignment.setAuto(helper.getLevel(), helper.absolutePos(pos), job, on);
     }
 
-    private static void discard(Settler... settlers) {
+    static void discard(Settler... settlers) {
         for (Settler settler : settlers) {
             settler.discard();
         }

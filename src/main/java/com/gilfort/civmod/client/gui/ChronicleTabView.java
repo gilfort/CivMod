@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.gilfort.civmod.api.DiaryEntryType;
+import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.chronicle.DiaryEntry;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
@@ -16,6 +17,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentUtils;
 import net.minecraft.util.FormattedCharSequence;
 
 /**
@@ -71,6 +73,10 @@ final class ChronicleTabView {
         int y = 0;
         if (!person.hasOrigin()) {
             y = append(built, font, Component.translatable("civmod.gui.chronicle.no_origin"), textWidth, CivGui.HINT_COLOR, y);
+        }
+        if (!person.talent().isEmpty()) {
+            Component jobs = ComponentUtils.formatList(person.talent(), Component.literal(", "), Job::displayName);
+            y = append(built, font, Component.translatable("civmod.gui.chronicle.talent", jobs), textWidth, CivGui.LABEL_COLOR, y);
         }
         List<DiaryEntry> before = person.diary().stream().filter(entry -> type(entry).filter(DiaryEntryType::beforeArrival).isPresent()).toList();
         List<DiaryEntry> since = person.diary().stream().filter(entry -> type(entry).filter(type -> !type.beforeArrival()).isPresent()).toList();

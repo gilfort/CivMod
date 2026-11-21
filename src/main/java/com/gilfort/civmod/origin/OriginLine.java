@@ -133,7 +133,7 @@ public final class OriginLine {
 
     private static List<String> upbringingParams(SettlerOrigin origin, Optional<RaceDefinition> race) {
         Identifier id = origin.upbringing().orElseThrow();
-        Optional<OriginEntry> upbringing = race.flatMap(definition -> definition.upbringings().stream().filter(entry -> entry.id().equals(id)).findFirst());
+        Optional<OriginEntry> upbringing = race.flatMap(definition -> definition.upbringing(id));
         String jobs = upbringing.map(entry -> String.join(JOB_SEPARATOR, entry.jobs().stream().map(Identifier::toString).toList())).orElse("");
         SettlerName.Surname surname = origin.name().map(SettlerName::surname).orElse(SettlerName.Surname.NONE);
         Optional<OriginEntry> trade = surname.type() == SurnameType.TRADE ? race.flatMap(definition -> definition.surnameEntries()

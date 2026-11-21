@@ -317,6 +317,9 @@ final class ResourceCollectionLoop implements CategoryLoop {
         if (result.levelUp()) {
             shell.showLevelUp(level, job);
         }
+        if (result.talentConfirmed()) {
+            shell.showTalent(job);
+        }
         // The line stays out while the job produces; a job that ended (no tool, buffer full) takes it in.
         if (profile.get() instanceof FishingProfile && result.end() == WorkRules.End.NONE) {
             settler.cast(stand);

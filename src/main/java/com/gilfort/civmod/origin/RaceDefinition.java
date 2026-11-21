@@ -80,4 +80,12 @@ public record RaceDefinition(Identifier id, Map<String, NameList> firstNames, Li
     Optional<OriginEntry> place(Identifier biomeType) {
         return places.stream().filter(entry -> entry.id().equals(biomeType)).findFirst();
     }
+
+    /**
+     * @param id an upbringing id
+     * @return that entry of the upbringing table
+     */
+    Optional<OriginEntry> upbringing(Identifier id) {
+        return upbringings.stream().filter(entry -> entry.id().equals(id)).findFirst();
+    }
 }

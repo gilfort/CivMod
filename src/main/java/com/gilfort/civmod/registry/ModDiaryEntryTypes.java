@@ -5,6 +5,7 @@ import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.DiaryEntryType;
 import com.gilfort.civmod.chronicle.Diary;
 import com.gilfort.civmod.origin.OriginLine;
+import com.gilfort.civmod.origin.Talent;
 
 import net.minecraft.core.Registry;
 import net.minecraft.resources.ResourceKey;
@@ -38,6 +39,10 @@ public final class ModDiaryEntryTypes {
     /** The settler has lost its settlement. */
     public static final DeferredHolder<DiaryEntryType, DiaryEntryType> HOMELESS = TYPES.register("homeless",
             () -> DiaryEntryType.of("diary.civmod.homeless"));
+
+    /** The first level-up in a Job the upbringing favours has confirmed the talent. */
+    public static final DeferredHolder<DiaryEntryType, DiaryEntryType> TALENT = TYPES.register("talent",
+            () -> new DiaryEntryType(Talent::confirmationText, false, false));
 
     private ModDiaryEntryTypes() {
     }

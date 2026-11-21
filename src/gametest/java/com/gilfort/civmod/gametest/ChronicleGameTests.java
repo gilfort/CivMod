@@ -376,7 +376,8 @@ public final class ChronicleGameTests {
         keys.addAll(List.of("origin.told.place", "origin.told.jobs.two", "origin.told.upbringing.plain", "origin.told.upbringing.same",
                 "origin.told.upbringing.different", "diary.civmod.arrival.no_reason", "diary.civmod.arrival.rescued", "diary.civmod.homeless",
                 "civmod.talk.line", "civmod.gui.settler.tab.chronicle", "civmod.gui.settler.help.chronicle", "civmod.gui.chronicle.no_origin",
-                "civmod.gui.chronicle.before_day", "civmod.gui.chronicle.before_arrival", "civmod.gui.chronicle.entry"));
+                "civmod.gui.chronicle.before_day", "civmod.gui.chronicle.before_arrival", "civmod.gui.chronicle.entry", "diary.civmod.talent",
+                "civmod.gui.chronicle.talent"));
         for (String key : keys) {
             helper.assertTrue(lang.has(key), "Language key " + key);
         }

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:talent_bonus_value_from_rules",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

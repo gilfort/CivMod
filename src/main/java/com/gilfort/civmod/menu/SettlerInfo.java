@@ -12,6 +12,7 @@ import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.job.NeedsReport;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.origin.Talent;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
@@ -45,36 +46,41 @@ public record SettlerInfo(Person person, Component status, boolean homeless, Com
         List<JobState> jobStates, Component bed, FoodInfo food, Component mission, NeedsReport needs, int xp, Optional<Job> helping) {
 
     /**
-     * Who the settler is: the name the window shows and the diary the Chronicle tab lists.
+     * Who the settler is: the name the window shows, the diary the Chronicle tab lists and the talent once it is confirmed.
      *
      * @param name      the settler name
      * @param diary     the diary entries, oldest first
      * @param hasOrigin whether the settler has an origin; one that arrived before the origins existed has none, and its tab says so
+     * @param talent    the Base Jobs of the settler's upbringing, empty until the talent is confirmed (it stays hidden until then)
      */
-    public record Person(Component name, List<DiaryEntry> diary, boolean hasOrigin) {
+    public record Person(Component name, List<DiaryEntry> diary, boolean hasOrigin, List<Job> talent) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, Person> STREAM_CODEC = StreamCodec.composite(
                 ComponentSerialization.STREAM_CODEC, Person::name,
                 DiaryEntry.STREAM_CODEC.apply(ByteBufCodecs.list()), Person::diary,
                 ByteBufCodecs.BOOL, Person::hasOrigin,
+                Job.STREAM_CODEC.apply(ByteBufCodecs.list()), Person::talent,
                 Person::new);
 
         /**
          * @param name      the settler name
          * @param diary     the diary entries
          * @param hasOrigin whether the settler has an origin
+         * @param talent    the confirmed talent's Base Jobs
          */
         public Person {
             diary = List.copyOf(diary);
+            talent = List.copyOf(talent);
         }
 
         /**
          * @param settler a settler (server side)
-         * @return its name and diary now
+         * @return its name, diary and, once confirmed, its talent now
          */
         static Person of(Settler settler) {
-            return new Person(settler.getName(), settler.getChronicle().entries(), settler.getOrigin().isPresent());
+            List<Job> talent = settler.getChronicle().talentConfirmed() ? Talent.baseJobs(settler) : List.of();
+            return new Person(settler.getName(), settler.getChronicle().entries(), settler.getOrigin().isPresent(), talent);
         }
     }
 

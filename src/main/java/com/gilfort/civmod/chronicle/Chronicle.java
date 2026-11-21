@@ -75,6 +75,13 @@ public record Chronicle(List<DiaryEntry> entries, List<OriginLine.Slot> told, bo
     }
 
     /**
+     * @return the chronicle with the talent confirmed
+     */
+    public Chronicle withTalentConfirmed() {
+        return new Chronicle(entries, told, true);
+    }
+
+    /**
      * @param slot an origin line
      * @return whether the settler has told it
      */

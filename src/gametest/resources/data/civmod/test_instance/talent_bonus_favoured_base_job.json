@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:talent_bonus_favoured_base_job",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

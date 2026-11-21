@@ -39,6 +39,7 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.ThoughtBubble;
+import com.gilfort.civmod.origin.Talent;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobBlockSite;
@@ -2490,7 +2491,7 @@ public final class SettlerWork {
     }
 
     /**
-     * Grants EXP in a job; a level-up is shown to nearby players.
+     * Grants EXP in a job, with the talent bonus of a favoured job; a level-up is shown to nearby players.
      *
      * @param level  the level
      * @param job    the job
@@ -2498,12 +2499,23 @@ public final class SettlerWork {
      * @param cap    the skill cap of the job's JobBlock
      */
     void gainExp(ServerLevel level, SettlerJob job, int amount, int cap) {
-        SkillRules rules = SkillRules.get();
-        int gained = settler.getSkills().addExp(job.jobType(), amount, cap, rules);
-        if (gained <= 0 || quiet) {
+        Talent.Gain gain = Talent.gainExp(settler, job.jobType(), amount, cap);
+        if (gain.levels() <= 0 || quiet) {
             return;
         }
         showLevelUp(level, job);
+        if (gain.confirmed()) {
+            showTalent(job);
+        }
+    }
+
+    /**
+     * Shows the thought bubble of a talent that has just been confirmed (not during catch-up).
+     *
+     * @param job the job whose level-up confirmed it
+     */
+    void showTalent(SettlerJob job) {
+        thoughts.talent(job, !quiet);
     }
 
     /**

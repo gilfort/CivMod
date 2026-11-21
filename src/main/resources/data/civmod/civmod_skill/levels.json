@@ -1,4 +1,5 @@
 {
   "base": 15,
-  "per_level": 5
+  "per_level": 5,
+  "talent_bonus_percent": 25
 }
