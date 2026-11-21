@@ -54,6 +54,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.RandomSource;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.InteractionHand;
@@ -137,10 +138,12 @@ final class ProducingLoop implements CategoryLoop {
     }
 
     /**
-     * @return the settler's Mastery, whose random source a test can script
+     * Replaces the random source of the Mastery rolls (tests).
+     *
+     * @param random the source to roll with, null for the settler's own
      */
-    Mastery mastery() {
-        return mastery;
+    void scriptMastery(@Nullable RandomSource random) {
+        mastery.script(random);
     }
 
     // ---------------------------------------------------------------- decisions
@@ -1040,20 +1043,14 @@ final class ProducingLoop implements CategoryLoop {
             release(level, job.jobBlock());
             return false;
         }
-        List<ItemStack> consumed = new ArrayList<>();
-        for (Ingredient input : step.inputs()) {
-            ItemStack one = buffer.takeOne(input);
-            if (one.isEmpty()) {
-                consumed.forEach(buffer::add);
-                fail(level, job.jobBlock(), round, List.of(new Request.Missing(PatternRecipes.representativeKey(input), 1)), moment.now());
-                return false;
-            }
-            consumed.add(one);
+        Optional<List<ItemStack>> taken = takeInputs(level, job, round, step, buffer, moment.now());
+        if (taken.isEmpty()) {
+            return false;
         }
+        List<ItemStack> consumed = taken.get();
         Pattern pattern = step.pattern();
         Optional<JobCraftingRecipe> innate = InnateRecipes.recipe(level, pattern);
-        // Before the remainders: a saved item is not used up and leaves nothing behind.
-        Mastery.Boost boost = mastery.apply(level, new Mastery.Craft(job.jobType(), shell.effectiveLevel(job), pattern,
+        Mastery.Boost boost = mastery.roll(level, new Mastery.Craft(job.jobType(), shell.effectiveLevel(job), pattern,
                 innate.filter(JobCraftingRecipe::drawsOnly).isPresent()), consumed, buffer);
         List<ItemStack> leftovers = PatternRecipes.remainders(consumed);
         round.addRemainders(leftovers);
@@ -1066,11 +1063,9 @@ final class ProducingLoop implements CategoryLoop {
                 ? profile(job).execute(level, recipe.get(), result, List.copyOf(consumed), new LibraryRestPoints(level, job.jobBlock(), job.jobType()))
                 // The recipe is gone (datapack change): the pattern's own output, as recorded.
                 : Stream.concat(Stream.of(result), leftovers.stream()).toList();
-        // Before the buffer takes the stacks: a masterwork is made on the result itself.
-        boost.finish(level, settler, produced, moment.live());
-        produced.forEach(buffer::add);
-        // The buffer keeps what is over its capacity: extra output at most overshoots it by one craft (3 hits).
-        boost.extraOutput(made.result()).forEach(buffer::add);
+        // Mastery changes the produced stacks in place and adds its extra output; the buffer keeps what is over its capacity.
+        List<ItemStack> boosted = moment.live() ? boost.finishLive(level, settler, produced, result) : boost.finish(settler, produced, result);
+        boosted.forEach(buffer::add);
         made.drawn().forEach(stack -> {
             buffer.add(stack);
             round.drawn.add(stack.getItem());
@@ -1081,15 +1076,38 @@ final class ProducingLoop implements CategoryLoop {
         shell.collectXp(level, xp, worn.orElse(ItemStack.EMPTY));
         shell.gainExp(level, job, job.jobType().baseExp() * site.level(), site.skillCap());
         innate.flatMap(JobCraftingRecipe::stationAfter).ifPresent(after -> shell.workplace(job.jobBlock()).replaceStation(level, execution.station(), after));
+        finishExecution(round, step, moment.live());
+        return true;
+    }
+
+    /**
+     * @return the stacks one execution takes out of the buffer, one per input; empty if an input is gone: what was taken goes
+     *         back and the round fails with the missing item
+     */
+    private Optional<List<ItemStack>> takeInputs(ServerLevel level, SettlerJob job, Round round, CraftPlan.Step step, JobBuffer buffer, long now) {
+        List<ItemStack> consumed = new ArrayList<>();
+        for (Ingredient input : step.inputs()) {
+            ItemStack one = buffer.takeOne(input);
+            if (one.isEmpty()) {
+                consumed.forEach(buffer::add);
+                fail(level, job.jobBlock(), round, List.of(new Request.Missing(PatternRecipes.representativeKey(input), 1)), now);
+                return Optional.empty();
+            }
+            consumed.add(one);
+        }
+        return Optional.of(consumed);
+    }
+
+    /** Counts the execution; the step ends after its last craft. Live play shows the item in the settler's hand. */
+    private void finishExecution(Round round, CraftPlan.Step step, boolean live) {
         if (++round.crafted >= step.crafts()) {
             round.step++;
             round.crafted = 0;
         }
-        if (moment.live()) {
-            shell.hold(pattern.output().toStack());
+        if (live) {
+            shell.hold(step.pattern().output().toStack());
             handTimer = HAND_TICKS;
         }
-        return true;
     }
 
     /**

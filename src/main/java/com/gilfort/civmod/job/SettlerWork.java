@@ -198,7 +198,7 @@ public final class SettlerWork {
         loops.put(JobCategory.MISSION, missions);
         clerks = new ClerkLoop(this);
         loops.put(JobCategory.LOGISTICS, clerks);
-        // The Craftsperson is the only Producing Job so far.
+        // All Producing Jobs work through this one loop.
         producing = new ProducingLoop(this);
         loops.put(JobCategory.PRODUCING, producing);
         deliverymen = new DeliverymanLoop(this);
@@ -961,7 +961,7 @@ public final class SettlerWork {
      * @param random the source to roll with, null for the settler's own
      */
     public void scriptMasteryRandom(@Nullable RandomSource random) {
-        producing.mastery().script(random);
+        producing.scriptMastery(random);
     }
 
     /**

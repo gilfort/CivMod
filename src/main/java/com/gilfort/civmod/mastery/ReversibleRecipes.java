@@ -100,7 +100,12 @@ public final class ReversibleRecipes {
     }
 
     private static Entry innateEntry(RecipeHolder<JobCraftingRecipe> holder) {
-        return new Entry(holder.id(), holder.value().result().orElseThrow().item().value(), items(holder.value().ingredients().stream()));
+        return new Entry(holder.id(), resultItem(holder.value()), items(holder.value().ingredients().stream()));
+    }
+
+    /** The item an innate recipe with a result makes. */
+    private static Item resultItem(JobCraftingRecipe recipe) {
+        return recipe.result().orElseThrow().item().value();
     }
 
     private static Set<Item> items(Stream<Ingredient> ingredients) {

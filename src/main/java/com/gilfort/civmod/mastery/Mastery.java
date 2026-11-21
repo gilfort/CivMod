@@ -1,6 +1,8 @@
 package com.gilfort.civmod.mastery;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Stream;
 
 import org.jetbrains.annotations.ApiStatus;
@@ -11,7 +13,6 @@ import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.mastery.MasterworkRules.Effect;
 
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.LivingEntity;
@@ -22,14 +23,10 @@ import net.minecraft.world.item.ItemStack;
  * it took the inputs out of the buffer. A Job with a parent in the Job API rolls ({@link MasteryRules#hits}); what a hit
  * gives depends on the recipe: gear (a result with durability) becomes a masterwork, a recipe with enough ingredient items
  * saves some of them, a smaller one makes extra output. A {@link ReversibleRecipes reversible} recipe gets neither saving
- * nor extra output. The roll lives in this class so the loop only has to call it.
+ * nor extra output. The loop calls {@link #roll} once before the remainders and {@link Boost#finish} or
+ * {@link Boost#finishLive} once after the craft made its stacks; the order of the steps inside is kept here.
  */
 public final class Mastery {
-
-    /** Particles of one saving or extra output. */
-    private static final int PARTICLE_COUNT = 5;
-    /** How far the particles spread from the settler's chest, in blocks. */
-    private static final double PARTICLE_SPREAD = 0.3;
 
     private final RandomSource random;
     private @Nullable RandomSource scripted;
@@ -53,7 +50,7 @@ public final class Mastery {
     }
 
     /** What a hit turned into. */
-    public enum Kind {
+    public enum Benefit {
         /** No hit, or a recipe Mastery does not touch. */
         NONE,
         /** Some of the inputs were not used up. */
@@ -65,52 +62,63 @@ public final class Mastery {
     }
 
     /**
-     * The outcome of the roll of one craft.
+     * The outcome of the roll of one craft. Finish it after the recipe made its stacks and before the buffer takes them.
      *
-     * @param kind    what the hits turned into
+     * @param benefit what the hits turned into
      * @param hits    how many hits the craft had (0 to the maximum of {@link MasteryRules})
-     * @param effects the effects of a masterwork, one per hit; empty unless the kind is {@link Kind#GEAR}
+     * @param saved   how many ingredient items the craft saves; 0 unless the benefit is {@link Benefit#SAVING}
+     * @param effects the effects of a masterwork, one per hit; empty unless the benefit is {@link Benefit#GEAR}
      */
-    public record Boost(Kind kind, int hits, List<Effect> effects) {
+    public record Boost(Benefit benefit, int hits, int saved, List<Effect> effects) {
 
         /** No hit. */
-        public static final Boost NONE = new Boost(Kind.NONE, 0, List.of());
+        public static final Boost NONE = new Boost(Benefit.NONE, 0, 0, List.of());
 
         /**
-         * @param result what one execution makes
-         * @return the extra output: the result once more per hit if the craft makes extra output, else nothing
+         * Finishes the craft with nobody watching (catch-up): gear becomes a masterwork, nothing is shown.
+         *
+         * @param settler  the settler who crafted
+         * @param produced what the craft made, the result first; gear in it is changed in place
+         * @param result   what one execution makes
+         * @return what the buffer takes: the produced stacks, then the extra output if the craft makes some
          */
-        public List<ItemStack> extraOutput(ItemStack result) {
-            return kind == Kind.EXTRA_OUTPUT ? Stream.generate(result::copy).limit(hits).toList() : List.of();
+        public List<ItemStack> finish(LivingEntity settler, List<ItemStack> produced, ItemStack result) {
+            makeMasterwork(settler, produced);
+            return withExtraOutput(produced, result);
         }
 
         /**
-         * Finishes the craft: gear becomes a masterwork, whatever the live play shows of the hits comes on top. Call it before
-         * the produced items go into the buffer, it changes the result in place.
+         * Finishes the craft in live play, where a player can watch: like {@link #finish}, and a masterwork plays its sound,
+         * particles and message while a saving or an extra output shows particles.
          *
          * @param level    the level
          * @param settler  the settler who crafted
-         * @param produced what the craft made, the result first
-         * @param live     whether a player can watch: live play shows particles (and, for a masterwork, a sound and a message),
-         *                 catch-up shows nothing
+         * @param produced what the craft made, the result first; gear in it is changed in place
+         * @param result   what one execution makes
+         * @return what the buffer takes: the produced stacks, then the extra output if the craft makes some
          */
-        public void finish(ServerLevel level, LivingEntity settler, List<ItemStack> produced, boolean live) {
-            switch (kind) {
-                case GEAR -> produced.stream().filter(ItemStack::isDamageableItem).findFirst().ifPresent(result -> {
-                    Masterwork.apply(result, effects, settler.getName().getString());
-                    if (live) {
-                        MasterworkNotice.show(level, level.players(), settler, result);
-                    }
-                });
-                case SAVING, EXTRA_OUTPUT -> {
-                    if (live) {
-                        level.sendParticles(ParticleTypes.HAPPY_VILLAGER, settler.getX(), settler.getY() + settler.getBbHeight() * 0.75, settler.getZ(),
-                                PARTICLE_COUNT, PARTICLE_SPREAD, PARTICLE_SPREAD, PARTICLE_SPREAD, 0.0);
-                    }
-                }
-                case NONE -> {
-                }
+        public List<ItemStack> finishLive(ServerLevel level, LivingEntity settler, List<ItemStack> produced, ItemStack result) {
+            makeMasterwork(settler, produced).ifPresent(stack -> MasterworkNotice.show(level, level.players(), settler, stack));
+            if (benefit == Benefit.SAVING || benefit == Benefit.EXTRA_OUTPUT) {
+                MasterworkNotice.showBoost(level, settler);
             }
+            return withExtraOutput(produced, result);
+        }
+
+        private Optional<ItemStack> makeMasterwork(LivingEntity settler, List<ItemStack> produced) {
+            if (benefit != Benefit.GEAR) {
+                return Optional.empty();
+            }
+            Optional<ItemStack> gear = produced.stream().filter(ItemStack::isDamageableItem).findFirst();
+            gear.ifPresent(stack -> Masterwork.turnInto(stack, effects, settler.getName().getString()));
+            return gear;
+        }
+
+        private List<ItemStack> withExtraOutput(List<ItemStack> produced, ItemStack result) {
+            if (benefit != Benefit.EXTRA_OUTPUT) {
+                return produced;
+            }
+            return Stream.concat(produced.stream(), Stream.generate(result::copy).limit(hits)).toList();
         }
     }
 
@@ -125,38 +133,53 @@ public final class Mastery {
     }
 
     /**
-     * Rolls for one craft. On a saving the saved items leave {@code consumed} and go back into the buffer: they are not
-     * used up, so they also leave no remainder (a saved milk bucket makes no empty bucket).
+     * Rolls for one craft and, on a saving, puts the saved items back into the buffer: they are not used up, so they also leave
+     * no remainder (a saved milk bucket makes no empty bucket). Call it after the craft took its inputs and before their
+     * remainders are worked out, so that what is left in {@code consumed} is what the craft used up.
      *
      * @param level    the level
      * @param craft    the craft
-     * @param consumed the inputs the craft took out of the buffer, one stack per ingredient item
+     * @param consumed the inputs the craft took out of the buffer, one stack per ingredient item; the saved ones leave it
      * @param buffer   the buffer the inputs came from
+     * @return what the hits turned into, to finish once the craft made its stacks
+     */
+    public Boost roll(ServerLevel level, Craft craft, List<ItemStack> consumed, JobBuffer buffer) {
+        RandomSource source = scripted != null ? scripted : random;
+        Boost boost = decide(craft, consumed.size(), source, () -> ReversibleRecipes.contains(level, craft.pattern().recipe().orElseThrow()));
+        for (int left = boost.saved(); left > 0; left--) {
+            buffer.add(consumed.remove(source.nextInt(consumed.size())));
+        }
+        return boost;
+    }
+
+    /**
+     * The decision of one craft: it touches neither the buffer nor the world.
+     *
+     * @param craft       the craft
+     * @param ingredients the ingredient items the craft took (counts included)
+     * @param random      the random source of the rolls and the effect draws
+     * @param reversible  whether the craft's recipe is reversible; asked only when a hit could save or add material
      * @return what the hits turned into
      */
-    public Boost apply(ServerLevel level, Craft craft, List<ItemStack> consumed, JobBuffer buffer) {
+    static Boost decide(Craft craft, int ingredients, RandomSource random, BooleanSupplier reversible) {
         if (craft.job().parent().isEmpty() || craft.drawsOnly() || craft.pattern().recipe().isEmpty()) {
             return Boost.NONE;
         }
         MasteryRules rules = MasteryRules.get();
-        RandomSource source = scripted != null ? scripted : random;
-        int hits = rules.hits(craft.skill(), source);
+        int hits = rules.hits(craft.skill(), random);
         if (hits == 0) {
             return Boost.NONE;
         }
         ItemStack gear = craft.pattern().output().toStack();
         if (gear.isDamageableItem()) {
-            return new Boost(Kind.GEAR, hits, MasterworkRules.get().draw(gear, hits, source));
+            return new Boost(Benefit.GEAR, hits, 0, MasterworkRules.get().draw(gear, hits, random));
         }
-        if (ReversibleRecipes.contains(level, craft.pattern().recipe().get())) {
+        if (reversible.getAsBoolean()) {
             return Boost.NONE;
         }
-        if (!rules.savesMaterial(consumed.size())) {
-            return new Boost(Kind.EXTRA_OUTPUT, hits, List.of());
+        if (!rules.savesMaterial(ingredients)) {
+            return new Boost(Benefit.EXTRA_OUTPUT, hits, 0, List.of());
         }
-        for (int left = rules.saved(consumed.size(), hits); left > 0; left--) {
-            buffer.add(consumed.remove(source.nextInt(consumed.size())));
-        }
-        return new Boost(Kind.SAVING, hits, List.of());
+        return new Boost(Benefit.SAVING, hits, rules.saved(ingredients, hits), List.of());
     }
 }

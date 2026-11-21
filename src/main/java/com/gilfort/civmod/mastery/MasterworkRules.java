@@ -39,18 +39,18 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
  * @param kinds the kinds of items with a pool of their own, the first match wins
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
-public record MasterworkRules(List<Effect> all, List<Kind> kinds) {
+public record MasterworkRules(List<Effect> all, List<KindPool> kinds) {
 
     /** Reload listener id. */
     public static final Identifier ID = CivMod.id("masterwork_rules");
     /** The pool for all items when no file is loaded: durability +25 %. */
-    public static final MasterworkRules FALLBACK = new MasterworkRules(List.of(new Effect(List.of(new Part(Part.Type.DURABILITY, Optional.empty(), 0.25)))),
+    public static final MasterworkRules FALLBACK = new MasterworkRules(List.of(new Effect(List.of(new EffectPart(EffectPart.Type.DURABILITY, Optional.empty(), 0.25)))),
             List.of());
 
     private static MasterworkRules current = FALLBACK;
 
     /** What a part of an effect changes. */
-    public record Part(Type type, Optional<Holder<Attribute>> attribute, double amount) {
+    public record EffectPart(Type type, Optional<Holder<Attribute>> attribute, double amount) {
 
         /** The kinds of change. */
         public enum Type implements StringRepresentable {
@@ -76,13 +76,13 @@ public record MasterworkRules(List<Effect> all, List<Kind> kinds) {
         }
 
         /** Built on first use: this class loads with the mod, before the attribute registry is filled. */
-        static final Codec<Part> CODEC = Codec.lazyInitialized(() -> RecordCodecBuilder.<Part>create(instance -> instance.group(
-                Type.CODEC.fieldOf("type").forGetter(Part::type),
-                BuiltInRegistries.ATTRIBUTE.holderByNameCodec().optionalFieldOf("attribute").forGetter(Part::attribute),
-                Codec.doubleRange(-1024.0, 1024.0).fieldOf("amount").forGetter(Part::amount)
-        ).apply(instance, Part::new)).validate(Part::validate));
+        static final Codec<EffectPart> CODEC = Codec.lazyInitialized(() -> RecordCodecBuilder.<EffectPart>create(instance -> instance.group(
+                Type.CODEC.fieldOf("type").forGetter(EffectPart::type),
+                BuiltInRegistries.ATTRIBUTE.holderByNameCodec().optionalFieldOf("attribute").forGetter(EffectPart::attribute),
+                Codec.doubleRange(-1024.0, 1024.0).fieldOf("amount").forGetter(EffectPart::amount)
+        ).apply(instance, EffectPart::new)).validate(EffectPart::validate));
 
-        private DataResult<Part> validate() {
+        private DataResult<EffectPart> validate() {
             if ((type == Type.ATTRIBUTE) != attribute.isPresent()) {
                 return DataResult.error(() -> "A part of type attribute needs an attribute and no other part has one: " + this);
             }
@@ -98,32 +98,32 @@ public record MasterworkRules(List<Effect> all, List<Kind> kinds) {
      *
      * @param parts what the effect changes, at least one part
      */
-    public record Effect(List<Part> parts) {
+    public record Effect(List<EffectPart> parts) {
 
         static final Codec<Effect> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                Part.CODEC.listOf(1, 16).fieldOf("parts").forGetter(Effect::parts)
+                EffectPart.CODEC.listOf(1, 16).fieldOf("parts").forGetter(Effect::parts)
         ).apply(instance, Effect::new));
     }
 
     /**
-     * The pool of one kind of items.
+     * The effect pool of one kind of items. In the JSON file the list of these is the key {@code kinds}.
      *
      * @param tag     the item tag that makes an item of the kind
      * @param effects the effects the further hits draw from, may be empty
      */
-    public record Kind(TagKey<Item> tag, List<Effect> effects) {
+    public record KindPool(TagKey<Item> tag, List<Effect> effects) {
 
-        static final Codec<Kind> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                TagKey.codec(Registries.ITEM).fieldOf("tag").forGetter(Kind::tag),
-                Effect.CODEC.listOf(0, 64).fieldOf("effects").forGetter(Kind::effects)
-        ).apply(instance, Kind::new));
+        static final Codec<KindPool> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                TagKey.codec(Registries.ITEM).fieldOf("tag").forGetter(KindPool::tag),
+                Effect.CODEC.listOf(0, 64).fieldOf("effects").forGetter(KindPool::effects)
+        ).apply(instance, KindPool::new));
     }
 
-    private record FileContent(Optional<List<Effect>> all, Optional<List<Kind>> kinds) {
+    private record FileContent(Optional<List<Effect>> all, Optional<List<KindPool>> kinds) {
 
         static final Codec<FileContent> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                 Effect.CODEC.listOf(1, 64).optionalFieldOf("all").forGetter(FileContent::all),
-                Kind.CODEC.listOf(0, 64).optionalFieldOf("kinds").forGetter(FileContent::kinds)
+                KindPool.CODEC.listOf(0, 64).optionalFieldOf("kinds").forGetter(FileContent::kinds)
         ).apply(instance, FileContent::new));
     }
 
@@ -144,7 +144,7 @@ public record MasterworkRules(List<Effect> all, List<Kind> kinds) {
      * @return one effect per hit
      */
     public List<Effect> draw(ItemStack stack, int hits, RandomSource random) {
-        List<Effect> kind = kinds.stream().filter(candidate -> stack.is(candidate.tag())).findFirst().map(Kind::effects).orElse(List.of());
+        List<Effect> kind = kinds.stream().filter(candidate -> stack.is(candidate.tag())).findFirst().map(KindPool::effects).orElse(List.of());
         List<Effect> drawn = new ArrayList<>();
         for (int hit = 0; hit < hits; hit++) {
             List<Effect> pool = hit == 0 || kind.isEmpty() ? all : kind;
@@ -163,8 +163,8 @@ public record MasterworkRules(List<Effect> all, List<Kind> kinds) {
     public static MasterworkRules merge(List<JsonElement> files) {
         MasterworkRules merged = FALLBACK;
         for (JsonElement file : files) {
-            FileContent part = FileContent.CODEC.parse(JsonOps.INSTANCE, file).getOrThrow();
-            merged = new MasterworkRules(part.all().orElse(merged.all()), part.kinds().orElse(merged.kinds()));
+            FileContent content = FileContent.CODEC.parse(JsonOps.INSTANCE, file).getOrThrow();
+            merged = new MasterworkRules(content.all().orElse(merged.all()), content.kinds().orElse(merged.kinds()));
         }
         return merged;
     }
@@ -174,6 +174,7 @@ public record MasterworkRules(List<Effect> all, List<Kind> kinds) {
         event.addListener(ID, new Loader());
     }
 
+    // Stays a copy of the loader in MasteryRules: two copies are allowed, and the files differ in type, file name and error text.
     private static final class Loader extends SimplePreparableReloadListener<MasterworkRules> {
 
         @Override
