@@ -126,7 +126,7 @@ public final class ConversationGameTests {
         Entertainment e = settler.getWork().entertainment();
         Entertainment.Talk t = e.talk();
         settler.getWork().setEntertainment(new Entertainment(e.value(), e.decayedDay(), e.today(), e.todayDay(), e.tavernDay(), e.recordDay(), e.roundDay(), e.stageDay(),
-                new Entertainment.Talk(t.day(), t.count(), t.lastTick() - ticks, t.points())));
+                new Entertainment.Talk(t.day(), t.count(), t.lastTick() - ticks, t.points()), e.playerTalkDay()));
     }
 
     /** Lets one conversation run from the roll to its end: {@code a} rolls, {@code b} is the partner next to it. */
@@ -309,10 +309,10 @@ public final class ConversationGameTests {
         // The next day starts at 0 again.
         Entertainment e = a.getWork().entertainment();
         a.getWork().setEntertainment(new Entertainment(e.value(), e.decayedDay(), e.today(), e.todayDay(), e.tavernDay(), e.recordDay(), e.roundDay(), e.stageDay(),
-                new Entertainment.Talk(day - 1, 2, e.talk().lastTick() - 5000, e.talk().points())));
+                new Entertainment.Talk(day - 1, 2, e.talk().lastTick() - 5000, e.talk().points()), e.playerTalkDay()));
         Entertainment f = b.getWork().entertainment();
         b.getWork().setEntertainment(new Entertainment(f.value(), f.decayedDay(), f.today(), f.todayDay(), f.tavernDay(), f.recordDay(), f.roundDay(), f.stageDay(),
-                new Entertainment.Talk(day - 1, 2, f.talk().lastTick() - 5000, f.talk().points())));
+                new Entertainment.Talk(day - 1, 2, f.talk().lastTick() - 5000, f.talk().points()), f.playerTalkDay()));
         rolls.value = CONVERSATION;
         a.getWork().decideNow(level);
         helper.assertTrue(talking(a, b), "A new day: the count starts again");

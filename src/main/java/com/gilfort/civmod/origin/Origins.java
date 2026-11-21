@@ -8,6 +8,7 @@ import java.util.UUID;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.chronicle.Diary;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.registry.ModAttachments;
@@ -21,8 +22,8 @@ import net.minecraft.world.entity.npc.villager.Villager;
 
 /**
  * Gives a settler its origin when it arrives (vault {@code Systems/Settler Origin.md}): rolls it from the data of the settler's
- * race ({@link OriginRoller}), records who took it in, and names the settler from the rolled name parts. Every way a settler comes
- * in calls one of the methods here; nothing else writes an origin.
+ * race ({@link OriginRoller}), records who took it in, names the settler from the rolled name parts and writes the arrival entry
+ * into its diary. Every way a settler comes in calls one of the methods here; nothing else writes an origin.
  */
 public final class Origins {
 
@@ -118,6 +119,7 @@ public final class Origins {
         Optional<Rescuer> rescuer = arrival.channel().founderRescues() ? settlement.flatMap(found -> found.origins().founder()) : Optional.empty();
         SettlerOrigin origin = rolled.withRescuer(rescuer);
         settler.setOrigin(origin);
+        Diary.arrival(settler, origin);
         origin.name().map(OriginText::name).ifPresent(settler::setCustomName);
     }
 }

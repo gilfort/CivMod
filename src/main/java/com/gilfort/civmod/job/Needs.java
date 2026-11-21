@@ -23,7 +23,7 @@ import net.minecraft.world.level.block.Blocks;
 final class Needs {
 
     /** The food need: met while the settler is not in the hunger state. */
-    private static final Need FOOD = new Need() {
+    static final Need FOOD = new Need() {
         @Override
         public int tier() {
             return 1;
@@ -47,7 +47,7 @@ final class Needs {
     };
 
     /** The fire need: a hearth within reach of the place the settler sleeps at. */
-    private static final Need FIRE = new Need() {
+    static final Need FIRE = new Need() {
         @Override
         public int tier() {
             return 1;
@@ -77,7 +77,7 @@ final class Needs {
     };
 
     /** The bed need: the settler sleeps in its own real bed, not on straw at the camp. */
-    private static final Need BED = new Need() {
+    static final Need BED = new Need() {
         @Override
         public int tier() {
             return 2;

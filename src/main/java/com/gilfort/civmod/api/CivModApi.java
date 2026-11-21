@@ -1,11 +1,13 @@
 package com.gilfort.civmod.api;
 
+import java.util.List;
 import java.util.function.Supplier;
 
 import org.jetbrains.annotations.ApiStatus;
 
 import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.block.StarterTools;
+import com.gilfort.civmod.chronicle.Diary;
 import com.gilfort.civmod.job.BiomeBonuses;
 import com.gilfort.civmod.npc.Settler;
 
@@ -40,6 +42,10 @@ public final class CivModApi {
     /** Key of the {@code civmod:job} registry: static, filled at mod load and synced to clients. */
     public static final ResourceKey<Registry<Job>> JOB_REGISTRY = ResourceKey.createRegistryKey(Identifier.fromNamespaceAndPath(MOD_ID, "job"));
 
+    /** Key of the {@code civmod:diary_entry_type} registry: static, filled at mod load and synced to clients. */
+    public static final ResourceKey<Registry<DiaryEntryType>> DIARY_ENTRY_TYPE_REGISTRY = ResourceKey
+            .createRegistryKey(Identifier.fromNamespaceAndPath(MOD_ID, "diary_entry_type"));
+
     private CivModApi() {
     }
 
@@ -49,6 +55,28 @@ public final class CivModApi {
      */
     public static DeferredRegister<Job> jobs(String namespace) {
         return DeferredRegister.create(JOB_REGISTRY, namespace);
+    }
+
+    /**
+     * @param namespace the namespace of the diary entry types (the addon's mod id)
+     * @return a deferred register for diary entry types in that namespace; attach it to the mod event bus
+     */
+    public static DeferredRegister<DiaryEntryType> diaryEntryTypes(String namespace) {
+        return DeferredRegister.create(DIARY_ENTRY_TYPE_REGISTRY, namespace);
+    }
+
+    /**
+     * Writes an entry into the diary of a settler (vault {@code Systems/Chronicle.md}), dated with the settler day of now. A diary
+     * holds 20 entries; when it is full the oldest entry that is not {@link DiaryEntryType#asPermanent() permanent} drops out. It
+     * works on a loaded settler on the server; a settler that is not loaded keeps its diary as it is.
+     *
+     * @param entity a settler (another entity has no diary)
+     * @param type   the type of the entry, registered in {@link #diaryEntryTypes}
+     * @param params the text parameters the type builds its words from
+     * @return whether the entry was written
+     */
+    public static boolean addDiaryEntry(Entity entity, Supplier<? extends DiaryEntryType> type, List<String> params) {
+        return entity instanceof Settler settler && Diary.add(settler, type.get(), params);
     }
 
     /**

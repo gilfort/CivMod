@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:chronicle_diary_cap_keeps_arrival",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

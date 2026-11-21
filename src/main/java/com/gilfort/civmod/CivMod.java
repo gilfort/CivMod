@@ -8,6 +8,7 @@ import com.gilfort.civmod.registry.ModBlockEntityTypes;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModCreativeModeTabs;
 import com.gilfort.civmod.registry.ModDataComponents;
+import com.gilfort.civmod.registry.ModDiaryEntryTypes;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModItems;
 import com.gilfort.civmod.registry.ModJobs;
@@ -53,6 +54,7 @@ public final class CivMod {
         ModAttachments.register(modEventBus);
         ModEntityTypes.register(modEventBus);
         ModJobs.register(modEventBus);
+        ModDiaryEntryTypes.register(modEventBus);
         ModRecipes.register(modEventBus);
 
         modContainer.registerConfig(ModConfig.Type.SYNCED, CivModConfig.SPEC);

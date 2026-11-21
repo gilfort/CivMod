@@ -17,7 +17,8 @@ public final class OriginText {
      * entry adds the text under its key.
      *
      * @param slot the slot: {@code upbringing}, {@code turning_point}, {@code reason}, {@code place}, {@code surname.trade},
-     *             {@code surname.place}, {@code surname.trait} or {@code surname.clan}
+     *             {@code surname.place}, {@code surname.trait}, {@code surname.clan}, {@code trade} (the trade as a noun) or
+     *             {@code job} (what a Job is as the object of "drawn to")
      * @param id   the entry id
      * @return the language key
      */
@@ -49,7 +50,8 @@ public final class OriginText {
         };
     }
 
-    private static Component idKey(String slot, String id) {
+    /** The translatable text of an entry id given as a string; the plain string if it is no id. */
+    static Component idKey(String slot, String id) {
         Identifier parsed = Identifier.tryParse(id);
         return parsed == null ? Component.literal(id) : Component.translatable(key(slot, parsed));
     }

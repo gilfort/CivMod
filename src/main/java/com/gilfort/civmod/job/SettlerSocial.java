@@ -225,7 +225,7 @@ final class SettlerSocial {
         return work.interruptible(level) && !work.hasPendingCatchUp() && work.social().mayConverse(level, rules);
     }
 
-    private void greet(Entity other, long now) {
+    void greet(Entity other, long now) {
         greeted.put(other.getUUID(), now);
         if (other instanceof Settler neighbour) {
             neighbour.getWork().social().greeted.put(settler.getUUID(), now);
