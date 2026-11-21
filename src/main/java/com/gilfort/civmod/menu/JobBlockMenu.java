@@ -267,8 +267,9 @@ public class JobBlockMenu extends CivMenu {
     /**
      * Shift + left click: on the Storage tab it moves between the player inventory and the JobBlock storage; on any other
      * tab the active tab decides what it does with an inventory item ({@link JobBlockTab#quickMove}, e.g. Station Types
-     * puts an unlock item into a free slot). Only the active tab sees the click, so a click never reaches the slot of a
-     * tab that is not open.
+     * puts an unlock item into a free slot, the Clerk's Delivery Orders put a filled slip into the first free slip slot).
+     * On a slot of the open tab (a slip slot) the item moves into the player inventory. Only the active tab sees the
+     * click, so a click never reaches the slot of a tab that is not open.
      */
     @Override
     public ItemStack quickMoveStack(Player player, int slotIndex) {
@@ -280,6 +281,8 @@ public class JobBlockMenu extends CivMenu {
             if (slot.container instanceof Inventory) {
                 activeTab().quickMove(slot.getItem());
                 slot.setChanged();
+            } else if (slot.isActive()) {
+                moveToInventory(slot);
             }
             return ItemStack.EMPTY;
         }
@@ -297,6 +300,14 @@ public class JobBlockMenu extends CivMenu {
             slot.setChanged();
         }
         return original;
+    }
+
+    /** Moves the item of an own slot of the open tab into the player inventory; it stays in its slot if nothing fits. */
+    private void moveToInventory(Slot slot) {
+        ItemStack stack = slot.getItem();
+        if (moveItemStackTo(stack, storageSlots, storageSlots + Inventory.INVENTORY_SIZE, true) && stack.isEmpty()) {
+            slot.setByPlayer(ItemStack.EMPTY);
+        }
     }
 
     @Override

@@ -34,6 +34,7 @@ public final class DeliveryOrdersTab extends JobBlockTab {
     private static final int DATA_COUNT = 1;
 
     private final ContainerData data = new SimpleContainerData(DATA_COUNT);
+    private List<Slot> orderSlots = List.of();
 
     DeliveryOrdersTab() {
     }
@@ -70,7 +71,22 @@ public final class DeliveryOrdersTab extends JobBlockTab {
         for (int slot = 0; slot < DeliveryOrders.MAX_SLOTS; slot++) {
             slots.add(new OrderSlot(container, slot, SLOTS_X + slot % COLUMNS * 18, SLOTS_Y + slot / COLUMNS * 18, index()));
         }
+        orderSlots = List.copyOf(slots);
         return slots;
+    }
+
+    /**
+     * Puts the clicked slip into the first free slot in use. Anything that is not a filled slip stays, and so does a slip
+     * when every slot in use is taken.
+     */
+    @Override
+    void quickMove(ItemStack stack) {
+        for (Slot slot : orderSlots) {
+            if (!slot.hasItem() && slot.mayPlace(stack)) {
+                slot.setByPlayer(stack.split(1));
+                return;
+            }
+        }
     }
 
     /**
