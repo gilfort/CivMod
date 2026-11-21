@@ -1,24 +1,35 @@
 package com.gilfort.civmod.gametest;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.logistics.DeliverySlip;
 import com.gilfort.civmod.logistics.ItemKey;
+import com.gilfort.civmod.menu.DeliveryOrdersTab;
 import com.gilfort.civmod.menu.DeliverySlipMenu;
+import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.StationTypesTab;
 import com.gilfort.civmod.menu.StationTypesTabData;
+import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModDataComponents;
 import com.gilfort.civmod.registry.ModItems;
+import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.DeliveryOrders;
 import com.gilfort.civmod.settlement.StationTypes;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
@@ -49,6 +60,7 @@ public final class ShiftClickGameTests {
             register(helper, "shift_click_other_tab", ShiftClickGameTests::otherTab);
             register(helper, "shift_click_slip_filter", ShiftClickGameTests::slipFilter);
             register(helper, "shift_click_station_types_fits", ShiftClickGameTests::fits);
+            register(helper, "shift_click_clerk_orders", ShiftClickGameTests::clerkOrders);
         });
     }
 
@@ -119,6 +131,85 @@ public final class ShiftClickGameTests {
         menu.quickMoveStack(player, slot);
         helper.assertTrue(menu.slip().orElseThrow().filter().size() == 2, "A second item takes the next slot");
         helper.succeed();
+    }
+
+    /**
+     * The Clerk's Delivery Orders tab (#299): a filled slip goes into the first free slot in use, anything else stays, a
+     * full tab keeps the slip in the inventory, and a click on a slip slot gives the slip back to the inventory.
+     */
+    private static void clerkOrders(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.CLERK_BLOCK.get());
+        BlockPos clerk = helper.absolutePos(new BlockPos(1, 1, 1));
+        Player player = helper.makeMockPlayer(GameType.SURVIVAL);
+        JobBlockMenu menu = new JobBlockMenu(1, player.getInventory(), (JobBlockEntity) level.getBlockEntity(clerk), JobBlockInfo.of(ModJobs.CLERK.get(), 1));
+        DeliveryOrdersTab tab = menu.tab(DeliveryOrdersTab.class).orElseThrow();
+        menu.setActiveTab(tab.index());
+        int inUse = tab.slots();
+        List<Slot> orders = menu.slots.stream().filter(slot -> slot.container.getContainerSize() == DeliveryOrders.MAX_SLOTS).toList();
+        int inventorySlot = menuSlot(menu, player);
+
+        ItemStack first = filledSlip(clerk, 1);
+        player.getInventory().setItem(INVENTORY_SLOT, first.copy());
+        menu.quickMoveStack(player, inventorySlot);
+        helper.assertTrue(sameSlip(orders.get(0).getItem(), first) && player.getInventory().getItem(INVENTORY_SLOT).isEmpty(),
+                "A filled slip goes into the first slip slot");
+        player.getInventory().setItem(INVENTORY_SLOT, filledSlip(clerk, 2));
+        menu.quickMoveStack(player, inventorySlot);
+        helper.assertTrue(orders.get(1).hasItem() && !orders.get(2).hasItem(), "The next slip takes the next free slot");
+
+        ItemStack blank = new ItemStack(ModItems.DELIVERY_SLIP.get());
+        blank.set(ModDataComponents.DELIVERY_SLIP.get(), DeliverySlip.blank());
+        for (ItemStack other : List.of(new ItemStack(Items.PAPER), blank)) {
+            player.getInventory().setItem(INVENTORY_SLOT, other);
+            menu.quickMoveStack(player, inventorySlot);
+            helper.assertTrue(!orders.get(2).hasItem() && player.getInventory().getItem(INVENTORY_SLOT) == other,
+                    "Not a filled slip, stays in the inventory: " + other);
+        }
+
+        for (int slot = 2; slot < inUse; slot++) {
+            orders.get(slot).set(filledSlip(clerk, slot + 1));
+        }
+        ItemStack extra = filledSlip(clerk, inUse + 1);
+        player.getInventory().setItem(INVENTORY_SLOT, extra.copy());
+        menu.quickMoveStack(player, inventorySlot);
+        helper.assertTrue(ItemStack.matches(player.getInventory().getItem(INVENTORY_SLOT), extra) && !orders.get(inUse).hasItem(),
+                "Every slot in use taken: the slip stays in the inventory");
+
+        player.getInventory().setItem(INVENTORY_SLOT, ItemStack.EMPTY);
+        menu.quickMoveStack(player, orders.get(0).index);
+        helper.assertTrue(!orders.get(0).hasItem() && slipsInInventory(player, first) == 1, "A click on a slip slot gives the slip back");
+
+        for (int slot = 0; slot < Inventory.INVENTORY_SIZE; slot++) {
+            player.getInventory().setItem(slot, new ItemStack(Items.STONE, 64));
+        }
+        menu.quickMoveStack(player, orders.get(1).index);
+        helper.assertTrue(orders.get(1).hasItem(), "A full inventory keeps the slip in its slot");
+        helper.succeed();
+    }
+
+    /** A slip with a source and a target, so it counts as an order; {@code seed} makes it differ from the others. */
+    private static ItemStack filledSlip(BlockPos source, int seed) {
+        DeliverySlip slip = new DeliverySlip(new UUID(0L, seed), Optional.of(source), List.of(source.above(seed)), false, List.of(),
+                DeliverySlip.Variant.NEAREST, 0, 0, DeliverySlip.Status.OK);
+        ItemStack stack = new ItemStack(ModItems.DELIVERY_SLIP.get());
+        stack.set(ModDataComponents.DELIVERY_SLIP.get(), slip);
+        return stack;
+    }
+
+    /** Whether both stacks hold the same slip; the Clerk may update a slip's status, so only the id counts. */
+    private static boolean sameSlip(ItemStack stack, ItemStack slip) {
+        return DeliveryOrders.slip(stack).map(DeliverySlip::id).equals(DeliveryOrders.slip(slip).map(DeliverySlip::id));
+    }
+
+    private static int slipsInInventory(Player player, ItemStack slip) {
+        int count = 0;
+        for (int slot = 0; slot < Inventory.INVENTORY_SIZE; slot++) {
+            if (sameSlip(player.getInventory().getItem(slot), slip)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     /** The Station Types tab accepts the unlock items that are not in a slot yet, and nothing else. */
