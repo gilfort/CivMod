@@ -399,7 +399,7 @@ public final class VillagerConversion {
         settler.setRace(Races.HUMAN);
         settler.setSkin(random.nextInt(SettlerSkins.COUNT));
         Component name = villager.hasCustomName() ? villager.getCustomName()
-                : Component.literal(RaceNames.pick(RaceNames.get(Races.HUMAN).npc(), SettlerSpawner.usedNames(level, settlement), random).orElse("Settler"));
+                : Component.literal(SettlerSpawner.randomName(Races.HUMAN, SettlerSpawner.usedNames(level, settlement), random));
         settler.setCustomName(name);
         rollSkills(settler.getSkills(), villager, random);
         settler.joinSettlement(data, settlement);

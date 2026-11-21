@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:settler_spawn_egg_homeless_rules",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 4
+}

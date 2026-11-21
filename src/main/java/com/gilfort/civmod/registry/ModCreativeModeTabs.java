@@ -7,6 +7,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
@@ -44,5 +45,13 @@ public final class ModCreativeModeTabs {
      */
     public static void register(IEventBus modEventBus) {
         CREATIVE_MODE_TABS.register(modEventBus);
+        modEventBus.addListener(ModCreativeModeTabs::addSpawnEggs);
+    }
+
+    /** Lists the Settler spawn egg in the vanilla spawn egg tab too. */
+    private static void addSpawnEggs(BuildCreativeModeTabContentsEvent event) {
+        if (event.getTabKey().equals(CreativeModeTabs.SPAWN_EGGS)) {
+            event.accept(ModItems.SETTLER_SPAWN_EGG.get());
+        }
     }
 }
