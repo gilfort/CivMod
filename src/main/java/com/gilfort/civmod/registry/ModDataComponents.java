@@ -5,6 +5,7 @@ import java.util.function.Supplier;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.item.ScrollBinding;
 import com.gilfort.civmod.logistics.DeliverySlip;
+import com.gilfort.civmod.mastery.MasterworkData;
 import com.gilfort.civmod.settlement.SettlementRules;
 import com.mojang.serialization.Codec;
 
@@ -46,6 +47,10 @@ public final class ModDataComponents {
     /** The order written on a Delivery Slip (vault {@code Jobs/Deliveryman.md}); a plain slip has none yet. */
     public static final Supplier<DataComponentType<DeliverySlip>> DELIVERY_SLIP = DATA_COMPONENTS.registerComponentType("delivery_slip",
             builder -> builder.persistent(DeliverySlip.CODEC).networkSynchronized(DeliverySlip.STREAM_CODEC));
+
+    /** The effects and the maker of a masterwork (vault {@code Systems/Producing Jobs.md}); the other masterwork components are worked out from it. */
+    public static final Supplier<DataComponentType<MasterworkData>> MASTERWORK = DATA_COMPONENTS.registerComponentType("masterwork",
+            builder -> builder.persistent(MasterworkData.CODEC).networkSynchronized(MasterworkData.STREAM_CODEC));
 
     private ModDataComponents() {
     }

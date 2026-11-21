@@ -60,6 +60,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.item.Item;
@@ -136,6 +137,7 @@ public final class SettlerWork {
     private final Map<JobCategory, CategoryLoop> loops = new EnumMap<>(JobCategory.class);
     private final MissionLoop missions;
     private final ClerkLoop clerks;
+    private final ProducingLoop producing;
     /** The Deliveryman's loop: a second Logistics loop beside the Clerk's. */
     private final DeliverymanLoop deliverymen;
     private final PriestLoop priests;
@@ -196,8 +198,9 @@ public final class SettlerWork {
         loops.put(JobCategory.MISSION, missions);
         clerks = new ClerkLoop(this);
         loops.put(JobCategory.LOGISTICS, clerks);
-        // The Craftsperson is the only Producing Job so far.
-        loops.put(JobCategory.PRODUCING, new ProducingLoop(this));
+        // All Producing Jobs work through this one loop.
+        producing = new ProducingLoop(this);
+        loops.put(JobCategory.PRODUCING, producing);
         deliverymen = new DeliverymanLoop(this);
         priests = new PriestLoop(this);
         services = new ServiceLoop(this);
@@ -950,6 +953,15 @@ public final class SettlerWork {
      */
     public void scriptSocialRolls(@Nullable DoubleSupplier rolls) {
         social.script(rolls);
+    }
+
+    /**
+     * Replaces the random source of the Mastery rolls of the Producing Jobs (tests).
+     *
+     * @param random the source to roll with, null for the settler's own
+     */
+    public void scriptMasteryRandom(@Nullable RandomSource random) {
+        producing.scriptMastery(random);
     }
 
     /**

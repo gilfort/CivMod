@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:mastery_masterwork_counts_as_plain_item",
+  "max_ticks": 400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

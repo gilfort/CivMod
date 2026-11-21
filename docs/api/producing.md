@@ -269,6 +269,95 @@ Only checked patterns are worked. Each library has its own checkmark limit; only
 
 A checked pattern set to "Always produce" in the pattern editor is worked without a request, for every Producing Job and without a profile hook. It is the lowest priority: only while the Job has no request it has a checked pattern for. Such patterns take turns, each round with its own "Produce at once" (crafts per round, as far as materials, buffer and fuel allow); the result goes to the Home Clerk (no Home Clerk: the own drop-off). A pattern without inputs, or whose output reached an active Max rule of the Home Clerk, passes its turn without an error status; without a Max rule it runs until Clerk and drop-off are full ("Drop-off full"). Nothing is reserved: inputs stay usable for everyone until they are taken. The turn is not saved. Setting the box checks the pattern, so the checkmark limit applies. Innate recipes can be set as well. A recipe with [`drops`](#drops) runs only here.
 
+## Mastery
+
+A Producing Job has Mastery when it has a parent: the Job you register with `.parent(...)` (see [Register a Producing Job](#register-a-producing-job)). Nothing else is needed, there is no profile hook or flag. The Craftsperson and the Smelter have no parent and never roll; the Specializations of CivMod and every addon Job with a parent do.
+
+On every finished craft the settler rolls. The chance is its effective skill in the Job times `chance_per_level`, at most `max_chance` (by default skill ÷ 10 %: 0.1 % at level 1, 10 % at level 100). After a hit it rolls again with the same chance, up to `max_hits` hits (3). What the hits do depends on the recipe:
+
+- **A recipe with at least `saving_min_ingredients` ingredient items (3), counts included.** The hits save material: ingredient items × `saving_share` (0.13) × hits, rounded down, at least `saving_minimum` (1), and never all of them. The saved items are picked at random among the ingredient items. They are not used up, so they stay in the buffer and leave no remainder (a saved milk bucket makes no empty bucket).
+- **A smaller recipe** (a furnace, smoker or stonecutting recipe, a brewing step, a small innate recipe). Every hit adds the recipe's result once more. The extra items go into the buffer and are delivered with the rest; the buffer takes them even when it is full, a craft overshoots its capacity by at most three results.
+- **A recipe whose result has durability** (`MAX_DAMAGE` above 0: tools, weapons, armour, clothing, bows, shields) makes a [masterwork](#masterworks) instead of a saving. Reversible recipes do not matter here, only the result does.
+- **Reversible recipes** get neither saving nor extra output. A recipe is reversible when its result is an ingredient of another recipe whose result is one of its own ingredients (nine iron ingots make an iron block, an iron block makes nine ingots). The mod finds them once per datapack reload, over every recipe it can lay out in a pattern, innate recipes included. There is no tag to mark more by hand. A pattern that names no recipe never rolls.
+- **A recipe that only draws** (an innate recipe with `drops` and no `result`, like the Sifter's) has no result to improve and is left out.
+
+Live play shows a saving or extra output as a few particles at the settler, with no message. A masterwork also gets a sound and a message (see below). Catch-up rolls the same way through the same code and shows nothing.
+
+The values are the file `data/<namespace>/civmod_mastery/rules.json`; the files of all packs are merged, later values override single fields, and a missing field keeps its default. A file with a value out of range is rejected as a whole with a log error and the defaults stay:
+
+```json
+{
+  "chance_per_level": 0.001,
+  "max_chance": 0.1,
+  "max_hits": 3,
+  "saving_share": 0.13,
+  "saving_minimum": 1,
+  "saving_min_ingredients": 3
+}
+```
+
+| Field | Range | Default |
+|---|---|---|
+| `chance_per_level` | 0 to 1 | 0.001 |
+| `max_chance` | 0 to 1 | 0.1 |
+| `max_hits` | 0 to 16 | 3 |
+| `saving_share` | 0 to 1 | 0.13 |
+| `saving_minimum` | 0 to 64 | 1 |
+| `saving_min_ingredients` | 1 to 64 | 3 |
+
+The skill is the effective level the JobBlock's level caps (see [Drops](#drops)), the same one the Sifter's draw uses. Mastery changes no item identity: an item made with a saving or extra output is a plain item.
+
+### Masterworks
+
+Every hit on a craft whose result has durability is one effect of a masterwork. A hit draws freely: the pool `all` and the pool of the item's kind are one list, and each effect in it has the same chance. Nothing is guaranteed, so with the default file a pickaxe's hit is as likely mining speed as durability, and every combination of effects can come up. The same effect drawn twice adds up, but an effect listed in both `all` and a kind counts as one entry in the list, so it is no more likely than the others. A kind is an item tag; the first kind in the list whose tag holds the item counts, so list an item that is in two tags (an axe is a tool and a weapon) in the kind you want it to have. An item of no kind, and a kind with no effects, draw from `all` alone, so a bow with three hits has durability +75 %.
+
+The pools are the file `data/<namespace>/civmod_mastery/masterworks.json`: `all` holds the effects every item can get, each kind the effects only its items can get on top. The files of all packs are merged, a later file replaces `all` or `kinds` as a whole when it sets them, and a file that does not parse is rejected with a log error (the fallback is durability +25 % for all items and no kinds). The default file:
+
+```json
+{
+  "all": [
+    { "parts": [ { "type": "durability", "amount": 0.25 } ] }
+  ],
+  "kinds": [
+    {
+      "tag": "civmod:masterwork/tools",
+      "effects": [ { "parts": [ { "type": "mining_speed", "amount": 0.1 } ] } ]
+    },
+    {
+      "tag": "civmod:masterwork/weapons",
+      "effects": [ { "parts": [ { "type": "attribute", "attribute": "minecraft:attack_damage", "amount": 1.0 } ] } ]
+    },
+    {
+      "tag": "civmod:masterwork/armour",
+      "effects": [
+        {
+          "parts": [
+            { "type": "attribute", "attribute": "minecraft:armor", "amount": 1.0 },
+            { "type": "attribute", "attribute": "minecraft:armor_toughness", "amount": 0.5 }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+An effect is a list of parts that come together (armour +1 and toughness +0.5 are one effect). A part is one of:
+
+| `type` | Fields | What it does |
+|---|---|---|
+| `durability` | `amount`, above 0 | The item's own durability times 1 + sum of the amounts (0.25 and 0.25 make +50 %), rounded down. |
+| `mining_speed` | `amount`, above 0 | Raises the speed of every `tool` rule of the item by the same share. The blocks and drops of the rules stay, so the tool tier stays. The default mining speed of the tool is not changed. |
+| `attribute` | `attribute`, `amount` | Adds the sum of the amounts as one modifier (add value) to the item's own attribute modifiers, which stay. The modifier counts in the slot of the item's own modifier of that attribute, else in the slot the item is worn in, else in the main hand. |
+
+The tags of the default kinds are `civmod:masterwork/tools` (pickaxes, axes, shovels, hoes), `civmod:masterwork/weapons` (swords, spears) and `civmod:masterwork/armour` (all armour and the clothing tags of CivMod). Replace or extend them with an item tag file like any other tag.
+
+A masterwork carries its effects and the name of its maker in one data component, `civmod:masterwork`. The durability, the tool speed, the attribute modifiers, the name, the rarity and the lore are worked out from that component and the item's own defaults, never from what the stack carries, so the bonuses always sit on top of the item's own stats. A smithing upgrade (a netherite upgrade of a masterwork diamond pickaxe) keeps the component, and the new item gets the same bonuses on top of its own durability, mining speeds and attributes. A hit on the upgrade adds its effect to the stored ones and the first maker stays. A craft still has at most three hits, but the effects add up over the upgrades, and the rarity follows the total number of effects. A settler works the bonuses out over the new item on every craft it finishes. For a player at the vanilla smithing table NeoForge has no event while the result is offered, so the bonuses are worked out when the player takes the result (a click or a shift click); until then the table's preview shows the old item's durability and name. Its look is fixed: the name "Masterwork" plus the item name through `ITEM_NAME` (a rename in the anvil goes to `CUSTOM_NAME` and keeps the prefix underneath), the rarity by the number of effects (one is yellow, two aqua, three or more light purple) and the lore "Made by" plus the maker's name, then one line each for the durability and the mining speed, which vanilla does not show. Attribute bonuses show through vanilla's own tooltip.
+
+In live play a masterwork plays a sound and particles at the settler and sends an action bar message to every player within 24 blocks ("Jacob made a Masterwork Iron Pickaxe!"). Catch-up makes the masterwork but shows nothing and sends no message.
+
+None of the masterwork components, the `civmod:masterwork` component included, is a [relevant component](#relevant-components), so the Clerk, stock rules, requests, patterns, the tool tier and recipe ingredients treat a masterwork as the plain item. Settlers do not prefer masterworks when they choose a tool: the choice looks at the tier and at enchantments only. Anvil, Mending and enchanting leave the components alone.
+
 ## Not part of the profile
 
 Request picking, chain resolution, reservations, input and result deliveries, catch-up, "Always produce", the Patterns tab and the Fuel tab are CivMod's loop and work the same for every Producing Job.

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:mastery_masterwork_upgrade_with_hits_adds",
+  "max_ticks": 400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -30,6 +30,7 @@ import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.ReservedFor;
 import com.gilfort.civmod.logistics.Stock;
+import com.gilfort.civmod.mastery.Mastery;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.Deliveries;
@@ -53,6 +54,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.RandomSource;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.InteractionHand;
@@ -118,6 +120,7 @@ final class ProducingLoop implements CategoryLoop {
     private final SettlerWork shell;
     private final Settler settler;
     private final Fatigue fatigue = new Fatigue();
+    private final Mastery mastery;
     /** Where the current fetch or delivery step is made. */
     private ClerkStorage.@Nullable Visit visit;
     private int swingTimer;
@@ -131,6 +134,16 @@ final class ProducingLoop implements CategoryLoop {
     ProducingLoop(SettlerWork shell) {
         this.shell = shell;
         this.settler = shell.settler();
+        this.mastery = new Mastery(settler.getRandom());
+    }
+
+    /**
+     * Replaces the random source of the Mastery rolls (tests).
+     *
+     * @param random the source to roll with, null for the settler's own
+     */
+    void scriptMastery(@Nullable RandomSource random) {
+        mastery.script(random);
     }
 
     // ---------------------------------------------------------------- decisions
@@ -1030,20 +1043,17 @@ final class ProducingLoop implements CategoryLoop {
             release(level, job.jobBlock());
             return false;
         }
-        List<ItemStack> consumed = new ArrayList<>();
-        for (Ingredient input : step.inputs()) {
-            ItemStack one = buffer.takeOne(input);
-            if (one.isEmpty()) {
-                consumed.forEach(buffer::add);
-                fail(level, job.jobBlock(), round, List.of(new Request.Missing(PatternRecipes.representativeKey(input), 1)), moment.now());
-                return false;
-            }
-            consumed.add(one);
+        Optional<List<ItemStack>> taken = takeInputs(level, job, round, step, buffer, moment.now());
+        if (taken.isEmpty()) {
+            return false;
         }
-        List<ItemStack> leftovers = PatternRecipes.remainders(consumed);
-        round.addRemainders(leftovers);
+        List<ItemStack> consumed = taken.get();
         Pattern pattern = step.pattern();
         Optional<JobCraftingRecipe> innate = InnateRecipes.recipe(level, pattern);
+        Mastery.Boost boost = mastery.roll(level, new Mastery.Craft(job.jobType(), shell.effectiveLevel(job), pattern,
+                innate.filter(JobCraftingRecipe::drawsOnly).isPresent()), consumed, buffer);
+        List<ItemStack> leftovers = PatternRecipes.remainders(consumed);
+        round.addRemainders(leftovers);
         ExecutionOutcome made = ExecutionOutcome.of(innate, pattern, shell.effectiveLevel(job), consumed, settler.getRandom());
         ItemStack result = made.result();
         Optional<RecipeHolder<?>> recipe = recipe(level, pattern);
@@ -1053,7 +1063,9 @@ final class ProducingLoop implements CategoryLoop {
                 ? profile(job).execute(level, recipe.get(), result, List.copyOf(consumed), new LibraryRestPoints(level, job.jobBlock(), job.jobType()))
                 // The recipe is gone (datapack change): the pattern's own output, as recorded.
                 : Stream.concat(Stream.of(result), leftovers.stream()).toList();
-        produced.forEach(buffer::add);
+        // Mastery changes the produced stacks in place and adds its extra output; the buffer keeps what is over its capacity.
+        List<ItemStack> boosted = moment.live() ? boost.finishLive(level, settler, produced, result) : boost.finish(settler, produced, result);
+        boosted.forEach(buffer::add);
         made.drawn().forEach(stack -> {
             buffer.add(stack);
             round.drawn.add(stack.getItem());
@@ -1064,15 +1076,38 @@ final class ProducingLoop implements CategoryLoop {
         shell.collectXp(level, xp, worn.orElse(ItemStack.EMPTY));
         shell.gainExp(level, job, job.jobType().baseExp() * site.level(), site.skillCap());
         innate.flatMap(JobCraftingRecipe::stationAfter).ifPresent(after -> shell.workplace(job.jobBlock()).replaceStation(level, execution.station(), after));
+        finishExecution(round, step, moment.live());
+        return true;
+    }
+
+    /**
+     * @return the stacks one execution takes out of the buffer, one per input; empty if an input is gone: what was taken goes
+     *         back and the round fails with the missing item
+     */
+    private Optional<List<ItemStack>> takeInputs(ServerLevel level, SettlerJob job, Round round, CraftPlan.Step step, JobBuffer buffer, long now) {
+        List<ItemStack> consumed = new ArrayList<>();
+        for (Ingredient input : step.inputs()) {
+            ItemStack one = buffer.takeOne(input);
+            if (one.isEmpty()) {
+                consumed.forEach(buffer::add);
+                fail(level, job.jobBlock(), round, List.of(new Request.Missing(PatternRecipes.representativeKey(input), 1)), now);
+                return Optional.empty();
+            }
+            consumed.add(one);
+        }
+        return Optional.of(consumed);
+    }
+
+    /** Counts the execution; the step ends after its last craft. Live play shows the item in the settler's hand. */
+    private void finishExecution(Round round, CraftPlan.Step step, boolean live) {
         if (++round.crafted >= step.crafts()) {
             round.step++;
             round.crafted = 0;
         }
-        if (moment.live()) {
-            shell.hold(pattern.output().toStack());
+        if (live) {
+            shell.hold(step.pattern().output().toStack());
             handTimer = HAND_TICKS;
         }
-        return true;
     }
 
     /**

@@ -10,6 +10,8 @@ import java.util.Optional;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.api.JobCraftingRecipe;
+
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -121,6 +123,16 @@ public final class PatternRecipes {
      */
     public static Optional<RecipeHolder<?>> holder(ServerLevel level, ResourceKey<Recipe<?>> id) {
         return level.recipeAccess().byKey(id);
+    }
+
+    /**
+     * @param level the level
+     * @return every recipe of the server that a pattern can follow, innate recipes ({@code civmod:job_crafting}) left out
+     *         (see {@link InnateRecipes}); one pass over all recipes, for work that runs once per recipe set
+     */
+    public static List<Shape> all(ServerLevel level) {
+        return level.recipeAccess().recipeMap().values().stream().filter(holder -> !(holder.value() instanceof JobCraftingRecipe))
+                .map(holder -> shape(level, holder)).flatMap(Optional::stream).toList();
     }
 
     /**
