@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:mastery_gear_gets_nothing_yet",
+  "max_ticks": 400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

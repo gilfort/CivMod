@@ -276,14 +276,14 @@ public final class SmelterSpecializationGameTests {
 
     // ---------------------------------------------------------------- setup
 
-    private record Setup(BlockPos clerk, BlockPos block, SettlementData data, Settlement settlement) {
+    record Setup(BlockPos clerk, BlockPos block, SettlementData data, Settlement settlement) {
     }
 
     /**
      * A working Clerk whose storage holds the items and a level-2 Smelter JobBlock with the Specialization unlocked,
      * one station and a checked pattern of the recipe.
      */
-    private static Setup setup(GameTestHelper helper, Job job, Item unlock, Block station, String recipe, Item input, List<ItemStack> stock) {
+    static Setup setup(GameTestHelper helper, Job job, Item unlock, Block station, String recipe, Item input, List<ItemStack> stock) {
         ServerLevel level = helper.getLevel();
         BlockPos clerk = StockRuleGameTests.workingClerk(helper);
         SettlementData data = SettlementData.get(level);
@@ -303,7 +303,7 @@ public final class SmelterSpecializationGameTests {
     }
 
     /** A settler working the Specialization at the setup's JobBlock. */
-    private static Settler worker(GameTestHelper helper, Setup setup, Job job) {
+    static Settler worker(GameTestHelper helper, Setup setup, Job job) {
         Settler settler = ClerkGameTests.settler(helper, new BlockPos(2, 1, 7), setup.data(), setup.settlement());
         settler.setCustomName(Component.literal("Ida"));
         settler.getFood().setMorningDay(Math.floorDiv(helper.getLevel().getOverworldClockTime(), 24000L));
@@ -317,7 +317,7 @@ public final class SmelterSpecializationGameTests {
         return JobPlaces.lines(StationTypeGameTests.block(level, pos)).stream().map(JobPlaces.Line::job).toList();
     }
 
-    private static void cleanUp(Setup setup, Settler settler) {
+    static void cleanUp(Setup setup, Settler settler) {
         TestAssignments.unassign(setup.data(), setup.clerk());
         TestAssignments.unassign(setup.data(), setup.block());
         settler.discard();
