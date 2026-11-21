@@ -30,6 +30,7 @@ import com.gilfort.civmod.logistics.Pattern;
 import com.gilfort.civmod.logistics.Request;
 import com.gilfort.civmod.logistics.ReservedFor;
 import com.gilfort.civmod.logistics.Stock;
+import com.gilfort.civmod.mastery.Mastery;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.Deliveries;
@@ -118,6 +119,7 @@ final class ProducingLoop implements CategoryLoop {
     private final SettlerWork shell;
     private final Settler settler;
     private final Fatigue fatigue = new Fatigue();
+    private final Mastery mastery;
     /** Where the current fetch or delivery step is made. */
     private ClerkStorage.@Nullable Visit visit;
     private int swingTimer;
@@ -131,6 +133,14 @@ final class ProducingLoop implements CategoryLoop {
     ProducingLoop(SettlerWork shell) {
         this.shell = shell;
         this.settler = shell.settler();
+        this.mastery = new Mastery(settler.getRandom());
+    }
+
+    /**
+     * @return the settler's Mastery, whose random source a test can script
+     */
+    Mastery mastery() {
+        return mastery;
     }
 
     // ---------------------------------------------------------------- decisions
@@ -1040,10 +1050,13 @@ final class ProducingLoop implements CategoryLoop {
             }
             consumed.add(one);
         }
-        List<ItemStack> leftovers = PatternRecipes.remainders(consumed);
-        round.addRemainders(leftovers);
         Pattern pattern = step.pattern();
         Optional<JobCraftingRecipe> innate = InnateRecipes.recipe(level, pattern);
+        // Before the remainders: a saved item is not used up and leaves nothing behind.
+        Mastery.Boost boost = mastery.apply(level, new Mastery.Craft(job.jobType(), shell.effectiveLevel(job), pattern,
+                innate.filter(JobCraftingRecipe::drawsOnly).isPresent()), consumed, buffer);
+        List<ItemStack> leftovers = PatternRecipes.remainders(consumed);
+        round.addRemainders(leftovers);
         ExecutionOutcome made = ExecutionOutcome.of(innate, pattern, shell.effectiveLevel(job), consumed, settler.getRandom());
         ItemStack result = made.result();
         Optional<RecipeHolder<?>> recipe = recipe(level, pattern);
@@ -1054,6 +1067,11 @@ final class ProducingLoop implements CategoryLoop {
                 // The recipe is gone (datapack change): the pattern's own output, as recorded.
                 : Stream.concat(Stream.of(result), leftovers.stream()).toList();
         produced.forEach(buffer::add);
+        // The buffer keeps what is over its capacity: extra output at most overshoots it by one craft (3 hits).
+        boost.extraOutput(made.result()).forEach(buffer::add);
+        if (moment.live()) {
+            boost.show(level, settler);
+        }
         made.drawn().forEach(stack -> {
             buffer.add(stack);
             round.drawn.add(stack.getItem());

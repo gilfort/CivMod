@@ -269,6 +269,44 @@ Only checked patterns are worked. Each library has its own checkmark limit; only
 
 A checked pattern set to "Always produce" in the pattern editor is worked without a request, for every Producing Job and without a profile hook. It is the lowest priority: only while the Job has no request it has a checked pattern for. Such patterns take turns, each round with its own "Produce at once" (crafts per round, as far as materials, buffer and fuel allow); the result goes to the Home Clerk (no Home Clerk: the own drop-off). A pattern without inputs, or whose output reached an active Max rule of the Home Clerk, passes its turn without an error status; without a Max rule it runs until Clerk and drop-off are full ("Drop-off full"). Nothing is reserved: inputs stay usable for everyone until they are taken. The turn is not saved. Setting the box checks the pattern, so the checkmark limit applies. Innate recipes can be set as well. A recipe with [`drops`](#drops) runs only here.
 
+## Mastery
+
+A Producing Job has Mastery when it has a parent: the Job you register with `.parent(...)` (see [Register a Producing Job](#register-a-producing-job)). Nothing else is needed, there is no profile hook or flag. The Craftsperson and the Smelter have no parent and never roll; the Specializations of CivMod and every addon Job with a parent do.
+
+On every finished craft the settler rolls. The chance is its effective skill in the Job times `chance_per_level`, at most `max_chance` (by default skill ÷ 10 %: 0.1 % at level 1, 10 % at level 100). After a hit it rolls again with the same chance, up to `max_hits` hits (3). What the hits do depends on the recipe:
+
+- **A recipe with at least `saving_min_ingredients` ingredient items (3), counts included.** The hits save material: ingredient items × `saving_share` (0.13) × hits, rounded down, at least `saving_minimum` (1), and never all of them. The saved items are picked at random among the ingredient items. They are not used up, so they stay in the buffer and leave no remainder (a saved milk bucket makes no empty bucket).
+- **A smaller recipe** (a furnace, smoker or stonecutting recipe, a brewing step, a small innate recipe). Every hit adds the recipe's result once more. The extra items go into the buffer and are delivered with the rest; the buffer takes them even when it is full, a craft overshoots its capacity by at most three results.
+- **A recipe whose result has durability** (gear) rolls too, but gets nothing yet: masterworks come with story #303.
+- **Reversible recipes** get neither saving nor extra output. A recipe is reversible when its result is an ingredient of another recipe whose result is one of its own ingredients (nine iron ingots make an iron block, an iron block makes nine ingots). The mod finds them once per datapack reload, over every recipe it can lay out in a pattern, innate recipes included. There is no tag to mark more by hand. A pattern that names no recipe never rolls.
+- **A recipe that only draws** (an innate recipe with `drops` and no `result`, like the Sifter's) has no result to improve and is left out.
+
+Live play shows a saving or extra output as a few particles at the settler, with no message. Catch-up rolls the same way through the same code and shows nothing.
+
+The values are the file `data/<namespace>/civmod_mastery/rules.json`; the files of all packs are merged, later values override single fields, and a missing field keeps its default. A file with a value out of range is rejected as a whole with a log error and the defaults stay:
+
+```json
+{
+  "chance_per_level": 0.001,
+  "max_chance": 0.1,
+  "max_hits": 3,
+  "saving_share": 0.13,
+  "saving_minimum": 1,
+  "saving_min_ingredients": 3
+}
+```
+
+| Field | Range | Default |
+|---|---|---|
+| `chance_per_level` | 0 to 1 | 0.001 |
+| `max_chance` | 0 to 1 | 0.1 |
+| `max_hits` | 0 to 16 | 3 |
+| `saving_share` | 0 to 1 | 0.13 |
+| `saving_minimum` | 0 to 64 | 1 |
+| `saving_min_ingredients` | 1 to 64 | 3 |
+
+The skill is the effective level the JobBlock's level caps (see [Drops](#drops)), the same one the Sifter's draw uses. Mastery changes no item identity: an item made with a saving or extra output is a plain item.
+
 ## Not part of the profile
 
 Request picking, chain resolution, reservations, input and result deliveries, catch-up, "Always produce", the Patterns tab and the Fuel tab are CivMod's loop and work the same for every Producing Job.

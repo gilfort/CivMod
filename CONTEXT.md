@@ -129,6 +129,9 @@ A Job a Level 1 JobBlock offers; root of a specialization tree.
 A Job with a parent Base Job, unlocked per JobBlock by its unlock item in a Station Types slot of the parent's JobBlock (Mission Jobs: in a Station Types slot of the Mission Board); it may belong to a different Job Category than its parent. Code: `Job.parent`, `Job.unlockItem` (`unlock_item` in `civmod_jobs/<job>.json`), `StationTypes.specializations`.
 _Avoid_: Advanced job, sub-job
 
+**Mastery**:
+The chance of a Producing Job with a parent (a Specialization) to do better than usual on a craft: it rolls per finished execution, a hit saves some of the inputs of a recipe with 3 or more ingredient items or adds extra output to a smaller one; reversible recipes are left out. Code: `Mastery`, `MasteryRules` (`civmod_mastery/rules.json`), `ReversibleRecipes`.
+
 **Station Types**:
 The 5 slots of a JobBlock whose Base Job has Specializations (the Mission Board too): one open slot per level (level 1: the first), the Base Job holds none and is always offered; its own station is no unlock item. An unlock item put into an open slot is consumed and unlocks every Specialization naming it at this JobBlock; put into a filled slot it replaces the old one, settlers of a Job no longer unlocked fall back to the Base Job (its library is kept, locked). Not the work place: the Job still needs its station in the world. Code: `StationTypes` (`put`, `unlocked`, `overview`), saved in `SettlementBlock.stationTypes()`; tab `StationTypesTab` (button `StationTypesTab.slotButtonId`, data `StationTypesTabData`), `StationTypesTabView`; offered Jobs `JobPlaces.offered(SettlementBlock)`.
 _Avoid_: Upgrade slot, unlock slot
