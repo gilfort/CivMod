@@ -138,6 +138,12 @@ public final class CivModConfig {
                     "A visit that moves items sets it back to this value.")
             .defineInRange("slipCooldownSeconds", 30, 1, 3600);
 
+    /** The name culture of settler names. */
+    public static final ModConfigSpec.ConfigValue<String> SETTLER_NAME_CULTURE = BUILDER
+            .comment("The name culture settlers draw their first names from, for example \"en\".",
+                    "A race without a name list for it falls back to \"en\". The name is rolled once when a settler arrives.")
+            .define("settlerNameCulture", "en", value -> value instanceof String culture && culture.matches("[a-z][a-z0-9_]*"));
+
     /** The built config spec, registered in the mod constructor. */
     public static final ModConfigSpec SPEC = BUILDER.build();
 

@@ -1,0 +1,76 @@
+{
+  "entries": [
+    {
+      "id": "civmod:smith",
+      "jobs": [
+        "civmod:craftsperson"
+      ]
+    },
+    {
+      "id": "civmod:miller",
+      "jobs": [
+        "civmod:gatherer"
+      ]
+    },
+    {
+      "id": "civmod:fisher",
+      "jobs": [
+        "civmod:fisherman"
+      ]
+    },
+    {
+      "id": "civmod:cooper",
+      "jobs": [
+        "civmod:craftsperson"
+      ]
+    },
+    {
+      "id": "civmod:carter",
+      "jobs": [
+        "civmod:deliveryman"
+      ]
+    },
+    {
+      "id": "civmod:mason",
+      "jobs": [
+        "civmod:craftsperson"
+      ]
+    },
+    {
+      "id": "civmod:miner",
+      "jobs": [
+        "civmod:miner"
+      ]
+    },
+    {
+      "id": "civmod:thatcher",
+      "jobs": [
+        "civmod:gatherer"
+      ]
+    },
+    {
+      "id": "civmod:tanner",
+      "jobs": [
+        "civmod:craftsperson"
+      ]
+    },
+    {
+      "id": "civmod:baker",
+      "jobs": [
+        "civmod:craftsperson"
+      ]
+    },
+    {
+      "id": "civmod:forester",
+      "jobs": [
+        "civmod:lumberjack"
+      ]
+    },
+    {
+      "id": "civmod:piper",
+      "jobs": [
+        "civmod:bard"
+      ]
+    }
+  ]
+}

@@ -15,6 +15,7 @@ import java.util.UUID;
 
 import com.gilfort.civmod.logistics.DeliveryTask;
 import com.gilfort.civmod.logistics.Request;
+import com.mojang.datafixers.util.Pair;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
@@ -56,8 +57,10 @@ public final class Settlement {
             BlockPos.CODEC.listOf().optionalFieldOf("hearths", List.of()).forGetter(settlement -> List.copyOf(settlement.hearths)),
             Codec.INT.optionalFieldOf("hearth_border", NO_BORDER).forGetter(Settlement::hearthBorderHash),
             CenterGrace.CODEC.optionalFieldOf("center_grace").forGetter(Settlement::centerGrace),
-            Shrine.State.CODEC.optionalFieldOf("shrine", Shrine.State.NONE).forGetter(Settlement::shrine),
-            Bonuses.CODEC.optionalFieldOf("bonuses", Bonuses.NONE).forGetter(Settlement::bonuses)
+            // One pair field keeps the group under the 16 fields RecordCodecBuilder allows; both still save as top-level keys.
+            Codec.mapPair(Shrine.State.CODEC.optionalFieldOf("shrine", Shrine.State.NONE), Bonuses.CODEC.optionalFieldOf("bonuses", Bonuses.NONE))
+                    .forGetter(settlement -> Pair.of(settlement.shrine, settlement.bonuses)),
+            SettlementOrigins.CODEC.optionalFieldOf("origins", SettlementOrigins.NONE).forGetter(Settlement::origins)
     ).apply(instance, Settlement::new));
 
     /**
@@ -107,6 +110,8 @@ public final class Settlement {
     private Shrine.State shrine;
     /** The timed bonuses (a prayer's blessing). */
     private Bonuses bonuses;
+    /** The founder and the places the settlers' origins point to. */
+    private SettlementOrigins origins;
 
     /**
      * @param id          the settlement id (unique per dimension)
@@ -120,16 +125,17 @@ public final class Settlement {
     public Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
             List<SettlementBlock> blocks) {
         this(id, name, foundedAt, color, settlersDue, members, blocks, Map.of(), List.of(), List.of(), Map.of(), List.of(), NO_BORDER, Optional.empty(),
-                Shrine.State.NONE, Bonuses.NONE);
+                Pair.of(Shrine.State.NONE, Bonuses.NONE), SettlementOrigins.NONE);
     }
 
     private Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
             List<SettlementBlock> blocks, Map<String, UUID> beds, List<Request> requests, List<DeliveryTask> deliveries,
             Map<UUID, BlockPos> bedReservations, List<BlockPos> hearths, int hearthBorderHash, Optional<CenterGrace> centerGrace,
-            Shrine.State shrine, Bonuses bonuses) {
-        this.bonuses = bonuses;
+            Pair<Shrine.State, Bonuses> shrineAndBonuses, SettlementOrigins origins) {
+        this.bonuses = shrineAndBonuses.getSecond();
         this.centerGrace = centerGrace;
-        this.shrine = shrine;
+        this.shrine = shrineAndBonuses.getFirst();
+        this.origins = origins;
         this.bedReservations.putAll(bedReservations);
         this.hearths.addAll(hearths);
         this.hearthBorderHash = hearthBorderHash;
@@ -275,6 +281,17 @@ public final class Settlement {
 
     void setBonuses(Bonuses bonuses) {
         this.bonuses = bonuses;
+    }
+
+    /**
+     * @return who founded the settlement and where the nearest biome of each biome type of its race lies
+     */
+    public SettlementOrigins origins() {
+        return origins;
+    }
+
+    void setOrigins(SettlementOrigins origins) {
+        this.origins = origins;
     }
 
     void setCenterGrace(Optional<CenterGrace> centerGrace) {

@@ -10,6 +10,7 @@
     "count": 3,
     "type": "minecraft:snow"
   },
+  "place": "civmod:snow_village",
   "days": 3,
   "recommended_level": 40,
   "jobs": [

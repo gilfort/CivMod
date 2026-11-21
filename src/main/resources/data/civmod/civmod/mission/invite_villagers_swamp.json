@@ -10,6 +10,7 @@
     "count": 1,
     "type": "minecraft:swamp"
   },
+  "place": "civmod:swamp_village",
   "days": 2,
   "recommended_level": 5,
   "jobs": [

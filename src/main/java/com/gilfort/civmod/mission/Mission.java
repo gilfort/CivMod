@@ -15,6 +15,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.npc.villager.VillagerType;
 import net.minecraft.world.item.Item;
@@ -39,9 +40,11 @@ import net.minecraft.world.level.storage.loot.LootTable;
  * @param weight           the draw weight in the daily offer
  * @param maxPerOffer      how often the mission may appear in one offer
  * @param xp               the XP a successful settler gains ({@link XpGain#NONE} when the file names none)
+ * @param place            a Villager mission: the place its Villagers come from, as the id of the text of their origin (empty: they come from "the village")
  */
 public record Mission(Component title, Component description, Optional<Holder<Item>> icon, List<ResourceKey<LootTable>> lootTables,
-        Optional<Villagers> villagers, int days, int recommendedLevel, int rolls, List<Job> jobs, int weight, int maxPerOffer, XpGain xp) {
+        Optional<Villagers> villagers, int days, int recommendedLevel, int rolls, List<Job> jobs, int weight, int maxPerOffer, XpGain xp,
+        Optional<Identifier> place) {
 
     private static final Codec<Mission> FIELDS = RecordCodecBuilder.create(instance -> instance.group(
             ComponentSerialization.CODEC.fieldOf("title").forGetter(Mission::title),
@@ -55,7 +58,8 @@ public record Mission(Component title, Component description, Optional<Holder<It
             Job.CODEC.listOf(1, Integer.MAX_VALUE).fieldOf("jobs").forGetter(Mission::jobs),
             Codec.intRange(1, Integer.MAX_VALUE).optionalFieldOf("weight", 1).forGetter(Mission::weight),
             Codec.intRange(1, Integer.MAX_VALUE).optionalFieldOf("max_per_offer", 1).forGetter(Mission::maxPerOffer),
-            XpGain.CODEC.optionalFieldOf("xp", XpGain.NONE).forGetter(Mission::xp)
+            XpGain.CODEC.optionalFieldOf("xp", XpGain.NONE).forGetter(Mission::xp),
+            Identifier.CODEC.optionalFieldOf("place").forGetter(Mission::place)
     ).apply(instance, Mission::new));
 
     /** Data and network codec; a mission needs exactly one result, loot tables or Villagers. */
@@ -77,7 +81,7 @@ public record Mission(Component title, Component description, Optional<Holder<It
      */
     public Mission(Component title, Component description, Optional<Holder<Item>> icon, List<ResourceKey<LootTable>> lootTables, int days,
             int recommendedLevel, int rolls, List<Job> jobs, int weight, int maxPerOffer) {
-        this(title, description, icon, lootTables, Optional.empty(), days, recommendedLevel, rolls, jobs, weight, maxPerOffer, XpGain.NONE);
+        this(title, description, icon, lootTables, Optional.empty(), days, recommendedLevel, rolls, jobs, weight, maxPerOffer, XpGain.NONE, Optional.empty());
     }
 
     private static DataResult<Mission> checkResult(Mission mission) {

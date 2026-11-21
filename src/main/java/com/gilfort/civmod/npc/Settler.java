@@ -11,6 +11,7 @@ import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
+import com.gilfort.civmod.origin.SettlerOrigin;
 import com.gilfort.civmod.settlement.OccupiedPlaces;
 import com.gilfort.civmod.settlement.StationTypes;
 import com.gilfort.civmod.settlement.Settlement;
@@ -120,6 +121,8 @@ public class Settler extends PathfinderMob {
     private final SettlerFood food = new SettlerFood();
     private final com.gilfort.civmod.job.SettlerSkills skills = new com.gilfort.civmod.job.SettlerSkills();
     private final com.gilfort.civmod.job.SettlerXp xp = new com.gilfort.civmod.job.SettlerXp();
+    /** The past of the settler; empty for settlers from before the origins and for hand-built test settlers. */
+    private Optional<SettlerOrigin> origin = Optional.empty();
     /** Looking around while sitting: the work goal holds the look of the main goals during a break. */
     private final GoalSelector sittingLook = new GoalSelector();
     /** Client: the timeline of the cast line ({@link #castTarget()}). */
@@ -278,6 +281,20 @@ public class Settler extends PathfinderMob {
      */
     public void setRace(Identifier race) {
         this.race = race;
+    }
+
+    /**
+     * @return the settler's past, empty if it arrived before the origins existed
+     */
+    public Optional<SettlerOrigin> getOrigin() {
+        return origin;
+    }
+
+    /**
+     * @param origin the settler's past (set by {@code Origins} when the settler arrives)
+     */
+    public void setOrigin(SettlerOrigin origin) {
+        this.origin = Optional.of(origin);
     }
 
     /**
@@ -838,6 +855,7 @@ public class Settler extends PathfinderMob {
         output.store("tool_needs", com.gilfort.civmod.job.ToolNeeds.Saved.LIST, work.toolNeedStates());
         output.store("entertainment", com.gilfort.civmod.entertainment.Entertainment.CODEC, work.entertainment());
         output.store("speed_boost", com.gilfort.civmod.job.SpeedBoost.CODEC, work.speedBoost());
+        origin.ifPresent(value -> output.store("origin", SettlerOrigin.CODEC, value));
     }
 
     @Override
@@ -859,6 +877,7 @@ public class Settler extends PathfinderMob {
         input.read("tool_needs", com.gilfort.civmod.job.ToolNeeds.Saved.LIST).ifPresent(work::restoreToolNeeds);
         input.read("entertainment", com.gilfort.civmod.entertainment.Entertainment.CODEC).ifPresent(work::setEntertainment);
         input.read("speed_boost", com.gilfort.civmod.job.SpeedBoost.CODEC).ifPresent(work::setSpeedBoost);
+        origin = input.read("origin", SettlerOrigin.CODEC);
         setInvisible(isAway());
     }
 }

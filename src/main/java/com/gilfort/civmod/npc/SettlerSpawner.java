@@ -1,13 +1,10 @@
 package com.gilfort.civmod.npc;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 import com.gilfort.civmod.CivMod;
@@ -15,6 +12,9 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.job.SettlerSkills;
+import com.gilfort.civmod.origin.Channel;
+import com.gilfort.civmod.origin.OriginData;
+import com.gilfort.civmod.origin.Origins;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.settlement.Settlement;
@@ -51,8 +51,6 @@ public final class SettlerSpawner {
     private static final int SPAWN_RADIUS = 5;
     private static final int SPAWN_ATTEMPTS = 16;
     private static final double ANNOUNCE_DISTANCE = 64.0;
-    /** The name of a Settler whose race has no names. */
-    private static final String FALLBACK_NAME = "Settler";
 
     private SettlerSpawner() {
     }
@@ -93,21 +91,18 @@ public final class SettlerSpawner {
      * @return the spawned settlers
      */
     public static List<Settler> arrive(ServerLevel level, SettlementData data, Settlement settlement, BlockPos anchor) {
-        Set<String> usedNames = new HashSet<>();
         Map<Identifier, Integer> races = new HashMap<>();
         for (UUID member : settlement.members()) {
             if (level.getEntity(member) instanceof Settler settler) {
-                usedNames.add(settler.getName().getString());
                 races.merge(settler.getRace(), 1, Integer::sum);
             }
         }
         List<Settler> spawned = new ArrayList<>();
         int missing = missingSettlers(settlement.members().size(), CivModConfig.STARTING_SETTLERS.get());
         for (int i = 0; i < missing; i++) {
-            Settler settler = spawn(level, data, settlement, anchor, Races.HUMAN, usedNames);
+            Settler settler = spawn(level, data, settlement, anchor, Races.HUMAN, Channel.STARTER);
             if (settler != null) {
                 spawned.add(settler);
-                usedNames.add(settler.getName().getString());
                 races.merge(settler.getRace(), 1, Integer::sum);
             }
         }
@@ -144,7 +139,7 @@ public final class SettlerSpawner {
         }
         Identifier race = level.getBlockState(center).getBlock() instanceof JobBlock block
                 ? block.centerRace().orElse(Races.HUMAN) : Races.HUMAN;
-        Settler settler = spawn(level, data, settlement, center, race, usedNames(level, settlement));
+        Settler settler = spawn(level, data, settlement, center, race, Channel.PILGRIM);
         if (settler == null) {
             return Optional.empty();
         }
@@ -157,29 +152,19 @@ public final class SettlerSpawner {
     }
 
     /**
-     * @param race      the race
-     * @param usedNames names to avoid while alternatives exist
-     * @param random    the random source
-     * @return a random person name of the race
-     */
-    static String randomName(Identifier race, Collection<String> usedNames, RandomSource random) {
-        return RaceNames.pick(RaceNames.get(race).npc(), usedNames, random).orElse(FALLBACK_NAME);
-    }
-
-    /**
      * Sets up a Settler that appears from a spawn egg: a random race from the race data (human while none is loaded), a random
-     * skin, a random name of that race, level 1 in every Job, and homeless where it stands. A custom name on the egg replaces the
-     * random one afterwards. The Settler joins a settlement only by the homeless rules.
+     * skin, a random origin and name of that race ({@link Origins#assignEgg}), level 1 in every Job, and homeless where it stands. A
+     * custom name on the egg replaces the random one afterwards. The Settler joins a settlement only by the homeless rules.
      *
      * @param settler the new Settler, already placed
      * @param random  the random source
      */
     static void initializeEggSettler(Settler settler, RandomSource random) {
-        List<Identifier> races = RaceNames.races();
+        List<Identifier> races = OriginData.races();
         Identifier race = races.isEmpty() ? Races.HUMAN : races.get(random.nextInt(races.size()));
         settler.setRace(race);
         settler.setSkin(random.nextInt(SettlerSkins.COUNT));
-        settler.setCustomName(Component.literal(randomName(race, List.of(), random)));
+        Origins.assignEgg(settler, random);
         for (Job job : ModJobs.REGISTRY) {
             settler.getSkills().set(job, SettlerSkills.Skill.START);
         }
@@ -196,7 +181,7 @@ public final class SettlerSpawner {
     }
 
     private static Settler spawn(ServerLevel level, SettlementData data, Settlement settlement, BlockPos anchor, Identifier race,
-            Set<String> usedNames) {
+            Channel channel) {
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
         if (settler == null) {
             return null;
@@ -206,7 +191,7 @@ public final class SettlerSpawner {
         settler.snapTo(pos.x, pos.y, pos.z, random.nextFloat() * 360.0F, 0.0F);
         settler.setRace(race);
         settler.setSkin(random.nextInt(SettlerSkins.COUNT));
-        settler.setCustomName(Component.literal(randomName(race, usedNames, random)));
+        Origins.assign(level, settler, channel, settlement);
         settler.joinSettlement(data, settlement);
         // Provisions for the first days, before a Clerk has food.
         settler.getInventory().setItem(Settler.POCKETS_START, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.BREAD, 2));
@@ -224,21 +209,6 @@ public final class SettlerSpawner {
     static void puff(ServerLevel level, Vec3 pos) {
         level.sendParticles(ParticleTypes.CLOUD, pos.x, pos.y + 1.0, pos.z, 12, 0.3, 0.5, 0.3, 0.02);
         level.playSound(null, pos.x, pos.y, pos.z, SoundEvents.ITEM_PICKUP, SoundSource.NEUTRAL, 0.4F, 0.8F);
-    }
-
-    /**
-     * @param level      the level
-     * @param settlement a settlement
-     * @return the names of its loaded Settlers (a new Settler avoids them)
-     */
-    static Set<String> usedNames(ServerLevel level, Settlement settlement) {
-        Set<String> names = new HashSet<>();
-        for (UUID member : settlement.members()) {
-            if (level.getEntity(member) instanceof Settler settler) {
-                names.add(settler.getName().getString());
-            }
-        }
-        return names;
     }
 
     /**

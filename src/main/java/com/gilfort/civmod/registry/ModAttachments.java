@@ -1,11 +1,13 @@
 package com.gilfort.civmod.registry;
 
+import java.util.Optional;
 import java.util.function.Supplier;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.npc.VillagerConversion;
 import com.mojang.serialization.Codec;
 
+import net.minecraft.resources.Identifier;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -33,6 +35,14 @@ public final class ModAttachments {
      */
     public static final Supplier<AttachmentType<Integer>> MISSION_LEVEL = ATTACHMENT_TYPES.register("mission_level",
             () -> AttachmentType.builder(() -> 0).serialize(Codec.INT.fieldOf("level"), level -> level > 0).build());
+
+    /**
+     * The place a mission names for the Villagers it brings (vault {@code Systems/Settler Origin.md}), kept on the Villager for its
+     * conversion into a Settler; empty for a Villager that did not come from such a mission.
+     */
+    public static final Supplier<AttachmentType<Optional<Identifier>>> MISSION_PLACE = ATTACHMENT_TYPES.register("mission_place",
+            () -> AttachmentType.<Optional<Identifier>>builder(Optional::empty)
+                    .serialize(Identifier.CODEC.optionalFieldOf("place"), Optional::isPresent).build());
 
     /**
      * Game time until which a Villager is Receptive for the conversion food (vault {@code Systems/NPC Population.md}); not

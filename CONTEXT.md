@@ -480,7 +480,7 @@ _Avoid_: Batch, leftover fuel
 ## Population
 
 **Villager conversion**:
-Turning a vanilla Villager inside a settlement border into a Settler of that settlement: an item of `civmod:conversion_primer` (default water bottle, which becomes a glass bottle) or a splash water bottle makes it Receptive; an item of `civmod:conversion_food` (default bread) then starts the conversion if the feeding checks pass (in order: baby, outside every border, `maxSettlersPerSettlement` reached counting Settlers and running conversions, no Free bed; a refusal shakes the head, names the reason in the action bar and uses up nothing). Feeding reserves a Free bed (`Settlement.bedReservations()`, through `SettlementData.reserveBed`); the Villager shakes for 5 minutes of world time (`ModAttachments.CONVERSION`, synced; completes on its first tick after loading). At the end the reserved bed (else another Free bed) goes to the new Settler: random skin, empty inventory, name tag or race name, every Job rolled from the mission level (`VillagerConversion.rollLevel`; nitwits and Villagers without one start at level 1). Without a bed or with the settlement dissolved it fails (stays a Villager, items used up); a Villager that dies frees its reservation. Code: `VillagerConversion`.
+Turning a vanilla Villager inside a settlement border into a Settler of that settlement: an item of `civmod:conversion_primer` (default water bottle, which becomes a glass bottle) or a splash water bottle makes it Receptive; an item of `civmod:conversion_food` (default bread) then starts the conversion if the feeding checks pass (in order: baby, outside every border, `maxSettlersPerSettlement` reached counting Settlers and running conversions, no Free bed; a refusal shakes the head, names the reason in the action bar and uses up nothing). Feeding reserves a Free bed (`Settlement.bedReservations()`, through `SettlementData.reserveBed`); the Villager shakes for 5 minutes of world time (`ModAttachments.CONVERSION`, synced; completes on its first tick after loading). At the end the reserved bed (else another Free bed) goes to the new Settler: random skin, empty inventory, an origin (the Villager's custom name is kept, otherwise a name is rolled), every Job rolled from the mission level (`VillagerConversion.rollLevel`; nitwits and Villagers without one start at level 1). Without a bed or with the settlement dissolved it fails (stays a Villager, items used up); a Villager that dies frees its reservation. Code: `VillagerConversion`.
 _Avoid_: Curing (that is the zombie villager), recruiting
 
 **Receptive**:
@@ -488,3 +488,21 @@ The 60 s window after the conversion primer in which a Villager takes the conver
 
 **Free bed**:
 A bed inside the settlement border that no Settler owns, no Villager conversion has reserved and is no player's respawn bed; a bed a Villager holds counts as free (Settlers before Villagers: the Settler takes it and the Villager forgets its home). Used by Settlers claiming a bed and by the Villager conversion. Code: `SettlerBeds.freeBeds`, claimed with `SettlerBeds.claim`.
+
+**Origin**:
+The past of a settler: gender, rolled name (first name and surname), the place it comes from, an upbringing, a turning point, a reason for coming and who took it in. Only ids, name parts and the rescuer are saved; the texts are built from language keys (`OriginText`), and the settler's name is a translatable text. Rolled once when the settler arrives, by `Origins` (one entry point per way of arriving) from the data of the settler's race (`RaceDefinition`, loaded by `OriginData` from `civmod_races`, `civmod_origin_tables` and `civmod_first_names`). Settlers from before the origins and hand-built test settlers have none. Code: `SettlerOrigin`, `Settler.getOrigin`.
+_Avoid_: Backstory, background
+
+**Arrival channel**:
+One way a settler comes in: starting settlers, the Priest's pilgrims, a converted Villager, a Villager a mission brought, a spawn egg. It decides where the place comes from, which reasons fit and whether the founder took the settler in. Code: `Channel` (a key that the reason entries of a race name, plus a place rule).
+_Avoid_: Source, spawn type
+
+**Origin place**:
+The real region a settler comes from: the nearest biome of a biome type of its race, told as a compass direction and days of walking, never as coordinates (`Place`, `PlaceHit`, `Compass`). A settlement looks the places up once after its founding, one biome type per tick, without loading chunks (`OriginPlaces`), and keeps them in `Settlement.origins()` (`SettlementOrigins`). A biome type without a hit drops out of the choice; with no hit at all the settler comes "from far away".
+
+**Rescuer**:
+The player who took a settler in: id, name when it happened and the settler day (`Rescuer`). For every settlement channel it is the founder of the settlement, the player who placed its Center Block (`SettlementOrigins.founder`, recorded in `SettlementWorld`); a Center Block placed by a command, a structure or a dispenser has no founder, and the spawn egg has none. Display only, no control rights.
+_Avoid_: Owner
+
+**Surname type**:
+One rule a race has to make a surname: `patronymic` (men only), `matronymic` (women only), `trade`, `place`, `trait`, `clan` or `none`, each with a weight in the race's data. A type that has nothing to offer a settler (wrong gender, no place, no entries) drops out; with none left the settler has no surname. Code: `SurnameType`, `RaceDefinition.SurnameRule`.

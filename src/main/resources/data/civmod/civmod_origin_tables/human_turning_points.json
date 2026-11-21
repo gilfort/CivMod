@@ -1,0 +1,65 @@
+{
+  "entries": [
+    {
+      "id": "civmod:raiders"
+    },
+    {
+      "id": "civmod:famine"
+    },
+    {
+      "id": "civmod:plague"
+    },
+    {
+      "id": "civmod:lost_trade"
+    },
+    {
+      "id": "civmod:collapse"
+    },
+    {
+      "id": "civmod:drought",
+      "places": [
+        "civmod:desert",
+        "civmod:steppe"
+      ]
+    },
+    {
+      "id": "civmod:sandstorm",
+      "places": [
+        "civmod:desert"
+      ]
+    },
+    {
+      "id": "civmod:grass_fire",
+      "places": [
+        "civmod:steppe",
+        "civmod:plains"
+      ]
+    },
+    {
+      "id": "civmod:flood",
+      "places": [
+        "civmod:coast",
+        "civmod:plains"
+      ]
+    },
+    {
+      "id": "civmod:shipwreck",
+      "places": [
+        "civmod:coast"
+      ]
+    },
+    {
+      "id": "civmod:hungry_wolves",
+      "places": [
+        "civmod:forest"
+      ]
+    },
+    {
+      "id": "civmod:conscription",
+      "places": [
+        "civmod:village",
+        "civmod:plains"
+      ]
+    }
+  ]
+}

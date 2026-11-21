@@ -1,0 +1,24 @@
+{
+  "entries": [
+    {
+      "id": "civmod:plains",
+      "biomes": "#civmod:origin/plains"
+    },
+    {
+      "id": "civmod:steppe",
+      "biomes": "#civmod:origin/steppe"
+    },
+    {
+      "id": "civmod:desert",
+      "biomes": "#civmod:origin/desert"
+    },
+    {
+      "id": "civmod:forest",
+      "biomes": "#civmod:origin/forest"
+    },
+    {
+      "id": "civmod:coast",
+      "biomes": "#civmod:origin/coast"
+    }
+  ]
+}

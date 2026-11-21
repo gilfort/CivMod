@@ -16,6 +16,7 @@ import com.gilfort.civmod.mission.MissionOffer;
 import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.origin.Rescuer;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
@@ -104,6 +105,8 @@ public final class SettlementWorld {
         notifyPlacement(player, placement);
         if (placement.outcome() == SettlementManager.Outcome.FOUNDED) {
             recordFounding(level, player);
+            placement.settlement().ifPresent(settlement -> SettlementData.get(level).updateOrigins(settlement,
+                    origins -> origins.withFounder(new Rescuer(player.getUUID(), player.getName().getString(), DayClock.day(level)))));
         }
     }
 

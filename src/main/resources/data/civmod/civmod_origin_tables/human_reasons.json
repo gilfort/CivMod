@@ -1,0 +1,70 @@
+{
+  "entries": [
+    {
+      "id": "civmod:survivors",
+      "channels": [
+        "starter"
+      ]
+    },
+    {
+      "id": "civmod:followed_prayer",
+      "channels": [
+        "pilgrim"
+      ]
+    },
+    {
+      "id": "civmod:seeking_shelter",
+      "channels": [
+        "pilgrim"
+      ]
+    },
+    {
+      "id": "civmod:saw_the_shrine",
+      "channels": [
+        "pilgrim"
+      ]
+    },
+    {
+      "id": "civmod:village_too_poor",
+      "channels": [
+        "villager"
+      ]
+    },
+    {
+      "id": "civmod:offered_bread",
+      "channels": [
+        "villager"
+      ]
+    },
+    {
+      "id": "civmod:tired_of_waiting",
+      "channels": [
+        "villager"
+      ]
+    },
+    {
+      "id": "civmod:brought_out",
+      "channels": [
+        "mission"
+      ]
+    },
+    {
+      "id": "civmod:escorted_here",
+      "channels": [
+        "mission"
+      ]
+    },
+    {
+      "id": "civmod:wandered_in",
+      "channels": [
+        "egg"
+      ]
+    },
+    {
+      "id": "civmod:lost_my_way",
+      "channels": [
+        "egg"
+      ]
+    }
+  ]
+}

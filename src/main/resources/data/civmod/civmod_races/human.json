@@ -1,0 +1,43 @@
+{
+  "first_names": {
+    "en": "civmod:human/en"
+  },
+  "surnames": [
+    {
+      "type": "patronymic",
+      "weight": 40
+    },
+    {
+      "type": "matronymic",
+      "weight": 0
+    },
+    {
+      "type": "trade",
+      "weight": 30,
+      "table": "civmod:human_trades"
+    },
+    {
+      "type": "place",
+      "weight": 10
+    },
+    {
+      "type": "trait",
+      "weight": 20,
+      "table": "civmod:human_traits"
+    },
+    {
+      "type": "clan",
+      "weight": 0
+    },
+    {
+      "type": "none",
+      "weight": 0
+    }
+  ],
+  "tables": {
+    "place": "civmod:human_places",
+    "upbringing": "civmod:human_upbringings",
+    "turning_point": "civmod:human_turning_points",
+    "reason": "civmod:human_reasons"
+  }
+}
