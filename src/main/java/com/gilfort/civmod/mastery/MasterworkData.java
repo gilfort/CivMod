@@ -39,20 +39,35 @@ public record MasterworkData(Holder<Item> madeFor, List<Effect> effects, String 
     public static final StreamCodec<RegistryFriendlyByteBuf, MasterworkData> STREAM_CODEC = ByteBufCodecs.fromCodecWithRegistries(CODEC);
 
     /**
+     * @param item  the item the first masterwork is made of
+     * @param hits  the effects of the hits, at least one; hits beyond the bound of the effects are dropped
+     * @param maker the name of the settler who made it
+     * @return a new masterwork, worked out for the item
+     */
+    static MasterworkData first(Holder<Item> item, List<Effect> hits, String maker) {
+        return new MasterworkData(item, bounded(hits), maker);
+    }
+
+    /**
      * @param hits the effects of new hits
-     * @return the same masterwork with the hits added to its effects
+     * @return the same masterwork with the hits added to its effects; hits that would take it beyond the bound are dropped, so
+     *         the component always saves
      */
     MasterworkData with(List<Effect> hits) {
         List<Effect> all = new ArrayList<>(effects);
         all.addAll(hits);
-        return new MasterworkData(madeFor, List.copyOf(all), maker);
+        return new MasterworkData(madeFor, bounded(all), maker);
     }
 
     /**
      * @param item the item the components are worked out for
      * @return the same masterwork, marked as worked out for the item
      */
-    MasterworkData madeFor(Holder<Item> item) {
+    MasterworkData workedOutFor(Holder<Item> item) {
         return new MasterworkData(item, effects, maker);
+    }
+
+    private static List<Effect> bounded(List<Effect> effects) {
+        return List.copyOf(effects.size() > MAX_EFFECTS ? effects.subList(0, MAX_EFFECTS) : effects);
     }
 }
