@@ -30,9 +30,9 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 
 /**
  * The effect pools of the masterworks (vault {@code Systems/Producing Jobs.md}), from
- * {@code data/<namespace>/civmod_mastery/masterworks.json}. The first hit of a craft draws from the pool for all items, every
- * further hit from the pool of the item's kind; the kind is the first one whose item tag holds the item. A kind with no
- * effects, and an item of no kind, draw the further hits from the pool for all items too. Files of all packs are merged, a
+ * {@code data/<namespace>/civmod_mastery/masterworks.json}. Every hit of a craft draws freely from the pool for all items and
+ * the pool of the item's kind taken as one list; the kind is the first one whose item tag holds the item. A kind with no
+ * effects, and an item of no kind, have the pool for all items alone. Files of all packs are merged, a
  * later file replaces the field it sets as a whole. Nothing here touches the world.
  *
  * @param all   the pool for all items, never empty
@@ -109,7 +109,7 @@ public record MasterworkRules(List<Effect> all, List<KindPool> kinds) {
      * The effect pool of one kind of items. In the JSON file the list of these is the key {@code kinds}.
      *
      * @param tag     the item tag that makes an item of the kind
-     * @param effects the effects the further hits draw from, may be empty
+     * @param effects the effects an item of the kind can get besides those of the pool for all items, may be empty
      */
     public record KindPool(TagKey<Item> tag, List<Effect> effects) {
 
@@ -135,8 +135,21 @@ public record MasterworkRules(List<Effect> all, List<KindPool> kinds) {
     }
 
     /**
-     * Draws the effects of a masterwork: the first hit from the pool for all items, every further hit from the pool of the
-     * item's kind. The same effect can come up twice.
+     * Everything one hit can give an item: the pool for all items, then the pool of the item's kind. The kind is the first one
+     * whose item tag holds the item; an item of no kind, and a kind with no effects, have the pool for all items alone.
+     *
+     * @param stack the item that becomes a masterwork
+     * @return the options, one effect each, never empty
+     */
+    public List<Effect> options(ItemStack stack) {
+        List<Effect> options = new ArrayList<>(all);
+        kinds.stream().filter(candidate -> stack.is(candidate.tag())).findFirst().ifPresent(kind -> options.addAll(kind.effects()));
+        return options;
+    }
+
+    /**
+     * Draws the effects of a masterwork: every hit draws freely, with the same chance for each of the item's
+     * {@link #options}, so nothing is fixed. The same effect can come up twice.
      *
      * @param stack  the item that becomes a masterwork
      * @param hits   the hits of the craft, one effect each
@@ -144,11 +157,10 @@ public record MasterworkRules(List<Effect> all, List<KindPool> kinds) {
      * @return one effect per hit
      */
     public List<Effect> draw(ItemStack stack, int hits, RandomSource random) {
-        List<Effect> kind = kinds.stream().filter(candidate -> stack.is(candidate.tag())).findFirst().map(KindPool::effects).orElse(List.of());
+        List<Effect> options = options(stack);
         List<Effect> drawn = new ArrayList<>();
         for (int hit = 0; hit < hits; hit++) {
-            List<Effect> pool = hit == 0 || kind.isEmpty() ? all : kind;
-            drawn.add(pool.get(random.nextInt(pool.size())));
+            drawn.add(options.get(random.nextInt(options.size())));
         }
         return drawn;
     }

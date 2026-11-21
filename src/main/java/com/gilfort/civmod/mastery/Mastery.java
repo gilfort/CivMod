@@ -75,7 +75,8 @@ public final class Mastery {
         public static final Boost NONE = new Boost(Benefit.NONE, 0, 0, List.of());
 
         /**
-         * Finishes the craft with nobody watching (catch-up): gear becomes a masterwork, nothing is shown.
+         * Finishes the craft with nobody watching (catch-up): gear becomes a masterwork (a masterwork upgraded by the craft
+         * keeps its bonuses, with a hit it gets more), nothing is shown.
          *
          * @param settler  the settler who crafted
          * @param produced what the craft made, the result first; gear in it is changed in place
@@ -106,6 +107,8 @@ public final class Mastery {
         }
 
         private Optional<ItemStack> makeMasterwork(LivingEntity settler, List<ItemStack> produced) {
+            // A smithing upgrade keeps the masterwork of its base: work its bonuses out over the new item, with or without a hit.
+            produced.forEach(Masterwork::refresh);
             if (benefit != Benefit.GEAR) {
                 return Optional.empty();
             }
