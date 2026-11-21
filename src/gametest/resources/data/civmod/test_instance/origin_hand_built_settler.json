@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:origin_hand_built_settler",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 8
+}

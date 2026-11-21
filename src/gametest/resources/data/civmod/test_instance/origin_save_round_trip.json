@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:origin_save_round_trip",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 8
+}

@@ -4,8 +4,9 @@ import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
-import com.gilfort.civmod.npc.RaceNames;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.origin.OriginData;
+import com.gilfort.civmod.origin.SettlerOrigin;
 import com.gilfort.civmod.npc.SettlerSkins;
 import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModEntityTypes;
@@ -63,7 +64,7 @@ public final class SettlerSpawnEggGameTests {
     }
 
     /** Spawns a Settler as the egg does. */
-    private static Settler spawn(GameTestHelper helper, ItemStack egg, BlockPos relative) {
+    static Settler spawn(GameTestHelper helper, ItemStack egg, BlockPos relative) {
         Settler settler = ModEntityTypes.SETTLER.get().spawn(helper.getLevel(), egg, null, helper.absolutePos(relative),
                 EntitySpawnReason.SPAWN_ITEM_USE, false, false);
         helper.assertTrue(settler != null, "The egg should spawn a Settler");
@@ -75,11 +76,10 @@ public final class SettlerSpawnEggGameTests {
     private static void newSettler(GameTestHelper helper) {
         Settler settler = spawn(helper, ModItems.SETTLER_SPAWN_EGG.get().getDefaultInstance(), new BlockPos(1, 1, 1));
         helper.assertTrue(settler.isHomeless(), "The egg Settler is homeless");
-        helper.assertTrue(RaceNames.races().contains(settler.getRace()), "Race from the race data: " + settler.getRace());
+        helper.assertTrue(OriginData.races().contains(settler.getRace()), "Race from the race data: " + settler.getRace());
         helper.assertTrue(settler.getSkin() >= 0 && settler.getSkin() < SettlerSkins.COUNT, "Skin in range: " + settler.getSkin());
         helper.assertTrue(settler.hasCustomName(), "The egg Settler has a name");
-        helper.assertTrue(RaceNames.get(settler.getRace()).npc().contains(settler.getName().getString()),
-                "Name from the race's list: " + settler.getName().getString());
+        helper.assertTrue(settler.getOrigin().flatMap(SettlerOrigin::name).isPresent(), "The egg Settler has an origin with a rolled name");
         for (Job job : ModJobs.REGISTRY) {
             helper.assertTrue(settler.getSkills().get(job).level() == 1, "Level 1 in " + job);
         }

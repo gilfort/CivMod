@@ -7,6 +7,8 @@ import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.npc.RaceNames;
+import com.gilfort.civmod.origin.OriginData;
+import com.gilfort.civmod.origin.RaceDefinition.NameList;
 import com.gilfort.civmod.npc.Races;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerSpawner;
@@ -82,7 +84,10 @@ public final class SettlerGameTests {
         helper.assertTrue(RaceNames.pick(candidates, Set.of("A", "B", "C"), random).isPresent(), "All used: should still return a name");
         helper.assertTrue(RaceNames.pick(List.of(), used, random).isEmpty(), "No candidates should give no name");
         RaceNames.NameSet human = RaceNames.get(Races.HUMAN);
-        helper.assertTrue(human.npc().size() >= 50 && human.settlement().size() >= 30, "Human name list not loaded: " + human);
+        helper.assertTrue(human.settlement().size() >= 30, "Human settlement names not loaded: " + human);
+        NameList firstNames = OriginData.firstNames(OriginData.race(Races.HUMAN).orElseThrow(), OriginData.DEFAULT_CULTURE);
+        helper.assertTrue(firstNames.male().size() + firstNames.female().size() + firstNames.unisex().size() >= 50,
+                "Human first names not loaded: " + firstNames);
         helper.succeed();
     }
 
@@ -135,7 +140,8 @@ public final class SettlerGameTests {
             helper.assertTrue(settlers.size() == 4, "Expected 4 starting settlers, got " + settlers.size());
             Set<String> names = new HashSet<>();
             for (Settler settler : settlers) {
-                helper.assertTrue(settler.hasCustomName() && names.add(settler.getName().getString()), "Settler without or with duplicate name");
+                helper.assertTrue(settler.hasCustomName() && settler.getOrigin().isPresent(), "Settler without name or origin");
+                helper.assertTrue(names.add(settler.getOrigin().orElseThrow().name().orElseThrow().first()), "Duplicate first name");
                 helper.assertTrue(settler.getSettlementId() == settlement.id() && settler.getRace().equals(Races.HUMAN), "Wrong membership or race");
                 helper.assertTrue(settler.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(anchor)) <= 8.0 * 8.0, "Settler spawned too far away");
             }
