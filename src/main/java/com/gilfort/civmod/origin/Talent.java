@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.chronicle.Diary;
+import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.job.SkillRules;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.registry.ModDiaryEntryTypes;
@@ -28,9 +29,10 @@ public final class Talent {
      * What an EXP gain did.
      *
      * @param levels    the levels gained
+     * @param exp       the whole EXP points granted: the amount with the bonus and the carried fraction
      * @param confirmed whether this gain confirmed the talent for the first time (the caller shows the thought bubble)
      */
-    public record Gain(int levels, boolean confirmed) {
+    public record Gain(int levels, int exp, boolean confirmed) {
     }
 
     private Talent() {
@@ -72,13 +74,13 @@ public final class Talent {
      * @param job     the Job the EXP is for
      * @param amount  the EXP of the action, without the bonus
      * @param cap     the skill cap of the Job's JobBlock
-     * @return the levels gained and whether the talent was confirmed by this gain
+     * @return the levels gained, the EXP granted and whether the talent was confirmed by this gain
      */
     public static Gain gainExp(Settler settler, Job job, int amount, int cap) {
         SkillRules rules = SkillRules.get();
         boolean favoured = favours(settler, job);
-        int levels = settler.getSkills().addExp(job, amount, cap, rules, favoured ? rules.talentBonusPercent() : 0);
-        return new Gain(levels, levels > 0 && favoured && confirm(settler, job));
+        SettlerSkills.Added added = settler.getSkills().addExp(job, amount, cap, rules, favoured ? rules.talentBonusPercent() : 0);
+        return new Gain(added.levels(), added.exp(), added.levels() > 0 && favoured && confirm(settler, job));
     }
 
     /**

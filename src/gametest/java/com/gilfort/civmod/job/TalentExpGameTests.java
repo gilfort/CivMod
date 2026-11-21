@@ -263,7 +263,7 @@ public final class TalentExpGameTests {
         return settler;
     }
 
-    /** The direct EXP of a Resource Collection roll gets the bonus too. */
+    /** The direct EXP of a Resource Collection roll gets the bonus too, and the result reports the EXP that was granted. */
     private static void resourceCollectionBonus(GameTestHelper helper) {
         List<long[]> forced = LumberjackGameTests.forceChunks(helper);
         Settler settler = lumberjack(helper, forced, Optional.of(WOODCUTTERS));
@@ -271,8 +271,12 @@ public final class TalentExpGameTests {
             long before = hundredths(skill(settler, job.jobType()));
             WorkRules.Result result = roll(helper, settler, job);
             helper.assertTrue(result.rolls() >= 4, "Rolls to count: " + result);
-            long gained = hundredths(skill(settler, job.jobType())) - before;
-            helper.assertTrue(gained == result.exp() * 125L, "EXP of " + result.exp() + " plain points gains 25 % more: " + gained / 100.0);
+            long after = hundredths(skill(settler, job.jobType()));
+            long gained = after - before;
+            helper.assertTrue(gained % 125 == 0, "The skill gains 25 % more than the plain EXP: " + gained / 100.0);
+            long plain = gained / 125;
+            helper.assertTrue(result.exp() > plain, "The result reports the bonus: " + result.exp() + " points granted for " + plain + " plain");
+            helper.assertTrue(result.exp() == after / 100 - before / 100, "The result reports the whole points the skill gained: " + result.exp() + " of " + gained / 100.0);
         });
     }
 
@@ -285,7 +289,7 @@ public final class TalentExpGameTests {
             WorkRules.Result result = roll(helper, settler, job);
             helper.assertTrue(result.rolls() >= 4, "Rolls to count: " + result);
             long gained = hundredths(skill(settler, job.jobType())) - before;
-            helper.assertTrue(gained == result.exp() * 100L, "EXP of " + result.exp() + " gains no bonus: " + gained / 100.0);
+            helper.assertTrue(gained == result.exp() * 100L, "The result reports the plain EXP of " + gained / 100.0 + ": " + result.exp());
         });
     }
 

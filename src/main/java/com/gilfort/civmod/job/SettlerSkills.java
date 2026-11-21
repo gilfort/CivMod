@@ -75,6 +75,18 @@ public final class SettlerSkills {
     }
 
     /**
+     * What an addition of EXP did.
+     *
+     * @param levels the levels gained
+     * @param exp    the whole EXP points the action earned: its amount, the bonus and the fraction paid out from before
+     */
+    public record Added(int levels, int exp) {
+
+        /** Nothing was added (a skill at its cap, an amount of 0). */
+        public static final Added NONE = new Added(0, 0);
+    }
+
+    /**
      * Adds EXP; at the cap excess EXP is discarded. A bonus adds a percentage of the amount. The fraction of a point that the bonus
      * leaves is kept in the skill and paid out with a later action, so a bonus on an action worth 1 EXP is not rounded away.
      *
@@ -83,17 +95,18 @@ public final class SettlerSkills {
      * @param cap          the skill cap of the JobBlock
      * @param rules        the skill rules
      * @param bonusPercent the extra EXP in percent of the amount, 0 for none
-     * @return the number of levels gained
+     * @return the levels gained and the EXP earned
      */
-    public int addExp(Job jobType, int amount, int cap, SkillRules rules, int bonusPercent) {
+    public Added addExp(Job jobType, int amount, int cap, SkillRules rules, int bonusPercent) {
         Skill skill = get(jobType);
         int limit = Math.min(cap, SkillRules.MAX_LEVEL);
         if (skill.level() >= limit || amount <= 0) {
-            return 0;
+            return Added.NONE;
         }
         int earned = amount * (PERCENT + bonusPercent) + skill.carry();
         int level = skill.level();
-        int exp = skill.exp() + earned / PERCENT;
+        int points = earned / PERCENT;
+        int exp = skill.exp() + points;
         int carry = earned % PERCENT;
         while (level < limit && exp >= rules.expToNext(level)) {
             exp -= rules.expToNext(level);
@@ -105,7 +118,7 @@ public final class SettlerSkills {
         }
         int gained = level - skill.level();
         skills.put(jobType, new Skill(level, exp, carry));
-        return gained;
+        return new Added(gained, points);
     }
 
     /**

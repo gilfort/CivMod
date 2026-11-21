@@ -127,7 +127,7 @@ final class WorkRules {
      * @param rolls     production rolls made
      * @param items     produced items
      * @param toolWear  times a tool was worn
-     * @param exp       EXP gained
+     * @param exp       EXP granted, with the talent bonus and the fraction carried over
      * @param levelUp   whether the skill level rose
      * @param talentConfirmed whether a level-up in this batch confirmed the settler's talent for the first time
      * @param end       why the batch stopped early ({@link End#NONE} if it used all work ticks)
@@ -279,7 +279,7 @@ final class WorkRules {
                 Talent.Gain gain = Talent.gainExp(settler, job.jobType(), amount, cap);
                 levelUp |= gain.levels() > 0;
                 talentConfirmed |= gain.confirmed();
-                exp += amount;
+                exp += gain.exp();
                 skillLevel = settler.getWork().effectiveLevel(job);
                 if (!room) {
                     end = End.OUTPUT_FULL;

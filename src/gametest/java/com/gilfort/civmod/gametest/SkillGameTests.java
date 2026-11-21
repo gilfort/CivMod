@@ -43,16 +43,16 @@ public final class SkillGameTests {
         SkillRules rules = SkillRules.FALLBACK;
         helper.assertTrue(rules.expToNext(1) == 20 && rules.expToNext(19) == 110, "EXP to next level = 15 + 5 × level");
         SettlerSkills skills = new SettlerSkills();
-        helper.assertTrue(skills.addExp(ModJobs.MINER.get(), 20, 20, rules, 0) == 1 && skills.get(ModJobs.MINER.get()).level() == 2
+        helper.assertTrue(skills.addExp(ModJobs.MINER.get(), 20, 20, rules, 0).levels() == 1 && skills.get(ModJobs.MINER.get()).level() == 2
                 && skills.get(ModJobs.MINER.get()).exp() == 0, "20 EXP: level 2");
         skills.addExp(ModJobs.MINER.get(), 100000, 20, rules, 0);
         helper.assertTrue(skills.get(ModJobs.MINER.get()).level() == 20 && skills.get(ModJobs.MINER.get()).exp() == 0, "Stops at the cap, excess discarded");
-        helper.assertTrue(skills.addExp(ModJobs.MINER.get(), 50, 20, rules, 0) == 0 && skills.get(ModJobs.MINER.get()).exp() == 0, "No EXP at the cap");
+        helper.assertTrue(skills.addExp(ModJobs.MINER.get(), 50, 20, rules, 0).levels() == 0 && skills.get(ModJobs.MINER.get()).exp() == 0, "No EXP at the cap");
         helper.assertTrue(skills.get(ModJobs.LUMBERJACK.get()).level() == 1, "Skill is per job type");
 
         skills.set(ModJobs.FISHERMAN.get(), new SettlerSkills.Skill(45, 3));
         helper.assertTrue(skills.effectiveLevel(ModJobs.FISHERMAN.get(), SettlementRules.skillCap(1)) == 20, "Works at the cap of a level-1 JobBlock");
-        helper.assertTrue(skills.addExp(ModJobs.FISHERMAN.get(), 50, 20, rules, 0) == 0 && skills.get(ModJobs.FISHERMAN.get()).level() == 45,
+        helper.assertTrue(skills.addExp(ModJobs.FISHERMAN.get(), 50, 20, rules, 0).levels() == 0 && skills.get(ModJobs.FISHERMAN.get()).level() == 45,
                 "Higher skill is kept, no EXP below it");
         helper.assertTrue(skills.effectiveLevel(ModJobs.FISHERMAN.get(), SettlementRules.skillCap(3)) == 45, "Full skill at a level-3 JobBlock");
         helper.succeed();
