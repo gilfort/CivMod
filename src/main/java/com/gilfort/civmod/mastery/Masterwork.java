@@ -33,10 +33,12 @@ import net.minecraft.world.item.equipment.Equippable;
  * these components is a relevant component, so the Clerk, stock rules, requests, the tool tier and recipe ingredients still see
  * the plain item.
  *
- * <p>Every value is worked out from the item's own defaults and the stored effects, never from what the stack carries, so the
- * bonuses always sit on top of the item's own stats. A smithing upgrade keeps the components of its base: {@link #refresh} works
- * them out again over the new item, and a new hit on the upgrade adds its effect to the stored ones. The same effect twice adds
- * up before it is applied, so every attribute gets one modifier. Anvil, Mending and enchanting leave the components alone.
+ * <p>Every value an effect covers is worked out from the item's own defaults and the stored effects, never from what the stack
+ * carries, so the bonuses always sit on top of the item's own stats. The first masterwork leaves every other component as the
+ * recipe made it, so a result with its own durability, tool or attributes keeps them. A smithing upgrade keeps the components
+ * of its base: {@link #refresh} works them all out again over the new item (what no effect covers goes back to the new item's
+ * own value), and a new hit on the upgrade adds its effect to the stored ones. The same effect twice adds up before it is
+ * applied, so every attribute gets one modifier. Anvil, Mending and enchanting leave the components alone.
  */
 public final class Masterwork {
 
@@ -80,7 +82,12 @@ public final class Masterwork {
             throw new IllegalArgumentException("A masterwork needs at least one effect: " + stack);
         }
         MasterworkData carried = stack.get(ModDataComponents.MASTERWORK.get());
-        apply(stack, carried == null ? new MasterworkData(stack.typeHolder(), hits, maker) : carried.with(hits));
+        if (carried == null) {
+            // A first masterwork: a recipe may have given the stack values on purpose, so only what an effect covers changes.
+            apply(stack, MasterworkData.first(stack.typeHolder(), hits, maker));
+        } else {
+            rederive(stack, carried.with(hits));
+        }
     }
 
     /**
@@ -93,27 +100,58 @@ public final class Masterwork {
     public static void refresh(ItemStack stack) {
         MasterworkData carried = stack.get(ModDataComponents.MASTERWORK.get());
         if (carried != null && !stack.is(carried.madeFor())) {
-            apply(stack, carried);
+            rederive(stack, carried);
         }
     }
 
+    /**
+     * Works every component out again over the stack's item: what no effect covers goes back to the item's own value, because
+     * the old one belongs to the item the masterwork was before.
+     */
+    private static void rederive(ItemStack stack, MasterworkData data) {
+        Totals totals = Totals.of(data.effects());
+        ItemStack defaults = stack.getItem().getDefaultInstance();
+        if (!coversDurability(totals)) {
+            restore(stack, defaults, DataComponents.MAX_DAMAGE);
+        }
+        if (!coversTool(totals, defaults)) {
+            restore(stack, defaults, DataComponents.TOOL);
+        }
+        if (!coversAttributes(totals)) {
+            restore(stack, defaults, DataComponents.ATTRIBUTE_MODIFIERS);
+        }
+        apply(stack, data);
+        // A less durable item (a modded transform) can have less durability than the stack has taken. Vanilla reads the damage
+        // clamped to the maximum, which would leave the stack one hit from breaking, so it keeps one point of durability.
+        if (stack.isDamageableItem() && stack.getDamageValue() >= stack.getMaxDamage()) {
+            stack.setDamageValue(stack.getMaxDamage() - 1);
+        }
+    }
+
+    private static boolean coversDurability(Totals totals) {
+        return totals.durability() > 0.0;
+    }
+
+    private static boolean coversTool(Totals totals, ItemStack defaults) {
+        return totals.miningSpeed() > 0.0 && defaults.get(DataComponents.TOOL) != null;
+    }
+
+    private static boolean coversAttributes(Totals totals) {
+        return !totals.attributes().isEmpty();
+    }
+
+    /** Sets what the effects cover, and the name, rarity and lore; every other component stays as it is. */
     private static void apply(ItemStack stack, MasterworkData data) {
         Totals totals = Totals.of(data.effects());
         ItemStack defaults = stack.getItem().getDefaultInstance();
-        stack.set(ModDataComponents.MASTERWORK.get(), data.madeFor(stack.typeHolder()));
-        if (totals.durability() > 0.0) {
+        stack.set(ModDataComponents.MASTERWORK.get(), data.workedOutFor(stack.typeHolder()));
+        if (coversDurability(totals)) {
             stack.set(DataComponents.MAX_DAMAGE, (int) Math.floor(defaults.getMaxDamage() * (1.0 + totals.durability())));
-        } else {
-            restore(stack, defaults, DataComponents.MAX_DAMAGE);
         }
-        if (totals.miningSpeed() > 0.0 && defaults.get(DataComponents.TOOL) != null) {
+        if (coversTool(totals, defaults)) {
             stack.set(DataComponents.TOOL, fasterTool(defaults.get(DataComponents.TOOL), totals.miningSpeed()));
-        } else {
-            restore(stack, defaults, DataComponents.TOOL);
         }
-        if (totals.attributes().isEmpty()) {
-            restore(stack, defaults, DataComponents.ATTRIBUTE_MODIFIERS);
-        } else {
+        if (coversAttributes(totals)) {
             stack.set(DataComponents.ATTRIBUTE_MODIFIERS, withAttributes(defaults, totals.attributes()));
         }
         stack.set(DataComponents.ITEM_NAME, Component.translatable("civmod.masterwork.name", defaults.getItemName()));

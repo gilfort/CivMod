@@ -136,7 +136,8 @@ public record MasterworkRules(List<Effect> all, List<KindPool> kinds) {
 
     /**
      * Everything one hit can give an item: the pool for all items, then the pool of the item's kind. The kind is the first one
-     * whose item tag holds the item; an item of no kind, and a kind with no effects, have the pool for all items alone.
+     * whose item tag holds the item; an item of no kind, and a kind with no effects, have the pool for all items alone. An
+     * effect that both pools list is one option, so it has the same chance as every other.
      *
      * @param stack the item that becomes a masterwork
      * @return the options, one effect each, never empty
@@ -144,7 +145,7 @@ public record MasterworkRules(List<Effect> all, List<KindPool> kinds) {
     public List<Effect> options(ItemStack stack) {
         List<Effect> options = new ArrayList<>(all);
         kinds.stream().filter(candidate -> stack.is(candidate.tag())).findFirst().ifPresent(kind -> options.addAll(kind.effects()));
-        return options;
+        return options.stream().distinct().toList();
     }
 
     /**

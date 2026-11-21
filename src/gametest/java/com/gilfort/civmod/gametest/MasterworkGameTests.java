@@ -1,6 +1,7 @@
 package com.gilfort.civmod.gametest;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -94,6 +95,9 @@ public final class MasterworkGameTests {
             register(helper, "mastery_masterwork_same_effect_twice", MasterworkGameTests::sameEffectTwice);
             register(helper, "mastery_masterwork_free_draw", MasterworkGameTests::freeDraw);
             register(helper, "mastery_masterwork_first_hit_is_free", MasterworkGameTests::firstHitIsFree);
+            register(helper, "mastery_masterwork_first_keeps_other_components", MasterworkGameTests::firstKeepsOtherComponents);
+            register(helper, "mastery_masterwork_upgrade_clamps_damage", MasterworkGameTests::upgradeClampsDamage);
+            register(helper, "mastery_masterwork_effects_are_bounded", MasterworkGameTests::effectsAreBounded);
             register(helper, "mastery_masterwork_free_combinations", MasterworkGameTests::freeCombinations);
             register(helper, "mastery_masterwork_weapon", MasterworkGameTests::weapon);
             register(helper, "mastery_masterwork_armour", MasterworkGameTests::armour);
@@ -283,6 +287,49 @@ public final class MasterworkGameTests {
         List<Effect> armour = rules.options(new ItemStack(Items.IRON_CHESTPLATE));
         helper.assertTrue(armour.size() == 2 && armour.get(1).parts().size() == 2, "Armour +1 and toughness +0.5 are one option of two parts: " + armour);
         helper.assertTrue(rules.options(new ItemStack(Items.BOW)).equals(rules.all()), "A bow has no kind: the pool for all items alone");
+        // An effect that both pools list is one option, so it is no more likely than the others.
+        Effect shared = rules.all().getFirst();
+        MasterworkRules both = new MasterworkRules(rules.all(), List.of(new MasterworkRules.KindPool(rules.kinds().getFirst().tag(), List.of(shared, options.get(1)))));
+        helper.assertTrue(both.options(pickaxe).equals(List.of(shared, options.get(1))), "An effect in both pools counts once: " + both.options(pickaxe));
+        helper.succeed();
+    }
+
+    /**
+     * A first masterwork changes only what its effects cover: a pickaxe whose recipe gave it 500 durability and no attribute
+     * modifiers keeps both when the one hit is mining speed.
+     */
+    private static void firstKeepsOtherComponents(GameTestHelper helper) {
+        ItemStack pickaxe = new ItemStack(Items.IRON_PICKAXE);
+        pickaxe.set(DataComponents.MAX_DAMAGE, 500);
+        pickaxe.set(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
+        Masterwork.turnInto(pickaxe, MasterworkRules.get().draw(pickaxe, 1, MasteryRolls.drawing(1, OTHER)), MAKER);
+        assertToolSpeed(helper, pickaxe, 1.1F);
+        helper.assertTrue(pickaxe.getMaxDamage() == 500, "The durability of the recipe stays: " + pickaxe.getMaxDamage());
+        helper.assertTrue(ItemAttributeModifiers.EMPTY.equals(pickaxe.get(DataComponents.ATTRIBUTE_MODIFIERS)), "The attributes of the recipe stay: " + pickaxe.get(DataComponents.ATTRIBUTE_MODIFIERS));
+        helper.succeed();
+    }
+
+    /**
+     * An item that turns into a less durable one (a modded transform) does not keep more damage than it can take: the damage
+     * ends one point below the new maximum, not at it.
+     */
+    private static void upgradeClampsDamage(GameTestHelper helper) {
+        ItemStack stack = new ItemStack(Items.WOODEN_PICKAXE);
+        stack.set(ModDataComponents.MASTERWORK.get(), new MasterworkData(new ItemStack(Items.DIAMOND_PICKAXE).typeHolder(), List.of(MasterworkRules.get().all().getFirst()), MAKER));
+        stack.set(DataComponents.DAMAGE, new ItemStack(Items.DIAMOND_PICKAXE).getMaxDamage() / 2);
+        Masterwork.refresh(stack);
+        helper.assertTrue(stack.getMaxDamage() > 0 && stack.getDamageValue() == stack.getMaxDamage() - 1, "One point of durability is left: " + stack.getDamageValue() + " of " + stack.getMaxDamage());
+        helper.succeed();
+    }
+
+    /** A masterwork carries at most 256 effects, so the component always saves: later hits are dropped, on a first masterwork and on an upgrade. */
+    private static void effectsAreBounded(GameTestHelper helper) {
+        List<Effect> hits = Collections.nCopies(300, MasterworkRules.get().all().getFirst());
+        ItemStack stack = new ItemStack(Items.IRON_PICKAXE);
+        Masterwork.turnInto(stack, hits, MAKER);
+        helper.assertTrue(stack.get(ModDataComponents.MASTERWORK.get()).effects().size() == 256, "A first masterwork is cut at 256: " + stack.get(ModDataComponents.MASTERWORK.get()).effects().size());
+        Masterwork.turnInto(stack, hits.subList(0, 5), MAKER);
+        helper.assertTrue(stack.get(ModDataComponents.MASTERWORK.get()).effects().size() == 256, "More hits on top are dropped: " + stack.get(ModDataComponents.MASTERWORK.get()).effects().size());
         helper.succeed();
     }
 

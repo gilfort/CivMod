@@ -14,8 +14,9 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent;
  * the result while it is offered, only when a player takes it, so that is when the bonuses are worked out over the new item:
  * the table's preview shows the old values until then.
  *
- * <p>A click on the result hands the event the stack the player gets. A shift click hands it a copy and puts the real stack
- * into the inventory first, so the inventory is checked as well; only stacks that are stale masterworks change.
+ * <p>A click on the result hands the event the stack the player gets. A shift click moves the real stack into the inventory
+ * first and hands the event the emptied source stack, so the inventory is swept as well to catch the real one; only stacks that
+ * are stale masterworks change. The server is the only side that changes stacks.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class MasterworkSmithing {
@@ -26,6 +27,9 @@ public final class MasterworkSmithing {
     @SubscribeEvent
     static void onSmithed(PlayerEvent.ItemSmithedEvent event) {
         Player player = event.getEntity();
+        if (player.level().isClientSide()) {
+            return;
+        }
         Masterwork.refresh(event.getResult());
         Masterwork.refresh(player.containerMenu.getCarried());
         Inventory inventory = player.getInventory();
