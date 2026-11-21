@@ -1066,12 +1066,11 @@ final class ProducingLoop implements CategoryLoop {
                 ? profile(job).execute(level, recipe.get(), result, List.copyOf(consumed), new LibraryRestPoints(level, job.jobBlock(), job.jobType()))
                 // The recipe is gone (datapack change): the pattern's own output, as recorded.
                 : Stream.concat(Stream.of(result), leftovers.stream()).toList();
+        // Before the buffer takes the stacks: a masterwork is made on the result itself.
+        boost.finish(level, settler, produced, moment.live());
         produced.forEach(buffer::add);
         // The buffer keeps what is over its capacity: extra output at most overshoots it by one craft (3 hits).
         boost.extraOutput(made.result()).forEach(buffer::add);
-        if (moment.live()) {
-            boost.show(level, settler);
-        }
         made.drawn().forEach(stack -> {
             buffer.add(stack);
             round.drawn.add(stack.getItem());

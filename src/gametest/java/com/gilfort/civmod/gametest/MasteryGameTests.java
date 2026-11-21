@@ -60,7 +60,6 @@ public final class MasteryGameTests {
             register(helper, "mastery_extra_output_two_hits", test -> founder(test, 2));
             register(helper, "mastery_extra_output_three_hits", test -> founder(test, 3));
             register(helper, "mastery_reversible_gets_nothing", MasteryGameTests::reversibleGetsNothing);
-            register(helper, "mastery_gear_gets_nothing_yet", MasteryGameTests::gearGetsNothing);
             register(helper, "mastery_craftsperson_never_rolls", MasteryGameTests::craftspersonNeverRolls);
             register(helper, "mastery_smelter_never_rolls", MasteryGameTests::smelterNeverRolls);
         });
@@ -71,7 +70,7 @@ public final class MasteryGameTests {
     }
 
     /** A Specialization that crafts one wanted item for the Clerk. */
-    private record Run(Setup setup, BlockPos craft, Settler settler) {
+    record Run(Setup setup, BlockPos craft, Settler settler) {
     }
 
     /**
@@ -92,21 +91,21 @@ public final class MasteryGameTests {
         return run(helper, BakerGameTests.baker(), BakerGameTests.bakery(helper, CRAFT), Blocks.CRAFTING_TABLE, stock, wanted, rolls);
     }
 
-    private static Run smith(GameTestHelper helper, List<ItemStack> stock, Item wanted, RandomSource rolls) {
+    static Run smith(GameTestHelper helper, List<ItemStack> stock, Item wanted, RandomSource rolls) {
         return run(helper, SmithGameTests.smith(), SmithGameTests.smithy(helper, CRAFT), Blocks.SMITHING_TABLE, stock, wanted, rolls);
     }
 
-    private static void work(GameTestHelper helper, Run run) {
+    static void work(GameTestHelper helper, Run run) {
         CraftspersonGameTests.catchUp(helper.getLevel(), run.settler(), WORK_TICKS);
     }
 
     /** How many of the item the Clerk holds plus the settler's buffer: where a saved item waits is not the point. */
-    private static int total(GameTestHelper helper, Run run, Item item) {
+    static int total(GameTestHelper helper, Run run, Item item) {
         return FletcherGameTests.count(helper.getLevel(), run.setup().clerk(), item)
                 + run.settler().getWork().buffer(run.craft()).counts().getOrDefault(ItemKey.of(item), 0);
     }
 
-    private static void finish(GameTestHelper helper, Run run) {
+    static void finish(GameTestHelper helper, Run run) {
         FletcherGameTests.cleanUp(run.setup(), run.settler());
         helper.succeed();
     }
@@ -176,15 +175,6 @@ public final class MasteryGameTests {
         work(helper, run);
         helper.assertTrue(total(helper, run, Items.IRON_BLOCK) == 1, "The block is made (status " + run.settler().getWork().status(run.craft()) + ")");
         helper.assertTrue(total(helper, run, Items.IRON_INGOT) == 0, "No ingot is saved: " + total(helper, run, Items.IRON_INGOT));
-        finish(helper, run);
-    }
-
-    /** Gear (a result with durability) is the masterwork branch of #303: until it exists, three hits change nothing. */
-    private static void gearGetsNothing(GameTestHelper helper) {
-        Run run = smith(helper, List.of(new ItemStack(Items.IRON_INGOT, 3), new ItemStack(Items.STICK, 2)), Items.IRON_PICKAXE, MasteryRolls.always());
-        work(helper, run);
-        helper.assertTrue(total(helper, run, Items.IRON_PICKAXE) == 1, "One pickaxe (status " + run.settler().getWork().status(run.craft()) + ")");
-        helper.assertTrue(total(helper, run, Items.IRON_INGOT) == 0 && total(helper, run, Items.STICK) == 0, "Nothing is saved from a pickaxe");
         finish(helper, run);
     }
 

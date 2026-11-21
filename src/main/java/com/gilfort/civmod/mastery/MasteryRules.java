@@ -1,21 +1,15 @@
 package com.gilfort.civmod.mastery;
 
-import java.io.Reader;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import com.gilfort.civmod.CivMod;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
-import net.minecraft.resources.FileToIdConverter;
 import net.minecraft.resources.Identifier;
-import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
 import net.minecraft.util.RandomSource;
@@ -46,7 +40,6 @@ public record MasteryRules(double chancePerLevel, double maxChance, int maxHits,
     /** Values used when no file is loaded. */
     public static final MasteryRules FALLBACK = new MasteryRules(0.001, 0.1, 3, 0.13, 1, 3);
 
-    private static final FileToIdConverter FILES = FileToIdConverter.json("civmod_mastery");
     private static MasteryRules current = FALLBACK;
 
     private record Part(Optional<Double> chancePerLevel, Optional<Double> maxChance, Optional<Integer> maxHits, Optional<Double> savingShare,
@@ -144,21 +137,8 @@ public record MasteryRules(double chancePerLevel, double maxChance, int maxHits,
 
         @Override
         protected MasteryRules prepare(ResourceManager manager, ProfilerFiller profiler) {
-            List<JsonElement> files = new ArrayList<>();
-            FILES.listMatchingResourceStacks(manager).entrySet().stream()
-                    .filter(entry -> FILES.fileToId(entry.getKey()).getPath().equals("rules"))
-                    .sorted(Map.Entry.comparingByKey())
-                    .forEach(entry -> {
-                        for (Resource resource : entry.getValue()) {
-                            try (Reader reader = resource.openAsReader()) {
-                                files.add(JsonParser.parseReader(reader));
-                            } catch (Exception e) {
-                                CivMod.LOGGER.error("Failed to read mastery rules {} from pack {}", entry.getKey(), resource.sourcePackId(), e);
-                            }
-                        }
-                    });
             try {
-                return merge(files);
+                return merge(MasteryFiles.read(manager, "rules"));
             } catch (Exception e) {
                 CivMod.LOGGER.error("Invalid mastery rules, using fallback values", e);
                 return FALLBACK;

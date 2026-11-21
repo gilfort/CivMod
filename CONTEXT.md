@@ -130,7 +130,10 @@ A Job with a parent Base Job, unlocked per JobBlock by its unlock item in a Stat
 _Avoid_: Advanced job, sub-job
 
 **Mastery**:
-The chance of a Producing Job with a parent (a Specialization) to do better than usual on a craft: it rolls per finished execution, a hit saves some of the inputs of a recipe with 3 or more ingredient items or adds extra output to a smaller one; reversible recipes are left out. Code: `Mastery`, `MasteryRules` (`civmod_mastery/rules.json`), `ReversibleRecipes`.
+The chance of a Producing Job with a parent (a Specialization) to do better than usual on a craft: it rolls per finished execution, a hit saves some of the inputs of a recipe with 3 or more ingredient items or adds extra output to a smaller one; reversible recipes are left out. A craft whose result has durability (gear) becomes a **Masterwork** instead. Code: `Mastery`, `MasteryRules` (`civmod_mastery/rules.json`), `ReversibleRecipes`.
+
+**Masterwork**:
+A piece of gear (a result with durability) that a hit of Mastery gave bonus effects: one effect per hit, the first from the pool for all items (durability +25 %), every further one from the pool of the item's kind (tool, weapon, armour), repeats add up. It is the plain item for the Clerk, stock rules, requests, tool tier and recipe ingredients, because its components (`ITEM_NAME` prefix, `RARITY`, `LORE`, `MAX_DAMAGE`, `TOOL`, `ATTRIBUTE_MODIFIERS`) are not relevant components. Code: `Masterwork`, `MasterworkRules` (`civmod_mastery/masterworks.json`), `MasterworkNotice`.
 
 **Station Types**:
 The 5 slots of a JobBlock whose Base Job has Specializations (the Mission Board too): one open slot per level (level 1: the first), the Base Job holds none and is always offered; its own station is no unlock item. An unlock item put into an open slot is consumed and unlocks every Specialization naming it at this JobBlock; put into a filled slot it replaces the old one, settlers of a Job no longer unlocked fall back to the Base Job (its library is kept, locked). Not the work place: the Job still needs its station in the world. Code: `StationTypes` (`put`, `unlocked`, `overview`), saved in `SettlementBlock.stationTypes()`; tab `StationTypesTab` (button `StationTypesTab.slotButtonId`, data `StationTypesTabData`), `StationTypesTabView`; offered Jobs `JobPlaces.offered(SettlementBlock)`.

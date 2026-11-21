@@ -1,0 +1,42 @@
+{
+  "all": [
+    {
+      "parts": [
+        { "type": "durability", "amount": 0.25 }
+      ]
+    }
+  ],
+  "kinds": [
+    {
+      "tag": "civmod:masterwork/tools",
+      "effects": [
+        {
+          "parts": [
+            { "type": "mining_speed", "amount": 0.1 }
+          ]
+        }
+      ]
+    },
+    {
+      "tag": "civmod:masterwork/weapons",
+      "effects": [
+        {
+          "parts": [
+            { "type": "attribute", "attribute": "minecraft:attack_damage", "amount": 1.0 }
+          ]
+        }
+      ]
+    },
+    {
+      "tag": "civmod:masterwork/armour",
+      "effects": [
+        {
+          "parts": [
+            { "type": "attribute", "attribute": "minecraft:armor", "amount": 1.0 },
+            { "type": "attribute", "attribute": "minecraft:armor_toughness", "amount": 0.5 }
+          ]
+        }
+      ]
+    }
+  ]
+}

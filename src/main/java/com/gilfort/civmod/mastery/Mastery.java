@@ -9,6 +9,7 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.logistics.Pattern;
+import com.gilfort.civmod.mastery.MasterworkRules.Effect;
 
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
@@ -59,20 +60,21 @@ public final class Mastery {
         SAVING,
         /** The recipe's result comes out once more per hit. */
         EXTRA_OUTPUT,
-        /** The result has durability: a hit is a masterwork (not made yet, see #303). */
+        /** The result has durability: the finished item becomes a masterwork. */
         GEAR
     }
 
     /**
      * The outcome of the roll of one craft.
      *
-     * @param kind what the hits turned into
-     * @param hits how many hits the craft had (0 to the maximum of {@link MasteryRules})
+     * @param kind    what the hits turned into
+     * @param hits    how many hits the craft had (0 to the maximum of {@link MasteryRules})
+     * @param effects the effects of a masterwork, one per hit; empty unless the kind is {@link Kind#GEAR}
      */
-    public record Boost(Kind kind, int hits) {
+    public record Boost(Kind kind, int hits, List<Effect> effects) {
 
         /** No hit. */
-        public static final Boost NONE = new Boost(Kind.NONE, 0);
+        public static final Boost NONE = new Boost(Kind.NONE, 0, List.of());
 
         /**
          * @param result what one execution makes
@@ -83,15 +85,31 @@ public final class Mastery {
         }
 
         /**
-         * Shows a saving or extra output as a few particles at the settler, no message. Nothing for a craft without one.
+         * Finishes the craft: gear becomes a masterwork, whatever the live play shows of the hits comes on top. Call it before
+         * the produced items go into the buffer, it changes the result in place.
          *
-         * @param level   the level
-         * @param settler the settler
+         * @param level    the level
+         * @param settler  the settler who crafted
+         * @param produced what the craft made, the result first
+         * @param live     whether a player can watch: live play shows particles (and, for a masterwork, a sound and a message),
+         *                 catch-up shows nothing
          */
-        public void show(ServerLevel level, LivingEntity settler) {
-            if (kind == Kind.SAVING || kind == Kind.EXTRA_OUTPUT) {
-                level.sendParticles(ParticleTypes.HAPPY_VILLAGER, settler.getX(), settler.getY() + settler.getBbHeight() * 0.75, settler.getZ(),
-                        PARTICLE_COUNT, PARTICLE_SPREAD, PARTICLE_SPREAD, PARTICLE_SPREAD, 0.0);
+        public void finish(ServerLevel level, LivingEntity settler, List<ItemStack> produced, boolean live) {
+            switch (kind) {
+                case GEAR -> produced.stream().filter(ItemStack::isDamageableItem).findFirst().ifPresent(result -> {
+                    Masterwork.apply(result, effects, settler.getName().getString());
+                    if (live) {
+                        MasterworkNotice.show(level, level.players(), settler, result);
+                    }
+                });
+                case SAVING, EXTRA_OUTPUT -> {
+                    if (live) {
+                        level.sendParticles(ParticleTypes.HAPPY_VILLAGER, settler.getX(), settler.getY() + settler.getBbHeight() * 0.75, settler.getZ(),
+                                PARTICLE_COUNT, PARTICLE_SPREAD, PARTICLE_SPREAD, PARTICLE_SPREAD, 0.0);
+                    }
+                }
+                case NONE -> {
+                }
             }
         }
     }
@@ -126,18 +144,19 @@ public final class Mastery {
         if (hits == 0) {
             return Boost.NONE;
         }
-        if (craft.pattern().output().toStack().isDamageableItem()) {
-            return new Boost(Kind.GEAR, hits);
+        ItemStack gear = craft.pattern().output().toStack();
+        if (gear.isDamageableItem()) {
+            return new Boost(Kind.GEAR, hits, MasterworkRules.get().draw(gear, hits, source));
         }
         if (ReversibleRecipes.contains(level, craft.pattern().recipe().get())) {
             return Boost.NONE;
         }
         if (!rules.savesMaterial(consumed.size())) {
-            return new Boost(Kind.EXTRA_OUTPUT, hits);
+            return new Boost(Kind.EXTRA_OUTPUT, hits, List.of());
         }
         for (int left = rules.saved(consumed.size(), hits); left > 0; left--) {
             buffer.add(consumed.remove(source.nextInt(consumed.size())));
         }
-        return new Boost(Kind.SAVING, hits);
+        return new Boost(Kind.SAVING, hits, List.of());
     }
 }
