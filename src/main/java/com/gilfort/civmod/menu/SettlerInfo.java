@@ -79,8 +79,8 @@ public record SettlerInfo(Person person, Component status, boolean homeless, Com
          * @return its name, diary and, once confirmed, its talent now
          */
         static Person of(Settler settler) {
-            List<Job> talent = settler.getChronicle().talentConfirmed() ? Talent.baseJobs(settler) : List.of();
-            return new Person(settler.getName(), settler.getChronicle().entries(), settler.getOrigin().isPresent(), talent);
+            List<Job> talent = settler.getPast().chronicle().talentConfirmed() ? Talent.baseJobs(settler) : List.of();
+            return new Person(settler.getName(), settler.getPast().chronicle().entries(), settler.getPast().origin().isPresent(), talent);
         }
     }
 

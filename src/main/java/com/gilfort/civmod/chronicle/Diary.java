@@ -39,9 +39,9 @@ public final class Diary {
         if (id == null) {
             throw new IllegalArgumentException("A diary entry type must be registered before it is used: " + type);
         }
-        Chronicle before = settler.getChronicle();
+        Chronicle before = settler.getPast().chronicle();
         Chronicle after = before.with(new DiaryEntry(id, params, DayClock.day(level)), Diary::isPermanent);
-        settler.setChronicle(after);
+        settler.getPast().setChronicle(after);
         return after != before;
     }
 
@@ -57,11 +57,14 @@ public final class Diary {
     }
 
     /**
-     * The entry of a settler that has lost its settlement.
+     * The entry of a settler that has lost its settlement. A settler that is homeless already gets none.
      *
-     * @param settler the settler
+     * @param settler the settler, before it leaves its settlement
      */
     public static void homeless(Settler settler) {
+        if (settler.isHomeless()) {
+            return;
+        }
         add(settler, ModDiaryEntryTypes.HOMELESS.get(), List.of());
     }
 

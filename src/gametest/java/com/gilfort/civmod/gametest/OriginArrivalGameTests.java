@@ -132,7 +132,7 @@ public final class OriginArrivalGameTests {
 
     /** The common part of every origin: a name that shows in the name tag, a gender, an upbringing and a turning point. */
     private static void checkRolled(GameTestHelper helper, Settler settler) {
-        SettlerOrigin origin = settler.getOrigin().orElseThrow(() -> helper.assertionException("A settler without an origin"));
+        SettlerOrigin origin = settler.getPast().origin().orElseThrow(() -> helper.assertionException("A settler without an origin"));
         SettlerName name = origin.name().orElseThrow(() -> helper.assertionException("A settler without a rolled name"));
         helper.assertTrue(settler.getName().equals(OriginText.name(name)), "The name tag is built from the name parts: " + settler.getName());
         helper.assertTrue(name.surname().type() != SurnameType.NONE && settler.getName().getContents() instanceof TranslatableContents translatable
@@ -156,7 +156,7 @@ public final class OriginArrivalGameTests {
             Set<String> firstNames = new HashSet<>();
             for (Settler settler : settlers) {
                 checkRolled(helper, settler);
-                SettlerOrigin origin = settler.getOrigin().orElseThrow();
+                SettlerOrigin origin = settler.getPast().origin().orElseThrow();
                 firstNames.add(origin.name().orElseThrow().first());
                 Place place = origin.place();
                 helper.assertTrue(place.kind() == Place.Kind.BIOME && (place.id().equals(PLAINS) || place.id().equals(STEPPE)),
@@ -182,7 +182,7 @@ public final class OriginArrivalGameTests {
         try {
             for (Settler settler : settlers) {
                 checkRolled(helper, settler);
-                SettlerOrigin origin = settler.getOrigin().orElseThrow();
+                SettlerOrigin origin = settler.getPast().origin().orElseThrow();
                 helper.assertTrue(origin.place().equals(Place.farAway()), "From far away: " + origin.place());
                 helper.assertTrue(origin.rescuer().isEmpty(), "No founder is recorded for a settlement that was not founded by a player: " + origin.rescuer());
             }
@@ -207,7 +207,7 @@ public final class OriginArrivalGameTests {
         Settler settler = recruit.get();
         try {
             checkRolled(helper, settler);
-            SettlerOrigin origin = settler.getOrigin().orElseThrow();
+            SettlerOrigin origin = settler.getPast().origin().orElseThrow();
             helper.assertTrue(hits().containsKey(origin.place().id()) && origin.place().direction().isPresent() && origin.place().days() >= 1,
                     "From a biome type with a hit: " + origin.place());
             helper.assertTrue(origin.rescuer().equals(Optional.of(FOUNDER)), "Taken in by the founder: " + origin.rescuer());
@@ -248,7 +248,7 @@ public final class OriginArrivalGameTests {
     private static void convertedVillager(GameTestHelper helper) {
         converted(helper, villager -> { }, settler -> {
             checkRolled(helper, settler);
-            SettlerOrigin origin = settler.getOrigin().orElseThrow();
+            SettlerOrigin origin = settler.getPast().origin().orElseThrow();
             helper.assertTrue(origin.place().equals(Place.village()), "From its village: " + origin.place());
             helper.assertTrue(origin.rescuer().equals(Optional.of(FOUNDER)), "Taken in by the founder: " + origin.rescuer());
             Set<Identifier> reasons = Set.of(CivMod.id("village_too_poor"), CivMod.id("offered_bread"), CivMod.id("tired_of_waiting"));
@@ -260,7 +260,7 @@ public final class OriginArrivalGameTests {
     private static void convertedVillagerKeepsName(GameTestHelper helper) {
         converted(helper, villager -> villager.setCustomName(Component.literal("Hilde")), settler -> {
             helper.assertTrue(settler.getName().getString().equals("Hilde"), "The Villager's name is kept: " + settler.getName());
-            SettlerOrigin origin = settler.getOrigin().orElseThrow(() -> helper.assertionException("No origin"));
+            SettlerOrigin origin = settler.getPast().origin().orElseThrow(() -> helper.assertionException("No origin"));
             helper.assertTrue(origin.name().isEmpty(), "No first name and no surname are rolled: " + origin.name());
             helper.assertTrue(origin.place().equals(Place.village()) && origin.upbringing().isPresent(), "The rest of the origin is rolled: " + origin);
         });
@@ -269,7 +269,7 @@ public final class OriginArrivalGameTests {
     /** A Villager a mission brought takes the place of the mission and a reason of the missions. */
     private static void convertedMissionVillager(GameTestHelper helper) {
         converted(helper, villager -> villager.setData(ModAttachments.MISSION_PLACE, Optional.of(DESERT_VILLAGE)), settler -> {
-            SettlerOrigin origin = settler.getOrigin().orElseThrow(() -> helper.assertionException("No origin"));
+            SettlerOrigin origin = settler.getPast().origin().orElseThrow(() -> helper.assertionException("No origin"));
             helper.assertTrue(origin.place().equals(Place.mission(DESERT_VILLAGE)), "From the place of the mission: " + origin.place());
             Set<Identifier> reasons = Set.of(CivMod.id("brought_out"), CivMod.id("escorted_here"));
             helper.assertTrue(reasons.contains(origin.reason().orElseThrow()), "A reason of the missions: " + origin.reason());
@@ -282,7 +282,7 @@ public final class OriginArrivalGameTests {
         Settler settler = SettlerSpawnEggGameTests.spawn(helper, ModItems.SETTLER_SPAWN_EGG.get().getDefaultInstance(), new BlockPos(1, 1, 1));
         try {
             checkRolled(helper, settler);
-            SettlerOrigin origin = settler.getOrigin().orElseThrow();
+            SettlerOrigin origin = settler.getPast().origin().orElseThrow();
             RaceDefinition race = OriginData.race(settler.getRace()).orElseThrow();
             helper.assertTrue(race.places().stream().anyMatch(entry -> entry.id().equals(origin.place().id())) && origin.place().direction().isEmpty(),
                     "A biome type of its race, no direction: " + origin.place());
@@ -303,11 +303,11 @@ public final class OriginArrivalGameTests {
         List<Settler> settlers = SettlerSpawner.arrive(helper.getLevel(), data, settlement, anchor);
         try {
             Settler settler = settlers.get(0);
-            SettlerOrigin before = settler.getOrigin().orElseThrow();
+            SettlerOrigin before = settler.getPast().origin().orElseThrow();
             Component nameBefore = settler.getName();
             settler.becomeHomeless();
             helper.assertTrue(settler.isHomeless(), "The settler is homeless");
-            helper.assertTrue(settler.getOrigin().equals(Optional.of(before)) && settler.getName().equals(nameBefore), "Origin and name are kept");
+            helper.assertTrue(settler.getPast().origin().equals(Optional.of(before)) && settler.getName().equals(nameBefore), "Origin and name are kept");
             helper.succeed();
         } finally {
             settlers.forEach(Settler::discard);
@@ -344,7 +344,7 @@ public final class OriginArrivalGameTests {
         helper.getLevel().addFreshEntity(settler);
         settler.joinSettlement(data, settlement);
         try {
-            helper.assertTrue(settler.getOrigin().isEmpty(), "No origin: " + settler.getOrigin());
+            helper.assertTrue(settler.getPast().origin().isEmpty(), "No origin: " + settler.getPast().origin());
             helper.assertTrue(Origins.usedFirstNames(helper.getLevel(), settlement).equals(Set.of("Hilde")), "Counts with its name");
             helper.succeed();
         } finally {
@@ -361,13 +361,13 @@ public final class OriginArrivalGameTests {
                 Place.biome(STEPPE, new PlaceHit(Compass.NORTH_EAST, 2500)), Optional.of(CivMod.id("farmers")), Optional.empty(),
                 Optional.of(CivMod.id("survivors")), Optional.of(FOUNDER));
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
-        settler.setOrigin(origin);
+        settler.getPast().setOrigin(origin);
         settler.setCustomName(OriginText.name(origin.name().orElseThrow()));
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
         settler.saveWithoutId(output);
         Settler loaded = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.LOAD);
         loaded.load(TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), output.buildResult()));
-        helper.assertTrue(loaded.getOrigin().equals(Optional.of(origin)), "Origin after the round trip: " + loaded.getOrigin());
+        helper.assertTrue(loaded.getPast().origin().equals(Optional.of(origin)), "Origin after the round trip: " + loaded.getPast().origin());
         helper.assertTrue(loaded.getName().equals(settler.getName()), "The name tag after the round trip: " + loaded.getName());
 
         Settler old = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);

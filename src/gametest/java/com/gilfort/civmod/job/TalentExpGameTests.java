@@ -100,7 +100,7 @@ public final class TalentExpGameTests {
 
     private static Settler withUpbringing(GameTestHelper helper, Identifier upbringing) {
         Settler settler = handBuilt(helper);
-        settler.setOrigin(origin(upbringing));
+        settler.getPast().setOrigin(origin(upbringing));
         return settler;
     }
 
@@ -123,7 +123,7 @@ public final class TalentExpGameTests {
     }
 
     private static List<DiaryEntry> confirmations(Settler settler) {
-        return settler.getChronicle().entries().stream().filter(entry -> entry.type().equals(ModDiaryEntryTypes.TALENT.getId())).toList();
+        return settler.getPast().chronicle().entries().stream().filter(entry -> entry.type().equals(ModDiaryEntryTypes.TALENT.getId())).toList();
     }
 
     private static boolean talentBubble(Settler settler) {
@@ -259,7 +259,7 @@ public final class TalentExpGameTests {
 
     private static Settler lumberjack(GameTestHelper helper, List<long[]> forced, Optional<Identifier> upbringing) {
         Settler settler = CatchUpGameTests.lumberjack(helper, forced);
-        upbringing.ifPresent(id -> settler.setOrigin(origin(id)));
+        upbringing.ifPresent(id -> settler.getPast().setOrigin(origin(id)));
         return settler;
     }
 
@@ -295,19 +295,19 @@ public final class TalentExpGameTests {
     private static void firstLevelUp(GameTestHelper helper) {
         Settler settler = withUpbringing(helper, WOODCUTTERS);
         Job lumberjack = ModJobs.LUMBERJACK.get();
-        helper.assertFalse(settler.getChronicle().talentConfirmed(), "Not confirmed at the start");
+        helper.assertFalse(settler.getPast().chronicle().talentConfirmed(), "Not confirmed at the start");
         act(helper, settler, lumberjack, 16);
         helper.assertTrue(skill(settler, lumberjack).level() == 2, "A level gained: " + skill(settler, lumberjack));
-        helper.assertTrue(settler.getChronicle().talentConfirmed(), "Confirmed by the level-up");
+        helper.assertTrue(settler.getPast().chronicle().talentConfirmed(), "Confirmed by the level-up");
         helper.assertTrue(confirmations(settler).size() == 1 && confirmations(settler).get(0).params().equals(List.of(lumberjack.id().toString())),
-                "One entry naming the Job: " + settler.getChronicle().entries());
+                "One entry naming the Job: " + settler.getPast().chronicle().entries());
         helper.assertTrue(talentBubble(settler), "The thought bubble shows: " + settler.getWork().recentThoughts());
         ThoughtBubble.Show bubble = settler.getWork().recentThoughts().stream().filter(show -> show.bubble() == ThoughtBubble.TALENT).findFirst().orElseThrow();
         helper.assertTrue(bubble.icon() == lumberjack.bubbleIcon().getItem(), "The bubble shows the Job's icon: " + bubble.icon());
         int bubbles = settler.getWork().recentThoughts().size();
         act(helper, settler, lumberjack, 100);
         helper.assertTrue(skill(settler, lumberjack).level() > 2, "More levels gained");
-        helper.assertTrue(confirmations(settler).size() == 1, "No second entry: " + settler.getChronicle().entries());
+        helper.assertTrue(confirmations(settler).size() == 1, "No second entry: " + settler.getPast().chronicle().entries());
         helper.assertTrue(settler.getWork().recentThoughts().stream().filter(show -> show.bubble() == ThoughtBubble.TALENT).count() == 1
                 && settler.getWork().recentThoughts().size() >= bubbles, "No second bubble");
         settler.discard();
@@ -319,7 +319,7 @@ public final class TalentExpGameTests {
         Settler settler = withUpbringing(helper, WOODCUTTERS);
         act(helper, settler, ModJobs.LUMBERJACK.get(), 10);
         helper.assertTrue(skill(settler, ModJobs.LUMBERJACK.get()).level() == 1, "No level yet");
-        helper.assertFalse(settler.getChronicle().talentConfirmed() || talentBubble(settler) || !confirmations(settler).isEmpty(), "Nothing confirmed");
+        helper.assertFalse(settler.getPast().chronicle().talentConfirmed() || talentBubble(settler) || !confirmations(settler).isEmpty(), "Nothing confirmed");
         settler.discard();
         helper.succeed();
     }
@@ -331,9 +331,9 @@ public final class TalentExpGameTests {
         act(helper, woodcutter, ModJobs.MINER.get(), 100);
         act(helper, withoutOrigin, ModJobs.LUMBERJACK.get(), 100);
         helper.assertTrue(skill(woodcutter, ModJobs.MINER.get()).level() > 1 && skill(withoutOrigin, ModJobs.LUMBERJACK.get()).level() > 1, "Levels gained");
-        helper.assertFalse(woodcutter.getChronicle().talentConfirmed() || talentBubble(woodcutter) || !confirmations(woodcutter).isEmpty(),
+        helper.assertFalse(woodcutter.getPast().chronicle().talentConfirmed() || talentBubble(woodcutter) || !confirmations(woodcutter).isEmpty(),
                 "An unfavoured Job confirms nothing");
-        helper.assertFalse(withoutOrigin.getChronicle().talentConfirmed() || talentBubble(withoutOrigin) || !confirmations(withoutOrigin).isEmpty(),
+        helper.assertFalse(withoutOrigin.getPast().chronicle().talentConfirmed() || talentBubble(withoutOrigin) || !confirmations(withoutOrigin).isEmpty(),
                 "A settler without an origin confirms nothing");
         woodcutter.discard();
         withoutOrigin.discard();
@@ -351,7 +351,7 @@ public final class TalentExpGameTests {
                     + " status " + settler.getWork().status(settler.getJobs().get(0).jobBlock()) + " at " + settler.position() + " scan "
                     + settler.getWork().scan(settler.getJobs().get(0).jobBlock()));
             helper.assertTrue(talentBubble(settler), "No talent bubble: " + settler.getWork().recentThoughts());
-            helper.assertTrue(confirmations(settler).size() == 1, "One diary entry: " + settler.getChronicle().entries());
+            helper.assertTrue(confirmations(settler).size() == 1, "One diary entry: " + settler.getPast().chronicle().entries());
             settler.discard();
             forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         });
@@ -368,8 +368,8 @@ public final class TalentExpGameTests {
             settler.getWork().setCatchUp(clock - DAY, clock);
             CatchUp.runNow(level, List.of(settler));
             helper.assertTrue(skill(settler, job.jobType()).level() >= 2, "The day gave a level: " + skill(settler, job.jobType()));
-            helper.assertTrue(settler.getChronicle().talentConfirmed() && confirmations(settler).size() == 1,
-                    "The entry is written: " + settler.getChronicle().entries());
+            helper.assertTrue(settler.getPast().chronicle().talentConfirmed() && confirmations(settler).size() == 1,
+                    "The entry is written: " + settler.getPast().chronicle().entries());
             helper.assertFalse(talentBubble(settler), "No bubble while catching up: " + settler.getWork().recentThoughts());
         });
     }

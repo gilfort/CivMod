@@ -140,8 +140,8 @@ public final class SettlerGameTests {
             helper.assertTrue(settlers.size() == 4, "Expected 4 starting settlers, got " + settlers.size());
             Set<String> names = new HashSet<>();
             for (Settler settler : settlers) {
-                helper.assertTrue(settler.hasCustomName() && settler.getOrigin().isPresent(), "Settler without name or origin");
-                helper.assertTrue(names.add(settler.getOrigin().orElseThrow().name().orElseThrow().first()), "Duplicate first name");
+                helper.assertTrue(settler.hasCustomName() && settler.getPast().origin().isPresent(), "Settler without name or origin");
+                helper.assertTrue(names.add(settler.getPast().origin().orElseThrow().name().orElseThrow().first()), "Duplicate first name");
                 helper.assertTrue(settler.getSettlementId() == settlement.id() && settler.getRace().equals(Races.HUMAN), "Wrong membership or race");
                 helper.assertTrue(settler.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(anchor)) <= 8.0 * 8.0, "Settler spawned too far away");
             }

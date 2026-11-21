@@ -81,7 +81,7 @@ public final class TalentGameTests {
     /** A joined settler with the given upbringing and its Lumberjack skill at the given level. */
     private static Settler candidate(GameTestHelper helper, Settlement settlement, String name, BlockPos at, Optional<Identifier> upbringing, int level) {
         Settler settler = AutoAssignmentGameTests.settler(helper, settlement, name, at);
-        upbringing.ifPresent(id -> settler.setOrigin(origin(id)));
+        upbringing.ifPresent(id -> settler.getPast().setOrigin(origin(id)));
         settler.getSkills().set(ModJobs.LUMBERJACK.get(), new SettlerSkills.Skill(level, 0));
         return settler;
     }
@@ -107,7 +107,7 @@ public final class TalentGameTests {
         Settlement settlement = AutoAssignmentGameTests.jobBlock(helper, LUMBERJACK, ModBlocks.LUMBERJACK_BLOCK.get());
         Settler nearPlain = candidate(helper, settlement, "NearPlain", new BlockPos(2, 1, 1), Optional.empty(), 2);
         Settler farTalented = candidate(helper, settlement, "FarTalented", new BlockPos(8, 1, 8), Optional.of(WOODCUTTERS), 2);
-        helper.assertFalse(farTalented.getChronicle().talentConfirmed(), "The talent is not confirmed yet");
+        helper.assertFalse(farTalented.getPast().chronicle().talentConfirmed(), "The talent is not confirmed yet");
         AutoAssignmentGameTests.toggle(helper, LUMBERJACK, ModJobs.LUMBERJACK.get(), true);
         helper.assertTrue(AutoAssignmentGameTests.holds(helper, farTalented, LUMBERJACK, ModJobs.LUMBERJACK.get()) && nearPlain.getJobs().isEmpty(),
                 "The talented settler takes the place: " + AutoAssignmentGameTests.block(helper, LUMBERJACK).assignees());
@@ -146,9 +146,9 @@ public final class TalentGameTests {
         ServerLevel level = helper.getLevel();
         Settler settler = handBuilt(helper);
         try {
-            settler.setOrigin(origin(STONE_AND_SEA));
+            settler.getPast().setOrigin(origin(STONE_AND_SEA));
             helper.assertTrue(SettlerInfo.of(settler).person().talent().isEmpty(), "Hidden before the confirmation");
-            settler.setChronicle(settler.getChronicle().withTalentConfirmed());
+            settler.getPast().setChronicle(settler.getPast().chronicle().withTalentConfirmed());
             SettlerInfo info = SettlerInfo.of(settler);
             List<Job> expected = List.of(ModJobs.MINER.get(), ModJobs.FISHERMAN.get());
             helper.assertTrue(info.person().talent().equals(expected), "Shown after the confirmation: " + info.person().talent());
@@ -156,7 +156,7 @@ public final class TalentGameTests {
             SettlerInfo.STREAM_CODEC.encode(buffer, info);
             helper.assertTrue(SettlerInfo.STREAM_CODEC.decode(buffer).person().talent().equals(expected), "The talent survives the trip to the client");
             Settler withoutOrigin = handBuilt(helper);
-            withoutOrigin.setChronicle(withoutOrigin.getChronicle().withTalentConfirmed());
+            withoutOrigin.getPast().setChronicle(withoutOrigin.getPast().chronicle().withTalentConfirmed());
             helper.assertTrue(SettlerInfo.of(withoutOrigin).person().talent().isEmpty(), "No origin, no talent to show");
             withoutOrigin.discard();
             helper.succeed();

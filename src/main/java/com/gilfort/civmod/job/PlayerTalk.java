@@ -91,18 +91,18 @@ public final class PlayerTalk {
 
     /** The next part of the origin the settler has not told yet, picked at random; written into the diary. */
     private static Optional<Result> tellOrigin(Settler settler, RandomSource random) {
-        Optional<SettlerOrigin> origin = settler.getOrigin();
+        Optional<SettlerOrigin> origin = settler.getPast().origin();
         if (origin.isEmpty()) {
             return Optional.empty();
         }
-        Chronicle chronicle = settler.getChronicle();
+        Chronicle chronicle = settler.getPast().chronicle();
         List<OriginLine.Slot> untold = OriginLine.tellable(origin.get()).stream().filter(slot -> !chronicle.hasTold(slot)).toList();
         if (untold.isEmpty()) {
             return Optional.empty();
         }
         OriginLine.Slot slot = untold.get(random.nextInt(untold.size()));
         List<String> params = OriginLine.params(slot, origin.get(), OriginData.race(settler.getRace()));
-        settler.setChronicle(chronicle.withTold(slot));
+        settler.getPast().setChronicle(chronicle.withTold(slot));
         Diary.add(settler, ModDiaryEntryTypes.ORIGIN_LINE.get(), params);
         return Optional.of(new Result(OriginLine.text(params), Optional.of(slot)));
     }

@@ -91,7 +91,7 @@ public final class Origins {
         Set<String> names = new HashSet<>();
         for (UUID member : settlement.members()) {
             if (level.getEntity(member) instanceof Settler settler) {
-                names.add(settler.getOrigin().flatMap(SettlerOrigin::name).map(SettlerName::first).orElseGet(() -> settler.getName().getString()));
+                names.add(settler.getPast().origin().flatMap(SettlerOrigin::name).map(SettlerName::first).orElseGet(() -> settler.getName().getString()));
             }
         }
         return names;
@@ -118,7 +118,7 @@ public final class Origins {
         SettlerOrigin rolled = OriginRoller.roll(race.get(), OriginData.firstNames(race.get(), culture), arrival, random);
         Optional<Rescuer> rescuer = arrival.channel().founderRescues() ? settlement.flatMap(found -> found.origins().founder()) : Optional.empty();
         SettlerOrigin origin = rolled.withRescuer(rescuer);
-        settler.setOrigin(origin);
+        settler.getPast().setOrigin(origin);
         Diary.arrival(settler, origin);
         origin.name().map(OriginText::name).ifPresent(settler::setCustomName);
     }

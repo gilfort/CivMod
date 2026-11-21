@@ -4,17 +4,15 @@ import java.util.List;
 import java.util.Optional;
 
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.chronicle.Diary;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 import com.gilfort.civmod.job.SettlerWork;
+import com.gilfort.civmod.origin.SettlerPast;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
-import com.gilfort.civmod.origin.SettlerOrigin;
-import com.gilfort.civmod.chronicle.Chronicle;
-import com.gilfort.civmod.chronicle.Diary;
-import com.gilfort.civmod.job.PlayerTalk;
 import com.gilfort.civmod.settlement.OccupiedPlaces;
 import com.gilfort.civmod.settlement.StationTypes;
 import com.gilfort.civmod.settlement.Settlement;
@@ -124,10 +122,7 @@ public class Settler extends PathfinderMob {
     private final SettlerFood food = new SettlerFood();
     private final com.gilfort.civmod.job.SettlerSkills skills = new com.gilfort.civmod.job.SettlerSkills();
     private final com.gilfort.civmod.job.SettlerXp xp = new com.gilfort.civmod.job.SettlerXp();
-    /** The past of the settler; empty for settlers from before the origins and for hand-built test settlers. */
-    private Optional<SettlerOrigin> origin = Optional.empty();
-    /** The diary and the marks of what the settler has told; empty for a settler without a story yet. */
-    private Chronicle chronicle = Chronicle.EMPTY;
+    private final SettlerPast past = new SettlerPast();
     /** Looking around while sitting: the work goal holds the look of the main goals during a break. */
     private final GoalSelector sittingLook = new GoalSelector();
     /** Client: the timeline of the cast line ({@link #castTarget()}). */
@@ -289,34 +284,6 @@ public class Settler extends PathfinderMob {
     }
 
     /**
-     * @return the settler's past, empty if it arrived before the origins existed
-     */
-    public Optional<SettlerOrigin> getOrigin() {
-        return origin;
-    }
-
-    /**
-     * @param origin the settler's past (set by {@code Origins} when the settler arrives)
-     */
-    public void setOrigin(SettlerOrigin origin) {
-        this.origin = Optional.of(origin);
-    }
-
-    /**
-     * @return the settler's diary and the marks of what it has told
-     */
-    public Chronicle getChronicle() {
-        return chronicle;
-    }
-
-    /**
-     * @param chronicle the settler's chronicle (written by {@link Diary} and the talk)
-     */
-    public void setChronicle(Chronicle chronicle) {
-        this.chronicle = chronicle;
-    }
-
-    /**
      * @return the settlement id, {@code -1} if homeless
      */
     public int getSettlementId() {
@@ -470,6 +437,13 @@ public class Settler extends PathfinderMob {
     }
 
     /**
+     * @return the origin and the chronicle of the settler
+     */
+    public SettlerPast getPast() {
+        return past;
+    }
+
+    /**
      * @return the equipment (tool belt, offhand, pockets, armor; see the slot constants)
      */
     public SimpleContainer getInventory() {
@@ -493,9 +467,7 @@ public class Settler extends PathfinderMob {
      * forgotten, e.g. a mission it was away on ends).
      */
     public void becomeHomeless() {
-        if (!isHomeless()) {
-            Diary.homeless(this);
-        }
+        Diary.homeless(this);
         settlementId = -1;
         setJobs(List.of());
         setHomeTo(blockPosition(), HOMELESS_RADIUS);
@@ -768,18 +740,8 @@ public class Settler extends PathfinderMob {
             // Let the scroll handle the interaction (assign / bind); invisible settlers are away.
             return InteractionResult.PASS;
         }
-        ItemStack held = player.getItemInHand(hand);
-        if (hand == InteractionHand.MAIN_HAND && SettlerFood.isEdible(held)) {
-            if (player instanceof ServerPlayer serverPlayer) {
-                feedBy(serverPlayer, held);
-            }
-            return InteractionResult.SUCCESS;
-        }
-        if (player instanceof ServerPlayer serverPlayer && hand == InteractionHand.MAIN_HAND) {
-            // Shift with an empty hand talks; a settler that does not talk (asleep) opens the window like a plain right-click.
-            if (!(player.isShiftKeyDown() && held.isEmpty() && PlayerTalk.talk(this, serverPlayer).isPresent())) {
-                openWindow(serverPlayer, Optional.empty());
-            }
+        if (hand == InteractionHand.MAIN_HAND && player instanceof ServerPlayer serverPlayer) {
+            SettlerInteraction.onRightClick(this, serverPlayer, player.getItemInHand(hand));
         }
         return InteractionResult.SUCCESS;
     }
@@ -795,19 +757,6 @@ public class Settler extends PathfinderMob {
         SettlerInfo info = SettlerInfo.of(this);
         player.openMenu(new SimpleMenuProvider((id, inventory, p) -> new SettlerMenu(id, inventory, this, info, anchor), getName()),
                 buffer -> SettlerInfo.STREAM_CODEC.encode(buffer, info));
-    }
-
-    private void feedBy(ServerPlayer player, ItemStack held) {
-        ItemStack one = held.copyWithCount(1);
-        ItemStack rest = work.feed(player.level(), one);
-        if (ItemStack.matches(rest, one)) {
-            player.sendOverlayMessage(Component.translatable("civmod.settler.full", getName()));
-            return;
-        }
-        held.consume(1, player);
-        if (!rest.isEmpty() && !ItemStack.isSameItemSameComponents(rest, one) && !player.getInventory().add(rest)) {
-            player.spawnAtLocation(player.level(), rest);
-        }
     }
 
     /**
@@ -880,8 +829,7 @@ public class Settler extends PathfinderMob {
         output.store("tool_needs", com.gilfort.civmod.job.ToolNeeds.Saved.LIST, work.toolNeedStates());
         output.store("entertainment", com.gilfort.civmod.entertainment.Entertainment.CODEC, work.entertainment());
         output.store("speed_boost", com.gilfort.civmod.job.SpeedBoost.CODEC, work.speedBoost());
-        origin.ifPresent(value -> output.store("origin", SettlerOrigin.CODEC, value));
-        output.store("chronicle", Chronicle.CODEC, chronicle);
+        past.save(output);
     }
 
     @Override
@@ -903,8 +851,7 @@ public class Settler extends PathfinderMob {
         input.read("tool_needs", com.gilfort.civmod.job.ToolNeeds.Saved.LIST).ifPresent(work::restoreToolNeeds);
         input.read("entertainment", com.gilfort.civmod.entertainment.Entertainment.CODEC).ifPresent(work::setEntertainment);
         input.read("speed_boost", com.gilfort.civmod.job.SpeedBoost.CODEC).ifPresent(work::setSpeedBoost);
-        origin = input.read("origin", SettlerOrigin.CODEC);
-        chronicle = input.read("chronicle", Chronicle.CODEC).orElse(Chronicle.EMPTY);
+        past.load(input);
         setInvisible(isAway());
     }
 }

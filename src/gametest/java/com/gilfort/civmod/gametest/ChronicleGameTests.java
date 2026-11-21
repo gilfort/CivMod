@@ -148,7 +148,7 @@ public final class ChronicleGameTests {
     /** A settler with a hand-set origin: the family, the trade surname and the turning point are the ones given. */
     private static Settler withOrigin(GameTestHelper helper, Optional<SettlerName> name) {
         Settler settler = handBuilt(helper);
-        settler.setOrigin(origin(name, Optional.of(CRAFTSFOLK), Optional.of(RAIDERS)));
+        settler.getPast().setOrigin(origin(name, Optional.of(CRAFTSFOLK), Optional.of(RAIDERS)));
         return settler;
     }
 
@@ -185,7 +185,7 @@ public final class ChronicleGameTests {
     }
 
     private static List<Identifier> types(Settler settler) {
-        return settler.getChronicle().entries().stream().map(DiaryEntry::type).toList();
+        return settler.getPast().chronicle().entries().stream().map(DiaryEntry::type).toList();
     }
 
     private static double entertainment(Settler settler) {
@@ -210,7 +210,7 @@ public final class ChronicleGameTests {
         try {
             helper.assertTrue(!settlers.isEmpty(), "Starting settlers arrived");
             for (Settler settler : settlers) {
-                List<DiaryEntry> diary = settler.getChronicle().entries();
+                List<DiaryEntry> diary = settler.getPast().chronicle().entries();
                 helper.assertTrue(diary.size() == 1 && diary.get(0).type().equals(CivMod.id("arrival")), "One arrival entry: " + diary);
                 DiaryEntry arrival = diary.get(0);
                 helper.assertTrue(arrival.day() == DayClock.day(helper.getLevel()), "Written on the day of the arrival: " + arrival.day());
@@ -232,7 +232,7 @@ public final class ChronicleGameTests {
         Settlement settlement = standalone(helper, data, anchor, Optional.empty());
         List<Settler> settlers = SettlerSpawner.arrive(helper.getLevel(), data, settlement, anchor);
         try {
-            DiaryEntry arrival = settlers.get(0).getChronicle().entries().get(0);
+            DiaryEntry arrival = settlers.get(0).getPast().chronicle().entries().get(0);
             helper.assertTrue(arrival.params().get(1).isEmpty(), "Nobody took it in: " + arrival.params());
             Component text = ModDiaryEntryTypes.ARRIVAL.get().text().apply(arrival.params());
             helper.assertTrue(key(text).equals(OriginText.key("reason", CivMod.id("survivors"))), "Only the reason: " + key(text));
@@ -253,7 +253,7 @@ public final class ChronicleGameTests {
             settler.becomeHomeless();
             helper.assertTrue(types(settler).equals(List.of(CivMod.id("arrival"), CivMod.id("homeless"))), "Arrival, then the loss of the home: " + types(settler));
             settler.becomeHomeless();
-            helper.assertTrue(settler.getChronicle().entries().size() == 2, "A settler that is homeless already writes nothing: " + types(settler));
+            helper.assertTrue(settler.getPast().chronicle().entries().size() == 2, "A settler that is homeless already writes nothing: " + types(settler));
             helper.succeed();
         } finally {
             settlers.forEach(Settler::discard);
@@ -280,7 +280,7 @@ public final class ChronicleGameTests {
             for (int i = 0; i < extra; i++) {
                 helper.assertTrue(CivModApi.addDiaryEntry(settler, ModDiaryEntryTypes.ORIGIN_LINE, List.of("turning_point", "civmod:entry_" + i)), "Entry " + i + " written");
             }
-            List<DiaryEntry> diary = settler.getChronicle().entries();
+            List<DiaryEntry> diary = settler.getPast().chronicle().entries();
             helper.assertTrue(diary.size() == Chronicle.CAP, "At most " + Chronicle.CAP + " entries: " + diary.size());
             helper.assertTrue(diary.get(0).type().equals(CivMod.id("arrival")), "The arrival entry stays at the top: " + types(settler));
             helper.assertTrue(diary.get(1).params().get(1).equals("civmod:entry_" + (extra - Chronicle.CAP + 1)), "The oldest others dropped first: " + diary.get(1));
@@ -298,7 +298,7 @@ public final class ChronicleGameTests {
             DiaryEntryType type = ModDiaryEntryTypes.REGISTRY.getValue(TEST_TYPE);
             helper.assertTrue(type != null && !type.permanent() && !type.beforeArrival(), "The addon type is in the registry: " + type);
             helper.assertTrue(CivModApi.addDiaryEntry(settler, () -> type, List.of("a", "b")), "The entry is written");
-            DiaryEntry entry = settler.getChronicle().entries().get(0);
+            DiaryEntry entry = settler.getPast().chronicle().entries().get(0);
             helper.assertTrue(entry.type().equals(TEST_TYPE) && entry.params().equals(List.of("a", "b")) && entry.day() == DayClock.day(helper.getLevel()),
                     "Type, parameters and day: " + entry);
             helper.assertTrue(key(type.text().apply(entry.params())).equals("diary.test.entry"), "The words come from the type");
@@ -316,20 +316,20 @@ public final class ChronicleGameTests {
         Settler settler = handBuilt(helper);
         try {
             Origins.assignEgg(settler, RandomSource.create(2L));
-            settler.setChronicle(settler.getChronicle().withTold(OriginLine.Slot.UPBRINGING).withTold(OriginLine.Slot.PLACE));
+            settler.getPast().setChronicle(settler.getPast().chronicle().withTold(OriginLine.Slot.UPBRINGING).withTold(OriginLine.Slot.PLACE));
             CivModApi.addDiaryEntry(settler, ModDiaryEntryTypes.HOMELESS, List.of());
-            Chronicle before = settler.getChronicle();
+            Chronicle before = settler.getPast().chronicle();
             TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
             settler.saveWithoutId(output);
             CompoundTag tag = output.buildResult();
             Settler loaded = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
             loaded.load(TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), tag));
-            helper.assertTrue(loaded.getChronicle().equals(before), "Saved with the settler: " + loaded.getChronicle());
-            helper.assertTrue(loaded.getChronicle().told().equals(List.of(OriginLine.Slot.UPBRINGING, OriginLine.Slot.PLACE)), "The told lines: " + loaded.getChronicle().told());
+            helper.assertTrue(loaded.getPast().chronicle().equals(before), "Saved with the settler: " + loaded.getPast().chronicle());
+            helper.assertTrue(loaded.getPast().chronicle().told().equals(List.of(OriginLine.Slot.UPBRINGING, OriginLine.Slot.PLACE)), "The told lines: " + loaded.getPast().chronicle().told());
             tag.remove("chronicle");
             Settler old = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
             old.load(TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), tag));
-            helper.assertTrue(old.getChronicle().equals(Chronicle.EMPTY), "A save without a chronicle loads an empty one: " + old.getChronicle());
+            helper.assertTrue(old.getPast().chronicle().equals(Chronicle.EMPTY), "A save without a chronicle loads an empty one: " + old.getPast().chronicle());
             helper.succeed();
         } finally {
             settler.discard();
@@ -346,7 +346,7 @@ public final class ChronicleGameTests {
             Origins.assignEgg(settler, RandomSource.create(3L));
             CivModApi.addDiaryEntry(settler, ModDiaryEntryTypes.HOMELESS, List.of());
             SettlerInfo info = SettlerInfo.of(settler);
-            helper.assertTrue(info.person().hasOrigin() && info.person().diary().equals(settler.getChronicle().entries()), "The diary of the settler: " + info.person());
+            helper.assertTrue(info.person().hasOrigin() && info.person().diary().equals(settler.getPast().chronicle().entries()), "The diary of the settler: " + info.person());
             RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), level.registryAccess());
             SettlerInfo.STREAM_CODEC.encode(buffer, info);
             SettlerInfo received = SettlerInfo.STREAM_CODEC.decode(buffer);
@@ -394,7 +394,7 @@ public final class ChronicleGameTests {
             double before = entertainment(settler);
             interact(player, settler, ItemStack.EMPTY);
             helper.assertTrue(player.containerMenu == player.inventoryMenu, "The window stays closed");
-            Chronicle chronicle = settler.getChronicle();
+            Chronicle chronicle = settler.getPast().chronicle();
             helper.assertTrue(chronicle.told().size() == 1 && chronicle.entries().size() == 1, "One line told and written: " + chronicle);
             helper.assertTrue(chronicle.entries().get(0).type().equals(CivMod.id("origin_line")), "An origin line entry: " + chronicle.entries());
             helper.assertTrue(entertainment(settler) - before == TALK_POINTS, "Entertainment rose by 0.5: " + entertainment(settler));
@@ -415,7 +415,7 @@ public final class ChronicleGameTests {
             helper.assertTrue(opensWindow(player, settler, new ItemStack(Items.STICK)), "Shift with an item in hand opens the window");
             settler.setSleepingPos(helper.absolutePos(ANCHOR));
             helper.assertTrue(opensWindow(player, settler, ItemStack.EMPTY), "A sleeping settler does not talk: the window opens");
-            helper.assertTrue(settler.getChronicle().equals(Chronicle.EMPTY) && entertainment(settler) == 0.0, "Nothing was told: " + settler.getChronicle());
+            helper.assertTrue(settler.getPast().chronicle().equals(Chronicle.EMPTY) && entertainment(settler) == 0.0, "Nothing was told: " + settler.getPast().chronicle());
             helper.succeed();
         } finally {
             TestPlayers.remove(player);
@@ -443,7 +443,7 @@ public final class ChronicleGameTests {
                     "The arrival and the three lines in the diary: " + types(settler));
             PlayerTalk.Result fourth = talk(helper, settler, player);
             helper.assertTrue(fourth.told().isEmpty() && key(fourth.line()).startsWith("civmod.talk.small."), "The fourth talk is small talk: " + key(fourth.line()));
-            helper.assertTrue(settler.getChronicle().entries().size() == 4, "Small talk writes nothing: " + types(settler));
+            helper.assertTrue(settler.getPast().chronicle().entries().size() == 4, "Small talk writes nothing: " + types(settler));
             for (int i = 0; i < 5; i++) {
                 helper.assertTrue(talk(helper, settler, player).told().isEmpty(), "Never an origin line again");
             }
@@ -476,7 +476,7 @@ public final class ChronicleGameTests {
             PlayerTalk.Result plainLine = talk(helper, plain, player);
             helper.assertTrue(key(plainLine.line()).equals("origin.told.upbringing.plain"), "No trade surname: " + key(plainLine.line()));
             helper.assertTrue(plainLine.told().equals(Optional.of(OriginLine.Slot.UPBRINGING)), "It is the upbringing: " + plainLine.told());
-            DiaryEntry written = plain.getChronicle().entries().get(0);
+            DiaryEntry written = plain.getPast().chronicle().entries().get(0);
             helper.assertTrue(OriginLine.text(written.params()).equals(plainLine.line()), "The diary entry reads like the line: " + written);
             helper.succeed();
         } finally {
@@ -493,8 +493,8 @@ public final class ChronicleGameTests {
         BlockPos anchor = helper.absolutePos(ANCHOR);
         Settlement settlement = standalone(helper, data, anchor, Optional.of(FOUNDER));
         Settler settler = handBuilt(helper);
-        settler.setOrigin(origin(Optional.empty(), Optional.empty(), Optional.empty()));
-        settler.setChronicle(settler.getChronicle().withTold(OriginLine.Slot.PLACE));
+        settler.getPast().setOrigin(origin(Optional.empty(), Optional.empty(), Optional.empty()));
+        settler.getPast().setChronicle(settler.getPast().chronicle().withTold(OriginLine.Slot.PLACE));
         settler.joinSettlement(data, settlement);
         ServerPlayer player = player(helper, true);
         try {
@@ -508,7 +508,7 @@ public final class ChronicleGameTests {
             PlayerTalk.Result settlementTalk = talk(helper, settler, player);
             String key = key(settlementTalk.line());
             helper.assertTrue(key.matches("civmod\\.talk\\.small\\.settlement\\.(bed|fire)\\.2"), "A need it lacks: " + key);
-            helper.assertTrue(settler.getChronicle().entries().isEmpty(), "Small talk writes nothing");
+            helper.assertTrue(settler.getPast().chronicle().entries().isEmpty(), "Small talk writes nothing");
             // A homeless settler has no settlement to talk about: it talks about the weather whatever the pick.
             settler.becomeHomeless();
             PlayerTalk.script(OriginRolls.picks(1, 0, 0));
@@ -573,7 +573,7 @@ public final class ChronicleGameTests {
         try {
             PlayerTalk.Result result = talk(helper, settler, player);
             helper.assertTrue(result.told().isEmpty() && key(result.line()).startsWith("civmod.talk.small."), "Small talk: " + key(result.line()));
-            helper.assertTrue(settler.getChronicle().equals(Chronicle.EMPTY), "No diary entry: " + settler.getChronicle());
+            helper.assertTrue(settler.getPast().chronicle().equals(Chronicle.EMPTY), "No diary entry: " + settler.getPast().chronicle());
             helper.succeed();
         } finally {
             TestPlayers.remove(player);

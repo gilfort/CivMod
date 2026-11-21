@@ -94,16 +94,16 @@ public final class Talent {
     }
 
     private static boolean confirm(Settler settler, Job job) {
-        if (settler.getChronicle().talentConfirmed()) {
+        if (settler.getPast().chronicle().talentConfirmed()) {
             return false;
         }
-        settler.setChronicle(settler.getChronicle().withTalentConfirmed());
+        settler.getPast().setChronicle(settler.getPast().chronicle().withTalentConfirmed());
         Diary.add(settler, ModDiaryEntryTypes.TALENT.get(), List.of(job.id().toString()));
         return true;
     }
 
     private static List<Identifier> upbringingJobs(Settler settler) {
-        return settler.getOrigin().flatMap(SettlerOrigin::upbringing)
+        return settler.getPast().origin().flatMap(SettlerOrigin::upbringing)
                 .flatMap(id -> OriginData.race(settler.getRace()).flatMap(race -> race.upbringing(id)))
                 .map(OriginEntry::jobs).orElse(List.of());
     }

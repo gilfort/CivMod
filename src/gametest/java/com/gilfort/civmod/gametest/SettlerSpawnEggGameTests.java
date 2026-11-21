@@ -79,7 +79,7 @@ public final class SettlerSpawnEggGameTests {
         helper.assertTrue(OriginData.races().contains(settler.getRace()), "Race from the race data: " + settler.getRace());
         helper.assertTrue(settler.getSkin() >= 0 && settler.getSkin() < SettlerSkins.COUNT, "Skin in range: " + settler.getSkin());
         helper.assertTrue(settler.hasCustomName(), "The egg Settler has a name");
-        helper.assertTrue(settler.getOrigin().flatMap(SettlerOrigin::name).isPresent(), "The egg Settler has an origin with a rolled name");
+        helper.assertTrue(settler.getPast().origin().flatMap(SettlerOrigin::name).isPresent(), "The egg Settler has an origin with a rolled name");
         for (Job job : ModJobs.REGISTRY) {
             helper.assertTrue(settler.getSkills().get(job).level() == 1, "Level 1 in " + job);
         }
