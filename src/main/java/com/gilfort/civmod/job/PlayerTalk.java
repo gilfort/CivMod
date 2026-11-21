@@ -44,6 +44,8 @@ public final class PlayerTalk {
     static final double TALK_POINTS = 0.5;
 
     private static final int SMALL_TALK_VARIANTS = 3;
+    /** A settler with a settlement talks about the weather one time in this many and about the settlement the other times. */
+    private static final int WEATHER_TALK_ONE_IN = 2;
 
     private static @Nullable RandomSource scripted;
 
@@ -109,7 +111,7 @@ public final class PlayerTalk {
 
     /** The weather, or the settlement told from the settler's own needs; a homeless settler has no settlement to talk about. */
     private static Component smallTalk(ServerLevel level, Settler settler, RandomSource random) {
-        if (settler.isHomeless() || random.nextInt(2) == 0) {
+        if (settler.isHomeless() || random.nextInt(WEATHER_TALK_ONE_IN) == 0) {
             String mood = level.isRaining() || level.isThundering() ? "bad" : "good";
             return variant("weather." + mood, random);
         }

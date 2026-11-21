@@ -76,9 +76,8 @@ public final class Diary {
      * @return the text
      */
     public static Component arrivalText(List<String> params) {
-        Identifier reason = params.isEmpty() ? null : Identifier.tryParse(params.get(0));
-        Component why = reason == null ? Component.translatable("diary.civmod.arrival.no_reason")
-                : Component.translatable(OriginText.key("reason", reason));
+        Component why = params.stream().findFirst().map(Identifier::tryParse).<Component>map(reason -> Component.translatable(OriginText.key("reason", reason)))
+                .orElseGet(() -> Component.translatable("diary.civmod.arrival.no_reason"));
         if (params.size() < 2 || params.get(1).isEmpty()) {
             return why;
         }

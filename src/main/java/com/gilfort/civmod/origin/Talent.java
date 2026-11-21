@@ -90,9 +90,10 @@ public final class Talent {
      * @return the text
      */
     public static Component confirmationText(List<String> params) {
-        Identifier id = params.isEmpty() ? null : Identifier.tryParse(params.get(0));
-        Job job = id == null ? null : ModJobs.REGISTRY.getValue(id);
-        return Component.translatable("diary.civmod.talent", job == null ? Component.literal(params.isEmpty() ? "" : params.get(0)) : job.indefiniteName());
+        String saved = params.isEmpty() ? "" : params.get(0);
+        Component job = Optional.ofNullable(Identifier.tryParse(saved)).flatMap(ModJobs.REGISTRY::getOptional).<Component>map(Job::indefiniteName)
+                .orElseGet(() -> Component.literal(saved));
+        return Component.translatable("diary.civmod.talent", job);
     }
 
     private static boolean confirm(Settler settler, Job job) {
