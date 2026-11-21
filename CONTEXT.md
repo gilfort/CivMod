@@ -505,11 +505,15 @@ The player who took a settler in: id, name when it happened and the settler day 
 _Avoid_: Owner
 
 **Diary**:
-The list of first-person entries a settler keeps, at most 20 (`Chronicle.CAP`), written on events only: its arrival, the loss of its settlement and the parts of its origin it has told. An entry is a type id, a list of text parameters and the settler day (`DiaryEntry`); the words are built from the type (`DiaryEntryType`, registry `civmod:diary_entry_type`) when somebody reads it. A full diary drops its oldest entry that is not permanent; the arrival entry is permanent. Origin lines are "before arrival" entries: the Chronicle tab lists them under "Before day X". Addons write through `CivModApi.addDiaryEntry`. Code: `Diary` (the writes), `Chronicle`, `ModDiaryEntryTypes`.
+The list of first-person entries a settler keeps, at most 20 (`Chronicle.CAP`), written on events only: its arrival, the loss of its settlement, the parts of its origin it has told and the confirmation of its talent. An entry is a type id, a list of text parameters and the settler day (`DiaryEntry`); the words are built from the type (`DiaryEntryType`, registry `civmod:diary_entry_type`) when somebody reads it. A full diary drops its oldest entry that is not permanent; the arrival entry is permanent. Origin lines are "before arrival" entries: the Chronicle tab lists them under "Before day X". Addons write through `CivModApi.addDiaryEntry`. Code: `Diary` (the writes), `Chronicle`, `ModDiaryEntryTypes`.
 _Avoid_: Journal, log
 
 **Chronicle**:
 The story of a settler: its diary plus the marks that must outlive the entries, which origin lines it has told and whether its talent is confirmed. Saved with the settler as one `Chronicle` value, so it can move to another settler as a whole. Shown in the Chronicle tab of the settler window (`ChronicleTabView`, `SettlerInfo.Person`). The settlement record at the Administrator is a different, later thing.
+
+**Talent**:
+The Jobs a settler's upbringing favours: the upbringing's one or two Base Jobs and every Job under them through `parent`. A favoured Job gives extra EXP (`talent_bonus_percent` in `civmod_skill/levels.json`, default 25), the same live and in catch-up. The first level-up in a favoured Job confirms the talent: the flag in the `Chronicle`, a diary entry, a thought bubble; until then the window shows nothing. A disliked Job is text only. Every skill EXP goes through `Talent.gainExp`; the fraction the bonus leaves is kept per skill (`SettlerSkills.Skill.carry`). Automatic assignment prefers a talented settler among equal skill levels. Code: `Talent`.
+_Avoid_: Gift, aptitude
 
 **Talk**:
 A player's Shift + right-click with an empty hand on a settler (`PlayerTalk`): the settler turns its head, greets, shows the conversation bubble and says one line in chat to that player only. The first three talks tell place, upbringing and turning point in random order, each once, and write each into the diary; after that it makes small talk about the weather (good or bad mood) or, from its own bed, fire and food needs, about the settlement. A sleeping settler does not talk: the click opens the window. The first talk of a day per settler gives 0.5 Entertainment (`Entertainment.talkedToPlayer`, own mark `playerTalkDay`). The told lines belong to the settler, not to a player.
