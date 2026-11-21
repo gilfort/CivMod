@@ -351,7 +351,7 @@ public final class LumberjackGameTests {
         return settler.getWork().scan(job.jobBlock()).map(ScanResult::isEmpty).orElse(true);
     }
 
-    static List<long[]> forceChunks(GameTestHelper helper) {
+    public static List<long[]> forceChunks(GameTestHelper helper) {
         return forceChunks(helper, new BlockPos(8, 0, 8));
     }
 

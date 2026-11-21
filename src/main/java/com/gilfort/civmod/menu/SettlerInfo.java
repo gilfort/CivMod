@@ -5,12 +5,14 @@ import java.util.List;
 import java.util.Optional;
 
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.chronicle.DiaryEntry;
 import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.JobStatus;
 import com.gilfort.civmod.job.NeedsReport;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.origin.Talent;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
@@ -27,7 +29,7 @@ import net.minecraft.world.item.ItemStack;
 /**
  * Snapshot of a settler shown in its GUI; sent to the client when the menu opens.
  *
- * @param name           the settler name
+ * @param person         the settler as a person: its name and its diary
  * @param status         the status text
  * @param homeless       whether the settler belongs to no settlement
  * @param settlementName the settlement name (empty if homeless)
@@ -40,8 +42,47 @@ import net.minecraft.world.item.ItemStack;
  * @param xp             the XP collected, in points
  * @param helping        the Job the settler helps with as a Laborer now (empty if it does not)
  */
-public record SettlerInfo(Component name, Component status, boolean homeless, Component settlementName, List<SettlerJob> jobs,
+public record SettlerInfo(Person person, Component status, boolean homeless, Component settlementName, List<SettlerJob> jobs,
         List<JobState> jobStates, Component bed, FoodInfo food, Component mission, NeedsReport needs, int xp, Optional<Job> helping) {
+
+    /**
+     * Who the settler is: the name the window shows, the diary the Chronicle tab lists and the talent once it is confirmed.
+     *
+     * @param name      the settler name
+     * @param diary     the diary entries, oldest first
+     * @param hasOrigin whether the settler has an origin; one that arrived before the origins existed has none, and its tab says so
+     * @param talent    the Base Jobs of the settler's upbringing, empty until the talent is confirmed (it stays hidden until then)
+     */
+    public record Person(Component name, List<DiaryEntry> diary, boolean hasOrigin, List<Job> talent) {
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, Person> STREAM_CODEC = StreamCodec.composite(
+                ComponentSerialization.STREAM_CODEC, Person::name,
+                DiaryEntry.STREAM_CODEC.apply(ByteBufCodecs.list()), Person::diary,
+                ByteBufCodecs.BOOL, Person::hasOrigin,
+                Job.STREAM_CODEC.apply(ByteBufCodecs.list()), Person::talent,
+                Person::new);
+
+        /**
+         * @param name      the settler name
+         * @param diary     the diary entries
+         * @param hasOrigin whether the settler has an origin
+         * @param talent    the confirmed talent's Base Jobs
+         */
+        public Person {
+            diary = List.copyOf(diary);
+            talent = List.copyOf(talent);
+        }
+
+        /**
+         * @param settler a settler (server side)
+         * @return its name, diary and, once confirmed, its talent now
+         */
+        static Person of(Settler settler) {
+            List<Job> talent = settler.getPast().chronicle().talentConfirmed() ? Talent.baseJobs(settler) : List.of();
+            return new Person(settler.getName(), settler.getPast().chronicle().entries(), settler.getPast().origin().isPresent(), talent);
+        }
+    }
 
     /**
      * Food state shown in the overview.
@@ -157,7 +198,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
 
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, SettlerInfo> STREAM_CODEC = StreamCodec.composite(
-            ComponentSerialization.STREAM_CODEC, SettlerInfo::name,
+            Person.STREAM_CODEC, SettlerInfo::person,
             ComponentSerialization.STREAM_CODEC, SettlerInfo::status,
             ByteBufCodecs.BOOL, SettlerInfo::homeless,
             ComponentSerialization.STREAM_CODEC, SettlerInfo::settlementName,
@@ -199,7 +240,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
         com.gilfort.civmod.food.SettlerFood food = settler.getFood();
         float appetite = food.appetite(settler.getRandom(), com.gilfort.civmod.config.CivModConfig.APPETITE_MIN.get(),
                 com.gilfort.civmod.config.CivModConfig.APPETITE_MAX.get());
-        return new SettlerInfo(settler.getName(), settler.statusText(), settler.isHomeless(), settlementName, settler.getJobs(), states, bed,
+        return new SettlerInfo(Person.of(settler), settler.statusText(), settler.isHomeless(), settlementName, settler.getJobs(), states, bed,
                 new FoodInfo(food.level(), food.saturation(), appetite),
                 settler.getWork().missionStatus().orElse(Component.empty()),
                 settler.level() instanceof ServerLevel level ? settler.getWork().needsReport(level) : NeedsReport.NONE, settler.getXp().points(),
@@ -229,7 +270,7 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
             return index >= 0 && index < jobStates.size() ? jobStates.get(index) : new JobState(JobStatus.IDLE, JobStatus.IDLE.displayName(), 0, 0, List.of(),
                     SkillInfo.NONE, List.of(), 0);
         }).toList();
-        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(jobs), states, bed, food, mission, needs, xp, helping);
+        return new SettlerInfo(person, status, homeless, settlementName, List.copyOf(jobs), states, bed, food, mission, needs, xp, helping);
     }
 
     /**
@@ -245,6 +286,6 @@ public record SettlerInfo(Component name, Component status, boolean homeless, Co
         if (index < states.size()) {
             states.set(index, states.get(index).switched(job, old.jobType()));
         }
-        return new SettlerInfo(name, status, homeless, settlementName, List.copyOf(switchedJobs), List.copyOf(states), bed, food, mission, needs, xp, helping);
+        return new SettlerInfo(person, status, homeless, settlementName, List.copyOf(switchedJobs), List.copyOf(states), bed, food, mission, needs, xp, helping);
     }
 }

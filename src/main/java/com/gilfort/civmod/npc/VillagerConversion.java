@@ -8,6 +8,7 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.mission.MissionVillagers;
+import com.gilfort.civmod.origin.Origins;
 import com.gilfort.civmod.registry.ModAttachments;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
@@ -398,9 +399,7 @@ public final class VillagerConversion {
         settler.snapTo(pos.x, pos.y, pos.z, villager.getYRot(), villager.getXRot());
         settler.setRace(Races.HUMAN);
         settler.setSkin(random.nextInt(SettlerSkins.COUNT));
-        Component name = villager.hasCustomName() ? villager.getCustomName()
-                : Component.literal(SettlerSpawner.randomName(Races.HUMAN, SettlerSpawner.usedNames(level, settlement), random));
-        settler.setCustomName(name);
+        Origins.assignConverted(level, settler, settlement, villager);
         rollSkills(settler.getSkills(), villager, random);
         settler.joinSettlement(data, settlement);
 

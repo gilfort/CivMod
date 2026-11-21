@@ -122,6 +122,16 @@ final class SettlerThoughts {
     }
 
     /**
+     * Shows the bubble of a confirmed talent: the icon of the Job whose level-up confirmed it.
+     *
+     * @param job  the Job
+     * @param send false while caught up
+     */
+    void talent(SettlerJob job, boolean send) {
+        emit(ThoughtBubble.TALENT, job.jobType().bubbleIcon().getItem(), true, send);
+    }
+
+    /**
      * Sends the problems that are on to a player that starts seeing the settler (it missed their "problem on").
      *
      * @param player the player
@@ -165,7 +175,7 @@ final class SettlerThoughts {
             case RECORD -> Items.MUSIC_DISC_CAT;
             case CONVERSATION -> Items.PAPER;
             case PLAYING -> Items.NOTE_BLOCK;
-            case JOB, NO_TOOL, NO_WORK_PLACE, BLOCKED, NEED_UNMET -> throw new IllegalArgumentException("Icon depends on the job or need: " + activity);
+            case JOB, TALENT, NO_TOOL, NO_WORK_PLACE, BLOCKED, NEED_UNMET -> throw new IllegalArgumentException("Icon depends on the job or need: " + activity);
         };
     }
 

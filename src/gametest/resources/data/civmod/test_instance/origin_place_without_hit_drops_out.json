@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:origin_place_without_hit_drops_out",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 4
+}

@@ -13,6 +13,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.origin.Talent;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -29,8 +30,8 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 /**
  * Automatic job assignment (vault {@code Systems/Scroll of Assignment.md}): every Job a JobBlock offers has a toggle
  * (default off). When it is switched on and every morning at 06:00 (catch-up too) jobless settlers of the settlement
- * take its free places: the highest skill in that Job first, ties nearest to the JobBlock, until no place or candidate
- * is left. Nothing else triggers it, so a place the player just freed stays free for the scroll until the next morning.
+ * take its free places: the highest skill in that Job first, then a talent for it (upbringing, confirmed or not), then nearest
+ * to the JobBlock, until no place or candidate is left. A talent never beats a higher skill. Nothing else triggers it, so a place the player just freed stays free for the scroll until the next morning.
  * <p>
  * Candidates are loaded settlers without any JobBlock job (Laborer only); assignment goes through the job picker's
  * path ({@link SettlementWorld#assign}). One pass over the settlement's settlers per toggle or per morning.
@@ -133,6 +134,7 @@ public final class AutoAssignment {
                 }
                 Vec3 center = Vec3.atCenterOf(block.pos());
                 Comparator<Settler> best = Comparator.<Settler>comparingInt(settler -> settler.getSkills().get(line.job()).level()).reversed()
+                        .thenComparing(settler -> !Talent.favours(settler, line.job()))
                         .thenComparingDouble(settler -> settler.distanceToSqr(center));
                 while (!candidates.isEmpty() && JobPlaces.line(block, line.job()).filter(current -> !current.full()).isPresent()) {
                     Settler settler = candidates.stream().min(best).orElseThrow();

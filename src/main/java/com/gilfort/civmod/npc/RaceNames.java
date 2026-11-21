@@ -26,9 +26,10 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 
 /**
- * Name lists per race, loaded from {@code data/<namespace>/civmod_names/<race>.json}
- * ({@code {"npc": [...], "settlement": [...]}}). Files of the same race from all datapacks are merged, so packs
- * can extend existing races or add new ones (vault {@code Systems/NPC Population.md}).
+ * Settlement name lists per race, loaded from {@code data/<namespace>/civmod_names/<race>.json}
+ * ({@code {"settlement": [...]}}). Files of the same race from all datapacks are merged, so packs
+ * can extend existing races or add new ones (vault {@code Systems/NPC Population.md}). The first names of settlers are
+ * part of the origin data ({@code OriginData}).
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class RaceNames extends SimplePreparableReloadListener<Map<Identifier, RaceNames.NameSet>> {
@@ -42,19 +43,17 @@ public final class RaceNames extends SimplePreparableReloadListener<Map<Identifi
     /**
      * Names of one race.
      *
-     * @param npc        person names
      * @param settlement settlement names
      */
-    public record NameSet(List<String> npc, List<String> settlement) {
+    public record NameSet(List<String> settlement) {
 
         /** JSON codec. */
         public static final Codec<NameSet> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                Codec.STRING.listOf().optionalFieldOf("npc", List.of()).forGetter(NameSet::npc),
                 Codec.STRING.listOf().optionalFieldOf("settlement", List.of()).forGetter(NameSet::settlement)
         ).apply(instance, NameSet::new));
 
         /** Empty name set. */
-        public static final NameSet EMPTY = new NameSet(List.of(), List.of());
+        public static final NameSet EMPTY = new NameSet(List.of());
     }
 
     @SubscribeEvent
@@ -68,13 +67,6 @@ public final class RaceNames extends SimplePreparableReloadListener<Map<Identifi
      */
     public static NameSet get(Identifier race) {
         return names.getOrDefault(race, NameSet.EMPTY);
-    }
-
-    /**
-     * @return the races that have person names, in a stable order (empty before the first data reload)
-     */
-    public static List<Identifier> races() {
-        return names.entrySet().stream().filter(entry -> !entry.getValue().npc().isEmpty()).map(Map.Entry::getKey).sorted().toList();
     }
 
     /**
@@ -99,18 +91,16 @@ public final class RaceNames extends SimplePreparableReloadListener<Map<Identifi
         Map<Identifier, NameSet> result = new HashMap<>();
         for (Map.Entry<Identifier, List<Resource>> entry : FILES.listMatchingResourceStacks(manager).entrySet()) {
             Identifier race = FILES.fileToId(entry.getKey());
-            List<String> npc = new ArrayList<>();
             List<String> settlement = new ArrayList<>();
             for (Resource resource : entry.getValue()) {
                 try (Reader reader = resource.openAsReader()) {
                     NameSet set = NameSet.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseReader(reader)).getOrThrow();
-                    set.npc().stream().filter(name -> !npc.contains(name)).forEach(npc::add);
                     set.settlement().stream().filter(name -> !settlement.contains(name)).forEach(settlement::add);
                 } catch (Exception e) {
                     CivMod.LOGGER.error("Failed to load names {} from pack {}", entry.getKey(), resource.sourcePackId(), e);
                 }
             }
-            result.put(race, new NameSet(List.copyOf(npc), List.copyOf(settlement)));
+            result.put(race, new NameSet(List.copyOf(settlement)));
         }
         return result;
     }

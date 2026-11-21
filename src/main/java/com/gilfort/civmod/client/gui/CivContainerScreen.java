@@ -47,7 +47,7 @@ public abstract class CivContainerScreen<T extends CivMenu> extends AbstractCont
         super.init();
         tabWidgets.clear();
         List<TabBar.Tab> bottom = bottomTabs();
-        tabBar = tabs.isEmpty() && bottom.isEmpty() ? null : new TabBar(tabs, bottom, this::isTabShown, leftPos, topPos, imageHeight);
+        tabBar = tabs.isEmpty() && bottom.isEmpty() ? null : new TabBar(tabs, bottom, this::isTabShown, leftPos, topPos, imageWidth, imageHeight);
         if (tabBar != null && !tabBar.isShown(menu.getActiveTab())) {
             // The selected tab disappeared (e.g. a job tab after removing the job): the first shown one.
             int first = 0;

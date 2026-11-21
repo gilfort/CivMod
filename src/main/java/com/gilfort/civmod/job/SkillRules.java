@@ -28,26 +28,31 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
  * files of all packs are merged, later entries override. Base EXP per job comes from the {@link Job} and
  * {@link JobBalancing}.
  *
- * @param base     EXP needed for level 1 → 2 minus {@code perLevel}
- * @param perLevel additional EXP per level
+ * @param base               EXP needed for level 1 → 2 minus {@code perLevel}
+ * @param perLevel           additional EXP per level
+ * @param talentBonusPercent the extra EXP a settler gains in a Job its upbringing favours, in percent of the EXP of the action
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
-public record SkillRules(int base, int perLevel) {
+public record SkillRules(int base, int perLevel, int talentBonusPercent) {
 
     /** Highest skill level. */
     public static final int MAX_LEVEL = 100;
     /** Reload listener id. */
     public static final Identifier ID = CivMod.id("skill_rules");
     /** Values used when no file is loaded. */
-    public static final SkillRules FALLBACK = new SkillRules(15, 5);
+    public static final SkillRules FALLBACK = new SkillRules(15, 5, 25);
+
+    /** The highest talent bonus a pack may set. */
+    private static final int MAX_TALENT_BONUS_PERCENT = 1000;
 
     private static final FileToIdConverter FILES = FileToIdConverter.json("civmod_skill");
     private static SkillRules current = FALLBACK;
 
-    private record Part(Optional<Integer> base, Optional<Integer> perLevel) {
+    private record Part(Optional<Integer> base, Optional<Integer> perLevel, Optional<Integer> talentBonusPercent) {
         static final Codec<Part> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                 Codec.INT.optionalFieldOf("base").forGetter(Part::base),
-                Codec.INT.optionalFieldOf("per_level").forGetter(Part::perLevel)
+                Codec.INT.optionalFieldOf("per_level").forGetter(Part::perLevel),
+                Codec.intRange(0, MAX_TALENT_BONUS_PERCENT).optionalFieldOf("talent_bonus_percent").forGetter(Part::talentBonusPercent)
         ).apply(instance, Part::new));
     }
 
@@ -75,6 +80,7 @@ public record SkillRules(int base, int perLevel) {
     public static SkillRules merge(List<JsonElement> files) {
         int base = FALLBACK.base();
         int perLevel = FALLBACK.perLevel();
+        int talentBonusPercent = FALLBACK.talentBonusPercent();
         for (JsonElement file : files) {
             Part part = Part.CODEC.parse(JsonOps.INSTANCE, file).getOrThrow();
             if (file.isJsonObject() && file.getAsJsonObject().has("base_exp")) {
@@ -82,8 +88,9 @@ public record SkillRules(int base, int perLevel) {
             }
             base = part.base().orElse(base);
             perLevel = part.perLevel().orElse(perLevel);
+            talentBonusPercent = part.talentBonusPercent().orElse(talentBonusPercent);
         }
-        return new SkillRules(base, perLevel);
+        return new SkillRules(base, perLevel, talentBonusPercent);
     }
 
     @SubscribeEvent

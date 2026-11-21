@@ -52,10 +52,12 @@ public class SettlerMenu extends CivMenu {
     public static final int TAB_INVENTORY = 3;
     /** Needs tab. */
     public static final int TAB_NEEDS = 4;
-    /** Mission tab (last of the top tabs: it is hidden without a Mission Job). */
+    /** Mission tab (hidden without a Mission Job). */
     public static final int TAB_MISSION = 5;
+    /** Chronicle tab: the settler's diary (last of the top tabs, always shown). */
+    public static final int TAB_CHRONICLE = 6;
     /** First of the job tabs (one per job, shown below the panel). */
-    public static final int FIRST_JOB_TAB = 6;
+    public static final int FIRST_JOB_TAB = 7;
     /** Maximum number of job tabs. */
     public static final int MAX_JOB_TABS = 6;
 

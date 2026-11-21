@@ -1,0 +1,96 @@
+{
+  "entries": [
+    {
+      "id": "civmod:woodcutters",
+      "jobs": [
+        "civmod:lumberjack"
+      ]
+    },
+    {
+      "id": "civmod:miners",
+      "jobs": [
+        "civmod:miner"
+      ]
+    },
+    {
+      "id": "civmod:fisher_folk",
+      "jobs": [
+        "civmod:fisherman"
+      ]
+    },
+    {
+      "id": "civmod:farmers",
+      "jobs": [
+        "civmod:gatherer"
+      ]
+    },
+    {
+      "id": "civmod:craftsfolk",
+      "jobs": [
+        "civmod:craftsperson"
+      ]
+    },
+    {
+      "id": "civmod:smelters",
+      "jobs": [
+        "civmod:smelter"
+      ]
+    },
+    {
+      "id": "civmod:wanderers",
+      "jobs": [
+        "civmod:adventurer"
+      ]
+    },
+    {
+      "id": "civmod:minstrels",
+      "jobs": [
+        "civmod:bard"
+      ]
+    },
+    {
+      "id": "civmod:temple_keepers",
+      "jobs": [
+        "civmod:priest"
+      ]
+    },
+    {
+      "id": "civmod:innkeepers",
+      "jobs": [
+        "civmod:tavern_host"
+      ]
+    },
+    {
+      "id": "civmod:record_keepers",
+      "jobs": [
+        "civmod:clerk"
+      ]
+    },
+    {
+      "id": "civmod:couriers",
+      "jobs": [
+        "civmod:deliveryman"
+      ]
+    },
+    {
+      "id": "civmod:stewards",
+      "jobs": [
+        "civmod:administrator"
+      ]
+    },
+    {
+      "id": "civmod:woodland_family",
+      "jobs": [
+        "civmod:lumberjack",
+        "civmod:gatherer"
+      ]
+    },
+    {
+      "id": "civmod:stone_and_sea",
+      "jobs": [
+        "civmod:miner",
+        "civmod:fisherman"
+      ]
+    }
+  ]
+}

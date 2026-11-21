@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.UnaryOperator;
 
 import com.gilfort.civmod.CivMod;
 import com.mojang.serialization.Codec;
@@ -238,6 +239,18 @@ public final class SettlementData extends SavedData {
     public void setName(Settlement settlement, String name) {
         settlement.setName(Optional.of(name));
         changed();
+    }
+
+    /**
+     * Changes what the settlement keeps for the origins of its settlers. Only the save is marked: no client shows it, so the
+     * {@link #revision()} stays.
+     *
+     * @param settlement the settlement
+     * @param change     the new origins from the old ones
+     */
+    public void updateOrigins(Settlement settlement, UnaryOperator<SettlementOrigins> change) {
+        settlement.setOrigins(change.apply(settlement.origins()));
+        setDirty();
     }
 
     /**

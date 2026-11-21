@@ -37,6 +37,8 @@ public enum ThoughtBubble {
     CONVERSATION(false),
     /** A Bard starts a stop or a stage act: a note block. */
     PLAYING(false),
+    /** The first level-up in a Job its upbringing favours confirms the settler's talent: the Job's bubble icon. Hidden by "Problems only". */
+    TALENT(false),
     /** Problem: no usable tool (the needed tool). */
     NO_TOOL(true),
     /** Problem: the Animal Farmer has no food for its animals (wheat). */

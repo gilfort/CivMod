@@ -4,11 +4,13 @@ import java.util.List;
 import java.util.Optional;
 
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.chronicle.Diary;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 import com.gilfort.civmod.job.SettlerWork;
+import com.gilfort.civmod.origin.SettlerPast;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.OccupiedPlaces;
@@ -120,6 +122,7 @@ public class Settler extends PathfinderMob {
     private final SettlerFood food = new SettlerFood();
     private final com.gilfort.civmod.job.SettlerSkills skills = new com.gilfort.civmod.job.SettlerSkills();
     private final com.gilfort.civmod.job.SettlerXp xp = new com.gilfort.civmod.job.SettlerXp();
+    private final SettlerPast past = new SettlerPast();
     /** Looking around while sitting: the work goal holds the look of the main goals during a break. */
     private final GoalSelector sittingLook = new GoalSelector();
     /** Client: the timeline of the cast line ({@link #castTarget()}). */
@@ -434,6 +437,13 @@ public class Settler extends PathfinderMob {
     }
 
     /**
+     * @return the origin and the chronicle of the settler
+     */
+    public SettlerPast getPast() {
+        return past;
+    }
+
+    /**
      * @return the equipment (tool belt, offhand, pockets, armor; see the slot constants)
      */
     public SimpleContainer getInventory() {
@@ -457,6 +467,7 @@ public class Settler extends PathfinderMob {
      * forgotten, e.g. a mission it was away on ends).
      */
     public void becomeHomeless() {
+        Diary.homeless(this);
         settlementId = -1;
         setJobs(List.of());
         setHomeTo(blockPosition(), HOMELESS_RADIUS);
@@ -729,15 +740,8 @@ public class Settler extends PathfinderMob {
             // Let the scroll handle the interaction (assign / bind); invisible settlers are away.
             return InteractionResult.PASS;
         }
-        ItemStack held = player.getItemInHand(hand);
-        if (hand == InteractionHand.MAIN_HAND && SettlerFood.isEdible(held)) {
-            if (player instanceof ServerPlayer serverPlayer) {
-                feedBy(serverPlayer, held);
-            }
-            return InteractionResult.SUCCESS;
-        }
-        if (player instanceof ServerPlayer serverPlayer && hand == InteractionHand.MAIN_HAND) {
-            openWindow(serverPlayer, Optional.empty());
+        if (hand == InteractionHand.MAIN_HAND && player instanceof ServerPlayer serverPlayer) {
+            SettlerInteraction.onRightClick(this, serverPlayer, player.getItemInHand(hand));
         }
         return InteractionResult.SUCCESS;
     }
@@ -753,19 +757,6 @@ public class Settler extends PathfinderMob {
         SettlerInfo info = SettlerInfo.of(this);
         player.openMenu(new SimpleMenuProvider((id, inventory, p) -> new SettlerMenu(id, inventory, this, info, anchor), getName()),
                 buffer -> SettlerInfo.STREAM_CODEC.encode(buffer, info));
-    }
-
-    private void feedBy(ServerPlayer player, ItemStack held) {
-        ItemStack one = held.copyWithCount(1);
-        ItemStack rest = work.feed(player.level(), one);
-        if (ItemStack.matches(rest, one)) {
-            player.sendOverlayMessage(Component.translatable("civmod.settler.full", getName()));
-            return;
-        }
-        held.consume(1, player);
-        if (!rest.isEmpty() && !ItemStack.isSameItemSameComponents(rest, one) && !player.getInventory().add(rest)) {
-            player.spawnAtLocation(player.level(), rest);
-        }
     }
 
     /**
@@ -838,6 +829,7 @@ public class Settler extends PathfinderMob {
         output.store("tool_needs", com.gilfort.civmod.job.ToolNeeds.Saved.LIST, work.toolNeedStates());
         output.store("entertainment", com.gilfort.civmod.entertainment.Entertainment.CODEC, work.entertainment());
         output.store("speed_boost", com.gilfort.civmod.job.SpeedBoost.CODEC, work.speedBoost());
+        past.save(output);
     }
 
     @Override
@@ -859,6 +851,7 @@ public class Settler extends PathfinderMob {
         input.read("tool_needs", com.gilfort.civmod.job.ToolNeeds.Saved.LIST).ifPresent(work::restoreToolNeeds);
         input.read("entertainment", com.gilfort.civmod.entertainment.Entertainment.CODEC).ifPresent(work::setEntertainment);
         input.read("speed_boost", com.gilfort.civmod.job.SpeedBoost.CODEC).ifPresent(work::setSpeedBoost);
+        past.load(input);
         setInvisible(isAway());
     }
 }

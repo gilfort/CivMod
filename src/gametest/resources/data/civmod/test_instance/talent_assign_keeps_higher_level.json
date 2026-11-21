@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:talent_assign_keeps_higher_level",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

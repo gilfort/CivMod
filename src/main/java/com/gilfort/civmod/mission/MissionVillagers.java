@@ -3,6 +3,7 @@ package com.gilfort.civmod.mission;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
@@ -68,6 +69,7 @@ public final class MissionVillagers {
                     .withProfession(level.registryAccess(), random.nextDouble() < nitwit ? VillagerProfession.NITWIT : VillagerProfession.NONE));
             villager.snapTo(spot.x, spot.y, spot.z, random.nextFloat() * 360.0F, 0.0F);
             villager.setData(ModAttachments.MISSION_LEVEL, recommended);
+            mission.place().ifPresent(place -> villager.setData(ModAttachments.MISSION_PLACE, Optional.of(place)));
             level.addFreshEntity(villager);
             arrived.add(villager);
         }

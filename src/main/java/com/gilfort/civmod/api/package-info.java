@@ -5,8 +5,9 @@
  * {@link com.gilfort.civmod.api.SimpleCollectionProfile}, {@link com.gilfort.civmod.api.ProducingProfile},
  * {@link com.gilfort.civmod.api.MissionProfile}, {@link com.gilfort.civmod.api.ServiceProfile} with its
  * {@link com.gilfort.civmod.api.ServiceAct}s and {@link com.gilfort.civmod.api.ServiceEffect}s) and the JobBlock factory
- * ({@link com.gilfort.civmod.api.CivModApi#jobBlock}). CivMod uses it for its own Jobs; addons compile against this
- * package only.
+ * ({@link com.gilfort.civmod.api.CivModApi#jobBlock}), and the diary of a settler
+ * ({@link com.gilfort.civmod.api.DiaryEntryType}, {@link com.gilfort.civmod.api.CivModApi#addDiaryEntry}). CivMod uses it
+ * for its own Jobs; addons compile against this package only.
  * <p>
  * Experimental until the first release: breaking changes are allowed and noted in the pull request that makes them.
  */

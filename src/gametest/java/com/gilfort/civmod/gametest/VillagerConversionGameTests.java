@@ -66,9 +66,9 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class VillagerConversionGameTests {
 
-    private static final BlockPos VILLAGER = new BlockPos(4, 1, 4);
+    static final BlockPos VILLAGER = new BlockPos(4, 1, 4);
     private static final BlockPos JOB_BLOCK = new BlockPos(1, 1, 1);
-    private static final BlockPos BED = new BlockPos(6, 1, 2);
+    static final BlockPos BED = new BlockPos(6, 1, 2);
     private static final BlockPos SECOND_BED = new BlockPos(7, 1, 6);
 
     private VillagerConversionGameTests() {
@@ -112,7 +112,7 @@ public final class VillagerConversionGameTests {
     }
 
     /** An adult Farmer (it has trades, so plain interaction opens trading). */
-    private static Villager villager(GameTestHelper helper, BlockPos at) {
+    static Villager villager(GameTestHelper helper, BlockPos at) {
         ServerLevel level = helper.getLevel();
         Villager villager = EntityTypes.VILLAGER.create(level, EntitySpawnReason.EVENT);
         villager.setVillagerData(villager.getVillagerData().withProfession(level.registryAccess(), VillagerProfession.FARMER));
@@ -127,7 +127,7 @@ public final class VillagerConversionGameTests {
      * Places a Lumberjack JobBlock at {@link #JOB_BLOCK} on the floor; its settlement's starting settlers count as arrived,
      * so none spawn during the test.
      */
-    private static Settlement settlement(GameTestHelper helper) {
+    static Settlement settlement(GameTestHelper helper) {
         floor(helper);
         TestSettlements.setBlock(helper, JOB_BLOCK, ModBlocks.LUMBERJACK_BLOCK.get());
         SettlementData data = SettlementData.get(helper.getLevel());
@@ -137,7 +137,7 @@ public final class VillagerConversionGameTests {
     }
 
     /** Places a bed (both halves) with its head at the given relative position, facing north. */
-    private static BlockPos bed(GameTestHelper helper, BlockPos relativeHead) {
+    static BlockPos bed(GameTestHelper helper, BlockPos relativeHead) {
         BlockPos head = helper.absolutePos(relativeHead);
         BlockState bed = Blocks.BED.pick(DyeColor.RED).defaultBlockState().setValue(BedBlock.FACING, Direction.NORTH);
         int flags = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
@@ -157,7 +157,7 @@ public final class VillagerConversionGameTests {
     }
 
     /** Water bottle, then bread: the conversion starts and uses up one bread. */
-    private static void convert(GameTestHelper helper, Villager villager) {
+    static void convert(GameTestHelper helper, Villager villager) {
         Player player = helper.makeMockPlayer(GameType.SURVIVAL);
         use(player, villager, waterBottle());
         use(player, villager, new ItemStack(Items.BREAD, 2));
@@ -168,24 +168,24 @@ public final class VillagerConversionGameTests {
     }
 
     /** Lets the running conversion complete in a few ticks instead of five minutes. */
-    private static void hurry(GameTestHelper helper, Villager villager) {
+    static void hurry(GameTestHelper helper, Villager villager) {
         VillagerConversion.Conversion conversion = villager.getData(ModAttachments.CONVERSION);
         villager.setData(ModAttachments.CONVERSION, conversion.withDue(helper.getLevel().getGameTime() + 2));
     }
 
     /** The Settler of the settlement standing near a position, if any. */
-    private static Optional<Settler> settlerNear(GameTestHelper helper, Settlement settlement, Vec3 pos) {
+    static Optional<Settler> settlerNear(GameTestHelper helper, Settlement settlement, Vec3 pos) {
         return helper.getLevel().getEntitiesOfClass(Settler.class, new AABB(pos, pos).inflate(40)).stream()
                 .filter(settler -> settler.getSettlementId() == settlement.id())
                 .findFirst();
     }
 
     /** Entities only tick in entity-ticking chunks: forces the test area (see {@link LumberjackGameTests#forceChunks}). */
-    private static List<long[]> force(GameTestHelper helper, int size) {
+    static List<long[]> force(GameTestHelper helper, int size) {
         return LumberjackGameTests.forceChunks(helper, new BlockPos(size, 0, 9));
     }
 
-    private static void unforce(GameTestHelper helper, List<long[]> forced) {
+    static void unforce(GameTestHelper helper, List<long[]> forced) {
         forced.forEach(chunk -> helper.getLevel().setChunkForced((int) chunk[0], (int) chunk[1], false));
     }
 

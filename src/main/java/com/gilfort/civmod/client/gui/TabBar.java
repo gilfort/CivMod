@@ -48,6 +48,7 @@ public final class TabBar {
     private final IntPredicate shown;
     private final int panelX;
     private final int panelY;
+    private final int panelWidth;
     private final int panelHeight;
 
     /**
@@ -56,15 +57,30 @@ public final class TabBar {
      * @param shown       which tabs are shown; a hidden tab keeps its index, the tabs after it move up
      * @param panelX      the left edge of the panel
      * @param panelY      the top edge of the panel
+     * @param panelWidth  the width of the panel; a row with more tabs than fit this wide moves them closer together
      * @param panelHeight the height of the panel
      */
-    public TabBar(List<Tab> top, List<Tab> bottom, IntPredicate shown, int panelX, int panelY, int panelHeight) {
+    public TabBar(List<Tab> top, List<Tab> bottom, IntPredicate shown, int panelX, int panelY, int panelWidth, int panelHeight) {
         this.top = List.copyOf(top);
         this.bottom = List.copyOf(bottom);
         this.shown = shown;
         this.panelX = panelX;
         this.panelY = panelY;
+        this.panelWidth = panelWidth;
         this.panelHeight = panelHeight;
+    }
+
+    /** The distance between two tabs of the row of a tab: the normal one, or less when the shown tabs would reach past the panel. */
+    private int spacing(int index) {
+        int first = isTop(index) ? 0 : top.size();
+        int end = isTop(index) ? top.size() : size();
+        int shownInRow = 0;
+        for (int i = first; i < end; i++) {
+            if (shown.test(i)) {
+                shownInRow++;
+            }
+        }
+        return shownInRow < 2 ? TAB_SPACING : Math.min(TAB_SPACING, (panelWidth - TAB_WIDTH) / (shownInRow - 1));
     }
 
     /**
@@ -170,7 +186,7 @@ public final class TabBar {
     }
 
     private boolean isOver(int index, double mouseX, double mouseY) {
-        int x = panelX + column(index) * TAB_SPACING;
+        int x = panelX + column(index) * spacing(index);
         int y0 = isTop(index) ? panelY - TAB_OFFSET : panelY + panelHeight;
         int y1 = isTop(index) ? panelY : panelY + panelHeight + TAB_OFFSET;
         return mouseX >= x && mouseX < x + TAB_WIDTH && mouseY >= y0 && mouseY < y1;
@@ -179,7 +195,7 @@ public final class TabBar {
     private void extractTab(GuiGraphicsExtractor graphics, int index, boolean selected) {
         boolean isTop = isTop(index);
         int column = column(index);
-        int x = panelX + column * TAB_SPACING;
+        int x = panelX + column * spacing(index);
         int y = isTop ? panelY - TAB_OFFSET : panelY + panelHeight - (TAB_HEIGHT - TAB_OFFSET);
         Identifier[] sprites = isTop ? (selected ? TOP_SELECTED : TOP_UNSELECTED) : (selected ? BOTTOM_SELECTED : BOTTOM_UNSELECTED);
         graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprites[Math.min(column, sprites.length - 1)], x, y, TAB_WIDTH, TAB_HEIGHT);

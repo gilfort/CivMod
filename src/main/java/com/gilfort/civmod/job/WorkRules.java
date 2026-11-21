@@ -17,6 +17,7 @@ import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.origin.Talent;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
@@ -126,12 +127,13 @@ final class WorkRules {
      * @param rolls     production rolls made
      * @param items     produced items
      * @param toolWear  times a tool was worn
-     * @param exp       EXP gained
+     * @param exp       EXP granted, with the talent bonus and the fraction carried over
      * @param levelUp   whether the skill level rose
+     * @param talentConfirmed whether a level-up in this batch confirmed the settler's talent for the first time
      * @param end       why the batch stopped early ({@link End#NONE} if it used all work ticks)
      * @param ticksLeft work ticks not used because the job ended
      */
-    record Result(int rolls, int items, int toolWear, int exp, boolean levelUp, End end, double ticksLeft) {
+    record Result(int rolls, int items, int toolWear, int exp, boolean levelUp, boolean talentConfirmed, End end, double ticksLeft) {
     }
 
     /**
@@ -172,23 +174,23 @@ final class WorkRules {
         ToolSupply supply = setup.supply();
         ScanResult scan = workplace.scan();
         if (profile.needsResources() && scan != null && !profile.hasResources(scan)) {
-            return new Result(0, 0, 0, 0, false, End.NO_RESOURCES, workTicks);
+            return new Result(0, 0, 0, 0, false, false, End.NO_RESOURCES, workTicks);
         }
         Set<Identifier> excluded = site.block().excluded(job.jobType());
         // The recipes the scan offers: fixed while the scan is (filtered per roll by exclusion and Max).
         List<CollectionRecipes.Offer> offered = CollectionRecipes.offered(level, job.jobType(), profile, scan);
         if (allExcluded(profile, scan, excluded, offered)) {
-            return new Result(0, 0, 0, 0, false, End.ALL_EXCLUDED, workTicks);
+            return new Result(0, 0, 0, 0, false, false, End.ALL_EXCLUDED, workTicks);
         }
         if (scan != null && profile.blockingReason(scan).isPresent()) {
-            return new Result(0, 0, 0, 0, false, End.BLOCKED, workTicks);
+            return new Result(0, 0, 0, 0, false, false, End.BLOCKED, workTicks);
         }
         Optional<ItemStack> tool = tool(level, settler, job, profile, site, supply, true);
         if (tool.isEmpty()) {
-            return new Result(0, 0, 0, 0, false, End.NO_TOOL, workTicks);
+            return new Result(0, 0, 0, 0, false, false, End.NO_TOOL, workTicks);
         }
         if (!output.hasRoom()) {
-            return new Result(0, 0, 0, 0, false, End.OUTPUT_FULL, workTicks);
+            return new Result(0, 0, 0, 0, false, false, End.OUTPUT_FULL, workTicks);
         }
         int cap = site.skillCap();
         int skillLevel = settler.getWork().effectiveLevel(job);
@@ -203,6 +205,7 @@ final class WorkRules {
         int wear = 0;
         int exp = 0;
         boolean levelUp = false;
+        boolean talentConfirmed = false;
         End end = End.NONE;
         while (true) {
             double perTick = SettlerSpeed.withBiome(profile.speed(skillLevel, tool.get()) * job.jobType().productivity(scan, site.level()), bonus, speedFactor) / 20.0;
@@ -273,10 +276,10 @@ final class WorkRules {
                     room = output.accept(stacks);
                 }
                 int amount = job.jobType().baseExp() * site.level();
-                if (settler.getSkills().addExp(job.jobType(), amount, cap, SkillRules.get()) > 0) {
-                    levelUp = true;
-                }
-                exp += amount;
+                Talent.Gain gain = Talent.gainExp(settler, job.jobType(), amount, cap);
+                levelUp |= gain.levels() > 0;
+                talentConfirmed |= gain.confirmed();
+                exp += gain.exp();
                 skillLevel = settler.getWork().effectiveLevel(job);
                 if (!room) {
                     end = End.OUTPUT_FULL;
@@ -290,7 +293,7 @@ final class WorkRules {
             }
         }
         workplace.setProduction(accumulated);
-        return new Result(rolls, items, wear, exp, levelUp, end, ticks);
+        return new Result(rolls, items, wear, exp, levelUp, talentConfirmed, end, ticks);
     }
 
     /**

@@ -97,7 +97,7 @@ public final class CatchUpGameTests {
      *
      * @return the settler (its job is the first one)
      */
-    static Settler lumberjack(GameTestHelper helper, List<long[]> forced) {
+    public static Settler lumberjack(GameTestHelper helper, List<long[]> forced) {
         ServerLevel level = helper.getLevel();
         for (int x = 0; x < 9; x++) {
             for (int z = 0; z < 9; z++) {
