@@ -10,6 +10,7 @@ import com.gilfort.civmod.block.StarterTools;
 import com.gilfort.civmod.item.DeliverySlipItem;
 import com.gilfort.civmod.item.JobBlockUpgradeItem;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
+import com.gilfort.civmod.item.SettlerSpawnEggItem;
 
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
@@ -70,6 +71,10 @@ public final class ModItems {
     /** The Scroll of Assignment. */
     public static final DeferredItem<ScrollOfAssignmentItem> SCROLL_OF_ASSIGNMENT = ITEMS.registerItem("scroll_of_assignment",
             ScrollOfAssignmentItem::new, properties -> properties.stacksTo(1));
+
+    /** The Settler spawn egg: a creative-mode tool that spawns one homeless Settler (vault {@code Systems/NPC Population.md}). */
+    public static final DeferredItem<SettlerSpawnEggItem> SETTLER_SPAWN_EGG = ITEMS.registerItem("settler_spawn_egg",
+            SettlerSpawnEggItem::new, properties -> properties.spawnEgg(ModEntityTypes.SETTLER.get()));
 
     /** The Delivery Slip: a written order for the Deliverymen of a Warehouse (vault {@code Jobs/Deliveryman.md}). */
     public static final DeferredItem<DeliverySlipItem> DELIVERY_SLIP = ITEMS.registerItem("delivery_slip", DeliverySlipItem::new,

@@ -169,6 +169,7 @@
   "civmod.tooltip.job_block_upgrade": "Upgrades a JobBlock from Lv %s to %s",
   "civmod.upgrade.done": "%s upgraded to Lv %s",
   "item.civmod.ledger": "Ledger",
+  "item.civmod.settler_spawn_egg": "Settler Spawn Egg",
   "civmod.tooltip.ledger": "Adds 9 stock slots to a Clerk JobBlock",
   "civmod.tooltip.ledgers": "Ledgers: %s/%s",
   "civmod.ledger.done": "Ledger added (%s/%s)",

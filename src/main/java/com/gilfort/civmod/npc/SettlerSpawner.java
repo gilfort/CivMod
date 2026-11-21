@@ -1,6 +1,7 @@
 package com.gilfort.civmod.npc;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -50,6 +51,8 @@ public final class SettlerSpawner {
     private static final int SPAWN_RADIUS = 5;
     private static final int SPAWN_ATTEMPTS = 16;
     private static final double ANNOUNCE_DISTANCE = 64.0;
+    /** The name of a Settler whose race has no names. */
+    private static final String FALLBACK_NAME = "Settler";
 
     private SettlerSpawner() {
     }
@@ -154,6 +157,36 @@ public final class SettlerSpawner {
     }
 
     /**
+     * @param race      the race
+     * @param usedNames names to avoid while alternatives exist
+     * @param random    the random source
+     * @return a random person name of the race
+     */
+    static String randomName(Identifier race, Collection<String> usedNames, RandomSource random) {
+        return RaceNames.pick(RaceNames.get(race).npc(), usedNames, random).orElse(FALLBACK_NAME);
+    }
+
+    /**
+     * Sets up a Settler that appears from a spawn egg: a random race from the race data (human while none is loaded), a random
+     * skin, a random name of that race, level 1 in every Job, and homeless where it stands. A custom name on the egg replaces the
+     * random one afterwards. The Settler joins a settlement only by the homeless rules.
+     *
+     * @param settler the new Settler, already placed
+     * @param random  the random source
+     */
+    static void initializeEggSettler(Settler settler, RandomSource random) {
+        List<Identifier> races = RaceNames.races();
+        Identifier race = races.isEmpty() ? Races.HUMAN : races.get(random.nextInt(races.size()));
+        settler.setRace(race);
+        settler.setSkin(random.nextInt(SettlerSkins.COUNT));
+        settler.setCustomName(Component.literal(randomName(race, List.of(), random)));
+        for (Job job : ModJobs.REGISTRY) {
+            settler.getSkills().set(job, SettlerSkills.Skill.START);
+        }
+        settler.becomeHomeless();
+    }
+
+    /**
      * @param settlement a settlement
      * @return whether Settlers and running conversions reached {@code maxSettlersPerSettlement} (0 = unlimited)
      */
@@ -173,8 +206,7 @@ public final class SettlerSpawner {
         settler.snapTo(pos.x, pos.y, pos.z, random.nextFloat() * 360.0F, 0.0F);
         settler.setRace(race);
         settler.setSkin(random.nextInt(SettlerSkins.COUNT));
-        String name = RaceNames.pick(RaceNames.get(race).npc(), usedNames, random).orElse("Settler");
-        settler.setCustomName(Component.literal(name));
+        settler.setCustomName(Component.literal(randomName(race, usedNames, random)));
         settler.joinSettlement(data, settlement);
         // Provisions for the first days, before a Clerk has food.
         settler.getInventory().setItem(Settler.POCKETS_START, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.BREAD, 2));

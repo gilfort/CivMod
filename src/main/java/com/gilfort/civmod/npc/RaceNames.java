@@ -71,6 +71,13 @@ public final class RaceNames extends SimplePreparableReloadListener<Map<Identifi
     }
 
     /**
+     * @return the races that have person names, in a stable order (empty before the first data reload)
+     */
+    public static List<Identifier> races() {
+        return names.entrySet().stream().filter(entry -> !entry.getValue().npc().isEmpty()).map(Map.Entry::getKey).sorted().toList();
+    }
+
+    /**
      * Picks a random name, avoiding the used ones while alternatives exist.
      *
      * @param candidates the available names
