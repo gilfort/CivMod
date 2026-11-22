@@ -114,6 +114,34 @@ public final class Visitors {
     }
 
     /**
+     * @param level   the level
+     * @param visitor a visitor
+     * @return whether the player can still ask it to stay longer: it has a stay that nobody has asked about yet
+     */
+    public static boolean canAskToStay(ServerLevel level, Settler visitor) {
+        return SettlementData.get(level).settlement(visitor.getVisitedSettlementId())
+                .map(settlement -> settlement.inn().visits().get(visitor.getUUID())).filter(visit -> !visit.asked()).isPresent();
+    }
+
+    /**
+     * A player asks a visitor to stay longer from its window and gets the answer on the action bar.
+     *
+     * @param player  the player
+     * @param visitor the visitor
+     * @return what happened
+     */
+    public static Ask askToStayAndTell(ServerPlayer player, Settler visitor) {
+        Ask result = askToStay(player.level(), visitor);
+        String key = switch (result) {
+            case EXTENDED -> "civmod.visitor.stay.extended";
+            case DECLINED, NO_STAY -> "civmod.visitor.stay.declined";
+            case ALREADY_ASKED -> "civmod.visitor.stay.already_asked";
+        };
+        player.sendOverlayMessage(Component.translatable(key, visitor.getName()));
+        return result;
+    }
+
+    /**
      * The player asks a visitor to stay a little longer: once per visitor, and it works with the chance of {@link InnRules}.
      *
      * @param level   the level

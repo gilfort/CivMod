@@ -6,5 +6,6 @@
   "max_stay_days": 4,
   "extend_chance": 0.5,
   "extend_days": 2,
-  "min_level_cap": 3
+  "min_level_cap": 3,
+  "default_price_amount": 3
 }

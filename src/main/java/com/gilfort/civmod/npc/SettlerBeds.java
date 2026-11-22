@@ -138,7 +138,7 @@ public final class SettlerBeds {
      * @param from       the position to search from
      * @return the head positions of the free beds
      */
-    static List<BlockPos> freeBeds(ServerLevel level, Settlement settlement, BlockPos from) {
+    public static List<BlockPos> freeBeds(ServerLevel level, Settlement settlement, BlockPos from) {
         Set<BlockPos> owned = settlement.beds().keySet();
         Collection<BlockPos> reserved = settlement.bedReservations().values();
         Set<BlockPos> spawnBeds = spawnBeds(level);
@@ -160,7 +160,7 @@ public final class SettlerBeds {
      * @param settler    the settler UUID
      * @param bed        the bed head position
      */
-    static void claim(ServerLevel level, SettlementData data, Settlement settlement, UUID settler, BlockPos bed) {
+    public static void claim(ServerLevel level, SettlementData data, Settlement settlement, UUID settler, BlockPos bed) {
         settlement.bedOf(settler).ifPresent(previous -> releasePoi(level, previous));
         data.assignBed(settlement, bed, settler);
         takePoi(level, bed);

@@ -515,6 +515,18 @@ public class Settler extends PathfinderMob {
     }
 
     /**
+     * Turns a visitor of an inn into a member of a settlement. It is the same entity with the same name, past and levels; only its
+     * state switches. The caller ends the stay and gives it a bed.
+     *
+     * @param data       the dimension's settlement data
+     * @param settlement the settlement the visitor joins
+     */
+    public void becomeSettler(SettlementData data, Settlement settlement) {
+        visitedSettlementId = -1;
+        joinSettlement(data, settlement);
+    }
+
+    /**
      * Makes the settler homeless: keeps name, inventory and skills, drops all jobs except Laborer (their work state is
      * forgotten, e.g. a mission it was away on ends).
      */

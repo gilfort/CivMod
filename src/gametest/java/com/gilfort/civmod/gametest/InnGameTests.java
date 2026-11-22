@@ -130,7 +130,7 @@ public final class InnGameTests {
     static InnRules rules(double base, double scale, int stayDays) {
         InnRules shipped = InnRules.FALLBACK;
         return new InnRules(base, scale, shipped.bedsPerLevel(), stayDays, stayDays, shipped.extendChance(), shipped.extendDays(),
-                shipped.minLevelCap());
+                shipped.minLevelCap(), shipped.defaultPriceAmount());
     }
 
     /** A Pantry of a level at (1, 1, 1) of a new settlement on a stone floor. */

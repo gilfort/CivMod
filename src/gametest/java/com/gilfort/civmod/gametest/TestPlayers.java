@@ -47,6 +47,19 @@ final class TestPlayers {
      * @return the player; remove it with {@link #remove}
      */
     static ServerPlayer add(GameTestHelper helper, Vec3 at, Consumer<Component> onChat) {
+        return add(helper, at, onChat, message -> { });
+    }
+
+    /**
+     * Like {@link #add(GameTestHelper, Vec3, Consumer)}, and the player also hands every action bar message to a listener.
+     *
+     * @param helper    the test
+     * @param at        where the player stands
+     * @param onChat    gets each system message (chat line) the player receives
+     * @param onOverlay gets each action bar message the player receives
+     * @return the player; remove it with {@link #remove}
+     */
+    static ServerPlayer add(GameTestHelper helper, Vec3 at, Consumer<Component> onChat, Consumer<Component> onOverlay) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         CommonListenerCookie cookie = CommonListenerCookie.createInitial(new GameProfile(UUID.randomUUID(), "test-listener"), false);
@@ -54,6 +67,11 @@ final class TestPlayers {
             @Override
             public void sendSystemMessage(Component message) {
                 onChat.accept(message);
+            }
+
+            @Override
+            public void sendOverlayMessage(Component message) {
+                onOverlay.accept(message);
             }
         };
         Connection connection = new Connection(PacketFlow.SERVERBOUND);
