@@ -17,6 +17,7 @@ import com.gilfort.civmod.inn.VisitorStroll;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.Visit;
 
 import net.minecraft.core.BlockPos;
@@ -68,6 +69,7 @@ public final class VisitorDayGameTests {
         event.register(Registries.TEST_FUNCTION, helper -> {
             register(helper, "visitor_day_sleeps_in_guest_bed", VisitorDayGameTests::sleepsInGuestBed);
             register(helper, "visitor_day_leaving_frees_bed", VisitorDayGameTests::leavingFreesBed);
+            register(helper, "visitor_day_hired_frees_bed", VisitorDayGameTests::hiredFreesBed);
             register(helper, "visitor_day_eats_once", VisitorDayGameTests::eatsOnce);
             register(helper, "visitor_day_no_food_leaves", VisitorDayGameTests::noFoodLeaves);
             register(helper, "visitor_day_tavern_crowd", VisitorDayGameTests::tavernCrowd);
@@ -189,6 +191,22 @@ public final class VisitorDayGameTests {
                     forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
                 })
                 .thenSucceed();
+    }
+
+    /** A visitor that is hired while it sleeps gets up and frees its guest bed. */
+    private static void hiredFreesBed(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Inn inn = newInn(helper);
+        Settler visitor = oneVisitor(helper, inn);
+        visitor.setNoAi(true);
+        BlockPos bed = helper.absolutePos(InnGameTests.BED_SPOTS.get(0));
+        helper.assertTrue(visitor.startSleeping(bed), "The visitor lies in its guest bed");
+
+        visitor.becomeSettler(SettlementData.get(level), inn.settlement());
+        helper.assertFalse(visitor.isSleeping(), "The new settler is up");
+        helper.assertFalse(level.getBlockState(bed).getValue(BedBlock.OCCUPIED), "The guest bed is free again");
+        visitor.discard();
+        InnGameTests.end(helper, inn);
     }
 
     /** A visitor that leaves while it sleeps frees its guest bed. */

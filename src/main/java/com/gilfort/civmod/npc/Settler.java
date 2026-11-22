@@ -522,6 +522,8 @@ public class Settler extends PathfinderMob {
      * @param settlement the settlement the visitor joins
      */
     public void becomeSettler(SettlementData data, Settlement settlement) {
+        // A visitor hired in its sleep leaves its guest bed free.
+        wakeUp();
         visitedSettlementId = -1;
         joinSettlement(data, settlement);
     }
