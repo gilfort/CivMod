@@ -70,6 +70,7 @@ public final class GuestBeds {
         Settlement owner = settlement.get();
         if (owner.inn().bedsOf(pantry).contains(bed)) {
             data.updateInn(owner, inn -> inn.withoutBed(bed));
+            SettlerBeds.releasePoi(level, bed);
             return Result.UNBOUND;
         }
         Optional<Result> refusal = refusal(level, owner, block.get(), bed);
@@ -77,6 +78,8 @@ public final class GuestBeds {
             return refusal.get();
         }
         data.updateInn(owner, inn -> inn.withBed(pantry, bed));
+        // Like a settler's bed, a guest bed is no home for a Villager.
+        SettlerBeds.takePoi(level, bed);
         Inns.bedBound(level, data, owner);
         return Inns.isInn(owner, pantry) ? Result.BOUND : Result.BOUND_OVER_LIMIT;
     }

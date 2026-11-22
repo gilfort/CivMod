@@ -42,6 +42,8 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.clock.WorldClocks;
+import net.minecraft.world.entity.ai.village.poi.PoiManager;
+import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -104,6 +106,7 @@ public final class InnGameTests {
             register(helper, "inn_guest_bed_unbound", InnGameTests::guestBedUnbound);
             register(helper, "inn_host_break", InnGameTests::hostBreak);
             register(helper, "inn_limit", InnGameTests::innLimit);
+            register(helper, "inn_guest_bed_poi", InnGameTests::guestBedPoi);
         });
     }
 
@@ -594,6 +597,35 @@ public final class InnGameTests {
         TestAssignments.unassign(SettlementData.get(helper.getLevel()), inn.pantry());
         play(helper, inn, day, EVENING);
         helper.assertTrue(visitors(helper).size() == 1, "The visitor stays and no second one comes: " + visitors(helper).size());
+        end(helper, inn);
+    }
+
+    /** Whether the vanilla home POI of the bed still has its ticket, so a Villager may take it. */
+    private static boolean poiFree(ServerLevel level, BlockPos bed) {
+        return level.getPoiManager().getInRange(type -> type.is(PoiTypes.HOME), bed, 0, PoiManager.Occupancy.HAS_SPACE)
+                .anyMatch(record -> record.getPos().equals(bed));
+    }
+
+    /**
+     * A guest bed is claimed in the vanilla POI system, so a Villager cannot take it as its home. Unbinding it, and the fall of
+     * its Pantry, free it again.
+     */
+    private static void guestBedPoi(GameTestHelper helper) {
+        Inn inn = inn(helper, 1, 2, false);
+        ServerLevel level = helper.getLevel();
+        SettlementData data = SettlementData.get(level);
+        BlockPos first = helper.absolutePos(BED_SPOTS.get(0));
+        BlockPos second = helper.absolutePos(BED_SPOTS.get(1));
+        helper.assertTrue(!poiFree(level, first) && !poiFree(level, second), "Bound guest beds are claimed");
+
+        helper.assertTrue(GuestBeds.toggle(level, data, inn.pantry(), first) == GuestBeds.Result.UNBOUND, "The first guest bed is unbound");
+        helper.assertTrue(poiFree(level, first), "An unbound bed is free for everybody again");
+        helper.assertTrue(!poiFree(level, second), "The other guest bed stays claimed");
+
+        long day = today(helper);
+        SettlementManager.remove(data, inn.pantry(), day, SettlementManager.Listener.NONE);
+        play(helper, inn, day, EVENING);
+        helper.assertTrue(poiFree(level, second), "The guest bed of a removed Pantry is free again");
         end(helper, inn);
     }
 

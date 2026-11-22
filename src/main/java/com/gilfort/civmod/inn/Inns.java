@@ -161,6 +161,7 @@ public final class Inns {
      * @param settlement the settlement that was dissolved
      */
     public static void dissolved(ServerLevel level, Settlement settlement) {
+        settlement.inn().guestBeds().values().forEach(beds -> beds.forEach(bed -> SettlerBeds.releasePoi(level, bed)));
         for (UUID visitor : settlement.inn().visits().keySet()) {
             if (level.getEntity(visitor) instanceof Settler settler) {
                 Visitors.vanish(level, settler);
@@ -211,11 +212,13 @@ public final class Inns {
         private void fallAway(long slot) {
             for (BlockPos pantry : List.copyOf(state.guestBeds().keySet())) {
                 if (settlement.block(pantry).filter(ClerkStorage::isPantry).isEmpty()) {
+                    state.bedsOf(pantry).forEach(bed -> SettlerBeds.releasePoi(level, bed));
                     state = state.withoutPantry(pantry);
                     continue;
                 }
                 for (BlockPos bed : state.bedsOf(pantry)) {
                     if (level.isLoaded(bed) && SettlerBeds.head(level, bed).filter(bed::equals).isEmpty()) {
+                        SettlerBeds.releasePoi(level, bed);
                         state = state.withoutBed(bed);
                     }
                 }
