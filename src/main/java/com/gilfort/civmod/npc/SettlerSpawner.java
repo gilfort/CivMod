@@ -11,7 +11,6 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.config.CivModConfig;
-import com.gilfort.civmod.entertainment.EntertainmentRules;
 import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.origin.Channel;
 import com.gilfort.civmod.origin.OriginData;
@@ -199,7 +198,7 @@ public final class SettlerSpawner {
             int start = Talent.favours(settler, job) ? VillagerConversion.rollLevel(levelCap, random) : 1;
             settler.getSkills().set(job, new SettlerSkills.Skill(start, 0));
         }
-        settler.becomeVisitor(settlement.id(), pantry, EntertainmentRules.get().tavernRadius());
+        settler.becomeVisitor(settlement.id());
         level.addFreshEntity(settler);
         return Optional.of(settler);
     }

@@ -3,8 +3,10 @@ package com.gilfort.civmod.entertainment;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.job.SettlerWork;
@@ -14,6 +16,7 @@ import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.Visit;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -31,8 +34,8 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
 
 /**
  * The Tavern evening (vault {@code Systems/Entertainment.md}): a Pantry whose Tavern Host is on shift, in the evening.
- * Once per in-game minute ({@link #COUNT_INTERVAL}) every such Pantry counts the settlers of its settlement within the
- * Tavern radius (a Bard on its way to its Stage or on it does not count). If the crowd is big enough (condition A) or a jukebox that holds a
+ * Once per in-game minute ({@link #COUNT_INTERVAL}) every such Pantry counts the settlers of its settlement and the visitors of its
+ * inn within the Tavern radius (a Bard on its way to its Stage or on it does not count). If the crowd is big enough (condition A) or a jukebox that holds a
  * disc stands near (condition B), each guest who holds a seat at the Pantry, and the Tavern Host, gets the points of
  * {@link EntertainmentRules#tavernPoints} once per evening.
  * <p>
@@ -187,15 +190,17 @@ public final class Tavern {
      * @param settlement the settlement of the Pantry
      * @param pantry     the Pantry
      * @param rules      the rules
-     * @return the settlers of the settlement within the Tavern radius of the Pantry that are not away (Mission, foraging); the
-     *         Tavern Host is one of them, a Bard on its way to the Stage or playing there is not (before that it is a guest)
+     * @return the settlers of the settlement and the visitors of this Pantry within the Tavern radius of the Pantry that are not away
+     *         (Mission, foraging); the Tavern Host is one of them, a Bard on its way to the Stage or playing there is not (before
+     *         that it is a guest). A visitor counts for the crowd only: it holds no seat, so the Tavern never pays it.
      */
     static List<Settler> present(ServerLevel level, Settlement settlement, BlockPos pantry, EntertainmentRules rules) {
         Vec3 center = Vec3.atCenterOf(pantry);
         double radius = rules.tavernRadius();
+        Set<UUID> visitors = settlement.inn().visitsOf(pantry).stream().map(Visit::id).collect(Collectors.toSet());
         return level.getEntitiesOfClass(Settler.class, AABB.ofSize(center, 2 * radius, 2 * radius, 2 * radius),
-                settler -> settlement.members().contains(settler.getUUID()) && !settler.isAway() && !Stage.performs(level, settler)
-                        && settler.position().distanceToSqr(center) <= radius * radius);
+                settler -> (settlement.members().contains(settler.getUUID()) || visitors.contains(settler.getUUID())) && !settler.isAway()
+                        && !Stage.performs(level, settler) && settler.position().distanceToSqr(center) <= radius * radius);
     }
 
     /**

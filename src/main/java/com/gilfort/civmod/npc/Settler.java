@@ -7,6 +7,8 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.chronicle.Diary;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.inn.Inns;
+import com.gilfort.civmod.inn.VisitorDay;
+import com.gilfort.civmod.inn.VisitorStroll;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
@@ -55,7 +57,6 @@ import net.minecraft.world.entity.ai.goal.GoalSelector;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
-import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -126,6 +127,7 @@ public class Settler extends PathfinderMob {
     private final com.gilfort.civmod.job.SettlerSkills skills = new com.gilfort.civmod.job.SettlerSkills();
     private final com.gilfort.civmod.job.SettlerXp xp = new com.gilfort.civmod.job.SettlerXp();
     private final SettlerPast past = new SettlerPast();
+    private final VisitorDay visitorDay = new VisitorDay(this);
     /** Looking around while sitting: the work goal holds the look of the main goals during a break. */
     private final GoalSelector sittingLook = new GoalSelector();
     /** Client: the timeline of the cast line ({@link #castTarget()}). */
@@ -242,7 +244,7 @@ public class Settler extends PathfinderMob {
     protected void registerGoals() {
         goalSelector.addGoal(0, new FloatGoal(this));
         goalSelector.addGoal(1, new OpenDoorGoal(this, true));
-        goalSelector.addGoal(5, new WaterAvoidingRandomStrollGoal(this, 0.5));
+        goalSelector.addGoal(5, new VisitorStroll(this, 0.5));
         goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
         goalSelector.addGoal(7, new RandomLookAroundGoal(this));
     }
@@ -318,15 +320,29 @@ public class Settler extends PathfinderMob {
     }
 
     /**
-     * Makes the settler a visitor of an inn and keeps it near the Pantry.
+     * @return what the settler does during its stay at an inn; it does nothing while the settler is no visitor
+     */
+    public VisitorDay visitorDay() {
+        return visitorDay;
+    }
+
+    /**
+     * Makes the settler a visitor of an inn. It is free to stroll through the whole settlement; {@link VisitorDay} keeps it inside
+     * the border and gathers it at the Pantry in the evening.
      *
      * @param settlementId the settlement of the inn
-     * @param pantry       the Pantry of the inn
-     * @param radius       how far from the Pantry it strolls
      */
-    public void becomeVisitor(int settlementId, BlockPos pantry, int radius) {
+    public void becomeVisitor(int settlementId) {
         visitedSettlementId = settlementId;
-        setHomeTo(pantry, radius);
+        clearHome();
+    }
+
+    /**
+     * @return the settlement the settler lives in, or the settlement of the inn it visits: the one whose settlers and visitors greet
+     *         each other, {@code -1} for a homeless settler
+     */
+    public int socialSettlementId() {
+        return settlementId >= 0 ? settlementId : visitedSettlementId;
     }
 
     /**
@@ -425,6 +441,10 @@ public class Settler extends PathfinderMob {
      */
     @Override
     public void remove(RemovalReason reason) {
+        if (reason.shouldDestroy() && isVisitor() && isSleeping()) {
+            // A visitor that leaves in the night frees its guest bed.
+            wakeUp();
+        }
         if (reason.shouldDestroy() && level() instanceof net.minecraft.server.level.ServerLevel server) {
             com.gilfort.civmod.settlement.Requests.releaseAll(SettlementData.get(server), getUUID());
             // Its requests for tools end with it.
@@ -691,10 +711,11 @@ public class Settler extends PathfinderMob {
     protected void customServerAiStep(ServerLevel level) {
         super.customServerAiStep(level);
         if (isVisitor()) {
-            // A visitor ticks no work, no needs and no social life of its own; only its stay is looked at now and then.
+            // A visitor ticks no work and no needs; its stay is looked at now and then, and its own day is all it does.
             if ((tickCount + getId()) % CHECK_INTERVAL == 0) {
                 checkMembership(level);
             }
+            visitorDay.aiStep(level);
             return;
         }
         work.aiStep(level);

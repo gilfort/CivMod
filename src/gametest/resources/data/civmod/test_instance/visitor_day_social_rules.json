@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:inn",
+  "function": "civmod:visitor_day_social_rules",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

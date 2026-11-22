@@ -888,6 +888,26 @@ public final class SettlerWork {
         }
     }
 
+    /**
+     * @return whether a conversation holds the settler's decisions: it stands still or walks to its partner
+     */
+    public boolean talkHoldsDecision() {
+        return social.holdsDecision();
+    }
+
+    /**
+     * The meeting check of a visitor, with the rules of a settler's (vault {@code Systems/Entertainment.md}). A visitor has no work
+     * decision, so its own decision step runs the check. Nothing happens while it is in a conversation or the config
+     * {@code socialLife} is off.
+     *
+     * @param level the level
+     */
+    public void meetAsVisitor(ServerLevel level) {
+        if (CivModConfig.SOCIAL_LIFE.get() && !social.holdsDecision()) {
+            social.meet(level, interruptible(level), true);
+        }
+    }
+
     /** What a settler did before a conversation stopped it: the step it goes back to afterwards. */
     record Resume(Activity activity, @Nullable BlockPos target, double reach) {
     }

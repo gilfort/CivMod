@@ -270,6 +270,7 @@
   "civmod.scroll.bed.spawn_bed": "This bed is a player's spawn point",
   "civmod.settler.status.visitor": "Visiting the inn",
   "civmod.visitor.moved_on": "%s has moved on.",
+  "civmod.visitor.no_food": "%s has moved on. The inn had no food.",
   "civmod.visitor.dissolved": "%s packs up and leaves, as the settlement is gone.",
   "civmod.visitor.stay.extended": "%s agrees to stay a little longer.",
   "civmod.visitor.stay.declined": "%s has to move on, as planned.",

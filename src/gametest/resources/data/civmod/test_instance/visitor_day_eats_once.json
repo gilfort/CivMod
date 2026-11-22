@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:visitor_meal",
+  "function": "civmod:visitor_day_eats_once",
+  "max_ticks": 600,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

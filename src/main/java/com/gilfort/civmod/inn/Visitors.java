@@ -75,14 +75,16 @@ public final class Visitors {
 
     /**
      * The visitor of a stay that is over goes, if it is loaded; one that is not loaded notices the missing stay when it loads. A
-     * visitor the player asked to stay longer says goodbye to the players nearby.
+     * visitor the player asked to stay longer says goodbye to the players nearby, and one that found no food at the Pantry says so.
      *
      * @param level the level
      * @param visit the stay that ended
      */
     static void leave(ServerLevel level, Visit visit) {
         if (level.getEntity(visit.id()) instanceof Settler visitor) {
-            if (visit.asked()) {
+            if (visit.noFood()) {
+                note(level, visitor, Component.translatable("civmod.visitor.no_food", visitor.getName()));
+            } else if (visit.asked()) {
                 note(level, visitor, Component.translatable("civmod.visitor.moved_on", visitor.getName()));
             }
             visitor.discard();

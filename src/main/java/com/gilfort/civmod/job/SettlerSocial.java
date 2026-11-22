@@ -24,8 +24,8 @@ import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.phys.AABB;
 
 /**
- * The social life of one settler (vault {@code Systems/Entertainment.md}, Conversations and greetings): in its decision
- * step it looks for company within the radius and rolls once per settler or player found. A greeting is a head turn
+ * The social life of one settler or visitor (vault {@code Systems/Entertainment.md}, Conversations and greetings): in its decision
+ * step it looks for company within the radius and rolls once per settler, visitor or player found. A greeting is a head turn
  * towards the other and one arm swing; the settler keeps walking or working. A conversation stops both settlers: the
  * settler whose roll succeeded walks up to the other, they talk for a few seconds, each gets its points, and both go back
  * to what they did.
@@ -199,11 +199,11 @@ final class SettlerSocial {
         }
     }
 
-    /** A settler of the same settlement that is awake and visible, or a player who plays. */
+    /** A settler or visitor of the same settlement that is awake and visible, or a player who plays. */
     private boolean noticeable(Entity other) {
         if (other instanceof Settler neighbour) {
-            return awakeAndVisible(neighbour) && neighbour.getSettlementId() >= 0
-                    && neighbour.getSettlementId() == settler.getSettlementId();
+            return awakeAndVisible(neighbour) && neighbour.socialSettlementId() >= 0
+                    && neighbour.socialSettlementId() == settler.socialSettlementId();
         }
         return other instanceof Player player && player.isAlive() && !player.isSpectator();
     }
@@ -383,7 +383,9 @@ final class SettlerSocial {
             work.resumeAfterTalk(level, side.resume);
         }
         if (completed) {
-            work.setEntertainment(work.entertainment().talked(SocialRules.get().points(), DayClock.day(level), level.getGameTime()));
+            // A visitor is marked as having talked (cooldown, daily limit) but gets no points.
+            double points = who.isVisitor() ? 0.0 : SocialRules.get().points();
+            work.setEntertainment(work.entertainment().talked(points, DayClock.day(level), level.getGameTime()));
         }
     }
 
