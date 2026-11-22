@@ -129,6 +129,13 @@ public final class SettlerSkills {
     }
 
     /**
+     * @return the highest level in any job, 0 for a settler without a skill entry
+     */
+    public int bestLevel() {
+        return skills.values().stream().mapToInt(Skill::level).max().orElse(0);
+    }
+
+    /**
      * @param saved saved skills
      */
     public void restore(Map<Job, Skill> saved) {

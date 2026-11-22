@@ -23,6 +23,11 @@ import net.minecraft.world.item.ItemStackTemplate;
  */
 final class VisitorMeal {
 
+    /** Volume of the eating sound. */
+    private static final float EAT_VOLUME = 0.6F;
+    /** The eating sound has a pitch of at least this much, plus a random share of {@link #EAT_PITCH_SPREAD}. */
+    private static final float EAT_PITCH_BASE = 0.9F;
+    private static final float EAT_PITCH_SPREAD = 0.2F;
     /** Items that fly off the food in the visitor's hand. */
     private static final int PARTICLES = 6;
 
@@ -57,8 +62,8 @@ final class VisitorMeal {
     }
 
     private static void effects(ServerLevel level, Settler visitor, ItemStack item) {
-        level.playSound(null, visitor.getX(), visitor.getY(), visitor.getZ(), SoundEvents.GENERIC_EAT.value(), SoundSource.NEUTRAL, 0.6F,
-                0.9F + level.getRandom().nextFloat() * 0.2F);
+        level.playSound(null, visitor.getX(), visitor.getY(), visitor.getZ(), SoundEvents.GENERIC_EAT.value(), SoundSource.NEUTRAL, EAT_VOLUME,
+                EAT_PITCH_BASE + level.getRandom().nextFloat() * EAT_PITCH_SPREAD);
         level.sendParticles(new ItemParticleOption(ParticleTypes.ITEM, ItemStackTemplate.fromNonEmptyStack(item)), visitor.getX(),
                 visitor.getEyeY() - 0.2, visitor.getZ(), PARTICLES, 0.2, 0.1, 0.2, 0.05);
     }

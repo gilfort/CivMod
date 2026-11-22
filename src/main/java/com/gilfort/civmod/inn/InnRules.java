@@ -45,7 +45,7 @@ public record InnRules(double baseChance, double reputationScale, int bedsPerLev
         int extendDays, int minLevelCap, int defaultPriceAmount) {
 
     /** Reload listener id. */
-    public static final Identifier ID = CivMod.id("inn_rules");
+    private static final Identifier ID = CivMod.id("inn_rules");
     /** Values used when no file is loaded. */
     public static final InnRules FALLBACK = new InnRules(0.05, 0.25, 2, 2, 4, 0.5, 2, 3, 3);
 

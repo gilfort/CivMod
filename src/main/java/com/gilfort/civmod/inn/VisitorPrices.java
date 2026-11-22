@@ -41,7 +41,7 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
  * the trade: one datapack file per Job at {@code data/<namespace>/civmod_visitor_prices/<job>.json} names an item and a base
  * amount, as in {@code {"item": "minecraft:anvil", "amount": 2}}. The file name is the id of the Job, so a pack overrides an entry by
  * shipping the same id and an addon adds one for its own Job. A Specialization without a file asks what its Base Job asks. A Job
- * without any entry asks for an item of the tag {@link #DEFAULT_TAG} (emeralds by default) in the amount of the
+ * without any entry asks for an item of the tag {@code civmod:visitor_price_default} (emeralds by default) in the amount of the
  * {@link InnRules#defaultPriceAmount() default price}. The amount grows with the level the visitor has in its trade
  * ({@link #scaledAmount}); nothing here touches the world.
  */
@@ -49,7 +49,7 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
 public final class VisitorPrices {
 
     /** The items a visitor asks for when its trade has no entry; an addon can add to the tag. */
-    public static final TagKey<Item> DEFAULT_TAG = TagKey.create(Registries.ITEM, CivMod.id("visitor_price_default"));
+    private static final TagKey<Item> DEFAULT_TAG = TagKey.create(Registries.ITEM, CivMod.id("visitor_price_default"));
 
     /** Reload listener id. */
     private static final Identifier ID = CivMod.id("visitor_prices");
@@ -72,7 +72,7 @@ public final class VisitorPrices {
     public record Entry(Item item, int amount) {
 
         /** File codec. */
-        public static final Codec<Entry> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+        private static final Codec<Entry> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                 BuiltInRegistries.ITEM.byNameCodec().validate(item -> item == Items.AIR ? DataResult.error(() -> "A price cannot be air")
                         : DataResult.success(item)).fieldOf("item").forGetter(Entry::item),
                 Codec.intRange(1, MAX_BASE_AMOUNT).fieldOf("amount").forGetter(Entry::amount)

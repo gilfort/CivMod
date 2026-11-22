@@ -153,6 +153,15 @@ public final class CivModConfig {
     /** The built config spec, registered in the mod constructor. */
     public static final ModConfigSpec SPEC = BUILDER.build();
 
+    private static final long TICKS_PER_SECOND = 20L;
+
     private CivModConfig() {
+    }
+
+    /**
+     * @return the ticks without progress after which a settler or visitor is put next to its target ({@link #ANTI_STUCK_SECONDS})
+     */
+    public static long antiStuckTicks() {
+        return ANTI_STUCK_SECONDS.get() * TICKS_PER_SECOND;
     }
 }

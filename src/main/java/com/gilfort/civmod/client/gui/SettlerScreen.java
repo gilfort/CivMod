@@ -50,6 +50,9 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
     private static final Identifier EXP_PROGRESS = Identifier.withDefaultNamespace("hud/experience_bar_progress");
     private static final int BUFFER_COLUMNS = 9;
     private static final int SMALL_BUTTON = 16;
+    /** Distance of the top of the bottom button from the bottom edge of the window. */
+    private static final int BOTTOM_BUTTON_OFFSET = 28;
+    private static final int BOTTOM_BUTTON_HEIGHT = 20;
     private static final int FOOD_Y = 72;
     /** Y of the job switcher's first Job button. */
     private static final int SWITCH_TOP = 34;
@@ -101,6 +104,12 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         }
     }
 
+    /** The full-width button at the bottom of the Overview tab (dismiss a homeless settler, ask a visitor to stay longer). */
+    private Button bottomButton(String labelKey, Button.OnPress onPress) {
+        return Button.builder(Component.translatable(labelKey), onPress)
+                .bounds(leftPos + CivGui.PADDING, topPos + imageHeight - BOTTOM_BUTTON_OFFSET, imageWidth - 2 * CivGui.PADDING, BOTTOM_BUTTON_HEIGHT).build();
+    }
+
     @Override
     protected void initContent() {
         storage.init(imageWidth);
@@ -108,13 +117,10 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         needs.init(imageWidth, imageHeight);
         SettlerInfo info = menu.getInfo();
         if (info.homeless()) {
-            addTabWidget(SettlerMenu.TAB_OVERVIEW, Button.builder(Component.translatable("civmod.gui.settler.dismiss"), button -> confirmDismiss())
-                    .bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 28, imageWidth - 2 * CivGui.PADDING, 20).build());
+            addTabWidget(SettlerMenu.TAB_OVERVIEW, bottomButton("civmod.gui.settler.dismiss", button -> confirmDismiss()));
         }
         if (info.visiting() == SettlerInfo.Visiting.CAN_ASK) {
-            addTabWidget(SettlerMenu.TAB_OVERVIEW, Button.builder(Component.translatable("civmod.gui.settler.ask_stay"),
-                    button -> clickButton(SettlerMenu.BUTTON_ASK_STAY))
-                    .bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 28, imageWidth - 2 * CivGui.PADDING, 20).build());
+            addTabWidget(SettlerMenu.TAB_OVERVIEW, bottomButton("civmod.gui.settler.ask_stay", button -> clickButton(SettlerMenu.BUTTON_ASK_STAY)));
         }
         List<SettlerJob> jobs = info.jobs();
         int right = leftPos + imageWidth - CivGui.PADDING;
@@ -379,7 +385,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
     @Override
     protected List<Component> helpLines(int tab) {
         if (tab == SettlerMenu.TAB_OVERVIEW && menu.getInfo().visiting() != SettlerInfo.Visiting.NO) {
-            return List.of(Component.translatable("civmod.gui.settler.help.visitor_talk"), Component.translatable("civmod.gui.settler.help.visitor_hire"));
+            return List.of(Component.translatable("civmod.gui.settler.help.chronicle"), Component.translatable("civmod.gui.settler.help.visitor_hire"));
         }
         if (tab == SettlerMenu.TAB_STORAGE) {
             return List.of(Component.translatable("civmod.gui.storage.help.take"), Component.translatable("civmod.gui.storage.help.take_half"),

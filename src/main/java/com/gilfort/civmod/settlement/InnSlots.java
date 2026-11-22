@@ -8,9 +8,9 @@ package com.gilfort.civmod.settlement;
 public final class InnSlots {
 
     /** Arrival checks per day. */
-    public static final int PER_DAY = 3;
+    private static final int PER_DAY = 3;
     /** Ticks between two checks (a quarter of the day). */
-    public static final long SPACING_TICKS = DayClock.DAY_TICKS / 4;
+    private static final long SPACING_TICKS = DayClock.DAY_TICKS / 4;
     /** The number of the morning check within a day. */
     private static final int MORNING = 0;
 

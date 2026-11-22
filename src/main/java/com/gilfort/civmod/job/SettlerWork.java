@@ -1672,7 +1672,7 @@ public final class SettlerWork {
         if (distance < bestDistance - 1.0) {
             bestDistance = distance;
             lastProgressTick = level.getGameTime();
-        } else if (level.getGameTime() - lastProgressTick > CivModConfig.ANTI_STUCK_SECONDS.get() * 20L) {
+        } else if (level.getGameTime() - lastProgressTick > CivModConfig.antiStuckTicks()) {
             Vec3 spot = StandingSpots.standingSpot(level, target, reach());
             settler.teleportTo(spot.x, spot.y, spot.z);
             settler.getNavigation().stop();
