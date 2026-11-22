@@ -168,9 +168,11 @@ public final class CarpenterGameTests {
     }
 
     /**
-     * A tag ingredient counts only when everything it accepts is wooden. The datapack recipes of this test hold a stick and an
-     * iron ingot next to a plank-or-cobblestone tag (1 of 3 slots wooden, outside), a plank-only tag (2 of 3, inside), three
-     * iron ingots with two sticks (40 %, outside) and one ingot with one stick (exactly 50 %, inside).
+     * A tag ingredient counts only when everything it accepts is wooden. The datapack recipes of this test hold a stick and a
+     * spawner next to a plank-or-cobblestone tag (1 of 3 slots wooden, outside), a plank-only tag (2 of 3, inside), three
+     * spawners with two sticks (40 %, outside) and one dragon egg with one stick (exactly 50 %, inside). Every recipe needs
+     * a spawner or a dragon egg, which have no vanilla recipe, so a dev client that loads the test datapack shows no
+     * craftable shortcut to bedrock, reinforced deepslate, a dragon egg or a spawner.
      */
     private static void domainTags(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
