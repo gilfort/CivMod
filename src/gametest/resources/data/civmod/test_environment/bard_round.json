@@ -1,5 +1,13 @@
 {
-  "type": "minecraft:clock_time",
-  "clock": "minecraft:overworld",
-  "time": 30000
+  "type": "minecraft:all_of",
+  "definitions": [
+    {
+      "type": "minecraft:clock_time",
+      "clock": "minecraft:overworld",
+      "time": 30000
+    },
+    {
+      "type": "civmod:fresh_settlements"
+    }
+  ]
 }

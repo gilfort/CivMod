@@ -153,7 +153,7 @@ public final class Hearths {
                 scan(loaded, settlement, found);
             }
         }
-        settlement.setHearths(found);
+        SettlementData.get(level).setHearths(settlement, found);
     }
 
     private static void scan(LevelChunk chunk, Settlement settlement, Set<BlockPos> found) {
@@ -199,8 +199,8 @@ public final class Hearths {
     }
 
     /**
-     * A block changed. This runs for every block change on the server, so the common case stays a tag check and one
-     * set lookup per settlement.
+     * A block changed. This runs for every block change on the server, so the common case (no hearth) stays a tag check and
+     * one map lookup, whatever the number of settlements. Only a new hearth checks the border of each settlement.
      *
      * @param event the event
      */
@@ -210,12 +210,14 @@ public final class Hearths {
             return;
         }
         SettlementData data = SettlementData.get(level);
-        boolean hearth = isHearth(event.getState());
         BlockPos pos = event.getPos();
+        if (!isHearth(event.getState())) {
+            data.removeHearth(pos);
+            return;
+        }
         for (Settlement settlement : data.settlements()) {
-            boolean changed = hearth ? JobAssignments.insideBorder(settlement, pos) && settlement.addHearth(pos) : settlement.removeHearth(pos);
-            if (changed) {
-                data.setDirty();
+            if (JobAssignments.insideBorder(settlement, pos)) {
+                data.addHearth(settlement, pos);
             }
         }
     }

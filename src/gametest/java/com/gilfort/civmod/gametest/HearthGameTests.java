@@ -19,8 +19,10 @@ import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Hearths;
 import com.gilfort.civmod.settlement.Settlement;
+import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.TestSettlements;
 
 import net.minecraft.core.BlockPos;
@@ -62,6 +64,8 @@ public final class HearthGameTests {
             register(helper, "hearth_cache_follows_blocks", HearthGameTests::cacheFollowsBlocks);
             register(helper, "hearth_found_when_founding", HearthGameTests::foundWhenFounding);
             register(helper, "hearth_tag_added_block", HearthGameTests::tagAddedBlock);
+            register(helper, "hearth_found_then_broken", HearthGameTests::foundThenBroken);
+            register(helper, "hearth_broken_after_dissolving", HearthGameTests::brokenAfterDissolving);
             register(helper, "hearth_fire_row", HearthGameTests::fireRow);
             register(helper, "camp_campfire_once", HearthGameTests::campfireOnce);
             register(helper, "camp_campfire_not_on_wood", HearthGameTests::campfireNotOnWood);
@@ -356,6 +360,38 @@ public final class HearthGameTests {
         helper.assertTrue(Hearths.of(level, settlement(helper, jobBlock)).equals(Set.of(helper.absolutePos(CENTER.east(2)))),
                 "Only the lit campfire: " + Hearths.of(level, settlement(helper, jobBlock)));
         end(helper, jobBlock);
+    }
+
+    /** A hearth the first look found leaves when it is broken, like one placed later. */
+    private static void foundThenBroken(GameTestHelper helper) {
+        floor(helper);
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(CENTER.east(2), Blocks.CAMPFIRE);
+        BlockPos jobBlock = jobBlock(helper, CENTER);
+        Settlement settlement = settlement(helper, jobBlock);
+        helper.assertTrue(Hearths.of(level, settlement).equals(Set.of(helper.absolutePos(CENTER.east(2)))), "Found on the first look");
+        helper.setBlock(CENTER.east(2), Blocks.AIR);
+        helper.assertTrue(Hearths.of(level, settlement).isEmpty(), "Broken: no hearth");
+        end(helper, jobBlock);
+    }
+
+    /** A dissolved settlement leaves no trace behind its hearths: breaking one afterwards is a plain block change. */
+    private static void brokenAfterDissolving(GameTestHelper helper) {
+        floor(helper);
+        ServerLevel level = helper.getLevel();
+        BlockPos jobBlock = jobBlock(helper, CENTER);
+        Settlement settlement = settlement(helper, jobBlock);
+        helper.setBlock(CENTER.east(2), Blocks.CAMPFIRE);
+        helper.assertTrue(Hearths.of(level, settlement).contains(helper.absolutePos(CENTER.east(2))), "A hearth before dissolving");
+        SettlementData data = SettlementData.get(level);
+        // The test settlement has a Center Block of its own next to the JobBlock: without both it dissolves after its grace.
+        for (SettlementBlock block : List.copyOf(settlement.blocks())) {
+            SettlementManager.remove(data, block.pos(), 0L, SettlementManager.Listener.NONE);
+        }
+        SettlementManager.morning(data, SettlementRules.CENTERLESS_DAYS + 1, SettlementManager.Listener.NONE);
+        helper.assertTrue(data.settlement(settlement.id()).isEmpty(), "The settlement is dissolved after its grace");
+        helper.setBlock(CENTER.east(2), Blocks.AIR);
+        helper.succeed();
     }
 
     /** A block an addon adds to the tag counts (the example addon adds the lava cauldron). */
