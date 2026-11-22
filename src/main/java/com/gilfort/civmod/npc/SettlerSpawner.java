@@ -178,7 +178,7 @@ public final class SettlerSpawner {
      * @param level      the dimension
      * @param settlement the settlement of the inn
      * @param pantry     the Pantry of the inn
-     * @param id         the UUID the visitor entity gets (the one the settlement's stay record carries)
+     * @param id         the UUID the visitor entity gets (the one the settlement's visit record carries)
      * @param levelCap   the highest level it can roll in a favoured Job
      * @return the visitor, empty if the entity could not be created
      */
@@ -204,7 +204,7 @@ public final class SettlerSpawner {
     }
 
     /**
-     * Sets up a Settler that appears from a spawn egg:a random race from the race data (human while none is loaded), a random
+     * Sets up a Settler that appears from a spawn egg: a random race from the race data (human while none is loaded), a random
      * skin, a random origin and name of that race ({@link Origins#assignEgg}), level 1 in every Job, and homeless where it stands. A
      * custom name on the egg replaces the random one afterwards. The Settler joins a settlement only by the homeless rules.
      *
@@ -253,12 +253,12 @@ public final class SettlerSpawner {
     }
 
     /**
-     * The cloud puff and sound of a Settler appearing.
+     * The cloud puff and sound of a Settler appearing, or of a visitor vanishing.
      *
      * @param level the level
-     * @param pos   where the Settler appears
+     * @param pos   where the Settler appears or vanishes
      */
-    static void puff(ServerLevel level, Vec3 pos) {
+    public static void puff(ServerLevel level, Vec3 pos) {
         level.sendParticles(ParticleTypes.CLOUD, pos.x, pos.y + 1.0, pos.z, 12, 0.3, 0.5, 0.3, 0.02);
         level.playSound(null, pos.x, pos.y, pos.z, SoundEvents.ITEM_PICKUP, SoundSource.NEUTRAL, 0.4F, 0.8F);
     }

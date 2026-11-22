@@ -12,6 +12,7 @@ import com.gilfort.civmod.settlement.Visit;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.ai.util.LandRandomPos;
 import net.minecraft.world.phys.Vec3;
@@ -33,7 +34,23 @@ public final class VisitorStroll extends WaterAvoidingRandomStrollGoal {
     /** Tries to find a hop inside the border before the visitor lets this stroll go. */
     private static final int ATTEMPTS = 5;
 
+    private static @Nullable RandomSource scripted;
+
     private final Settler settler;
+
+    /**
+     * Replaces the random source of the pull to the Pantry (tests). It is not the source of {@link Inns#script}, so a stroll never
+     * eats up the rolls that script an arrival or a request to stay longer.
+     *
+     * @param random the scripted source ({@code nextDouble} answers whether a hop is pulled), or {@code null} for the level's own
+     */
+    public static void script(@Nullable RandomSource random) {
+        scripted = random;
+    }
+
+    private static RandomSource random(ServerLevel level) {
+        return scripted != null ? scripted : level.getRandom();
+    }
 
     /**
      * @param settler       the settler that strolls
@@ -69,12 +86,12 @@ public final class VisitorStroll extends WaterAvoidingRandomStrollGoal {
             return Optional.empty();
         }
         Optional<Settlement> settlement = SettlementData.get(level).settlement(visitor.getVisitedSettlementId());
-        Optional<Visit> stay = settlement.map(found -> found.inn().visits().get(visitor.getUUID()));
-        if (stay.isEmpty()) {
+        Optional<Visit> visit = settlement.flatMap(found -> found.inn().visit(visitor.getUUID()));
+        if (visit.isEmpty()) {
             return Optional.empty();
         }
-        boolean pull = Inns.random(level).nextDouble() < PULL_CHANCE;
-        Vec3 pantry = Vec3.atCenterOf(stay.get().pantry());
+        boolean pull = random(level).nextDouble() < PULL_CHANCE;
+        Vec3 pantry = Vec3.atCenterOf(visit.get().pantry());
         for (int attempt = 0; attempt < ATTEMPTS; attempt++) {
             Vec3 spot = pull ? LandRandomPos.getPosTowards(visitor, HORIZONTAL_DISTANCE, VERTICAL_DISTANCE, pantry)
                     : LandRandomPos.getPos(visitor, HORIZONTAL_DISTANCE, VERTICAL_DISTANCE);

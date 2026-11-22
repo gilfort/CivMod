@@ -3,7 +3,6 @@ package com.gilfort.civmod.inn;
 import java.util.Optional;
 import java.util.UUID;
 
-import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerSpawner;
 import com.gilfort.civmod.settlement.InnSlots;
@@ -11,18 +10,14 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.Visit;
 
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.phys.Vec3;
 
 /**
  * The visitor entities of the inns (vault {@code Systems/NPC Population.md}): they come into the world, are asked to stay longer
- * and leave. The settlement's {@link Visit} is the truth about a stay; the entity is its body, and a body without a stay removes
- * itself ({@link Inns#checkStay}).
+ * and leave. The settlement's {@link Visit} is the truth about a visitor's stay; the entity is its body, and a body without a visit
+ * removes itself ({@link Inns#checkVisit}).
  */
 public final class Visitors {
 
@@ -37,19 +32,19 @@ public final class Visitors {
         DECLINED,
         /** The player asked this visitor before. */
         ALREADY_ASKED,
-        /** The settlement has no stay of this visitor. */
-        NO_STAY
+        /** The settlement has no visit of this visitor. */
+        NO_VISIT
     }
 
     private Visitors() {
     }
 
     /**
-     * Brings the visitor of a stay into the world, rolling its past and its levels.
+     * Brings the visitor of a visit into the world, rolling its past and its levels.
      *
      * @param level      the level
      * @param settlement the settlement of the inn
-     * @param visit      the stay
+     * @param visit      the visit
      * @param levelCap   the highest level it can roll in a favoured Job
      * @return whether the visitor stands in the world now
      */
@@ -59,26 +54,26 @@ public final class Visitors {
 
     /**
      * @param level      the level
-     * @param settlement the settlement
-     * @return the highest level a visitor can roll: the best skill level of the settlement's loaded settlers, at least the minimum
-     *         of the rules
+     * @param settlement the settlement, with every settler loaded ({@link Inns#run} waits for that)
+     * @return the highest level a visitor can roll: the best skill level of the settlement's settlers, at least the minimum of the
+     *         rules
      */
     static int levelCap(ServerLevel level, Settlement settlement) {
         int best = InnRules.get().minLevelCap();
         for (UUID member : settlement.members()) {
             if (level.getEntity(member) instanceof Settler settler) {
-                best = Math.max(best, settler.getSkills().snapshot().values().stream().mapToInt(SettlerSkills.Skill::level).max().orElse(0));
+                best = Math.max(best, settler.getSkills().bestLevel());
             }
         }
         return best;
     }
 
     /**
-     * The visitor of a stay that is over goes, if it is loaded; one that is not loaded notices the missing stay when it loads. A
+     * The visitor of a visit that is over goes, if it is loaded; one that is not loaded notices the missing visit when it loads. A
      * visitor the player asked to stay longer says goodbye to the players nearby, and one that found no food at the Pantry says so.
      *
      * @param level the level
-     * @param visit the stay that ended
+     * @param visit the visit that ended
      */
     static void leave(ServerLevel level, Visit visit) {
         if (level.getEntity(visit.id()) instanceof Settler visitor) {
@@ -98,9 +93,7 @@ public final class Visitors {
      * @param visitor the visitor
      */
     static void vanish(ServerLevel level, Settler visitor) {
-        Vec3 pos = visitor.position();
-        level.sendParticles(ParticleTypes.CLOUD, pos.x, pos.y + 1.0, pos.z, 12, 0.3, 0.5, 0.3, 0.02);
-        level.playSound(null, pos.x, pos.y, pos.z, SoundEvents.ITEM_PICKUP, SoundSource.NEUTRAL, 0.4F, 0.8F);
+        SettlerSpawner.puff(level, visitor.position());
         note(level, visitor, Component.translatable("civmod.visitor.dissolved", visitor.getName()));
         visitor.discard();
     }
@@ -116,11 +109,12 @@ public final class Visitors {
     /**
      * @param level   the level
      * @param visitor a visitor
-     * @return whether the player can still ask it to stay longer: it has a stay that nobody has asked about yet
+     * @return whether the player can still ask it to stay longer: it has a visit that nobody has asked about yet and that no empty
+     *         Pantry has cut short
      */
     public static boolean canAskToStay(ServerLevel level, Settler visitor) {
         return SettlementData.get(level).settlement(visitor.getVisitedSettlementId())
-                .map(settlement -> settlement.inn().visits().get(visitor.getUUID())).filter(visit -> !visit.asked()).isPresent();
+                .flatMap(settlement -> settlement.inn().visit(visitor.getUUID())).filter(visit -> !visit.asked() && !visit.noFood()).isPresent();
     }
 
     /**
@@ -134,7 +128,7 @@ public final class Visitors {
         Ask result = askToStay(player.level(), visitor);
         String key = switch (result) {
             case EXTENDED -> "civmod.visitor.stay.extended";
-            case DECLINED, NO_STAY -> "civmod.visitor.stay.declined";
+            case DECLINED, NO_VISIT -> "civmod.visitor.stay.declined";
             case ALREADY_ASKED -> "civmod.visitor.stay.already_asked";
         };
         player.sendOverlayMessage(Component.translatable(key, visitor.getName()));
@@ -142,7 +136,8 @@ public final class Visitors {
     }
 
     /**
-     * The player asks a visitor to stay a little longer: once per visitor, and it works with the chance of {@link InnRules}.
+     * The player asks a visitor to stay a little longer: once per visitor, and it works with the chance of {@link InnRules}. A
+     * visitor that the meal sent away for an empty Pantry has made up its mind: the ask is declined and nothing changes.
      *
      * @param level   the level
      * @param visitor the visitor
@@ -151,13 +146,16 @@ public final class Visitors {
     public static Ask askToStay(ServerLevel level, Settler visitor) {
         SettlementData data = SettlementData.get(level);
         Optional<Settlement> settlement = data.settlement(visitor.getVisitedSettlementId());
-        Optional<Visit> stay = settlement.map(found -> found.inn().visits().get(visitor.getUUID()));
-        if (stay.isEmpty()) {
-            return Ask.NO_STAY;
+        Optional<Visit> found = settlement.flatMap(owner -> owner.inn().visit(visitor.getUUID()));
+        if (found.isEmpty()) {
+            return Ask.NO_VISIT;
         }
-        Visit visit = stay.get();
+        Visit visit = found.get();
         if (visit.asked()) {
             return Ask.ALREADY_ASKED;
+        }
+        if (visit.noFood()) {
+            return Ask.DECLINED;
         }
         InnRules rules = InnRules.get();
         boolean works = rules.extensionWorks(Inns.random(level).nextDouble());

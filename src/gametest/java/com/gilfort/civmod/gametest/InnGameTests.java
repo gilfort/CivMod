@@ -13,6 +13,7 @@ import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.inn.GuestBeds;
 import com.gilfort.civmod.inn.InnRules;
 import com.gilfort.civmod.inn.Inns;
+import com.gilfort.civmod.inn.VisitorStroll;
 import com.gilfort.civmod.inn.Visitors;
 import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.npc.Settler;
@@ -98,8 +99,10 @@ public final class InnGameTests {
             register(helper, "inn_stay_and_leave", InnGameTests::stayAndLeave);
             register(helper, "inn_stay_longer", InnGameTests::stayLonger);
             register(helper, "inn_stay_longer_declined", InnGameTests::stayLongerDeclined);
+            register(helper, "inn_stay_longer_sent_away", InnGameTests::stayLongerSentAway);
             register(helper, "inn_catch_up", InnGameTests::catchUp);
             register(helper, "inn_catch_up_no_host", InnGameTests::catchUpNoHost);
+            register(helper, "inn_waits_for_settlers", InnGameTests::waitsForSettlers);
             register(helper, "inn_dissolved", InnGameTests::dissolved);
             register(helper, "inn_visitor_without_stay", InnGameTests::visitorWithoutStay);
             register(helper, "inn_pantry_removed", InnGameTests::pantryRemoved);
@@ -145,6 +148,7 @@ public final class InnGameTests {
         // A test that failed before left its scripts behind; every test starts without them.
         Inns.script(null);
         Inns.scriptHostCover(null);
+        VisitorStroll.script(null);
         ServerLevel level = helper.getLevel();
         // The tests of a batch share the clock: every test starts at 08:00 of the same day, before the first check it plays.
         setClock(level, START_DAY, START_TIME);
@@ -217,6 +221,7 @@ public final class InnGameTests {
         InnRules.use(InnRules.FALLBACK);
         Inns.script(null);
         Inns.scriptHostCover(null);
+        VisitorStroll.script(null);
     }
 
     // ------------------------------------------------------------------------------------------------------ guest beds
@@ -483,7 +488,50 @@ public final class InnGameTests {
         end(helper, inn);
     }
 
+    /**
+     * A visitor that the meal sent away cannot be asked to stay longer: the ask is refused without using it up, and the window does
+     * not offer it.
+     */
+    private static void stayLongerSentAway(GameTestHelper helper) {
+        InnRules.use(rules(1.0, 0.0, 3));
+        Inn inn = inn(helper, 1, 1, true);
+        Inns.script(MasteryRolls.scripted(MasteryRolls.HIT));
+        ServerLevel level = helper.getLevel();
+        play(helper, inn, today(helper), NOON);
+        Settler visitor = visitors(helper).get(0);
+        long morning = InnSlots.nextMorning(InnSlots.latest(level.getOverworldClockTime()));
+        SettlementData.get(level).updateInn(inn.settlement(), state -> state.withVisit(state.visits().get(visitor.getUUID()).sentAway(morning)));
+        Visit sentAway = inn.settlement().inn().visits().get(visitor.getUUID());
+
+        helper.assertTrue(!Visitors.canAskToStay(level, visitor), "The window does not offer the ask to a visitor that was sent away");
+        helper.assertTrue(Visitors.askToStay(level, visitor) == Visitors.Ask.DECLINED, "The ask is refused");
+        helper.assertTrue(inn.settlement().inn().visits().get(visitor.getUUID()).equals(sentAway),
+                "The refused ask changes nothing: " + inn.settlement().inn().visits().get(visitor.getUUID()));
+        end(helper, inn);
+    }
+
     // --------------------------------------------------------------------------------------------------------- catch-up
+
+    /**
+     * The checks need the whole settlement: the reputation is the share over all settlers and the level cap the best skill of all of
+     * them. While a settler of the settlement is not loaded the checks wait; they are played when it is.
+     */
+    private static void waitsForSettlers(GameTestHelper helper) {
+        InnRules.use(rules(1.0, 0.0, 3));
+        Inn inn = inn(helper, 1, 2, true);
+        SettlementData data = SettlementData.get(helper.getLevel());
+        UUID unloaded = UUID.randomUUID();
+        data.addMember(inn.settlement(), unloaded);
+        long before = inn.settlement().inn().lastSlot();
+        play(helper, inn, today(helper), NOON);
+        helper.assertTrue(visitors(helper).isEmpty() && inn.settlement().inn().lastSlot() == before,
+                "A settler is not loaded, so the checks wait: " + visitors(helper).size() + " visitors, last check " + inn.settlement().inn().lastSlot());
+
+        data.removeMember(inn.settlement(), unloaded);
+        Inns.run(helper.getLevel(), inn.settlement());
+        helper.assertTrue(visitors(helper).size() == 1, "With every settler loaded the missed check is played: " + visitors(helper).size());
+        end(helper, inn);
+    }
 
     /**
      * Five days pass while nobody plays the checks: the visitors whose stay still runs are there when the Pantry loads, capped by

@@ -10,8 +10,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 
 /**
- * One stay at an inn (vault {@code Systems/NPC Population.md}): everything the settlement keeps about a visitor. The entity is the
- * visitor's body and is found by {@link #id()}; when the stay ends, the record goes and the entity with it, loaded or not.
+ * One visit to an inn (vault {@code Systems/NPC Population.md}): everything the settlement keeps about a visitor. The entity is the
+ * visitor's body and is found by {@link #id()}; when the visit ends, the record goes and the entity with it, loaded or not.
  *
  * @param id        the UUID of the visitor entity
  * @param pantry    the Pantry of the inn the visitor came to
@@ -38,16 +38,15 @@ public record Visit(UUID id, BlockPos pantry, Optional<BlockPos> bed, long leave
     ).apply(instance, Visit::new));
 
     /**
-     * A stay that has just begun.
+     * A visit that has just begun: nobody asked the visitor to stay longer yet, and it has not eaten.
      *
      * @param id        the UUID of the visitor entity
      * @param pantry    the Pantry of the inn
      * @param bed       the guest bed it sleeps in
      * @param leaveSlot the check at which it leaves
-     * @param asked     whether the player asked it to stay longer
      */
-    public Visit(UUID id, BlockPos pantry, Optional<BlockPos> bed, long leaveSlot, boolean asked) {
-        this(id, pantry, bed, leaveSlot, asked, NO_DAY, false);
+    public Visit(UUID id, BlockPos pantry, Optional<BlockPos> bed, long leaveSlot) {
+        this(id, pantry, bed, leaveSlot, false, NO_DAY, false);
     }
 
     /**

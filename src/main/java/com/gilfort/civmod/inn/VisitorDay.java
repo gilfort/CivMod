@@ -34,8 +34,8 @@ import net.minecraft.world.phys.Vec3;
  * </ul>
  * Its times are the daily times of a settler ({@link Schedule#dayTimes}), so visitors do not all go to bed at the same tick. Each
  * decision also runs the meeting check of the social life, with the rules of a settler. Nothing is saved: after a reload the
- * visitor decides again, and the stay itself ({@link Visit}) is kept by the settlement. In an unloaded settlement the visitor does
- * not tick, so it stands still there; the checks of the inn work on its stay as data.
+ * visitor decides again, and the visit itself ({@link Visit}) is kept by the settlement. In an unloaded settlement the visitor does
+ * not tick, so it stands still there; the checks of the inn work on its visit as data.
  */
 public final class VisitorDay {
 
@@ -83,7 +83,7 @@ public final class VisitorDay {
     private @Nullable Walk walk;
 
     /**
-     * @param visitor the settler whose stay at an inn this is the day of
+     * @param visitor the settler whose visit to an inn this is the day of
      */
     public VisitorDay(Settler visitor) {
         this.visitor = visitor;
@@ -118,7 +118,7 @@ public final class VisitorDay {
 
     /**
      * Decides once what the visitor does now, as it does every decision step (tests call it directly). Nothing is decided while
-     * the visitor is in a conversation, and a visitor whose stay is gone does nothing; its body notices that by itself.
+     * the visitor is in a conversation, and a visitor whose visit is gone does nothing; its body notices that by itself.
      *
      * @param level the level
      */
@@ -128,16 +128,16 @@ public final class VisitorDay {
         }
         SettlementData data = SettlementData.get(level);
         Optional<Settlement> settlement = data.settlement(visitor.getVisitedSettlementId());
-        Optional<Visit> stay = settlement.map(found -> found.inn().visits().get(visitor.getUUID()));
-        if (stay.isEmpty()) {
+        Optional<Visit> visit = settlement.flatMap(found -> found.inn().visit(visitor.getUUID()));
+        if (visit.isEmpty()) {
             return;
         }
         long clock = level.getOverworldClockTime();
         long day = DayClock.day(clock);
         part = Part.of(DayClock.dayTime(clock), Schedule.dayTimes(visitor.getUUID(), day));
         switch (part) {
-            case NIGHT -> night(level, stay.get());
-            case EVENING -> evening(level, data, settlement.get(), stay.get(), day);
+            case NIGHT -> night(level, visit.get());
+            case EVENING -> evening(level, data, settlement.get(), visit.get(), day);
             case DAY -> strollByDay();
         }
         visitor.getWork().meetAsVisitor(level);
@@ -150,22 +150,25 @@ public final class VisitorDay {
         visitor.clearHome();
     }
 
-    /** The evening: to the Pantry for the meal, then around the Pantry. */
-    private void evening(ServerLevel level, SettlementData data, Settlement settlement, Visit stay, long day) {
+    /**
+     * The evening: to the Pantry for the meal, then around the Pantry. A Pantry that is gone serves no meal and sends nobody away:
+     * the visitor stays the night and leaves at the next morning check, which the inn plays.
+     */
+    private void evening(ServerLevel level, SettlementData data, Settlement settlement, Visit visit, long day) {
         wakeUp();
-        visitor.setHomeTo(stay.pantry(), EVENING_RADIUS);
-        boolean hungry = stay.fedDay() != day;
+        visitor.setHomeTo(visit.pantry(), EVENING_RADIUS);
+        boolean hungry = visit.fedDay() != day && ClerkStorage.pantryAt(settlement, visit.pantry()).isPresent();
         mayStroll = !hungry;
-        if (hungry && reached(level, stay.pantry(), PANTRY_REACH)) {
-            eat(level, data, settlement, stay, day);
+        if (hungry && reached(level, visit.pantry(), PANTRY_REACH)) {
+            eat(level, data, settlement, visit, day);
             mayStroll = true;
         }
     }
 
     /** The meal: one piece of food from the Pantry. With nothing to eat the visitor leaves at the next morning check. */
-    private void eat(ServerLevel level, SettlementData data, Settlement settlement, Visit stay, long day) {
-        Visit meal = stay.fedOn(day);
-        if (!VisitorMeal.eat(level, visitor, stay.pantry())) {
+    private void eat(ServerLevel level, SettlementData data, Settlement settlement, Visit visit, long day) {
+        Visit meal = visit.fedOn(day);
+        if (!VisitorMeal.eat(level, visitor, visit.pantry())) {
             meal = meal.sentAway(InnSlots.nextMorning(InnSlots.latest(level.getOverworldClockTime())));
         }
         Visit updated = meal;
@@ -173,13 +176,13 @@ public final class VisitorDay {
     }
 
     /** The night: to the guest bed and into it. A visitor without a bed stands where it is until morning. */
-    private void night(ServerLevel level, Visit stay) {
+    private void night(ServerLevel level, Visit visit) {
         mayStroll = false;
         if (visitor.isSleeping()) {
             walk = null;
             return;
         }
-        Optional<BlockPos> bed = stay.bed();
+        Optional<BlockPos> bed = visit.bed();
         if (bed.isEmpty()) {
             visitor.getNavigation().stop();
             walk = null;
@@ -217,7 +220,7 @@ public final class VisitorDay {
         Walk current = walk;
         if (current == null || !current.target().equals(target)) {
             walk = new Walk(target.immutable(), now);
-        } else if (now - current.since() > CivModConfig.ANTI_STUCK_SECONDS.get() * 20L) {
+        } else if (now - current.since() > CivModConfig.antiStuckTicks()) {
             Vec3 spot = StandingSpots.standingSpot(level, target, reach);
             visitor.teleportTo(spot.x, spot.y, spot.z);
             visitor.getNavigation().stop();

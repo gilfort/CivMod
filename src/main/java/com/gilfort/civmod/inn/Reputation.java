@@ -10,8 +10,8 @@ import net.minecraft.server.level.ServerLevel;
 
 /**
  * The reputation of a settlement as a refuge (vault {@code Systems/NPC Population.md}): the share of met needs over all its
- * settlers, counting only the needs that exist in the game. Nobody sees it; it only changes how many visitors an inn expects. A
- * settler that is not loaded cannot be asked and does not count.
+ * settlers, counting only the needs that exist in the game. Nobody sees it; it only changes how many visitors an inn expects. The
+ * settlers are asked where they stand, so every one of them has to be loaded; {@link Inns#run} waits for that.
  */
 final class Reputation {
 
@@ -20,8 +20,8 @@ final class Reputation {
 
     /**
      * @param level      the level
-     * @param settlement a settlement
-     * @return the share of met needs, 0 to 1; 0 for a settlement without a loaded settler
+     * @param settlement a settlement, with every settler loaded
+     * @return the share of met needs, 0 to 1; 0 for a settlement without a settler
      */
     static double of(ServerLevel level, Settlement settlement) {
         NeedTally sum = NeedTally.NONE;

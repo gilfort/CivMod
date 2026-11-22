@@ -18,6 +18,7 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.Visit;
 
 import net.minecraft.core.BlockPos;
@@ -32,6 +33,7 @@ import net.minecraft.world.entity.decoration.Cushion;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.levelgen.LegacyRandomSource;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -72,6 +74,7 @@ public final class VisitorDayGameTests {
             register(helper, "visitor_day_hired_frees_bed", VisitorDayGameTests::hiredFreesBed);
             register(helper, "visitor_day_eats_once", VisitorDayGameTests::eatsOnce);
             register(helper, "visitor_day_no_food_leaves", VisitorDayGameTests::noFoodLeaves);
+            register(helper, "visitor_day_pantry_removed_no_note", VisitorDayGameTests::pantryRemovedNoNote);
             register(helper, "visitor_day_tavern_crowd", VisitorDayGameTests::tavernCrowd);
             register(helper, "visitor_day_settler_talks", VisitorDayGameTests::settlerTalks);
             register(helper, "visitor_day_settler_at_daily_limit", VisitorDayGameTests::settlerAtDailyLimit);
@@ -80,6 +83,7 @@ public final class VisitorDayGameTests {
             register(helper, "visitor_day_social_rules", VisitorDayGameTests::socialRules);
             register(helper, "visitor_day_stroll_inside_border", VisitorDayGameTests::strollInsideBorder);
             register(helper, "visitor_day_stroll_pull", VisitorDayGameTests::strollPull);
+            register(helper, "visitor_day_stroll_own_random", VisitorDayGameTests::strollOwnRandom);
         });
     }
 
@@ -277,6 +281,33 @@ public final class VisitorDayGameTests {
                 .thenSucceed();
     }
 
+    /**
+     * A Pantry that is gone before the evening meal is no empty Pantry: the visitor is not sent away for it, stays until the next
+     * morning and leaves without the note.
+     */
+    private static void pantryRemovedNoNote(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Inn inn = newInn(helper);
+        List<Component> chat = new ArrayList<>();
+        ServerPlayer player = InnGameTests.listener(helper, chat);
+        long day = InnGameTests.today(helper);
+        Settler visitor = oneVisitor(helper, inn);
+        place(helper, visitor, new BlockPos(2, 1, 2), new double[] {NOTHING});
+        Visit planned = stay(inn, visitor);
+
+        SettlementManager.remove(SettlementData.get(level), inn.pantry(), day, SettlementManager.Listener.NONE);
+        InnGameTests.setClock(level, day, EVENING_MEAL);
+        visitor.visitorDay().decideNow(level);
+        helper.assertTrue(!stay(inn, visitor).noFood() && stay(inn, visitor).leaveSlot() == planned.leaveSlot(),
+                "No Pantry is not an empty Pantry: " + stay(inn, visitor));
+
+        InnGameTests.play(helper, inn, day + 1, InnGameTests.MORNING);
+        helper.assertTrue(visitor.isRemoved(), "It leaves the next morning");
+        helper.assertTrue(chat.isEmpty(), "Quietly: " + chat);
+        TestPlayers.remove(player);
+        InnGameTests.end(helper, inn);
+    }
+
     // ---------------------------------------------------------------------------------------------------- Tavern evening
 
     /**
@@ -452,7 +483,7 @@ public final class VisitorDayGameTests {
         Inn inn = wideInn(helper);
         Settler visitor = oneVisitor(helper, inn);
         place(helper, visitor, new BlockPos(1 + EDGE, 1, 1), new double[] {NOTHING});
-        Inns.script(MasteryRolls.scripted(MasteryRolls.MISS));
+        VisitorStroll.script(MasteryRolls.scripted(MasteryRolls.MISS));
 
         int hops = 0;
         int beyondTavern = 0;
@@ -490,7 +521,7 @@ public final class VisitorDayGameTests {
         place(helper, visitor, new BlockPos(1 + MIDDLE, 1, 1), new double[] {NOTHING});
         Vec3 pantry = Vec3.atCenterOf(inn.pantry());
 
-        Inns.script(MasteryRolls.scripted(MasteryRolls.HIT));
+        VisitorStroll.script(MasteryRolls.scripted(MasteryRolls.HIT));
         int hops = 0;
         int closer = 0;
         for (int i = 0; i < 100; i++) {
@@ -504,7 +535,7 @@ public final class VisitorDayGameTests {
         }
         helper.assertTrue(hops > 50 && closer >= 0.75 * hops, "The hops with the pull end closer to the Pantry: " + closer + " of " + hops);
 
-        Inns.script(MasteryRolls.scripted(MasteryRolls.MISS));
+        VisitorStroll.script(MasteryRolls.scripted(MasteryRolls.MISS));
         hops = 0;
         double total = 0.0;
         for (int i = 0; i < 300; i++) {
@@ -517,6 +548,30 @@ public final class VisitorDayGameTests {
         double start = visitor.position().distanceTo(pantry);
         helper.assertTrue(hops > 100 && total / hops > start - 0.5,
                 "Without the pull the hops do not head for the Pantry: " + (total / hops) + " on average, from " + start);
+        forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+        end(helper, inn, List.of());
+    }
+
+    /** The stroll has a random source of its own: its hops never draw from the one that scripts the arrivals and the asks to stay. */
+    private static void strollOwnRandom(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper, new BlockPos(-10, 0, -25), new BlockPos(45, 0, 25));
+        Inn inn = wideInn(helper);
+        Settler visitor = oneVisitor(helper, inn);
+        place(helper, visitor, new BlockPos(1 + MIDDLE, 1, 1), new double[] {NOTHING});
+
+        int[] draws = {0};
+        Inns.script(new LegacyRandomSource(0L) {
+            @Override
+            public double nextDouble() {
+                draws[0]++;
+                return super.nextDouble();
+            }
+        });
+        for (int i = 0; i < 20; i++) {
+            VisitorStroll.hop(visitor);
+        }
+        helper.assertTrue(draws[0] == 0, "The hops of a stroll do not use the random source of the inn: " + draws[0] + " draws");
         forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
         end(helper, inn, List.of());
     }

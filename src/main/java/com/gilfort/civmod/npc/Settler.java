@@ -304,7 +304,7 @@ public class Settler extends PathfinderMob {
 
     /**
      * A visitor is a settler in a visitor state: it has an origin, a name and levels, but no job, no needs and no settlement; the
-     * stay itself is kept by the settlement of the inn ({@code Visit}).
+     * visit itself is kept by the settlement of the inn ({@code Visit}).
      *
      * @return whether the settler visits an inn
      */
@@ -725,7 +725,7 @@ public class Settler extends PathfinderMob {
     protected void customServerAiStep(ServerLevel level) {
         super.customServerAiStep(level);
         if (isVisitor()) {
-            // A visitor ticks no work and no needs; its stay is looked at now and then, and its own day is all it does.
+            // A visitor ticks no work and no needs; its visit is looked at now and then, and its own day is all it does.
             if ((tickCount + getId()) % CHECK_INTERVAL == 0) {
                 checkMembership(level);
             }
@@ -754,14 +754,14 @@ public class Settler extends PathfinderMob {
     }
 
     /**
-     * Checks the settlement membership and catches up on Jobs changed while unloaded; a visitor checks that its stay goes on. Runs every
+     * Checks the settlement membership and catches up on Jobs changed while unloaded; a visitor checks that its visit goes on. Runs every
      * {@value #CHECK_INTERVAL} ticks of the AI step; tests call it directly.
      *
      * @param level the settler's level
      */
     public void checkMembership(ServerLevel level) {
         if (isVisitor()) {
-            Inns.checkStay(level, this);
+            Inns.checkVisit(level, this);
             return;
         }
         SettlementData data = SettlementData.get(level);
@@ -923,7 +923,7 @@ public class Settler extends PathfinderMob {
         setSkin(input.getIntOr("skin", 0));
         settlementId = input.getIntOr("settlement", -1);
         visitedSettlementId = input.getIntOr("visiting", -1);
-        jobs =input.read("jobs", SettlerJob.CODEC.listOf()).map(List::copyOf).orElse(List.of());
+        jobs = input.read("jobs", SettlerJob.CODEC.listOf()).map(List::copyOf).orElse(List.of());
         input.read("buffers", SettlerWork.BuffersSnapshot.CODEC).ifPresent(work::restore);
         setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
         ContainerHelper.loadAllItems(input, inventory.getItems());

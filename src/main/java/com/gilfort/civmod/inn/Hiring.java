@@ -34,10 +34,10 @@ public final class Hiring {
         NOT_ENOUGH,
         /** The settlement is at {@code maxSettlersPerSettlement}. */
         SETTLEMENT_FULL,
-        /** No bed of the village is free (guest beds do not count). */
+        /** No bed of the settlement is free (guest beds do not count). */
         NO_FREE_BED,
-        /** The settlement has no stay of this visitor, so there is nobody to hire. */
-        NO_STAY,
+        /** The settlement has no visit of this visitor, so there is nobody to hire. */
+        NO_VISIT,
         /** The visitor is a settler now. */
         HIRED
     }
@@ -61,9 +61,9 @@ public final class Hiring {
         ServerLevel level = player.level();
         SettlementData data = SettlementData.get(level);
         Optional<Settlement> settlement = data.settlement(visitor.getVisitedSettlementId());
-        Optional<Visit> stay = settlement.map(found -> found.inn().visits().get(visitor.getUUID()));
-        if (stay.isEmpty()) {
-            return refuse(player, visitor, Outcome.NO_STAY, Component.translatable("civmod.visitor.hire.no_stay", visitor.getName()));
+        Optional<Visit> visit = settlement.flatMap(found -> found.inn().visit(visitor.getUUID()));
+        if (visit.isEmpty()) {
+            return refuse(player, visitor, Outcome.NO_VISIT,Component.translatable("civmod.visitor.hire.no_visit", visitor.getName()));
         }
         if (held.getCount() < offer.price().amount()) {
             return refuse(player, visitor, Outcome.NOT_ENOUGH, Component.translatable("civmod.visitor.hire.not_enough", visitor.getName(),
@@ -72,7 +72,7 @@ public final class Hiring {
         if (SettlerSpawner.isFull(settlement.get())) {
             return refuse(player, visitor, Outcome.SETTLEMENT_FULL, Component.translatable("civmod.visitor.hire.full", visitor.getName()));
         }
-        Optional<BlockPos> bed = SettlerBeds.freeBeds(level, settlement.get(), stay.get().pantry()).stream().findFirst();
+        Optional<BlockPos> bed = SettlerBeds.freeBedsInSettlement(level, settlement.get(), visit.get().pantry()).stream().findFirst();
         if (bed.isEmpty()) {
             return refuse(player, visitor, Outcome.NO_FREE_BED, Component.translatable("civmod.visitor.hire.no_bed", visitor.getName()));
         }
@@ -82,7 +82,7 @@ public final class Hiring {
         return Outcome.HIRED;
     }
 
-    /** The visitor ends its stay, which frees its guest bed, and becomes a settler with the bed; its diary says it joined. */
+    /** The visitor ends its visit, which frees its guest bed, and becomes a settler with the bed; its diary says it joined. */
     private static void join(ServerLevel level, SettlementData data, Settlement settlement, Settler visitor, BlockPos bed) {
         data.updateInn(settlement, inn -> inn.withoutVisit(visitor.getUUID()));
         visitor.becomeSettler(data, settlement);

@@ -55,7 +55,7 @@ public record SettlerInfo(Person person, Component status, boolean homeless, Com
         NO,
         /** A visitor the player can still ask to stay longer. */
         CAN_ASK,
-        /** A visitor that was asked already. */
+        /** A visitor that cannot be asked any more: it was asked already, or its meal sent it away. */
         ASKED;
 
         /** Network codec. */

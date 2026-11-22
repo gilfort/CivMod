@@ -58,7 +58,7 @@ public final class GuestBeds {
      */
     public static Result toggle(ServerLevel level, SettlementData data, BlockPos pantry, BlockPos clicked) {
         Optional<Settlement> settlement = data.settlementAt(pantry);
-        Optional<SettlementBlock> block = settlement.flatMap(found -> found.block(pantry)).filter(ClerkStorage::isPantry);
+        Optional<SettlementBlock> block = settlement.flatMap(found -> ClerkStorage.pantryAt(found, pantry));
         if (block.isEmpty()) {
             return Result.NO_PANTRY;
         }

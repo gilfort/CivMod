@@ -22,11 +22,15 @@ import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.origin.OriginLine;
+import com.gilfort.civmod.origin.SettlerOrigin;
 import com.gilfort.civmod.origin.Talent;
 import com.gilfort.civmod.registry.ModDiaryEntryTypes;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.TestSettlements;
 
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
@@ -37,11 +41,14 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -66,6 +73,7 @@ public final class VisitorHireGameTests {
             register(helper, "visitor_talk", VisitorHireGameTests::talk);
             register(helper, "visitor_hire", VisitorHireGameTests::hire);
             register(helper, "visitor_hire_refused", VisitorHireGameTests::hireRefused);
+            register(helper, "visitor_hire_far_bed", VisitorHireGameTests::hireFarBed);
             register(helper, "visitor_clicks", VisitorHireGameTests::clicks);
             register(helper, "visitor_ask_button", VisitorHireGameTests::askButton);
         });
@@ -240,10 +248,25 @@ public final class VisitorHireGameTests {
         player.interactOn(visitor, InteractionHand.MAIN_HAND, Vec3.ZERO);
     }
 
-    /** Raises the visitor in its trade to level 10, so that its price asks for at least two items. */
+    /** Raises the visitor in its trade to this level. */
+    private static final int EXPENSIVE_LEVEL = 10;
+
+    /** Raises the visitor in its trade to level 10. */
     private static VisitorOffer expensive(Settler visitor) {
         Job trade = VisitorOffer.of(visitor).trade();
-        visitor.getSkills().set(trade, new SettlerSkills.Skill(10, 0));
+        visitor.getSkills().set(trade, new SettlerSkills.Skill(EXPENSIVE_LEVEL, 0));
+        return VisitorOffer.of(visitor);
+    }
+
+    /**
+     * Gives the visitor a trade whose price is a stackable item and makes it expensive, so the price asks for several items whatever
+     * the visitor was rolled: its upbringing favours nothing, so the Job it is best in is its trade, and that is the Smith at level 10.
+     */
+    private static VisitorOffer stackableTrade(Settler visitor) {
+        SettlerOrigin origin = visitor.getPast().origin().orElseThrow();
+        visitor.getPast().setOrigin(new SettlerOrigin(origin.gender(), origin.name(), origin.place(), Optional.empty(), origin.turningPoint(),
+                origin.reason(), origin.rescuer()));
+        visitor.getSkills().set(ModJobs.SMITH.get(), new SettlerSkills.Skill(EXPENSIVE_LEVEL, 0));
         return VisitorOffer.of(visitor);
     }
 
@@ -320,9 +343,9 @@ public final class VisitorHireGameTests {
         Inn inn = InnGameTests.inn(helper, 1, 1, true);
         Players players = players(helper);
         Settler visitor = arrived(helper, inn);
-        VisitorOffer offer = expensive(visitor);
+        VisitorOffer offer = stackableTrade(visitor);
         int amount = offer.price().amount();
-        helper.assertTrue(amount >= 2, "A level 10 trade asks for at least two items: " + offer.price());
+        helper.assertTrue(amount >= 2, "A level 10 smith asks for at least two items: " + offer.price());
 
         click(players.player(), visitor, offer.price().stack(), false);
         helper.assertTrue(says(players.overlay(), "civmod.visitor.hire.no_bed"), "Only the guest bed is free: " + players.overlay());
@@ -353,6 +376,47 @@ public final class VisitorHireGameTests {
         }
         TestPlayers.remove(players.player());
         release(helper, inn, visitor);
+        InnGameTests.end(helper, inn);
+    }
+
+    /** How far east of the Pantry a second JobBlock stands that carries the border further (inside its own join radius of 50). */
+    private static final int OUTPOST = 48;
+    /** How far east of the Pantry the free bed stands: inside the border, but beyond the 64 blocks of the bed search around the Pantry. */
+    private static final int FAR_BED_DISTANCE = 85;
+
+    /**
+     * The free bed a hire takes is searched in the whole settlement, not only within 64 blocks of the Pantry: a settlement grows
+     * with every connected JobBlock, so its border can reach further than that from the Pantry.
+     */
+    private static void hireFarBed(GameTestHelper helper) {
+        InnRules.use(InnGameTests.rules(1.0, 0.0, 3));
+        Inn inn = InnGameTests.inn(helper, 5, 1, true);
+        ServerLevel level = helper.getLevel();
+        SettlementData data = SettlementData.get(level);
+        BlockPos outpost = inn.pantry().east(OUTPOST);
+        TestSettlements.place(helper, outpost, ModJobs.LUMBERJACK.get(), 1);
+        SettlementManager.setLevel(data, outpost, 5, SettlementManager.Listener.NONE);
+        helper.assertTrue(inn.settlement().block(outpost).filter(block -> block.connected() && block.level() == 5).isPresent(),
+                "The outpost is a connected JobBlock of the settlement: " + inn.settlement().block(outpost));
+        BlockPos far = VillagerConversionGameTests.bed(helper, InnGameTests.PANTRY.east(FAR_BED_DISTANCE));
+        Players players = players(helper);
+        Settler visitor = arrived(helper, inn);
+
+        helper.assertTrue(!SettlerBeds.freeBeds(level, inn.settlement(), inn.pantry()).contains(far), "The search of 64 blocks does not reach the bed");
+        List<BlockPos> free = SettlerBeds.freeBedsInSettlement(level, inn.settlement(), inn.pantry());
+        helper.assertTrue(free.contains(far), "The border reaches the bed, so the search of the whole settlement finds it: " + free);
+
+        VisitorOffer offer = stackableTrade(visitor);
+        click(players.player(), visitor, offer.price().stack(), false);
+        helper.assertTrue(!visitor.isVisitor() && inn.settlement().bedOf(visitor.getUUID()).equals(Optional.of(free.get(0))),
+                "The visitor is hired and takes the nearest free bed of the settlement: " + players.overlay() + ", " + inn.settlement().bedOf(visitor.getUUID()));
+
+        TestPlayers.remove(players.player());
+        release(helper, inn, visitor);
+        level.setBlock(far, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        level.setBlock(far.south(), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+        // The border of this settlement reaches 100 blocks: it must not swallow the settlements of the tests that run after it.
+        TestSettlements.dissolve(level, inn.settlement());
         InnGameTests.end(helper, inn);
     }
 

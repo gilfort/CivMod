@@ -19,7 +19,7 @@ import net.minecraft.core.BlockPos;
  * who stay and the last arrival check that was run. Immutable; {@link SettlementData#updateInn} swaps it for a changed copy.
  *
  * @param guestBeds the guest beds (head positions) per Pantry, in the order they were bound
- * @param visits    the stays by visitor UUID
+ * @param visits    the visits by visitor UUID
  * @param lastSlot  the last arrival check ({@link InnSlots}) that was run, {@link #NO_SLOT} before the first
  */
 public record InnState(Map<BlockPos, List<BlockPos>> guestBeds, Map<UUID, Visit> visits, long lastSlot) {
@@ -48,7 +48,7 @@ public record InnState(Map<BlockPos, List<BlockPos>> guestBeds, Map<UUID, Visit>
 
     /**
      * @param guestBeds the guest beds per Pantry, in binding order
-     * @param visits    the stays
+     * @param visits    the visits
      * @param lastSlot  the last arrival check that was run
      */
     public InnState {
@@ -74,18 +74,18 @@ public record InnState(Map<BlockPos, List<BlockPos>> guestBeds, Map<UUID, Visit>
 
     /**
      * @param bed a bed head position
-     * @return the Pantry the bed is bound to as a guest bed
-     */
-    public Optional<BlockPos> pantryOf(BlockPos bed) {
-        return guestBeds.entrySet().stream().filter(entry -> entry.getValue().contains(bed)).map(Map.Entry::getKey).findFirst();
-    }
-
-    /**
-     * @param bed a bed head position
      * @return whether it is a guest bed of any Pantry
      */
     public boolean isGuestBed(BlockPos bed) {
-        return pantryOf(bed).isPresent();
+        return guestBeds.values().stream().anyMatch(beds -> beds.contains(bed));
+    }
+
+    /**
+     * @param visitor a visitor UUID
+     * @return its visit, empty if the settlement has none of it
+     */
+    public Optional<Visit> visit(UUID visitor) {
+        return Optional.ofNullable(visits.get(visitor));
     }
 
     /**
@@ -105,7 +105,7 @@ public record InnState(Map<BlockPos, List<BlockPos>> guestBeds, Map<UUID, Visit>
 
     /**
      * @param pantry a Pantry position
-     * @return the stays at that Pantry
+     * @return the visits at that Pantry
      */
     public List<Visit> visitsOf(BlockPos pantry) {
         return visits.values().stream().filter(visit -> visit.pantry().equals(pantry)).toList();
@@ -133,9 +133,9 @@ public record InnState(Map<BlockPos, List<BlockPos>> guestBeds, Map<UUID, Visit>
     public InnState withoutBed(BlockPos bed) {
         Map<BlockPos, List<BlockPos>> beds = new LinkedHashMap<>();
         guestBeds.forEach((pantry, list) -> beds.put(pantry, list.stream().filter(other -> !other.equals(bed)).toList()));
-        Map<UUID, Visit> stays = new LinkedHashMap<>(visits);
-        stays.replaceAll((id, visit) -> visit.bed().filter(bed::equals).isPresent() ? visit.sleepingIn(Optional.empty()) : visit);
-        return new InnState(beds, stays, lastSlot);
+        Map<UUID, Visit> byVisitor = new LinkedHashMap<>(visits);
+        byVisitor.replaceAll((id, visit) -> visit.bed().filter(bed::equals).isPresent() ? visit.sleepingIn(Optional.empty()) : visit);
+        return new InnState(beds, byVisitor, lastSlot);
     }
 
     /**
@@ -155,23 +155,23 @@ public record InnState(Map<BlockPos, List<BlockPos>> guestBeds, Map<UUID, Visit>
     }
 
     /**
-     * @param visit a stay, new or changed
+     * @param visit a visit, new or changed
      * @return this state with it
      */
     public InnState withVisit(Visit visit) {
-        Map<UUID, Visit> stays = new LinkedHashMap<>(visits);
-        stays.put(visit.id(), visit);
-        return new InnState(guestBeds, stays, lastSlot);
+        Map<UUID, Visit> byVisitor = new LinkedHashMap<>(visits);
+        byVisitor.put(visit.id(), visit);
+        return new InnState(guestBeds, byVisitor, lastSlot);
     }
 
     /**
      * @param visitor a visitor UUID
-     * @return this state without its stay, which frees its guest bed
+     * @return this state without its visit, which frees its guest bed
      */
     public InnState withoutVisit(UUID visitor) {
-        Map<UUID, Visit> stays = new LinkedHashMap<>(visits);
-        stays.remove(visitor);
-        return new InnState(guestBeds, stays, lastSlot);
+        Map<UUID, Visit> byVisitor = new LinkedHashMap<>(visits);
+        byVisitor.remove(visitor);
+        return new InnState(guestBeds, byVisitor, lastSlot);
     }
 
     /**

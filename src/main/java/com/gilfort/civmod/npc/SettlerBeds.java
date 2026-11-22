@@ -12,7 +12,9 @@ import java.util.stream.Collectors;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
+import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.DayClock;
 
 import net.minecraft.core.BlockPos;
@@ -139,6 +141,27 @@ public final class SettlerBeds {
      * @return the head positions of the free beds
      */
     public static List<BlockPos> freeBeds(ServerLevel level, Settlement settlement, BlockPos from) {
+        return freeBeds(level, settlement, from, POI_RADIUS);
+    }
+
+    /**
+     * {@link #freeBeds} over the whole settlement: the search reaches as far as the border does, which can be further than
+     * {@value #POI_RADIUS} blocks from {@code from} once connected JobBlocks carry it outwards. One search per call, for a player's
+     * click; the settlers' own bed search keeps the shorter reach.
+     *
+     * @param level      the level
+     * @param settlement the settlement
+     * @param from       the position to search from
+     * @return the head positions of the free beds, closest first
+     */
+    public static List<BlockPos> freeBedsInSettlement(ServerLevel level, Settlement settlement, BlockPos from) {
+        int reach = settlement.blocks().stream().filter(SettlementBlock::connected)
+                .mapToInt(block -> (int) Math.ceil(SettlementRules.horizontalDistance(from, block.pos())) + SettlementRules.joinRadius(block)).max()
+                .orElse(0);
+        return freeBeds(level, settlement, from, Math.max(POI_RADIUS, reach));
+    }
+
+    private static List<BlockPos> freeBeds(ServerLevel level, Settlement settlement, BlockPos from, int radius) {
         Set<BlockPos> owned = settlement.beds().keySet();
         Collection<BlockPos> reserved = settlement.bedReservations().values();
         Set<BlockPos> spawnBeds = spawnBeds(level);
@@ -146,7 +169,7 @@ public final class SettlerBeds {
                 type -> type.is(PoiTypes.HOME),
                 pos -> !owned.contains(pos) && !reserved.contains(pos) && !spawnBeds.contains(pos) && !settlement.inn().isGuestBed(pos)
                         && JobAssignments.insideBorder(settlement, pos),
-                from, POI_RADIUS, PoiManager.Occupancy.ANY)
+                from, radius, PoiManager.Occupancy.ANY)
                 .map(Pair::getSecond)
                 .toList();
     }

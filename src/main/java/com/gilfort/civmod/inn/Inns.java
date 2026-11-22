@@ -32,8 +32,8 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
  * The inns of the settlements (vault {@code Systems/NPC Population.md}, spec Inn and visitors). A Pantry with guest beds is an
  * inn. Three times a day (the checks of {@link InnSlots}) it draws visitors while a Tavern Host covers that time; each visitor stays
  * a few days, sleeps in a guest bed and leaves at a check. {@link #run} plays every check that has not been played yet, so an
- * unloaded settlement catches up when its Pantry loads: visitors whose stay still runs appear, those who would be gone leave no
- * trace. Once a second the level tick only compares two numbers per settlement with an inn.
+ * unloaded settlement catches up when its Pantry and all its settlers are loaded: visitors whose stay still runs appear, those who
+ * would be gone leave no trace. Once a second the level tick only compares two numbers per settlement with an inn.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class Inns {
@@ -42,8 +42,8 @@ public final class Inns {
     private static final int TICK_INTERVAL = 20;
 
     /**
-     * Whether a Tavern Host works a Pantry at a time. The shift of a Tavern Host is the one of {@link ClerkStorage}; part-time work
-     * will bring a window from the job entry, and this is where it plugs in.
+     * Whether a Tavern Host works a Pantry at a time. The shipped answer is the shift of a Tavern Host ({@link ClerkStorage#working});
+     * tests script another one.
      */
     @FunctionalInterface
     public interface HostCover {
@@ -64,7 +64,7 @@ public final class Inns {
     }
 
     /**
-     * Replaces the random source of the arrival rolls, the stays and the requests to stay longer (tests). Per check an inn draws the
+     * Replaces the random source of the arrival rolls, the days of a visit and the requests to stay longer (tests). Per check an inn draws the
      * share of one more visitor ({@code nextDouble}, only when there is a fraction), and per visitor the days it stays
      * ({@code nextInt}).
      *
@@ -121,8 +121,9 @@ public final class Inns {
     }
 
     /**
-     * Plays every arrival check of a settlement's inn that has not been played yet, up to now. The Pantries of its inns must be
-     * loaded; otherwise the checks wait and are played when they are.
+     * Plays every arrival check of a settlement's inn that has not been played yet, up to now. The Pantries of its inns and every
+     * settler of the settlement must be loaded: the reputation and the level cap of a visitor are read from all of them, and a
+     * check never works from a part of the settlement. Otherwise the checks wait and are played when they are.
      *
      * @param level      the level
      * @param settlement the settlement
@@ -130,7 +131,8 @@ public final class Inns {
     public static void run(ServerLevel level, Settlement settlement) {
         long now = InnSlots.latest(level.getOverworldClockTime());
         long last = settlement.inn().lastSlot();
-        if (last == InnState.NO_SLOT || last >= now || !activeInns(settlement.inn(), settlement).stream().allMatch(level::isLoaded)) {
+        if (last == InnState.NO_SLOT || last >= now || !activeInns(settlement.inn(), settlement).stream().allMatch(level::isLoaded)
+                || !settlersLoaded(level, settlement)) {
             return;
         }
         // A visitor who arrived before this window has left by now: the checks before it cannot leave anybody behind.
@@ -138,18 +140,23 @@ public final class Inns {
         new Pass(level, settlement).play(first, now);
     }
 
+    /** @return whether every settler of the settlement stands in a loaded chunk, so a settler is not missing from what is counted */
+    private static boolean settlersLoaded(ServerLevel level, Settlement settlement) {
+        return settlement.members().stream().allMatch(member -> level.getEntity(member) instanceof Settler);
+    }
+
     /**
-     * The visitor looks at its stay now and then: a stay that is gone (the visitor left while it was unloaded) removes the visitor
+     * The visitor looks at its visit now and then: a visit that is gone (it ended while the visitor was unloaded) removes the visitor
      * quietly, a settlement that is gone makes it vanish.
      *
      * @param level   the level
      * @param visitor the visitor
      */
-    public static void checkStay(ServerLevel level, Settler visitor) {
+    public static void checkVisit(ServerLevel level, Settler visitor) {
         Optional<Settlement> settlement = SettlementData.get(level).settlement(visitor.getVisitedSettlementId());
         if (settlement.isEmpty()) {
             Visitors.vanish(level, visitor);
-        } else if (!settlement.get().inn().visits().containsKey(visitor.getUUID())) {
+        } else if (settlement.get().inn().visit(visitor.getUUID()).isEmpty()) {
             visitor.discard();
         }
     }
@@ -172,7 +179,7 @@ public final class Inns {
     /** @return the Pantries of the settlement that count as inns in this state of its inn: the first ones with a guest bed, up to the limit */
     private static List<BlockPos> activeInns(InnState inn, Settlement settlement) {
         return inn.pantries().stream().limit(CivModConfig.MAX_INNS_PER_SETTLEMENT.get())
-                .filter(pantry -> settlement.block(pantry).filter(ClerkStorage::isPantry).isPresent()).toList();
+                .filter(pantry -> ClerkStorage.pantryAt(settlement, pantry).isPresent()).toList();
     }
 
     /** One play of the checks between two points in time: it works on a copy of the inn state and writes it back at the end. */
@@ -185,7 +192,7 @@ public final class Inns {
         private InnState state;
         /** The visitors that arrived and did not leave again in this pass: they step into the world at its end. */
         private final Set<UUID> arrived = new LinkedHashSet<>();
-        /** The stays of visitors that already stood in the world and ended in this pass. */
+        /** The visits of visitors that already stood in the world and ended in this pass. */
         private final List<Visit> departed = new ArrayList<>();
         private @Nullable Double reputation;
 
@@ -211,7 +218,7 @@ public final class Inns {
          */
         private void fallAway(long slot) {
             for (BlockPos pantry : List.copyOf(state.guestBeds().keySet())) {
-                if (settlement.block(pantry).filter(ClerkStorage::isPantry).isEmpty()) {
+                if (ClerkStorage.pantryAt(settlement, pantry).isEmpty()) {
                     state.bedsOf(pantry).forEach(bed -> SettlerBeds.releasePoi(level, bed));
                     state = state.withoutPantry(pantry);
                     continue;
@@ -255,7 +262,7 @@ public final class Inns {
                 int count = Math.min(arrivals(block.level()), free.size());
                 for (int i = 0; i < count; i++) {
                     int days = random.nextIntBetweenInclusive(rules.minStayDays(), rules.maxStayDays());
-                    Visit visit = new Visit(UUID.randomUUID(), pantry, Optional.of(free.get(i)), InnSlots.after(slot, days), false);
+                    Visit visit = new Visit(UUID.randomUUID(), pantry, Optional.of(free.get(i)), InnSlots.after(slot, days));
                     state = state.withVisit(visit);
                     arrived.add(visit.id());
                 }

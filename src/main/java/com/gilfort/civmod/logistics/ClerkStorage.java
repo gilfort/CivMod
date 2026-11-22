@@ -102,6 +102,15 @@ public final class ClerkStorage {
     }
 
     /**
+     * @param settlement a settlement
+     * @param pos        a position
+     * @return the Pantry of the settlement at that position, empty if there is no JobBlock there or it is no Pantry
+     */
+    public static Optional<SettlementBlock> pantryAt(Settlement settlement, BlockPos pos) {
+        return settlement.block(pos).filter(ClerkStorage::isPantry);
+    }
+
+    /**
      * @param block a JobBlock
      * @return whether a settler serves a counter at it: a Clerk JobBlock or a Pantry
      */
