@@ -52,6 +52,11 @@ public final class SettlementData extends SavedData {
     private final Map<UUID, Long> lastFoundingDay = new HashMap<>();
     /** JobBlocks that belong to no settlement yet (placed outside every exclusion zone, or left by a dissolved one). */
     private final Map<BlockPos, SettlementBlock> unsettled = new LinkedHashMap<>();
+    /**
+     * The ids of the settlements that have a hearth at a position: the same hearths as {@link Settlement#hearths()}, looked up by
+     * position. Every block change on the server asks it ({@link Hearths}), so that question must not walk all settlements.
+     */
+    private final Map<BlockPos, Set<Integer>> hearthOwners = new HashMap<>();
     private int revision;
 
     /**
@@ -67,6 +72,7 @@ public final class SettlementData extends SavedData {
         for (Settlement settlement : settlements) {
             this.settlements.put(settlement.id(), settlement);
             settlement.blocks().forEach(block -> index(settlement, block.pos()));
+            settlement.hearths().forEach(pos -> indexHearth(settlement, pos));
             // Saves from before the Home Clerk: JobBlocks without one get it now.
             settlement.blocks().stream().filter(block -> block.homeClerk().isEmpty())
                     .forEach(block -> Warehouses.assignHomeClerk(settlement, block));
@@ -346,6 +352,7 @@ public final class SettlementData extends SavedData {
 
     void dissolve(Settlement settlement) {
         settlements.remove(settlement.id());
+        settlement.hearths().forEach(pos -> unindexHearth(settlement, pos));
         changed();
     }
 
@@ -372,6 +379,83 @@ public final class SettlementData extends SavedData {
         if (!settlement.bonuses().equals(bonuses)) {
             settlement.setBonuses(bonuses);
             changed();
+        }
+    }
+
+    /**
+     * Forgets every settlement, unsettled JobBlock and founding day of the dimension. The GameTests start each batch with it, so
+     * the settlements of earlier tests do not pile up in the shared test world; the ids go on counting.
+     */
+    public void clear() {
+        settlements.clear();
+        byPos.clear();
+        byChunk.clear();
+        lastFoundingDay.clear();
+        unsettled.clear();
+        hearthOwners.clear();
+        changed();
+    }
+
+    /**
+     * Adds a hearth to a settlement.
+     *
+     * @param settlement the settlement, whose border holds the position
+     * @param pos        where the hearth is
+     */
+    void addHearth(Settlement settlement, BlockPos pos) {
+        if (settlement.addHearth(pos)) {
+            indexHearth(settlement, pos);
+            setDirty();
+        }
+    }
+
+    /**
+     * Removes a hearth from every settlement that has it.
+     *
+     * @param pos where the hearth was
+     */
+    void removeHearth(BlockPos pos) {
+        Set<Integer> owners = hearthOwners.remove(pos);
+        if (owners == null) {
+            return;
+        }
+        for (int id : owners) {
+            Settlement owner = settlements.get(id);
+            if (owner == null) {
+                throw new IllegalStateException("The hearth index holds settlement " + id + " at " + pos + ", which no longer exists");
+            }
+            owner.removeHearth(pos);
+        }
+        setDirty();
+    }
+
+    /**
+     * Replaces the hearths of a settlement with the result of a scan.
+     *
+     * @param settlement the settlement
+     * @param found      its hearths now
+     */
+    void setHearths(Settlement settlement, Set<BlockPos> found) {
+        int before = settlement.hearthRevision();
+        settlement.hearths().forEach(pos -> unindexHearth(settlement, pos));
+        settlement.setHearths(found);
+        settlement.hearths().forEach(pos -> indexHearth(settlement, pos));
+        if (settlement.hearthRevision() != before) {
+            setDirty();
+        }
+    }
+
+    private void indexHearth(Settlement settlement, BlockPos pos) {
+        hearthOwners.computeIfAbsent(pos.immutable(), key -> new HashSet<>()).add(settlement.id());
+    }
+
+    private void unindexHearth(Settlement settlement, BlockPos pos) {
+        Set<Integer> owners = hearthOwners.get(pos);
+        if (owners != null) {
+            owners.remove(settlement.id());
+            if (owners.isEmpty()) {
+                hearthOwners.remove(pos);
+            }
         }
     }
 
