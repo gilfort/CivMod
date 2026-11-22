@@ -228,6 +228,12 @@ public final class VisitorDay {
         return false;
     }
 
+    @Override
+    public String toString() {
+        return "VisitorDay[" + part + ", mayStroll=" + mayStroll + ", walk=" + walk + ", navigationDone=" + visitor.getNavigation().isDone()
+                + ", at " + visitor.blockPosition() + "]";
+    }
+
     private boolean isNear(BlockPos target, double reach) {
         Vec3 center = Vec3.atCenterOf(target);
         double dx = visitor.getX() - center.x;
