@@ -113,11 +113,10 @@ public final class Inns {
     @SubscribeEvent
     static void onLevelTick(LevelTickEvent.Post event) {
         if (event.getLevel() instanceof ServerLevel level && level.getGameTime() % TICK_INTERVAL == 0) {
-            for (Settlement settlement : SettlementData.get(level).settlements()) {
-                if (settlement.inn().lastSlot() != InnState.NO_SLOT) {
-                    run(level, settlement);
-                }
-            }
+            // A copy of the few settlements with an inn: playing a check spawns entities, and nothing may change the list meanwhile.
+            List<Settlement> withInn = SettlementData.get(level).settlements().stream()
+                    .filter(settlement -> settlement.inn().lastSlot() != InnState.NO_SLOT).toList();
+            withInn.forEach(settlement -> run(level, settlement));
         }
     }
 
@@ -247,6 +246,9 @@ public final class Inns {
                     continue;
                 }
                 List<BlockPos> free = freeBeds(block);
+                if (free.isEmpty()) {
+                    continue;
+                }
                 int count = Math.min(arrivals(block.level()), free.size());
                 for (int i = 0; i < count; i++) {
                     int days = random.nextIntBetweenInclusive(rules.minStayDays(), rules.maxStayDays());
