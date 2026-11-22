@@ -163,6 +163,16 @@ public final class SettlerBeds {
     static void claim(ServerLevel level, SettlementData data, Settlement settlement, UUID settler, BlockPos bed) {
         settlement.bedOf(settler).ifPresent(previous -> releasePoi(level, previous));
         data.assignBed(settlement, bed, settler);
+        takePoi(level, bed);
+    }
+
+    /**
+     * Takes the POI ticket of a bed so Villagers do not claim it as their home; a Villager holding the bed loses it.
+     *
+     * @param level the level
+     * @param bed   the bed head position
+     */
+    public static void takePoi(ServerLevel level, BlockPos bed) {
         PoiManager poi = level.getPoiManager();
         if (take(poi, bed).isEmpty() && poi.existsAtPosition(PoiTypes.HOME, bed)) {
             evictVillagers(level, bed);
