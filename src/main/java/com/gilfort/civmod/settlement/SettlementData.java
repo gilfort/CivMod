@@ -260,6 +260,17 @@ public final class SettlementData extends SavedData {
     }
 
     /**
+     * Changes what the settlement keeps for its inn. Only the save is marked: no client shows it, so the {@link #revision()} stays.
+     *
+     * @param settlement the settlement
+     * @param change     the new inn state from the old one
+     */
+    public void updateInn(Settlement settlement, UnaryOperator<InnState> change) {
+        settlement.setInn(change.apply(settlement.inn()));
+        setDirty();
+    }
+
+    /**
      * Marks the starting settlers of a settlement as arrived.
      *
      * @param settlement the settlement

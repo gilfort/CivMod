@@ -11,10 +11,12 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.entertainment.EntertainmentRules;
 import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.origin.Channel;
 import com.gilfort.civmod.origin.OriginData;
 import com.gilfort.civmod.origin.Origins;
+import com.gilfort.civmod.origin.Talent;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.settlement.Settlement;
@@ -170,7 +172,40 @@ public final class SettlerSpawner {
     }
 
     /**
-     * Sets up a Settler that appears from a spawn egg: a random race from the race data (human while none is loaded), a random
+     * Brings a visitor to the inn of a settlement (vault {@code Systems/NPC Population.md}): a human with a random skin, an origin of
+     * the visitor channel and a name, and levels in the Jobs its upbringing favours. It appears on a safe spot within
+     * {@value #SPAWN_RADIUS} blocks of the Pantry without a puff or a message, and belongs to no settlement.
+     *
+     * @param level      the dimension
+     * @param settlement the settlement of the inn
+     * @param pantry     the Pantry of the inn
+     * @param id         the UUID the visitor entity gets (the one the settlement's stay record carries)
+     * @param levelCap   the highest level it can roll in a favoured Job
+     * @return the visitor, empty if the entity could not be created
+     */
+    public static Optional<Settler> visitor(ServerLevel level, Settlement settlement, BlockPos pantry, UUID id, int levelCap) {
+        Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
+        if (settler == null) {
+            return Optional.empty();
+        }
+        RandomSource random = level.getRandom();
+        Vec3 pos = findSpawnPos(level, pantry, random);
+        settler.snapTo(pos.x, pos.y, pos.z, random.nextFloat() * 360.0F, 0.0F);
+        settler.setUUID(id);
+        settler.setRace(Races.HUMAN);
+        settler.setSkin(random.nextInt(SettlerSkins.COUNT));
+        Origins.assign(level, settler, Channel.VISITOR, settlement);
+        for (Job job : ModJobs.REGISTRY) {
+            int start = Talent.favours(settler, job) ? VillagerConversion.rollLevel(levelCap, random) : 1;
+            settler.getSkills().set(job, new SettlerSkills.Skill(start, 0));
+        }
+        settler.becomeVisitor(settlement.id(), pantry, EntertainmentRules.get().tavernRadius());
+        level.addFreshEntity(settler);
+        return Optional.of(settler);
+    }
+
+    /**
+     * Sets up a Settler that appears from a spawn egg:a random race from the race data (human while none is loaded), a random
      * skin, a random origin and name of that race ({@link Origins#assignEgg}), level 1 in every Job, and homeless where it stands. A
      * custom name on the egg replaces the random one afterwards. The Settler joins a settlement only by the homeless rules.
      *

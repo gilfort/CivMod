@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:inn",
+  "function": "civmod:inn_visitor_without_stay",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

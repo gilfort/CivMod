@@ -27,6 +27,12 @@ public final class CivModConfig {
                     "Every Settler costs server tick time.")
             .defineInRange("maxSettlersPerSettlement", 0, 0, 1024);
 
+    /** Most Pantries with guest beds that count as an inn in one settlement. */
+    public static final ModConfigSpec.IntValue MAX_INNS_PER_SETTLEMENT = BUILDER
+            .comment("Most Pantries with guest beds that count as an inn in one settlement; further ones draw no visitors.",
+                    "Visitors come to the inns only, at most as many as there are free guest beds.")
+            .defineInRange("maxInnsPerSettlement", 1, 1, 64);
+
     /** Limits founding to one settlement per player per in-game day. */
     public static final ModConfigSpec.BooleanValue LIMIT_FOUNDING_PER_DAY = BUILDER
             .comment("If true, each player can found at most one settlement per in-game day.",

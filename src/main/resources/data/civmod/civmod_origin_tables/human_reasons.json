@@ -65,6 +65,24 @@
       "channels": [
         "egg"
       ]
+    },
+    {
+      "id": "civmod:passing_through",
+      "channels": [
+        "visitor"
+      ]
+    },
+    {
+      "id": "civmod:looking_for_work",
+      "channels": [
+        "visitor"
+      ]
+    },
+    {
+      "id": "civmod:heard_of_this_place",
+      "channels": [
+        "visitor"
+      ]
     }
   ]
 }

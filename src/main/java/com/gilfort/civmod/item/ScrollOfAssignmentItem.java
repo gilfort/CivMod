@@ -7,7 +7,11 @@ import com.gilfort.civmod.api.BiomePosition;
 import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.block.JobBlock;
+import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.entertainment.EntertainmentRules;
 import com.gilfort.civmod.entertainment.Stage;
+import com.gilfort.civmod.inn.GuestBeds;
+import com.gilfort.civmod.inn.InnRules;
 import com.gilfort.civmod.job.BiomeBonuses;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.menu.BiomeBonusText;
@@ -51,7 +55,8 @@ import net.neoforged.neoforge.capabilities.Capabilities;
  * <ul>
  * <li>Shift + right-click a JobBlock: bind to it.</li>
  * <li>Bound to a JobBlock, right-click a block (or water): cycle work POI → collect → drop-off → removed; bound to a
- * Clerk JobBlock: a container cycles storage → removed, any other block stand spot → removed.</li>
+ * Clerk JobBlock: a container cycles storage → removed, any other block stand spot → removed; bound to a Pantry, a bed
+ * is bound as a guest bed of its inn and unbound by a second click.</li>
  * <li>Bound to a Clerk JobBlock (a Warehouse), right-click another Clerk JobBlock: link / unlink it as Served Clerk.</li>
  * <li>Bound to a JobBlock, right-click a settler: open the {@link JobPicker job picker} and assign the chosen Job.</li>
  * <li>Shift + right-click a settler: bind to the settler (NPC settings, e.g. bed later).</li>
@@ -188,6 +193,32 @@ public class ScrollOfAssignmentItem extends Item {
             case OUTSIDE -> Component.translatable("civmod.scroll.point.outside").withStyle(ChatFormatting.RED);
             case SPAWN_BED -> Component.translatable("civmod.scroll.bed.spawn_bed").withStyle(ChatFormatting.RED);
             case HOMELESS -> Component.translatable("civmod.scroll.bed.homeless", label).withStyle(ChatFormatting.RED);
+            case GUEST_BED -> Component.translatable("civmod.scroll.bed.guest_bed").withStyle(ChatFormatting.RED);
+        };
+        player.sendOverlayMessage(message);
+    }
+
+    /** Bound to a Pantry, right-click a bed: binds it as a guest bed of the inn, a second click unbinds it. */
+    private static void toggleGuestBed(ServerPlayer player, BlockPos pantry, BlockPos bed) {
+        ServerLevel level = player.level();
+        SettlementData data = SettlementData.get(level);
+        GuestBeds.Result result = GuestBeds.toggle(level, data, pantry, bed);
+        Optional<SettlementBlock> block = JobBlockSite.blockAt(level, pantry);
+        int held = data.settlementAt(pantry).map(found -> found.inn().bedsOf(pantry).size()).orElse(0);
+        int capacity = block.map(found -> InnRules.get().bedCapacity(found.level())).orElse(0);
+        Component message = switch (result) {
+            case BOUND -> Component.translatable("civmod.scroll.guest_bed.bound", held, capacity);
+            case BOUND_OVER_LIMIT -> Component.translatable("civmod.scroll.guest_bed.over_limit", CivModConfig.MAX_INNS_PER_SETTLEMENT.get())
+                    .withStyle(ChatFormatting.RED);
+            case UNBOUND -> Component.translatable("civmod.scroll.guest_bed.unbound", held, capacity);
+            case NOT_A_BED -> Component.translatable("civmod.scroll.bed.not_a_bed").withStyle(ChatFormatting.RED);
+            case OUTSIDE -> Component.translatable("civmod.scroll.point.outside").withStyle(ChatFormatting.RED);
+            case TOO_FAR -> Component.translatable("civmod.scroll.guest_bed.too_far", EntertainmentRules.get().tavernRadius())
+                    .withStyle(ChatFormatting.RED);
+            case FULL -> Component.translatable("civmod.scroll.guest_bed.full", capacity).withStyle(ChatFormatting.RED);
+            case TAKEN -> Component.translatable("civmod.scroll.guest_bed.taken").withStyle(ChatFormatting.RED);
+            case SPAWN_BED -> Component.translatable("civmod.scroll.bed.spawn_bed").withStyle(ChatFormatting.RED);
+            case NO_PANTRY -> Component.translatable("civmod.scroll.binding_lost").withStyle(ChatFormatting.RED);
         };
         player.sendOverlayMessage(message);
     }
@@ -217,6 +248,10 @@ public class ScrollOfAssignmentItem extends Item {
         }
         ServerLevel level = player.level();
         Job jobType = block.get().jobType();
+        if (ClerkStorage.isPantry(block.get()) && SettlerBeds.head(level, target).isPresent()) {
+            toggleGuestBed(player, jobBlock, target);
+            return;
+        }
         if (ClerkStorage.isClerk(block.get()) || ClerkStorage.isPantry(block.get())) {
             if (ClerkStorage.isClerk(block.get()) && !target.equals(jobBlock)
                     && JobBlockSite.blockAt(level, target).filter(ClerkStorage::isClerk).isPresent()) {

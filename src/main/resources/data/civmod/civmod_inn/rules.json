@@ -1,0 +1,10 @@
+{
+  "base_chance": 0.05,
+  "reputation_scale": 0.25,
+  "beds_per_level": 2,
+  "min_stay_days": 2,
+  "max_stay_days": 4,
+  "extend_chance": 0.5,
+  "extend_days": 2,
+  "min_level_cap": 3
+}

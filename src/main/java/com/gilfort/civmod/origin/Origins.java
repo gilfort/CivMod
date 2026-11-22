@@ -42,7 +42,7 @@ public final class Origins {
     }
 
     /**
-     * Gives a settler that joins a settlement an origin: starting settlers and the Priest's pilgrims.
+     * Gives a settler that comes to a settlement an origin: starting settlers, the Priest's pilgrims and the visitors of an inn.
      *
      * @param level      the dimension
      * @param settler    the new settler, race already set

@@ -2431,6 +2431,14 @@ public final class SettlerWork {
 
     /**
      * @param level the level
+     * @return how many of the needs that count for the reputation of the settlement are met now
+     */
+    public NeedTally needTally(ServerLevel level) {
+        return needs.tally(level, moment(level.getOverworldClockTime()).day());
+    }
+
+    /**
+     * @param level the level
      * @return the needs as the Needs tab shows them now
      */
     public NeedsReport needsReport(ServerLevel level) {

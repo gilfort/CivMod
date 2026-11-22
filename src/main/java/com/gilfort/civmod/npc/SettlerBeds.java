@@ -72,7 +72,9 @@ public final class SettlerBeds {
         /** The respawn bed of a player. */
         SPAWN_BED,
         /** The settler is homeless. */
-        HOMELESS
+        HOMELESS,
+        /** A guest bed of an inn. */
+        GUEST_BED
     }
 
     /**
@@ -129,7 +131,7 @@ public final class SettlerBeds {
 
     /**
      * Free beds of a settlement, closest first: inside the border, not owned by a Settler, not reserved for a Villager
-     * conversion, no player's respawn bed. A bed a Villager holds counts as free (Settlers before Villagers).
+     * conversion, no player's respawn bed and no guest bed of an inn. A bed a Villager holds counts as free (Settlers before Villagers).
      *
      * @param level      the level
      * @param settlement the settlement
@@ -142,7 +144,8 @@ public final class SettlerBeds {
         Set<BlockPos> spawnBeds = spawnBeds(level);
         return level.getPoiManager().findAllClosestFirstWithType(
                 type -> type.is(PoiTypes.HOME),
-                pos -> !owned.contains(pos) && !reserved.contains(pos) && !spawnBeds.contains(pos) && JobAssignments.insideBorder(settlement, pos),
+                pos -> !owned.contains(pos) && !reserved.contains(pos) && !spawnBeds.contains(pos) && !settlement.inn().isGuestBed(pos)
+                        && JobAssignments.insideBorder(settlement, pos),
                 from, POI_RADIUS, PoiManager.Occupancy.ANY)
                 .map(Pair::getSecond)
                 .toList();
@@ -218,6 +221,9 @@ public final class SettlerBeds {
         }
         if (spawnBeds(level).contains(head.get())) {
             return AssignResult.SPAWN_BED;
+        }
+        if (owner.inn().isGuestBed(head.get())) {
+            return AssignResult.GUEST_BED;
         }
         Optional<UUID> current = Optional.ofNullable(owner.beds().get(head.get()));
         if (current.filter(settler::equals).isPresent()) {
