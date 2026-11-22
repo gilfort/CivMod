@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:inn",
+  "function": "civmod:inn_stay_longer_sent_away",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

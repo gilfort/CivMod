@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:visitor_night",
+  "function": "civmod:visitor_day_sleeps_in_guest_bed",
+  "max_ticks": 600,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

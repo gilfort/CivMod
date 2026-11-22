@@ -888,6 +888,26 @@ public final class SettlerWork {
         }
     }
 
+    /**
+     * @return whether a conversation holds the settler's decisions: it stands still or walks to its partner
+     */
+    public boolean talkHoldsDecision() {
+        return social.holdsDecision();
+    }
+
+    /**
+     * The meeting check of a visitor, with the rules of a settler's (vault {@code Systems/Entertainment.md}). A visitor has no work
+     * decision, so its own decision step runs the check. Nothing happens while it is in a conversation or the config
+     * {@code socialLife} is off.
+     *
+     * @param level the level
+     */
+    public void meetAsVisitor(ServerLevel level) {
+        if (CivModConfig.SOCIAL_LIFE.get() && !social.holdsDecision()) {
+            social.meet(level, interruptible(level), true);
+        }
+    }
+
     /** What a settler did before a conversation stopped it: the step it goes back to afterwards. */
     record Resume(Activity activity, @Nullable BlockPos target, double reach) {
     }
@@ -1652,7 +1672,7 @@ public final class SettlerWork {
         if (distance < bestDistance - 1.0) {
             bestDistance = distance;
             lastProgressTick = level.getGameTime();
-        } else if (level.getGameTime() - lastProgressTick > CivModConfig.ANTI_STUCK_SECONDS.get() * 20L) {
+        } else if (level.getGameTime() - lastProgressTick > CivModConfig.antiStuckTicks()) {
             Vec3 spot = StandingSpots.standingSpot(level, target, reach());
             settler.teleportTo(spot.x, spot.y, spot.z);
             settler.getNavigation().stop();
@@ -2427,6 +2447,14 @@ public final class SettlerWork {
      */
     public void entertain(double points, Entertain.Cap cap, long day) {
         setEntertainment(entertainment().addCapped(points, cap, day));
+    }
+
+    /**
+     * @param level the level
+     * @return how many of the needs that count for the reputation of the settlement are met now
+     */
+    public NeedTally needTally(ServerLevel level) {
+        return needs.tally(level, moment(level.getOverworldClockTime()).day());
     }
 
     /**

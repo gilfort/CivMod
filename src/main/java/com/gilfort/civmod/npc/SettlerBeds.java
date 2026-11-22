@@ -12,7 +12,9 @@ import java.util.stream.Collectors;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
+import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.SettlementRules;
 import com.gilfort.civmod.settlement.DayClock;
 
 import net.minecraft.core.BlockPos;
@@ -72,7 +74,9 @@ public final class SettlerBeds {
         /** The respawn bed of a player. */
         SPAWN_BED,
         /** The settler is homeless. */
-        HOMELESS
+        HOMELESS,
+        /** A guest bed of an inn. */
+        GUEST_BED
     }
 
     /**
@@ -129,21 +133,43 @@ public final class SettlerBeds {
 
     /**
      * Free beds of a settlement, closest first: inside the border, not owned by a Settler, not reserved for a Villager
-     * conversion, no player's respawn bed. A bed a Villager holds counts as free (Settlers before Villagers).
+     * conversion, no player's respawn bed and no guest bed of an inn. A bed a Villager holds counts as free (Settlers before Villagers).
      *
      * @param level      the level
      * @param settlement the settlement
      * @param from       the position to search from
      * @return the head positions of the free beds
      */
-    static List<BlockPos> freeBeds(ServerLevel level, Settlement settlement, BlockPos from) {
+    public static List<BlockPos> freeBeds(ServerLevel level, Settlement settlement, BlockPos from) {
+        return freeBeds(level, settlement, from, POI_RADIUS);
+    }
+
+    /**
+     * {@link #freeBeds} over the whole settlement: the search reaches as far as the border does, which can be further than
+     * {@value #POI_RADIUS} blocks from {@code from} once connected JobBlocks carry it outwards. One search per call, for a player's
+     * click; the settlers' own bed search keeps the shorter reach.
+     *
+     * @param level      the level
+     * @param settlement the settlement
+     * @param from       the position to search from
+     * @return the head positions of the free beds, closest first
+     */
+    public static List<BlockPos> freeBedsInSettlement(ServerLevel level, Settlement settlement, BlockPos from) {
+        int reach = settlement.blocks().stream().filter(SettlementBlock::connected)
+                .mapToInt(block -> (int) Math.ceil(SettlementRules.horizontalDistance(from, block.pos())) + SettlementRules.joinRadius(block)).max()
+                .orElse(0);
+        return freeBeds(level, settlement, from, Math.max(POI_RADIUS, reach));
+    }
+
+    private static List<BlockPos> freeBeds(ServerLevel level, Settlement settlement, BlockPos from, int radius) {
         Set<BlockPos> owned = settlement.beds().keySet();
         Collection<BlockPos> reserved = settlement.bedReservations().values();
         Set<BlockPos> spawnBeds = spawnBeds(level);
         return level.getPoiManager().findAllClosestFirstWithType(
                 type -> type.is(PoiTypes.HOME),
-                pos -> !owned.contains(pos) && !reserved.contains(pos) && !spawnBeds.contains(pos) && JobAssignments.insideBorder(settlement, pos),
-                from, POI_RADIUS, PoiManager.Occupancy.ANY)
+                pos -> !owned.contains(pos) && !reserved.contains(pos) && !spawnBeds.contains(pos) && !settlement.inn().isGuestBed(pos)
+                        && JobAssignments.insideBorder(settlement, pos),
+                from, radius, PoiManager.Occupancy.ANY)
                 .map(Pair::getSecond)
                 .toList();
     }
@@ -157,9 +183,19 @@ public final class SettlerBeds {
      * @param settler    the settler UUID
      * @param bed        the bed head position
      */
-    static void claim(ServerLevel level, SettlementData data, Settlement settlement, UUID settler, BlockPos bed) {
+    public static void claim(ServerLevel level, SettlementData data, Settlement settlement, UUID settler, BlockPos bed) {
         settlement.bedOf(settler).ifPresent(previous -> releasePoi(level, previous));
         data.assignBed(settlement, bed, settler);
+        takePoi(level, bed);
+    }
+
+    /**
+     * Takes the POI ticket of a bed so Villagers do not claim it as their home; a Villager holding the bed loses it.
+     *
+     * @param level the level
+     * @param bed   the bed head position
+     */
+    public static void takePoi(ServerLevel level, BlockPos bed) {
         PoiManager poi = level.getPoiManager();
         if (take(poi, bed).isEmpty() && poi.existsAtPosition(PoiTypes.HOME, bed)) {
             evictVillagers(level, bed);
@@ -218,6 +254,9 @@ public final class SettlerBeds {
         }
         if (spawnBeds(level).contains(head.get())) {
             return AssignResult.SPAWN_BED;
+        }
+        if (owner.inn().isGuestBed(head.get())) {
+            return AssignResult.GUEST_BED;
         }
         Optional<UUID> current = Optional.ofNullable(owner.beds().get(head.get()));
         if (current.filter(settler::equals).isPresent()) {

@@ -8,6 +8,7 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.chronicle.Chronicle;
 import com.gilfort.civmod.chronicle.Diary;
+import com.gilfort.civmod.inn.VisitorOffer;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.origin.OriginData;
 import com.gilfort.civmod.origin.OriginLine;
@@ -25,6 +26,7 @@ import net.minecraft.util.RandomSource;
  * empty hand. The settler turns its head, greets, shows the conversation bubble and says one line in chat to the player who talked.
  * The first talks tell the three parts of its origin in random order, each once, and write each into the diary; after that it makes
  * small talk about the weather or, from its own needs, about the settlement. The first talk of a day gives a little Entertainment.
+ * A visitor of an inn starts every talk with its price and its trade and gets no Entertainment (vault {@code Systems/NPC Population.md}).
  * <p>
  * The told lines belong to the settler, not to a player: every player hears the lines that are left. The class lives in this
  * package because the greeting and the needs are package-private; the settler does not stop what it is doing.
@@ -77,18 +79,33 @@ public final class PlayerTalk {
         SettlerWork work = settler.getWork();
         work.social().greet(player, level.getGameTime());
         work.conversationBubble();
-        work.setEntertainment(work.entertainment().talkedToPlayer(TALK_POINTS, DayClock.day(level)));
-        player.sendSystemMessage(Component.translatable("civmod.talk.line", settler.getName(), result.line()));
+        if (settler.isVisitor()) {
+            // A visitor gets no Entertainment and starts every talk with its price; the line of the origin comes after it.
+            if (result.told().isPresent()) {
+                say(player, settler, VisitorOffer.of(settler).greeting());
+            }
+        } else {
+            work.setEntertainment(work.entertainment().talkedToPlayer(TALK_POINTS, DayClock.day(level)));
+        }
+        say(player, settler, result.line());
         return Optional.of(result);
     }
 
+    private static void say(ServerPlayer player, Settler settler, Component line) {
+        player.sendSystemMessage(Component.translatable("civmod.talk.line", settler.getName(), line));
+    }
+
     /**
-     * Decides what the settler says and writes what it tells into the diary. This is the one place that picks the words, so a
-     * settler in another state (a visitor that opens with its price and trade) puts its own words in front here.
+     * Decides what the settler says and writes what it tells into the diary. This is the one place that picks the words. A visitor
+     * has no needs and no settlement to talk about: once its origin is told it repeats its price and its trade.
      */
     private static Result choose(ServerLevel level, Settler settler) {
         RandomSource random = scripted != null ? scripted : settler.getRandom();
-        return tellOrigin(settler, random).orElseGet(() -> new Result(smallTalk(level, settler, random), Optional.empty()));
+        Optional<Result> origin = tellOrigin(settler, random);
+        if (settler.isVisitor()) {
+            return origin.orElseGet(() -> new Result(VisitorOffer.of(settler).greeting(), Optional.empty()));
+        }
+        return origin.orElseGet(() -> new Result(smallTalk(level, settler, random), Optional.empty()));
     }
 
     /** The next part of the origin the settler has not told yet, picked at random; written into the diary. */

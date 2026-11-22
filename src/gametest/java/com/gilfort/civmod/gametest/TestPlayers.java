@@ -1,12 +1,14 @@
 package com.gilfort.civmod.gametest;
 
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import com.mojang.authlib.GameProfile;
 
 import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.Connection;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -33,10 +35,45 @@ final class TestPlayers {
      * @return the player; remove it with {@link #remove}
      */
     static ServerPlayer add(GameTestHelper helper, Vec3 at) {
+        return add(helper, at, message -> { });
+    }
+
+    /**
+     * Like {@link #add(GameTestHelper, Vec3)}, for a player that hands every chat message sent to it to a listener.
+     *
+     * @param helper  the test
+     * @param at      where the player stands
+     * @param onChat  gets each system message (chat line) the player receives; action bar messages do not reach it
+     * @return the player; remove it with {@link #remove}
+     */
+    static ServerPlayer add(GameTestHelper helper, Vec3 at, Consumer<Component> onChat) {
+        return add(helper, at, onChat, message -> { });
+    }
+
+    /**
+     * Like {@link #add(GameTestHelper, Vec3, Consumer)}, and the player also hands every action bar message to a listener.
+     *
+     * @param helper    the test
+     * @param at        where the player stands
+     * @param onChat    gets each system message (chat line) the player receives
+     * @param onOverlay gets each action bar message the player receives
+     * @return the player; remove it with {@link #remove}
+     */
+    static ServerPlayer add(GameTestHelper helper, Vec3 at, Consumer<Component> onChat, Consumer<Component> onOverlay) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         CommonListenerCookie cookie = CommonListenerCookie.createInitial(new GameProfile(UUID.randomUUID(), "test-listener"), false);
-        ServerPlayer player = new ServerPlayer(server, level, cookie.gameProfile(), cookie.clientInformation());
+        ServerPlayer player = new ServerPlayer(server, level, cookie.gameProfile(), cookie.clientInformation()) {
+            @Override
+            public void sendSystemMessage(Component message) {
+                onChat.accept(message);
+            }
+
+            @Override
+            public void sendOverlayMessage(Component message) {
+                onOverlay.accept(message);
+            }
+        };
         Connection connection = new Connection(PacketFlow.SERVERBOUND);
         EmbeddedChannel channel = new EmbeddedChannel(connection);
         player.connection = new ServerGamePacketListenerImpl(server, connection, player, cookie);

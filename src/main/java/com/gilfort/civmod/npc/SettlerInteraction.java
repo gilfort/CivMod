@@ -3,6 +3,7 @@ package com.gilfort.civmod.npc;
 import java.util.Optional;
 
 import com.gilfort.civmod.food.SettlerFood;
+import com.gilfort.civmod.inn.Hiring;
 import com.gilfort.civmod.job.PlayerTalk;
 
 import net.minecraft.network.chat.Component;
@@ -11,7 +12,8 @@ import net.minecraft.world.item.ItemStack;
 
 /**
  * What a player's right-click with the main hand does to a settler: food in the hand feeds it, Shift with an empty hand talks to it
- * ({@link PlayerTalk}), anything else opens its window.
+ * ({@link PlayerTalk}), anything else opens its window. A visitor of an inn ignores food, is hired with the price stack
+ * ({@link Hiring}) and is asked to stay longer in its window.
  */
 final class SettlerInteraction {
 
@@ -24,7 +26,12 @@ final class SettlerInteraction {
      * @param held    the stack in the player's main hand
      */
     static void onRightClick(Settler settler, ServerPlayer player, ItemStack held) {
-        if (SettlerFood.isEdible(held)) {
+        if (settler.isVisitor()) {
+            // The price in the hand hires the visitor; it eats at the Pantry and nowhere else, so food does nothing.
+            if (!held.isEmpty() && Hiring.hire(player, settler, held) != Hiring.Outcome.WRONG_ITEM) {
+                return;
+            }
+        } else if (SettlerFood.isEdible(held)) {
             feed(settler, player, held);
             return;
         }

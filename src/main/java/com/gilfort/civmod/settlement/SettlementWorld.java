@@ -11,6 +11,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.inn.Inns;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.mission.MissionOffer;
 import com.gilfort.civmod.mission.Missions;
@@ -433,6 +434,8 @@ public final class SettlementWorld {
                         settler.becomeHomeless();
                     }
                 }
+                // Visitors never become homeless: they vanish.
+                Inns.dissolved(level, settlement);
             }
 
             @Override

@@ -125,6 +125,35 @@ final class SettlerNeeds {
         return new NeedsReport(Math.min(state.workTier(), tier()), rows);
     }
 
+    /**
+     * The needs that count for the reputation of the settlement ({@code Inns}): the needs of the tiers up to the one the settler's
+     * work is in (not the hunger of the food need, which it can ease by itself) and one tool need per tool Job it has a tool for.
+     * Needs that do not exist yet are not counted, so the reputation is not high by default.
+     *
+     * @param level the level
+     * @param day   the day
+     * @return how many of them are met
+     */
+    NeedTally tally(ServerLevel level, long day) {
+        int tier = tier();
+        Need.Context context = context(level, day, () -> false);
+        int met = 0;
+        int total = 0;
+        for (Need need : Needs.ALL) {
+            if (need != Needs.FOOD && need.tier() <= tier) {
+                total++;
+                met += need.check(context).met() ? 1 : 0;
+            }
+        }
+        for (SettlerJob job : settler.getJobs()) {
+            if (tools.band(job) > 0 && tools.view(job) != ToolNeeds.View.NONE) {
+                total++;
+                met += tools.view(job) == ToolNeeds.View.HAPPY ? 1 : 0;
+            }
+        }
+        return new NeedTally(met, total);
+    }
+
     private Need.Context context(ServerLevel level, long day, BooleanSupplier foodPoint) {
         return new Need.Context(level, day, settler, shell.meals(), shell.rest(), foodPoint);
     }

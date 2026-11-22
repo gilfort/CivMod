@@ -361,6 +361,29 @@ _Avoid_: auto-hire, auto-job
 The JobBlock of the Tavern Host and the settlement's food point: food-only storage (27 / 36 / 45 / 54 / 63 slots by level, no linked containers). Settlers use the nearest Pantry with food; a working Tavern Host serves at the counter (queue, service time, EXP per hand-out, meal bonus 1 % per Tavern Host level, provisions without bonus), otherwise it is self-service. Code: `ModBlocks.PANTRY_BLOCK`, `ModJobs.TAVERN_HOST`, `ClerkStorage.isPantry`, `SettlementRules.storageSlots`.
 _Avoid_: Clerk food point
 
+**Inn**:
+A Pantry with guest beds. A Tavern Host on shift draws visitors to it at three checks a day (06:00, 12:00, 18:00); how many depends on the reputation and the Pantry level, capped by the free guest beds. `maxInnsPerSettlement` limits how many Pantries count. Code: `Inns` (checks, catch-up), `InnRules` (datapack `civmod_inn/rules.json`), `InnState` in `Settlement.inn()`.
+_Avoid_: Hotel, tavern recruitment
+
+**Guest bed**:
+A bed bound to a Pantry with the Scroll of Assignment, within the Tavern radius, at most 2 per Pantry level; the settlers' bed search never hands it out, and its POI ticket is taken so no Villager claims it. Code: `GuestBeds`, `InnState.guestBeds`, the filter in `SettlerBeds.freeBeds`, `SettlerBeds.takePoi`.
+
+**Visitor**:
+A Settler in a visitor state (`Settler.isVisitor`) who stays at an inn for 2 to 4 days; it is no member of a settlement and not homeless. The settlement keeps the record of its stay as a `Visit`; the entity is its body. It strolls by day, eats once at the Pantry in the evening and sleeps in its guest bed at night, and takes part in the meeting check; it ticks no needs and no Job. Code: `Visit`, `Visitors`, `VisitorDay` (its day), `VisitorStroll`, `SettlerSpawner.visitor`, origin channel `Channel.VISITOR`.
+_Avoid_: Guest (a settler who sits in the Tavern evening), traveller
+
+**Visit**:
+The settlement's record of one visitor's stay at an inn: the Pantry, the guest bed, the arrival check it leaves at, whether the player asked it to stay longer, its last meal and whether the meal sent it away. It is the truth about the stay; a visitor entity without a visit removes itself. In code and comments the record is a "visit" and "stay" only means how long it lasts. Code: `Visit`, `InnState.visits`.
+
+**Visitor price / offer**:
+What a visitor asks to join the settlement: an item and an amount that follow its trade (the favoured Job it is best in) and its level there. The files `civmod_visitor_prices/<job>.json` and the tag `civmod:visitor_price_default` give the item; paying it with a right-click hires the visitor (`Hiring`), and the same entity becomes a settler. Code: `VisitorOffer`, `VisitorPrices`, `Hiring`.
+
+**Arrival check / slot**:
+One of the three checks a day of an inn, numbered on the day clock (`InnSlots`); the length of a visit and every departure are counted in slots. `Inns.run` plays every slot that is due, live and as catch-up.
+
+**Reputation**:
+The share of met needs (bed, fire, food variety, Entertainment, tools) over all settlers of a settlement (the checks wait until all are loaded); never shown, it only scales the arrivals of an inn. Code: `Reputation`, `NeedTally`.
+
 **Food point**:
 Every Pantry; settlers take food from the nearest one that has food (a Tavern Host from its own Pantry first). Code: `ClerkStorage.nearestFood` → `ClerkStorage.FoodPoint`.
 _Avoid_: Clerk JobBlock as food point

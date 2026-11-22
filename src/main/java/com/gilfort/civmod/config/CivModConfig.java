@@ -27,6 +27,12 @@ public final class CivModConfig {
                     "Every Settler costs server tick time.")
             .defineInRange("maxSettlersPerSettlement", 0, 0, 1024);
 
+    /** Most Pantries with guest beds that count as an inn in one settlement. */
+    public static final ModConfigSpec.IntValue MAX_INNS_PER_SETTLEMENT = BUILDER
+            .comment("Most Pantries with guest beds that count as an inn in one settlement; further ones draw no visitors.",
+                    "Visitors come to the inns only, at most as many as there are free guest beds.")
+            .defineInRange("maxInnsPerSettlement", 1, 1, 64);
+
     /** Limits founding to one settlement per player per in-game day. */
     public static final ModConfigSpec.BooleanValue LIMIT_FOUNDING_PER_DAY = BUILDER
             .comment("If true, each player can found at most one settlement per in-game day.",
@@ -127,7 +133,7 @@ public final class CivModConfig {
 
     /** Switches the meeting check (greetings and conversations) off. */
     public static final ModConfigSpec.BooleanValue SOCIAL_LIFE = BUILDER
-            .comment("If false, settlers neither greet nor talk: the meeting check in their decision step does not run.",
+            .comment("If false, settlers and visitors neither greet nor talk: the meeting check in their decision step does not run.",
                     "Cuts the cost of the check on large servers.")
             .define("socialLife", true);
 
@@ -147,6 +153,15 @@ public final class CivModConfig {
     /** The built config spec, registered in the mod constructor. */
     public static final ModConfigSpec SPEC = BUILDER.build();
 
+    private static final long TICKS_PER_SECOND = 20L;
+
     private CivModConfig() {
+    }
+
+    /**
+     * @return the ticks without progress after which a settler or visitor is put next to its target ({@link #ANTI_STUCK_SECONDS})
+     */
+    public static long antiStuckTicks() {
+        return ANTI_STUCK_SECONDS.get() * TICKS_PER_SECOND;
     }
 }

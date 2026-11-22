@@ -20,6 +20,8 @@ public record Channel(String key, PlaceRule placeRule, boolean founderRescues) {
     public static final Channel MISSION = new Channel("mission", PlaceRule.MISSION, true);
     /** A settler from a spawn egg: a biome type of its race, nobody took it in. */
     public static final Channel EGG = new Channel("egg", PlaceRule.ANY_TYPE, false);
+    /** A visitor of an inn: a biome type of its race that the settlement found, nobody took it in. */
+    public static final Channel VISITOR = new Channel("visitor", PlaceRule.ANY_HIT, false);
 
     /** Where the place of a settler comes from. */
     public enum PlaceRule {

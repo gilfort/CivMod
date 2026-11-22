@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.chronicle.DiaryEntry;
+import com.gilfort.civmod.inn.Visitors;
 import com.gilfort.civmod.job.JobBuffer;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.JobStatus;
@@ -18,6 +19,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementWorld;
 
+import io.netty.buffer.ByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
@@ -41,9 +43,25 @@ import net.minecraft.world.item.ItemStack;
  * @param needs          the needs shown in the Needs tab
  * @param xp             the XP collected, in points
  * @param helping        the Job the settler helps with as a Laborer now (empty if it does not)
+ * @param visiting       whether the settler visits an inn, and if so whether it can still be asked to stay longer
  */
 public record SettlerInfo(Person person, Component status, boolean homeless, Component settlementName, List<SettlerJob> jobs,
-        List<JobState> jobStates, Component bed, FoodInfo food, Component mission, NeedsReport needs, int xp, Optional<Job> helping) {
+        List<JobState> jobStates, Component bed, FoodInfo food, Component mission, NeedsReport needs, int xp, Optional<Job> helping,
+        Visiting visiting) {
+
+    /** Whether the settler is a visitor of an inn (vault {@code Systems/NPC Population.md}). */
+    public enum Visiting {
+        /** A settler or a homeless settler. */
+        NO,
+        /** A visitor the player can still ask to stay longer. */
+        CAN_ASK,
+        /** A visitor that cannot be asked any more: it was asked already, or its meal sent it away. */
+        ASKED;
+
+        /** Network codec. */
+        public static final StreamCodec<ByteBuf, Visiting> STREAM_CODEC = ByteBufCodecs.idMapper(id -> values()[id], Visiting::ordinal);
+    }
+
 
     /**
      * Who the settler is: the name the window shows, the diary the Chronicle tab lists and the talent once it is confirmed.
@@ -210,6 +228,7 @@ public record SettlerInfo(Person person, Component status, boolean homeless, Com
             NeedsReport.STREAM_CODEC, SettlerInfo::needs,
             ByteBufCodecs.VAR_INT, SettlerInfo::xp,
             ByteBufCodecs.optional(Job.STREAM_CODEC), SettlerInfo::helping,
+            Visiting.STREAM_CODEC, SettlerInfo::visiting,
             SettlerInfo::new);
 
     /**
@@ -244,7 +263,22 @@ public record SettlerInfo(Person person, Component status, boolean homeless, Com
                 new FoodInfo(food.level(), food.saturation(), appetite),
                 settler.getWork().missionStatus().orElse(Component.empty()),
                 settler.level() instanceof ServerLevel level ? settler.getWork().needsReport(level) : NeedsReport.NONE, settler.getXp().points(),
-                settler.getWork().helping().map(SettlerJob::jobType));
+                settler.getWork().helping().map(SettlerJob::jobType), visiting(settler));
+    }
+
+    private static Visiting visiting(Settler settler) {
+        if (!settler.isVisitor()) {
+            return Visiting.NO;
+        }
+        return settler.level() instanceof ServerLevel level && Visitors.canAskToStay(level, settler) ? Visiting.CAN_ASK : Visiting.ASKED;
+    }
+
+    /**
+     * @param visiting the new state
+     * @return a copy with that state (the client marks the ask as used before the server confirms)
+     */
+    public SettlerInfo withVisiting(Visiting visiting) {
+        return new SettlerInfo(person, status, homeless, settlementName, jobs, jobStates, bed, food, mission, needs, xp, helping, visiting);
     }
 
     /**
@@ -270,7 +304,7 @@ public record SettlerInfo(Person person, Component status, boolean homeless, Com
             return index >= 0 && index < jobStates.size() ? jobStates.get(index) : new JobState(JobStatus.IDLE, JobStatus.IDLE.displayName(), 0, 0, List.of(),
                     SkillInfo.NONE, List.of(), 0);
         }).toList();
-        return new SettlerInfo(person, status, homeless, settlementName, List.copyOf(jobs), states, bed, food, mission, needs, xp, helping);
+        return new SettlerInfo(person, status, homeless, settlementName, List.copyOf(jobs), states, bed, food, mission, needs, xp, helping, visiting);
     }
 
     /**
@@ -286,6 +320,7 @@ public record SettlerInfo(Person person, Component status, boolean homeless, Com
         if (index < states.size()) {
             states.set(index, states.get(index).switched(job, old.jobType()));
         }
-        return new SettlerInfo(person, status, homeless, settlementName, List.copyOf(switchedJobs), List.copyOf(states), bed, food, mission, needs, xp, helping);
+        return new SettlerInfo(person, status, homeless, settlementName, List.copyOf(switchedJobs), List.copyOf(states), bed, food, mission, needs, xp, helping,
+                visiting);
     }
 }

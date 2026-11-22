@@ -6,6 +6,9 @@ import java.util.Optional;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.chronicle.Diary;
 import com.gilfort.civmod.food.SettlerFood;
+import com.gilfort.civmod.inn.Inns;
+import com.gilfort.civmod.inn.VisitorDay;
+import com.gilfort.civmod.inn.VisitorStroll;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
@@ -54,7 +57,6 @@ import net.minecraft.world.entity.ai.goal.GoalSelector;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.OpenDoorGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
-import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -117,12 +119,15 @@ public class Settler extends PathfinderMob {
     private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE);
     private Identifier race = Races.HUMAN;
     private int settlementId = -1;
+    /** The settlement whose inn the settler visits, {@code -1} for a settler that is no visitor (vault {@code Systems/NPC Population.md}). */
+    private int visitedSettlementId = -1;
     private List<SettlerJob> jobs = List.of();
     private final SettlerWork work = new SettlerWork(this);
     private final SettlerFood food = new SettlerFood();
     private final com.gilfort.civmod.job.SettlerSkills skills = new com.gilfort.civmod.job.SettlerSkills();
     private final com.gilfort.civmod.job.SettlerXp xp = new com.gilfort.civmod.job.SettlerXp();
     private final SettlerPast past = new SettlerPast();
+    private final VisitorDay visitorDay = new VisitorDay(this);
     /** Looking around while sitting: the work goal holds the look of the main goals during a break. */
     private final GoalSelector sittingLook = new GoalSelector();
     /** Client: the timeline of the cast line ({@link #castTarget()}). */
@@ -239,7 +244,7 @@ public class Settler extends PathfinderMob {
     protected void registerGoals() {
         goalSelector.addGoal(0, new FloatGoal(this));
         goalSelector.addGoal(1, new OpenDoorGoal(this, true));
-        goalSelector.addGoal(5, new WaterAvoidingRandomStrollGoal(this, 0.5));
+        goalSelector.addGoal(5, new VisitorStroll(this, 0.5));
         goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
         goalSelector.addGoal(7, new RandomLookAroundGoal(this));
     }
@@ -291,10 +296,53 @@ public class Settler extends PathfinderMob {
     }
 
     /**
-     * @return whether the settler belongs to no settlement
+     * @return whether the settler belongs to no settlement and is no visitor either
      */
     public boolean isHomeless() {
-        return settlementId < 0;
+        return settlementId < 0 && !isVisitor();
+    }
+
+    /**
+     * A visitor is a settler in a visitor state: it has an origin, a name and levels, but no job, no needs and no settlement; the
+     * visit itself is kept by the settlement of the inn ({@code Visit}).
+     *
+     * @return whether the settler visits an inn
+     */
+    public boolean isVisitor() {
+        return visitedSettlementId >= 0;
+    }
+
+    /**
+     * @return the settlement whose inn the settler visits, {@code -1} if it is no visitor
+     */
+    public int getVisitedSettlementId() {
+        return visitedSettlementId;
+    }
+
+    /**
+     * @return what the settler does during its stay at an inn; it does nothing while the settler is no visitor
+     */
+    public VisitorDay visitorDay() {
+        return visitorDay;
+    }
+
+    /**
+     * Makes the settler a visitor of an inn. It is free to stroll through the whole settlement; {@link VisitorDay} keeps it inside
+     * the border and gathers it at the Pantry in the evening.
+     *
+     * @param settlementId the settlement of the inn
+     */
+    public void becomeVisitor(int settlementId) {
+        visitedSettlementId = settlementId;
+        clearHome();
+    }
+
+    /**
+     * @return the settlement the settler lives in, or the settlement of the inn it visits: the one whose settlers and visitors greet
+     *         each other, {@code -1} for a homeless settler
+     */
+    public int socialSettlementId() {
+        return settlementId >= 0 ? settlementId : visitedSettlementId;
     }
 
     /**
@@ -393,6 +441,10 @@ public class Settler extends PathfinderMob {
      */
     @Override
     public void remove(RemovalReason reason) {
+        if (reason.shouldDestroy() && isVisitor() && isSleeping()) {
+            // A visitor that leaves in the night frees its guest bed.
+            wakeUp();
+        }
         if (reason.shouldDestroy() && level() instanceof net.minecraft.server.level.ServerLevel server) {
             com.gilfort.civmod.settlement.Requests.releaseAll(SettlementData.get(server), getUUID());
             // Its requests for tools end with it.
@@ -460,6 +512,20 @@ public class Settler extends PathfinderMob {
         settlementId = settlement.id();
         data.addMember(settlement, getUUID());
         updateHome(settlement);
+    }
+
+    /**
+     * Turns a visitor of an inn into a member of a settlement. It is the same entity with the same name, past and levels; only its
+     * state switches. The caller ends the stay and gives it a bed.
+     *
+     * @param data       the dimension's settlement data
+     * @param settlement the settlement the visitor joins
+     */
+    public void becomeSettler(SettlementData data, Settlement settlement) {
+        // A visitor hired in its sleep leaves its guest bed free.
+        wakeUp();
+        visitedSettlementId = -1;
+        joinSettlement(data, settlement);
     }
 
     /**
@@ -658,6 +724,14 @@ public class Settler extends PathfinderMob {
     @Override
     protected void customServerAiStep(ServerLevel level) {
         super.customServerAiStep(level);
+        if (isVisitor()) {
+            // A visitor ticks no work and no needs; its visit is looked at now and then, and its own day is all it does.
+            if ((tickCount + getId()) % CHECK_INTERVAL == 0) {
+                checkMembership(level);
+            }
+            visitorDay.aiStep(level);
+            return;
+        }
         work.aiStep(level);
         if (tickCount >= castHeldUntil && castTarget().isPresent()) {
             entityData.set(CAST_TARGET, Optional.empty());
@@ -680,12 +754,16 @@ public class Settler extends PathfinderMob {
     }
 
     /**
-     * Checks the settlement membership and catches up on Jobs changed while unloaded. Runs every
+     * Checks the settlement membership and catches up on Jobs changed while unloaded; a visitor checks that its visit goes on. Runs every
      * {@value #CHECK_INTERVAL} ticks of the AI step; tests call it directly.
      *
      * @param level the settler's level
      */
     public void checkMembership(ServerLevel level) {
+        if (isVisitor()) {
+            Inns.checkVisit(level, this);
+            return;
+        }
         SettlementData data = SettlementData.get(level);
         if (!isHomeless()) {
             Optional<Settlement> settlement = data.settlement(settlementId);
@@ -716,6 +794,9 @@ public class Settler extends PathfinderMob {
      * @return the status shown in the GUI
      */
     public Component statusText() {
+        if (isVisitor()) {
+            return Component.translatable("civmod.settler.status.visitor");
+        }
         if (isHomeless()) {
             return Component.translatable("civmod.settler.status.homeless");
         }
@@ -820,6 +901,7 @@ public class Settler extends PathfinderMob {
         output.putString("race", race.toString());
         output.putInt("skin", getSkin());
         output.putInt("settlement", settlementId);
+        output.putInt("visiting", visitedSettlementId);
         output.store("jobs", SettlerJob.CODEC.listOf(), jobs);
         ContainerHelper.saveAllItems(output, inventory.getItems());
         food.save(output);
@@ -840,6 +922,7 @@ public class Settler extends PathfinderMob {
         race = Optional.ofNullable(Identifier.tryParse(input.getStringOr("race", Races.HUMAN.toString()))).orElse(Races.HUMAN);
         setSkin(input.getIntOr("skin", 0));
         settlementId = input.getIntOr("settlement", -1);
+        visitedSettlementId = input.getIntOr("visiting", -1);
         jobs = input.read("jobs", SettlerJob.CODEC.listOf()).map(List::copyOf).orElse(List.of());
         input.read("buffers", SettlerWork.BuffersSnapshot.CODEC).ifPresent(work::restore);
         setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);

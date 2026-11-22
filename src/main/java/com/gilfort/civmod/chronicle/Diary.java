@@ -15,7 +15,7 @@ import net.minecraft.server.level.ServerLevel;
 
 /**
  * Writes into the diary of a settler (vault {@code Systems/Chronicle.md}). Every entry is written on an event, never on a tick: the
- * arrival, the loss of a home and what the settler tells in a talk. The public way in for addons is
+ * arrival, joining a settlement from an inn, the loss of a home and what the settler tells in a talk. The public way in for addons is
  * {@link com.gilfort.civmod.api.CivModApi#addDiaryEntry}.
  */
 public final class Diary {
@@ -57,6 +57,16 @@ public final class Diary {
     }
 
     /**
+     * The entry of a visitor that joins a settlement: the reason it came to the inn.
+     *
+     * @param settler the visitor, now a settler
+     */
+    public static void joined(Settler settler) {
+        List<String> reason = settler.getPast().origin().flatMap(SettlerOrigin::reason).map(id -> List.of(id.toString())).orElse(List.of());
+        add(settler, ModDiaryEntryTypes.JOINED.get(), reason);
+    }
+
+    /**
      * The entry of a settler that has lost its settlement. A settler that is homeless already gets none.
      *
      * @param settler the settler, before it leaves its settlement
@@ -82,6 +92,18 @@ public final class Diary {
             return why;
         }
         return Component.translatable("diary.civmod.arrival.rescued", why, params.get(1));
+    }
+
+    /**
+     * Builds the text of the entry of a visitor that joined: "I joined the settlement. <reason>"; without a reason only the first part.
+     *
+     * @param params the reason id (empty for none)
+     * @return the text
+     */
+    public static Component joinedText(List<String> params) {
+        return params.stream().findFirst().map(Identifier::tryParse)
+                .<Component>map(reason -> Component.translatable("diary.civmod.joined.reason", Component.translatable(OriginText.key("reason", reason))))
+                .orElseGet(() -> Component.translatable("diary.civmod.joined"));
     }
 
     private static boolean isPermanent(Identifier type) {

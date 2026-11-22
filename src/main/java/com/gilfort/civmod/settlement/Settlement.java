@@ -60,7 +60,9 @@ public final class Settlement {
             // One pair field keeps the group under the 16 fields RecordCodecBuilder allows; both still save as top-level keys.
             Codec.mapPair(Shrine.State.CODEC.optionalFieldOf("shrine", Shrine.State.NONE), Bonuses.CODEC.optionalFieldOf("bonuses", Bonuses.NONE))
                     .forGetter(settlement -> Pair.of(settlement.shrine, settlement.bonuses)),
-            SettlementOrigins.CODEC.optionalFieldOf("origins", SettlementOrigins.NONE).forGetter(Settlement::origins)
+            // Again one pair field, to stay under the 16 fields; the inn saves its fields flat next to "origins".
+            Codec.mapPair(SettlementOrigins.CODEC.optionalFieldOf("origins", SettlementOrigins.NONE), InnState.MAP_CODEC)
+                    .forGetter(settlement -> Pair.of(settlement.origins, settlement.inn))
     ).apply(instance, Settlement::new));
 
     /**
@@ -112,6 +114,8 @@ public final class Settlement {
     private Bonuses bonuses;
     /** The founder and the places the settlers' origins point to. */
     private SettlementOrigins origins;
+    /** The guest beds and the visitors of the settlement's inn. */
+    private InnState inn;
 
     /**
      * @param id          the settlement id (unique per dimension)
@@ -125,17 +129,18 @@ public final class Settlement {
     public Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
             List<SettlementBlock> blocks) {
         this(id, name, foundedAt, color, settlersDue, members, blocks, Map.of(), List.of(), List.of(), Map.of(), List.of(), NO_BORDER, Optional.empty(),
-                Pair.of(Shrine.State.NONE, Bonuses.NONE), SettlementOrigins.NONE);
+                Pair.of(Shrine.State.NONE, Bonuses.NONE), Pair.of(SettlementOrigins.NONE, InnState.NONE));
     }
 
     private Settlement(int id, Optional<String> name, long foundedAt, int color, long settlersDue, List<UUID> members,
             List<SettlementBlock> blocks, Map<String, UUID> beds, List<Request> requests, List<DeliveryTask> deliveries,
             Map<UUID, BlockPos> bedReservations, List<BlockPos> hearths, int hearthBorderHash, Optional<CenterGrace> centerGrace,
-            Pair<Shrine.State, Bonuses> shrineAndBonuses, SettlementOrigins origins) {
+            Pair<Shrine.State, Bonuses> shrineAndBonuses, Pair<SettlementOrigins, InnState> originsAndInn) {
         this.bonuses = shrineAndBonuses.getSecond();
         this.centerGrace = centerGrace;
         this.shrine = shrineAndBonuses.getFirst();
-        this.origins = origins;
+        this.origins = originsAndInn.getFirst();
+        this.inn = originsAndInn.getSecond();
         this.bedReservations.putAll(bedReservations);
         this.hearths.addAll(hearths);
         this.hearthBorderHash = hearthBorderHash;
@@ -292,6 +297,17 @@ public final class Settlement {
 
     void setOrigins(SettlementOrigins origins) {
         this.origins = origins;
+    }
+
+    /**
+     * @return the guest beds bound to the settlement's Pantries and the visitors who stay
+     */
+    public InnState inn() {
+        return inn;
+    }
+
+    void setInn(InnState inn) {
+        this.inn = inn;
     }
 
     void setCenterGrace(Optional<CenterGrace> centerGrace) {
