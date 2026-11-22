@@ -40,6 +40,10 @@ public final class ModDiaryEntryTypes {
     public static final DeferredHolder<DiaryEntryType, DiaryEntryType> HOMELESS = TYPES.register("homeless",
             () -> DiaryEntryType.of("diary.civmod.homeless"));
 
+    /** A visitor of an inn took the offer and joined the settlement: the reason it came is part of the entry. */
+    public static final DeferredHolder<DiaryEntryType, DiaryEntryType> JOINED = TYPES.register("joined",
+            () -> new DiaryEntryType(Diary::joinedText, false, false));
+
     /** The first level-up in a Job the upbringing favours has confirmed the talent. */
     public static final DeferredHolder<DiaryEntryType, DiaryEntryType> TALENT = TYPES.register("talent",
             () -> new DiaryEntryType(Talent::confirmationText, false, false));

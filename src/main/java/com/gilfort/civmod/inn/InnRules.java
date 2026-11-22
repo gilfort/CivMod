@@ -37,22 +37,24 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
  * @param extendChance      the chance that asking a visitor to stay longer works (0.5)
  * @param extendDays        days a successful ask adds (2)
  * @param minLevelCap       the lowest cap of the levels a visitor rolls, whatever the best settler can do (3)
+ * @param defaultPriceAmount the base amount of the price of a trade that has no entry in the price table (3); the item comes from the tag
+ *                          {@code civmod:visitor_price_default}
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public record InnRules(double baseChance, double reputationScale, int bedsPerLevel, int minStayDays, int maxStayDays, double extendChance,
-        int extendDays, int minLevelCap) {
+        int extendDays, int minLevelCap, int defaultPriceAmount) {
 
     /** Reload listener id. */
     public static final Identifier ID = CivMod.id("inn_rules");
     /** Values used when no file is loaded. */
-    public static final InnRules FALLBACK = new InnRules(0.05, 0.25, 2, 2, 4, 0.5, 2, 3);
+    public static final InnRules FALLBACK = new InnRules(0.05, 0.25, 2, 2, 4, 0.5, 2, 3, 3);
 
     private static final FileToIdConverter FILES = FileToIdConverter.json("civmod_inn");
     private static InnRules current = FALLBACK;
 
     private record Part(Optional<Double> baseChance, Optional<Double> reputationScale, Optional<Integer> bedsPerLevel,
             Optional<Integer> minStayDays, Optional<Integer> maxStayDays, Optional<Double> extendChance, Optional<Integer> extendDays,
-            Optional<Integer> minLevelCap) {
+            Optional<Integer> minLevelCap, Optional<Integer> defaultPriceAmount) {
 
         static final Codec<Part> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                 Codec.doubleRange(0.0, 10.0).optionalFieldOf("base_chance").forGetter(Part::baseChance),
@@ -62,7 +64,8 @@ public record InnRules(double baseChance, double reputationScale, int bedsPerLev
                 Codec.intRange(1, 30).optionalFieldOf("max_stay_days").forGetter(Part::maxStayDays),
                 Codec.doubleRange(0.0, 1.0).optionalFieldOf("extend_chance").forGetter(Part::extendChance),
                 Codec.intRange(0, 30).optionalFieldOf("extend_days").forGetter(Part::extendDays),
-                Codec.intRange(1, 100).optionalFieldOf("min_level_cap").forGetter(Part::minLevelCap)
+                Codec.intRange(1, 100).optionalFieldOf("min_level_cap").forGetter(Part::minLevelCap),
+                Codec.intRange(1, 64).optionalFieldOf("default_price_amount").forGetter(Part::defaultPriceAmount)
         ).apply(instance, Part::new));
     }
 
@@ -122,7 +125,8 @@ public record InnRules(double baseChance, double reputationScale, int bedsPerLev
             merged = new InnRules(part.baseChance().orElse(merged.baseChance()), part.reputationScale().orElse(merged.reputationScale()),
                     part.bedsPerLevel().orElse(merged.bedsPerLevel()), part.minStayDays().orElse(merged.minStayDays()),
                     part.maxStayDays().orElse(merged.maxStayDays()), part.extendChance().orElse(merged.extendChance()),
-                    part.extendDays().orElse(merged.extendDays()), part.minLevelCap().orElse(merged.minLevelCap()));
+                    part.extendDays().orElse(merged.extendDays()), part.minLevelCap().orElse(merged.minLevelCap()),
+                    part.defaultPriceAmount().orElse(merged.defaultPriceAmount()));
         }
         if (merged.minStayDays() > merged.maxStayDays()) {
             throw new IllegalArgumentException("min_stay_days " + merged.minStayDays() + " is more than max_stay_days " + merged.maxStayDays());

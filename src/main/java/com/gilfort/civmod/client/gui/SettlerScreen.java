@@ -111,6 +111,11 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
             addTabWidget(SettlerMenu.TAB_OVERVIEW, Button.builder(Component.translatable("civmod.gui.settler.dismiss"), button -> confirmDismiss())
                     .bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 28, imageWidth - 2 * CivGui.PADDING, 20).build());
         }
+        if (info.visiting() == SettlerInfo.Visiting.CAN_ASK) {
+            addTabWidget(SettlerMenu.TAB_OVERVIEW, Button.builder(Component.translatable("civmod.gui.settler.ask_stay"),
+                    button -> clickButton(SettlerMenu.BUTTON_ASK_STAY))
+                    .bounds(leftPos + CivGui.PADDING, topPos + imageHeight - 28, imageWidth - 2 * CivGui.PADDING, 20).build());
+        }
         List<SettlerJob> jobs = info.jobs();
         int right = leftPos + imageWidth - CivGui.PADDING;
         if (switching >= 0 && switching < jobs.size()) {
@@ -373,6 +378,9 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
 
     @Override
     protected List<Component> helpLines(int tab) {
+        if (tab == SettlerMenu.TAB_OVERVIEW && menu.getInfo().visiting() != SettlerInfo.Visiting.NO) {
+            return List.of(Component.translatable("civmod.gui.settler.help.visitor_talk"), Component.translatable("civmod.gui.settler.help.visitor_hire"));
+        }
         if (tab == SettlerMenu.TAB_STORAGE) {
             return List.of(Component.translatable("civmod.gui.storage.help.take"), Component.translatable("civmod.gui.storage.help.take_half"),
                     Component.translatable("civmod.gui.storage.help.take_one"), Component.translatable("civmod.gui.storage.help.store"),

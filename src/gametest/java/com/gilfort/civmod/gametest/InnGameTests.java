@@ -61,19 +61,19 @@ public final class InnGameTests {
     /** Day time of the morning check (06:00). */
     private static final long MORNING = 0L;
     /** Day time of the noon check (12:00). */
-    private static final long NOON = 6000L;
+    static final long NOON = 6000L;
     /** Day time of the evening check (18:00). */
-    private static final long EVENING = 12000L;
+    static final long EVENING = 12000L;
     /** The reasons of the visitor channel. */
     private static final Set<Identifier> VISITOR_REASONS = Set.of(CivMod.id("passing_through"), CivMod.id("looking_for_work"),
             CivMod.id("heard_of_this_place"));
     /** Where the guest beds of a test inn stand, as the head of the bed, all within the Tavern radius of the Pantry. */
-    private static final List<BlockPos> BED_SPOTS = List.of(new BlockPos(3, 1, 3), new BlockPos(5, 1, 3), new BlockPos(7, 1, 3),
+    static final List<BlockPos> BED_SPOTS = List.of(new BlockPos(3, 1, 3), new BlockPos(5, 1, 3), new BlockPos(7, 1, 3),
             new BlockPos(3, 1, 6), new BlockPos(5, 1, 6), new BlockPos(7, 1, 6));
     /** The day and the day time (08:00) every test starts at. */
     private static final long START_DAY = 10L;
     private static final long START_TIME = 2000L;
-    private static final BlockPos PANTRY = new BlockPos(1, 1, 1);
+    static final BlockPos PANTRY = new BlockPos(1, 1, 1);
     private static final BlockPos SECOND_PANTRY = new BlockPos(9, 1, 1);
 
     private InnGameTests() {
@@ -120,14 +120,14 @@ public final class InnGameTests {
      * @param settlement its settlement
      * @param host       the Tavern Host assigned to the Pantry, if there is one
      */
-    private record Inn(BlockPos pantry, Settlement settlement, Optional<Settler> host) {
+    record Inn(BlockPos pantry, Settlement settlement, Optional<Settler> host) {
     }
 
     /** The rules a test runs with: the chance of every check and the days a visitor stays, the rest as shipped. */
-    private static InnRules rules(double base, double scale, int stayDays) {
+    static InnRules rules(double base, double scale, int stayDays) {
         InnRules shipped = InnRules.FALLBACK;
         return new InnRules(base, scale, shipped.bedsPerLevel(), stayDays, stayDays, shipped.extendChance(), shipped.extendDays(),
-                shipped.minLevelCap());
+                shipped.minLevelCap(), shipped.defaultPriceAmount());
     }
 
     /** A Pantry of a level at (1, 1, 1) of a new settlement on a stone floor. */
@@ -138,7 +138,7 @@ public final class InnGameTests {
     }
 
     /** A Pantry of a level with guest beds and, if asked for, a Tavern Host, in a new settlement on a stone floor. */
-    private static Inn inn(GameTestHelper helper, int pantryLevel, int beds, boolean withHost) {
+    static Inn inn(GameTestHelper helper, int pantryLevel, int beds, boolean withHost) {
         // A test that failed before left its scripts behind; every test starts without them.
         Inns.script(null);
         Inns.scriptHostCover(null);
@@ -170,17 +170,17 @@ public final class InnGameTests {
     }
 
     /** Sets the clock to the day time of a check and plays the checks that have not been played yet. */
-    private static void play(GameTestHelper helper, Inn inn, long day, long dayTime) {
+    static void play(GameTestHelper helper, Inn inn, long day, long dayTime) {
         setClock(helper.getLevel(), day, dayTime);
         Inns.run(helper.getLevel(), inn.settlement());
     }
 
-    private static long today(GameTestHelper helper) {
+    static long today(GameTestHelper helper) {
         return DayClock.day(helper.getLevel());
     }
 
     /** The visitors that stand within 20 blocks of the Pantry now (the test structure itself is empty and tiny). */
-    private static List<Settler> visitors(GameTestHelper helper) {
+    static List<Settler> visitors(GameTestHelper helper) {
         return helper.getLevel().getEntitiesOfClass(Settler.class, new AABB(helper.absolutePos(PANTRY)).inflate(20.0), Settler::isVisitor);
     }
 
@@ -189,16 +189,16 @@ public final class InnGameTests {
     }
 
     /** A player near the Pantry who keeps the chat lines it gets. */
-    private static ServerPlayer listener(GameTestHelper helper, List<Component> chat) {
+    static ServerPlayer listener(GameTestHelper helper, List<Component> chat) {
         return TestPlayers.add(helper, Vec3.atCenterOf(helper.absolutePos(PANTRY)), chat::add);
     }
 
-    private static boolean says(List<Component> chat, String key) {
+    static boolean says(List<Component> chat, String key) {
         return chat.stream().anyMatch(line -> line.getContents() instanceof TranslatableContents contents && contents.getKey().equals(key));
     }
 
     /** Ends a test: the visitors, the host and the Tavern Host's place are gone, the rules and scripts are back. */
-    private static void end(GameTestHelper helper, Inn inn) {
+    static void end(GameTestHelper helper, Inn inn) {
         visitors(helper).forEach(Settler::discard);
         inn.host().ifPresent(Settler::discard);
         SettlementData data = SettlementData.get(helper.getLevel());

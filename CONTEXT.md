@@ -372,6 +372,9 @@ A bed bound to a Pantry with the Scroll of Assignment, within the Tavern radius,
 A Settler in a visitor state (`Settler.isVisitor`) who stays at an inn for 2 to 4 days; it is no member of a settlement and not homeless. The settlement keeps its stay as a `Visit`; the entity is its body. Code: `Visit`, `Visitors`, `SettlerSpawner.visitor`, origin channel `Channel.VISITOR`.
 _Avoid_: Guest (a settler who sits in the Tavern evening), traveller
 
+**Visitor price / offer**:
+What a visitor asks to join the settlement: an item and an amount that follow its trade (the favoured Job it is best in) and its level there. The files `civmod_visitor_prices/<job>.json` and the tag `civmod:visitor_price_default` give the item; paying it with a right-click hires the visitor (`Hiring`), and the same entity becomes a settler. Code: `VisitorOffer`, `VisitorPrices`, `Hiring`.
+
 **Arrival check / slot**:
 One of the three checks a day of an inn, numbered on the day clock (`InnSlots`); a stay and every departure are counted in slots. `Inns.run` plays every slot that is due, live and as catch-up.
 

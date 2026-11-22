@@ -7,6 +7,7 @@ import org.jspecify.annotations.Nullable;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
+import com.gilfort.civmod.inn.Visitors;
 import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.npc.Settler;
 
@@ -63,6 +64,8 @@ public class SettlerMenu extends CivMenu {
 
     /** Button id: dismiss a homeless settler. */
     public static final int BUTTON_DISMISS = 900;
+    /** Button id: ask a visitor of an inn to stay longer. */
+    public static final int BUTTON_ASK_STAY = 901;
 
     /** Items accepted in the tool belt. */
     public static final TagKey<Item> SETTLER_TOOLS = TagKey.create(Registries.ITEM, CivMod.id("settler_tools"));
@@ -218,7 +221,21 @@ public class SettlerMenu extends CivMenu {
             }
             return true;
         }
+        if (buttonId == BUTTON_ASK_STAY) {
+            askToStay(player);
+            return true;
+        }
         return super.clickMenuButton(player, buttonId);
+    }
+
+    /** The client marks the ask as used; the server asks the visitor, tells the player the answer and takes a fresh snapshot. */
+    private void askToStay(Player player) {
+        if (settler == null) {
+            info = info.withVisiting(SettlerInfo.Visiting.ASKED);
+        } else if (settler.isVisitor() && player instanceof ServerPlayer serverPlayer && stillValid(serverPlayer)) {
+            Visitors.askToStayAndTell(serverPlayer, settler);
+            info = SettlerInfo.of(settler);
+        }
     }
 
     /**

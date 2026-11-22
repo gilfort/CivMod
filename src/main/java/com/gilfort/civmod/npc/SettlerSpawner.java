@@ -228,7 +228,7 @@ public final class SettlerSpawner {
      * @param settlement a settlement
      * @return whether Settlers and running conversions reached {@code maxSettlersPerSettlement} (0 = unlimited)
      */
-    static boolean isFull(Settlement settlement) {
+    public static boolean isFull(Settlement settlement) {
         int max = CivModConfig.MAX_SETTLERS_PER_SETTLEMENT.get();
         return max > 0 && settlement.members().size() + settlement.bedReservations().size() >= max;
     }
