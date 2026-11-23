@@ -6,6 +6,7 @@ import org.joml.Quaternionf;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.config.CivModClientConfig;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerSkins;
 import com.gilfort.civmod.npc.SleepingPose;
@@ -101,6 +102,9 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
         super.extractRenderState(settler, state, partialTicks);
         state.skin = SKINS[Math.floorMod(settler.getSkin(), SKINS.length)];
         state.showCape = false;
+        if (!CivModClientConfig.RENDER_SETTLER_CLOTHING.get()) {
+            hideClothing(state);
+        }
         SettlerRenderState settlerState = (SettlerRenderState) state;
         settlerState.roll = null;
         settlerState.line = FishingLineRenderer.extract(settler, partialTicks);
@@ -122,6 +126,17 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
         float angle = (float) Math.toRadians(pose == SleepingPose.LEFT_SIDE ? 90.0 : -90.0);
         settlerState.roll = new Quaternionf().rotationAxis(angle, bed.getStepX(), 0.0F, bed.getStepZ());
         settlerState.lift = (state.skin.model() == PlayerModelType.SLIM ? ARM_REACH_SLIM : ARM_REACH_WIDE) - HALF_DEPTH - ARM_SINK;
+    }
+
+    /**
+     * The armour layer draws what the state holds: the worn clothes arrive as the settler's equipment (see
+     * {@code SettlerClothing#showWorn}), so the client config takes them out of the state again.
+     */
+    private static void hideClothing(AvatarRenderState state) {
+        state.headEquipment = ItemStack.EMPTY;
+        state.chestEquipment = ItemStack.EMPTY;
+        state.legsEquipment = ItemStack.EMPTY;
+        state.feetEquipment = ItemStack.EMPTY;
     }
 
     /**

@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.chronicle.Diary;
+import com.gilfort.civmod.clothing.ClothingRules;
 import com.gilfort.civmod.clothing.SettlerClothing;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.inn.Inns;
@@ -88,7 +89,7 @@ public class Settler extends PathfinderMob {
     public static final int POCKETS_START = OFFHAND + 1;
     /** Number of pocket slots. */
     public static final int POCKETS_SIZE = 9;
-    /** Inventory slots: armor / clothing in the order head, chest, legs, feet (not shown in the PoC; see {@link SettlerClothing}). */
+    /** Inventory slots: armor / clothing in the order head, chest, legs, feet (shown on the body of a Human settler; see {@link SettlerClothing}). */
     public static final int ARMOR_START = POCKETS_START + POCKETS_SIZE;
     /** Number of armor slots. */
     public static final int ARMOR_SIZE = 4;
@@ -117,7 +118,14 @@ public class Settler extends PathfinderMob {
     /** Hitbox while sitting: the head of the lowered passenger pose ends about 1.3 blocks up. */
     private static final EntityDimensions SITTING_DIMENSIONS = EntityDimensions.scalable(0.6F, 1.3F).withEyeHeight(1.04F);
 
-    private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE);
+    /** Every change of the inventory lets the body show what the settler wears now ({@link SettlerClothing#showWorn}). */
+    private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE) {
+        @Override
+        public void setChanged() {
+            super.setChanged();
+            clothing.showWorn();
+        }
+    };
     private Identifier race = Races.HUMAN;
     private int settlementId = -1;
     /** The settlement whose inn the settler visits, {@code -1} for a settler that is no visitor (vault {@code Systems/NPC Population.md}). */
@@ -150,6 +158,10 @@ public class Settler extends PathfinderMob {
         sittingLook.addGoal(0, new LookAtPlayerGoal(this, Player.class, 8.0F));
         sittingLook.addGoal(1, new RandomLookAroundGoal(this));
         setDropChance(EquipmentSlot.MAINHAND, 0.0F);
+        // The worn clothes shown on the body are copies of the inventory's armour slots; the inventory drops them.
+        for (EquipmentSlot slot : ClothingRules.SLOTS) {
+            setDropChance(slot, 0.0F);
+        }
     }
 
     /**
@@ -288,6 +300,7 @@ public class Settler extends PathfinderMob {
      */
     public void setRace(Identifier race) {
         this.race = race;
+        clothing.showWorn();
     }
 
     /**
@@ -942,6 +955,7 @@ public class Settler extends PathfinderMob {
         input.read("buffers", SettlerWork.BuffersSnapshot.CODEC).ifPresent(work::restore);
         setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
         ContainerHelper.loadAllItems(input, inventory.getItems());
+        clothing.showWorn();
         food.load(input);
         clothing.load(input);
         input.read("skills", com.gilfort.civmod.job.SettlerSkills.CODEC).ifPresent(skills::restore);

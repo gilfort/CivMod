@@ -8,6 +8,7 @@ import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.job.ClothingOrders;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Stock;
+import com.gilfort.civmod.npc.Races;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.DayClock;
@@ -134,6 +135,25 @@ public final class SettlerClothing {
         put(slot, stack);
         if (settler.level() instanceof ServerLevel level) {
             ClothingOrders.settled(level, settler, slot);
+        }
+    }
+
+    /**
+     * Server: lets the settler's body show what it wears. The worn pieces are copied into the entity's own equipment slots, which
+     * vanilla sends to every player that tracks the settler and the armour layer of the renderer reads, so no packet of our own is
+     * needed. Only Human settlers show clothes; another race keeps wearing them unseen until it gets a look of its own. Called when the
+     * inventory changes, when the race changes and after loading; it changes nothing for a slot that already shows the right piece.
+     */
+    public void showWorn() {
+        if (settler.level().isClientSide()) {
+            return;
+        }
+        boolean visible = Races.HUMAN.equals(settler.getRace());
+        for (EquipmentSlot slot : ClothingRules.SLOTS) {
+            ItemStack wanted = visible ? worn(slot) : ItemStack.EMPTY;
+            if (!ItemStack.matches(settler.getItemBySlot(slot), wanted)) {
+                settler.setItemSlot(slot, wanted.copy());
+            }
         }
     }
 
