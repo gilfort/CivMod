@@ -20,7 +20,6 @@ import com.gilfort.civmod.job.PlayerTalk;
 import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.npc.Races;
 import com.gilfort.civmod.npc.Settler;
-import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.origin.Origins;
 import com.gilfort.civmod.registry.ModBlocks;
@@ -28,9 +27,11 @@ import com.gilfort.civmod.registry.ModDiaryEntryTypes;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.DayClock;
+import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.SettlementWorld;
 import com.gilfort.civmod.settlement.TestSettlements;
 
 import com.google.gson.JsonObject;
@@ -476,11 +477,14 @@ public final class FavouriteMealGameTests {
         level.addFreshEntity(settler);
         settler.joinSettlement(data, settlement);
         settler.getSkills().set(ModJobs.LUMBERJACK.get(), new SettlerSkills.Skill(skill, 0));
-        settler.addJob(new SettlerJob(ModJobs.LUMBERJACK.get(), jobBlock));
+        // Through the settlement, so that the settler is an assignee of the block: the membership check drops a job that is only on the settler.
+        helper.assertTrue(SettlementWorld.assign(level, jobBlock, settler, ModJobs.LUMBERJACK.get()) == JobAssignments.AssignResult.OK, "Lumberjack assigned");
         settler.getFood().setFavourite(id(FAVOURITE));
         DIET.forEach(food -> settler.getFood().variety().record(id(food), today(level)));
         settler.getFood().setLevel(5);
         settler.getFood().setSaturation(0.0F);
+        // The membership check runs every 200 ticks at an offset of the entity id; run one now so that the test does not depend on it.
+        settler.checkMembership(level);
         return settler;
     }
 
