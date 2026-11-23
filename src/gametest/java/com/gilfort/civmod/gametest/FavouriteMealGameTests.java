@@ -438,15 +438,16 @@ public final class FavouriteMealGameTests {
         List<ItemStack> stock = List.of(new ItemStack(Items.COOKED_BEEF), new ItemStack(FAVOURITE), new ItemStack(Items.STONE));
         FoodVariety fed = new FoodVariety();
         DIET.forEach(food -> fed.record(id(food), 10L));
-        Optional<Identifier> favourite = Optional.of(id(FAVOURITE));
+        FoodVariety.Wishes none = FoodVariety.Wishes.forTier(5, Optional.empty());
+        FoodVariety.Wishes wished = FoodVariety.Wishes.forTier(5, Optional.of(id(FAVOURITE)));
         helper.assertFalse(fed.isShort(10L, ten), "Ten foods: the variety is not short");
-        helper.assertTrue(fed.choose(stock, 12, 10L, ten).equals(Optional.of(0)), "Without a favourite the beef fits best");
-        helper.assertTrue(fed.choose(stock, 12, 10L, ten, favourite).equals(Optional.of(1)), "The missing favourite first, though the beef fits better");
-        helper.assertTrue(fed.choose(stock, 14, 10L, ten, favourite).equals(Optional.of(1)), "The favourite is chosen where it fits");
-        helper.assertTrue(fed.choose(stock, 15, 10L, ten, favourite).isEmpty(), "The rule against overeating applies to the favourite too: " + fed.choose(stock, 15, 10L, ten, favourite));
-        helper.assertTrue(fed.choose(List.of(new ItemStack(Items.COOKED_BEEF)), 12, 10L, ten, favourite).equals(Optional.of(0)), "Not in the stock: the usual choice");
+        helper.assertTrue(fed.choose(stock, 12, 10L, none).equals(Optional.of(0)), "Without a favourite the beef fits best");
+        helper.assertTrue(fed.choose(stock, 12, 10L, wished).equals(Optional.of(1)), "The missing favourite first, though the beef fits better");
+        helper.assertTrue(fed.choose(stock, 14, 10L, wished).equals(Optional.of(1)), "The favourite is chosen where it fits");
+        helper.assertTrue(fed.choose(stock, 15, 10L, wished).isEmpty(), "The rule against overeating applies to the favourite too: " + fed.choose(stock, 15, 10L, wished));
+        helper.assertTrue(fed.choose(List.of(new ItemStack(Items.COOKED_BEEF)), 12, 10L, wished).equals(Optional.of(0)), "Not in the stock: the usual choice");
         fed.record(id(FAVOURITE), 10L);
-        helper.assertTrue(fed.choose(stock, 12, 10L, ten, favourite).equals(Optional.of(0)), "In the window: the usual choice again");
+        helper.assertTrue(fed.choose(stock, 12, 10L, wished).equals(Optional.of(0)), "In the window: the usual choice again");
         helper.succeed();
     }
 

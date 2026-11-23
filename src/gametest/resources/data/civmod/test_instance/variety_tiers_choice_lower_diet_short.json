@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:variety_tiers_choice_lower_diet_short",
+  "max_ticks": 40,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -62,6 +62,7 @@ public final class NeedTier2GameTests {
 
     private static final BlockPos CENTER = new BlockPos(8, 1, 8);
     private static final FoodVariety.Diet DAYS = new FoodVariety.Diet(3, 3);
+    private static final FoodVariety.Wishes WISHES = new FoodVariety.Wishes(List.of(DAYS), Optional.empty());
     private static final long DAY = 24000L;
 
     private NeedTier2GameTests() {
@@ -160,12 +161,12 @@ public final class NeedTier2GameTests {
     /** Short of variety: a food outside the window, even a small one; otherwise the one closest to 20. */
     private static void choice(GameTestHelper helper) {
         List<ItemStack> stock = List.of(new ItemStack(Items.COOKED_BEEF), new ItemStack(Items.CARROT), new ItemStack(Items.STONE));
-        helper.assertTrue(eaten(10L, Items.COOKED_BEEF).choose(stock, 12, 10L, DAYS).equals(Optional.of(1)), "The carrot is new, the beef fits better");
-        helper.assertTrue(eaten(10L, Items.COOKED_BEEF, Items.CARROT).choose(stock, 12, 10L, DAYS).equals(Optional.of(0)),
+        helper.assertTrue(eaten(10L, Items.COOKED_BEEF).choose(stock, 12, 10L, WISHES).equals(Optional.of(1)), "The carrot is new, the beef fits better");
+        helper.assertTrue(eaten(10L, Items.COOKED_BEEF, Items.CARROT).choose(stock, 12, 10L, WISHES).equals(Optional.of(0)),
                 "Nothing new: the existing choice");
-        helper.assertTrue(eaten(10L, Items.BREAD, Items.APPLE, Items.COOKIE).choose(stock, 12, 10L, DAYS).equals(Optional.of(0)),
+        helper.assertTrue(eaten(10L, Items.BREAD, Items.APPLE, Items.COOKIE).choose(stock, 12, 10L, WISHES).equals(Optional.of(0)),
                 "Enough variety: the existing choice");
-        helper.assertTrue(eaten(10L, Items.BREAD).choose(List.of(new ItemStack(Items.COOKED_BEEF)), 15, 10L, DAYS).isEmpty(),
+        helper.assertTrue(eaten(10L, Items.BREAD).choose(List.of(new ItemStack(Items.COOKED_BEEF)), 15, 10L, WISHES).isEmpty(),
                 "A new food that would overeat stays where it is");
         helper.succeed();
     }

@@ -33,10 +33,15 @@ public final class FoodVariety {
      */
     public record Diet(int foods, int days) {
 
+        /** The first tier that asks for variety: 3 foods. */
+        public static final int THREE_FOODS_TIER = 2;
         /** The tier from which 5 foods are asked. */
-        private static final int FIVE_FOODS_TIER = 4;
-        /** The tier from which 10 foods are asked. */
-        private static final int TEN_FOODS_TIER = 5;
+        public static final int FIVE_FOODS_TIER = 4;
+        /** The tier from which 10 foods are asked, and the favourite meal. */
+        public static final int TEN_FOODS_TIER = 5;
+        private static final int THREE_FOODS = 3;
+        private static final int FIVE_FOODS = 5;
+        private static final int TEN_FOODS = 10;
 
         /**
          * @param tier a need tier
@@ -44,12 +49,28 @@ public final class FoodVariety {
          */
         public static Diet forTier(int tier) {
             if (tier >= TEN_FOODS_TIER) {
-                return new Diet(10, CivModConfig.FOOD_VARIETY_DAYS_10.get());
+                return new Diet(TEN_FOODS, CivModConfig.FOOD_VARIETY_DAYS_10.get());
             }
             if (tier >= FIVE_FOODS_TIER) {
-                return new Diet(5, CivModConfig.FOOD_VARIETY_DAYS_5.get());
+                return new Diet(FIVE_FOODS, CivModConfig.FOOD_VARIETY_DAYS_5.get());
             }
-            return new Diet(3, CivModConfig.FOOD_VARIETY_DAYS.get());
+            return new Diet(THREE_FOODS, CivModConfig.FOOD_VARIETY_DAYS.get());
+        }
+
+        /**
+         * @param tier a need tier
+         * @return the diets a settler of that tier has to meet: its own and those of the lower tiers, the lowest first
+         */
+        public static List<Diet> upToTier(int tier) {
+            List<Diet> diets = new ArrayList<>();
+            diets.add(forTier(THREE_FOODS_TIER));
+            if (tier >= FIVE_FOODS_TIER) {
+                diets.add(forTier(FIVE_FOODS_TIER));
+            }
+            if (tier >= TEN_FOODS_TIER) {
+                diets.add(forTier(TEN_FOODS_TIER));
+            }
+            return List.copyOf(diets);
         }
 
         /**
@@ -65,6 +86,25 @@ public final class FoodVariety {
          */
         int coveredItems() {
             return 2 * foods;
+        }
+    }
+
+    /**
+     * What a settler wants on its plate at a food point: the diets of its tier and the lower ones, and the favourite meal when its tier
+     * asks for it.
+     *
+     * @param diets     the diets the settler has to meet
+     * @param favourite the favourite meal the tier asks for, empty if the tier asks for none or the settler has none
+     */
+    public record Wishes(List<Diet> diets, Optional<Identifier> favourite) {
+
+        /**
+         * @param tier      the settler's need tier
+         * @param favourite the settler's favourite meal, empty if it has none
+         * @return the wishes of a settler of that tier
+         */
+        public static Wishes forTier(int tier, Optional<Identifier> favourite) {
+            return new Wishes(Diet.upToTier(tier), Diet.asksForFavourite(tier) ? favourite : Optional.empty());
         }
     }
 
@@ -154,40 +194,30 @@ public final class FoodVariety {
     }
 
     /**
-     * The food choice at a food point: while variety is short a food outside the window, even a smaller one; otherwise
-     * {@link SettlerFood#choose(List, int)}. The rule against overeating always applies.
+     * The food choice at a food point: the favourite meal first while the tier asks for it and it is missing from the window of the tier 5
+     * diet; then, while any diet of the settler is short, a food that is outside the window of a short diet, even a smaller one;
+     * otherwise {@link SettlerFood#choose(List, int)}. The rule against overeating always applies.
      *
      * @param stacks candidate stacks (any items)
      * @param level  the food level
      * @param today  the day
-     * @param diet   what the settler's tier asks for
+     * @param wishes what the settler's tier asks for
      * @return the index of the chosen stack, empty if nothing may be eaten
      */
-    public Optional<Integer> choose(List<ItemStack> stacks, int level, long today, Diet diet) {
-        return choose(stacks, level, today, diet, Optional.empty());
-    }
-
-    /**
-     * The food choice at a food point of a settler that asks for its favourite meal (tier 5): the favourite first while it is missing
-     * from the window, then the choice of {@link #choose(List, int, long, Diet)}.
-     *
-     * @param stacks    candidate stacks (any items)
-     * @param level     the food level
-     * @param today     the day
-     * @param diet      what the settler's tier asks for
-     * @param favourite the favourite meal the tier asks for, empty if the tier asks for none or the settler has none
-     * @return the index of the chosen stack, empty if nothing may be eaten
-     */
-    public Optional<Integer> choose(List<ItemStack> stacks, int level, long today, Diet diet, Optional<Identifier> favourite) {
-        if (favourite.isPresent() && !window(today, diet).contains(favourite.get())) {
-            Optional<Integer> favourited = SettlerFood.choose(stacks, level, stack -> BuiltInRegistries.ITEM.getKey(stack.getItem()).equals(favourite.get()));
-            if (favourited.isPresent()) {
-                return favourited;
+    public Optional<Integer> choose(List<ItemStack> stacks, int level, long today, Wishes wishes) {
+        if (wishes.favourite().isPresent()) {
+            Identifier favourite = wishes.favourite().get();
+            if (!window(today, Diet.forTier(Diet.TEN_FOODS_TIER)).contains(favourite)) {
+                Optional<Integer> favourited = SettlerFood.choose(stacks, level, stack -> BuiltInRegistries.ITEM.getKey(stack.getItem()).equals(favourite));
+                if (favourited.isPresent()) {
+                    return favourited;
+                }
             }
         }
-        if (isShort(today, diet)) {
-            Set<Identifier> window = window(today, diet);
-            Optional<Integer> fresh = SettlerFood.choose(stacks, level, stack -> !window.contains(BuiltInRegistries.ITEM.getKey(stack.getItem())));
+        List<Set<Identifier>> shortWindows = wishes.diets().stream().filter(diet -> isShort(today, diet)).map(diet -> window(today, diet)).toList();
+        if (!shortWindows.isEmpty()) {
+            Optional<Integer> fresh = SettlerFood.choose(stacks, level,
+                    stack -> shortWindows.stream().anyMatch(window -> !window.contains(BuiltInRegistries.ITEM.getKey(stack.getItem()))));
             if (fresh.isPresent()) {
                 return fresh;
             }

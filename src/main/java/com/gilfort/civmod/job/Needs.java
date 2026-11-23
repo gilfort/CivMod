@@ -8,6 +8,7 @@ import java.util.OptionalInt;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.entertainment.Entertainment;
 import com.gilfort.civmod.entertainment.EntertainmentRules;
+import com.gilfort.civmod.food.FoodVariety.Diet;
 import com.gilfort.civmod.settlement.DayClock;
 
 import net.minecraft.network.chat.Component;
@@ -143,7 +144,8 @@ final class Needs {
     private static final Need ENTERTAINMENT_3 = new EntertainmentNeed(3);
 
     /** Every need, in the order of its rows in the Needs tab. */
-    static final List<Need> ALL = List.of(FOOD, FIRE, BED, new FoodVarietyNeed(2), new FoodVarietyNeed(4), new FoodVarietyNeed(5), new FavouriteMealNeed(),
+    static final List<Need> ALL = List.of(FOOD, FIRE, BED, new FoodVarietyNeed(Diet.THREE_FOODS_TIER), new FoodVarietyNeed(Diet.FIVE_FOODS_TIER),
+            new FoodVarietyNeed(Diet.TEN_FOODS_TIER), new FavouriteMealNeed(),
             ENTERTAINMENT_2, ENTERTAINMENT_3, new ClothingNeed(2), new ClothingNeed(3), new ClothingNeed(4), new ClothingNeed(5));
 
     private Needs() {

@@ -22,7 +22,7 @@ import net.minecraft.world.item.Items;
 final class FavouriteMealNeed implements Need {
 
     /** The tier the need belongs to. */
-    static final int TIER = 5;
+    static final int TIER = Diet.TEN_FOODS_TIER;
 
     @Override
     public int tier() {

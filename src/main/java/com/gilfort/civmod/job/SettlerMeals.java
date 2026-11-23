@@ -623,12 +623,9 @@ final class SettlerMeals {
         if (food.level() >= SettlerFood.MAX) {
             return ItemStack.EMPTY;
         }
-        // The diet of the settler's own tier, so that a settler of a higher tier goes for the variety it needs to keep its work level.
-        int tier = shell.needTier();
-        FoodVariety.Diet diet = FoodVariety.Diet.forTier(tier);
-        // On tier 5 the counter also prefers the favourite meal while it is missing from the window.
-        Optional<Identifier> favourite = FoodVariety.Diet.asksForFavourite(tier) ? food.favourite() : Optional.empty();
-        Optional<Integer> slot = food.variety().choose(stock.contents(), food.level(), day, diet, favourite);
+        // The diets of the settler's own tier and the lower ones (it has to meet them all to keep its work level); on tier 5 the favourite meal too.
+        FoodVariety.Wishes wishes = FoodVariety.Wishes.forTier(shell.needTier(), food.favourite());
+        Optional<Integer> slot = food.variety().choose(stock.contents(), food.level(), day, wishes);
         return slot.isEmpty() ? ItemStack.EMPTY : stock.takeOne(slot.get());
     }
 

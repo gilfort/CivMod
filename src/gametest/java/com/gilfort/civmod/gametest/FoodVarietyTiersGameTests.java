@@ -69,6 +69,7 @@ public final class FoodVarietyTiersGameTests {
             register(helper, "variety_tiers_window_days", FoodVarietyTiersGameTests::windowDays);
             register(helper, "variety_tiers_light_eater", FoodVarietyTiersGameTests::lightEater);
             register(helper, "variety_tiers_choice", FoodVarietyTiersGameTests::choice);
+            register(helper, "variety_tiers_choice_lower_diet_short", FoodVarietyTiersGameTests::lowerDietShort);
             register(helper, "variety_tiers_tier4_five_foods", FoodVarietyTiersGameTests::tierFour);
             register(helper, "variety_tiers_tier5_ten_foods", FoodVarietyTiersGameTests::tierFive);
             register(helper, "variety_tiers_climb_back", FoodVarietyTiersGameTests::climbBack);
@@ -92,6 +93,11 @@ public final class FoodVarietyTiersGameTests {
             variety.record(id(item), day);
         }
         return variety;
+    }
+
+    /** What a settler of the tier wants, without a favourite meal. */
+    private static FoodVariety.Wishes wishes(int tier) {
+        return FoodVariety.Wishes.forTier(tier, Optional.empty());
     }
 
     private static long today(ServerLevel level) {
@@ -165,14 +171,32 @@ public final class FoodVarietyTiersGameTests {
     private static void choice(GameTestHelper helper) {
         List<ItemStack> stock = List.of(new ItemStack(Items.COOKED_BEEF), new ItemStack(Items.CARROT), new ItemStack(Items.STONE));
         FoodVariety four = eaten(10L, Items.BREAD, Items.APPLE, Items.COOKIE, Items.COOKED_BEEF);
-        helper.assertTrue(four.choose(stock, 12, 10L, Diet.forTier(3)).equals(Optional.of(0)), "4 foods are enough for 3: the beef fits best");
-        helper.assertTrue(four.choose(stock, 12, 10L, Diet.forTier(4)).equals(Optional.of(1)), "4 foods are short of 5: the new carrot first");
+        helper.assertTrue(four.choose(stock, 12, 10L, wishes(3)).equals(Optional.of(0)), "4 foods are enough for 3: the beef fits best");
+        helper.assertTrue(four.choose(stock, 12, 10L, wishes(4)).equals(Optional.of(1)), "4 foods are short of 5: the new carrot first");
         FoodVariety five = eaten(10L, Items.BREAD, Items.APPLE, Items.COOKIE, Items.COOKED_BEEF, Items.MELON_SLICE);
-        helper.assertTrue(five.choose(stock, 12, 10L, Diet.forTier(4)).equals(Optional.of(0)), "5 foods are enough for 5: the usual choice");
-        helper.assertTrue(five.choose(stock, 12, 10L, Diet.forTier(5)).equals(Optional.of(1)), "5 foods are short of 10: the new carrot first");
+        helper.assertTrue(five.choose(stock, 12, 10L, wishes(4)).equals(Optional.of(0)), "5 foods are enough for 5: the usual choice");
+        helper.assertTrue(five.choose(stock, 12, 10L, wishes(5)).equals(Optional.of(1)), "5 foods are short of 10: the new carrot first");
         FoodVariety nine = eaten(10L, DIET.subList(0, 9).toArray(Item[]::new));
         List<ItemStack> last = List.of(new ItemStack(Items.COOKED_BEEF), new ItemStack(DIET.get(9)));
-        helper.assertTrue(nine.choose(last, 6, 10L, Diet.forTier(5)).equals(Optional.of(1)), "9 foods are short of 10: the tenth, new food");
+        helper.assertTrue(nine.choose(last, 6, 10L, wishes(5)).equals(Optional.of(1)), "9 foods are short of 10: the tenth, new food");
+        helper.succeed();
+    }
+
+    /**
+     * A settler of tier 5 meets the 5 foods of tier 4 too: 10 foods in the 7 days but only 4 in the last 5 days leave the tier 4 diet short,
+     * so the counter gives it a food of its older days, though the tier 5 diet is full.
+     */
+    private static void lowerDietShort(GameTestHelper helper) {
+        FoodVariety variety = eaten(4L, DIET.subList(0, 6).toArray(Item[]::new));
+        for (int i = 0; i < 10; i++) {
+            variety.record(id(DIET.get(6 + i % 4)), 10L);
+        }
+        helper.assertFalse(variety.isShort(10L, Diet.forTier(5)), "10 foods in the 7 days: the tier 5 diet is full");
+        helper.assertTrue(variety.isShort(10L, Diet.forTier(4)), "4 foods in the last 5 days: the tier 4 diet is short");
+        List<ItemStack> stock = List.of(new ItemStack(Items.COOKED_PORKCHOP), new ItemStack(Items.CARROT));
+        helper.assertTrue(variety.choose(stock, 12, 10L, wishes(4)).equals(Optional.of(1)), "Tier 4: the carrot of the older days, though the porkchop fits better");
+        helper.assertTrue(variety.choose(stock, 12, 10L, wishes(5)).equals(Optional.of(1)), "Tier 5 settler: the tier 4 diet is short as well, so the carrot");
+        helper.assertTrue(variety.choose(stock, 12, 10L, wishes(3)).equals(Optional.of(0)), "Tier 3: 4 foods are enough for 3, the porkchop fits best");
         helper.succeed();
     }
 
