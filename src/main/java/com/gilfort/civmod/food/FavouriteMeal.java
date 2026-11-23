@@ -8,6 +8,7 @@ import java.util.Optional;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.RandomSource;
@@ -38,7 +39,8 @@ public final class FavouriteMeal {
     /**
      * Rolls a favourite meal: one of the foods in the tag of the race that settlers eat. An item of the tag that a settler would never
      * eat (a cake has no food component) is skipped, or the settler could never get what it needs. The foods are drawn in the order of
-     * their ids, so a scripted random source gives the same food on every start.
+     * their ids, so the same state of the random source gives the same food whatever order the tag lists them in. The callers pass the
+     * settler's own source, not the scripted source of the origin roll, so that the scripted sequences of those tests stay as they are.
      *
      * @param race   the race id
      * @param random the random source
@@ -53,5 +55,14 @@ public final class FavouriteMeal {
         }
         foods.sort(Comparator.naturalOrder());
         return foods.isEmpty() ? Optional.empty() : Optional.of(foods.get(random.nextInt(foods.size())));
+    }
+
+    /**
+     * @param item a food item id
+     * @return the name of the item, or the path of its id when the item is gone (a removed mod)
+     */
+    public static Component name(Identifier item) {
+        return BuiltInRegistries.ITEM.getOptional(item).<Component>map(found -> new ItemStack(found).getHoverName())
+                .orElseGet(() -> Component.literal(item.getPath()));
     }
 }

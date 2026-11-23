@@ -118,8 +118,7 @@ public final class PlayerTalk {
         if (favourite.isEmpty() || !food.revealFavourite()) {
             return Optional.empty();
         }
-        List<String> params = Diary.favouriteMeal(settler, favourite.get(), Diary.Reveal.TOLD);
-        return Optional.of(new Result(Diary.favouriteMealText(params), Optional.empty()));
+        return Optional.of(new Result(Diary.favouriteMeal(settler, favourite.get(), Diary.Reveal.TOLD), Optional.empty()));
     }
 
     /** The next part of the origin the settler has not told yet, picked at random; written into the diary. */

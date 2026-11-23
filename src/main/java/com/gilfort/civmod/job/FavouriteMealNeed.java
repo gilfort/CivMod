@@ -3,6 +3,7 @@ package com.gilfort.civmod.job;
 import java.util.List;
 import java.util.Optional;
 
+import com.gilfort.civmod.food.FavouriteMeal;
 import com.gilfort.civmod.food.FoodVariety.Diet;
 import com.gilfort.civmod.food.SettlerFood;
 
@@ -58,8 +59,7 @@ final class FavouriteMealNeed implements Need {
             return new Check(eaten, Component.translatable("civmod.need.favourite_meal.unknown"));
         }
         ItemStack meal = BuiltInRegistries.ITEM.getOptional(favourite.get()).map(ItemStack::new).orElse(ItemStack.EMPTY);
-        Component name = meal.isEmpty() ? Component.literal(favourite.get().getPath()) : meal.getHoverName();
-        return new Check(eaten, Component.translatable("civmod.need.favourite_meal." + (eaten ? "met" : "missing"), name, diet.days()),
+        return new Check(eaten, Component.translatable("civmod.need.favourite_meal." + (eaten ? "met" : "missing"), FavouriteMeal.name(favourite.get()), diet.days()),
                 meal.isEmpty() ? List.of() : List.of(meal));
     }
 }

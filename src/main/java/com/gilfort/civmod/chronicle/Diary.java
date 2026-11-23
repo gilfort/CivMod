@@ -4,18 +4,17 @@ import java.util.Arrays;
 import java.util.List;
 
 import com.gilfort.civmod.api.DiaryEntryType;
+import com.gilfort.civmod.food.FavouriteMeal;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.origin.OriginText;
 import com.gilfort.civmod.origin.SettlerOrigin;
 import com.gilfort.civmod.registry.ModDiaryEntryTypes;
 import com.gilfort.civmod.settlement.DayClock;
 
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.StringRepresentable;
-import net.minecraft.world.item.ItemStack;
 
 /**
  * Writes into the diary of a settler (vault {@code Systems/Chronicle.md}). Every entry is written on an event, never on a tick: the
@@ -135,12 +134,12 @@ public final class Diary {
      * @param settler the settler
      * @param item    the favourite meal's item id
      * @param reveal  how the favourite came out
-     * @return the text parameters of the entry, which {@link #favouriteMealText} turns into words
+     * @return the text of the entry, as {@link #favouriteMealText} builds it
      */
-    public static List<String> favouriteMeal(Settler settler, Identifier item, Reveal reveal) {
+    public static Component favouriteMeal(Settler settler, Identifier item, Reveal reveal) {
         List<String> params = List.of(item.toString(), reveal.getSerializedName());
         add(settler, ModDiaryEntryTypes.FAVOURITE_MEAL.get(), params);
-        return params;
+        return favouriteMealText(params);
     }
 
     /**
@@ -155,8 +154,7 @@ public final class Diary {
         if (id == null) {
             return Component.empty();
         }
-        Component item = BuiltInRegistries.ITEM.getOptional(id).<Component>map(found -> new ItemStack(found).getHoverName())
-                .orElseGet(() -> Component.literal(id.getPath()));
+        Component item = FavouriteMeal.name(id);
         return Arrays.stream(Reveal.values()).filter(reveal -> reveal.getSerializedName().equals(params.get(1))).findFirst()
                 .<Component>map(reveal -> Component.translatable("diary.civmod.favourite_meal." + reveal.getSerializedName(), item))
                 .orElse(Component.empty());
