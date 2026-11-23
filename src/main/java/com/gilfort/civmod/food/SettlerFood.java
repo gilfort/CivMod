@@ -25,7 +25,7 @@ import net.minecraft.world.level.storage.ValueOutput;
 
 /**
  * Food state of a settler (vault {@code Systems/Needs.md}): a vanilla {@link FoodData} (food level 0–20, saturation
- * buffer) driven by exhaustion like the player's, the settler's appetite and the meal / foraging state of the day.
+ * buffer) driven by exhaustion like the player's, the settler's appetite and favourite meal, and the meal / foraging state of the day.
  * <p>
  * Every {@value #EXHAUSTION_PER_POINT} exhaustion first removes one saturation, then one food level – the same rule
  * as vanilla {@code FoodData.tick}, which needs a player and is therefore not called.
@@ -128,6 +128,13 @@ public final class SettlerFood {
         }
         favouriteKnown = true;
         return true;
+    }
+
+    /**
+     * @param favourite the favourite meal's item id (tests)
+     */
+    public void setFavourite(Identifier favourite) {
+        this.favourite = favourite;
     }
 
     /**

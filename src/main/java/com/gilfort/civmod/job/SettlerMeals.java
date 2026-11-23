@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.chronicle.Diary;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.food.FoodVariety;
 import com.gilfort.civmod.food.SettlerFood;
@@ -23,6 +24,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -510,9 +512,12 @@ final class SettlerMeals {
         }
         if (Schedule.eatsAtFoodPoint(mealPurpose, food.level())) {
             // The diet of the settler's own tier, so that a settler of a higher tier goes for the variety it needs to keep its work level.
-            FoodVariety.Diet diet = FoodVariety.Diet.forTier(shell.needTier());
+            int tier = shell.needTier();
+            FoodVariety.Diet diet = FoodVariety.Diet.forTier(tier);
+            // On tier 5 the counter also prefers the favourite meal while it is missing from the window.
+            Optional<Identifier> favourite = FoodVariety.Diet.asksForFavourite(tier) ? food.favourite() : Optional.empty();
             while (food.level() < SettlerFood.MAX) {
-                Optional<Integer> slot = food.variety().choose(stock.contents(), food.level(), day, diet);
+                Optional<Integer> slot = food.variety().choose(stock.contents(), food.level(), day, diet, favourite);
                 if (slot.isEmpty()) {
                     break;
                 }
@@ -554,7 +559,18 @@ final class SettlerMeals {
     }
 
     private void recordMeal(ItemStack item, long day) {
-        settler.getFood().variety().record(BuiltInRegistries.ITEM.getKey(item.getItem()), day);
+        Identifier id = BuiltInRegistries.ITEM.getKey(item.getItem());
+        settler.getFood().variety().record(id, day);
+        revealFavouriteIfEaten(id, item);
+    }
+
+    /** The first time the settler eats its favourite meal it shows: a diary entry and a thought bubble (none while it catches up). */
+    private void revealFavouriteIfEaten(Identifier id, ItemStack item) {
+        SettlerFood food = settler.getFood();
+        if (food.favourite().filter(id::equals).isPresent() && food.revealFavourite()) {
+            Diary.favouriteMeal(settler, id, Diary.Reveal.EATEN);
+            shell.showFavouriteMeal(item.getItem());
+        }
     }
 
     private void eatItem(ServerLevel level, ItemStack item, @Nullable Stock stock, long day) {

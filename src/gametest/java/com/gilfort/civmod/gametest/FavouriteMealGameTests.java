@@ -2,18 +2,40 @@ package com.gilfort.civmod.gametest;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.block.JobBlockEntity;
 import com.gilfort.civmod.chronicle.DiaryEntry;
+import com.gilfort.civmod.entertainment.Entertainment;
+import com.gilfort.civmod.entertainment.EntertainmentRules;
+import com.gilfort.civmod.food.FoodVariety;
+import com.gilfort.civmod.food.FoodVariety.Diet;
+import com.gilfort.civmod.job.CatchUp;
+import com.gilfort.civmod.job.NeedState;
+import com.gilfort.civmod.job.NeedsReport;
 import com.gilfort.civmod.job.PlayerTalk;
+import com.gilfort.civmod.job.SettlerSkills;
 import com.gilfort.civmod.npc.Races;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.SettlerJob;
+import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.origin.Origins;
+import com.gilfort.civmod.registry.ModBlocks;
 import com.gilfort.civmod.registry.ModDiaryEntryTypes;
 import com.gilfort.civmod.registry.ModEntityTypes;
+import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.DayClock;
+import com.gilfort.civmod.settlement.Settlement;
+import com.gilfort.civmod.settlement.SettlementData;
+import com.gilfort.civmod.settlement.SettlementManager;
+import com.gilfort.civmod.settlement.TestSettlements;
 
+import com.google.gson.JsonObject;
+
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -26,10 +48,12 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.phys.Vec3;
@@ -61,6 +85,16 @@ public final class FavouriteMealGameTests {
             register(helper, "favourite_meal_old_save_rolls_on_load", FavouriteMealGameTests::oldSaveRolls);
             register(helper, "favourite_meal_told_after_origin_lines", FavouriteMealGameTests::toldAfterOrigin);
             register(helper, "favourite_meal_told_first_without_origin", FavouriteMealGameTests::toldFirstWithoutOrigin);
+            register(helper, "favourite_meal_first_meal_shows_bubble_and_diary", FavouriteMealGameTests::firstMeal);
+            register(helper, "favourite_meal_first_meal_in_catch_up", FavouriteMealGameTests::firstMealInCatchUp);
+            register(helper, "favourite_meal_row_hidden_until_known", FavouriteMealGameTests::rowHiddenUntilKnown);
+            register(helper, "favourite_meal_row_names_known_favourite", FavouriteMealGameTests::rowNamesKnownFavourite);
+            register(helper, "favourite_meal_tier_five_needs_it", FavouriteMealGameTests::tierFiveNeedsIt);
+            register(helper, "favourite_meal_no_favourite_asks_none", FavouriteMealGameTests::noFavouriteAsksNone);
+            register(helper, "favourite_meal_texts_exist", FavouriteMealGameTests::textsExist);
+            register(helper, "favourite_meal_choice_prefers_missing_favourite", FavouriteMealGameTests::choice);
+            register(helper, "favourite_meal_pantry_prefers_favourite_on_tier_5", FavouriteMealGameTests::pantryTierFive);
+            register(helper, "favourite_meal_pantry_ignores_favourite_below_tier_5", FavouriteMealGameTests::pantryTierFour);
         });
     }
 
@@ -203,6 +237,278 @@ public final class FavouriteMealGameTests {
             TestPlayers.remove(player);
             settler.discard();
         }
+    }
+
+    // ---------------------------------------------------------------- the reveal by the first meal
+
+    /** A settler with a favourite that is not the given food: the other food, so that a meal of it shows nothing. */
+    private static Item otherFood(Settler settler) {
+        return settler.getFood().favourite().orElseThrow().equals(id(Items.CARROT)) ? Items.APPLE : Items.CARROT;
+    }
+
+    private static List<ThoughtBubble.Show> favouriteBubbles(Settler settler) {
+        return settler.getWork().recentThoughts().stream().filter(show -> show.bubble() == ThoughtBubble.FAVOURITE_MEAL).toList();
+    }
+
+    /**
+     * The first time the settler eats its favourite it shows a thought bubble with the food and writes a diary entry; another food and
+     * every later meal of the favourite show nothing.
+     */
+    private static void firstMeal(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Settler settler = handBuilt(helper);
+        try {
+            settler.getFood().rollFavourite(Races.HUMAN, RandomSource.create(7L));
+            Item favourite = BuiltInRegistries.ITEM.getValue(settler.getFood().favourite().orElseThrow());
+            settler.getFood().setLevel(5);
+            settler.getWork().feed(level, new ItemStack(otherFood(settler)));
+            helper.assertFalse(settler.getFood().favouriteKnown(), "Another food shows nothing");
+            helper.assertTrue(favouriteBubbles(settler).isEmpty() && favouriteEntries(settler).isEmpty(), "No bubble, no entry: " + settler.getWork().recentThoughts());
+
+            settler.getFood().setLevel(5);
+            settler.getWork().feed(level, new ItemStack(favourite));
+            helper.assertTrue(settler.getFood().favouriteKnown(), "The first favourite meal shows it");
+            helper.assertTrue(favouriteBubbles(settler).equals(List.of(new ThoughtBubble.Show(settler.getId(), ThoughtBubble.FAVOURITE_MEAL, favourite, true))),
+                    "One thought bubble with the food: " + settler.getWork().recentThoughts());
+            List<DiaryEntry> entries = favouriteEntries(settler);
+            helper.assertTrue(entries.size() == 1 && entries.get(0).params().equals(List.of(id(favourite).toString(), "eaten")), "One diary entry: " + entries);
+            helper.assertTrue(key(ModDiaryEntryTypes.FAVOURITE_MEAL.get().text().apply(entries.get(0).params())).equals("diary.civmod.favourite_meal.eaten"),
+                    "The entry says it was eaten");
+
+            settler.getFood().setLevel(5);
+            settler.getWork().feed(level, new ItemStack(favourite));
+            helper.assertTrue(favouriteBubbles(settler).size() == 1 && favouriteEntries(settler).size() == 1, "Only the first time: " + settler.getWork().recentThoughts());
+            helper.succeed();
+        } finally {
+            settler.discard();
+        }
+    }
+
+    /** A first favourite meal eaten while the settler catches up writes the diary entry and shows no bubble. */
+    private static void firstMealInCatchUp(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos jobBlock = NeedTierGameTests.place(helper, new BlockPos(1, 1, 1), ModJobs.LUMBERJACK.get(), 1);
+        Settler settler = ClothingNeedGameTests.comfortable(helper, jobBlock, 5);
+        settler.getFood().rollFavourite(Races.HUMAN, RandomSource.create(7L));
+        Identifier favourite = settler.getFood().favourite().orElseThrow();
+        settler.getFood().setSaturation(0.0F);
+        settler.getFood().setLevel(4);
+        settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(BuiltInRegistries.ITEM.getValue(favourite), 16));
+        long dayStart = Math.floorDiv(level.getOverworldClockTime(), 24000L) * 24000L;
+        settler.getWork().setCatchUp(dayStart - 3 * 24000L, dayStart);
+        CatchUp.runNow(level, List.of(settler));
+        helper.assertTrue(settler.getFood().variety().meals().stream().anyMatch(meal -> meal.item().equals(favourite)), "The settler ate its favourite meal while it caught up");
+        helper.assertTrue(settler.getFood().favouriteKnown() && favouriteEntries(settler).size() == 1, "Known, with an entry: " + favouriteEntries(settler));
+        helper.assertTrue(favouriteBubbles(settler).isEmpty(), "No bubble while caught up: " + settler.getWork().recentThoughts());
+        NeedTierGameTests.end(helper, settler, jobBlock);
+    }
+
+    // ---------------------------------------------------------------- the need on tier 5
+
+    private static final int BLOCK_LEVEL = 5;
+    private static final String FAVOURITE_ROW = "civmod.need.favourite_meal";
+    /** Ten different foods that are not the favourite meal of {@link #tierFive}. */
+    private static final List<Item> DIET = List.of(Items.BREAD, Items.CARROT, Items.APPLE, Items.COOKED_BEEF, Items.COOKIE, Items.BAKED_POTATO,
+            Items.MELON_SLICE, Items.COOKED_PORKCHOP, Items.PUMPKIN_PIE, Items.COOKED_COD);
+    /** A Human favourite meal that is none of the {@link #DIET}. */
+    private static final Item FAVOURITE = Items.COOKED_MUTTON;
+
+    private static long today(ServerLevel level) {
+        return DayClock.day(level.getOverworldClockTime());
+    }
+
+    /** A settler of tier 5 whose other needs are met and who ate ten different foods today, none of them {@link #FAVOURITE}. It has no favourite meal yet. */
+    private static Settler tierFive(GameTestHelper helper, BlockPos jobBlock) {
+        ServerLevel level = helper.getLevel();
+        Settler settler = ClothingNeedGameTests.comfortable(helper, jobBlock, 85);
+        ClothingNeedGameTests.dressInHighest(settler);
+        for (Item food : DIET) {
+            settler.getFood().variety().record(id(food), today(level));
+        }
+        return settler;
+    }
+
+    /** The need check of a day with full Entertainment, which decays from day to day, so that the diet is the only need that can fail. */
+    private static void check(Settler settler, ServerLevel level, long day) {
+        settler.getWork().setEntertainment(Entertainment.of(EntertainmentRules.MAX));
+        settler.getWork().checkNeedsNow(level, day);
+    }
+
+    private static NeedsReport.Row favouriteRow(Settler settler, ServerLevel level) {
+        return settler.getWork().needsReport(level).rows(5).stream().filter(row -> key(row.name()).equals(FAVOURITE_ROW)).findFirst()
+                .orElseThrow(() -> new IllegalStateException("No favourite meal row on tier 5: " + settler.getWork().needsReport(level).rows(5)));
+    }
+
+    /** An unknown favourite meal shows "?" and no icon, and the thought bubble of the missing need does not give it away. */
+    private static void rowHiddenUntilKnown(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos jobBlock = NeedTierGameTests.place(helper, new BlockPos(1, 1, 1), ModJobs.LUMBERJACK.get(), BLOCK_LEVEL);
+        Settler settler = tierFive(helper, jobBlock);
+        settler.getFood().setFavourite(id(FAVOURITE));
+        helper.assertFalse(settler.getFood().favouriteKnown(), "Hidden");
+        NeedsReport.Row row = favouriteRow(settler, level);
+        helper.assertFalse(row.met(), "Ten foods, but not the favourite meal");
+        helper.assertTrue(key(row.detail()).equals("civmod.need.favourite_meal.unknown") && row.icons().isEmpty(), "Shows \"?\" and no icon: " + row.detail() + " " + row.icons());
+        check(settler, level, today(level));
+        settler.getWork().decideNow(level);
+        List<ThoughtBubble.Show> needBubbles = settler.getWork().recentThoughts().stream().filter(show -> show.bubble() == ThoughtBubble.NEED_UNMET).toList();
+        helper.assertTrue(!needBubbles.isEmpty() && needBubbles.stream().noneMatch(show -> show.icon() == FAVOURITE),
+                "The need bubble is shown without the favourite meal: " + settler.getWork().recentThoughts());
+        NeedTierGameTests.end(helper, settler, jobBlock);
+    }
+
+    /** Once known the row names the favourite meal with its icon; it turns green when the meal is eaten within the window. */
+    private static void rowNamesKnownFavourite(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos jobBlock = NeedTierGameTests.place(helper, new BlockPos(1, 1, 1), ModJobs.LUMBERJACK.get(), BLOCK_LEVEL);
+        Settler settler = tierFive(helper, jobBlock);
+        settler.getFood().setFavourite(id(FAVOURITE));
+        settler.getFood().revealFavourite();
+        NeedsReport.Row missing = favouriteRow(settler, level);
+        helper.assertFalse(missing.met(), "Not eaten lately");
+        helper.assertTrue(key(missing.detail()).equals("civmod.need.favourite_meal.missing"), "Says it is missing: " + missing.detail());
+        helper.assertTrue(((TranslatableContents) missing.detail().getContents()).getArgs()[0].equals(new ItemStack(FAVOURITE).getHoverName()), "Names the meal: " + missing.detail());
+        helper.assertTrue(missing.icons().size() == 1 && missing.icons().get(0).is(FAVOURITE), "Shows its icon: " + missing.icons());
+        check(settler, level, today(level));
+        settler.getWork().decideNow(level);
+        helper.assertTrue(settler.getWork().recentThoughts().stream().anyMatch(show -> show.bubble() == ThoughtBubble.NEED_UNMET && show.icon() == FAVOURITE),
+                "The need bubble shows the favourite meal once it is known: " + settler.getWork().recentThoughts());
+
+        settler.getFood().variety().record(id(FAVOURITE), today(level));
+        NeedsReport.Row eaten = favouriteRow(settler, level);
+        helper.assertTrue(eaten.met() && key(eaten.detail()).equals("civmod.need.favourite_meal.met"), "Eaten lately: " + eaten.detail());
+        NeedTierGameTests.end(helper, settler, jobBlock);
+    }
+
+    /**
+     * Ten foods are not enough on tier 5: without the favourite meal in the window the settler loses a tier after its grace day, and
+     * the meal brings it back at once.
+     */
+    private static void tierFiveNeedsIt(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos jobBlock = NeedTierGameTests.place(helper, new BlockPos(1, 1, 1), ModJobs.LUMBERJACK.get(), BLOCK_LEVEL);
+        Settler settler = tierFive(helper, jobBlock);
+        settler.getFood().setFavourite(id(FAVOURITE));
+        long day = today(level);
+        check(settler, level, day);
+        helper.assertTrue(settler.getWork().needState().inGrace() && settler.getWork().needState().workTier() == NeedState.MAX_TIER, "Grace day first: " + settler.getWork().needState());
+        check(settler, level, day + 1);
+        helper.assertTrue(settler.getWork().needState().workTier() == 4, "Next morning tier 4: " + settler.getWork().needState());
+
+        settler.getFood().setLevel(5);
+        settler.getWork().feed(level, new ItemStack(FAVOURITE));
+        settler.getFood().setLevel(15);
+        settler.getWork().decideNow(level);
+        helper.assertTrue(settler.getWork().needState().workTier() == NeedState.MAX_TIER, "Back at once with the favourite meal: " + settler.getWork().needState());
+        NeedTierGameTests.end(helper, settler, jobBlock);
+    }
+
+    /** A settler without a favourite meal (its race has no tag) is asked for none, and its row says so. */
+    private static void noFavouriteAsksNone(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos jobBlock = NeedTierGameTests.place(helper, new BlockPos(1, 1, 1), ModJobs.LUMBERJACK.get(), BLOCK_LEVEL);
+        Settler settler = tierFive(helper, jobBlock);
+        NeedsReport.Row row = favouriteRow(settler, level);
+        helper.assertTrue(row.met() && key(row.detail()).equals("civmod.need.favourite_meal.none"), "Met, with the line for no favourite: " + row.detail());
+        long day = today(level);
+        check(settler, level, day);
+        helper.assertTrue(settler.getWork().needState().workTier() == NeedState.MAX_TIER && !settler.getWork().needState().inGrace(), "Ten foods are enough: " + settler.getWork().needState());
+        NeedTierGameTests.end(helper, settler, jobBlock);
+    }
+
+    /** Every language key the row, the diary entry and the talk line need exists. */
+    private static void textsExist(GameTestHelper helper) {
+        JsonObject lang = GuiTextGameTests.lang(helper);
+        for (String key : List.of(FAVOURITE_ROW, FAVOURITE_ROW + ".unknown", FAVOURITE_ROW + ".none", FAVOURITE_ROW + ".met", FAVOURITE_ROW + ".missing",
+                "diary.civmod.favourite_meal.told", "diary.civmod.favourite_meal.eaten")) {
+            helper.assertTrue(lang.has(key), "Language key " + key);
+        }
+        helper.assertTrue(lang.get(FAVOURITE_ROW + ".unknown").getAsString().equals("?"), "An unknown favourite shows a question mark");
+        helper.succeed();
+    }
+
+    // ---------------------------------------------------------------- at the counter
+
+    /**
+     * The favourite meal goes first while it is missing from the window, even a small one and also when the variety is not short; once
+     * it is in the window, or when it is not in the stock or may not be eaten, the usual choice stands.
+     */
+    private static void choice(GameTestHelper helper) {
+        Diet ten = Diet.forTier(5);
+        List<ItemStack> stock = List.of(new ItemStack(Items.COOKED_BEEF), new ItemStack(FAVOURITE), new ItemStack(Items.STONE));
+        FoodVariety fed = new FoodVariety();
+        DIET.forEach(food -> fed.record(id(food), 10L));
+        Optional<Identifier> favourite = Optional.of(id(FAVOURITE));
+        helper.assertFalse(fed.isShort(10L, ten), "Ten foods: the variety is not short");
+        helper.assertTrue(fed.choose(stock, 12, 10L, ten).equals(Optional.of(0)), "Without a favourite the beef fits best");
+        helper.assertTrue(fed.choose(stock, 12, 10L, ten, favourite).equals(Optional.of(1)), "The missing favourite first, though the beef fits better");
+        helper.assertTrue(fed.choose(stock, 14, 10L, ten, favourite).equals(Optional.of(1)), "The favourite is chosen where it fits");
+        helper.assertTrue(fed.choose(stock, 15, 10L, ten, favourite).isEmpty(), "The rule against overeating applies to the favourite too: " + fed.choose(stock, 15, 10L, ten, favourite));
+        helper.assertTrue(fed.choose(List.of(new ItemStack(Items.COOKED_BEEF)), 12, 10L, ten, favourite).equals(Optional.of(0)), "Not in the stock: the usual choice");
+        fed.record(id(FAVOURITE), 10L);
+        helper.assertTrue(fed.choose(stock, 12, 10L, ten, favourite).equals(Optional.of(0)), "In the window: the usual choice again");
+        helper.succeed();
+    }
+
+    /** A Pantry with beef, bread and a stack of the favourite meal, and a hungry settler of the given skill who ate ten foods lately. */
+    private static Settler hungryAtPantry(GameTestHelper helper, int skill) {
+        ServerLevel level = helper.getLevel();
+        for (int x = 0; x < 12; x++) {
+            for (int z = 0; z < 12; z++) {
+                helper.setBlock(new BlockPos(x, 0, z), Blocks.STONE);
+            }
+        }
+        TestSettlements.setBlock(helper, new BlockPos(1, 1, 1), ModBlocks.LUMBERJACK_BLOCK.get());
+        BlockPos jobBlock = helper.absolutePos(new BlockPos(1, 1, 1));
+        ((JobBlockEntity) level.getBlockEntity(jobBlock)).setJobLevel(BLOCK_LEVEL);
+        SettlementManager.setLevel(SettlementData.get(level), jobBlock, BLOCK_LEVEL, SettlementManager.Listener.NONE);
+        BlockPos clerkPos = helper.absolutePos(new BlockPos(6, 1, 6));
+        TestSettlements.setBlock(helper, new BlockPos(6, 1, 6), ModBlocks.PANTRY_BLOCK.get());
+        Container clerk = (Container) level.getBlockEntity(clerkPos);
+        clerk.setItem(0, new ItemStack(Items.COOKED_BEEF, 16));
+        clerk.setItem(1, new ItemStack(FAVOURITE, 4));
+        SettlementData data = SettlementData.get(level);
+        Settlement settlement = data.settlementAt(jobBlock).orElseThrow();
+        Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
+        Vec3 spawn = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(2, 1, 2)));
+        settler.snapTo(spawn.x, spawn.y, spawn.z, 0.0F, 0.0F);
+        level.addFreshEntity(settler);
+        settler.joinSettlement(data, settlement);
+        settler.getSkills().set(ModJobs.LUMBERJACK.get(), new SettlerSkills.Skill(skill, 0));
+        settler.addJob(new SettlerJob(ModJobs.LUMBERJACK.get(), jobBlock));
+        settler.getFood().setFavourite(id(FAVOURITE));
+        DIET.forEach(food -> settler.getFood().variety().record(id(food), today(level)));
+        settler.getFood().setLevel(5);
+        settler.getFood().setSaturation(0.0F);
+        return settler;
+    }
+
+    /** Waits for the first meal after the ten of the diet and hands it to the check. */
+    private static void firstMealAtPantry(GameTestHelper helper, Settler settler, List<long[]> forced, Consumer<Identifier> check) {
+        ServerLevel level = helper.getLevel();
+        helper.succeedWhen(() -> {
+            List<Identifier> meals = settler.getFood().variety().meals().stream().map(FoodVariety.Meal::item).toList();
+            helper.assertTrue(meals.size() > DIET.size(), "Not eaten yet: " + meals + " (" + settler.statusText().getString() + ")");
+            check.accept(meals.get(DIET.size()));
+            settler.discard();
+            forced.forEach(chunk -> level.setChunkForced((int) chunk[0], (int) chunk[1], false));
+        });
+    }
+
+    /** At the Pantry a settler of tier 5 whose favourite meal is missing takes it first, though the beef would fill it better. */
+    private static void pantryTierFive(GameTestHelper helper) {
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        Settler settler = hungryAtPantry(helper, 85);
+        firstMealAtPantry(helper, settler, forced,
+                first -> helper.assertTrue(first.equals(id(FAVOURITE)), "The favourite meal comes first on tier 5: " + first));
+    }
+
+    /** Below tier 5 the favourite meal asks for nothing: the settler takes the usual choice, the beef. */
+    private static void pantryTierFour(GameTestHelper helper) {
+        List<long[]> forced = LumberjackGameTests.forceChunks(helper);
+        Settler settler = hungryAtPantry(helper, 65);
+        firstMealAtPantry(helper, settler, forced,
+                first -> helper.assertTrue(first.equals(id(Items.COOKED_BEEF)), "The usual choice on tier 4: " + first));
     }
 
     private static CompoundTag save(ServerLevel level, Settler settler) {

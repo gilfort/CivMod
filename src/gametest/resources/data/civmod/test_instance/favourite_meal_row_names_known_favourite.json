@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:favourite_meal_row_names_known_favourite",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
