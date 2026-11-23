@@ -965,6 +965,8 @@ public class Settler extends PathfinderMob {
         input.read("entertainment", com.gilfort.civmod.entertainment.Entertainment.CODEC).ifPresent(work::setEntertainment);
         input.read("speed_boost", com.gilfort.civmod.job.SpeedBoost.CODEC).ifPresent(work::setSpeedBoost);
         past.load(input);
+        // A settler from before the favourite meal rolls one now, like the appetite on its first use.
+        food.rollFavourite(race, getRandom());
         setInvisible(isAway());
     }
 }

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:favourite_meal_row_hidden_until_known",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

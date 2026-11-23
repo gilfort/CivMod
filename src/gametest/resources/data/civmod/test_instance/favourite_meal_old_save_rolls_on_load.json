@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:favourite_meal_old_save_rolls_on_load",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

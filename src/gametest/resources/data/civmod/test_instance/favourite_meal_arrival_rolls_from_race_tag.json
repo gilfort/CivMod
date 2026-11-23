@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:favourite_meal_arrival_rolls_from_race_tag",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

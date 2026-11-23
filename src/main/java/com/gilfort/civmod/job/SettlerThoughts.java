@@ -132,6 +132,16 @@ final class SettlerThoughts {
     }
 
     /**
+     * Shows the bubble of the first favourite meal: the food the settler ate.
+     *
+     * @param meal the favourite meal
+     * @param send false while caught up
+     */
+    void favouriteMeal(Item meal, boolean send) {
+        emit(ThoughtBubble.FAVOURITE_MEAL, meal, true, send);
+    }
+
+    /**
      * Sends the problems that are on to a player that starts seeing the settler (it missed their "problem on").
      *
      * @param player the player
@@ -175,7 +185,7 @@ final class SettlerThoughts {
             case RECORD -> Items.MUSIC_DISC_CAT;
             case CONVERSATION -> Items.PAPER;
             case PLAYING -> Items.NOTE_BLOCK;
-            case JOB, TALENT, NO_TOOL, NO_WORK_PLACE, BLOCKED, NEED_UNMET -> throw new IllegalArgumentException("Icon depends on the job or need: " + activity);
+            case JOB, TALENT, FAVOURITE_MEAL, NO_TOOL, NO_WORK_PLACE, BLOCKED, NEED_UNMET -> throw new IllegalArgumentException("Icon depends on the job or need: " + activity);
         };
     }
 

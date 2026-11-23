@@ -2558,6 +2558,15 @@ public final class SettlerWork {
     }
 
     /**
+     * Shows the thought bubble of the first favourite meal.
+     *
+     * @param meal the favourite meal
+     */
+    void showFavouriteMeal(net.minecraft.world.item.Item meal) {
+        thoughts.favouriteMeal(meal, !quiet);
+    }
+
+    /**
      * Shows a level-up to nearby players (particles, sound, message); a talent it confirms also shows its bubble.
      *
      * @param level           the level

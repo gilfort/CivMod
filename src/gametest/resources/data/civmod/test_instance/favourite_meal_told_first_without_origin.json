@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:favourite_meal_told_first_without_origin",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

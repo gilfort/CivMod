@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:favourite_meal_pantry_prefers_favourite_on_tier_5",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

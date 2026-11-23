@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:favourite_meal_first_meal_shows_bubble_and_diary",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

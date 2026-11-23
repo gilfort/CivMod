@@ -53,6 +53,14 @@ public final class FoodVariety {
         }
 
         /**
+         * @param tier a need tier
+         * @return whether that tier asks for the settler's favourite meal within its diet: only tier 5 does
+         */
+        public static boolean asksForFavourite(int tier) {
+            return tier >= TEN_FOODS_TIER;
+        }
+
+        /**
          * @return the items the window always covers, however old they are
          */
         int coveredItems() {
@@ -156,6 +164,27 @@ public final class FoodVariety {
      * @return the index of the chosen stack, empty if nothing may be eaten
      */
     public Optional<Integer> choose(List<ItemStack> stacks, int level, long today, Diet diet) {
+        return choose(stacks, level, today, diet, Optional.empty());
+    }
+
+    /**
+     * The food choice at a food point of a settler that asks for its favourite meal (tier 5): the favourite first while it is missing
+     * from the window, then the choice of {@link #choose(List, int, long, Diet)}.
+     *
+     * @param stacks    candidate stacks (any items)
+     * @param level     the food level
+     * @param today     the day
+     * @param diet      what the settler's tier asks for
+     * @param favourite the favourite meal the tier asks for, empty if the tier asks for none or the settler has none
+     * @return the index of the chosen stack, empty if nothing may be eaten
+     */
+    public Optional<Integer> choose(List<ItemStack> stacks, int level, long today, Diet diet, Optional<Identifier> favourite) {
+        if (favourite.isPresent() && !window(today, diet).contains(favourite.get())) {
+            Optional<Integer> favourited = SettlerFood.choose(stacks, level, stack -> BuiltInRegistries.ITEM.getKey(stack.getItem()).equals(favourite.get()));
+            if (favourited.isPresent()) {
+                return favourited;
+            }
+        }
         if (isShort(today, diet)) {
             Set<Identifier> window = window(today, diet);
             Optional<Integer> fresh = SettlerFood.choose(stacks, level, stack -> !window.contains(BuiltInRegistries.ITEM.getKey(stack.getItem())));

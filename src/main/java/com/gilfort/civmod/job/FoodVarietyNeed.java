@@ -14,7 +14,7 @@ import net.minecraft.world.item.Items;
 /**
  * The food variety need of a tier (vault {@code Systems/Needs.md}): the settler ate the foods of the tier's {@link Diet}
  * within its window. One {@link Need} per tier that asks for a different diet: 3 foods at tier 2, 5 at tier 4, 10 at tier 5.
- * The favourite meal of tier 5 joins this need later (spec #317, story #322).
+ * The favourite meal of tier 5 has a need of its own, {@link FavouriteMealNeed}: both must be met for tier 5.
  */
 final class FoodVarietyNeed implements Need {
 

@@ -423,7 +423,7 @@ public final class ChronicleGameTests {
         }
     }
 
-    /** The first three talks tell place, upbringing and turning point, each once; the fourth is small talk and writes nothing. */
+    /** The first three talks tell place, upbringing and turning point, each once; the fourth tells the favourite meal and the rest is small talk that writes nothing. */
     private static void threeOriginLines(GameTestHelper helper) {
         Settler settler = handBuilt(helper);
         ServerPlayer player = player(helper, true);
@@ -441,9 +441,12 @@ public final class ChronicleGameTests {
             helper.assertTrue(lines.size() == 3, "Three different lines: " + lines);
             helper.assertTrue(types(settler).equals(List.of(CivMod.id("arrival"), CivMod.id("origin_line"), CivMod.id("origin_line"), CivMod.id("origin_line"))),
                     "The arrival and the three lines in the diary: " + types(settler));
+            // The settler that arrives has a favourite meal too: it comes after the origin (FavouriteMealGameTests), then the small talk.
+            PlayerTalk.Result favourite = talk(helper, settler, player);
+            helper.assertTrue(favourite.told().isEmpty() && key(favourite.line()).equals("diary.civmod.favourite_meal.told"), "The fourth talk tells the favourite meal: " + key(favourite.line()));
             PlayerTalk.Result fourth = talk(helper, settler, player);
-            helper.assertTrue(fourth.told().isEmpty() && key(fourth.line()).startsWith("civmod.talk.small."), "The fourth talk is small talk: " + key(fourth.line()));
-            helper.assertTrue(settler.getPast().chronicle().entries().size() == 4, "Small talk writes nothing: " + types(settler));
+            helper.assertTrue(fourth.told().isEmpty() && key(fourth.line()).startsWith("civmod.talk.small."), "The fifth talk is small talk: " + key(fourth.line()));
+            helper.assertTrue(settler.getPast().chronicle().entries().size() == 5, "Small talk writes nothing: " + types(settler));
             for (int i = 0; i < 5; i++) {
                 helper.assertTrue(talk(helper, settler, player).told().isEmpty(), "Never an origin line again");
             }
