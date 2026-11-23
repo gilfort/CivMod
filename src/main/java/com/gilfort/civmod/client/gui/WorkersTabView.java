@@ -110,7 +110,7 @@ final class WorkersTabView implements JobBlockTabView {
     }
 
     /** Whether the Clerk's "Auto tool supply" toggle is shown. */
-    private boolean toolSupplyToggle() {
+    private boolean supplyToggle() {
         return menu.getInfo().jobType() == ModJobs.CLERK.get() && menu.workers().inSettlement();
     }
 
@@ -125,9 +125,9 @@ final class WorkersTabView implements JobBlockTabView {
             toggles.add(new WorkersToggle(Component.translatable(menu.workers().treasure() ? "civmod.gui.job_block.treasure.on"
                     : "civmod.gui.job_block.treasure.off"), tab.treasureButtonId(!menu.workers().treasure())));
         }
-        if (toolSupplyToggle()) {
-            toggles.add(new WorkersToggle(Component.translatable(menu.workers().autoToolSupply() ? "civmod.gui.job_block.tool_supply.on"
-                    : "civmod.gui.job_block.tool_supply.off"), tab.toolSupplyButtonId(!menu.workers().autoToolSupply())));
+        if (supplyToggle()) {
+            toggles.add(new WorkersToggle(Component.translatable(menu.workers().autoSupply() ? "civmod.gui.job_block.supply.on"
+                    : "civmod.gui.job_block.supply.off"), tab.supplyButtonId(!menu.workers().autoSupply())));
         }
         screen.views().forEach(view -> view.workersToggle().ifPresent(toggles::add));
         return toggles;
@@ -245,8 +245,8 @@ final class WorkersTabView implements JobBlockTabView {
         if (treasureToggle()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.treasure"));
         }
-        if (toolSupplyToggle()) {
-            lines.add(Component.translatable("civmod.gui.job_block.help.tool_supply"));
+        if (supplyToggle()) {
+            lines.add(Component.translatable("civmod.gui.job_block.help.supply"));
         }
         if (menu.getInfo().jobType() == ModJobs.DELIVERYMAN.get()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.worker_auto"));

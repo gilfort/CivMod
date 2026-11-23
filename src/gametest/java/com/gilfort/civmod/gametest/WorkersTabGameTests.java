@@ -71,7 +71,7 @@ public final class WorkersTabGameTests {
             register(helper, "workers_tab_auto_toggle", WorkersTabGameTests::autoToggle);
             register(helper, "workers_tab_wanted_state", WorkersTabGameTests::wantedState);
             register(helper, "workers_tab_treasure_toggle", WorkersTabGameTests::treasureToggle);
-            register(helper, "workers_tab_tool_supply_toggle", WorkersTabGameTests::toolSupplyToggle);
+            register(helper, "workers_tab_tool_supply_toggle", WorkersTabGameTests::supplyToggle);
             register(helper, "workers_tab_deliveryman_auto", WorkersTabGameTests::deliverymanAuto);
             register(helper, "workers_tab_settler_window", WorkersTabGameTests::settlerWindow);
             register(helper, "workers_tab_days_left", WorkersTabGameTests::daysLeft);
@@ -294,24 +294,24 @@ public final class WorkersTabGameTests {
      * The Clerk's "Auto tool supply" toggle (#242): on by default, the button sends the wanted state, the Clerk keeps it
      * through a save and the window shows it.
      */
-    private static void toolSupplyToggle(GameTestHelper helper) {
+    private static void supplyToggle(GameTestHelper helper) {
         clerkBlock(helper);
         Player first = player(helper);
         Player second = player(helper);
         SettlementBlock block = JobBlockSite.blockAt(helper.getLevel(), helper.absolutePos(CLERK)).orElseThrow();
-        helper.assertTrue(block.autoToolSupply() && sees(menu(helper, first)).autoToolSupply(), "The tool supply is on by default");
+        helper.assertTrue(block.autoSupply() && sees(menu(helper, first)).autoSupply(), "The tool supply is on by default");
 
         JobBlockMenu one = menu(helper, first);
         JobBlockMenu two = menu(helper, second);
-        helper.assertTrue(one.clickMenuButton(first, one.tab(WorkersTab.class).orElseThrow().toolSupplyButtonId(false)), "First click switches it off");
-        helper.assertTrue(two.clickMenuButton(second, two.tab(WorkersTab.class).orElseThrow().toolSupplyButtonId(false)), "Second click for the same state");
-        helper.assertFalse(block.autoToolSupply(), "The supply is off after two clicks for the same state");
-        helper.assertFalse(sees(two).autoToolSupply(), "The window shows it off");
+        helper.assertTrue(one.clickMenuButton(first, one.tab(WorkersTab.class).orElseThrow().supplyButtonId(false)), "First click switches it off");
+        helper.assertTrue(two.clickMenuButton(second, two.tab(WorkersTab.class).orElseThrow().supplyButtonId(false)), "Second click for the same state");
+        helper.assertFalse(block.autoSupply(), "The supply is off after two clicks for the same state");
+        helper.assertFalse(sees(two).autoSupply(), "The window shows it off");
 
         var ops = helper.getLevel().registryAccess().createSerializationContext(JsonOps.INSTANCE);
         SettlementBlock loaded = SettlementBlock.CODEC.parse(ops, SettlementBlock.CODEC.encodeStart(ops, block).getOrThrow()).getOrThrow();
-        helper.assertFalse(loaded.autoToolSupply(), "The Clerk keeps it off through a save");
-        helper.assertTrue(one.clickMenuButton(first, one.tab(WorkersTab.class).orElseThrow().toolSupplyButtonId(true)) && block.autoToolSupply(), "On again");
+        helper.assertFalse(loaded.autoSupply(), "The Clerk keeps it off through a save");
+        helper.assertTrue(one.clickMenuButton(first, one.tab(WorkersTab.class).orElseThrow().supplyButtonId(true)) && block.autoSupply(), "On again");
         helper.succeed();
     }
 

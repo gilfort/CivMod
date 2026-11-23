@@ -302,10 +302,10 @@ public final class ToolSupplyGameTests {
         ask(helper, met);
         helper.assertTrue(settlement.requests().isEmpty(), "Skill 15, an enchanted tier and a met requirement ask for nothing: " + settlement.requests());
 
-        helper.assertFalse(JobAssignments.setAutoToolSupply(data, clerk, false), "The Clerk switches the supply off");
+        helper.assertFalse(JobAssignments.setAutoSupply(data, clerk, false), "The Clerk switches the supply off");
         ask(helper, switchedOff);
         helper.assertTrue(settlement.requests().isEmpty(), "No request while the Clerk's supply is off: " + settlement.requests());
-        JobAssignments.setAutoToolSupply(data, clerk, true);
+        JobAssignments.setAutoSupply(data, clerk, true);
         Settler switchedOn = miner(helper, new BlockPos(1, 1, 29), IRON_SKILL);
         ask(helper, switchedOn);
         helper.assertTrue(requestsOf(settlement, switchedOn).size() == 1 && settlement.requests().size() == 1,

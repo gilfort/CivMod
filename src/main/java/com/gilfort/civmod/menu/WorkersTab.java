@@ -39,8 +39,8 @@ public final class WorkersTab extends JobBlockTab {
     private static final int LEAVES = 0;
     /** Buttons: set the treasure option off / on (Fisherman, {@link #treasureButtonId}). */
     private static final int TREASURE = LEAVES + 2;
-    /** Buttons: set the Clerk's automatic tool supply off / on ({@link #toolSupplyButtonId}). */
-    private static final int TOOL_SUPPLY = TREASURE + 2;
+    /** Buttons: set the Clerk's automatic tool supply off / on ({@link #supplyButtonId}). */
+    private static final int SUPPLY = TREASURE + 2;
 
     private final TabData<WorkersTabData> data = new TabData<>(WorkersTabData.EMPTY,
             (menu, level, pos) -> WorkersTabData.of(level, pos, menu.getInfo().jobType(), menu.getInfo().level()), WorkersTabData.Sync::new);
@@ -74,7 +74,7 @@ public final class WorkersTab extends JobBlockTab {
 
     @Override
     int buttons() {
-        return TOOL_SUPPLY + 2;
+        return SUPPLY + 2;
     }
 
     /**
@@ -104,18 +104,18 @@ public final class WorkersTab extends JobBlockTab {
      * @param on the wanted state of the Clerk's automatic tool supply
      * @return the menu button id that sets it
      */
-    public int toolSupplyButtonId(boolean on) {
-        return buttonId(TOOL_SUPPLY + (on ? 1 : 0));
+    public int supplyButtonId(boolean on) {
+        return buttonId(SUPPLY + (on ? 1 : 0));
     }
 
     @Override
     boolean clickButton(Player player, int button) {
         if (button < TREASURE) {
             setLeaves(button - LEAVES == 1);
-        } else if (button < TOOL_SUPPLY) {
+        } else if (button < SUPPLY) {
             setTreasure(button - TREASURE == 1);
         } else {
-            menu().editSettlement((data, pos) -> JobAssignments.setAutoToolSupply(data, pos, button - TOOL_SUPPLY == 1));
+            menu().editSettlement((data, pos) -> JobAssignments.setAutoSupply(data, pos, button - SUPPLY == 1));
         }
         return true;
     }
