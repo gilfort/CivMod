@@ -777,6 +777,7 @@
   "item.civmod.thought_bubble": "Thought Bubble",
   "item.civmod.problem_marker": "Problem Marker",
   "civmod.configuration.showThoughtBubbles": "Show Thought Bubbles",
+  "civmod.configuration.renderSettlerClothing": "Show Settler Clothing",
   "job.civmod.animal_farmer": "Animal Farmer",
   "job.civmod.animal_farmer.indefinite": "an Animal Farmer",
   "job.civmod.animal_farmer.description": "Collects leather, meat, wool and eggs from the farm animals around a hay bale, without killing them",

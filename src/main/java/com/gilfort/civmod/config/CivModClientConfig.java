@@ -19,6 +19,11 @@ public final class CivModClientConfig {
             .comment("How the Clerk's Storage tab sorts its items: AMOUNT or NAME.")
             .defineEnum("storageSort", StorageSort.AMOUNT);
 
+    /** Whether settlers show the clothes they wear (vault {@code Systems/Needs.md}, decisions of 2026-11-21). */
+    public static final ModConfigSpec.BooleanValue RENDER_SETTLER_CLOTHING = BUILDER
+            .comment("Whether settlers show the clothes they wear. The placeholder models are plain; switch this off to hide them.")
+            .define("renderSettlerClothing", true);
+
     /** The client config spec. */
     public static final ModConfigSpec SPEC = BUILDER.build();
 
