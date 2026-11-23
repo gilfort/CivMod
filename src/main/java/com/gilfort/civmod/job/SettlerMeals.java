@@ -349,8 +349,7 @@ final class SettlerMeals {
     /** Starts the time of an item: from the nutrition it gives. */
     private void beginItem(ItemStack stack) {
         eating = stack.copyWithCount(1);
-        eatTimer = SettlerFood.eatTicks(SettlerFood.nutrition(stack), CivModConfig.EATING_BASE_SECONDS.get(),
-                CivModConfig.EATING_SECONDS_PER_NUTRITION.get(), CivModConfig.EATING_MAX_SECONDS.get());
+        eatTimer = SettlerFood.eatTicks(SettlerFood.nutrition(stack));
     }
 
     private BodyStep finishPocketItem(ServerLevel level) {

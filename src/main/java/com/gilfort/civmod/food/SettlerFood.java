@@ -7,7 +7,9 @@ import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.config.CivModConfig;
 
+import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
@@ -42,8 +44,6 @@ public final class SettlerFood {
     public static final long AWAKE_TICKS = 14000L;
     /** Ticks per real minute. */
     public static final double TICKS_PER_MINUTE = 1200.0;
-    /** Ticks per real second. */
-    private static final double TICKS_PER_SECOND = 20.0;
     /**
      * Marks "no day" in the per-day flags. Days may be negative in tests with a frozen clock; saves written before
      * this used {@code -1}, which is read as "no day" as well.
@@ -350,17 +350,15 @@ public final class SettlerFood {
     }
 
     /**
-     * How long one food item takes to eat: a base time plus a time per nutrition point, capped.
+     * How long one food item takes to eat: a base time plus a time per nutrition point, capped (the {@code eating*} server configs).
      *
-     * @param nutrition        the nutrition of the item
-     * @param baseSeconds      seconds every item takes
-     * @param secondsPerPoint  extra seconds per nutrition point
-     * @param maxSeconds       the most seconds one item takes
+     * @param nutrition the nutrition of the item
      * @return the eating time in ticks
      */
-    public static int eatTicks(int nutrition, double baseSeconds, double secondsPerPoint, double maxSeconds) {
-        double seconds = Math.min(baseSeconds + secondsPerPoint * Math.max(nutrition, 0), maxSeconds);
-        return (int) Math.round(seconds * TICKS_PER_SECOND);
+    public static int eatTicks(int nutrition) {
+        double seconds = Math.min(CivModConfig.EATING_BASE_SECONDS.get() + CivModConfig.EATING_SECONDS_PER_NUTRITION.get() * Math.max(nutrition, 0),
+                CivModConfig.EATING_MAX_SECONDS.get());
+        return (int) Math.round(seconds * SharedConstants.TICKS_PER_SECOND);
     }
 
     /**
