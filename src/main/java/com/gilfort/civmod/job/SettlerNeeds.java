@@ -33,6 +33,8 @@ final class SettlerNeeds {
     private Entertainment entertainment = Entertainment.START;
     /** The need the settler complains about (not saved: found again by the re-check of a grace day). */
     private @Nullable Need missing;
+    /** The item of the missing need's thought bubble, read when it was found (a clothing need shows the piece that is missing). */
+    private @Nullable Item missingIcon;
 
     /**
      * @param shell the Settler Shell
@@ -55,23 +57,28 @@ final class SettlerNeeds {
      *
      * @param level     the level
      * @param day       the day
+     * @param dayTime   the day time of the check
      * @param foodPoint whether a food point has food for the settler now
      */
-    void step(ServerLevel level, long day, BooleanSupplier foodPoint) {
+    void step(ServerLevel level, long day, long dayTime, BooleanSupplier foodPoint) {
         if (settler.isHomeless()) {
             return;
         }
         entertainment = entertainment.decayed(day, EntertainmentRules.get());
         tools.step(day);
         int tier = tier();
+        // Before the check: yesterday's wear and the pieces the collect inventory holds count for today.
+        settler.getClothing().step(level, day, dayTime, tier);
         boolean morning = day > state.checkedDay();
         if (!morning && state.settled(tier)) {
             return;
         }
-        Optional<Need> unmet = Needs.firstUnmet(context(level, day, foodPoint));
+        Need.Context context = context(level, day, foodPoint);
+        Optional<Need> unmet = Needs.firstUnmet(context);
         int highestMet = Needs.highestMet(unmet);
         state = morning ? state.morning(day, tier, highestMet) : state.climb(tier, highestMet);
         missing = state.inGrace() ? unmet.orElse(null) : null;
+        missingIcon = missing == null ? null : missing.icon(context);
         if (morning && missing != null && !shell.quiet()) {
             complain(level, missing);
         }
@@ -106,7 +113,7 @@ final class SettlerNeeds {
      * @return the item of the need the settler complains about, if any
      */
     Optional<Item> missingIcon() {
-        return Optional.ofNullable(missing).map(Need::icon);
+        return Optional.ofNullable(missingIcon);
     }
 
     /**

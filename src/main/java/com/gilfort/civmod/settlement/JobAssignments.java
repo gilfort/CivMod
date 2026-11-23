@@ -590,20 +590,20 @@ public final class JobAssignments {
     }
 
     /**
-     * Sets the "Auto tool supply" option of a Clerk JobBlock.
+     * Sets the "Auto supply" option of a Clerk JobBlock.
      *
      * @param data     the dimension's settlement data
      * @param jobBlock the Clerk JobBlock position
-     * @param on       whether missing tools are made and delivered for the settlers of its JobBlocks
+     * @param on       whether missing tools, food and clothing are made and delivered for the settlers of its JobBlocks
      * @return the state now: whether the supply is on (true without a JobBlock there, the default)
      */
-    public static boolean setAutoToolSupply(SettlementData data, BlockPos jobBlock, boolean on) {
+    public static boolean setAutoSupply(SettlementData data, BlockPos jobBlock, boolean on) {
         Optional<SettlementBlock> block = JobBlockSite.blockAt(data, jobBlock);
-        block.filter(found -> found.autoToolSupply() != on).ifPresent(found -> {
-            found.setAutoToolSupply(on);
+        block.filter(found -> found.autoSupply() != on).ifPresent(found -> {
+            found.setAutoSupply(on);
             data.changed();
         });
-        return block.map(SettlementBlock::autoToolSupply).orElse(true);
+        return block.map(SettlementBlock::autoSupply).orElse(true);
     }
 
     /**

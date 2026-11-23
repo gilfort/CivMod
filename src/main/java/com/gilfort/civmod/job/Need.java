@@ -79,6 +79,15 @@ interface Need {
 
     /**
      * @param context what the check can read
+     * @return the item shown in the thought bubble while the need is missing now; a need whose missing part varies (a clothing piece)
+     *         names that part, the others show {@link #icon()}
+     */
+    default Item icon(Context context) {
+        return icon();
+    }
+
+    /**
+     * @param context what the check can read
      * @return whether the need is met now
      */
     Check check(Context context);

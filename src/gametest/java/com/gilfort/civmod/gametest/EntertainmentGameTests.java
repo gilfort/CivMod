@@ -84,7 +84,7 @@ public final class EntertainmentGameTests {
     }
 
     /**
-     * A Lumberjack of the given skill whose other needs are all met: food, a hearth next to its own bed and a varied diet.
+     * A Lumberjack of the given skill whose other needs are all met: food, a hearth next to its own bed, a varied diet and clothes.
      * Only Entertainment decides its tier.
      */
     private static Settler content(GameTestHelper helper, BlockPos jobBlock, int skill) {
@@ -104,6 +104,7 @@ public final class EntertainmentGameTests {
         settler.getFood().setLevel(15);
         // Provisions: hunger must not limit a settler through a catch-up.
         settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
+        ClothingNeedGameTests.dressInHighest(settler);
         return settler;
     }
 
@@ -237,7 +238,7 @@ public final class EntertainmentGameTests {
             helper.assertTrue(key(row.tooltip()).equals("civmod.need.entertainment.tooltip") && args(row.tooltip()).equals(List.of("3", "0", "12")),
                     "The tooltip lists today's 3 points, 0 from conversations and 12 % speed: " + row.tooltip());
         }
-        helper.assertTrue(report.rows(1).stream().noneMatch(row -> isEntertainment(row)) && report.rows(4).isEmpty(),
+        helper.assertTrue(report.rows(1).stream().noneMatch(row -> isEntertainment(row)) && report.rows(4).stream().noneMatch(row -> isEntertainment(row)),
                 "No Entertainment row in the other tiers");
 
         // A conversation: its 0.5 count in today's points and have a line of their own.

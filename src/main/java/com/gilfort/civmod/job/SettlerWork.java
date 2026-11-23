@@ -834,7 +834,7 @@ public final class SettlerWork {
         SettlerMeals.FoodLookup foodLookup = meals.lookup(level, dayTime);
         if (!window.pending() && dayTime >= dayTimes(day).wake()) {
             // Missed days first: catch-up checks them in their order.
-            needs.step(level, day, foodLookup::hasFood);
+            needs.step(level, day, dayTime, foodLookup::hasFood);
         }
         if (CivModConfig.SOCIAL_LIFE.get() && !social.holdsDecision() && !window.pending() && !quiet) {
             // Live only: greetings and conversations are not simulated in catch-up. A seated Tavern guest never starts one.
@@ -1853,7 +1853,7 @@ public final class SettlerWork {
 
         // The same need rules as live: the first hour of a day is its wake-up.
         SettlerMeals.FoodLookup foodLookup = meals.lookup(level, dayTime);
-        needs.step(level, day, foodLookup::hasFood);
+        needs.step(level, day, dayTime, foodLookup::hasFood);
 
         // Start of the hour: back from foraging, the morning plan, a meal if hungry.
         if (decideCatchUp(level, day, dayTime) == Intent.FORAGE) {
@@ -2491,8 +2491,9 @@ public final class SettlerWork {
      * @param day   the day
      */
     public void checkNeedsNow(ServerLevel level, long day) {
-        SettlerMeals.FoodLookup foodLookup = meals.lookup(level, moment(level.getOverworldClockTime()).dayTime());
-        needs.step(level, day, foodLookup::hasFood);
+        long dayTime = moment(level.getOverworldClockTime()).dayTime();
+        SettlerMeals.FoodLookup foodLookup = meals.lookup(level, dayTime);
+        needs.step(level, day, dayTime, foodLookup::hasFood);
     }
 
     /**

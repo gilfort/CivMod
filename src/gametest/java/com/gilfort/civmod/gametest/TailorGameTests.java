@@ -379,7 +379,7 @@ public final class TailorGameTests {
      * Keeps only the innate recipe that makes the item checked. The Tailor has twelve innate recipes and a settler of
      * level 1 checks six patterns at most, so a test chooses the one it wants worked.
      */
-    private static void checkOnly(GameTestHelper helper, BlockPos craft, Item wanted) {
+    static void checkOnly(GameTestHelper helper, BlockPos craft, Item wanted) {
         ServerLevel level = helper.getLevel();
         Job tailor = tailor();
         Patterns.syncInnate(level, craft, tailor);

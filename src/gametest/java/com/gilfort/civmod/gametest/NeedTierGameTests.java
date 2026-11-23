@@ -16,6 +16,8 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.npc.ThoughtBubble;
+import com.gilfort.civmod.registry.ModClothing;
+import com.gilfort.civmod.registry.ModClothing.ClothSet;
 import com.gilfort.civmod.registry.ModEntityTypes;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.DayClock;
@@ -39,6 +41,7 @@ import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.equipment.ArmorType;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -165,11 +168,11 @@ public final class NeedTierGameTests {
         NeedsReport report = SettlerInfo.of(settler).needs();
         helper.assertTrue(report.tier() == 3, "Tier from its job: " + report);
         helper.assertTrue(report.rows(1).size() == 2 && !report.rows(1).get(0).met(), "Tier 1 holds food (unmet) and fire: " + report);
-        helper.assertTrue(report.rows(2).size() == 3, "Tier 2 holds bed, food variety and Entertainment: " + report);
-        // Tier 3 holds the tool need of the Lumberjack (skill 45 is band 3) and Entertainment.
-        helper.assertTrue(report.rows(3).size() == 2, "Tier 3 holds the tool and Entertainment rows: " + report);
+        helper.assertTrue(report.rows(2).size() == 4, "Tier 2 holds bed, food variety, Entertainment and clothing: " + report);
+        // Tier 3 holds the tool need of the Lumberjack (skill 45 is band 3), Entertainment and clothing.
+        helper.assertTrue(report.rows(3).size() == 3, "Tier 3 holds the tool, Entertainment and clothing rows: " + report);
         for (int tier = 4; tier <= NeedState.MAX_TIER; tier++) {
-            helper.assertTrue(report.rows(tier).isEmpty(), "Needs without a system are hidden, tier " + tier);
+            helper.assertTrue(report.rows(tier).size() == 1, "Tier " + tier + " holds the clothing row only: " + report.rows(tier));
         }
         settler.getWork().checkNeedsNow(level, 100L);
         settler.getWork().checkNeedsNow(level, 101L);
@@ -229,6 +232,11 @@ public final class NeedTierGameTests {
 
         settler.getFood().setLevel(15);
         settler.getWork().setEntertainment(Entertainment.of(EntertainmentRules.MAX));
+        // A settler of tier 3 needs better clothing as well.
+        List<ArmorType> pieces = List.of(ArmorType.HELMET, ArmorType.CHESTPLATE, ArmorType.LEGGINGS, ArmorType.BOOTS);
+        for (int i = 0; i < pieces.size(); i++) {
+            settler.getInventory().setItem(Settler.ARMOR_START + i, new ItemStack(ModClothing.piece(ClothSet.MEDIUM, pieces.get(i)).get()));
+        }
         settler.getWork().decideNow(level);
         helper.assertTrue(settler.getWork().effectiveLevel(job) == 45, "Back at once: " + settler.getWork().effectiveLevel(job));
         helper.assertFalse(settler.getWork().needState().inGrace(), "No grace day left");

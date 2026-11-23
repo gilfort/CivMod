@@ -28,7 +28,7 @@ import net.minecraft.world.item.Item;
  * a producer of the settlement can make (or the first in registry order when none can). The result waits in the Clerk and
  * {@link HeldSupply} carries it into the collect inventory.
  * <p>
- * Nothing polls: the check runs before every roll and only does anything while something is missing. The switch "Auto tool
+ * Nothing polls: the check runs before every roll and only does anything while something is missing. The switch "Auto
  * supply" of the Home Clerk covers it too.
  */
 final class ConsumableOrders {

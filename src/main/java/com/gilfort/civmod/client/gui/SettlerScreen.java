@@ -400,7 +400,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
             return List.of(Component.translatable("civmod.gui.settler.help.switch"));
         }
         if (tab == SettlerMenu.TAB_NEEDS) {
-            return List.of(Component.translatable("civmod.gui.settler.help.needs"));
+            return List.of(Component.translatable("civmod.gui.settler.help.needs"), Component.translatable("civmod.gui.settler.help.clothing"));
         }
         if (tab == SettlerMenu.TAB_CHRONICLE) {
             return List.of(Component.translatable("civmod.gui.settler.help.chronicle"));

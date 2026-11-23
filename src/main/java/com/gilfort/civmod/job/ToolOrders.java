@@ -103,10 +103,10 @@ public final class ToolOrders {
 
     /**
      * @param site the JobBlock of a settler
-     * @return its Home Clerk, empty when it has none or the Clerk's switch "Auto tool supply" is off
+     * @return its Home Clerk, empty when it has none or the Clerk's switch "Auto supply" is off
      */
     static Optional<BlockPos> supplyClerk(JobBlockSite site) {
-        return site.block().homeClerk().filter(home -> site.settlement().block(home).filter(SettlementBlock::autoToolSupply).isPresent());
+        return site.block().homeClerk().filter(home -> site.settlement().block(home).filter(SettlementBlock::autoSupply).isPresent());
     }
 
     /**

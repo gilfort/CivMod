@@ -5,6 +5,8 @@ import java.util.Optional;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.chronicle.Diary;
+import com.gilfort.civmod.clothing.ClothingRules;
+import com.gilfort.civmod.clothing.SettlerClothing;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.inn.Inns;
 import com.gilfort.civmod.inn.VisitorDay;
@@ -87,7 +89,7 @@ public class Settler extends PathfinderMob {
     public static final int POCKETS_START = OFFHAND + 1;
     /** Number of pocket slots. */
     public static final int POCKETS_SIZE = 9;
-    /** Inventory slots: armor / clothing (not shown in the PoC). */
+    /** Inventory slots: armor / clothing in the order head, chest, legs, feet (shown on the body of a Human settler; see {@link SettlerClothing}). */
     public static final int ARMOR_START = POCKETS_START + POCKETS_SIZE;
     /** Number of armor slots. */
     public static final int ARMOR_SIZE = 4;
@@ -116,7 +118,14 @@ public class Settler extends PathfinderMob {
     /** Hitbox while sitting: the head of the lowered passenger pose ends about 1.3 blocks up. */
     private static final EntityDimensions SITTING_DIMENSIONS = EntityDimensions.scalable(0.6F, 1.3F).withEyeHeight(1.04F);
 
-    private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE);
+    /** Every change of the inventory lets the body show what the settler wears now ({@link SettlerClothing#showWorn}). */
+    private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE) {
+        @Override
+        public void setChanged() {
+            super.setChanged();
+            clothing.showWorn();
+        }
+    };
     private Identifier race = Races.HUMAN;
     private int settlementId = -1;
     /** The settlement whose inn the settler visits, {@code -1} for a settler that is no visitor (vault {@code Systems/NPC Population.md}). */
@@ -124,6 +133,7 @@ public class Settler extends PathfinderMob {
     private List<SettlerJob> jobs = List.of();
     private final SettlerWork work = new SettlerWork(this);
     private final SettlerFood food = new SettlerFood();
+    private final SettlerClothing clothing = new SettlerClothing(this);
     private final com.gilfort.civmod.job.SettlerSkills skills = new com.gilfort.civmod.job.SettlerSkills();
     private final com.gilfort.civmod.job.SettlerXp xp = new com.gilfort.civmod.job.SettlerXp();
     private final SettlerPast past = new SettlerPast();
@@ -148,6 +158,10 @@ public class Settler extends PathfinderMob {
         sittingLook.addGoal(0, new LookAtPlayerGoal(this, Player.class, 8.0F));
         sittingLook.addGoal(1, new RandomLookAroundGoal(this));
         setDropChance(EquipmentSlot.MAINHAND, 0.0F);
+        // The worn clothes shown on the body are copies of the inventory's armour slots; the inventory drops them.
+        for (EquipmentSlot slot : ClothingRules.SLOTS) {
+            setDropChance(slot, 0.0F);
+        }
     }
 
     /**
@@ -286,6 +300,7 @@ public class Settler extends PathfinderMob {
      */
     public void setRace(Identifier race) {
         this.race = race;
+        clothing.showWorn();
     }
 
     /**
@@ -390,7 +405,7 @@ public class Settler extends PathfinderMob {
      * @param jobBlock the JobBlock position
      */
     public void removeJob(BlockPos jobBlock) {
-        toolJobGone(jobBlock);
+        supplyJobGone(jobBlock);
         jobs = jobs.stream().filter(job -> !job.jobBlock().equals(jobBlock)).toList();
         work.forget(jobBlock);
     }
@@ -407,16 +422,21 @@ public class Settler extends PathfinderMob {
         if (jobs.stream().noneMatch(held -> held.jobBlock().equals(jobBlock) && held.jobType() != job)) {
             return;
         }
-        toolJobGone(jobBlock);
+        supplyJobGone(jobBlock);
         jobs = jobs.stream().map(held -> held.jobBlock().equals(jobBlock) ? new SettlerJob(job, jobBlock) : held).toList();
         work.forget(jobBlock);
     }
 
-    /** A Job leaves the settler: its request for the Job's tool ends (vault {@code Systems/Needs.md}). */
-    private void toolJobGone(BlockPos jobBlock) {
+    /**
+     * A Job leaves the settler: its request for the Job's tool ends, and so do its requests for clothing, which are asked again from
+     * a Job it still has (vault {@code Systems/Needs.md}).
+     */
+    private void supplyJobGone(BlockPos jobBlock) {
         if (level() instanceof net.minecraft.server.level.ServerLevel server) {
-            jobs.stream().filter(job -> job.jobBlock().equals(jobBlock)).findFirst()
-                    .ifPresent(gone -> com.gilfort.civmod.job.ToolOrders.jobGone(server, this, gone));
+            jobs.stream().filter(job -> job.jobBlock().equals(jobBlock)).findFirst().ifPresent(gone -> {
+                com.gilfort.civmod.job.ToolOrders.jobGone(server, this, gone);
+                com.gilfort.civmod.job.ClothingOrders.jobGone(server, this);
+            });
         }
     }
 
@@ -486,6 +506,13 @@ public class Settler extends PathfinderMob {
      */
     public SettlerFood getFood() {
         return food;
+    }
+
+    /**
+     * @return what the settler wears (the four armour slots read as clothing, wear)
+     */
+    public SettlerClothing getClothing() {
+        return clothing;
     }
 
     /**
@@ -905,6 +932,7 @@ public class Settler extends PathfinderMob {
         output.store("jobs", SettlerJob.CODEC.listOf(), jobs);
         ContainerHelper.saveAllItems(output, inventory.getItems());
         food.save(output);
+        clothing.save(output);
         output.store("skills", com.gilfort.civmod.job.SettlerSkills.CODEC, skills.snapshot());
         output.putInt("xp", xp.points());
         output.store("needs", com.gilfort.civmod.job.NeedState.CODEC, work.needState());
@@ -927,7 +955,9 @@ public class Settler extends PathfinderMob {
         input.read("buffers", SettlerWork.BuffersSnapshot.CODEC).ifPresent(work::restore);
         setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
         ContainerHelper.loadAllItems(input, inventory.getItems());
+        clothing.showWorn();
         food.load(input);
+        clothing.load(input);
         input.read("skills", com.gilfort.civmod.job.SettlerSkills.CODEC).ifPresent(skills::restore);
         xp.restore(input.getIntOr("xp", 0));
         input.read("needs", com.gilfort.civmod.job.NeedState.CODEC).ifPresent(work::restoreNeeds);

@@ -110,7 +110,7 @@ public final class ToolSupplyGameTests {
     // ---------------------------------------------------------------- layout
 
     /** A working Clerk whose storage holds the items. */
-    private static BlockPos clerkWith(GameTestHelper helper, List<ItemStack> stock) {
+    static BlockPos clerkWith(GameTestHelper helper, List<ItemStack> stock) {
         BlockPos clerk = StockRuleGameTests.workingClerk(helper);
         Container chest = (Container) helper.getLevel().getBlockEntity(helper.absolutePos(new BlockPos(4, 1, 1)));
         for (int i = 0; i < stock.size(); i++) {
@@ -132,7 +132,7 @@ public final class ToolSupplyGameTests {
     }
 
     /** A settler working a Job at a JobBlock. */
-    private static Settler worker(GameTestHelper helper, SettlementData data, Settlement settlement, BlockPos jobBlock, BlockPos at, String name, Job job) {
+    static Settler worker(GameTestHelper helper, SettlementData data, Settlement settlement, BlockPos jobBlock, BlockPos at, String name, Job job) {
         Settler settler = settler(helper, data, settlement, at, name);
         helper.assertTrue(TestAssignments.assign(data, jobBlock, settler.getUUID(), name, settlement.id(), List.of(), job) == JobAssignments.AssignResult.OK,
                 name + " assigned");
@@ -147,7 +147,7 @@ public final class ToolSupplyGameTests {
         CatchUp.runNow(level, List.of(settler));
     }
 
-    private static int free(ServerLevel level, BlockPos clerk, Item item) {
+    static int free(ServerLevel level, BlockPos clerk, Item item) {
         return ClerkStorage.stock(level, clerk, true).count(stack -> stack.is(item));
     }
 
@@ -160,7 +160,7 @@ public final class ToolSupplyGameTests {
         return false;
     }
 
-    private static Settler settler(GameTestHelper helper, SettlementData data, Settlement settlement, BlockPos at, String name) {
+    static Settler settler(GameTestHelper helper, SettlementData data, Settlement settlement, BlockPos at, String name) {
         Settler settler = ClerkGameTests.settler(helper, at, data, settlement);
         settler.setCustomName(Component.literal(name));
         settler.getFood().setMorningDay(Math.floorDiv(helper.getLevel().getOverworldClockTime(), 24000L));
@@ -186,6 +186,8 @@ public final class ToolSupplyGameTests {
         settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
         settler.getSkills().set(ModJobs.MINER.get(), new SettlerSkills.Skill(skill, 0));
         settler.getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_PICKAXE));
+        // Clothing is not what these tests are about: a full set keeps the clothing need quiet.
+        ClothingNeedGameTests.dressInHighest(settler);
         helper.assertTrue(TestAssignments.assign(data, jobBlock, settler.getUUID(), "Miner", settlement.id(), List.of()) == JobAssignments.AssignResult.OK,
                 "Miner assigned");
         settler.addJob(new SettlerJob(ModJobs.MINER.get(), jobBlock));
@@ -193,7 +195,7 @@ public final class ToolSupplyGameTests {
     }
 
     /** A JobBlock of level 5 without a block in the world, with a fed settler of the given skill that holds the given tool, if any. */
-    private static Settler toolWorker(GameTestHelper helper, BlockPos relative, Job job, int skill, ItemStack belt) {
+    static Settler toolWorker(GameTestHelper helper, BlockPos relative, Job job, int skill, ItemStack belt) {
         ServerLevel level = helper.getLevel();
         BlockPos jobBlock = helper.absolutePos(relative);
         TestSettlements.place(helper, jobBlock, job, BLOCK_LEVEL);
@@ -208,17 +210,19 @@ public final class ToolSupplyGameTests {
         settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 64));
         settler.getSkills().set(job, new SettlerSkills.Skill(skill, 0));
         settler.getInventory().setItem(Settler.BELT_START, belt);
+        // Clothing is not what these tests are about: a full set keeps the clothing need quiet.
+        ClothingNeedGameTests.dressInHighest(settler);
         helper.assertTrue(TestAssignments.assign(data, jobBlock, settler.getUUID(), "Worker", settlement.id(), List.of(), job) == JobAssignments.AssignResult.OK,
                 "Worker assigned");
         settler.addJob(new SettlerJob(job, jobBlock));
         return settler;
     }
 
-    private static BlockPos jobBlock(Settler settler) {
+    static BlockPos jobBlock(Settler settler) {
         return settler.getJobs().getFirst().jobBlock();
     }
 
-    private static Settlement settlement(GameTestHelper helper, BlockPos clerk) {
+    static Settlement settlement(GameTestHelper helper, BlockPos clerk) {
         return SettlementData.get(helper.getLevel()).settlementAt(clerk).orElseThrow();
     }
 
@@ -234,7 +238,7 @@ public final class ToolSupplyGameTests {
         settler.getWork().decideNow(helper.getLevel());
     }
 
-    private static void cleanUp(GameTestHelper helper, Settler... settlers) {
+    static void cleanUp(GameTestHelper helper, Settler... settlers) {
         SettlementData data = SettlementData.get(helper.getLevel());
         for (Settler settler : settlers) {
             for (SettlerJob job : settler.getJobs()) {
@@ -244,7 +248,7 @@ public final class ToolSupplyGameTests {
         }
     }
 
-    private static void finish(GameTestHelper helper, Settler... settlers) {
+    static void finish(GameTestHelper helper, Settler... settlers) {
         cleanUp(helper, settlers);
         helper.succeed();
     }
@@ -302,10 +306,10 @@ public final class ToolSupplyGameTests {
         ask(helper, met);
         helper.assertTrue(settlement.requests().isEmpty(), "Skill 15, an enchanted tier and a met requirement ask for nothing: " + settlement.requests());
 
-        helper.assertFalse(JobAssignments.setAutoToolSupply(data, clerk, false), "The Clerk switches the supply off");
+        helper.assertFalse(JobAssignments.setAutoSupply(data, clerk, false), "The Clerk switches the supply off");
         ask(helper, switchedOff);
         helper.assertTrue(settlement.requests().isEmpty(), "No request while the Clerk's supply is off: " + settlement.requests());
-        JobAssignments.setAutoToolSupply(data, clerk, true);
+        JobAssignments.setAutoSupply(data, clerk, true);
         Settler switchedOn = miner(helper, new BlockPos(1, 1, 29), IRON_SKILL);
         ask(helper, switchedOn);
         helper.assertTrue(requestsOf(settlement, switchedOn).size() == 1 && settlement.requests().size() == 1,
