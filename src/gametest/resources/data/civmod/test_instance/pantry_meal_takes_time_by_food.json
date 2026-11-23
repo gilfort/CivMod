@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:pantry_meal_takes_time_by_food",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

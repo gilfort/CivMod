@@ -94,6 +94,21 @@ public final class CivModConfig {
             .comment("Settlers carrying less food than this (nutrition) fetch provisions from a Clerk (food point) in the morning.")
             .defineInRange("provisionNutrition", 6, 0, 100);
 
+    /** Seconds a meal takes before the nutrition of the food is added. */
+    public static final ModConfigSpec.DoubleValue EATING_BASE_SECONDS = BUILDER
+            .comment("Eating time: seconds every food item takes, whatever its size.")
+            .defineInRange("eatingBaseSeconds", 2.0, 0.0, 60.0);
+
+    /** Seconds a meal takes per nutrition point of the food. */
+    public static final ModConfigSpec.DoubleValue EATING_SECONDS_PER_NUTRITION = BUILDER
+            .comment("Eating time: extra seconds per nutrition point of the food item.")
+            .defineInRange("eatingSecondsPerNutrition", 0.5, 0.0, 10.0);
+
+    /** Longest time one item takes. */
+    public static final ModConfigSpec.DoubleValue EATING_MAX_SECONDS = BUILDER
+            .comment("Eating time: the most seconds one food item takes.")
+            .defineInRange("eatingMaxSeconds", 8.0, 0.0, 120.0);
+
     /** Food points regained by a day of foraging. */
     public static final ModConfigSpec.IntValue FORAGING_FOOD = BUILDER
             .comment("Food points a settler regains by foraging for a day when no food is available.")
