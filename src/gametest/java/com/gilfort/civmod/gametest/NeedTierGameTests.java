@@ -172,7 +172,7 @@ public final class NeedTierGameTests {
         // Tier 3 holds the tool need of the Lumberjack (skill 45 is band 3), Entertainment and clothing.
         helper.assertTrue(report.rows(3).size() == 3, "Tier 3 holds the tool, Entertainment and clothing rows: " + report);
         for (int tier = 4; tier <= NeedState.MAX_TIER; tier++) {
-            helper.assertTrue(report.rows(tier).size() == 1, "Tier " + tier + " holds the clothing row only: " + report.rows(tier));
+            helper.assertTrue(report.rows(tier).size() == 2, "Tier " + tier + " holds the food variety and clothing rows: " + report.rows(tier));
         }
         settler.getWork().checkNeedsNow(level, 100L);
         settler.getWork().checkNeedsNow(level, 101L);

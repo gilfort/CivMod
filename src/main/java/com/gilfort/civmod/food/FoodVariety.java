@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import com.gilfort.civmod.config.CivModConfig;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
@@ -14,19 +15,50 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * What a settler ate lately and the rule of the Food variety need (vault {@code Systems/Needs.md}): at least
- * {@value #REQUIRED} distinct food items within the window. The window is the last days, but always covers at least the
- * last {@value #COVERED_ITEMS} items eaten, so a light eater with large meals does not fail for eating little.
- * Meals keep their item id: a food of a removed mod still counts for the days it stays in the window.
+ * What a settler ate lately and the rule of the Food variety need (vault {@code Systems/Needs.md}): at least the foods of
+ * its {@link Diet} as distinct food items within the window. The window is the last days, but always covers at least the
+ * last items eaten, twice as many as the foods it asks for, so a light eater with large meals does not fail for eating little. Meals keep their
+ * item id: a food of a removed mod still counts for the days it stays in the window.
  */
 public final class FoodVariety {
 
-    /** Distinct foods the need asks for. */
-    public static final int REQUIRED = 3;
-    /** Items the window always covers. */
-    private static final int COVERED_ITEMS = 2 * REQUIRED;
     /** Longest list of meals: the oldest goes first. */
     public static final int MAX_MEALS = 64;
+
+    /**
+     * What a tier asks for: a number of distinct foods within a number of days.
+     *
+     * @param foods the distinct foods the need asks for
+     * @param days  how many days the window reaches back, today included
+     */
+    public record Diet(int foods, int days) {
+
+        /** The tier from which 5 foods are asked. */
+        private static final int FIVE_FOODS_TIER = 4;
+        /** The tier from which 10 foods are asked. */
+        private static final int TEN_FOODS_TIER = 5;
+
+        /**
+         * @param tier a need tier
+         * @return the diet of that tier: 3 foods up to tier 3, 5 foods at tier 4, 10 foods at tier 5, each with the window of the server config
+         */
+        public static Diet forTier(int tier) {
+            if (tier >= TEN_FOODS_TIER) {
+                return new Diet(10, CivModConfig.FOOD_VARIETY_DAYS_10.get());
+            }
+            if (tier >= FIVE_FOODS_TIER) {
+                return new Diet(5, CivModConfig.FOOD_VARIETY_DAYS_5.get());
+            }
+            return new Diet(3, CivModConfig.FOOD_VARIETY_DAYS.get());
+        }
+
+        /**
+         * @return the items the window always covers, however old they are
+         */
+        int coveredItems() {
+            return 2 * foods;
+        }
+    }
 
     /**
      * One food item eaten.
@@ -80,15 +112,15 @@ public final class FoodVariety {
 
     /**
      * @param today the day
-     * @param days  how many days the window reaches back, today included
+     * @param diet  what the tier asks for
      * @return the distinct foods in the window, the oldest first
      */
-    public Set<Identifier> window(long today, int days) {
-        int lastItems = meals.size() - COVERED_ITEMS;
+    public Set<Identifier> window(long today, Diet diet) {
+        int lastItems = meals.size() - diet.coveredItems();
         Set<Identifier> foods = new LinkedHashSet<>();
         for (int i = 0; i < meals.size(); i++) {
             Meal meal = meals.get(i);
-            if (i >= lastItems || meal.day() > today - days) {
+            if (i >= lastItems || meal.day() > today - diet.days()) {
                 foods.add(meal.item());
             }
         }
@@ -97,20 +129,20 @@ public final class FoodVariety {
 
     /**
      * @param today the day
-     * @param days  how many days the window reaches back, today included
+     * @param diet  what the tier asks for
      * @return the number of distinct foods in the window
      */
-    public int distinct(long today, int days) {
-        return window(today, days).size();
+    public int distinct(long today, Diet diet) {
+        return window(today, diet).size();
     }
 
     /**
      * @param today the day
-     * @param days  how many days the window reaches back, today included
+     * @param diet  what the tier asks for
      * @return whether the settler ate too few different foods
      */
-    public boolean isShort(long today, int days) {
-        return distinct(today, days) < REQUIRED;
+    public boolean isShort(long today, Diet diet) {
+        return distinct(today, diet) < diet.foods();
     }
 
     /**
@@ -120,12 +152,12 @@ public final class FoodVariety {
      * @param stacks candidate stacks (any items)
      * @param level  the food level
      * @param today  the day
-     * @param days   how many days the window reaches back, today included
+     * @param diet   what the settler's tier asks for
      * @return the index of the chosen stack, empty if nothing may be eaten
      */
-    public Optional<Integer> choose(List<ItemStack> stacks, int level, long today, int days) {
-        if (isShort(today, days)) {
-            Set<Identifier> window = window(today, days);
+    public Optional<Integer> choose(List<ItemStack> stacks, int level, long today, Diet diet) {
+        if (isShort(today, diet)) {
+            Set<Identifier> window = window(today, diet);
             Optional<Integer> fresh = SettlerFood.choose(stacks, level, stack -> !window.contains(BuiltInRegistries.ITEM.getKey(stack.getItem())));
             if (fresh.isPresent()) {
                 return fresh;
