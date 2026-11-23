@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.chronicle.Diary;
+import com.gilfort.civmod.clothing.SettlerClothing;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.inn.Inns;
 import com.gilfort.civmod.inn.VisitorDay;
@@ -87,7 +88,7 @@ public class Settler extends PathfinderMob {
     public static final int POCKETS_START = OFFHAND + 1;
     /** Number of pocket slots. */
     public static final int POCKETS_SIZE = 9;
-    /** Inventory slots: armor / clothing (not shown in the PoC). */
+    /** Inventory slots: armor / clothing in the order head, chest, legs, feet (not shown in the PoC; see {@link SettlerClothing}). */
     public static final int ARMOR_START = POCKETS_START + POCKETS_SIZE;
     /** Number of armor slots. */
     public static final int ARMOR_SIZE = 4;
@@ -124,6 +125,7 @@ public class Settler extends PathfinderMob {
     private List<SettlerJob> jobs = List.of();
     private final SettlerWork work = new SettlerWork(this);
     private final SettlerFood food = new SettlerFood();
+    private final SettlerClothing clothing = new SettlerClothing(this);
     private final com.gilfort.civmod.job.SettlerSkills skills = new com.gilfort.civmod.job.SettlerSkills();
     private final com.gilfort.civmod.job.SettlerXp xp = new com.gilfort.civmod.job.SettlerXp();
     private final SettlerPast past = new SettlerPast();
@@ -486,6 +488,13 @@ public class Settler extends PathfinderMob {
      */
     public SettlerFood getFood() {
         return food;
+    }
+
+    /**
+     * @return what the settler wears (the four armour slots read as clothing, wear)
+     */
+    public SettlerClothing getClothing() {
+        return clothing;
     }
 
     /**
@@ -905,6 +914,7 @@ public class Settler extends PathfinderMob {
         output.store("jobs", SettlerJob.CODEC.listOf(), jobs);
         ContainerHelper.saveAllItems(output, inventory.getItems());
         food.save(output);
+        clothing.save(output);
         output.store("skills", com.gilfort.civmod.job.SettlerSkills.CODEC, skills.snapshot());
         output.putInt("xp", xp.points());
         output.store("needs", com.gilfort.civmod.job.NeedState.CODEC, work.needState());
@@ -928,6 +938,7 @@ public class Settler extends PathfinderMob {
         setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
         ContainerHelper.loadAllItems(input, inventory.getItems());
         food.load(input);
+        clothing.load(input);
         input.read("skills", com.gilfort.civmod.job.SettlerSkills.CODEC).ifPresent(skills::restore);
         xp.restore(input.getIntOr("xp", 0));
         input.read("needs", com.gilfort.civmod.job.NeedState.CODEC).ifPresent(work::restoreNeeds);

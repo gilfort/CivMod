@@ -11,8 +11,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * What a player's right-click with the main hand does to a settler: food in the hand feeds it, Shift with an empty hand talks to it
- * ({@link PlayerTalk}), anything else opens its window. A visitor of an inn ignores food, is hired with the price stack
+ * What a player's right-click with the main hand does to a settler: food in the hand feeds it, a piece of clothing in the hand puts it on,
+ * Shift with an empty hand talks to it ({@link PlayerTalk}), anything else opens its window. A visitor of an inn ignores food, is hired with the price stack
  * ({@link Hiring}) and is asked to stay longer in its window.
  */
 final class SettlerInteraction {
@@ -35,10 +35,26 @@ final class SettlerInteraction {
             feed(settler, player, held);
             return;
         }
+        if (dress(settler, player, held)) {
+            return;
+        }
         // A settler that does not talk (asleep) opens its window like on a plain right-click.
         if (!(player.isShiftKeyDown() && held.isEmpty() && PlayerTalk.talk(settler, player).isPresent())) {
             settler.openWindow(player, Optional.empty());
         }
+    }
+
+    /** A piece of clothing in the hand goes into its slot and the piece worn there goes back to the player. */
+    private static boolean dress(Settler settler, ServerPlayer player, ItemStack held) {
+        Optional<ItemStack> old = settler.getClothing().equip(held.copyWithCount(1));
+        if (old.isEmpty()) {
+            return false;
+        }
+        held.consume(1, player);
+        if (!old.get().isEmpty() && !player.getInventory().add(old.get())) {
+            player.spawnAtLocation(player.level(), old.get());
+        }
+        return true;
     }
 
     private static void feed(Settler settler, ServerPlayer player, ItemStack held) {

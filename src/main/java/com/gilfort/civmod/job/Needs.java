@@ -174,7 +174,8 @@ final class Needs {
     private static final Need ENTERTAINMENT_3 = new EntertainmentNeed(3);
 
     /** Every need, in the order of its rows in the Needs tab. */
-    static final List<Need> ALL = List.of(FOOD, FIRE, BED, FOOD_VARIETY, ENTERTAINMENT_2, ENTERTAINMENT_3);
+    static final List<Need> ALL = List.of(FOOD, FIRE, BED, FOOD_VARIETY, ENTERTAINMENT_2, ENTERTAINMENT_3, new ClothingNeed(2),
+            new ClothingNeed(3), new ClothingNeed(4), new ClothingNeed(5));
 
     private Needs() {
     }

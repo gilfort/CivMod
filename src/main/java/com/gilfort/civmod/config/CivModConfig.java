@@ -121,6 +121,16 @@ public final class CivModConfig {
                     "It always covers at least the last 6 food items eaten.")
             .defineInRange("foodVarietyDays", 3, 1, 14);
 
+    /** Share of a worn clothing piece's durability that one ordinary day uses. */
+    public static final ModConfigSpec.DoubleValue CLOTHING_WEAR_PERCENT = BUILDER
+            .comment("Clothing: percent of its durability a worn piece loses on an ordinary day.")
+            .defineInRange("clothingWearPercent", 2.0, 0.0, 100.0);
+
+    /** Share of a worn clothing piece's durability that one day on a mission uses. */
+    public static final ModConfigSpec.DoubleValue CLOTHING_MISSION_WEAR_PERCENT = BUILDER
+            .comment("Clothing: percent of its durability a worn piece loses on a day the settler spends on a mission.")
+            .defineInRange("clothingMissionWearPercent", 5.0, 0.0, 100.0);
+
     /** Logs a Lumberjack needs in its scan area to work at all. */
     public static final ModConfigSpec.IntValue LUMBERJACK_MINIMUM_LOGS = BUILDER
             .comment("Lumberjack: logs needed in the scan area to work at all; below this the job is blocked.")

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:clothing_put_on_from_collect",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

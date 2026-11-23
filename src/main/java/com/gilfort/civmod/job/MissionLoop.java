@@ -215,6 +215,7 @@ final class MissionLoop implements CategoryLoop {
             return JobStep.skip(JobStatus.IDLE);
         }
         trip = reserved.departing(MissionRules.returnTime(day, mission.get().days()));
+        settler.getClothing().onMission(day, DayClock.day(trip.returnTime()));
         leaveTarget = null;
         return leave(level);
     }
