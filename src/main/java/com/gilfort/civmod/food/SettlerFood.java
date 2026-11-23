@@ -42,6 +42,8 @@ public final class SettlerFood {
     public static final long AWAKE_TICKS = 14000L;
     /** Ticks per real minute. */
     public static final double TICKS_PER_MINUTE = 1200.0;
+    /** Ticks per real second. */
+    private static final double TICKS_PER_SECOND = 20.0;
     /**
      * Marks "no day" in the per-day flags. Days may be negative in tests with a frozen clock; saves written before
      * this used {@code -1}, which is read as "no day" as well.
@@ -345,6 +347,20 @@ public final class SettlerFood {
     public static float exhaustionFor(long awakeTicks, double weightedWorkTicks, double basePerDay, double perWorkMinute, double appetite) {
         double points = basePerDay * awakeTicks / AWAKE_TICKS + perWorkMinute * weightedWorkTicks / TICKS_PER_MINUTE;
         return (float) (points * EXHAUSTION_PER_POINT * appetite);
+    }
+
+    /**
+     * How long one food item takes to eat: a base time plus a time per nutrition point, capped.
+     *
+     * @param nutrition        the nutrition of the item
+     * @param baseSeconds      seconds every item takes
+     * @param secondsPerPoint  extra seconds per nutrition point
+     * @param maxSeconds       the most seconds one item takes
+     * @return the eating time in ticks
+     */
+    public static int eatTicks(int nutrition, double baseSeconds, double secondsPerPoint, double maxSeconds) {
+        double seconds = Math.min(baseSeconds + secondsPerPoint * Math.max(nutrition, 0), maxSeconds);
+        return (int) Math.round(seconds * TICKS_PER_SECOND);
     }
 
     /**

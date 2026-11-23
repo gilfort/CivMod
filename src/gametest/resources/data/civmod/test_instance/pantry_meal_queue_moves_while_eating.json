@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:pantry_meal_queue_moves_while_eating",
+  "max_ticks": 600,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
