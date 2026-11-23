@@ -48,6 +48,10 @@ public final class ModDiaryEntryTypes {
     public static final DeferredHolder<DiaryEntryType, DiaryEntryType> TALENT = TYPES.register("talent",
             () -> new DiaryEntryType(Talent::confirmationText, false, false));
 
+    /** The settler showed its favourite meal: it told it in a talk or ate it for the first time. */
+    public static final DeferredHolder<DiaryEntryType, DiaryEntryType> FAVOURITE_MEAL = TYPES.register("favourite_meal",
+            () -> new DiaryEntryType(Diary::favouriteMealText, false, false));
+
     private ModDiaryEntryTypes() {
     }
 

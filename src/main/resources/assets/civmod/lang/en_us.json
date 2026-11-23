@@ -965,6 +965,8 @@
   "diary.civmod.joined.reason": "I took the offer and joined the settlement. %s",
   "diary.civmod.homeless": "I lost my home and have to get by on my own.",
   "diary.civmod.talent": "I think working as %s really suits me.",
+  "diary.civmod.favourite_meal.told": "My favourite meal is %s.",
+  "diary.civmod.favourite_meal.eaten": "I finally got to eat %s, my favourite meal.",
   "civmod.gui.settler.tab.chronicle": "Chronicle",
   "civmod.gui.settler.help.chronicle": "Shift + right-click it, empty-handed, to talk",
   "civmod.gui.settler.ask_stay": "Ask to stay longer",

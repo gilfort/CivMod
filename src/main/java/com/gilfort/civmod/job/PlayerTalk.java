@@ -8,6 +8,7 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.chronicle.Chronicle;
 import com.gilfort.civmod.chronicle.Diary;
+import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.inn.VisitorOffer;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.origin.OriginData;
@@ -17,6 +18,7 @@ import com.gilfort.civmod.registry.ModDiaryEntryTypes;
 import com.gilfort.civmod.settlement.DayClock;
 
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
@@ -24,8 +26,9 @@ import net.minecraft.util.RandomSource;
 /**
  * A player talks to a settler (vault {@code Systems/Settler Origin.md}, {@code Systems/Entertainment.md}): Shift + right-click with an
  * empty hand. The settler turns its head, greets, shows the conversation bubble and says one line in chat to the player who talked.
- * The first talks tell the three parts of its origin in random order, each once, and write each into the diary; after that it makes
- * small talk about the weather or, from its own needs, about the settlement. The first talk of a day gives a little Entertainment.
+ * The first talks tell the three parts of its origin in random order, each once, and write each into the diary; the next one tells its
+ * favourite meal, once, with a diary entry; after that it makes small talk about the weather or, from its own needs, about the
+ * settlement. The first talk of a day gives a little Entertainment.
  * A visitor of an inn starts every talk with its price and its trade and gets no Entertainment (vault {@code Systems/NPC Population.md}).
  * <p>
  * The told lines belong to the settler, not to a player: every player hears the lines that are left. The class lives in this
@@ -105,7 +108,18 @@ public final class PlayerTalk {
         if (settler.isVisitor()) {
             return origin.orElseGet(() -> new Result(VisitorOffer.of(settler).greeting(), Optional.empty()));
         }
-        return origin.orElseGet(() -> new Result(smallTalk(level, settler, random), Optional.empty()));
+        return origin.or(() -> tellFavouriteMeal(settler)).orElseGet(() -> new Result(smallTalk(level, settler, random), Optional.empty()));
+    }
+
+    /** The favourite meal, once, after the origin is told; written into the diary. A settler without a favourite meal tells nothing. */
+    private static Optional<Result> tellFavouriteMeal(Settler settler) {
+        SettlerFood food = settler.getFood();
+        Optional<Identifier> favourite = food.favourite();
+        if (favourite.isEmpty() || !food.revealFavourite()) {
+            return Optional.empty();
+        }
+        List<String> params = Diary.favouriteMeal(settler, favourite.get(), Diary.Reveal.TOLD);
+        return Optional.of(new Result(Diary.favouriteMealText(params), Optional.empty()));
     }
 
     /** The next part of the origin the settler has not told yet, picked at random; written into the diary. */

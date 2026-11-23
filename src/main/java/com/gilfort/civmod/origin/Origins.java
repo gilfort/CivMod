@@ -107,6 +107,7 @@ public final class Origins {
     }
 
     private static void apply(Settler settler, OriginRoller.Arrival arrival, Optional<Settlement> settlement, RandomSource random) {
+        settler.getFood().rollFavourite(settler.getRace(), settler.getRandom());
         Optional<RaceDefinition> race = OriginData.race(settler.getRace());
         if (race.isEmpty()) {
             if (!arrival.keepName()) {
