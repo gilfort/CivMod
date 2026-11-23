@@ -115,7 +115,7 @@ public final class SettlerFood {
     /**
      * @return whether the settler showed its favourite meal (told it or ate it); the Needs tab names it from then on
      */
-    public boolean favouriteKnown() {
+    public boolean isFavouriteKnown() {
         return favouriteKnown;
     }
 

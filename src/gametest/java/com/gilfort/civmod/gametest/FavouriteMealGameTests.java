@@ -195,10 +195,10 @@ public final class FavouriteMealGameTests {
         try {
             Origins.assignEgg(settler, RandomSource.create(4L));
             Identifier favourite = settler.getFood().favourite().orElseThrow();
-            helper.assertFalse(settler.getFood().favouriteKnown(), "The favourite is hidden at first");
+            helper.assertFalse(settler.getFood().isFavouriteKnown(), "The favourite is hidden at first");
             for (int i = 0; i < 3; i++) {
                 helper.assertTrue(talk(helper, settler, player).told().isPresent(), "Talk " + (i + 1) + " tells the origin");
-                helper.assertFalse(settler.getFood().favouriteKnown(), "Still hidden after " + (i + 1) + " talks");
+                helper.assertFalse(settler.getFood().isFavouriteKnown(), "Still hidden after " + (i + 1) + " talks");
             }
             helper.assertTrue(favouriteEntries(settler).isEmpty(), "Nothing about the favourite in the diary yet");
 
@@ -206,7 +206,7 @@ public final class FavouriteMealGameTests {
             helper.assertTrue(fourth.told().isEmpty() && key(fourth.line()).equals("diary.civmod.favourite_meal.told"), "The fourth talk tells the favourite: " + key(fourth.line()));
             helper.assertTrue(((TranslatableContents) fourth.line().getContents()).getArgs()[0].equals(new ItemStack(BuiltInRegistries.ITEM.getValue(favourite)).getHoverName()),
                     "It names the favourite meal: " + fourth.line());
-            helper.assertTrue(settler.getFood().favouriteKnown(), "The favourite is known now");
+            helper.assertTrue(settler.getFood().isFavouriteKnown(), "The favourite is known now");
             List<DiaryEntry> entries = favouriteEntries(settler);
             helper.assertTrue(entries.size() == 1, "One diary entry: " + entries);
             helper.assertTrue(ModDiaryEntryTypes.FAVOURITE_MEAL.get().text().apply(entries.get(0).params()).equals(fourth.line()), "The entry reads like the line: " + entries.get(0));
@@ -230,7 +230,7 @@ public final class FavouriteMealGameTests {
         try {
             settler.getFood().rollFavourite(Races.HUMAN, RandomSource.create(2L));
             PlayerTalk.Result first = talk(helper, settler, player);
-            helper.assertTrue(key(first.line()).equals("diary.civmod.favourite_meal.told") && settler.getFood().favouriteKnown(), "The first talk tells the favourite: " + key(first.line()));
+            helper.assertTrue(key(first.line()).equals("diary.civmod.favourite_meal.told") && settler.getFood().isFavouriteKnown(), "The first talk tells the favourite: " + key(first.line()));
             helper.assertTrue(key(talk(helper, settler, player).line()).startsWith("civmod.talk.small."), "Small talk after that");
             helper.succeed();
         } finally {
@@ -262,12 +262,12 @@ public final class FavouriteMealGameTests {
             Item favourite = BuiltInRegistries.ITEM.getValue(settler.getFood().favourite().orElseThrow());
             settler.getFood().setLevel(5);
             settler.getWork().feed(level, new ItemStack(otherFood(settler)));
-            helper.assertFalse(settler.getFood().favouriteKnown(), "Another food shows nothing");
+            helper.assertFalse(settler.getFood().isFavouriteKnown(), "Another food shows nothing");
             helper.assertTrue(favouriteBubbles(settler).isEmpty() && favouriteEntries(settler).isEmpty(), "No bubble, no entry: " + settler.getWork().recentThoughts());
 
             settler.getFood().setLevel(5);
             settler.getWork().feed(level, new ItemStack(favourite));
-            helper.assertTrue(settler.getFood().favouriteKnown(), "The first favourite meal shows it");
+            helper.assertTrue(settler.getFood().isFavouriteKnown(), "The first favourite meal shows it");
             helper.assertTrue(favouriteBubbles(settler).equals(List.of(new ThoughtBubble.Show(settler.getId(), ThoughtBubble.FAVOURITE_MEAL, favourite, true))),
                     "One thought bubble with the food: " + settler.getWork().recentThoughts());
             List<DiaryEntry> entries = favouriteEntries(settler);
@@ -298,7 +298,7 @@ public final class FavouriteMealGameTests {
         settler.getWork().setCatchUp(dayStart - 3 * 24000L, dayStart);
         CatchUp.runNow(level, List.of(settler));
         helper.assertTrue(settler.getFood().variety().meals().stream().anyMatch(meal -> meal.item().equals(favourite)), "The settler ate its favourite meal while it caught up");
-        helper.assertTrue(settler.getFood().favouriteKnown() && favouriteEntries(settler).size() == 1, "Known, with an entry: " + favouriteEntries(settler));
+        helper.assertTrue(settler.getFood().isFavouriteKnown() && favouriteEntries(settler).size() == 1, "Known, with an entry: " + favouriteEntries(settler));
         helper.assertTrue(favouriteBubbles(settler).isEmpty(), "No bubble while caught up: " + settler.getWork().recentThoughts());
         NeedTierGameTests.end(helper, settler, jobBlock);
     }
@@ -345,7 +345,7 @@ public final class FavouriteMealGameTests {
         BlockPos jobBlock = NeedTierGameTests.place(helper, new BlockPos(1, 1, 1), ModJobs.LUMBERJACK.get(), BLOCK_LEVEL);
         Settler settler = tierFive(helper, jobBlock);
         settler.getFood().setFavourite(id(FAVOURITE));
-        helper.assertFalse(settler.getFood().favouriteKnown(), "Hidden");
+        helper.assertFalse(settler.getFood().isFavouriteKnown(), "Hidden");
         NeedsReport.Row row = favouriteRow(settler, level);
         helper.assertFalse(row.met(), "Ten foods, but not the favourite meal");
         helper.assertTrue(key(row.detail()).equals("civmod.need.favourite_meal.unknown") && row.icons().isEmpty(), "Shows \"?\" and no icon: " + row.detail() + " " + row.icons());

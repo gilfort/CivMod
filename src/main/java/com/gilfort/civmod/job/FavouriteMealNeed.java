@@ -42,7 +42,7 @@ final class FavouriteMealNeed implements Need {
     @Override
     public Item icon(Context context) {
         SettlerFood food = context.settler().getFood();
-        return food.favouriteKnown() ? food.favourite().flatMap(BuiltInRegistries.ITEM::getOptional).orElseGet(this::icon) : icon();
+        return food.isFavouriteKnown() ? food.favourite().flatMap(BuiltInRegistries.ITEM::getOptional).orElseGet(this::icon) : icon();
     }
 
     @Override
@@ -54,7 +54,7 @@ final class FavouriteMealNeed implements Need {
         }
         Diet diet = Diet.forTier(TIER);
         boolean eaten = food.variety().window(context.day(), diet).contains(favourite.get());
-        if (!food.favouriteKnown()) {
+        if (!food.isFavouriteKnown()) {
             return new Check(eaten, Component.translatable("civmod.need.favourite_meal.unknown"));
         }
         ItemStack meal = BuiltInRegistries.ITEM.getOptional(favourite.get()).map(ItemStack::new).orElse(ItemStack.EMPTY);
