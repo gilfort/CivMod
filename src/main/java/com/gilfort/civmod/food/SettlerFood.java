@@ -7,10 +7,13 @@ import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.config.CivModConfig;
 
+import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.Container;
@@ -24,7 +27,7 @@ import net.minecraft.world.level.storage.ValueOutput;
 
 /**
  * Food state of a settler (vault {@code Systems/Needs.md}): a vanilla {@link FoodData} (food level 0–20, saturation
- * buffer) driven by exhaustion like the player's, the settler's appetite and the meal / foraging state of the day.
+ * buffer) driven by exhaustion like the player's, the settler's appetite and favourite meal, and the meal / foraging state of the day.
  * <p>
  * Every {@value #EXHAUSTION_PER_POINT} exhaustion first removes one saturation, then one food level – the same rule
  * as vanilla {@code FoodData.tick}, which needs a player and is therefore not called.
@@ -56,6 +59,8 @@ public final class SettlerFood {
     private final FoodData data = new FoodData();
     private float exhaustion;
     private float appetite = -1.0F;
+    private @Nullable Identifier favourite;
+    private boolean favouriteKnown;
     private long eatenDay = NO_DAY;
     private long morningDay = NO_DAY;
     private long complaintDay = NO_DAY;
@@ -98,6 +103,52 @@ public final class SettlerFood {
             appetite = rollAppetite(random, min, max);
         }
         return appetite;
+    }
+
+    /**
+     * @return the favourite meal, empty while none is rolled
+     */
+    public Optional<Identifier> favourite() {
+        return Optional.ofNullable(favourite);
+    }
+
+    /**
+     * @return whether the settler showed its favourite meal (told it or ate it); the Needs tab names it from then on
+     */
+    public boolean isFavouriteKnown() {
+        return favouriteKnown;
+    }
+
+    /**
+     * Shows the favourite meal: the settler told it or ate it for the first time.
+     *
+     * @return whether it was hidden until now; false when the settler has no favourite meal or it was known already
+     */
+    public boolean revealFavourite() {
+        if (favourite == null || favouriteKnown) {
+            return false;
+        }
+        favouriteKnown = true;
+        return true;
+    }
+
+    /**
+     * @param favourite the favourite meal's item id (tests)
+     */
+    public void setFavourite(Identifier favourite) {
+        this.favourite = favourite;
+    }
+
+    /**
+     * Rolls the favourite meal if the settler has none yet.
+     *
+     * @param race   the settler's race
+     * @param random the random source
+     */
+    public void rollFavourite(Identifier race, RandomSource random) {
+        if (favourite == null) {
+            favourite = FavouriteMeal.roll(race, random).orElse(null);
+        }
     }
 
     /**
@@ -299,6 +350,18 @@ public final class SettlerFood {
     }
 
     /**
+     * How long one food item takes to eat: a base time plus a time per nutrition point, capped (the {@code eating*} server configs).
+     *
+     * @param nutrition the nutrition of the item
+     * @return the eating time in ticks
+     */
+    public static int eatTicks(int nutrition) {
+        double seconds = Math.min(CivModConfig.EATING_BASE_SECONDS.get() + CivModConfig.EATING_SECONDS_PER_NUTRITION.get() * Math.max(nutrition, 0),
+                CivModConfig.EATING_MAX_SECONDS.get());
+        return (int) Math.round(seconds * SharedConstants.TICKS_PER_SECOND);
+    }
+
+    /**
      * Rolls an appetite: log-symmetric around 1, normal values are more likely than the extremes.
      *
      * @param random random source
@@ -423,6 +486,10 @@ public final class SettlerFood {
         data.addAdditionalSaveData(food);
         food.putFloat("exhaustion", exhaustion);
         food.putFloat("appetite", appetite);
+        if (favourite != null) {
+            food.store("favourite", Identifier.CODEC, favourite);
+            food.putBoolean("favourite_known", favouriteKnown);
+        }
         food.putInt("day_format", DAY_FORMAT);
         putDay(food, "eaten_day", eatenDay);
         putDay(food, "morning_day", morningDay);
@@ -449,6 +516,8 @@ public final class SettlerFood {
             data.readAdditionalSaveData(food);
             exhaustion = food.getFloatOr("exhaustion", 0.0F);
             appetite = food.getFloatOr("appetite", -1.0F);
+            favourite = food.read("favourite", Identifier.CODEC).orElse(null);
+            favouriteKnown = favourite != null && food.getBooleanOr("favourite_known", false);
             boolean legacy = food.getIntOr("day_format", 0) < DAY_FORMAT;
             eatenDay = day(food, "eaten_day", legacy);
             morningDay = day(food, "morning_day", legacy);

@@ -1,8 +1,10 @@
 package com.gilfort.civmod.chronicle;
 
+import java.util.Arrays;
 import java.util.List;
 
 import com.gilfort.civmod.api.DiaryEntryType;
+import com.gilfort.civmod.food.FavouriteMeal;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.origin.OriginText;
 import com.gilfort.civmod.origin.SettlerOrigin;
@@ -12,6 +14,7 @@ import com.gilfort.civmod.settlement.DayClock;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.StringRepresentable;
 
 /**
  * Writes into the diary of a settler (vault {@code Systems/Chronicle.md}). Every entry is written on an event, never on a tick: the
@@ -19,6 +22,25 @@ import net.minecraft.server.level.ServerLevel;
  * {@link com.gilfort.civmod.api.CivModApi#addDiaryEntry}.
  */
 public final class Diary {
+
+    /** How a favourite meal came out. */
+    public enum Reveal implements StringRepresentable {
+        /** The settler told it in a talk. */
+        TOLD("told"),
+        /** The settler ate it for the first time. */
+        EATEN("eaten");
+
+        private final String serializedName;
+
+        Reveal(String serializedName) {
+            this.serializedName = serializedName;
+        }
+
+        @Override
+        public String getSerializedName() {
+            return serializedName;
+        }
+    }
 
     private Diary() {
     }
@@ -104,6 +126,38 @@ public final class Diary {
         return params.stream().findFirst().map(Identifier::tryParse)
                 .<Component>map(reason -> Component.translatable("diary.civmod.joined.reason", Component.translatable(OriginText.key("reason", reason))))
                 .orElseGet(() -> Component.translatable("diary.civmod.joined"));
+    }
+
+    /**
+     * Writes the entry of a settler that showed its favourite meal.
+     *
+     * @param settler the settler
+     * @param item    the favourite meal's item id
+     * @param reveal  how the favourite came out
+     * @return the text of the entry, as {@link #favouriteMealText} builds it
+     */
+    public static Component favouriteMeal(Settler settler, Identifier item, Reveal reveal) {
+        List<String> params = List.of(item.toString(), reveal.getSerializedName());
+        add(settler, ModDiaryEntryTypes.FAVOURITE_MEAL.get(), params);
+        return favouriteMealText(params);
+    }
+
+    /**
+     * Builds the text of the favourite meal entry: "My favourite meal is Bread." when the settler told it, "I finally got to eat Bread, my
+     * favourite meal." when it ate it first.
+     *
+     * @param params the item id and the way it came out, as {@link #favouriteMeal} wrote them
+     * @return the text; empty for parameters that no version of the entry wrote
+     */
+    public static Component favouriteMealText(List<String> params) {
+        Identifier id = params.size() == 2 ? Identifier.tryParse(params.get(0)) : null;
+        if (id == null) {
+            return Component.empty();
+        }
+        Component item = FavouriteMeal.name(id);
+        return Arrays.stream(Reveal.values()).filter(reveal -> reveal.getSerializedName().equals(params.get(1))).findFirst()
+                .<Component>map(reveal -> Component.translatable("diary.civmod.favourite_meal." + reveal.getSerializedName(), item))
+                .orElse(Component.empty());
     }
 
     private static boolean isPermanent(Identifier type) {

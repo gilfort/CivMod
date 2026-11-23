@@ -39,6 +39,8 @@ public enum ThoughtBubble {
     PLAYING(false),
     /** The first level-up in a Job its upbringing favours confirms the settler's talent: the Job's bubble icon. Hidden by "Problems only". */
     TALENT(false),
+    /** The settler eats its favourite meal for the first time: the item it ate. Hidden by "Problems only". */
+    FAVOURITE_MEAL(false),
     /** Problem: no usable tool (the needed tool). */
     NO_TOOL(true),
     /** Problem: the Animal Farmer has no food for its animals (wheat). */

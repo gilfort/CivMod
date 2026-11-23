@@ -1112,8 +1112,8 @@ public final class SettlerWork {
 
     // ---------------------------------------------------------------- thought bubbles and held item
 
-    /** What the held item depends on. */
-    private record HandKey(Activity activity, @Nullable SettlerJob job, JobStatus status) {
+    /** What the held item depends on (the food while eating: a meal of several items shows each in turn). */
+    private record HandKey(Activity activity, @Nullable SettlerJob job, JobStatus status, Item food) {
     }
 
     /**
@@ -1145,7 +1145,7 @@ public final class SettlerWork {
     private void observe() {
         JobStatus status = activeJob == null ? JobStatus.IDLE : status(activeJob.jobBlock());
         thoughts.update(new SettlerThoughts.Now(activeJob, activityBubble(status), problems()), !quiet);
-        HandKey key = new HandKey(activity, activeJob, status);
+        HandKey key = new HandKey(activity, activeJob, status, activity == Activity.EATING ? meals.eatingItem().getItem() : Items.AIR);
         if (!key.equals(handKey)) {
             handKey = key;
             ItemStack held = heldItem(status);
@@ -1207,10 +1207,13 @@ public final class SettlerWork {
 
     /**
      * The item in the hand for what the settler does: working, the job's real tool or its display item (a Craftsperson
-     * carrying its result shows the result, a Deliveryman its bundle on the whole tour); anything else (eating, bed,
-     * drop-off, fetching) an empty hand. Always a display copy, never an inventory item.
+     * carrying its result shows the result, a Deliveryman its bundle on the whole tour); eating, the food in the mouth;
+     * anything else (bed, drop-off, fetching) an empty hand. Always a display copy, never an inventory item.
      */
     private ItemStack heldItem(JobStatus status) {
+        if (activity == Activity.EATING) {
+            return meals.eatingItem();
+        }
         SettlerJob job = activeJob;
         if (job == null) {
             return ItemStack.EMPTY;
@@ -2552,6 +2555,15 @@ public final class SettlerWork {
             level.sendParticles(net.minecraft.core.particles.ParticleTypes.COMPOSTER, settler.getX(), settler.getY() + 1.0, settler.getZ(),
                     XP_BURST, 0.4, 0.5, 0.4, 0.0);
         }
+    }
+
+    /**
+     * Shows the thought bubble of the first favourite meal.
+     *
+     * @param meal the favourite meal
+     */
+    void showFavouriteMeal(Item meal) {
+        thoughts.favouriteMeal(meal, !quiet);
     }
 
     /**

@@ -6,7 +6,9 @@ import java.util.Optional;
 
 import org.jspecify.annotations.Nullable;
 
+import com.gilfort.civmod.chronicle.Diary;
 import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.food.FoodVariety;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.Schedule.Activity;
 import com.gilfort.civmod.job.Schedule.Decision;
@@ -22,6 +24,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -35,8 +38,8 @@ import net.minecraft.world.item.Items;
  */
 final class SettlerMeals {
 
-    /** Ticks one item of a meal from the pockets takes (5 s). */
-    private static final int EAT_TICKS = 100;
+    /** Ticks between the sound and the particles of eating. */
+    private static final int EFFECT_INTERVAL_TICKS = 6;
     /** Ticks a foraging settler walks before it vanishes. */
     private static final int FORAGE_WALK_TICKS = 600;
     /** Food value gained per level of a working Tavern Host: +1 % (Lv 100: +100 %). */
@@ -44,10 +47,26 @@ final class SettlerMeals {
     /** Players within this distance get the hunger message. */
     private static final double COMPLAIN_RANGE = 32.0;
 
+    /**
+     * A meal the settler took at a food point and eats beside it, one item at a time: where it took the food, the day it
+     * counts for, and the factor on the food value that the counter gives.
+     *
+     * @param point the food point
+     * @param day   the day of the meal
+     * @param bonus the factor on the food value of a meal at a working Tavern Host's counter, 1.0 without
+     */
+    private record CounterMeal(ClerkStorage.FoodPoint point, long day, double bonus) {
+    }
+
     private final SettlerWork shell;
     private final Settler settler;
     private double weightedWorkTicks;
+    /** Ticks left until the item in the mouth is eaten. */
     private int eatTimer;
+    /** The item the settler eats now, a display copy (empty while it does not eat). */
+    private ItemStack eating = ItemStack.EMPTY;
+    /** The meal taken at a food point; null while the settler eats from its pockets. */
+    private @Nullable CounterMeal counterMeal;
     private boolean eatUntilFull;
     private boolean hungryNoFood;
     private long forageStart;
@@ -212,7 +231,7 @@ final class SettlerMeals {
      * @return whether the pockets hold something the settler may eat now
      */
     boolean hasPocketMeal() {
-        return SettlerFood.choose(pocketStacks(), settler.getFood().level()).isPresent();
+        return choosePocketMeal().isPresent();
     }
 
     /**
@@ -292,40 +311,78 @@ final class SettlerMeals {
      * @return eat, or stay if there is nothing to eat
      */
     BodyStep pocketMeal(boolean untilFull) {
-        if (!hasPocketMeal()) {
+        Optional<Integer> choice = choosePocketMeal();
+        if (choice.isEmpty()) {
             return BodyStep.STAY;
         }
-        eatTimer = EAT_TICKS;
+        counterMeal = null;
+        beginItem(pocketItem(choice.get()));
         eatUntilFull = untilFull;
         hungryNoFood = false;
         return BodyStep.EAT;
     }
 
     /**
-     * One tick of a meal from the pockets: eating effects, an item eaten when the timer runs out.
+     * One tick of a meal: eating effects, an item eaten when its time is over.
      *
      * @param level the level
      * @return stay while eating; idle when nothing is left to eat, done after the meal
      */
     BodyStep eatTick(ServerLevel level) {
-        Optional<Integer> choice = SettlerFood.choose(pocketStacks(), settler.getFood().level());
-        if (choice.isEmpty()) {
-            return BodyStep.DONE_NO_DECISION;
-        }
-        ItemStack stack = settler.getInventory().getItem(Settler.POCKETS_START + choice.get());
-        if (--eatTimer % 6 == 0 && eatTimer > 0) {
-            eatingEffects(level, stack);
+        if (--eatTimer % EFFECT_INTERVAL_TICKS == 0 && eatTimer > 0) {
+            eatingEffects(level, eating);
         }
         if (eatTimer > 0) {
             return BodyStep.STAY;
         }
-        ItemStack one = stack.split(1);
+        CounterMeal meal = counterMeal;
+        return meal == null ? finishPocketItem(level) : finishCounterItem(level, meal);
+    }
+
+    /**
+     * @return the item the settler eats now, shown in its hand; empty while it does not eat
+     */
+    ItemStack eatingItem() {
+        return eating;
+    }
+
+    /** Starts the time of an item: from the nutrition it gives. */
+    private void beginItem(ItemStack stack) {
+        eating = stack.copyWithCount(1);
+        eatTimer = SettlerFood.eatTicks(SettlerFood.nutrition(stack));
+    }
+
+    /** The item is eaten: the one the time was set for, taken from the pockets if it is still there. */
+    private BodyStep finishPocketItem(ServerLevel level) {
+        Optional<Integer> choice = pocketOfEating();
+        if (choice.isEmpty()) {
+            eating = ItemStack.EMPTY;
+            return BodyStep.DONE_NO_DECISION;
+        }
+        ItemStack one = pocketItem(choice.get()).split(1);
         settler.getInventory().setChanged();
         eatItem(level, one, null, today(level));
-        if (eatUntilFull && hasPocketMeal()) {
-            eatTimer = EAT_TICKS;
+        Optional<Integer> next = eatUntilFull ? choosePocketMeal() : Optional.empty();
+        if (next.isPresent()) {
+            beginItem(pocketItem(next.get()));
             return BodyStep.STAY;
         }
+        eating = ItemStack.EMPTY;
+        return BodyStep.DONE;
+    }
+
+    /** The item eaten beside the counter is done: the next one from the same stock, or the end of the meal. */
+    private BodyStep finishCounterItem(ServerLevel level, CounterMeal meal) {
+        Stock stock = ClerkStorage.stock(level, meal.point().clerk(), false);
+        eatItem(level, eating, stock.isEmpty() ? null : stock, meal.day(), meal.bonus());
+        ItemStack next = takeMealItem(stock, meal.day());
+        if (!next.isEmpty()) {
+            beginItem(next);
+            return BodyStep.STAY;
+        }
+        takeProvisions(stock);
+        counterMeal = null;
+        eating = ItemStack.EMPTY;
         return BodyStep.DONE;
     }
 
@@ -346,26 +403,26 @@ final class SettlerMeals {
     }
 
     /**
-     * At the food point: waits for its turn at a working Tavern Host's counter, then eats and takes provisions.
+     * At the food point: waits for its turn at a working Tavern Host's counter, then takes the food there. The counter is
+     * free for the next customer from then on; the settler eats what it took where it stands, and takes provisions when
+     * the meal is over.
      *
      * @param level the level
-     * @return stay while waiting at the counter, done after the visit
+     * @return stay while waiting at the counter, eat after taking food, done after a visit without a meal
      */
     BodyStep atFoodPoint(ServerLevel level) {
         ClerkStorage.FoodPoint point = foodPoint;
+        BodyStep step = BodyStep.DONE;
         if (point != null) {
             boolean counter = point.visit().counter() && shell.ownPantry().filter(point.clerk()::equals).isEmpty();
             if (counter && !shell.waitAtCounter(level, point.clerk())) {
                 return BodyStep.STAY;
             }
-            if (visitFoodPoint(level, point, today(level), DayClock.dayTime(level), point.visit().counter())
-                    && counter) {
-                ClerkCounter.handOut(level, point.clerk(), true);
-            }
+            step = takeFood(level, point, today(level), DayClock.dayTime(level));
         }
         mealPurpose = null;
         foodPoint = null;
-        return BodyStep.DONE;
+        return step;
     }
 
     /**
@@ -458,8 +515,8 @@ final class SettlerMeals {
      * @return whether there was something to eat
      */
     boolean eatFromPockets(ServerLevel level, long day) {
-        Optional<Integer> choice = SettlerFood.choose(pocketStacks(), settler.getFood().level());
-        choice.ifPresent(slot -> eatItem(level, settler.getInventory().getItem(Settler.POCKETS_START + slot).split(1), null, day));
+        Optional<Integer> choice = choosePocketMeal();
+        choice.ifPresent(slot -> eatItem(level, pocketItem(slot).split(1), null, day));
         return choice.isPresent();
     }
 
@@ -474,7 +531,7 @@ final class SettlerMeals {
      */
     void visitFoodPointNow(ServerLevel level, ClerkStorage.FoodPoint point, @Nullable MealPurpose purpose, long day, long dayTime) {
         mealPurpose = purpose;
-        if (visitFoodPoint(level, point, day, dayTime, true)) {
+        if (eatAtFoodPoint(level, point, day, dayTime)) {
             ClerkCounter.handOut(level, point.clerk(), false);
         }
         mealPurpose = null;
@@ -483,44 +540,102 @@ final class SettlerMeals {
     // ---------------------------------------------------------------- eating
 
     /**
-     * At a food point: eats until full (not in the morning unless hungry), puts back leftover containers and refills
-     * the provisions, from what the access rule lets the settler reach.
+     * Live visit at a food point, the settler stands at the counter or the block: puts back leftover containers and takes
+     * the first item of the meal (not in the morning unless hungry). Without a meal it takes its provisions at once.
      *
-     * @param day       the day of the meal
-     * @param atCounter whether the settler is served at the counter of a working Clerk (catch-up: always)
+     * @param day the day of the meal
+     * @return eat when the settler took food to eat beside the counter, done when there is no meal
+     */
+    private BodyStep takeFood(ServerLevel level, ClerkStorage.FoodPoint point, long day, long dayTime) {
+        Stock stock = ClerkStorage.stock(level, point.clerk(), false);
+        if (stock.isEmpty()) {
+            return BodyStep.DONE;
+        }
+        boolean served = servedAtCounter(level, point, dayTime, point.visit().counter());
+        returnContainers(stock);
+        ItemStack first = Schedule.eatsAtFoodPoint(mealPurpose, settler.getFood().level()) ? takeMealItem(stock, day) : ItemStack.EMPTY;
+        boolean handedOut = !first.isEmpty();
+        if (handedOut) {
+            counterMeal = new CounterMeal(point, day, bonusAtCounter(level, point, served));
+            beginItem(first);
+        } else {
+            handedOut = takeProvisions(stock);
+        }
+        if (handedOut && served) {
+            ClerkCounter.handOut(level, point.clerk(), true);
+        }
+        return first.isEmpty() ? BodyStep.DONE : BodyStep.EAT;
+    }
+
+    /**
+     * Catch-up visit at a food point, on the spot: eats until full (not in the morning unless hungry), puts back leftover
+     * containers and refills the provisions, from what the access rule lets the settler reach.
+     *
+     * @param day the day of the meal
      * @return whether a working Tavern Host handed something out (food from its whole storage at the counter)
      */
-    private boolean visitFoodPoint(ServerLevel level, ClerkStorage.FoodPoint point, long day, long dayTime, boolean atCounter) {
-        boolean own = shell.ownPantry().filter(point.clerk()::equals).isPresent();
+    private boolean eatAtFoodPoint(ServerLevel level, ClerkStorage.FoodPoint point, long day, long dayTime) {
         Stock stock = ClerkStorage.stock(level, point.clerk(), false);
         if (stock.isEmpty()) {
             return false;
         }
-        // A working Tavern Host serves at the counter; its meals carry the bonus, provisions do not.
-        boolean served = atCounter && !own && ClerkStorage.working(level, point.clerk(), dayTime);
-        double bonus = served ? 1.0 + MEAL_BONUS_PER_LEVEL * ClerkCounter.clerkSkill(level, point.clerk()) : 1.0;
+        boolean served = servedAtCounter(level, point, dayTime, true);
+        double bonus = bonusAtCounter(level, point, served);
+        returnContainers(stock);
         boolean handedOut = false;
-        SettlerFood food = settler.getFood();
+        if (Schedule.eatsAtFoodPoint(mealPurpose, settler.getFood().level())) {
+            for (ItemStack item = takeMealItem(stock, day); !item.isEmpty(); item = takeMealItem(stock, day)) {
+                handedOut = true;
+                eatItem(level, item, stock, day, bonus);
+            }
+        }
+        return (takeProvisions(stock) || handedOut) && served;
+    }
+
+    /** A working Tavern Host serves a customer at its counter; its meals carry the bonus, provisions do not. */
+    private boolean servedAtCounter(ServerLevel level, ClerkStorage.FoodPoint point, long dayTime, boolean atCounter) {
+        return atCounter && shell.ownPantry().filter(point.clerk()::equals).isEmpty() && ClerkStorage.working(level, point.clerk(), dayTime);
+    }
+
+    private double bonusAtCounter(ServerLevel level, ClerkStorage.FoodPoint point, boolean served) {
+        return served ? 1.0 + MEAL_BONUS_PER_LEVEL * ClerkCounter.clerkSkill(level, point.clerk()) : 1.0;
+    }
+
+    /** Bowls and bottles of earlier meals go back into the stock. */
+    private void returnContainers(Stock stock) {
         for (int i = Settler.POCKETS_START; i < Settler.POCKETS_START + Settler.POCKETS_SIZE; i++) {
             ItemStack stack = settler.getInventory().getItem(i);
             if (stack.is(Items.BOWL) || stack.is(Items.GLASS_BOTTLE)) {
                 settler.getInventory().setItem(i, stock.insert(stack));
             }
         }
-        if (Schedule.eatsAtFoodPoint(mealPurpose, food.level())) {
-            while (food.level() < SettlerFood.MAX) {
-                Optional<Integer> slot = food.variety().choose(stock.contents(), food.level(), day, CivModConfig.FOOD_VARIETY_DAYS.get());
-                if (slot.isEmpty()) {
-                    break;
-                }
-                ItemStack item = stock.takeOne(slot.get());
-                if (item.isEmpty()) {
-                    break;
-                }
-                handedOut = true;
-                eatItem(level, item, stock, day, bonus);
-            }
+    }
+
+    /**
+     * Takes the item of the stock the settler eats next: food not eaten lately first, while the settler is not full.
+     *
+     * @param stock the stock
+     * @param day   the day of the meal
+     * @return the item, empty if the settler is full or nothing fits
+     */
+    private ItemStack takeMealItem(Stock stock, long day) {
+        SettlerFood food = settler.getFood();
+        if (food.level() >= SettlerFood.MAX) {
+            return ItemStack.EMPTY;
         }
+        // The diets of the settler's own tier and the lower ones (it has to meet them all to keep its work level); on tier 5 the favourite meal too.
+        FoodVariety.Wishes wishes = FoodVariety.Wishes.forTier(shell.needTier(), food.favourite());
+        Optional<Integer> slot = food.variety().choose(stock.contents(), food.level(), day, wishes);
+        return slot.isEmpty() ? ItemStack.EMPTY : stock.takeOne(slot.get());
+    }
+
+    /**
+     * Fills the pockets with food from the stock up to the provisions the settler wants.
+     *
+     * @return whether it took something
+     */
+    private boolean takeProvisions(Stock stock) {
+        boolean handedOut = false;
         int wanted = CivModConfig.PROVISION_NUTRITION.get();
         while (provisions() < wanted) {
             List<ItemStack> contents = stock.contents();
@@ -542,7 +657,7 @@ final class SettlerMeals {
                 break;
             }
         }
-        return handedOut && served;
+        return handedOut;
     }
 
     /** The day meals are noted with outside catch-up: the day the needs are checked on. */
@@ -551,7 +666,18 @@ final class SettlerMeals {
     }
 
     private void recordMeal(ItemStack item, long day) {
-        settler.getFood().variety().record(BuiltInRegistries.ITEM.getKey(item.getItem()), day);
+        Identifier id = BuiltInRegistries.ITEM.getKey(item.getItem());
+        settler.getFood().variety().record(id, day);
+        revealFavouriteIfEaten(id, item);
+    }
+
+    /** The first time the settler eats its favourite meal it shows: a diary entry and a thought bubble (none while it catches up). */
+    private void revealFavouriteIfEaten(Identifier id, ItemStack item) {
+        SettlerFood food = settler.getFood();
+        if (food.favourite().filter(id::equals).isPresent() && food.revealFavourite()) {
+            Diary.favouriteMeal(settler, id, Diary.Reveal.EATEN);
+            shell.showFavouriteMeal(item.getItem());
+        }
     }
 
     private void eatItem(ServerLevel level, ItemStack item, @Nullable Stock stock, long day) {
@@ -641,6 +767,27 @@ final class SettlerMeals {
         }
         settler.getInventory().setChanged();
         return rest;
+    }
+
+    /** The pocket the settler eats from now, as an index into the pockets. */
+    private Optional<Integer> choosePocketMeal() {
+        return SettlerFood.choose(pocketStacks(), settler.getFood().level());
+    }
+
+    /** The pocket that still holds the item the settler began to eat, empty if it is gone or may not be eaten any more. */
+    private Optional<Integer> pocketOfEating() {
+        int level = settler.getFood().level();
+        for (int i = 0; i < Settler.POCKETS_SIZE; i++) {
+            ItemStack stack = pocketItem(i);
+            if (ItemStack.isSameItemSameComponents(stack, eating) && SettlerFood.mayEat(level, SettlerFood.nutrition(stack))) {
+                return Optional.of(i);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private ItemStack pocketItem(int pocket) {
+        return settler.getInventory().getItem(Settler.POCKETS_START + pocket);
     }
 
     private List<ItemStack> pocketStacks() {

@@ -1,8 +1,8 @@
 {
   "type": "minecraft:function",
   "environment": "civmod:day",
-  "function": "civmod:pocket_meal_takes_five_seconds",
-  "max_ticks": 20,
+  "function": "civmod:variety_tiers_light_eater",
+  "max_ticks": 40,
   "structure": "minecraft:empty",
   "padding": 40
 }

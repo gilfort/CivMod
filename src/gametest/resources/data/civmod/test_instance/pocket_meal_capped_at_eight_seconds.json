@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:pocket_meal_capped_at_eight_seconds",
+  "max_ticks": 20,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

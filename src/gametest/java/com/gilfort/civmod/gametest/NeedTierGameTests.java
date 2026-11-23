@@ -171,9 +171,8 @@ public final class NeedTierGameTests {
         helper.assertTrue(report.rows(2).size() == 4, "Tier 2 holds bed, food variety, Entertainment and clothing: " + report);
         // Tier 3 holds the tool need of the Lumberjack (skill 45 is band 3), Entertainment and clothing.
         helper.assertTrue(report.rows(3).size() == 3, "Tier 3 holds the tool, Entertainment and clothing rows: " + report);
-        for (int tier = 4; tier <= NeedState.MAX_TIER; tier++) {
-            helper.assertTrue(report.rows(tier).size() == 1, "Tier " + tier + " holds the clothing row only: " + report.rows(tier));
-        }
+        helper.assertTrue(report.rows(4).size() == 2, "Tier 4 holds the food variety and clothing rows: " + report.rows(4));
+        helper.assertTrue(report.rows(5).size() == 3, "Tier 5 holds the food variety, favourite meal and clothing rows: " + report.rows(5));
         settler.getWork().checkNeedsNow(level, 100L);
         settler.getWork().checkNeedsNow(level, 101L);
         settler.getWork().checkNeedsNow(level, 102L);
