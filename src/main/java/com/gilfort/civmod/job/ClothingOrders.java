@@ -122,14 +122,16 @@ public final class ClothingOrders {
     }
 
     /**
-     * The settler put a piece on in a slot (by itself or by the player's hand): what it asked for there ends.
+     * The settler put a piece on in a slot (by itself or by the player's hand): what it asked for there ends, as far as the piece
+     * satisfies it. A request for a higher rank stays, so a piece the Tailor is making for it is not lost.
      *
      * @param level   the level
      * @param settler the settler
      * @param slot    the slot
+     * @param rank    the rank of the piece that went on
      */
-    public static void settled(ServerLevel level, Settler settler, EquipmentSlot slot) {
-        ToolOrders.cancel(level, settler.getUUID(), item -> isPieceFor(item, slot));
+    public static void settled(ServerLevel level, Settler settler, EquipmentSlot slot, int rank) {
+        ToolOrders.cancel(level, settler.getUUID(), item -> isPieceFor(item, slot) && ClothingRules.rank(new ItemStack(item)) <= rank);
     }
 
     /**

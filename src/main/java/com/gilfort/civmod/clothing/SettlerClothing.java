@@ -141,11 +141,11 @@ public final class SettlerClothing {
         return Settler.ARMOR_START + ClothingRules.SLOTS.indexOf(slot);
     }
 
-    /** Puts a piece on; what the settler asked for in that slot ends with it. */
+    /** Puts a piece on; what the settler asked for in that slot ends with it, unless the piece is of a lower rank than asked. */
     private void putOn(EquipmentSlot slot, ItemStack stack) {
         put(slot, stack);
         if (settler.level() instanceof ServerLevel level) {
-            ClothingOrders.settled(level, settler, slot);
+            ClothingOrders.settled(level, settler, slot, ClothingRules.rank(stack));
         }
     }
 
@@ -344,6 +344,7 @@ public final class SettlerClothing {
     }
 
     private void wear(long ordinaryDays, long missionDays) {
+        boolean damaged = false;
         for (EquipmentSlot slot : ClothingRules.SLOTS) {
             ItemStack piece = worn(slot);
             if (piece.isEmpty() || !piece.isDamageableItem()) {
@@ -356,7 +357,12 @@ public final class SettlerClothing {
                 put(slot, ItemStack.EMPTY);
             } else {
                 piece.setDamageValue((int) total);
+                damaged = true;
             }
+        }
+        if (damaged) {
+            // The piece changed in place: the inventory has to tell, so the shown copies follow now and not at some later change.
+            settler.getInventory().setChanged();
         }
     }
 

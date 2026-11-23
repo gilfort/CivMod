@@ -76,6 +76,7 @@ public final class ClothingSupplyGameTests {
             TestFunctions.register(helper, "clothing_supply_worn_piece_asks_same_rank", ClothingSupplyGameTests::wornPieceAsksSameRank);
             TestFunctions.register(helper, "clothing_supply_switch_off", ClothingSupplyGameTests::switchOff);
             TestFunctions.register(helper, "clothing_supply_request_ends", ClothingSupplyGameTests::requestEnds);
+            TestFunctions.register(helper, "clothing_supply_lower_piece_keeps_request", ClothingSupplyGameTests::lowerPieceKeepsRequest);
         });
     }
 
@@ -113,7 +114,7 @@ public final class ClothingSupplyGameTests {
     private static List<Request> pieceRequests(Settlement settlement, Settler settler) {
         return settlement.requests().stream()
                 .filter(request -> request.reservedFor().filter(ReservedFor.settler(settler.getUUID())::equals).isPresent()
-                        && ClothingRules.rank(request.item().toStack()) != ClothingRules.NO_RANK)
+                        && ClothingRules.isClothing(request.item().toStack()))
                 .toList();
     }
 
@@ -400,5 +401,27 @@ public final class ClothingSupplyGameTests {
         dies.discard();
         helper.assertTrue(pieceRequests(settlement, dies).isEmpty() && settlement.requests().size() == 3, "The settler is gone: " + settlement.requests());
         ToolSupplyGameTests.finish(helper, owner, leaves);
+    }
+
+    /**
+     * A piece put on by hand ends the request of its slot only when its rank is at least the rank asked for: a Simple helmet does not
+     * end the request for a Medium one of a tier 3 settler (a Tailor may be crafting it), a Medium helmet does.
+     */
+    private static void lowerPieceKeepsRequest(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos clerk = ToolSupplyGameTests.clerkWith(helper, List.of());
+        Settlement settlement = ToolSupplyGameTests.settlement(helper, clerk);
+        Settler settler = wearer(helper, TIER_3_SKILL);
+        check(helper, settler, today(level));
+        helper.assertTrue(askedItems(settlement, settler).equals(set(ClothSet.MEDIUM)), "Tier 3 asks for Medium Cloth: " + askedItems(settlement, settler));
+
+        settler.getClothing().equip(new ItemStack(piece(ClothSet.SIMPLE, ArmorType.HELMET)));
+        helper.assertTrue(askedItems(settlement, settler).equals(set(ClothSet.MEDIUM)),
+                "A Simple helmet leaves the request for the Medium helmet: " + askedItems(settlement, settler));
+
+        settler.getClothing().equip(new ItemStack(piece(ClothSet.MEDIUM, ArmorType.HELMET)));
+        helper.assertTrue(pieceRequests(settlement, settler).size() == 3 && !askedItems(settlement, settler).contains(piece(ClothSet.MEDIUM, ArmorType.HELMET)),
+                "A Medium helmet ends it: " + askedItems(settlement, settler));
+        ToolSupplyGameTests.finish(helper, settler);
     }
 }

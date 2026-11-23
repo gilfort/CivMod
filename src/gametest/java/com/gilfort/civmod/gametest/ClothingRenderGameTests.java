@@ -39,6 +39,10 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 public final class ClothingRenderGameTests {
 
     private static final int DYE_RGB = 0x3366CC;
+    /** The durability of the worn test boots: a day of wear takes a visible share of it. */
+    private static final int WEAR_MAX_DAMAGE = 100;
+    /** Any day: wear counts the days between two checks. */
+    private static final long WEAR_FIRST_DAY = 10L;
     private static final Identifier OTHER_RACE = CivMod.id("other_race_for_tests");
 
     private ClothingRenderGameTests() {
@@ -53,6 +57,7 @@ public final class ClothingRenderGameTests {
             register(helper, "clothing_render_survives_save", ClothingRenderGameTests::survivesSave);
             register(helper, "clothing_render_only_human", ClothingRenderGameTests::onlyHuman);
             register(helper, "clothing_render_drops_nothing", ClothingRenderGameTests::dropsNothing);
+            register(helper, "clothing_render_follows_wear", ClothingRenderGameTests::followsWear);
         });
     }
 
@@ -150,6 +155,22 @@ public final class ClothingRenderGameTests {
         helper.assertTrue(!shown(settler, EquipmentSlot.HEAD).isEmpty(), "Human shows it");
         settler.setRace(OTHER_RACE);
         helper.assertTrue(shown(settler, EquipmentSlot.HEAD).isEmpty(), "A change of race hides it again");
+        settler.discard();
+        helper.succeed();
+    }
+
+    /** The daily wear changes the worn piece in place: the shown copy follows, so no later change of the inventory re-copies it. */
+    private static void followsWear(GameTestHelper helper) {
+        Settler settler = settler(helper);
+        ItemStack boots = piece(ClothSet.SIMPLE, ArmorType.BOOTS);
+        boots.set(DataComponents.MAX_DAMAGE, WEAR_MAX_DAMAGE);
+        settler.getClothing().equip(boots);
+        settler.getClothing().step(helper.getLevel(), WEAR_FIRST_DAY, 0L, 1);
+        settler.getClothing().step(helper.getLevel(), WEAR_FIRST_DAY + 1, 0L, 1);
+        int worn = settler.getClothing().worn(EquipmentSlot.FEET).getDamageValue();
+        helper.assertTrue(worn > 0, "A day of wear damaged the boots: " + worn);
+        helper.assertTrue(shown(settler, EquipmentSlot.FEET).getDamageValue() == worn,
+                "The shown boots wear with them: shown " + shown(settler, EquipmentSlot.FEET).getDamageValue() + ", worn " + worn);
         settler.discard();
         helper.succeed();
     }
