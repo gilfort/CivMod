@@ -38,6 +38,7 @@ public final class PocketMealGameTests {
             register(helper, "pocket_meal_big_food", PocketMealGameTests::bigFood);
             register(helper, "pocket_meal_capped_at_eight_seconds", PocketMealGameTests::cappedAtEightSeconds);
             register(helper, "pocket_meal_until_full_per_item", PocketMealGameTests::untilFullPerItem);
+            register(helper, "pocket_meal_eats_the_item_it_began", PocketMealGameTests::itemItBegan);
         });
     }
 
@@ -102,6 +103,25 @@ public final class PocketMealGameTests {
         ItemStack feast = new ItemStack(Items.BREAD, 2);
         feast.set(DataComponents.FOOD, new FoodProperties(20, 1.0F, false));
         eatenAfter(helper, feast, 160);
+    }
+
+    /** The settler eats the item it began with: if the pockets change meanwhile, it does not eat another item in its place. */
+    private static void itemItBegan(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Settler settler = hungry(helper, new ItemStack(Items.CARROT, 2));
+        SettlerMeals meals = new SettlerMeals(settler.getWork());
+        helper.assertTrue(meals.pocketMeal(false) == BodyStep.EAT, "Starts eating the carrot");
+        helper.assertTrue(eat(meals, level, 69) == BodyStep.STAY, "Still eating");
+        settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.COOKED_BEEF, 2));
+        helper.assertTrue(eat(meals, level, 1) == BodyStep.DONE_NO_DECISION && count(settler) == 2 && settler.getFood().level() == 4,
+                "The carrot is gone, so nothing is eaten: " + count(settler) + " items, food " + settler.getFood().level());
+        settler.getInventory().setItem(Settler.POCKETS_START, new ItemStack(Items.CARROT, 2));
+        helper.assertTrue(meals.pocketMeal(false) == BodyStep.EAT, "Starts the next carrot");
+        settler.getInventory().setItem(Settler.POCKETS_START + 1, new ItemStack(Items.COOKED_BEEF, 2));
+        helper.assertTrue(eat(meals, level, 70) == BodyStep.DONE && count(settler) == 1 && settler.getInventory().getItem(Settler.POCKETS_START + 1).getCount() == 2,
+                "The carrot it began with is eaten, the beef stays: " + count(settler));
+        settler.discard();
+        helper.succeed();
     }
 
     /** "Eat until full" takes the time of the item again for every further item (bread, 5 nutrition: 90 ticks). */

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:pocket_meal_eats_the_item_it_began",
+  "max_ticks": 20,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -352,8 +352,9 @@ final class SettlerMeals {
         eatTimer = SettlerFood.eatTicks(SettlerFood.nutrition(stack));
     }
 
+    /** The item is eaten: the one the time was set for, taken from the pockets if it is still there. */
     private BodyStep finishPocketItem(ServerLevel level) {
-        Optional<Integer> choice = choosePocketMeal();
+        Optional<Integer> choice = pocketOfEating();
         if (choice.isEmpty()) {
             eating = ItemStack.EMPTY;
             return BodyStep.DONE_NO_DECISION;
@@ -771,6 +772,18 @@ final class SettlerMeals {
     /** The pocket the settler eats from now, as an index into the pockets. */
     private Optional<Integer> choosePocketMeal() {
         return SettlerFood.choose(pocketStacks(), settler.getFood().level());
+    }
+
+    /** The pocket that still holds the item the settler began to eat, empty if it is gone or may not be eaten any more. */
+    private Optional<Integer> pocketOfEating() {
+        int level = settler.getFood().level();
+        for (int i = 0; i < Settler.POCKETS_SIZE; i++) {
+            ItemStack stack = pocketItem(i);
+            if (ItemStack.isSameItemSameComponents(stack, eating) && SettlerFood.mayEat(level, SettlerFood.nutrition(stack))) {
+                return Optional.of(i);
+            }
+        }
+        return Optional.empty();
     }
 
     private ItemStack pocketItem(int pocket) {
