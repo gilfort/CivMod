@@ -47,20 +47,22 @@ final class ClothingNeed implements Need {
     /** The piece that is missing, the first one in the order head, chest, legs, feet. */
     @Override
     public Item icon(Context context) {
-        int rank = ClothingRules.requiredRank(tier);
         return context.settler().getClothing().pieces(tier).stream().filter(piece -> piece.state() == State.MISSING).findFirst()
-                .map(piece -> ClothingRules.clothOf(rank, piece.slot())).orElseGet(this::icon);
+                .map(this::missingPiece).orElseGet(this::icon);
     }
 
     @Override
     public Check check(Context context) {
         SettlerClothing clothing = context.settler().getClothing();
         List<Piece> pieces = clothing.pieces(tier);
-        int rank = ClothingRules.requiredRank(tier);
         List<ItemStack> icons = pieces.stream()
-                .map(piece -> piece.state() == State.MISSING ? new ItemStack(ClothingRules.clothOf(rank, piece.slot())) : piece.stack().copy()).toList();
-        boolean met = pieces.stream().noneMatch(piece -> piece.state() == State.MISSING);
-        return new Check(met, detail(pieces), icons, tooltip(pieces));
+                .map(piece -> piece.state() == State.MISSING ? new ItemStack(missingPiece(piece)) : piece.stack().copy()).toList();
+        return new Check(clothing.meets(tier), detail(pieces), icons, tooltip(pieces));
+    }
+
+    /** The piece of the set the tier asks for that fills a missing slot. */
+    private Item missingPiece(Piece piece) {
+        return ClothingRules.clothOf(ClothingRules.requiredRank(tier), piece.slot());
     }
 
     private static Component detail(List<Piece> pieces) {

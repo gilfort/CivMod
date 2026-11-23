@@ -139,13 +139,13 @@ public final class ClothingOrders {
      * @param settler the settler
      */
     public static void jobGone(ServerLevel level, Settler settler) {
-        ToolOrders.cancel(level, settler.getUUID(), item -> ClothingRules.rank(new ItemStack(item)) != ClothingRules.NO_RANK);
+        ToolOrders.cancel(level, settler.getUUID(), item -> ClothingRules.isClothing(new ItemStack(item)));
     }
 
     /** Whether the item is a piece of clothing that fits the slot. */
     private static boolean isPieceFor(Item item, EquipmentSlot slot) {
         ItemStack stack = new ItemStack(item);
-        return ClothingRules.rank(stack) != ClothingRules.NO_RANK && ClothingRules.slotOf(stack).filter(slot::equals).isPresent();
+        return ClothingRules.isClothing(stack) && ClothingRules.slotOf(stack).filter(slot::equals).isPresent();
     }
 
     /** Whether the item is a piece for the slot of the want with at least the wanted rank. */

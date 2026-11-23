@@ -63,7 +63,7 @@ public final class ClothingRules {
      * @param rank a rank above {@link #NO_RANK}
      * @return the cloth set of that rank
      */
-    public static ClothSet setOfRank(int rank) {
+    static ClothSet setOfRank(int rank) {
         if (rank < 1 || rank > SETS.size()) {
             throw new IllegalArgumentException("No clothing set of rank " + rank);
         }
@@ -85,6 +85,14 @@ public final class ClothingRules {
 
     /**
      * @param stack a stack
+     * @return whether it is in one of the clothing tags (armour without a clothing tag is not clothing, an empty stack neither)
+     */
+    public static boolean isClothing(ItemStack stack) {
+        return rank(stack) != NO_RANK;
+    }
+
+    /**
+     * @param stack a stack
      * @return the armour slot it fits (head, chest, legs or feet), empty if it is not wearable armour
      */
     public static Optional<EquipmentSlot> slotOf(ItemStack stack) {
@@ -96,7 +104,7 @@ public final class ClothingRules {
      * @param slot a slot
      * @return the armour type of that slot
      */
-    public static ArmorType armorTypeOf(EquipmentSlot slot) {
+    static ArmorType armorTypeOf(EquipmentSlot slot) {
         return switch (slot) {
             case HEAD -> ArmorType.HELMET;
             case CHEST -> ArmorType.CHESTPLATE;
@@ -131,7 +139,7 @@ public final class ClothingRules {
      * @param stack a stack
      * @return the share of its durability that is left (1 for a piece that cannot wear)
      */
-    public static double durability(ItemStack stack) {
+    static double durability(ItemStack stack) {
         return stack.isDamageableItem() ? (double) (stack.getMaxDamage() - stack.getDamageValue()) / stack.getMaxDamage() : 1.0;
     }
 
@@ -145,12 +153,12 @@ public final class ClothingRules {
      * @return whether the candidate replaces it
      */
     public static boolean replaces(ItemStack candidate, ItemStack worn) {
-        int candidateRank = rank(candidate);
-        if (candidateRank == NO_RANK) {
+        if (!isClothing(candidate)) {
             return false;
         }
-        int wornRank = worn.isEmpty() ? NO_RANK : rank(worn);
-        if (wornRank == NO_RANK || candidateRank > wornRank) {
+        int candidateRank = rank(candidate);
+        int wornRank = rank(worn);
+        if (!isClothing(worn) || candidateRank > wornRank) {
             return true;
         }
         return candidateRank == wornRank && isWornOut(worn) && !isWornOut(candidate);

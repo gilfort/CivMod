@@ -35,8 +35,6 @@ import net.minecraft.world.level.storage.ValueOutput;
  */
 public final class SettlerClothing {
 
-    /** The collect inventory is searched at most once per in-game hour (ticks). */
-    private static final long SEARCH_INTERVAL_TICKS = 1000L;
     /** Marks "no day". */
     private static final long NO_DAY = Long.MIN_VALUE;
 
@@ -94,6 +92,14 @@ public final class SettlerClothing {
         ).apply(instance, WearDays::new));
 
         /**
+         * @param day the day wear is applied up to
+         * @return these days with the check day moved to {@code day}
+         */
+        WearDays checkedOn(long day) {
+            return new WearDays(day, missionFrom, missionTo);
+        }
+
+        /**
          * @param first the first day
          * @param last  the last day
          * @return how many days of {@code first..last} the last mission covers
@@ -123,11 +129,16 @@ public final class SettlerClothing {
      * @return what the settler wears there, empty for none
      */
     public ItemStack worn(EquipmentSlot slot) {
-        return settler.getInventory().getItem(Settler.ARMOR_START + ClothingRules.SLOTS.indexOf(slot));
+        return settler.getInventory().getItem(inventoryIndex(slot));
     }
 
     private void put(EquipmentSlot slot, ItemStack stack) {
-        settler.getInventory().setItem(Settler.ARMOR_START + ClothingRules.SLOTS.indexOf(slot), stack);
+        settler.getInventory().setItem(inventoryIndex(slot), stack);
+    }
+
+    /** The inventory index of a clothing slot. */
+    private static int inventoryIndex(EquipmentSlot slot) {
+        return Settler.ARMOR_START + ClothingRules.SLOTS.indexOf(slot);
     }
 
     /** Puts a piece on; what the settler asked for in that slot ends with it. */
@@ -166,7 +177,7 @@ public final class SettlerClothing {
         List<Piece> pieces = new ArrayList<>(ClothingRules.SLOTS.size());
         for (EquipmentSlot slot : ClothingRules.SLOTS) {
             ItemStack stack = worn(slot);
-            State state = stack.isEmpty() || ClothingRules.rank(stack) < Math.max(required, 1) ? State.MISSING
+            State state = !ClothingRules.isClothing(stack) || ClothingRules.rank(stack) < required ? State.MISSING
                     : ClothingRules.isWornOut(stack) ? State.WORN_OUT : State.MET;
             pieces.add(new Piece(slot, stack, state));
         }
@@ -211,7 +222,7 @@ public final class SettlerClothing {
      * @return the piece that was worn there, empty for none; no value if the stack is not a piece of clothing
      */
     public Optional<ItemStack> equip(ItemStack piece) {
-        Optional<EquipmentSlot> slot = ClothingRules.slotOf(piece).filter(found -> ClothingRules.rank(piece) != ClothingRules.NO_RANK);
+        Optional<EquipmentSlot> slot = ClothingRules.slotOf(piece).filter(found -> ClothingRules.isClothing(piece));
         if (slot.isEmpty()) {
             return Optional.empty();
         }
@@ -292,7 +303,7 @@ public final class SettlerClothing {
         }
         if (!dressed) {
             // Nothing found: the next search waits an hour. A search that found something runs again at the next check.
-            searchAfter = time + SEARCH_INTERVAL_TICKS;
+            searchAfter = time + DayClock.HOUR_TICKS;
         }
     }
 
@@ -320,7 +331,7 @@ public final class SettlerClothing {
      */
     private void wearDays(long day) {
         if (days.checkedDay() == NO_DAY) {
-            days = new WearDays(day, days.missionFrom(), days.missionTo());
+            days = days.checkedOn(day);
             return;
         }
         if (day <= days.checkedDay()) {
@@ -329,7 +340,7 @@ public final class SettlerClothing {
         long passed = day - days.checkedDay();
         long missionDays = days.missionDaysIn(days.checkedDay(), day - 1);
         wear(passed - missionDays, missionDays);
-        days = new WearDays(day, days.missionFrom(), days.missionTo());
+        days = days.checkedOn(day);
     }
 
     private void wear(long ordinaryDays, long missionDays) {
