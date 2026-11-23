@@ -2562,7 +2562,7 @@ public final class SettlerWork {
      *
      * @param meal the favourite meal
      */
-    void showFavouriteMeal(net.minecraft.world.item.Item meal) {
+    void showFavouriteMeal(Item meal) {
         thoughts.favouriteMeal(meal, !quiet);
     }
 
