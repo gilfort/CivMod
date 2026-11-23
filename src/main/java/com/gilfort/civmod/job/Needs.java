@@ -8,14 +8,11 @@ import java.util.OptionalInt;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.entertainment.Entertainment;
 import com.gilfort.civmod.entertainment.EntertainmentRules;
-import com.gilfort.civmod.food.FoodVariety;
 import com.gilfort.civmod.settlement.DayClock;
 
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 
@@ -101,34 +98,6 @@ final class Needs {
         }
     };
 
-    /** The food variety need: see {@link FoodVariety}. */
-    private static final Need FOOD_VARIETY = new Need() {
-        @Override
-        public int tier() {
-            return 2;
-        }
-
-        @Override
-        public Component name() {
-            return Component.translatable("civmod.need.food_variety");
-        }
-
-        @Override
-        public Item icon() {
-            return Items.APPLE;
-        }
-
-        @Override
-        public Check check(Context context) {
-            int days = CivModConfig.FOOD_VARIETY_DAYS.get();
-            FoodVariety variety = context.settler().getFood().variety();
-            Component detail = Component.translatable("civmod.need.food_variety.detail", variety.distinct(context.day(), days), FoodVariety.REQUIRED, days);
-            List<ItemStack> icons = variety.window(context.day(), days).stream()
-                    .flatMap(id -> BuiltInRegistries.ITEM.getOptional(id).stream()).map(ItemStack::new).toList();
-            return new Check(!variety.isShort(context.day(), days), detail, icons);
-        }
-    };
-
     /** The Entertainment need of a tier: more than the tier's threshold of {@link EntertainmentRules}. */
     private static final class EntertainmentNeed implements Need {
 
@@ -174,8 +143,8 @@ final class Needs {
     private static final Need ENTERTAINMENT_3 = new EntertainmentNeed(3);
 
     /** Every need, in the order of its rows in the Needs tab. */
-    static final List<Need> ALL = List.of(FOOD, FIRE, BED, FOOD_VARIETY, ENTERTAINMENT_2, ENTERTAINMENT_3, new ClothingNeed(2),
-            new ClothingNeed(3), new ClothingNeed(4), new ClothingNeed(5));
+    static final List<Need> ALL = List.of(FOOD, FIRE, BED, new FoodVarietyNeed(2), new FoodVarietyNeed(4), new FoodVarietyNeed(5), ENTERTAINMENT_2,
+            ENTERTAINMENT_3, new ClothingNeed(2), new ClothingNeed(3), new ClothingNeed(4), new ClothingNeed(5));
 
     private Needs() {
     }

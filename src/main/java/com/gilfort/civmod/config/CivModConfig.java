@@ -132,9 +132,21 @@ public final class CivModConfig {
 
     /** How many days the window of the Food variety need reaches back, today included. */
     public static final ModConfigSpec.IntValue FOOD_VARIETY_DAYS = BUILDER
-            .comment("Food variety need: how many in-game days the window reaches back, today included.",
+            .comment("Food variety need for 3 different foods (tiers 2 and 3): how many in-game days the window reaches back, today included.",
                     "It always covers at least the last 6 food items eaten.")
             .defineInRange("foodVarietyDays", 3, 1, 14);
+
+    /** How many days the window of the Food variety need for 5 foods (tier 4) reaches back, today included. */
+    public static final ModConfigSpec.IntValue FOOD_VARIETY_DAYS_5 = BUILDER
+            .comment("Food variety need for 5 different foods (tier 4): how many in-game days the window reaches back, today included.",
+                    "It always covers at least the last 10 food items eaten.")
+            .defineInRange("foodVarietyDays5", 5, 1, 14);
+
+    /** How many days the window of the Food variety need for 10 foods (tier 5) reaches back, today included. */
+    public static final ModConfigSpec.IntValue FOOD_VARIETY_DAYS_10 = BUILDER
+            .comment("Food variety need for 10 different foods (tier 5): how many in-game days the window reaches back, today included.",
+                    "It always covers at least the last 20 food items eaten.")
+            .defineInRange("foodVarietyDays10", 7, 1, 14);
 
     /** Share of a worn clothing piece's durability that one ordinary day uses. */
     public static final ModConfigSpec.DoubleValue CLOTHING_WEAR_PERCENT = BUILDER

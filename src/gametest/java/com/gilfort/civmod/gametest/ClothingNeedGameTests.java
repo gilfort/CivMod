@@ -169,7 +169,7 @@ public final class ClothingNeedGameTests {
     }
 
     /** Every need but clothing is met: a hearth, an own bed, three foods, full Entertainment and no hunger. */
-    private static Settler comfortable(GameTestHelper helper, BlockPos jobBlock, int skill) {
+    static Settler comfortable(GameTestHelper helper, BlockPos jobBlock, int skill) {
         ServerLevel level = helper.getLevel();
         helper.setBlock(new BlockPos(3, 1, 3), Blocks.CAMPFIRE);
         Settler settler = plain(helper, jobBlock, skill);

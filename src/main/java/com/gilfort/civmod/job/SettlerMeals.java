@@ -7,6 +7,7 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.food.FoodVariety;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.job.Schedule.Activity;
 import com.gilfort.civmod.job.Schedule.Decision;
@@ -620,7 +621,9 @@ final class SettlerMeals {
         if (food.level() >= SettlerFood.MAX) {
             return ItemStack.EMPTY;
         }
-        Optional<Integer> slot = food.variety().choose(stock.contents(), food.level(), day, CivModConfig.FOOD_VARIETY_DAYS.get());
+        // The diet of the settler's own tier, so that a settler of a higher tier goes for the variety it needs to keep its work level.
+        FoodVariety.Diet diet = FoodVariety.Diet.forTier(shell.needTier());
+        Optional<Integer> slot = food.variety().choose(stock.contents(), food.level(), day, diet);
         return slot.isEmpty() ? ItemStack.EMPTY : stock.takeOne(slot.get());
     }
 

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:variety_tiers_tier5_ten_foods",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

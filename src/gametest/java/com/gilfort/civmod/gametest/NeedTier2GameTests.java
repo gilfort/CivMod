@@ -61,7 +61,7 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 public final class NeedTier2GameTests {
 
     private static final BlockPos CENTER = new BlockPos(8, 1, 8);
-    private static final int DAYS = 3;
+    private static final FoodVariety.Diet DAYS = new FoodVariety.Diet(3, 3);
     private static final long DAY = 24000L;
 
     private NeedTier2GameTests() {
