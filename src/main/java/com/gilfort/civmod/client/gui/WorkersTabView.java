@@ -109,7 +109,7 @@ final class WorkersTabView implements JobBlockTabView {
         return menu.getInfo().jobType().profile(FishermanProfile.class).isPresent() && info.inSettlement();
     }
 
-    /** Whether the Clerk's "Auto tool supply" toggle is shown. */
+    /** Whether the Clerk's "Auto supply" toggle is shown. */
     private boolean supplyToggle() {
         return menu.getInfo().jobType() == ModJobs.CLERK.get() && menu.workers().inSettlement();
     }

@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.gilfort.civmod.config.CivModConfig;
+import com.gilfort.civmod.job.ClothingOrders;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
@@ -128,6 +129,14 @@ public final class SettlerClothing {
         settler.getInventory().setItem(Settler.ARMOR_START + ClothingRules.SLOTS.indexOf(slot), stack);
     }
 
+    /** Puts a piece on; what the settler asked for in that slot ends with it. */
+    private void putOn(EquipmentSlot slot, ItemStack stack) {
+        put(slot, stack);
+        if (settler.level() instanceof ServerLevel level) {
+            ClothingOrders.settled(level, settler, slot);
+        }
+    }
+
     /**
      * @param tier a need tier
      * @return the four slots as that tier's need sees them, in the order of {@link ClothingRules#SLOTS}
@@ -187,7 +196,7 @@ public final class SettlerClothing {
             return Optional.empty();
         }
         ItemStack old = worn(slot.get());
-        put(slot.get(), piece.copy());
+        putOn(slot.get(), piece.copy());
         return Optional.of(old);
     }
 
@@ -229,7 +238,7 @@ public final class SettlerClothing {
             stock.insert(taken);
             return false;
         }
-        put(slot, taken);
+        putOn(slot, taken);
         return true;
     }
 
@@ -241,7 +250,9 @@ public final class SettlerClothing {
 
     /**
      * The clothing step of the need check, in live play and in catch-up: wear of the days that passed, then putting on what the
-     * collect inventories of the settler's Jobs hold (at most once an hour, and only while the settler wants something).
+     * collect inventories of the settler's Jobs hold (at most once an hour, and only while the settler wants something). When they
+     * hold nothing to put on, the settler asks for the pieces it wants ({@link ClothingOrders}) and puts on what that brings into
+     * its collect inventory at once.
      *
      * @param level   the level
      * @param day     the day of the check
@@ -251,17 +262,26 @@ public final class SettlerClothing {
     public void step(ServerLevel level, long day, long dayTime, int tier) {
         wearDays(day);
         long time = day * DayClock.DAY_TICKS + dayTime;
-        if (time < searchAfter || wants(tier).isEmpty()) {
+        List<Want> wants = time < searchAfter ? List.of() : wants(tier);
+        if (wants.isEmpty()) {
             return;
         }
-        boolean dressed = false;
-        for (BlockPos collect : collectInventories(level)) {
-            dressed |= dress(ClerkStorage.stock(level, collect, dayTime, true));
+        boolean dressed = dressFromCollectInventories(level, dayTime);
+        if (!dressed && ClothingOrders.supply(level, settler, wants)) {
+            dressed = dressFromCollectInventories(level, dayTime);
         }
         if (!dressed) {
             // Nothing found: the next search waits an hour. A search that found something runs again at the next check.
             searchAfter = time + SEARCH_INTERVAL_TICKS;
         }
+    }
+
+    private boolean dressFromCollectInventories(ServerLevel level, long dayTime) {
+        boolean dressed = false;
+        for (BlockPos collect : collectInventories(level)) {
+            dressed |= dress(ClerkStorage.stock(level, collect, dayTime, true));
+        }
+        return dressed;
     }
 
     private List<BlockPos> collectInventories(ServerLevel level) {

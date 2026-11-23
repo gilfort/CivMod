@@ -134,7 +134,7 @@ public final class SettlementBlock {
      * @param served     the Served Clerks of a Warehouse, in linking order
      * @param ledgers    the Ledgers used on the block (9 more rule slots each)
      * @param orders     the Delivery Orders
-     * @param autoSupply whether the settlers of the JobBlocks this Clerk belongs to get tools from the settlement
+     * @param autoSupply whether the settlers of the JobBlocks this Clerk belongs to get tools, food and clothing from the settlement
      */
     private record ClerkFields(List<BlockPos> storage, List<StandSpot> standSpots, SpotOfDay spotOfDay, List<StockRule> stockRules,
             List<BlockPos> served, int ledgers, DeliveryOrders.Saved orders, boolean autoSupply) {
@@ -713,7 +713,7 @@ public final class SettlementBlock {
 
     /**
      * @return whether the settlers of the JobBlocks this Clerk is the Home Clerk of get missing tools made and delivered by
-     *         the settlement ("Auto tool supply", on by default)
+     *         the settlement ("Auto supply", on by default)
      */
     public boolean autoSupply() {
         return autoSupply;

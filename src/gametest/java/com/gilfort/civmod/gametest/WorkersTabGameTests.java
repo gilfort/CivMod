@@ -291,7 +291,7 @@ public final class WorkersTabGameTests {
     }
 
     /**
-     * The Clerk's "Auto tool supply" toggle (#242): on by default, the button sends the wanted state, the Clerk keeps it
+     * The Clerk's "Auto supply" toggle (#242): on by default, the button sends the wanted state, the Clerk keeps it
      * through a save and the window shows it.
      */
     private static void supplyToggle(GameTestHelper helper) {
@@ -299,7 +299,7 @@ public final class WorkersTabGameTests {
         Player first = player(helper);
         Player second = player(helper);
         SettlementBlock block = JobBlockSite.blockAt(helper.getLevel(), helper.absolutePos(CLERK)).orElseThrow();
-        helper.assertTrue(block.autoSupply() && sees(menu(helper, first)).autoSupply(), "The tool supply is on by default");
+        helper.assertTrue(block.autoSupply() && sees(menu(helper, first)).autoSupply(), "The supply is on by default");
 
         JobBlockMenu one = menu(helper, first);
         JobBlockMenu two = menu(helper, second);

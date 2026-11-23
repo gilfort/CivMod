@@ -29,7 +29,7 @@ import net.minecraft.world.item.Items;
  * The "Workers" tab of every JobBlock (vault {@code Systems/GUI.md}, "Info becomes Workers"): per offered Job its line
  * with the automatic assignment button, below it one row per settler with ✕ (unassigns it at once) and a click on head
  * or name that opens the settler window; plus the leaf collection toggle (Lumberjack), the treasure toggle
- * (Fisherman) and the "Auto tool supply" toggle (Clerk). Its data is the synced {@link WorkersTabData}; the server changes the state and sends the data again
+ * (Fisherman) and the "Auto supply" toggle (Clerk). Its data is the synced {@link WorkersTabData}; the server changes the state and sends the data again
  * ({@link JobBlockMenu#resend}), the client only renders and asks. JobBlocks are upgraded with the JobBlock Upgrade
  * items, not here ({@link com.gilfort.civmod.block.JobBlockUpgrade}).
  */
@@ -39,7 +39,7 @@ public final class WorkersTab extends JobBlockTab {
     private static final int LEAVES = 0;
     /** Buttons: set the treasure option off / on (Fisherman, {@link #treasureButtonId}). */
     private static final int TREASURE = LEAVES + 2;
-    /** Buttons: set the Clerk's automatic tool supply off / on ({@link #supplyButtonId}). */
+    /** Buttons: set the Clerk's automatic supply off / on ({@link #supplyButtonId}). */
     private static final int SUPPLY = TREASURE + 2;
 
     private final TabData<WorkersTabData> data = new TabData<>(WorkersTabData.EMPTY,
@@ -99,9 +99,9 @@ public final class WorkersTab extends JobBlockTab {
     }
 
     /**
-     * Like {@link #leavesButtonId}, the tool supply toggle carries the wanted state.
+     * Like {@link #leavesButtonId}, the supply toggle carries the wanted state.
      *
-     * @param on the wanted state of the Clerk's automatic tool supply
+     * @param on the wanted state of the Clerk's automatic supply
      * @return the menu button id that sets it
      */
     public int supplyButtonId(boolean on) {

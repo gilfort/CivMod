@@ -392,7 +392,7 @@ public class Settler extends PathfinderMob {
      * @param jobBlock the JobBlock position
      */
     public void removeJob(BlockPos jobBlock) {
-        toolJobGone(jobBlock);
+        supplyJobGone(jobBlock);
         jobs = jobs.stream().filter(job -> !job.jobBlock().equals(jobBlock)).toList();
         work.forget(jobBlock);
     }
@@ -409,16 +409,21 @@ public class Settler extends PathfinderMob {
         if (jobs.stream().noneMatch(held -> held.jobBlock().equals(jobBlock) && held.jobType() != job)) {
             return;
         }
-        toolJobGone(jobBlock);
+        supplyJobGone(jobBlock);
         jobs = jobs.stream().map(held -> held.jobBlock().equals(jobBlock) ? new SettlerJob(job, jobBlock) : held).toList();
         work.forget(jobBlock);
     }
 
-    /** A Job leaves the settler: its request for the Job's tool ends (vault {@code Systems/Needs.md}). */
-    private void toolJobGone(BlockPos jobBlock) {
+    /**
+     * A Job leaves the settler: its request for the Job's tool ends, and so do its requests for clothing, which are asked again from
+     * a Job it still has (vault {@code Systems/Needs.md}).
+     */
+    private void supplyJobGone(BlockPos jobBlock) {
         if (level() instanceof net.minecraft.server.level.ServerLevel server) {
-            jobs.stream().filter(job -> job.jobBlock().equals(jobBlock)).findFirst()
-                    .ifPresent(gone -> com.gilfort.civmod.job.ToolOrders.jobGone(server, this, gone));
+            jobs.stream().filter(job -> job.jobBlock().equals(jobBlock)).findFirst().ifPresent(gone -> {
+                com.gilfort.civmod.job.ToolOrders.jobGone(server, this, gone);
+                com.gilfort.civmod.job.ClothingOrders.jobGone(server, this);
+            });
         }
     }
 
