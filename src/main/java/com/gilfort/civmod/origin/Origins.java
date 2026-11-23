@@ -107,6 +107,7 @@ public final class Origins {
     }
 
     private static void apply(Settler settler, OriginRoller.Arrival arrival, Optional<Settlement> settlement, RandomSource random) {
+        // The settler's own source, not the scripted one of the origin roll: that keeps the scripted sequences of the origin tests as they are.
         settler.getFood().rollFavourite(settler.getRace(), settler.getRandom());
         Optional<RaceDefinition> race = OriginData.race(settler.getRace());
         if (race.isEmpty()) {
