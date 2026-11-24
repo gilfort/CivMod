@@ -45,12 +45,19 @@ final class Furnaces {
     /** Heat of one execution of a recipe that is no cooking recipe: one vanilla smelting. */
     static final int STANDARD_HEAT = AbstractFurnaceBlockEntity.BURN_TIME_STANDARD;
 
+    /** The slot of a furnace the player puts the item to smelt in (vanilla's own constant is protected). */
+    private static final int INPUT_SLOT = 0;
+    /** The slot a furnace puts its finished item in. */
+    private static final int OUTPUT_SLOT = 2;
+
     private Furnaces() {
     }
 
     /**
-     * A furnace is free for a settler only while it is idle: its inventory is empty and it does not burn on its own (a
-     * player's smelting is never disturbed). Its lit state alone says nothing: settlers light furnaces themselves.
+     * A furnace is free for a settler only while it is idle: its input and output slots are empty and it does not burn on
+     * its own (a player's smelting is never disturbed). The fuel slot may hold anything: the settler burns fuel from its
+     * own buffer and never touches what the player left there. Its lit state alone says nothing: settlers light furnaces
+     * themselves.
      *
      * @param level the level
      * @param pos   a station
@@ -60,7 +67,8 @@ final class Furnaces {
         if (!(level.getBlockEntity(pos) instanceof AbstractFurnaceBlockEntity furnace)) {
             return true;
         }
-        return furnace.isEmpty() && furnace.litTimeRemaining <= 0;
+        return furnace.getItem(INPUT_SLOT).isEmpty() && furnace.getItem(OUTPUT_SLOT).isEmpty()
+                && furnace.litTimeRemaining <= 0;
     }
 
     /**
