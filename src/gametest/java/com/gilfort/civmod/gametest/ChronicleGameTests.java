@@ -17,6 +17,7 @@ import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.npc.Races;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.npc.SettlerSpawner;
 import com.gilfort.civmod.origin.Ancestor;
 import com.gilfort.civmod.origin.Gender;
@@ -115,6 +116,7 @@ public final class ChronicleGameTests {
             register(helper, "chronicle_talk_entertainment_once_per_day", ChronicleGameTests::entertainmentOncePerDay);
             register(helper, "chronicle_talk_multiplayer", ChronicleGameTests::multiplayer);
             register(helper, "chronicle_talk_settler_without_origin", ChronicleGameTests::settlerWithoutOrigin);
+            register(helper, "chronicle_talk_speech_bubble", ChronicleGameTests::speechBubble);
         });
     }
 
@@ -577,6 +579,22 @@ public final class ChronicleGameTests {
             PlayerTalk.Result result = talk(helper, settler, player);
             helper.assertTrue(result.told().isEmpty() && key(result.line()).startsWith("civmod.talk.small."), "Small talk: " + key(result.line()));
             helper.assertTrue(settler.getPast().chronicle().equals(Chronicle.EMPTY), "No diary entry: " + settler.getPast().chronicle());
+            helper.succeed();
+        } finally {
+            TestPlayers.remove(player);
+            settler.discard();
+        }
+    }
+
+    /** A settler that talks to a player shows the speech bubble: three dots in the sprite, so no item icon. */
+    private static void speechBubble(GameTestHelper helper) {
+        Settler settler = handBuilt(helper);
+        ServerPlayer player = player(helper, true);
+        try {
+            talk(helper, settler, player);
+            List<ThoughtBubble.Show> bubbles = settler.getWork().recentThoughts().stream().filter(show -> show.bubble() == ThoughtBubble.CONVERSATION).toList();
+            helper.assertTrue(bubbles.equals(List.of(new ThoughtBubble.Show(settler.getId(), ThoughtBubble.CONVERSATION, Items.AIR, true))),
+                    "One speech bubble without an icon: " + settler.getWork().recentThoughts());
             helper.succeed();
         } finally {
             TestPlayers.remove(player);
