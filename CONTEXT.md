@@ -376,6 +376,9 @@ A bed bound to a Pantry with the Scroll of Assignment, within the Tavern radius,
 A Settler in a visitor state (`Settler.isVisitor`) who stays at an inn for 2 to 4 days; it is no member of a settlement and not homeless. The settlement keeps the record of its stay as a `Visit`; the entity is its body. It strolls by day, eats once at the Pantry in the evening and sleeps in its guest bed at night, and takes part in the meeting check; it ticks no needs and no Job. Code: `Visit`, `Visitors`, `VisitorDay` (its day), `VisitorStroll`, `SettlerSpawner.visitor`, origin channel `Channel.VISITOR`.
 _Avoid_: Guest (a settler who sits in the Tavern evening), traveller
 
+**Visitor marker**:
+The small compass above the name tag of every visitor of an inn, so the player tells visitors from settlers. A synced flag of the settler (`Settler.hasVisitorMarker`) says who gets it: it is set when the settler becomes a visitor and cleared when it is hired. Unlike a thought bubble it shows within 16 blocks also while the visitor sleeps, and the client option "Show thought bubbles" does not hide it. Code: `Settler.VISITOR_MARKER`, `VisitorMarkerRenderer`.
+
 **Visit**:
 The settlement's record of one visitor's stay at an inn: the Pantry, the guest bed, the arrival check it leaves at, whether the player asked it to stay longer, its last meal and whether the meal sent it away. It is the truth about the stay; a visitor entity without a visit removes itself. In code and comments the record is a "visit" and "stay" only means how long it lasts. Code: `Visit`, `InnState.visits`.
 
