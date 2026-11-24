@@ -148,6 +148,13 @@ public final class CivNetwork {
                         payload.handle(player);
                     }
                 });
+        registrar.playToServer(SettlerMenu.TryAgain.TYPE, SettlerMenu.TryAgain.STREAM_CODEC,
+                (payload, context) -> {
+                    if (context.player() instanceof ServerPlayer player) {
+                        payload.handle(player);
+                    }
+                });
+        registrar.playToClient(SettlerMenu.Refresh.TYPE, SettlerMenu.Refresh.STREAM_CODEC);
         registrar.playToServer(StorageTerminal.Click.TYPE, StorageTerminal.Click.STREAM_CODEC, (payload, context) -> {
             if (context.player() instanceof ServerPlayer player) {
                 payload.handle(player);
