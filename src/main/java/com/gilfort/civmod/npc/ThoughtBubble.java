@@ -10,10 +10,12 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 
 /**
- * A thought bubble above a settler (vault {@code Systems/Thought Bubbles.md}): an activity it starts (shown once) or a
- * problem (red "!", repeated client-side while it lasts).
+ * A bubble above a settler (vault {@code Systems/Thought Bubbles.md}): an activity it starts (shown once) or a problem
+ * (red "!", repeated client-side while it lasts). Most are thought bubbles with dots; a speech bubble has a tail and is
+ * drawn for what a settler says.
  */
 public enum ThoughtBubble {
 
@@ -33,8 +35,11 @@ public enum ThoughtBubble {
     MISSION(false),
     /** A guest in the Tavern misses music: a music disc, a hint that a jukebox with a disc improves the Tavern. */
     RECORD(false),
-    /** Two settlers talk: a sheet of paper, above both. An activity bubble without the red mark, hidden by "Problems only". */
-    CONVERSATION(false),
+    /**
+     * Two settlers or visitors talk, or a settler answers a player: a speech bubble with three dots in the sprite and no item
+     * icon, above the talkers. An activity bubble without the red mark, hidden by "Problems only".
+     */
+    CONVERSATION(false, true),
     /** A Bard starts a stop or a stage act: a note block. */
     PLAYING(false),
     /** The first level-up in a Job its upbringing favours confirms the settler's talent: the Job's bubble icon. Hidden by "Problems only". */
@@ -67,10 +72,19 @@ public enum ThoughtBubble {
      */
     private static final int NEED_UNMET_SHOW_PERCENT = 40;
 
+    /** The icon of a bubble that shows none (air): the dots of a speech bubble are drawn in its sprite. */
+    public static final Item NO_ICON = Items.AIR;
+
     private final boolean problem;
+    private final boolean speech;
 
     ThoughtBubble(boolean problem) {
+        this(problem, false);
+    }
+
+    ThoughtBubble(boolean problem, boolean speech) {
         this.problem = problem;
+        this.speech = speech;
     }
 
     /**
@@ -91,11 +105,18 @@ public enum ThoughtBubble {
     }
 
     /**
+     * @return whether it is drawn as a speech bubble (with a tail) instead of a thought bubble
+     */
+    public boolean speech() {
+        return speech;
+    }
+
+    /**
      * Server → client, to the players tracking the settler: show a bubble, or turn a problem on / off.
      *
      * @param settlerId the settler's entity id
      * @param bubble    the bubble
-     * @param icon      the item shown in the bubble
+     * @param icon      the item shown in the bubble, {@link #NO_ICON} for none
      * @param on        false only to end a problem
      */
     public record Show(int settlerId, ThoughtBubble bubble, Item icon, boolean on) implements CustomPacketPayload {

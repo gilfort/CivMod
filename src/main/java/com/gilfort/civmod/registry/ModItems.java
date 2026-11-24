@@ -127,12 +127,14 @@ public final class ModItems {
 
     /** Render-only sprite: the thought bubble drawn above a settler. */
     public static final DeferredItem<Item> THOUGHT_BUBBLE = ITEMS.registerSimpleItem("thought_bubble");
+    /** Render-only sprite: the speech bubble (with a tail) drawn above a settler that talks. */
+    public static final DeferredItem<Item> SPEECH_BUBBLE = ITEMS.registerSimpleItem("speech_bubble");
     /** Render-only sprite: the red "!" of a problem thought bubble. */
     public static final DeferredItem<Item> PROBLEM_MARKER = ITEMS.registerSimpleItem("problem_marker");
 
     /** Items that are only used for rendering and never shown in the creative tab. */
     public static final Set<DeferredItem<Item>> RENDER_ONLY = Set.of(UNCONNECTED_MARKER, WORK_MARKER, PRIMARY_WORK_MARKER, COLLECT_MARKER,
-            DROP_OFF_MARKER, BED_MARKER, BED_ICON, STAND_SPOT_MARKER, HAMMER, THOUGHT_BUBBLE, PROBLEM_MARKER);
+            DROP_OFF_MARKER, BED_MARKER, BED_ICON, STAND_SPOT_MARKER, HAMMER, THOUGHT_BUBBLE, SPEECH_BUBBLE, PROBLEM_MARKER);
 
     private ModItems() {
     }
