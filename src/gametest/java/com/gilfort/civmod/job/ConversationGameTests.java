@@ -526,7 +526,8 @@ public final class ConversationGameTests {
         helper.assertFalse(ThoughtBubble.CONVERSATION.problem(), "An activity bubble: no red mark, hidden by 'Problems only'");
         helper.assertTrue(ThoughtBubble.CONVERSATION.speech(), "Drawn as a speech bubble, not a thought bubble");
         for (ThoughtBubble other : ThoughtBubble.values()) {
-            helper.assertTrue(other == ThoughtBubble.CONVERSATION || !other.speech(), "Every other bubble stays a thought bubble: " + other);
+            helper.assertTrue(other == ThoughtBubble.CONVERSATION || other == ThoughtBubble.STORY || !other.speech(),
+                    "Every other bubble stays a thought bubble: " + other);
         }
         rolls.value = CONVERSATION;
         a.getWork().decideNow(level);

@@ -433,6 +433,8 @@ public final class ChronicleGameTests {
         Settler settler = handBuilt(helper);
         ServerPlayer player = player(helper, true);
         try (StoryTalks story = StoryTalks.begin(helper)) {
+            // Pick 0 of the untold aspects each time: the three parts of the origin, then the favourite meal.
+            PlayerTalk.script(OriginRolls.picks(0));
             Origins.assignEgg(settler, RandomSource.create(4L));
             Set<OriginLine.Slot> slots = new HashSet<>();
             Set<String> lines = new HashSet<>();
@@ -457,6 +459,7 @@ public final class ChronicleGameTests {
             }
             helper.succeed();
         } finally {
+            PlayerTalk.script(null);
             TestPlayers.remove(player);
             settler.discard();
         }
