@@ -40,7 +40,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 /**
  * Draws thought bubbles and speech bubbles above settlers (vault {@code Systems/Thought Bubbles.md}): a pixel bubble above the name tag
  * with an item icon, a red "!" in the corner for problems. Each bubble shows for {@value #SHOW_TICKS} ticks and shrinks
- * away at the end; bubbles that arrive meanwhile wait their turn. Problems repeat every {@value #REPEAT_TICKS} ticks
+ * away at the end; bubbles that arrive meanwhile wait their turn. Problems and the story bubble repeat every {@value #REPEAT_TICKS} ticks
  * while they are on. Only within {@value #DISTANCE} blocks, never while the settler sleeps (except the bed bubble, which
  * plays out) or is away (Mission), and as
  * the client option "Show thought bubbles" allows.
@@ -95,7 +95,7 @@ public final class ThoughtBubbleRenderer {
     private record Drawn(ItemStackRenderState bubble, @Nullable ItemStackRenderState icon, @Nullable ItemStackRenderState marker) {
     }
 
-    /** A problem that is on: its icon and when it shows again. */
+    /** A bubble that repeats (a problem or the story bubble) and is on: its icon and when it shows again. */
     private static final class Problem {
         private final Item icon;
         /** Shown at once, then repeated from the tick loop. */
@@ -140,7 +140,7 @@ public final class ThoughtBubbleRenderer {
      */
     public static void handle(ThoughtBubble.Show payload, IPayloadContext context) {
         Thoughts thoughts = THOUGHTS.computeIfAbsent(payload.settlerId(), id -> new Thoughts());
-        if (!payload.bubble().problem()) {
+        if (!payload.bubble().repeats()) {
             thoughts.add(new Bubble(payload.bubble(), payload.icon()));
             return;
         }

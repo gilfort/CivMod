@@ -185,12 +185,13 @@ final class SettlerThoughts {
             case RECORD -> Items.MUSIC_DISC_CAT;
             case CONVERSATION -> ThoughtBubble.NO_ICON;
             case PLAYING -> Items.NOTE_BLOCK;
+            case STORY -> Items.WRITABLE_BOOK;
             case JOB, TALENT, FAVOURITE_MEAL, NO_TOOL, NO_WORK_PLACE, BLOCKED, NEED_UNMET -> throw new IllegalArgumentException("Icon depends on the job or need: " + activity);
         };
     }
 
     /**
-     * @param problem a problem bubble with a fixed icon
+     * @param problem a problem bubble, or another bubble that repeats, with a fixed icon
      * @return its icon
      */
     static Item problemIcon(ThoughtBubble problem) {

@@ -1172,7 +1172,16 @@ public final class SettlerWork {
         };
     }
 
-    /** The problems that are on now (one per kind; the first job with it gives the icon). */
+    /**
+     * @param level the level
+     * @return whether the settler has a story aspect to tell now (see {@link StoryShare}): it shows the story bubble, and a talk tells one
+     */
+    boolean sharesStory(ServerLevel level) {
+        Schedule.Moment moment = moment(level.getOverworldClockTime());
+        return StoryShare.shares(settler, moment, dayTimes(moment.day()), missions.isAway());
+    }
+
+    /** The bubbles that stay on while they last: the problems now (one per kind; the first job with it gives the icon) and the story bubble. */
     private Map<ThoughtBubble, Item> problems() {
         Map<ThoughtBubble, Item> on = new EnumMap<>(ThoughtBubble.class);
         for (SettlerJob job : settler.getJobs()) {
@@ -1195,6 +1204,9 @@ public final class SettlerWork {
         if (meals.hungryNoFood()) {
             on.put(ThoughtBubble.HUNGRY_NO_FOOD,
                     SettlerThoughts.problemIcon(ThoughtBubble.HUNGRY_NO_FOOD));
+        }
+        if (settler.level() instanceof ServerLevel level && sharesStory(level)) {
+            on.put(ThoughtBubble.STORY, SettlerThoughts.problemIcon(ThoughtBubble.STORY));
         }
         needs.missingIcon().ifPresent(icon -> on.put(ThoughtBubble.NEED_UNMET, icon));
         if (activeJob != null && needs.tools().view(activeJob) == ToolNeeds.View.WEAK) {

@@ -46,6 +46,11 @@ public enum ThoughtBubble {
     TALENT(false),
     /** The settler eats its favourite meal for the first time: the item it ate. Hidden by "Problems only". */
     FAVOURITE_MEAL(false),
+    /**
+     * The settler has a story aspect to tell today: a speech bubble with a book and quill, repeated like a problem while it lasts but
+     * without the red mark. Hidden by "Problems only".
+     */
+    STORY(false, true, true),
     /** Problem: no usable tool (the needed tool). */
     NO_TOOL(true),
     /** Problem: the Animal Farmer has no food for its animals (wheat). */
@@ -77,14 +82,20 @@ public enum ThoughtBubble {
 
     private final boolean problem;
     private final boolean speech;
+    private final boolean repeats;
 
     ThoughtBubble(boolean problem) {
         this(problem, false);
     }
 
     ThoughtBubble(boolean problem, boolean speech) {
+        this(problem, speech, problem);
+    }
+
+    ThoughtBubble(boolean problem, boolean speech, boolean repeats) {
         this.problem = problem;
         this.speech = speech;
+        this.repeats = repeats;
     }
 
     /**
@@ -98,10 +109,18 @@ public enum ThoughtBubble {
     }
 
     /**
-     * @return whether it marks a problem (red "!", repeated while it lasts)
+     * @return whether it marks a problem (red "!", repeated while it lasts, kept by the option "Problems only")
      */
     public boolean problem() {
         return problem;
+    }
+
+    /**
+     * @return whether the server turns it on and off and the client shows it again every 30 seconds while it is on (every problem, and
+     *         the story bubble)
+     */
+    public boolean repeats() {
+        return repeats;
     }
 
     /**
@@ -117,7 +136,7 @@ public enum ThoughtBubble {
      * @param settlerId the settler's entity id
      * @param bubble    the bubble
      * @param icon      the item shown in the bubble, {@link #NO_ICON} for none
-     * @param on        false only to end a problem
+     * @param on        false only to end a bubble that repeats ({@link #repeats()})
      */
     public record Show(int settlerId, ThoughtBubble bubble, Item icon, boolean on) implements CustomPacketPayload {
 
