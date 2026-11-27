@@ -156,6 +156,18 @@ public final class ToolNeeds {
     }
 
     /**
+     * Ends the wait after a fruitless search of the collect inventory: the next check searches again ("Try again").
+     *
+     * @param jobBlock the JobBlock of the Job
+     */
+    void forgetSearch(BlockPos jobBlock) {
+        Entry entry = entries.get(jobBlock);
+        if (entry != null) {
+            entry.searchAfter = Long.MIN_VALUE;
+        }
+    }
+
+    /**
      * The one way to search the collect inventory for a tool: runs the search only if one is due, and records a fruitless
      * search so the next waits an hour.
      *

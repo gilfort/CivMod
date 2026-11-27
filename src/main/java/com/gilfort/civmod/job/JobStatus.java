@@ -101,6 +101,19 @@ public enum JobStatus {
     }
 
     /**
+     * The waiting statuses: the job waits for something the player can fix (a tool, a material, room, a work place).
+     * The settler window offers "Try again" for exactly these (vault {@code Systems/GUI.md}), and the job topic of small
+     * talk names them. No request, Nothing to produce and Pausing are not in it: they check again every decision or are
+     * meant to wait.
+     *
+     * @return whether the job waits on something
+     */
+    public boolean isWaiting() {
+        return this == NO_TOOL || this == NO_FOOD || this == NO_WORK_PLACE || this == NO_FREE_WORK_PLACE || this == DROP_OFF_FULL
+                || this == STORAGE_FULL || this == BLOCKED || this == MISSING_INPUTS || this == MISSING_FUEL || this == NO_MISSION;
+    }
+
+    /**
      * @return whether the job's buffer waits for room where it goes (not delivered after work)
      */
     public boolean waitsForRoom() {

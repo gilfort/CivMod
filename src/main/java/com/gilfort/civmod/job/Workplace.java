@@ -398,6 +398,16 @@ final class Workplace {
     }
 
     /**
+     * Forgets everything the job waits on at its Workplace: the block and the requests and patterns a Producing Job
+     * skips. The next decision checks the job again ("Try again", vault {@code Systems/GUI.md}).
+     */
+    void forgetWaits() {
+        unblock();
+        skips.clear();
+        alwaysSkips.clear();
+    }
+
+    /**
      * @param gameTime the game time now
      * @return whether the job still waits after being blocked
      */
