@@ -19,10 +19,12 @@ import com.gilfort.civmod.inn.VisitorOffer;
 import com.gilfort.civmod.inn.VisitorPrices;
 import com.gilfort.civmod.job.PlayerTalk;
 import com.gilfort.civmod.job.SettlerSkills;
+import com.gilfort.civmod.job.StoryShare;
 import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
+import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.origin.OriginLine;
 import com.gilfort.civmod.origin.SettlerOrigin;
 import com.gilfort.civmod.origin.Talent;
@@ -73,6 +75,7 @@ public final class VisitorHireGameTests {
             register(helper, "visitor_offer_trade_and_level", VisitorHireGameTests::offerTradeAndLevel);
             register(helper, "visitor_talk", VisitorHireGameTests::talk);
             register(helper, "visitor_hire", VisitorHireGameTests::hire);
+            register(helper, "visitor_hire_keeps_story", VisitorHireGameTests::hireKeepsStory);
             register(helper, "visitor_hire_refused", VisitorHireGameTests::hireRefused);
             register(helper, "visitor_hire_far_bed", VisitorHireGameTests::hireFarBed);
             register(helper, "visitor_clicks", VisitorHireGameTests::clicks);
@@ -342,6 +345,51 @@ public final class VisitorHireGameTests {
         TestPlayers.remove(players.player());
         release(helper, inn, visitor);
         InnGameTests.end(helper, inn);
+    }
+
+    /**
+     * A hired visitor keeps the parts of its origin it told as a visitor and does not tell them again. On the hire day it shows no
+     * story bubble, since the hire used up that day's chance; from its next waking time the roll applies like for every settler.
+     */
+    private static void hireKeepsStory(GameTestHelper helper) {
+        InnRules.use(InnGameTests.rules(1.0, 0.0, 3));
+        Inn inn = InnGameTests.inn(helper, 1, 1, true);
+        VillagerConversionGameTests.bed(helper, NEAR_BED);
+        Players players = players(helper);
+        Settler visitor = arrived(helper, inn);
+        ServerLevel level = helper.getLevel();
+        Set<OriginLine.Slot> told = new HashSet<>();
+        for (int talk = 0; talk < 2; talk++) {
+            told.add(talk(helper, visitor, players.player()).told().orElseThrow(() -> helper.assertionException("The visitor told no part of its origin")));
+        }
+        helper.assertTrue(told.size() == 2, "Two different parts are told: " + told);
+        VisitorOffer offer = VisitorOffer.of(visitor);
+
+        click(players.player(), visitor, offer.price().stack(), false);
+        helper.assertTrue(!visitor.isVisitor(), "The visitor is hired");
+
+        try (StoryTalks story = StoryTalks.begin(helper)) {
+            told.forEach(slot -> helper.assertTrue(visitor.getPast().chronicle().hasTold(slot), "It keeps what it told: " + slot));
+            helper.assertTrue(StoryShare.untold(visitor).stream().noneMatch(aspect -> aspect.slot().map(told::contains).orElse(false)),
+                    "It has nothing left to tell of the parts it told: " + StoryShare.untold(visitor));
+            helper.assertFalse(StoryShare.untold(visitor).isEmpty(), "A part of its story is still untold");
+
+            visitor.getWork().decideNow(level);
+            helper.assertTrue(storyBubbles(visitor).isEmpty(), "No story bubble on the hire day, although the roll hits: " + storyBubbles(visitor));
+
+            story.nextDay();
+            visitor.getWork().decideNow(level);
+            helper.assertTrue(storyBubbles(visitor).equals(List.of(new ThoughtBubble.Show(visitor.getId(), ThoughtBubble.STORY, Items.WRITABLE_BOOK, true))),
+                    "From the next day the roll applies and the story bubble shows: " + storyBubbles(visitor));
+        }
+
+        TestPlayers.remove(players.player());
+        release(helper, inn, visitor);
+        InnGameTests.end(helper, inn);
+    }
+
+    private static List<ThoughtBubble.Show> storyBubbles(Settler settler) {
+        return settler.getWork().recentThoughts().stream().filter(show -> show.bubble() == ThoughtBubble.STORY).toList();
     }
 
     /**
