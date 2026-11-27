@@ -27,9 +27,10 @@ import net.minecraft.world.phys.Vec3;
  * no Job; this class is all it does on its own. Once per decision step ({@link SettlerWork#DECISION_INTERVAL} ticks) it looks at
  * the time of day and does what the time asks:
  * <ul>
- * <li>by day it strolls ({@link VisitorStroll}) through the settlement inside the border, with a light pull to the Pantry;</li>
- * <li>in the evening (from the end of work to its bedtime) it walks to the Pantry, eats one piece of food from the Pantry's stock,
- * and stays around the Pantry within the Tavern evening;</li>
+ * <li>by day it strolls ({@link VisitorStroll}) through the settlement inside the border, with a light pull to the Pantry, and sits
+ * on a free seat of the Tavern in turns ({@link VisitorSitting});</li>
+ * <li>in the evening (from the end of work to its bedtime) it stands up, walks to the Pantry, eats one piece of food from the
+ * Pantry's stock, and stays around the Pantry within the Tavern evening, never on a seat;</li>
  * <li>at night it walks to its guest bed and sleeps there until its waking time.</li>
  * </ul>
  * Its times are the daily times of a settler ({@link Schedule#dayTimes}), so visitors do not all go to bed at the same tick. Each
@@ -77,8 +78,9 @@ public final class VisitorDay {
     }
 
     private final Settler visitor;
+    private final VisitorSitting sitting;
     private Part part = Part.DAY;
-    /** Whether the stroll goal may start a stroll: not while the visitor walks to the Pantry or its bed, or lies in it. */
+    /** Whether the stroll goal may start a stroll: not while the visitor walks to a seat, the Pantry or its bed, or sits or lies in it. */
     private boolean mayStroll = true;
     private @Nullable Walk walk;
 
@@ -87,6 +89,14 @@ public final class VisitorDay {
      */
     public VisitorDay(Settler visitor) {
         this.visitor = visitor;
+        this.sitting = new VisitorSitting(visitor);
+    }
+
+    /**
+     * @return the key of the seat the visitor walks to or sits on by day, empty while it strolls
+     */
+    Optional<String> heldSeat() {
+        return sitting.heldSeat();
     }
 
     /**
@@ -138,23 +148,31 @@ public final class VisitorDay {
         switch (part) {
             case NIGHT -> night(level, visit.get());
             case EVENING -> evening(level, data, settlement.get(), visit.get(), day);
-            case DAY -> strollByDay();
+            case DAY -> day(level, settlement.get(), visit.get());
         }
         visitor.getWork().meetAsVisitor(level);
     }
 
-    private void strollByDay() {
+    /** The day: a stroll, then a walk to a free seat and a sitting, in turns. */
+    private void day(ServerLevel level, Settlement settlement, Visit visit) {
         wakeUp();
-        walk = null;
-        mayStroll = true;
         visitor.clearHome();
+        Optional<BlockPos> seat = sitting.dayStep(level, settlement, visit);
+        mayStroll = sitting.strolls();
+        if (seat.isEmpty()) {
+            walk = null;
+        } else if (reached(level, seat.get(), VisitorSitting.SEAT_REACH)) {
+            sitting.sitDown(level, visit);
+        }
     }
 
     /**
      * The evening: to the Pantry for the meal, then around the Pantry. A Pantry that is gone serves no meal and sends nobody away:
-     * the visitor stays the night and leaves at the next morning check, which the inn plays.
+     * the visitor stays the night and leaves at the next morning check, which the inn plays. A visitor that still sits stands up
+     * first: the seats are the settlers'.
      */
     private void evening(ServerLevel level, SettlementData data, Settlement settlement, Visit visit, long day) {
+        sitting.standDown();
         wakeUp();
         visitor.setHomeTo(visit.pantry(), EVENING_RADIUS);
         boolean hungry = visit.fedDay() != day && ClerkStorage.pantryAt(settlement, visit.pantry()).isPresent();
@@ -177,6 +195,7 @@ public final class VisitorDay {
 
     /** The night: to the guest bed and into it. A visitor without a bed stands where it is until morning. */
     private void night(ServerLevel level, Visit visit) {
+        sitting.standDown();
         mayStroll = false;
         if (visitor.isSleeping()) {
             walk = null;
@@ -233,7 +252,7 @@ public final class VisitorDay {
 
     @Override
     public String toString() {
-        return "VisitorDay[" + part + ", mayStroll=" + mayStroll + ", walk=" + walk + ", navigationDone=" + visitor.getNavigation().isDone()
+        return "VisitorDay[" + part + ", " + sitting + ", mayStroll=" + mayStroll + ", walk=" + walk + ", navigationDone=" + visitor.getNavigation().isDone()
                 + ", at " + visitor.blockPosition() + "]";
     }
 
