@@ -40,7 +40,7 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
  * {@link EntertainmentRules#tavernPoints} once per evening.
  * <p>
  * The seats and the walk to them are in {@link TavernSeats} and {@code SettlerTavern}; this class holds the count, the
- * jukebox check and the catch-up of a missed evening.
+ * jukebox check, the condition a drink needs for its points and the catch-up of a missed evening.
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public final class Tavern {
@@ -70,6 +70,31 @@ public final class Tavern {
      */
     public static boolean isEvening(long dayTime) {
         return dayTime >= SettlerWork.WORK_END && dayTime < ClerkStorage.TAVERN_SHIFT_END;
+    }
+
+    /**
+     * @param dayTime a day time (0 = 06:00)
+     * @return whether a guest may fetch a drink then: in the Tavern evening, with at least the refill limit of ticks left until
+     *         the end of the Tavern Host's shift (a drink already begun is finished after that)
+     */
+    public static boolean ordersOpen(long dayTime) {
+        return isEvening(dayTime) && ClerkStorage.TAVERN_SHIFT_END - dayTime >= EntertainmentRules.get().drinks().refillLimitTicks();
+    }
+
+    /**
+     * Whether the condition of the Tavern evening holds at a Pantry now: enough settlers present (condition A) or a jukebox that
+     * holds a disc (B). A finished drink gives its points only while it holds. The jukebox is only read when the crowd is too
+     * small.
+     *
+     * @param level  the level
+     * @param pantry the Pantry
+     * @return whether the condition holds
+     */
+    public static boolean conditionHolds(ServerLevel level, BlockPos pantry) {
+        EntertainmentRules rules = EntertainmentRules.get();
+        return SettlementData.get(level).settlementAt(pantry)
+                .map(settlement -> rules.crowdHolds(present(level, settlement, pantry, rules).size()) || jukeboxHoldsDisc(level, pantry, rules.jukeboxRadius()))
+                .orElse(false);
     }
 
     /**
@@ -166,8 +191,13 @@ public final class Tavern {
                 .min(Comparator.comparingDouble((SettlementBlock block) -> block.pos().distSqr(settler.blockPosition())))
                 .map(pantry -> new Hosted(settlement, pantry.pos()))).ifPresent(missed -> {
                     EntertainmentRules rules = EntertainmentRules.get();
-                    double points = rules.tavernPoints(membersOnPlace(level, missed.settlement()), jukeboxHoldsDisc(level, missed.pantry(), rules.jukeboxRadius()));
-                    pay(List.of(settler), points, day);
+                    int members = membersOnPlace(level, missed.settlement());
+                    boolean jukebox = jukeboxHoldsDisc(level, missed.pantry(), rules.jukeboxRadius());
+                    pay(List.of(settler), rules.tavernPoints(members, jukebox), day);
+                    if (rules.conditionHolds(members, jukebox)) {
+                        // The Tavern condition holds, whatever the points are: the settler has its drinks from the stock, if the Pantry is loaded.
+                        settler.getWork().drinkInCatchUp(level, missed.pantry(), day);
+                    }
                 });
     }
 

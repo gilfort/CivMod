@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:visitor_drinks_no_beer",
+  "function": "civmod:visitor_drinks_no_beer",
+  "max_ticks": 2500,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

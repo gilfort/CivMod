@@ -235,8 +235,8 @@ public final class EntertainmentGameTests {
             helper.assertTrue(row.met() == (tier == 2), "6 is more than 5 but not more than 8, tier " + tier + ": " + row.met());
             helper.assertTrue(key(row.detail()).equals("civmod.need.entertainment.detail") && args(row.detail()).equals(List.of("6", "10")),
                     "The row reads 6/10: " + row.detail());
-            helper.assertTrue(key(row.tooltip()).equals("civmod.need.entertainment.tooltip") && args(row.tooltip()).equals(List.of("3", "0", "12")),
-                    "The tooltip lists today's 3 points, 0 from conversations and 12 % speed: " + row.tooltip());
+            helper.assertTrue(key(row.tooltip()).equals("civmod.need.entertainment.tooltip") && args(row.tooltip()).equals(List.of("3", "0", "0", "12")),
+                    "The tooltip lists today's 3 points, 0 from conversations, 0 from beer and 12 % speed: " + row.tooltip());
         }
         helper.assertTrue(report.rows(1).stream().noneMatch(row -> isEntertainment(row)) && report.rows(4).stream().noneMatch(row -> isEntertainment(row)),
                 "No Entertainment row in the other tiers");
@@ -244,7 +244,12 @@ public final class EntertainmentGameTests {
         // A conversation: its 0.5 count in today's points and have a line of their own.
         settler.getWork().setEntertainment(Entertainment.of(3).add(3, today).talked(0.5, today, 1L));
         helper.assertTrue(args(SettlerInfo.of(settler).needs().rows(2).stream().filter(row -> isEntertainment(row)).findFirst().orElseThrow().tooltip())
-                .equals(List.of("3.5", "0.5", "13")), "The tooltip lists 3.5 points today, 0.5 of them from conversations, and 13 % speed");
+                .equals(List.of("3.5", "0.5", "0", "13")), "The tooltip lists 3.5 points today, 0.5 of them from conversations, and 13 % speed");
+
+        // A beer: its points count in today's points and have a line of their own.
+        settler.getWork().setEntertainment(Entertainment.of(3).add(3, today).tookDrink(today).drankDrink(0.5, today));
+        helper.assertTrue(args(SettlerInfo.of(settler).needs().rows(2).stream().filter(row -> isEntertainment(row)).findFirst().orElseThrow().tooltip())
+                .equals(List.of("3.5", "0", "0.5", "13")), "The tooltip lists 3.5 points today, 0.5 of them from beer, and 13 % speed");
 
         // Another day: today's points are gone.
         settler.getWork().setEntertainment(Entertainment.of(3).add(3, today - 1));
@@ -272,7 +277,7 @@ public final class EntertainmentGameTests {
 
         host.getWork().setEntertainment(Entertainment.of(3).add(3, calendar).talked(0.5, calendar, 1L));
         List<String> tooltip = args(SettlerInfo.of(host).needs().rows(2).stream().filter(row -> isEntertainment(row)).findFirst().orElseThrow().tooltip());
-        helper.assertTrue(tooltip.equals(List.of("3.5", "0.5", "13")),
+        helper.assertTrue(tooltip.equals(List.of("3.5", "0.5", "0", "13")),
                 "The tooltip counts the calendar day's points, 0.5 of them from conversations, though the Host's day has begun: " + tooltip);
         TestAssignments.unassign(SettlementData.get(level), pantry);
         host.discard();
@@ -316,7 +321,8 @@ public final class EntertainmentGameTests {
     private static void saved(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         Settler settler = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);
-        Entertainment entertainment = new Entertainment(7.5, 12L, 3.0, 12L, 12L, 12L, 11L, 10L, new Entertainment.Talk(12L, 2, 5000L, 1.0), 12L);
+        Entertainment entertainment = new Entertainment(7.5, 12L, 3.0, 12L, 12L, 12L, 11L, 10L, new Entertainment.Talk(12L, 2, 5000L, 1.0), 12L,
+                new Entertainment.DrinkMarks(12L, 2, 1.0));
         settler.getWork().setEntertainment(entertainment);
 
         TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
@@ -380,13 +386,13 @@ public final class EntertainmentGameTests {
         // datapack files: later values override, missing values keep the defaults
         helper.assertTrue(EntertainmentRules.merge(List.of()).equals(rules), "No file: the defaults");
         EntertainmentRules merged = EntertainmentRules.merge(List.of(json("{\"decay\": 2, \"tier_2_threshold\": 4}"), json("{\"decay\": 3, \"speed_per_point\": 0.05}")));
-        helper.assertTrue(merged.equals(new EntertainmentRules(3.0, 4.0, 8.0, 0.05, 3.0, 1.5, 4, 12, 8)), "Merged in order: " + merged);
+        helper.assertTrue(merged.equals(new EntertainmentRules(3.0, 4.0, 8.0, 0.05, 2.0, 1.5, 4, 12, 8, EntertainmentRules.DrinkRules.FALLBACK)), "Merged in order: " + merged);
         EntertainmentRules tavern = EntertainmentRules.merge(List.of(json("{\"tavern_points\": 2, \"crowd_size\": 3, \"jukebox_radius\": 5}"),
                 json("{\"tavern_factor\": 2, \"tavern_radius\": 10}")));
-        helper.assertTrue(tavern.equals(new EntertainmentRules(1.0, 5.0, 8.0, 0.02, 2.0, 2.0, 3, 10, 5)), "The Tavern values merge: " + tavern);
+        helper.assertTrue(tavern.equals(new EntertainmentRules(1.0, 5.0, 8.0, 0.02, 2.0, 2.0, 3, 10, 5, EntertainmentRules.DrinkRules.FALLBACK)), "The Tavern values merge: " + tavern);
 
         // present settlers, jukebox with a disc, expected points per guest: A or B gives the base, both multiply it
-        double[][] evening = {{0, 0, 0}, {3, 0, 0}, {4, 0, 3}, {9, 0, 3}, {0, 1, 3}, {1, 1, 3}, {3, 1, 3}, {4, 1, 4.5}};
+        double[][] evening = {{0, 0, 0}, {3, 0, 0}, {4, 0, 2}, {9, 0, 2}, {0, 1, 2}, {1, 1, 2}, {3, 1, 2}, {4, 1, 3}};
         for (double[] row : evening) {
             helper.assertTrue(near(rules.tavernPoints((int) row[0], row[1] == 1), row[2]),
                     row[0] + " present, jukebox " + (row[1] == 1) + ": " + row[2] + ", got " + rules.tavernPoints((int) row[0], row[1] == 1));

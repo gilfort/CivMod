@@ -26,8 +26,8 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
 /**
  * Carries out the meal intents of the {@link Schedule} for the Settler Shell (vault {@code Systems/Needs.md}): eat from
@@ -46,6 +46,17 @@ final class SettlerMeals {
     private static final double MEAL_BONUS_PER_LEVEL = 0.01;
     /** Players within this distance get the hunger message. */
     private static final double COMPLAIN_RANGE = 32.0;
+    /** Lowest pitch of an eating or drinking sound; the pitch of one sound varies from here by {@link #PITCH_SPREAD}. */
+    private static final float PITCH_LOWEST = 0.9F;
+    private static final float PITCH_SPREAD = 0.2F;
+
+    /**
+     * @param random the source to draw from
+     * @return the pitch of one eating or drinking sound, a little different each time (0.9 to 1.1)
+     */
+    static float variedPitch(RandomSource random) {
+        return PITCH_LOWEST + random.nextFloat() * PITCH_SPREAD;
+    }
 
     /**
      * A meal the settler took at a food point and eats beside it, one item at a time: where it took the food, the day it
@@ -170,6 +181,8 @@ final class SettlerMeals {
             key = "fetching_food";
         } else if (activity == Activity.WAIT_FOR_FOOD) {
             key = "waiting_for_food";
+        } else if (activity == Activity.ORDER_DRINK) {
+            key = "fetching_drink";
         } else if (hungryNoFood) {
             key = food.level() <= 0 ? "starving" : "hungry";
         }
@@ -601,11 +614,11 @@ final class SettlerMeals {
         return served ? 1.0 + MEAL_BONUS_PER_LEVEL * ClerkCounter.clerkSkill(level, point.clerk()) : 1.0;
     }
 
-    /** Bowls and bottles of earlier meals go back into the stock. */
-    private void returnContainers(Stock stock) {
+    /** Bowls and bottles of earlier meals and drinks go back into the stock. */
+    void returnContainers(Stock stock) {
         for (int i = Settler.POCKETS_START; i < Settler.POCKETS_START + Settler.POCKETS_SIZE; i++) {
             ItemStack stack = settler.getInventory().getItem(i);
-            if (stack.is(Items.BOWL) || stack.is(Items.GLASS_BOTTLE)) {
+            if (SettlerFood.isEmptyContainer(stack)) {
                 settler.getInventory().setItem(i, stock.insert(stack));
             }
         }
@@ -737,7 +750,7 @@ final class SettlerMeals {
             return;
         }
         level.playSound(null, settler.getX(), settler.getY(), settler.getZ(), net.minecraft.sounds.SoundEvents.GENERIC_EAT.value(),
-                net.minecraft.sounds.SoundSource.NEUTRAL, 0.6F, 0.9F + level.getRandom().nextFloat() * 0.2F);
+                net.minecraft.sounds.SoundSource.NEUTRAL, 0.6F, variedPitch(level.getRandom()));
         if (!item.isEmpty()) {
             level.sendParticles(new net.minecraft.core.particles.ItemParticleOption(net.minecraft.core.particles.ParticleTypes.ITEM,
                     net.minecraft.world.item.ItemStackTemplate.fromNonEmptyStack(item)),
@@ -749,7 +762,7 @@ final class SettlerMeals {
      * @param stack a stack
      * @return what did not fit into the pockets
      */
-    private ItemStack addToPockets(ItemStack stack) {
+    ItemStack addToPockets(ItemStack stack) {
         ItemStack rest = stack.copy();
         for (int i = Settler.POCKETS_START; i < Settler.POCKETS_START + Settler.POCKETS_SIZE && !rest.isEmpty(); i++) {
             ItemStack slot = settler.getInventory().getItem(i);

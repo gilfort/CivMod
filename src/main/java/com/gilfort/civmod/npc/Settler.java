@@ -112,6 +112,8 @@ public class Settler extends PathfinderMob {
     /** Whether the settler is a visitor of an inn. Synched so the clients draw the visitor marker (a compass above the name tag). */
     private static final EntityDataAccessor<Boolean> VISITOR_MARKER = SynchedEntityData.defineId(Settler.class,
             EntityDataSerializers.BOOLEAN);
+    /** Whether the settler takes a sip of its drink now. Synched so the clients raise the arm to the mouth. */
+    private static final EntityDataAccessor<Boolean> SIPPING = SynchedEntityData.defineId(Settler.class, EntityDataSerializers.BOOLEAN);
     /** Entity event: a fish bites, the client dips the bobber and reels in the line. */
     private static final byte FISH_CAUGHT_EVENT = 100;
     /** Ticks the line stays out after the work last asked for it (the work asks every tick). */
@@ -184,6 +186,25 @@ public class Settler extends PathfinderMob {
         builder.define(STRAW, -1);
         builder.define(CAST_TARGET, Optional.empty());
         builder.define(VISITOR_MARKER, false);
+        builder.define(SIPPING, false);
+    }
+
+    /**
+     * @return whether the settler takes a sip of its drink now (the client draws the arm raised to the mouth)
+     */
+    public boolean isSipping() {
+        return entityData.get(SIPPING);
+    }
+
+    /**
+     * Server: starts or ends a sip.
+     *
+     * @param sipping whether the settler sips now
+     */
+    public void setSipping(boolean sipping) {
+        if (isSipping() != sipping) {
+            entityData.set(SIPPING, sipping);
+        }
     }
 
     /**
@@ -566,8 +587,9 @@ public class Settler extends PathfinderMob {
      * @param settlement the settlement the visitor joins
      */
     public void becomeSettler(SettlementData data, Settlement settlement) {
-        // A visitor hired in its sleep leaves its guest bed free.
+        // A visitor hired in its sleep leaves its guest bed free; one hired with a beer in its hand puts it back.
         wakeUp();
+        visitorDay.hired();
         setVisitedSettlementId(-1);
         joinSettlement(data, settlement);
         if (level() instanceof ServerLevel level) {

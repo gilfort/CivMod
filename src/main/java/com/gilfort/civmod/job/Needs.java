@@ -132,7 +132,8 @@ final class Needs {
             // Tavern Host starts at its early waking time.
             long today = DayClock.day(context.level());
             Component tooltip = Component.translatable("civmod.need.entertainment.tooltip", Entertainment.format(entertainment.pointsOn(today)),
-                    Entertainment.format(entertainment.talk().pointsOn(today)), Entertainment.format(rules.speedBonus(entertainment.value()) * 100.0));
+                    Entertainment.format(entertainment.talk().pointsOn(today)), Entertainment.format(entertainment.drinks().pointsOn(today)),
+                    Entertainment.format(rules.speedBonus(entertainment.value()) * 100.0));
             return new Check(rules.met(entertainment.value(), tier), detail, List.of(), tooltip);
         }
     }

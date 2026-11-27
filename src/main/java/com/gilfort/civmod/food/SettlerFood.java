@@ -21,6 +21,7 @@ import net.minecraft.world.food.FoodData;
 import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.UseRemainder;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
@@ -387,10 +388,18 @@ public final class SettlerFood {
 
     /**
      * @param stack an item stack
-     * @return whether settlers eat it (food component, not tagged {@link #INEDIBLE})
+     * @return whether it is an empty container a meal or a drink leaves behind (bowl, glass bottle): it goes back into the Pantry
+     */
+    public static boolean isEmptyContainer(ItemStack stack) {
+        return stack.is(Items.BOWL) || stack.is(Items.GLASS_BOTTLE);
+    }
+
+    /**
+     * @param stack an item stack
+     * @return whether settlers eat it (food component, not tagged {@link #INEDIBLE}, not a {@link TavernDrinks drink})
      */
     public static boolean isEdible(ItemStack stack) {
-        return !stack.isEmpty() && stack.has(DataComponents.FOOD) && !stack.is(INEDIBLE);
+        return !stack.isEmpty() && stack.has(DataComponents.FOOD) && !stack.is(INEDIBLE) && !TavernDrinks.is(stack);
     }
 
     /**

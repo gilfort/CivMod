@@ -3,9 +3,18 @@
   "tier_2_threshold": 5,
   "tier_3_threshold": 8,
   "speed_per_point": 0.02,
-  "tavern_points": 3,
+  "tavern_points": 2,
   "tavern_factor": 1.5,
   "crowd_size": 4,
   "tavern_radius": 12,
-  "jukebox_radius": 8
+  "jukebox_radius": 8,
+  "drink_points": 0.5,
+  "sips_min": 3,
+  "sips_max": 5,
+  "sip_ticks": 60,
+  "pause_min_ticks": 100,
+  "pause_max_ticks": 200,
+  "max_drinks_per_evening": 3,
+  "refill_limit_ticks": 1000,
+  "catchup_drinks": 2
 }
