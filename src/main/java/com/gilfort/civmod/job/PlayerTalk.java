@@ -215,12 +215,13 @@ public final class PlayerTalk {
     }
 
     /**
-     * "I work as a Lumberjack." for the job the settler works at now, or its top-priority job while it rests or walks, and a second
-     * sentence: the status of that job if it waits on something the player can fix, else that things are running fine.
+     * "I work as a Lumberjack." for the job the settler works at now (also while it delivers), or its top-priority job while it rests
+     * or walks, and a second sentence: the status of that job if it waits on something the player can fix, else that things are
+     * running fine.
      */
     private static Component job(Settler settler, RandomSource random) {
         SettlerWork work = settler.getWork();
-        SettlerJob job = work.atWork() ? work.activeJob().orElseThrow() : work.jobs().getFirst();
+        SettlerJob job = work.jobInProgress().orElseGet(() -> work.jobs().getFirst());
         Component second = work.status(job.jobBlock()).isWaiting()
                 ? Component.translatable("civmod.talk.small.job.waiting", work.statusText(job.jobBlock()))
                 : variant("job.fine", random);

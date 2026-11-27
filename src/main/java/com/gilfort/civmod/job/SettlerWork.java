@@ -644,6 +644,14 @@ public final class SettlerWork {
     }
 
     /**
+     * @return the job the settler works at now, on a job step or while it delivers the result of one; empty while it rests, eats or
+     *         walks elsewhere, although {@link #activeJob()} still names the last job then
+     */
+    Optional<SettlerJob> jobInProgress() {
+        return activity == Activity.JOB || activity == Activity.DELIVER ? activeJob() : Optional.empty();
+    }
+
+    /**
      * @return the job the settler currently works on
      */
     public Optional<SettlerJob> activeJob() {

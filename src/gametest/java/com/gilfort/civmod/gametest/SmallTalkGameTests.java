@@ -63,6 +63,7 @@ public final class SmallTalkGameTests {
             register(helper, "small_talk_job_running_fine", SmallTalkGameTests::jobRunningFine);
             register(helper, "small_talk_job_waiting_status", SmallTalkGameTests::jobWaitingStatus);
             register(helper, "small_talk_job_top_priority", SmallTalkGameTests::jobTopPriority);
+            register(helper, "small_talk_job_while_delivering", SmallTalkGameTests::jobWhileDelivering);
             register(helper, "small_talk_homeless_weather_and_time_only", SmallTalkGameTests::homelessTopics);
             register(helper, "small_talk_jobless_has_no_job_topic", SmallTalkGameTests::joblessTopics);
         });
@@ -282,6 +283,25 @@ public final class SmallTalkGameTests {
             TalkJobStatus.set(scene.settler(), scene.jobBlock(), JobStatus.NO_TOOL);
             helper.assertTrue(args(scene.say(3, 0))[1].equals(Component.translatable("civmod.talk.small.job.waiting", JobStatus.NO_TOOL.displayName())),
                     "The status of the first job counts");
+            helper.succeed();
+        } finally {
+            scene.cleanup();
+        }
+    }
+
+    /** A settler that delivers talks about the job it delivers for, also when that is its second job, and about that job's status. */
+    private static void jobWhileDelivering(GameTestHelper helper) {
+        Scene scene = working(helper, true);
+        try {
+            TalkJobStatus.startDelivery(helper.getLevel(), scene.settler(), scene.otherJobBlock());
+            TalkJobStatus.set(scene.settler(), scene.jobBlock(), JobStatus.NO_FOOD);
+            Component line = scene.say(3, 0);
+            helper.assertTrue(args(line)[0].equals(work(ModJobs.MINER.get())), "It names the job it delivers for: " + args(line)[0]);
+            helper.assertTrue(args(line)[1] instanceof Component second && key(second).equals("civmod.talk.small.job.fine.0"),
+                    "The status of the first job does not count: " + args(line)[1]);
+            TalkJobStatus.set(scene.settler(), scene.otherJobBlock(), JobStatus.NO_TOOL);
+            helper.assertTrue(args(scene.say(3, 0))[1].equals(Component.translatable("civmod.talk.small.job.waiting", JobStatus.NO_TOOL.displayName())),
+                    "The status of the job it delivers for counts");
             helper.succeed();
         } finally {
             scene.cleanup();
