@@ -62,9 +62,13 @@ final class SettlerTavern {
     /** When the guest sat down this evening, as far as the Tavern count saw; not saved. */
     private @Nullable Sitting sitting;
 
-    SettlerTavern(SettlerWork shell) {
+    /**
+     * @param shell  the work object of the settler
+     * @param drinks the settler's drinks, which the shell also puts down and catches up
+     */
+    SettlerTavern(SettlerWork shell, SettlerDrinks drinks) {
         this.settler = shell.settler();
-        this.drinks = new SettlerDrinks(shell);
+        this.drinks = drinks;
     }
 
     /**
@@ -170,20 +174,6 @@ final class SettlerTavern {
         booking = null;
         sitting = null;
         drinks.drop();
-    }
-
-    /** The settler does not spend the evening in the Tavern (any more): a drink it holds is put down. */
-    void dropDrink() {
-        drinks.drop();
-    }
-
-    /**
-     * @param level  the level
-     * @param pantry the Pantry of the missed evening
-     * @param day    the day of that evening
-     */
-    void drinkInCatchUp(ServerLevel level, BlockPos pantry, long day) {
-        drinks.catchUp(level, pantry, day);
     }
 
     /**

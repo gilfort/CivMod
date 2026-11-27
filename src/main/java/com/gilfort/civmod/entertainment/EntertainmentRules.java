@@ -99,16 +99,23 @@ public record EntertainmentRules(double decay, double tier2Threshold, double tie
             Optional<Integer> pauseMinTicks, Optional<Integer> pauseMaxTicks, Optional<Integer> maxPerEvening, Optional<Integer> refillLimitTicks,
             Optional<Integer> catchup) {
 
+        /** Upper bounds of the datapack values. */
+        private static final int MAX_SIPS = 20;
+        private static final int MAX_SIP_TICKS = 1200;
+        private static final int MAX_PAUSE_TICKS = 2400;
+        private static final int MAX_DRINKS = 20;
+        private static final int MAX_REFILL_LIMIT_TICKS = 14000;
+
         static final Codec<DrinkPart> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                 Codec.doubleRange(0.0, MAX).optionalFieldOf("drink_points").forGetter(DrinkPart::points),
-                Codec.intRange(1, 20).optionalFieldOf("sips_min").forGetter(DrinkPart::sipsMin),
-                Codec.intRange(1, 20).optionalFieldOf("sips_max").forGetter(DrinkPart::sipsMax),
-                Codec.intRange(1, 1200).optionalFieldOf("sip_ticks").forGetter(DrinkPart::sipTicks),
-                Codec.intRange(0, 2400).optionalFieldOf("pause_min_ticks").forGetter(DrinkPart::pauseMinTicks),
-                Codec.intRange(0, 2400).optionalFieldOf("pause_max_ticks").forGetter(DrinkPart::pauseMaxTicks),
-                Codec.intRange(0, 20).optionalFieldOf("max_drinks_per_evening").forGetter(DrinkPart::maxPerEvening),
-                Codec.intRange(0, 14000).optionalFieldOf("refill_limit_ticks").forGetter(DrinkPart::refillLimitTicks),
-                Codec.intRange(0, 20).optionalFieldOf("catchup_drinks").forGetter(DrinkPart::catchup)
+                Codec.intRange(1, MAX_SIPS).optionalFieldOf("sips_min").forGetter(DrinkPart::sipsMin),
+                Codec.intRange(1, MAX_SIPS).optionalFieldOf("sips_max").forGetter(DrinkPart::sipsMax),
+                Codec.intRange(1, MAX_SIP_TICKS).optionalFieldOf("sip_ticks").forGetter(DrinkPart::sipTicks),
+                Codec.intRange(0, MAX_PAUSE_TICKS).optionalFieldOf("pause_min_ticks").forGetter(DrinkPart::pauseMinTicks),
+                Codec.intRange(0, MAX_PAUSE_TICKS).optionalFieldOf("pause_max_ticks").forGetter(DrinkPart::pauseMaxTicks),
+                Codec.intRange(0, MAX_DRINKS).optionalFieldOf("max_drinks_per_evening").forGetter(DrinkPart::maxPerEvening),
+                Codec.intRange(0, MAX_REFILL_LIMIT_TICKS).optionalFieldOf("refill_limit_ticks").forGetter(DrinkPart::refillLimitTicks),
+                Codec.intRange(0, MAX_DRINKS).optionalFieldOf("catchup_drinks").forGetter(DrinkPart::catchup)
         ).apply(instance, DrinkPart::new));
 
         DrinkRules over(DrinkRules base) {
@@ -201,9 +208,10 @@ public record EntertainmentRules(double decay, double tier2Threshold, double tie
      * @param present settlers present at the Pantry, the Tavern Host included
      * @return whether the crowd is big enough (condition A)
      */
-    public boolean crowdHolds(int present) {
+    boolean crowdHolds(int present) {
         return present >= crowdSize;
     }
+
 
     /**
      * The points of one Tavern evening: the base points if the crowd (condition A) or the jukebox (condition B) holds,

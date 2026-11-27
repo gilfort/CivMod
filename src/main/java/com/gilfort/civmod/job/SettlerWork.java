@@ -153,6 +153,7 @@ public final class SettlerWork {
     /** Rest: carries out the rest intents of the Schedule. */
     private final SettlerRest resting;
     /** Tavern: books a seat in the evening and sits there. */
+    private final SettlerDrinks drinks;
     private final SettlerTavern tavern;
     /** Needs: the need tier and the limit it puts on the level the settler works at. */
     private final SettlerNeeds needs;
@@ -201,7 +202,8 @@ public final class SettlerWork {
         thoughts = new SettlerThoughts(settler);
         meals = new SettlerMeals(this);
         resting = new SettlerRest(settler);
-        tavern = new SettlerTavern(this);
+        drinks = new SettlerDrinks(this);
+        tavern = new SettlerTavern(this, drinks);
         needs = new SettlerNeeds(this);
         social = new SettlerSocial(settler);
     }
@@ -1289,7 +1291,7 @@ public final class SettlerWork {
         }
         meals.mark(decision, day, dayTime);
         if (decision.intent() != Intent.GO_TO_TAVERN) {
-            tavern.dropDrink();
+            drinks.drop();
         }
         if (decision.complain()) {
             meals.complain(level, day);
@@ -2206,7 +2208,7 @@ public final class SettlerWork {
      * @param day    the day of the missed evening
      */
     public void drinkInCatchUp(ServerLevel level, BlockPos pantry, long day) {
-        tavern.drinkInCatchUp(level, pantry, day);
+        drinks.catchUp(level, pantry, day);
     }
 
     /**
@@ -2507,6 +2509,29 @@ public final class SettlerWork {
      */
     public void setEntertainment(Entertainment entertainment) {
         needs.setEntertainment(entertainment);
+    }
+
+    /**
+     * @param day the settler day of an evening
+     * @return how many drinks the settler took at the Tavern that evening
+     */
+    int drinksOn(long day) {
+        return entertainment().drinks().on(day);
+    }
+
+    /**
+     * @param day the settler day of the evening: counts a drink taken at the counter
+     */
+    void countDrinkTaken(long day) {
+        setEntertainment(entertainment().tookDrink(day));
+    }
+
+    /**
+     * @param points the Entertainment the finished drink gives
+     * @param day    the settler day of the evening
+     */
+    void countDrinkDrunk(double points, long day) {
+        setEntertainment(entertainment().drankDrink(points, day));
     }
 
     /**

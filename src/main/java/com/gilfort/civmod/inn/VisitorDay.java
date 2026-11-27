@@ -203,7 +203,7 @@ public final class VisitorDay {
 
     /** The beer: a walk to the counter while the evening allows one, and a stand there or on the spot until it is drunk. */
     private void drink(ServerLevel level, BlockPos pantry) {
-        Optional<SettlerDrinks.Trip> trip = drinks.walkStep(level, pantry);
+        Optional<SettlerDrinks.Trip> trip = drinks.tripToCounter(level, pantry);
         if (trip.isPresent() && reached(level, trip.get().target(), trip.get().reach())) {
             drinks.arrived();
         }
