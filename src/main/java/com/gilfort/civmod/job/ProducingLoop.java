@@ -3,6 +3,7 @@ package com.gilfort.civmod.job;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,9 +12,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import org.jspecify.annotations.Nullable;
+
+import com.google.common.base.Suppliers;
 
 import com.gilfort.civmod.api.BlockingReason;
 import com.gilfort.civmod.api.JobCraftingRecipe;
@@ -166,13 +170,14 @@ final class ProducingLoop implements CategoryLoop {
             }
             Pick pick = start(level, job, site, stations(level, job, site, day, ofDay), level.getGameTime(), dayTime, false);
             if (pick.round().isEmpty()) {
-                return pick.status().map(status -> JobStep.skip(status, pick.subject())).orElseGet(JobStep::skip);
+                return pick.status().map(status -> status == JobStatus.BLOCKED ? JobStep.blocked(BlockingReason.of(pick.subject().orElseThrow()))
+                        : JobStep.skip(status, pick.subject())).orElseGet(JobStep::skip);
             }
             workplace.setRound(pick.round().get());
         }
         Round round = Objects.requireNonNull(workplace.round());
         if (round.always() && round.phase == Round.Phase.WAIT
-                && requested(level, site, workable(level, job, site, Patterns.usable(level, site.block(), job.jobType()), level.getGameTime(), dayTime, false))) {
+                && requested(level, site, needs(level, job, site, Patterns.usable(level, site.block(), job.jobType()), level.getGameTime(), dayTime, false).workable())) {
             // A request goes first: an always-produce round does not wait for its inputs in front of it.
             release(level, jobBlock);
             return JobStep.skip();
@@ -235,7 +240,13 @@ final class ProducingLoop implements CategoryLoop {
         Map<UUID, Long> skips = workplace.skips();
         skips.values().removeIf(until -> until <= now || until - now > SKIP_TICKS);
         ProducingProfile profile = profile(job);
-        List<Pattern> checked = workable(level, job, site, Patterns.usable(level, site.block(), job.jobType()), now, dayTime, catchUp);
+        List<Pattern> usable = Patterns.usable(level, site.block(), job.jobType());
+        List<Request> open = Requests.claimable(settlement);
+        PatternNeeds needs = needs(level, job, site, usable, now, dayTime, catchUp);
+        if (supplyTools(level, job, site, needs, now)) {
+            needs = needs(level, job, site, usable, now, dayTime, catchUp);
+        }
+        List<Pattern> checked = needs.workable();
         List<Pattern> requestable = requestable(level, checked);
         JobBuffer buffer = workplace.buffer();
         Map<ItemKey, Integer> held = buffer.counts();
@@ -249,7 +260,7 @@ final class ProducingLoop implements CategoryLoop {
                 .map(list -> new FuelSupply(list, new Furnaces.BurnTimes(level, stations.getFirst()), stations));
         // On "Deliveryman": every store, read once at the first try.
         Map<BlockPos, Map<ItemKey, Integer>> stores = null;
-        for (Request request : Requests.claimable(settlement)) {
+        for (Request request : open) {
             if (requestable.stream().noneMatch(pattern -> pattern.output().equals(request.item()))) {
                 continue;
             }
@@ -304,7 +315,12 @@ final class ProducingLoop implements CategoryLoop {
         }
         if (tries == 0 && !skipped) {
             Optional<Round> always = alwaysRound(level, job, site, checked, fuel, now, dayTime, catchUp);
-            return new Pick(always, more, always.isPresent() ? Optional.empty() : Optional.of(JobStatus.NO_REQUEST), Optional.empty());
+            if (always.isPresent()) {
+                return new Pick(always, more, Optional.empty(), Optional.empty());
+            }
+            // A request only a recipe without its tool or station serves names that need ("Needs Shears").
+            Optional<Component> blocked = needs.blockedBy(open);
+            return new Pick(Optional.empty(), more, Optional.of(blocked.isPresent() ? JobStatus.BLOCKED : JobStatus.NO_REQUEST), blocked);
         }
         Optional<Request.Missing> missingFuel = workplace.missingFuel();
         return new Pick(Optional.empty(), more, Optional.of(missingFuel.isPresent() ? JobStatus.MISSING_FUEL : JobStatus.MISSING_INPUTS),
@@ -492,43 +508,81 @@ final class ProducingLoop implements CategoryLoop {
     }
 
     /**
-     * The usable checked patterns the settler can work now: innate recipes whose tool is neither on the belt nor in the
-     * collect inventory, or whose own station stands nowhere near the JobBlock, are skipped (vault
-     * {@code Systems/Producing Jobs.md}) and marked in the Patterns tab ("Needs Shears"); the Job keeps its other
-     * recipes.
+     * The usable checked patterns split by what the settler can work now: innate recipes whose tool is neither on the
+     * belt nor in the collect inventory, or whose own station stands nowhere near the JobBlock, are left out (vault
+     * {@code Systems/Producing Jobs.md}) and marked in the Patterns tab ("Needs Shears"), the tool before the station; the
+     * Job keeps its other recipes.
      */
-    private List<Pattern> workable(ServerLevel level, SettlerJob job, JobBlockSite site, List<Pattern> usable, long now, long dayTime, boolean catchUp) {
-        Map<ResourceKey<Recipe<?>>, Component> needs = new HashMap<>();
+    private PatternNeeds needs(ServerLevel level, SettlerJob job, JobBlockSite site, List<Pattern> usable, long now, long dayTime, boolean catchUp) {
+        Map<ResourceKey<Recipe<?>>, Component> marks = new HashMap<>();
         List<Pattern> kept = new ArrayList<>();
-        Stock collect = null;
+        List<PatternNeeds.Unworkable> left = new ArrayList<>();
+        Set<Ingredient> atHand = new HashSet<>();
+        // Read once, and only when a tool is not on the belt.
+        Supplier<Stock> collect = Suppliers.memoize(() -> stock(level, site.collect(), dayTime, catchUp));
+        Workplace workplace = shell.workplace(site.pos());
         for (Pattern pattern : usable) {
             Optional<JobCraftingRecipe> innate = InnateRecipes.recipe(level, pattern);
-            Optional<Component> need = Optional.empty();
-            if (innate.isPresent()) {
-                Optional<Ingredient> tool = innate.get().tool();
-                if (tool.isPresent() && SettlerTools.best(settler, tool.get()).isEmpty()) {
-                    if (collect == null) {
-                        collect = stock(level, site.collect(), dayTime, catchUp);
-                    }
-                    if (SettlerTools.find(collect, tool.get()).isEmpty()) {
-                        need = Optional.of(InnateRecipes.needsTool(tool.get()));
-                    }
-                }
-                Optional<TagKey<Block>> station = innate.get().station();
-                if (need.isEmpty() && station.isPresent() && !shell.workplace(site.pos()).recipeStationNear(station.get(), now,
-                        () -> !stationsAround(level, site, station.get()).isEmpty())) {
-                    need = Optional.of(InnateRecipes.needsStation(station.get()));
-                }
-            }
+            Optional<Ingredient> missingTool = innate.flatMap(recipe -> missingTool(recipe, collect, atHand));
+            Optional<Component> need = missingTool.map(InnateRecipes::needsTool).or(() -> innate.flatMap(JobCraftingRecipe::station)
+                    .filter(station -> !workplace.recipeStationNear(station, now, () -> !stationsAround(level, site, station).isEmpty()))
+                    .map(InnateRecipes::needsStation));
             Optional<ResourceKey<Recipe<?>>> id = pattern.recipe();
             if (need.isPresent() && id.isPresent()) {
-                needs.put(id.get(), need.get());
+                marks.put(id.get(), need.get());
+                left.add(new PatternNeeds.Unworkable(pattern, need.get(), missingTool, !drawsAtRandom(level, pattern)));
             } else {
                 kept.add(pattern);
             }
         }
-        Patterns.setNeeds(level, site.pos(), job.jobType(), needs);
-        return kept;
+        Patterns.setNeeds(level, site.pos(), job.jobType(), marks);
+        return new PatternNeeds(kept, left, atHand);
+    }
+
+    /**
+     * @param recipe  an innate recipe
+     * @param collect the collect inventory
+     * @param atHand  collects the tools on the belt or in the collect inventory
+     * @return the recipe's tool when the settler has none of it at hand
+     */
+    private Optional<Ingredient> missingTool(JobCraftingRecipe recipe, Supplier<Stock> collect, Set<Ingredient> atHand) {
+        Optional<Ingredient> tool = recipe.tool();
+        if (tool.isEmpty()) {
+            return Optional.empty();
+        }
+        if (SettlerTools.best(settler, tool.get()).isPresent() || SettlerTools.find(collect.get(), tool.get()).isPresent()) {
+            atHand.add(tool.get());
+            return Optional.empty();
+        }
+        return tool;
+    }
+
+    /**
+     * The tool supply of innate recipes (vault {@code Systems/Producing Jobs.md}): a missing tool somebody wants
+     * ({@link PatternNeeds#wantedTools}) is taken from the Home Clerk's store or ordered there
+     * ({@link ToolOrders#supplyRecipeTool}); a tool at hand ends the settler's request for it. Each tool is looked at once
+     * per in-game hour and at once when it goes from missing to at hand or back ({@link Workplace#toolCheckDue}), live and
+     * in catch-up alike.
+     *
+     * @return whether a tool reached the collect inventory: the patterns are sorted anew
+     */
+    private boolean supplyTools(ServerLevel level, SettlerJob job, JobBlockSite site, PatternNeeds needs, long now) {
+        Workplace workplace = shell.workplace(site.pos());
+        for (Ingredient tool : needs.toolsAtHand()) {
+            if (workplace.toolCheckDue(tool, false, now)) {
+                ToolOrders.recipeToolAtHand(level, settler.getUUID(), tool);
+            }
+        }
+        if (needs.unworkable().isEmpty()) {
+            return false;
+        }
+        boolean arrived = false;
+        for (Ingredient tool : needs.wantedTools(Requests.claimable(site.settlement()))) {
+            if (workplace.toolCheckDue(tool, true, now)) {
+                arrived |= ToolOrders.supplyRecipeTool(level, settler, job, site, tool);
+            }
+        }
+        return arrived;
     }
 
     /**
@@ -1526,8 +1580,8 @@ final class ProducingLoop implements CategoryLoop {
             Round round = workplace.round();
             if (round.phase == Round.Phase.WAIT) {
                 long now = (long) clock;
-                if (round.always() && requested(level, site, workable(level, job, site, Patterns.usable(level, site.block(), job.jobType()), now,
-                        DayClock.dayTime(now), true))) {
+                if (round.always() && requested(level, site, needs(level, job, site, Patterns.usable(level, site.block(), job.jobType()), now,
+                        DayClock.dayTime(now), true).workable())) {
                     // A request goes first, like in a live decision.
                     release(level, jobBlock);
                     continue;

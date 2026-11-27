@@ -8,6 +8,7 @@ import java.util.function.Predicate;
 
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.logistics.ItemKey;
 import com.gilfort.civmod.logistics.Producers;
 import com.gilfort.civmod.logistics.Request;
@@ -28,6 +29,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Ingredient;
 
 /**
  * The automatic tool supply (vault {@code Systems/Needs.md}, decisions of 2026-11-15): a settler of any Job with a tool
@@ -99,6 +101,67 @@ public final class ToolOrders {
         }
         chooseTool(need).ifPresent(tool -> Requests.postReserved(SettlementData.get(level), settlement, ItemKey.of(tool), 1, home.get(), me));
         return false;
+    }
+
+    /**
+     * The tool supply of an innate recipe of a Producing Job (vault {@code Systems/Producing Jobs.md}), called when the
+     * recipe lacks its tool and an open request or "Always produce" wants it. The tool staircase does not apply: any tool
+     * of the recipe's kind in the Home Clerk's store is held for the settler, the highest tier first. When none is in
+     * stock, the request goes to the Home Clerk, reserved for the settler, for the lowest tier a producer of the
+     * settlement can make, else for the lowest tier; golden tools are never ordered. A request nobody can make waits
+     * with "Missing: ..." and never steps down. Same Home Clerk, same "Auto supply" switch and same hand-over as
+     * {@link #supply}.
+     *
+     * @param level   the level
+     * @param settler the settler without the tool
+     * @param job     its Producing Job
+     * @param site    the JobBlock of the Job
+     * @param tool    the recipe's tool
+     * @return whether a tool is free stock in the collect inventory now: the settler can work the recipe at once
+     */
+    static boolean supplyRecipeTool(ServerLevel level, Settler settler, SettlerJob job, JobBlockSite site, Ingredient tool) {
+        Optional<BlockPos> home = supplyClerk(site);
+        if (home.isEmpty()) {
+            return false;
+        }
+        Settlement settlement = site.settlement();
+        ReservedFor me = ReservedFor.settler(settler.getUUID());
+        Predicate<Item> kind = kindOf(tool);
+        HeldSupply.Want want = new HeldSupply.Want(level, settlement, site, job, me, kind, stack -> true);
+        HeldSupply.Held held = HeldSupply.handOver(want);
+        if (held != HeldSupply.Held.NOTHING) {
+            return held == HeldSupply.Held.IN_COLLECT;
+        }
+        if (HeldSupply.onItsWay(want) || HeldSupply.asked(want).isPresent()) {
+            return false;
+        }
+        Optional<ItemKey> inStore = ClerkStorage.stock(level, home.get(), true).counts().keySet().stream()
+                .filter(key -> kind.test(key.item()))
+                .min(Comparator.comparingInt((ItemKey key) -> -ToolTiers.tier(key.toStack())).thenComparing(vanillaFirst()));
+        if (inStore.isPresent()) {
+            Holds.hold(settlement, home.get(), me, inStore.get(), 1);
+            return HeldSupply.handOver(want) == HeldSupply.Held.IN_COLLECT;
+        }
+        List<Item> cheapestFirst = ToolStaircase.orderable(kind, ToolStaircase.Rule.NONE)
+                .sorted(Comparator.comparingInt((Item item) -> ToolTiers.tier(new ItemStack(item)))
+                        .thenComparing(ItemKey::of, vanillaFirst()))
+                .toList();
+        cheapestFirst.stream().filter(item -> Producers.canMake(level, settlement, ItemKey.of(item))).findFirst()
+                .or(() -> cheapestFirst.stream().findFirst())
+                .ifPresent(item -> Requests.postReserved(SettlementData.get(level), settlement, ItemKey.of(item), 1, home.get(), me));
+        return false;
+    }
+
+    /**
+     * The settler has an innate recipe's tool on its belt or in its collect inventory: its request for that kind of tool
+     * ends ({@link #cancel}).
+     *
+     * @param level   the level
+     * @param settler the settler
+     * @param tool    the recipe's tool
+     */
+    static void recipeToolAtHand(ServerLevel level, UUID settler, Ingredient tool) {
+        cancel(level, settler, kindOf(tool));
     }
 
     /**
@@ -208,8 +271,12 @@ public final class ToolOrders {
      * @return the comparator, the best tool first
      */
     private static Comparator<ItemKey> bestFirst(ToolStaircase.Rule rule) {
-        return Comparator.comparingInt((ItemKey key) -> -rule.rank(key.toStack()))
-                .thenComparing(key -> !BuiltInRegistries.ITEM.getKey(key.item()).getNamespace().equals(Identifier.DEFAULT_NAMESPACE))
+        return Comparator.comparingInt((ItemKey key) -> -rule.rank(key.toStack())).thenComparing(vanillaFirst());
+    }
+
+    /** Between tools of one rank: vanilla before other namespaces, then the later id (so the stone tool comes before the copper one). */
+    private static Comparator<ItemKey> vanillaFirst() {
+        return Comparator.comparing((ItemKey key) -> !BuiltInRegistries.ITEM.getKey(key.item()).getNamespace().equals(Identifier.DEFAULT_NAMESPACE))
                 .thenComparing(key -> BuiltInRegistries.ITEM.getKey(key.item()).toString(), Comparator.reverseOrder());
     }
 
@@ -241,6 +308,10 @@ public final class ToolOrders {
         // A farmer asks for nothing but what its Job needs (food, shears), and which items count as food is known only for
         // the animal types seen since the last start: so everything reserved for it goes.
         job.jobType().profile(ConsumablesProfile.class).ifPresent(profile -> cancel(level, settler.getUUID(), item -> true));
+        List<Ingredient> recipeTools = InnateRecipes.of(level, job.jobType()).stream().flatMap(holder -> holder.value().tool().stream()).toList();
+        if (!recipeTools.isEmpty()) {
+            cancel(level, settler.getUUID(), item -> recipeTools.stream().anyMatch(tool -> kindOf(tool).test(item)));
+        }
     }
 
     /**
@@ -270,5 +341,9 @@ public final class ToolOrders {
 
     static Predicate<Item> kindOf(ResourceCollectionProfile profile) {
         return item -> profile.isTool(new ItemStack(item));
+    }
+
+    private static Predicate<Item> kindOf(Ingredient tool) {
+        return item -> tool.test(new ItemStack(item));
     }
 }

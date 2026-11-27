@@ -39,6 +39,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Block;
@@ -60,6 +61,8 @@ final class Workplace {
 
     /** Ticks a blocked job waits before it is checked again. */
     static final int BLOCKED_RETRY = 600;
+    /** Ticks between two looks at the supply of one innate recipe tool: an in-game hour. */
+    static final long TOOL_CHECK_TICKS = 1000L;
 
     /** What a scan was made for; a different key triggers a rescan. */
     private record ScanKey(BlockPos center, int radius, long day) {
@@ -95,6 +98,8 @@ final class Workplace {
         private @Nullable FactorOfDay factorOfDay;
         /** Whether a station of an innate recipe's own tag stands near the JobBlock, until the next search. */
         private final Map<TagKey<Block>, StationSeen> recipeStations = new HashMap<>();
+        /** When a Producing Job looks at the supply of an innate recipe's tool next (live: game time, catch-up: the simulated clock). */
+        private final Map<Ingredient, ToolCheck> toolChecks = new HashMap<>();
         /** The day a delivery after work found the drop-off full: it is not tried again that evening. */
         private long fullAfterWorkDay = -1L;
         /** How the settler moves around the work place of a day, null before the first plan of the work. */
@@ -103,6 +108,10 @@ final class Workplace {
 
     /** The roaming of the work place of a day; a new day starts it anew. */
     private record RoamingOfDay(long day, Roaming roaming) {
+    }
+
+    /** The last look at the supply of an innate recipe's tool: whether the tool was missing, and when the next look is due. */
+    private record ToolCheck(boolean missing, long next) {
     }
 
     /** The last search for an innate recipe's station: whether one was found, and until when that counts. */
@@ -305,6 +314,25 @@ final class Workplace {
             dayState.recipeStations.put(tag, seen);
         }
         return seen.found();
+    }
+
+    /**
+     * Whether the supply of an innate recipe's tool is due for a look ({@link ProducingLoop}): at once when the tool went
+     * from missing to at hand or back since the last look, else at most once per {@value #TOOL_CHECK_TICKS} ticks and
+     * tool. A clock that went back (catch-up after live play) starts anew.
+     *
+     * @param tool     the recipe's tool
+     * @param missing  whether the settler lacks the tool now
+     * @param gameTime the time now (catch-up: the simulated clock)
+     * @return whether to look now; the next look is due an hour later
+     */
+    boolean toolCheckDue(Ingredient tool, boolean missing, long gameTime) {
+        ToolCheck last = dayState.toolChecks.get(tool);
+        if (last != null && last.missing() == missing && gameTime < last.next() && gameTime >= last.next() - TOOL_CHECK_TICKS) {
+            return false;
+        }
+        dayState.toolChecks.put(tool, new ToolCheck(missing, gameTime + TOOL_CHECK_TICKS));
+        return true;
     }
 
     /**
