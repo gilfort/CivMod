@@ -1180,7 +1180,7 @@ public final class SettlerWork {
      */
     public void spendStoryToday(ServerLevel level) {
         long day = moment(level.getOverworldClockTime()).day();
-        settler.getPast().setChronicle(settler.getPast().chronicle().withStorySpent(day));
+        settler.getPast().updateChronicle(chronicle -> chronicle.withStorySpent(day));
     }
 
     /**

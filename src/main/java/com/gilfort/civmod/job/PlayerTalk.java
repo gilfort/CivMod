@@ -164,7 +164,7 @@ public final class PlayerTalk {
     private static Result tellOrigin(Settler settler, OriginLine.Slot slot) {
         SettlerOrigin origin = settler.getPast().origin().orElseThrow();
         List<String> params = OriginLine.params(slot, origin, OriginData.race(settler.getRace()));
-        settler.getPast().setChronicle(settler.getPast().chronicle().withTold(slot));
+        settler.getPast().updateChronicle(chronicle -> chronicle.withTold(slot));
         Diary.add(settler, ModDiaryEntryTypes.ORIGIN_LINE.get(), params);
         return new Result(OriginLine.text(params), Optional.of(slot));
     }

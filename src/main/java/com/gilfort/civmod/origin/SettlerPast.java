@@ -1,6 +1,7 @@
 package com.gilfort.civmod.origin;
 
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 
 import com.gilfort.civmod.chronicle.Chronicle;
 
@@ -45,6 +46,15 @@ public final class SettlerPast {
      */
     public void setChronicle(Chronicle chronicle) {
         this.chronicle = chronicle;
+    }
+
+    /**
+     * Replaces the chronicle with a changed copy of itself, e.g. {@code updateChronicle(chronicle -> chronicle.withTold(slot))}.
+     *
+     * @param change gets the current chronicle and returns the new one
+     */
+    public void updateChronicle(UnaryOperator<Chronicle> change) {
+        chronicle = change.apply(chronicle);
     }
 
     /**
