@@ -10,7 +10,6 @@ import com.gilfort.civmod.entertainment.EntertainmentRules;
 import com.gilfort.civmod.entertainment.Tavern;
 import com.gilfort.civmod.food.SettlerFood;
 import com.gilfort.civmod.food.TavernDrinks;
-import com.gilfort.civmod.job.Schedule.Activity;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
@@ -23,19 +22,23 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * The drinks of one seated Tavern guest (vault {@code Systems/Entertainment.md}, Tavern drinks): it fetches a drink at the
- * counter of its Pantry like a meal (the same queue and service time), carries it to its seat and drinks it there in
- * several sips, with a pause between two. A finished drink gives a little Entertainment while the Tavern condition holds; the
- * empty bottle goes into the pockets and back into the Pantry with the next order.
+ * The drinks of one Tavern guest (vault {@code Systems/Entertainment.md}, Tavern drinks): it fetches a drink at the
+ * counter of its Pantry like a meal (the same queue and service time) and drinks it in several sips, with a pause between two.
+ * <p>
+ * A settler drinks at its seat: a finished drink gives it a little Entertainment while the Tavern condition holds, and the empty
+ * bottle goes into its pockets and back into the Pantry with the next order. A visitor of an inn drinks on its feet near the
+ * counter ({@code VisitorDrinks}): it gains no points, and the empty bottle goes straight back into the Pantry, as a visitor
+ * carries nothing out of the inn. Both count their drinks in the settler's {@link Entertainment}, which the limit of the evening
+ * reads.
  * <p>
  * It only says what it wants ({@link SettlerTavern} turns that into a {@link BodyStep}). The state is a small counter per
- * guest that drinks: nothing is saved, nothing is scanned, and the sips run on the work tick the seated guest has anyway.
- * What counts for the evening (the drinks taken, the points they gave) is saved with the settler's {@link Entertainment}.
+ * guest that drinks: nothing is saved, nothing is scanned, and the sips run on the tick the guest has anyway. What counts for the
+ * evening (the drinks taken, the points they gave) is saved with the settler's {@link Entertainment}.
  */
-final class SettlerDrinks {
+public final class SettlerDrinks {
 
     /** What a guest standing at the counter learns. */
-    enum Counter {
+    public enum Counter {
         /** Its turn has not come yet. */
         WAIT,
         /** It took its drink and goes back to its seat. */
@@ -52,7 +55,16 @@ final class SettlerDrinks {
     private static final int FIRST_SIP_DELAY_TICKS = 1;
     private static final float SIP_VOLUME = 0.5F;
 
-    /** The way to the counter: where the guest queues and since when it has been on its way. */
+    /**
+     * The way to the counter.
+     *
+     * @param target where the guest queues
+     * @param reach  how close it has to come, horizontally
+     */
+    public record Trip(BlockPos target, double reach) {
+    }
+
+    /** The trip of a guest: where it queues and since when it has been on its way. */
     private record Order(BlockPos pantry, BlockPos target, double reach, long since) {
     }
 
@@ -81,7 +93,10 @@ final class SettlerDrinks {
     /** Game time before which the guest does not read the stock again. */
     private long noDrinkUntil;
 
-    SettlerDrinks(SettlerWork shell) {
+    /**
+     * @param shell the work object of the guest: a settler's, or a visitor's, which a visitor has without running it
+     */
+    public SettlerDrinks(SettlerWork shell) {
         this.shell = shell;
         this.settler = shell.settler();
     }
@@ -91,14 +106,28 @@ final class SettlerDrinks {
      *
      * @return a copy of the drink, empty while the guest holds none
      */
-    ItemStack inHand() {
+    public ItemStack inHand() {
         Drink current = drink;
         return current == null ? ItemStack.EMPTY : current.item.copy();
     }
 
     /**
+     * @return whether the guest is on its way to the counter, waits there or holds a drink
+     */
+    public boolean busy() {
+        return order != null || drink != null;
+    }
+
+    /**
+     * @return whether the guest holds a drink
+     */
+    public boolean holds() {
+        return drink != null;
+    }
+
+    /**
      * The guest's next trip to the counter. A guest already on its way goes on while the Tavern Host works and the wait is not
-     * too long. A seated guest without a drink starts a trip when the evening allows one: fewer drinks than the evening's limit,
+     * too long. A seated guest (a visitor: on its feet) without a drink starts a trip when the evening allows one: fewer drinks than the evening's limit,
      * enough time before the shift ends, the Tavern Host on shift and at the counter, and a drink in the stock (the stock is
      * read here, and not again for a while when it holds none).
      *
@@ -106,7 +135,7 @@ final class SettlerDrinks {
      * @param pantry the Pantry whose seat the guest booked
      * @return the walk to the counter, empty if the guest stays where it is
      */
-    Optional<BodyStep.Walk> order(ServerLevel level, BlockPos pantry) {
+    public Optional<Trip> order(ServerLevel level, BlockPos pantry) {
         dropIfStale(level);
         if (drink != null) {
             return Optional.empty();
@@ -121,7 +150,7 @@ final class SettlerDrinks {
             order = null;
             return Optional.empty();
         }
-        if (!settler.isSitting() || !mayOrder(level, pantry, now, dayTime)) {
+        if (!inPlace() || !mayOrder(level, pantry, now, dayTime)) {
             return Optional.empty();
         }
         if (!ClerkStorage.stock(level, pantry, false).contains(TavernDrinks::is)) {
@@ -136,8 +165,13 @@ final class SettlerDrinks {
         return Optional.of(walk(order));
     }
 
-    private static BodyStep.Walk walk(Order trip) {
-        return new BodyStep.Walk(Activity.ORDER_DRINK, trip.target(), trip.reach());
+    private static Trip walk(Order trip) {
+        return new Trip(trip.target(), trip.reach());
+    }
+
+    /** A settler drinks at its seat, a visitor on its feet. */
+    private boolean inPlace() {
+        return settler.isVisitor() || settler.isSitting();
     }
 
     private boolean mayOrder(ServerLevel level, BlockPos pantry, long now, long dayTime) {
@@ -152,7 +186,7 @@ final class SettlerDrinks {
      * @param level the level
      * @return whether it still waits, took its drink or got none
      */
-    Counter atCounter(ServerLevel level) {
+    public Counter atCounter(ServerLevel level) {
         Order trip = order;
         if (trip == null) {
             return Counter.EMPTY_HANDED;
@@ -181,9 +215,9 @@ final class SettlerDrinks {
      *
      * @param level the level
      */
-    void sip(ServerLevel level) {
+    public void sip(ServerLevel level) {
         Drink current = drink;
-        if (current == null || !settler.isSitting() || --current.ticksLeft > 0) {
+        if (current == null || !inPlace() || --current.ticksLeft > 0) {
             return;
         }
         EntertainmentRules.DrinkRules rules = EntertainmentRules.get().drinks();
@@ -206,10 +240,16 @@ final class SettlerDrinks {
         finish(level, current);
     }
 
-    /** The last sip is drunk: the empty bottle goes into the pockets and the drink gives its points while the Tavern condition holds. */
+    /**
+     * The last sip is drunk: the empty bottle is given back and a settler's drink gives its points while the Tavern condition holds.
+     * A visitor shows its own hand, so the shell does not look at it.
+     */
     private void finish(ServerLevel level, Drink finished) {
         drink = null;
-        giveBackBottle(level, finished.item);
+        giveBackBottle(level, finished);
+        if (settler.isVisitor()) {
+            return;
+        }
         if (Tavern.conditionHolds(level, finished.pantry)) {
             double points = EntertainmentRules.get().drinkPoints(ClerkCounter.clerkSkill(level, finished.pantry));
             settler.getWork().setEntertainment(settler.getWork().entertainment().drankDrink(points, finished.day));
@@ -218,10 +258,10 @@ final class SettlerDrinks {
     }
 
     /**
-     * The guest leaves the Tavern (bedtime, its seat gone, an appointment): a drink it holds is put down, its bottle in the
-     * pockets, without points; a trip to the counter ends.
+     * The guest leaves the Tavern (bedtime, its seat gone, an appointment): a drink it holds is put down, its bottle given back,
+     * without points; a trip to the counter ends.
      */
-    void drop() {
+    public void drop() {
         order = null;
         Drink current = drink;
         if (current == null) {
@@ -230,7 +270,7 @@ final class SettlerDrinks {
         drink = null;
         settler.setSipping(false);
         if (settler.level() instanceof ServerLevel level) {
-            giveBackBottle(level, current.item);
+            giveBackBottle(level, current);
         }
     }
 
@@ -242,14 +282,22 @@ final class SettlerDrinks {
         }
     }
 
-    /** What is left of a drink goes into the pockets. */
-    private void giveBackBottle(ServerLevel level, ItemStack finished) {
-        keep(level, SettlerFood.remainder(finished));
+    /** What is left of a drink goes into the pockets of a settler and back into the Pantry for a visitor. */
+    private void giveBackBottle(ServerLevel level, Drink finished) {
+        ItemStack bottle = SettlerFood.remainder(finished.item);
+        if (settler.isVisitor()) {
+            spill(level, ClerkStorage.stock(level, finished.pantry, false).insert(bottle));
+        } else {
+            keep(level, bottle);
+        }
     }
 
     /** The stack goes into the pockets; what does not fit lies on the ground. */
     private void keep(ServerLevel level, ItemStack stack) {
-        ItemStack rest = shell.meals().addToPockets(stack);
+        spill(level, shell.meals().addToPockets(stack));
+    }
+
+    private void spill(ServerLevel level, ItemStack rest) {
         if (!rest.isEmpty()) {
             settler.spawnAtLocation(level, rest);
         }

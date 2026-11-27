@@ -79,7 +79,7 @@ public final class TavernDrinksGameTests {
     /**
      * A guest whose bedtime is late, so no test clock set before 20:15 sends it to bed. It walks (its AI is on) and has eaten.
      */
-    private static Settler guestWithLateBed(GameTestHelper helper, BlockPos pantry, BlockPos relative) {
+    static Settler guestWithLateBed(GameTestHelper helper, BlockPos pantry, BlockPos relative) {
         ServerLevel level = helper.getLevel();
         SettlementData data = SettlementData.get(level);
         Settler guest = ModEntityTypes.SETTLER.get().create(level, EntitySpawnReason.EVENT);

@@ -207,8 +207,8 @@ final class SettlerTavern {
             drinks.drop();
             return BodyStep.STOP;
         }
-        Optional<BodyStep.Walk> toCounter = drinks.order(level, current.pantry());
-        return toCounter.isPresent() ? toCounter.get() : toSeat(seat.get());
+        Optional<SettlerDrinks.Trip> toCounter = drinks.order(level, current.pantry());
+        return toCounter.isPresent() ? new BodyStep.Walk(Activity.ORDER_DRINK, toCounter.get().target(), toCounter.get().reach()) : toSeat(seat.get());
     }
 
     private BodyStep toSeat(TavernSeats.Seat seat) {

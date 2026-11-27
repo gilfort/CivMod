@@ -390,7 +390,7 @@ _Avoid_: Hotel, tavern recruitment
 A bed bound to a Pantry with the Scroll of Assignment, within the Tavern radius, at most 2 per Pantry level; the settlers' bed search never hands it out, and its POI ticket is taken so no Villager claims it. Code: `GuestBeds`, `InnState.guestBeds`, the filter in `SettlerBeds.freeBeds`, `SettlerBeds.takePoi`.
 
 **Visitor**:
-A Settler in a visitor state (`Settler.isVisitor`) who stays at an inn for 2 to 4 days; it is no member of a settlement and not homeless. The settlement keeps the record of its stay as a `Visit`; the entity is its body. It strolls by day, eats once at the Pantry in the evening and sleeps in its guest bed at night, and takes part in the meeting check; it ticks no needs and no Job. Code: `Visit`, `Visitors`, `VisitorDay` (its day), `VisitorStroll`, `SettlerSpawner.visitor`, origin channel `Channel.VISITOR`.
+A Settler in a visitor state (`Settler.isVisitor`) who stays at an inn for 2 to 4 days; it is no member of a settlement and not homeless. The settlement keeps the record of its stay as a `Visit`; the entity is its body. It strolls by day, eats once at the Pantry in the evening and fetches up to three beers at its counter (standing, for free, no points), and sleeps in its guest bed at night, and takes part in the meeting check; it ticks no needs and no Job. Code: `Visit`, `Visitors`, `VisitorDay` (its day), `VisitorDrinks` (its beer), `VisitorStroll`, `SettlerSpawner.visitor`, origin channel `Channel.VISITOR`.
 _Avoid_: Guest (a settler who sits in the Tavern evening), traveller
 
 **Visitor marker**:

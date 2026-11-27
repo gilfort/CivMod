@@ -587,8 +587,9 @@ public class Settler extends PathfinderMob {
      * @param settlement the settlement the visitor joins
      */
     public void becomeSettler(SettlementData data, Settlement settlement) {
-        // A visitor hired in its sleep leaves its guest bed free.
+        // A visitor hired in its sleep leaves its guest bed free; one hired with a beer in its hand puts it back.
         wakeUp();
+        visitorDay.hired();
         setVisitedSettlementId(-1);
         joinSettlement(data, settlement);
         if (level() instanceof ServerLevel level) {

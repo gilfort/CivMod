@@ -6,6 +6,7 @@ import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.job.Schedule;
+import com.gilfort.civmod.job.SettlerDrinks;
 import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.job.StandingSpots;
 import com.gilfort.civmod.logistics.ClerkStorage;
@@ -30,7 +31,8 @@ import net.minecraft.world.phys.Vec3;
  * <li>by day it strolls ({@link VisitorStroll}) through the settlement inside the border, with a light pull to the Pantry, and sits
  * on a free seat of the Tavern in turns ({@link VisitorSitting});</li>
  * <li>in the evening (from the end of work to its bedtime) it stands up, walks to the Pantry, eats one piece of food from the
- * Pantry's stock, and stays around the Pantry within the Tavern evening, never on a seat;</li>
+ * Pantry's stock, and stays around the Pantry within the Tavern evening, never on a seat; there it fetches beer at the counter and
+ * sips it standing ({@link VisitorDrinks});</li>
  * <li>at night it walks to its guest bed and sleeps there until its waking time.</li>
  * </ul>
  * Its times are the daily times of a settler ({@link Schedule#dayTimes}), so visitors do not all go to bed at the same tick. Each
@@ -79,6 +81,7 @@ public final class VisitorDay {
 
     private final Settler visitor;
     private final VisitorSitting sitting;
+    private final VisitorDrinks drinks;
     private Part part = Part.DAY;
     /** Whether the stroll goal may start a stroll: not while the visitor walks to a seat, the Pantry or its bed, or sits or lies in it. */
     private boolean mayStroll = true;
@@ -90,6 +93,14 @@ public final class VisitorDay {
     public VisitorDay(Settler visitor) {
         this.visitor = visitor;
         this.sitting = new VisitorSitting(visitor);
+        this.drinks = new VisitorDrinks(visitor);
+    }
+
+    /**
+     * The visitor is hired and is a settler from now on: a beer it holds is put back.
+     */
+    public void hired() {
+        drinks.drop();
     }
 
     /**
@@ -114,13 +125,14 @@ public final class VisitorDay {
     }
 
     /**
-     * Every tick of the AI step: the conversation and the head turn of the social life run on, and every decision step the visitor
-     * decides what to do now.
+     * Every tick of the AI step: the conversation and the head turn of the social life run on, a visitor at the counter waits for its
+     * turn or sips its beer, and every decision step the visitor decides what to do now.
      *
      * @param level the level
      */
     public void aiStep(ServerLevel level) {
         visitor.getWork().socialTick();
+        drinks.tick(level);
         if ((visitor.tickCount + visitor.getId()) % SettlerWork.DECISION_INTERVAL == 0) {
             decideNow(level);
         }
@@ -155,6 +167,7 @@ public final class VisitorDay {
 
     /** The day: a stroll, then a walk to a free seat and a sitting, in turns. */
     private void day(ServerLevel level, Settlement settlement, Visit visit) {
+        drinks.drop();
         wakeUp();
         visitor.clearHome();
         Optional<BlockPos> seat = sitting.dayStep(level, settlement, visit);
@@ -167,20 +180,34 @@ public final class VisitorDay {
     }
 
     /**
-     * The evening: to the Pantry for the meal, then around the Pantry. A Pantry that is gone serves no meal and sends nobody away:
-     * the visitor stays the night and leaves at the next morning check, which the inn plays. A visitor that still sits stands up
-     * first: the seats are the settlers'.
+     * The evening: to the Pantry for the meal, then around the Pantry, with a beer at the counter now and then ({@link VisitorDrinks}).
+     * A Pantry that is gone serves no meal and sends nobody away: the visitor stays the night and leaves at the next morning check,
+     * which the inn plays. A visitor that still sits stands up first: the seats are the settlers'.
      */
     private void evening(ServerLevel level, SettlementData data, Settlement settlement, Visit visit, long day) {
         sitting.standDown();
         wakeUp();
         visitor.setHomeTo(visit.pantry(), EVENING_RADIUS);
-        boolean hungry = visit.fedDay() != day && ClerkStorage.pantryAt(settlement, visit.pantry()).isPresent();
+        boolean pantryStands = ClerkStorage.pantryAt(settlement, visit.pantry()).isPresent();
+        boolean hungry = visit.fedDay() != day && pantryStands;
         mayStroll = !hungry;
-        if (hungry && reached(level, visit.pantry(), PANTRY_REACH)) {
-            eat(level, data, settlement, visit, day);
-            mayStroll = true;
+        if (hungry) {
+            if (reached(level, visit.pantry(), PANTRY_REACH)) {
+                eat(level, data, settlement, visit, day);
+                mayStroll = true;
+            }
+        } else if (pantryStands) {
+            drink(level, visit.pantry());
         }
+    }
+
+    /** The beer: a walk to the counter while the evening allows one, and a stand there or on the spot until it is drunk. */
+    private void drink(ServerLevel level, BlockPos pantry) {
+        Optional<SettlerDrinks.Trip> trip = drinks.walkStep(level, pantry);
+        if (trip.isPresent() && reached(level, trip.get().target(), trip.get().reach())) {
+            drinks.arrived();
+        }
+        mayStroll = !drinks.busy();
     }
 
     /** The meal: one piece of food from the Pantry. With nothing to eat the visitor leaves at the next morning check. */
@@ -195,6 +222,7 @@ public final class VisitorDay {
 
     /** The night: to the guest bed and into it. A visitor without a bed stands where it is until morning. */
     private void night(ServerLevel level, Visit visit) {
+        drinks.drop();
         sitting.standDown();
         mayStroll = false;
         if (visitor.isSleeping()) {
@@ -252,7 +280,7 @@ public final class VisitorDay {
 
     @Override
     public String toString() {
-        return "VisitorDay[" + part + ", " + sitting + ", mayStroll=" + mayStroll + ", walk=" + walk + ", navigationDone=" + visitor.getNavigation().isDone()
+        return "VisitorDay[" + part + ", " + sitting + ", " + drinks + ", mayStroll=" + mayStroll + ", walk=" + walk + ", navigationDone=" + visitor.getNavigation().isDone()
                 + ", at " + visitor.blockPosition() + "]";
     }
 
