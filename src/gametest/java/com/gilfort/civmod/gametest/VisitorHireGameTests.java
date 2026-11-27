@@ -28,6 +28,7 @@ import com.gilfort.civmod.origin.SettlerOrigin;
 import com.gilfort.civmod.origin.Talent;
 import com.gilfort.civmod.registry.ModDiaryEntryTypes;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.TestSettlements;
@@ -319,6 +320,16 @@ public final class VisitorHireGameTests {
         helper.assertTrue(diary.stream().filter(entry -> entry.type().equals(ModDiaryEntryTypes.ORIGIN_LINE.getId())).count() == 3
                 && diary.stream().anyMatch(entry -> entry.type().equals(ModDiaryEntryTypes.ARRIVAL.getId())),
                 "It keeps the entries it already had: " + diary);
+
+        helper.assertTrue(visitor.getPast().chronicle().storySpentDay() == DayClock.day(helper.getLevel()),
+                "Its story chance of the hire day is used up: " + visitor.getPast().chronicle().storySpentDay());
+        try (StoryTalks story = StoryTalks.begin(helper)) {
+            PlayerTalk.Result sameDay = talk(helper, visitor, players.player());
+            helper.assertTrue(sameDay.told().isEmpty() && !visitor.getFood().isFavouriteKnown(), "On the hire day it tells nothing new: " + sameDay.line());
+            PlayerTalk.Result nextDay = story.talkNextDay(helper, visitor, players.player());
+            helper.assertTrue(visitor.getFood().favourite().isEmpty() || visitor.getFood().isFavouriteKnown() && nextDay.told().isEmpty(),
+                    "From its next waking time it has a story aspect to tell: " + nextDay.line());
+        }
 
         helper.assertTrue(Talent.favours(visitor, offer.trade()), "Its talent is that of a settler");
         visitor.getSkills().set(offer.trade(), new SettlerSkills.Skill(1, 0));

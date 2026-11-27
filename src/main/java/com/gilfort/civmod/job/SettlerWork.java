@@ -1142,7 +1142,7 @@ public final class SettlerWork {
     }
 
     /** Sends the thought bubbles of what changed and lets the held item follow the activity. */
-    private void observe() {
+    void observe() {
         JobStatus status = activeJob == null ? JobStatus.IDLE : status(activeJob.jobBlock());
         thoughts.update(new SettlerThoughts.Now(activeJob, activityBubble(status), problems()), !quiet);
         HandKey key = new HandKey(activity, activeJob, status, activity == Activity.EATING ? meals.eatingItem().getItem() : Items.AIR);
@@ -1170,6 +1170,17 @@ public final class SettlerWork {
             };
             default -> null;
         };
+    }
+
+    /**
+     * Uses up the settler's chance to share a story aspect on today's day: it told one, or it was hired as a visitor today. The story
+     * bubble goes at the next look.
+     *
+     * @param level the level
+     */
+    public void spendStoryToday(ServerLevel level) {
+        long day = moment(level.getOverworldClockTime()).day();
+        settler.getPast().setChronicle(settler.getPast().chronicle().withStorySpent(day));
     }
 
     /**

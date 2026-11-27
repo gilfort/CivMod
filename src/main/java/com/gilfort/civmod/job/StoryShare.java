@@ -110,7 +110,7 @@ public final class StoryShare {
      * @param settler the settler
      * @return the aspects of its story it has not told yet: the origin lines it has and the favourite meal while it is hidden
      */
-    static List<Aspect> untold(Settler settler) {
+    public static List<Aspect> untold(Settler settler) {
         List<Aspect> untold = new ArrayList<>();
         Optional<SettlerOrigin> origin = settler.getPast().origin();
         if (origin.isPresent()) {

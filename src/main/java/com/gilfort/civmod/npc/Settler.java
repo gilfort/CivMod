@@ -570,6 +570,10 @@ public class Settler extends PathfinderMob {
         wakeUp();
         setVisitedSettlementId(-1);
         joinSettlement(data, settlement);
+        if (level() instanceof ServerLevel level) {
+            // It keeps what it told; the daily story share starts with its next waking time.
+            work.spendStoryToday(level);
+        }
     }
 
     /**

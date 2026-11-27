@@ -388,11 +388,11 @@ public final class ChronicleGameTests {
 
     // ---------------------------------------------------------------- the talk
 
-    /** Shift + right-click with an empty hand: the settler tells a line, writes it into its diary, and the first talk of the day gives 0.5. */
+    /** Shift + right-click with an empty hand on a story day: the settler tells a line, writes it into its diary, and the first talk of the day gives 0.5. */
     private static void talkShiftEmptyHand(GameTestHelper helper) {
         Settler settler = withOrigin(helper, Optional.empty());
         ServerPlayer player = player(helper, true);
-        try {
+        try (StoryTalks unused = StoryTalks.begin(helper)) {
             double before = entertainment(settler);
             interact(player, settler, ItemStack.EMPTY);
             helper.assertTrue(player.containerMenu == player.inventoryMenu, "The window stays closed");
@@ -425,16 +425,19 @@ public final class ChronicleGameTests {
         }
     }
 
-    /** The first three talks tell place, upbringing and turning point, each once; the fourth tells the favourite meal and the rest is small talk that writes nothing. */
+    /**
+     * On story days (one aspect a day) the first three talks tell place, upbringing and turning point, each once; the fourth tells the
+     * favourite meal and the rest is small talk that writes nothing.
+     */
     private static void threeOriginLines(GameTestHelper helper) {
         Settler settler = handBuilt(helper);
         ServerPlayer player = player(helper, true);
-        try {
+        try (StoryTalks story = StoryTalks.begin(helper)) {
             Origins.assignEgg(settler, RandomSource.create(4L));
             Set<OriginLine.Slot> slots = new HashSet<>();
             Set<String> lines = new HashSet<>();
             for (int i = 0; i < 3; i++) {
-                PlayerTalk.Result result = talk(helper, settler, player);
+                PlayerTalk.Result result = story.talkNextDay(helper, settler, player);
                 helper.assertTrue(result.told().isPresent(), "Talk " + (i + 1) + " tells a part of the origin");
                 slots.add(result.told().get());
                 lines.add(key(result.line()) + result.line());
@@ -444,13 +447,13 @@ public final class ChronicleGameTests {
             helper.assertTrue(types(settler).equals(List.of(CivMod.id("arrival"), CivMod.id("origin_line"), CivMod.id("origin_line"), CivMod.id("origin_line"))),
                     "The arrival and the three lines in the diary: " + types(settler));
             // The settler that arrives has a favourite meal too: it comes after the origin (FavouriteMealGameTests), then the small talk.
-            PlayerTalk.Result favourite = talk(helper, settler, player);
+            PlayerTalk.Result favourite = story.talkNextDay(helper, settler, player);
             helper.assertTrue(favourite.told().isEmpty() && key(favourite.line()).equals("diary.civmod.favourite_meal.told"), "The fourth talk tells the favourite meal: " + key(favourite.line()));
-            PlayerTalk.Result fourth = talk(helper, settler, player);
+            PlayerTalk.Result fourth = story.talkNextDay(helper, settler, player);
             helper.assertTrue(fourth.told().isEmpty() && key(fourth.line()).startsWith("civmod.talk.small."), "The fifth talk is small talk: " + key(fourth.line()));
             helper.assertTrue(settler.getPast().chronicle().entries().size() == 5, "Small talk writes nothing: " + types(settler));
             for (int i = 0; i < 5; i++) {
-                helper.assertTrue(talk(helper, settler, player).told().isEmpty(), "Never an origin line again");
+                helper.assertTrue(story.talkNextDay(helper, settler, player).told().isEmpty(), "Never an origin line again");
             }
             helper.succeed();
         } finally {
@@ -463,7 +466,7 @@ public final class ChronicleGameTests {
     private static void upbringingVariants(GameTestHelper helper) {
         ServerPlayer player = player(helper, true);
         List<Settler> settlers = new java.util.ArrayList<>();
-        try {
+        try (StoryTalks unused = StoryTalks.begin(helper)) {
             // The talk draws the order of the lines: pick 1 of the three is the upbringing.
             PlayerTalk.script(OriginRolls.picks(1));
             Settler same = withOrigin(helper, Optional.of(tradeName(SMITH, Ancestor.GRANDFATHER)));
@@ -555,14 +558,13 @@ public final class ChronicleGameTests {
         Settler settler = withOrigin(helper, Optional.empty());
         ServerPlayer first = player(helper, true);
         ServerPlayer second = player(helper, true);
-        try {
+        try (StoryTalks story = StoryTalks.begin(helper)) {
             Set<OriginLine.Slot> slots = new HashSet<>();
-            slots.add(talk(helper, settler, first).told().orElseThrow());
-            slots.add(talk(helper, settler, second).told().orElseThrow());
-            slots.add(talk(helper, settler, first).told().orElseThrow());
+            slots.add(story.talkNextDay(helper, settler, first).told().orElseThrow());
+            slots.add(story.talkNextDay(helper, settler, second).told().orElseThrow());
+            slots.add(story.talkNextDay(helper, settler, first).told().orElseThrow());
             helper.assertTrue(slots.size() == 3, "Each part once, whoever asks: " + slots);
-            helper.assertTrue(talk(helper, settler, second).told().isEmpty(), "Small talk for every player after that");
-            helper.assertTrue(entertainment(settler) == TALK_POINTS, "One day, one gift of Entertainment per settler: " + entertainment(settler));
+            helper.assertTrue(story.talkNextDay(helper, settler, second).told().isEmpty(), "Small talk for every player after that");
             helper.succeed();
         } finally {
             TestPlayers.remove(first);

@@ -25,10 +25,10 @@ import net.minecraft.util.RandomSource;
 
 /**
  * A player talks to a settler (vault {@code Systems/Settler Origin.md}, {@code Systems/Entertainment.md}): Shift + right-click with an
- * empty hand. The settler turns its head, greets, shows the conversation bubble and says one line in chat to the player who talked.
- * The first talks tell the three parts of its origin in random order, each once, and write each into the diary; the next one tells its
- * favourite meal, once, with a diary entry; after that it makes small talk about the weather or, from its own needs, about the
- * settlement. The first talk of a day gives a little Entertainment.
+ * empty hand. The settler turns its head, greets, shows the speech bubble and says one line in chat to the player who talked.
+ * A settler that shows the story bubble ({@link StoryShare}) tells one story aspect it has not told yet, picked at random: a part of
+ * its origin or its favourite meal, each with a diary entry. Every other talk is small talk about the weather or, from its own needs,
+ * about the settlement. The first talk of a day gives a little Entertainment.
  * A visitor of an inn starts every talk with its price and its trade and gets no Entertainment (vault {@code Systems/NPC Population.md}).
  * <p>
  * The told lines belong to the settler, not to a player: every player hears the lines that are left. The class lives in this
@@ -78,8 +78,8 @@ public final class PlayerTalk {
         if (!(settler.level() instanceof ServerLevel level) || settler.isSleeping() || settler.getWork().activity() == Schedule.Activity.SLEEP) {
             return Optional.empty();
         }
-        Result result = choose(level, settler);
         SettlerWork work = settler.getWork();
+        Result result = choose(level, settler);
         work.social().greet(player, level.getGameTime());
         work.conversationBubble();
         if (settler.isVisitor()) {
@@ -99,19 +99,37 @@ public final class PlayerTalk {
     }
 
     /**
-     * Decides what the settler says and writes what it tells into the diary. This is the one place that picks the words. A visitor
-     * has no needs and no settlement to talk about: once its origin is told it repeats its price and its trade.
+     * Decides what the settler says and writes what it tells into the diary. This is the one place that picks the words. A settler
+     * tells one story aspect when it shows the story bubble and makes small talk otherwise. A visitor has no needs and no settlement
+     * to talk about and no daily share: every talk gives its price and its trade and one part of its origin, and once the origin is
+     * told it repeats the price.
      */
     private static Result choose(ServerLevel level, Settler settler) {
         RandomSource random = scripted != null ? scripted : settler.getRandom();
-        Optional<Result> origin = tellOrigin(settler, random);
         if (settler.isVisitor()) {
-            return origin.orElseGet(() -> new Result(VisitorOffer.of(settler).greeting(), Optional.empty()));
+            return tellOriginPart(settler, random).orElseGet(() -> new Result(VisitorOffer.of(settler).greeting(), Optional.empty()));
         }
-        return origin.or(() -> tellFavouriteMeal(settler)).orElseGet(() -> new Result(smallTalk(level, settler, random), Optional.empty()));
+        return tellStory(level, settler, random).orElseGet(() -> new Result(smallTalk(level, settler, random), Optional.empty()));
     }
 
-    /** The favourite meal, once, after the origin is told; written into the diary. A settler without a favourite meal tells nothing. */
+    /**
+     * The story aspect of the day, picked at random among the untold ones; written into the diary. It uses up the settler's chance of
+     * the day and takes the story bubble down. A settler without the bubble tells nothing.
+     */
+    private static Optional<Result> tellStory(ServerLevel level, Settler settler, RandomSource random) {
+        SettlerWork work = settler.getWork();
+        if (!work.sharesStory(level)) {
+            return Optional.empty();
+        }
+        List<StoryShare.Aspect> untold = StoryShare.untold(settler);
+        StoryShare.Aspect aspect = untold.get(random.nextInt(untold.size()));
+        Optional<Result> told = aspect.slot().map(slot -> tellOrigin(settler, slot)).or(() -> tellFavouriteMeal(settler));
+        work.spendStoryToday(level);
+        work.observe();
+        return told;
+    }
+
+    /** The favourite meal, once; written into the diary. A settler without a favourite meal tells nothing. */
     private static Optional<Result> tellFavouriteMeal(Settler settler) {
         SettlerFood food = settler.getFood();
         Optional<Identifier> favourite = food.favourite();
@@ -121,8 +139,8 @@ public final class PlayerTalk {
         return Optional.of(new Result(Diary.favouriteMeal(settler, favourite.get(), Diary.Reveal.TOLD), Optional.empty()));
     }
 
-    /** The next part of the origin the settler has not told yet, picked at random; written into the diary. */
-    private static Optional<Result> tellOrigin(Settler settler, RandomSource random) {
+    /** The next part of the origin a visitor has not told yet, picked at random; written into the diary. */
+    private static Optional<Result> tellOriginPart(Settler settler, RandomSource random) {
         Optional<SettlerOrigin> origin = settler.getPast().origin();
         if (origin.isEmpty()) {
             return Optional.empty();
@@ -132,11 +150,16 @@ public final class PlayerTalk {
         if (untold.isEmpty()) {
             return Optional.empty();
         }
-        OriginLine.Slot slot = untold.get(random.nextInt(untold.size()));
-        List<String> params = OriginLine.params(slot, origin.get(), OriginData.race(settler.getRace()));
-        settler.getPast().setChronicle(chronicle.withTold(slot));
+        return Optional.of(tellOrigin(settler, untold.get(random.nextInt(untold.size()))));
+    }
+
+    /** One part of the settler's origin; marked as told and written into the diary. */
+    private static Result tellOrigin(Settler settler, OriginLine.Slot slot) {
+        SettlerOrigin origin = settler.getPast().origin().orElseThrow();
+        List<String> params = OriginLine.params(slot, origin, OriginData.race(settler.getRace()));
+        settler.getPast().setChronicle(settler.getPast().chronicle().withTold(slot));
         Diary.add(settler, ModDiaryEntryTypes.ORIGIN_LINE.get(), params);
-        return Optional.of(new Result(OriginLine.text(params), Optional.of(slot)));
+        return new Result(OriginLine.text(params), Optional.of(slot));
     }
 
     /** The weather, or the settlement told from the settler's own needs; a homeless settler has no settlement to talk about. */
