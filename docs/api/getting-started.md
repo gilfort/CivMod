@@ -212,7 +212,13 @@ In the evening settlers spend time in a Tavern: a Pantry whose Tavern Host is on
 - `civmod:seat_blocks` (block tag): blocks settlers sit on. Empty by default. The settler sits at the height of the block's collision shape, looks the way of its `facing` property (south, yaw 0, without one) and walks to the block above it.
 - `civmod:jukeboxes` (block tag): blocks that count as a jukebox within 8 blocks of the Pantry. Default: `minecraft:jukebox`. A block holds a disc when its `has_record` block state property is true; a block without that property counts when its block entity is a vanilla jukebox that holds an item.
 
-A seat is taken while another settler has booked it for the evening or an entity (a player) rides it; settlers never ride a seat. The numbers of the evening (crowd of 4 settlers, 3 points, factor 1.5 when the crowd and a jukebox with a disc both hold, the radii of 12 and 8 blocks) are datapack values in `data/<namespace>/civmod_entertainment/rules.json`: `tavern_points`, `tavern_factor`, `crowd_size`, `tavern_radius`, `jukebox_radius`. Later packs override earlier ones per value.
+A seat is taken while another settler has booked it for the evening or an entity (a player) rides it; settlers never ride a seat. The numbers of the evening (crowd of 4 settlers, 2 points, factor 1.5 when the crowd and a jukebox with a disc both hold, the radii of 12 and 8 blocks) are datapack values in `data/<namespace>/civmod_entertainment/rules.json`: `tavern_points`, `tavern_factor`, `crowd_size`, `tavern_radius`, `jukebox_radius`. Later packs override earlier ones per value.
+
+### Drinks
+
+A seated guest fetches a drink at the counter of the Pantry, sips it at its seat and gets a little Entertainment for it. The item tag `civmod:tavern_drinks` (default: `civmod:beer`) lists the drinks, so another mod's drink joins by a tag file and no code. A Pantry takes these items like food, but a drink is never food for a settler. The drink's `use_remainder` (a glass bottle for beer) is what the guest keeps and puts back into the Pantry with its next order.
+
+The numbers are datapack values in the same `rules.json`: `drink_points` (0.5, plus 1 % per skill level of the Tavern Host), `sips_min` and `sips_max` (3 and 5), `sip_ticks` (60), `pause_min_ticks` and `pause_max_ticks` (100 and 200), `max_drinks_per_evening` (3), `refill_limit_ticks` (1000: no new drink when fewer ticks are left until 20:00) and `catchup_drinks` (2 for a missed evening).
 
 ## Social life
 

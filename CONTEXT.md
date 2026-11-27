@@ -64,12 +64,16 @@ The 20 % share of the meeting check, between two settlers (never a player): both
 _Avoid_: `stop()` to end a conversation (the held item would not come back); a second activity value for the standing partner; saving the reservation
 
 **Tavern**:
-A Pantry whose Tavern Host is on shift (until 20:00), in the evening from 17:30. Every 17 server ticks it counts the settlers within 12 blocks (a Bard on its way to its Stage or playing there, see **Bard**, is not counted) and pays each of them who was not paid that day 3 points (times 1.5 with both conditions) if 4 are present or a jukebox with a disc stands within 8 blocks. Code: `Tavern` (count, jukebox check, catch-up), `TavernSeats` (finds seats), `SettlerTavern` (a settler's booking, walk and sitting), the intent `GO_TO_TAVERN` of `Schedule`.
+A Pantry whose Tavern Host is on shift (until 20:00), in the evening from 17:30. Every 17 server ticks it counts the settlers within 12 blocks (a Bard on its way to its Stage or playing there, see **Bard**, is not counted) and pays each of them who was not paid that day 2 points (times 1.5 with both conditions) if 4 are present or a jukebox with a disc stands within 8 blocks. Code: `Tavern` (count, jukebox check, the condition a drink needs, catch-up), `TavernSeats` (finds seats), `SettlerTavern` (a settler's booking, walk and sitting), `SettlerDrinks` (a seated guest's trips to the counter and its sips), the intent `GO_TO_TAVERN` of `Schedule`.
 _Avoid_: Paying outside `Tavern`; a second place that decides who sits where
 
 **Seat**:
 A vanilla Cushion or another entity of `civmod:seat_entities`, or a block of `civmod:seat_blocks`, within 12 blocks of a Pantry. A settler books one seat for an evening in its `SettlerTavern` (nothing saved), sits on it in the sitting pose and never rides it; a seat is taken while another settler has booked it or an entity rides it.
 _Avoid_: Saving seat reservations; letting settlers ride the seat entity
+
+**Drink**:
+An item of the tag `civmod:tavern_drinks` (beer by default) that a Pantry holds next to its food. A seated Tavern guest fetches one at the counter (the queue and service time of a meal, the Tavern Host gains EXP), carries it to its seat and sips it in 3 to 5 sips; a finished drink gives `drink_points` while the Tavern condition holds. A drink is never food (`SettlerFood.isEdible`). Code: `TavernDrinks` (the tag), `SettlerDrinks` (one guest's trip, sips and catch-up), `Entertainment.DrinkMarks` (the drinks taken and their points per day, saved).
+_Avoid_: Counting a drink as food; a tick or a scan per guest for the sips
 
 **Food variety**:
 The tier 2 need of at least 3 distinct food items in the window: the last days (config, today included), but always at least the last 6 items eaten. Short of it, a settler at a food point prefers a food outside the window. Code: `FoodVariety` (the rule and the bounded list of meals, saved in `SettlerFood`), recorded by `SettlerMeals` with the simulated day in catch-up.
