@@ -21,8 +21,8 @@ import net.minecraft.world.phys.Vec3;
  * The stroll of a settler on its feet (vault {@code Systems/NPC Population.md}): vanilla's water-avoiding stroll, which a settler that
  * is no visitor keeps. A visitor strolls through the whole settlement inside the border, hop by hop like a homeless settler, and
  * with a light pull to the Pantry: a share of its hops ({@link #PULL_CHANCE}) heads for the Pantry, the others go anywhere. A hop
- * that would end outside the border is dropped. In the evening, and while the visitor walks to its meal or bed or sleeps, the
- * stroll gives way ({@link VisitorDay}); the evening stroll is vanilla's, held around the Pantry by the visitor's home.
+ * that would end outside the border is dropped. In the evening, and while the visitor walks to a seat, its meal or its bed, or sits
+ * or sleeps, the stroll gives way ({@link VisitorDay}); the evening stroll is vanilla's, held around the Pantry by the visitor's home.
  */
 public final class VisitorStroll extends WaterAvoidingRandomStrollGoal {
 
@@ -39,16 +39,17 @@ public final class VisitorStroll extends WaterAvoidingRandomStrollGoal {
     private final Settler settler;
 
     /**
-     * Replaces the random source of the pull to the Pantry (tests). It is not the source of {@link Inns#script}, so a stroll never
-     * eats up the rolls that script an arrival or a request to stay longer.
+     * Replaces the random source of the pull to the Pantry and of the lengths of the strolls and sittings of the visitors (tests). It
+     * is not the source of {@link Inns#script}, so a stroll never eats up the rolls that script an arrival or a request to stay longer.
      *
-     * @param random the scripted source ({@code nextDouble} answers whether a hop is pulled), or {@code null} for the level's own
+     * @param random the scripted source ({@code nextDouble} answers whether a hop is pulled, {@code nextInt} how far above its lower
+     *               bound a stroll or sitting lasts), or {@code null} for the level's own
      */
     public static void script(@Nullable RandomSource random) {
         scripted = random;
     }
 
-    private static RandomSource random(ServerLevel level) {
+    static RandomSource random(ServerLevel level) {
         return scripted != null ? scripted : level.getRandom();
     }
 

@@ -51,17 +51,17 @@ public final class VisitorDayGameTests {
     /** 21:00: after every settler's bedtime. */
     private static final long NIGHT = 15000L;
     /** 23:30: the Tavern evening, after the evening check, before bedtime. */
-    private static final long EVENING_MEAL = 12500L;
+    static final long EVENING_MEAL = 12500L;
     /** 07:00: after every settler's waking time. */
     private static final long MORNING_UP = 1000L;
     /** The roll of the meeting check that is a conversation. */
-    private static final double CONVERSATION = 0.0;
+    static final double CONVERSATION = 0.0;
     /** The roll of the meeting check that is a greeting (conversation share 0.2, greeting share 0.3). */
     private static final double GREETING = 0.25;
     /** The roll of the meeting check that is neither. */
-    private static final double NOTHING = 0.99;
+    static final double NOTHING = 0.99;
     /** Ticks enough to walk up, talk for 120 and end. */
-    private static final int WHOLE_TALK = 130;
+    static final int WHOLE_TALK = 130;
 
     private VisitorDayGameTests() {
     }
@@ -94,14 +94,14 @@ public final class VisitorDayGameTests {
     // ------------------------------------------------------------------------------------------------------------- setup
 
     /** A Pantry with one guest bed and a Tavern Host, and the one visitor of the noon check, with no chance left to bring a second. */
-    private static Settler oneVisitor(GameTestHelper helper, Inn inn) {
+    static Settler oneVisitor(GameTestHelper helper, Inn inn) {
         InnGameTests.play(helper, inn, InnGameTests.today(helper), InnGameTests.NOON);
         List<Settler> visitors = InnGameTests.visitors(helper);
         helper.assertTrue(visitors.size() == 1, "One visitor arrived: " + visitors.size());
         return visitors.get(0);
     }
 
-    private static Inn newInn(GameTestHelper helper) {
+    static Inn newInn(GameTestHelper helper) {
         InnRules.use(InnGameTests.rules(1.0, 0.0, 3));
         return InnGameTests.inn(helper, 1, 1, true);
     }
@@ -133,7 +133,7 @@ public final class VisitorDayGameTests {
     }
 
     /** A fed settler of the inn's settlement, with its meeting rolls scripted. */
-    private static Settler settler(GameTestHelper helper, Inn inn, BlockPos at, double[] roll) {
+    static Settler settler(GameTestHelper helper, Inn inn, BlockPos at, double[] roll) {
         Settler settler = TavernGameTests.settler(helper, inn.pantry(), at);
         settler.getFood().setLevel(SettlerFood.MAX);
         settler.getWork().scriptSocialRolls(() -> roll[0]);
@@ -141,14 +141,14 @@ public final class VisitorDayGameTests {
     }
 
     /** Stands the visitor at a position, without AI, and scripts its meeting rolls. */
-    private static void place(GameTestHelper helper, Settler visitor, BlockPos at, double[] roll) {
+    static void place(GameTestHelper helper, Settler visitor, BlockPos at, double[] roll) {
         Vec3 spot = Vec3.atBottomCenterOf(helper.absolutePos(at));
         visitor.teleportTo(spot.x, spot.y, spot.z);
         visitor.setNoAi(true);
         visitor.getWork().scriptSocialRolls(() -> roll[0]);
     }
 
-    private static void talk(int ticks, Settler... settlers) {
+    static void talk(int ticks, Settler... settlers) {
         for (int i = 0; i < ticks; i++) {
             for (Settler settler : settlers) {
                 settler.getWork().socialTick();
@@ -156,11 +156,11 @@ public final class VisitorDayGameTests {
         }
     }
 
-    private static double value(Settler settler) {
+    static double value(Settler settler) {
         return settler.getWork().entertainment().value();
     }
 
-    private static void end(GameTestHelper helper, Inn inn, List<Settler> settlers) {
+    static void end(GameTestHelper helper, Inn inn, List<Settler> settlers) {
         settlers.forEach(Settler::discard);
         InnGameTests.end(helper, inn);
     }
