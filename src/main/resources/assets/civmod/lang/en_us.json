@@ -1002,5 +1002,20 @@
   "civmod.talk.small.settlement.food.2": "There is not much for me to eat right now.",
   "civmod.talk.small.settlement.fine.0": "I have a bed, a fire and food. I cannot complain.",
   "civmod.talk.small.settlement.fine.1": "Things are going well here.",
-  "civmod.talk.small.settlement.fine.2": "I am glad I ended up in this place."
+  "civmod.talk.small.settlement.fine.2": "I am glad I ended up in this place.",
+  "civmod.talk.small.time.morning.0": "Good morning. The day has only just begun.",
+  "civmod.talk.small.time.morning.1": "Mornings are a good time to get things done.",
+  "civmod.talk.small.time.morning.2": "The day is still young. There is plenty to do.",
+  "civmod.talk.small.time.afternoon.0": "The afternoon is going by quickly.",
+  "civmod.talk.small.time.afternoon.1": "Half the day is behind us already.",
+  "civmod.talk.small.time.afternoon.2": "It will not be long until the evening.",
+  "civmod.talk.small.time.evening.0": "The day is nearly over. I am looking forward to the evening.",
+  "civmod.talk.small.time.evening.1": "Evening already. Where did the day go?",
+  "civmod.talk.small.time.evening.2": "I like the evenings best, when the work is done.",
+  "civmod.talk.small.job": "%1$s %2$s",
+  "civmod.talk.small.job.work": "I work as %s.",
+  "civmod.talk.small.job.waiting": "Right now: %s.",
+  "civmod.talk.small.job.fine.0": "Things are running fine.",
+  "civmod.talk.small.job.fine.1": "Everything is running smoothly.",
+  "civmod.talk.small.job.fine.2": "I have nothing to complain about."
 }

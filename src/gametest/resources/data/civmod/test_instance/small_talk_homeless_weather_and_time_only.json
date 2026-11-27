@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:small_talk_homeless_weather_and_time_only",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

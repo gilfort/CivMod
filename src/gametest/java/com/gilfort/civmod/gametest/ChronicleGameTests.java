@@ -370,11 +370,13 @@ public final class ChronicleGameTests {
         List<String> keys = new java.util.ArrayList<>();
         jobs.forEach(job -> keys.add(OriginText.key("job", job)));
         human.surnameEntries().get(SurnameType.TRADE).forEach(entry -> keys.add(OriginText.key("trade", entry.id())));
-        for (String topic : List.of("weather.good", "weather.bad", "settlement.bed", "settlement.fire", "settlement.food", "settlement.fine")) {
+        for (String topic : List.of("weather.good", "weather.bad", "settlement.bed", "settlement.fire", "settlement.food", "settlement.fine",
+                "time.morning", "time.afternoon", "time.evening", "job.fine")) {
             for (int variant = 0; variant < 3; variant++) {
                 keys.add("civmod.talk.small." + topic + "." + variant);
             }
         }
+        keys.addAll(List.of("civmod.talk.small.job", "civmod.talk.small.job.work", "civmod.talk.small.job.waiting"));
         keys.addAll(List.of("origin.told.place", "origin.told.jobs.two", "origin.told.upbringing.plain", "origin.told.upbringing.same",
                 "origin.told.upbringing.different", "diary.civmod.arrival.no_reason", "diary.civmod.arrival.rescued", "diary.civmod.homeless",
                 "civmod.talk.line", "civmod.gui.settler.tab.chronicle", "civmod.gui.settler.help.chronicle", "civmod.gui.chronicle.no_origin",
@@ -497,7 +499,7 @@ public final class ChronicleGameTests {
         }
     }
 
-    /** After the origin the settler talks about the weather or, from its own needs, about the settlement. */
+    /** After the origin the settler talks about the weather or, from its own needs, about the settlement (the other topics: {@code SmallTalkGameTests}). */
     private static void smallTalk(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         SettlementData data = new SettlementData();
@@ -520,10 +522,10 @@ public final class ChronicleGameTests {
             String key = key(settlementTalk.line());
             helper.assertTrue(key.matches("civmod\\.talk\\.small\\.settlement\\.(bed|fire)\\.2"), "A need it lacks: " + key);
             helper.assertTrue(settler.getPast().chronicle().entries().isEmpty(), "Small talk writes nothing");
-            // A homeless settler has no settlement to talk about: it talks about the weather whatever the pick.
+            // A homeless settler has no settlement to talk about: its second family is the time of day (see SmallTalkGameTests).
             settler.becomeHomeless();
             PlayerTalk.script(OriginRolls.picks(1, 0, 0));
-            helper.assertTrue(key(talk(helper, settler, player).line()).startsWith("civmod.talk.small.weather."), "A homeless settler talks about the weather");
+            helper.assertTrue(key(talk(helper, settler, player).line()).startsWith("civmod.talk.small.time."), "A homeless settler talks about the time of day");
             helper.succeed();
         } finally {
             PlayerTalk.script(null);
