@@ -17,6 +17,7 @@ import com.gilfort.civmod.menu.SettlerInfo;
 import com.gilfort.civmod.menu.SettlerMenu;
 import com.gilfort.civmod.npc.Races;
 import com.gilfort.civmod.npc.Settler;
+import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.npc.SettlerSpawner;
 import com.gilfort.civmod.origin.Ancestor;
 import com.gilfort.civmod.origin.Gender;
@@ -115,6 +116,7 @@ public final class ChronicleGameTests {
             register(helper, "chronicle_talk_entertainment_once_per_day", ChronicleGameTests::entertainmentOncePerDay);
             register(helper, "chronicle_talk_multiplayer", ChronicleGameTests::multiplayer);
             register(helper, "chronicle_talk_settler_without_origin", ChronicleGameTests::settlerWithoutOrigin);
+            register(helper, "chronicle_talk_speech_bubble", ChronicleGameTests::speechBubble);
         });
     }
 
@@ -368,11 +370,13 @@ public final class ChronicleGameTests {
         List<String> keys = new java.util.ArrayList<>();
         jobs.forEach(job -> keys.add(OriginText.key("job", job)));
         human.surnameEntries().get(SurnameType.TRADE).forEach(entry -> keys.add(OriginText.key("trade", entry.id())));
-        for (String topic : List.of("weather.good", "weather.bad", "settlement.bed", "settlement.fire", "settlement.food", "settlement.fine")) {
+        for (String topic : List.of("weather.good", "weather.bad", "settlement.bed", "settlement.fire", "settlement.food", "settlement.fine",
+                "time.morning", "time.afternoon", "time.evening", "job.fine")) {
             for (int variant = 0; variant < 3; variant++) {
                 keys.add("civmod.talk.small." + topic + "." + variant);
             }
         }
+        keys.addAll(List.of("civmod.talk.small.job", "civmod.talk.small.job.work", "civmod.talk.small.job.waiting"));
         keys.addAll(List.of("origin.told.place", "origin.told.jobs.two", "origin.told.upbringing.plain", "origin.told.upbringing.same",
                 "origin.told.upbringing.different", "diary.civmod.arrival.no_reason", "diary.civmod.arrival.rescued", "diary.civmod.homeless",
                 "civmod.talk.line", "civmod.gui.settler.tab.chronicle", "civmod.gui.settler.help.chronicle", "civmod.gui.chronicle.no_origin",
@@ -386,11 +390,11 @@ public final class ChronicleGameTests {
 
     // ---------------------------------------------------------------- the talk
 
-    /** Shift + right-click with an empty hand: the settler tells a line, writes it into its diary, and the first talk of the day gives 0.5. */
+    /** Shift + right-click with an empty hand on a story day: the settler tells a line, writes it into its diary, and the first talk of the day gives 0.5. */
     private static void talkShiftEmptyHand(GameTestHelper helper) {
         Settler settler = withOrigin(helper, Optional.empty());
         ServerPlayer player = player(helper, true);
-        try {
+        try (StoryTalks unused = StoryTalks.begin(helper)) {
             double before = entertainment(settler);
             interact(player, settler, ItemStack.EMPTY);
             helper.assertTrue(player.containerMenu == player.inventoryMenu, "The window stays closed");
@@ -423,16 +427,21 @@ public final class ChronicleGameTests {
         }
     }
 
-    /** The first three talks tell place, upbringing and turning point, each once; the fourth tells the favourite meal and the rest is small talk that writes nothing. */
+    /**
+     * On story days (one aspect a day) the first three talks tell place, upbringing and turning point, each once; the fourth tells the
+     * favourite meal and the rest is small talk that writes nothing.
+     */
     private static void threeOriginLines(GameTestHelper helper) {
         Settler settler = handBuilt(helper);
         ServerPlayer player = player(helper, true);
-        try {
+        try (StoryTalks story = StoryTalks.begin(helper)) {
+            // Pick 0 of the untold aspects each time: the three parts of the origin, then the favourite meal.
+            PlayerTalk.script(OriginRolls.picks(0));
             Origins.assignEgg(settler, RandomSource.create(4L));
             Set<OriginLine.Slot> slots = new HashSet<>();
             Set<String> lines = new HashSet<>();
             for (int i = 0; i < 3; i++) {
-                PlayerTalk.Result result = talk(helper, settler, player);
+                PlayerTalk.Result result = story.talkNextDay(helper, settler, player);
                 helper.assertTrue(result.told().isPresent(), "Talk " + (i + 1) + " tells a part of the origin");
                 slots.add(result.told().get());
                 lines.add(key(result.line()) + result.line());
@@ -442,16 +451,17 @@ public final class ChronicleGameTests {
             helper.assertTrue(types(settler).equals(List.of(CivMod.id("arrival"), CivMod.id("origin_line"), CivMod.id("origin_line"), CivMod.id("origin_line"))),
                     "The arrival and the three lines in the diary: " + types(settler));
             // The settler that arrives has a favourite meal too: it comes after the origin (FavouriteMealGameTests), then the small talk.
-            PlayerTalk.Result favourite = talk(helper, settler, player);
+            PlayerTalk.Result favourite = story.talkNextDay(helper, settler, player);
             helper.assertTrue(favourite.told().isEmpty() && key(favourite.line()).equals("diary.civmod.favourite_meal.told"), "The fourth talk tells the favourite meal: " + key(favourite.line()));
-            PlayerTalk.Result fourth = talk(helper, settler, player);
+            PlayerTalk.Result fourth = story.talkNextDay(helper, settler, player);
             helper.assertTrue(fourth.told().isEmpty() && key(fourth.line()).startsWith("civmod.talk.small."), "The fifth talk is small talk: " + key(fourth.line()));
             helper.assertTrue(settler.getPast().chronicle().entries().size() == 5, "Small talk writes nothing: " + types(settler));
             for (int i = 0; i < 5; i++) {
-                helper.assertTrue(talk(helper, settler, player).told().isEmpty(), "Never an origin line again");
+                helper.assertTrue(story.talkNextDay(helper, settler, player).told().isEmpty(), "Never an origin line again");
             }
             helper.succeed();
         } finally {
+            PlayerTalk.script(null);
             TestPlayers.remove(player);
             settler.discard();
         }
@@ -461,7 +471,7 @@ public final class ChronicleGameTests {
     private static void upbringingVariants(GameTestHelper helper) {
         ServerPlayer player = player(helper, true);
         List<Settler> settlers = new java.util.ArrayList<>();
-        try {
+        try (StoryTalks unused = StoryTalks.begin(helper)) {
             // The talk draws the order of the lines: pick 1 of the three is the upbringing.
             PlayerTalk.script(OriginRolls.picks(1));
             Settler same = withOrigin(helper, Optional.of(tradeName(SMITH, Ancestor.GRANDFATHER)));
@@ -489,7 +499,7 @@ public final class ChronicleGameTests {
         }
     }
 
-    /** After the origin the settler talks about the weather or, from its own needs, about the settlement. */
+    /** After the origin the settler talks about the weather or, from its own needs, about the settlement (the other topics: {@code SmallTalkGameTests}). */
     private static void smallTalk(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         SettlementData data = new SettlementData();
@@ -512,10 +522,10 @@ public final class ChronicleGameTests {
             String key = key(settlementTalk.line());
             helper.assertTrue(key.matches("civmod\\.talk\\.small\\.settlement\\.(bed|fire)\\.2"), "A need it lacks: " + key);
             helper.assertTrue(settler.getPast().chronicle().entries().isEmpty(), "Small talk writes nothing");
-            // A homeless settler has no settlement to talk about: it talks about the weather whatever the pick.
+            // A homeless settler has no settlement to talk about: its second family is the time of day (see SmallTalkGameTests).
             settler.becomeHomeless();
             PlayerTalk.script(OriginRolls.picks(1, 0, 0));
-            helper.assertTrue(key(talk(helper, settler, player).line()).startsWith("civmod.talk.small.weather."), "A homeless settler talks about the weather");
+            helper.assertTrue(key(talk(helper, settler, player).line()).startsWith("civmod.talk.small.time."), "A homeless settler talks about the time of day");
             helper.succeed();
         } finally {
             PlayerTalk.script(null);
@@ -553,14 +563,13 @@ public final class ChronicleGameTests {
         Settler settler = withOrigin(helper, Optional.empty());
         ServerPlayer first = player(helper, true);
         ServerPlayer second = player(helper, true);
-        try {
+        try (StoryTalks story = StoryTalks.begin(helper)) {
             Set<OriginLine.Slot> slots = new HashSet<>();
-            slots.add(talk(helper, settler, first).told().orElseThrow());
-            slots.add(talk(helper, settler, second).told().orElseThrow());
-            slots.add(talk(helper, settler, first).told().orElseThrow());
+            slots.add(story.talkNextDay(helper, settler, first).told().orElseThrow());
+            slots.add(story.talkNextDay(helper, settler, second).told().orElseThrow());
+            slots.add(story.talkNextDay(helper, settler, first).told().orElseThrow());
             helper.assertTrue(slots.size() == 3, "Each part once, whoever asks: " + slots);
-            helper.assertTrue(talk(helper, settler, second).told().isEmpty(), "Small talk for every player after that");
-            helper.assertTrue(entertainment(settler) == TALK_POINTS, "One day, one gift of Entertainment per settler: " + entertainment(settler));
+            helper.assertTrue(story.talkNextDay(helper, settler, second).told().isEmpty(), "Small talk for every player after that");
             helper.succeed();
         } finally {
             TestPlayers.remove(first);
@@ -577,6 +586,22 @@ public final class ChronicleGameTests {
             PlayerTalk.Result result = talk(helper, settler, player);
             helper.assertTrue(result.told().isEmpty() && key(result.line()).startsWith("civmod.talk.small."), "Small talk: " + key(result.line()));
             helper.assertTrue(settler.getPast().chronicle().equals(Chronicle.EMPTY), "No diary entry: " + settler.getPast().chronicle());
+            helper.succeed();
+        } finally {
+            TestPlayers.remove(player);
+            settler.discard();
+        }
+    }
+
+    /** A settler that talks to a player shows the speech bubble: three dots in the sprite, so no item icon. */
+    private static void speechBubble(GameTestHelper helper) {
+        Settler settler = handBuilt(helper);
+        ServerPlayer player = player(helper, true);
+        try {
+            talk(helper, settler, player);
+            List<ThoughtBubble.Show> bubbles = settler.getWork().recentThoughts().stream().filter(show -> show.bubble() == ThoughtBubble.CONVERSATION).toList();
+            helper.assertTrue(bubbles.equals(List.of(new ThoughtBubble.Show(settler.getId(), ThoughtBubble.CONVERSATION, Items.AIR, true))),
+                    "One speech bubble without an icon: " + settler.getWork().recentThoughts());
             helper.succeed();
         } finally {
             TestPlayers.remove(player);

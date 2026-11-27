@@ -187,23 +187,25 @@ public final class FavouriteMealGameTests {
     // ---------------------------------------------------------------- the reveal by a talk
 
     /**
-     * After the three parts of the origin the next talk tells the favourite meal, once, and writes it into the diary with the same words;
-     * after that it is small talk again, and the settler keeps the favourite hidden until then.
+     * On story days the favourite meal is one of four aspects; the scripted picks tell the three parts of the origin first. The talk that
+     * tells the favourite meal does it once and writes it into the diary with the same words; after that it is small talk again, and the
+     * settler keeps the favourite hidden until then.
      */
     private static void toldAfterOrigin(GameTestHelper helper) {
         Settler settler = handBuilt(helper);
         ServerPlayer player = player(helper);
-        try {
+        try (StoryTalks story = StoryTalks.begin(helper)) {
+            PlayerTalk.script(OriginRolls.picks(0));
             Origins.assignEgg(settler, RandomSource.create(4L));
             Identifier favourite = settler.getFood().favourite().orElseThrow();
             helper.assertFalse(settler.getFood().isFavouriteKnown(), "The favourite is hidden at first");
             for (int i = 0; i < 3; i++) {
-                helper.assertTrue(talk(helper, settler, player).told().isPresent(), "Talk " + (i + 1) + " tells the origin");
+                helper.assertTrue(story.talkNextDay(helper, settler, player).told().isPresent(), "Talk " + (i + 1) + " tells the origin");
                 helper.assertFalse(settler.getFood().isFavouriteKnown(), "Still hidden after " + (i + 1) + " talks");
             }
             helper.assertTrue(favouriteEntries(settler).isEmpty(), "Nothing about the favourite in the diary yet");
 
-            PlayerTalk.Result fourth = talk(helper, settler, player);
+            PlayerTalk.Result fourth = story.talkNextDay(helper, settler, player);
             helper.assertTrue(fourth.told().isEmpty() && key(fourth.line()).equals("diary.civmod.favourite_meal.told"), "The fourth talk tells the favourite: " + key(fourth.line()));
             helper.assertTrue(((TranslatableContents) fourth.line().getContents()).getArgs()[0].equals(new ItemStack(BuiltInRegistries.ITEM.getValue(favourite)).getHoverName()),
                     "It names the favourite meal: " + fourth.line());
@@ -213,26 +215,27 @@ public final class FavouriteMealGameTests {
             helper.assertTrue(ModDiaryEntryTypes.FAVOURITE_MEAL.get().text().apply(entries.get(0).params()).equals(fourth.line()), "The entry reads like the line: " + entries.get(0));
 
             for (int i = 0; i < 4; i++) {
-                PlayerTalk.Result later = talk(helper, settler, player);
+                PlayerTalk.Result later = story.talkNextDay(helper, settler, player);
                 helper.assertTrue(later.told().isEmpty() && key(later.line()).startsWith("civmod.talk.small."), "Small talk after that: " + key(later.line()));
             }
             helper.assertTrue(favouriteEntries(settler).size() == 1, "Told once: " + favouriteEntries(settler));
             helper.succeed();
         } finally {
+            PlayerTalk.script(null);
             TestPlayers.remove(player);
             settler.discard();
         }
     }
 
-    /** A settler with a favourite but no origin (an old save) has no origin lines to tell first: its first talk tells the favourite. */
+    /** A settler with a favourite but no origin (an old save) has no origin lines: its story day tells the favourite, the next one has nothing left. */
     private static void toldFirstWithoutOrigin(GameTestHelper helper) {
         Settler settler = handBuilt(helper);
         ServerPlayer player = player(helper);
-        try {
+        try (StoryTalks story = StoryTalks.begin(helper)) {
             settler.getFood().rollFavourite(Races.HUMAN, RandomSource.create(2L));
-            PlayerTalk.Result first = talk(helper, settler, player);
+            PlayerTalk.Result first = story.talkNextDay(helper, settler, player);
             helper.assertTrue(key(first.line()).equals("diary.civmod.favourite_meal.told") && settler.getFood().isFavouriteKnown(), "The first talk tells the favourite: " + key(first.line()));
-            helper.assertTrue(key(talk(helper, settler, player).line()).startsWith("civmod.talk.small."), "Small talk after that");
+            helper.assertTrue(key(story.talkNextDay(helper, settler, player).line()).startsWith("civmod.talk.small."), "Small talk after that");
             helper.succeed();
         } finally {
             TestPlayers.remove(player);

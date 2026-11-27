@@ -143,7 +143,7 @@ public final class ConversationGameTests {
     }
 
     private static boolean shown(Settler settler, int count) {
-        ThoughtBubble.Show bubble = new ThoughtBubble.Show(settler.getId(), ThoughtBubble.CONVERSATION, Items.PAPER, true);
+        ThoughtBubble.Show bubble = new ThoughtBubble.Show(settler.getId(), ThoughtBubble.CONVERSATION, Items.AIR, true);
         return settler.getWork().recentThoughts().stream().filter(bubble::equals).count() == count;
     }
 
@@ -516,7 +516,7 @@ public final class ConversationGameTests {
         helper.succeed();
     }
 
-    /** A speech bubble above both (a paper, no problem mark), sent again while the talk lasts. */
+    /** A speech bubble above both (three dots in the sprite, no item icon, no problem mark), sent again while the talk lasts. */
     private static void bubble(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos pantry = TavernGameTests.pantry(helper);
@@ -524,6 +524,11 @@ public final class ConversationGameTests {
         Settler a = SocialGameTests.settler(helper, pantry, 2, 4, rolls);
         Settler b = SocialGameTests.settler(helper, pantry, 3, 4, rolls);
         helper.assertFalse(ThoughtBubble.CONVERSATION.problem(), "An activity bubble: no red mark, hidden by 'Problems only'");
+        helper.assertTrue(ThoughtBubble.CONVERSATION.speech(), "Drawn as a speech bubble, not a thought bubble");
+        for (ThoughtBubble other : ThoughtBubble.values()) {
+            helper.assertTrue(other == ThoughtBubble.CONVERSATION || other == ThoughtBubble.STORY || !other.speech(),
+                    "Every other bubble stays a thought bubble: " + other);
+        }
         rolls.value = CONVERSATION;
         a.getWork().decideNow(level);
         rolls.value = NOTHING;

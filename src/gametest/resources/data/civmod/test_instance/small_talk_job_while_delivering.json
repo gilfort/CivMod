@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:small_talk_job_while_delivering",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

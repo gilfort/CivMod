@@ -130,6 +130,7 @@ public final class CivModClient {
         event.register(JobPointsDisplay.Sync.TYPE, JobPointsRenderer::handle);
         event.register(ClerkTabData.Sync.TYPE, JobBlockScreen::handleClerkTab);
         event.register(com.gilfort.civmod.menu.StorageTerminal.Sync.TYPE, SettlerScreen::handleTerminal);
+        event.register(com.gilfort.civmod.menu.SettlerMenu.Refresh.TYPE, SettlerScreen::handleRefresh);
         event.register(JobPicker.Open.TYPE, JobPickerScreen::handle);
         event.register(JobPicker.OpenReplace.TYPE, JobReplaceScreen::handle);
         event.register(com.gilfort.civmod.menu.PatternsTabData.Sync.TYPE, JobBlockScreen::handlePatternTab);

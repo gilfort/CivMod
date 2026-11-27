@@ -187,6 +187,12 @@ public final class CivModConfig {
                     "A race without a name list for it falls back to \"en\". The name is rolled once when a settler arrives.")
             .define("settlerNameCulture", "en", value -> value instanceof String culture && culture.matches("[a-z][a-z0-9_]*"));
 
+    /** How many days pass on average between two days on which a settler has a story aspect to share. */
+    public static final ModConfigSpec.IntValue SETTLER_STORY_SHARE_ONE_IN = BUILDER
+            .comment("A settler has a story aspect to share (a speech bubble with a book and quill) on 1 day in this many.",
+                    "1 means every day. Each settler rolls once a day, at waking time; an unused chance is lost at bedtime.")
+            .defineInRange("settlerStoryShareOneIn", 3, 1, 100);
+
     /** The built config spec, registered in the mod constructor. */
     public static final ModConfigSpec SPEC = BUILDER.build();
 

@@ -644,6 +644,14 @@ public final class SettlerWork {
     }
 
     /**
+     * @return the job the settler works at now, on a job step or while it delivers the result of one; empty while it rests, eats or
+     *         walks elsewhere, although {@link #activeJob()} still names the last job then
+     */
+    Optional<SettlerJob> jobInProgress() {
+        return activity == Activity.JOB || activity == Activity.DELIVER ? activeJob() : Optional.empty();
+    }
+
+    /**
      * @return the job the settler currently works on
      */
     public Optional<SettlerJob> activeJob() {
@@ -1142,7 +1150,7 @@ public final class SettlerWork {
     }
 
     /** Sends the thought bubbles of what changed and lets the held item follow the activity. */
-    private void observe() {
+    void observe() {
         JobStatus status = activeJob == null ? JobStatus.IDLE : status(activeJob.jobBlock());
         thoughts.update(new SettlerThoughts.Now(activeJob, activityBubble(status), problems()), !quiet);
         HandKey key = new HandKey(activity, activeJob, status, activity == Activity.EATING ? meals.eatingItem().getItem() : Items.AIR);
@@ -1172,7 +1180,27 @@ public final class SettlerWork {
         };
     }
 
-    /** The problems that are on now (one per kind; the first job with it gives the icon). */
+    /**
+     * Uses up the settler's chance to share a story aspect on today's day: it told one, or it was hired as a visitor today. The story
+     * bubble goes at the next look.
+     *
+     * @param level the level
+     */
+    public void spendStoryToday(ServerLevel level) {
+        long day = moment(level.getOverworldClockTime()).day();
+        settler.getPast().updateChronicle(chronicle -> chronicle.withStorySpent(day));
+    }
+
+    /**
+     * @param level the level
+     * @return whether the settler has a story aspect to tell now (see {@link StoryShare}): it shows the story bubble, and a talk tells one
+     */
+    boolean sharesStory(ServerLevel level) {
+        Schedule.Moment moment = moment(level.getOverworldClockTime());
+        return StoryShare.shares(settler, moment, dayTimes(moment.day()), missions.isAway());
+    }
+
+    /** The bubbles that stay on while they last: the problems now (one per kind; the first job with it gives the icon) and the story bubble. */
     private Map<ThoughtBubble, Item> problems() {
         Map<ThoughtBubble, Item> on = new EnumMap<>(ThoughtBubble.class);
         for (SettlerJob job : settler.getJobs()) {
@@ -1195,6 +1223,9 @@ public final class SettlerWork {
         if (meals.hungryNoFood()) {
             on.put(ThoughtBubble.HUNGRY_NO_FOOD,
                     SettlerThoughts.problemIcon(ThoughtBubble.HUNGRY_NO_FOOD));
+        }
+        if (settler.level() instanceof ServerLevel level && sharesStory(level)) {
+            on.put(ThoughtBubble.STORY, SettlerThoughts.problemIcon(ThoughtBubble.STORY));
         }
         needs.missingIcon().ifPresent(icon -> on.put(ThoughtBubble.NEED_UNMET, icon));
         if (activeJob != null && needs.tools().view(activeJob) == ToolNeeds.View.WEAK) {
@@ -2296,6 +2327,23 @@ public final class SettlerWork {
     public void recheckExcluded(BlockPos jobBlock) {
         existingWorkplace(jobBlock).filter(workplace -> workplace.status() == JobStatus.ALL_EXCLUDED
                 || workplace.status() == JobStatus.NOTHING_TO_PRODUCE).ifPresent(Workplace::unblock);
+    }
+
+    /**
+     * "Try again" of the settler window (vault {@code Systems/GUI.md}): a job that waits on something ({@link
+     * JobStatus#isWaiting}) forgets its block timer, the requests and patterns it skips and the wait after a fruitless
+     * tool search, so the next decision checks it again.
+     *
+     * @param jobBlock the JobBlock of the job
+     * @return whether the job waited and was cleared; false (and nothing changed) for a job with another status
+     */
+    public boolean tryAgain(BlockPos jobBlock) {
+        if (!status(jobBlock).isWaiting()) {
+            return false;
+        }
+        existingWorkplace(jobBlock).ifPresent(Workplace::forgetWaits);
+        needs.tools().forgetSearch(jobBlock);
+        return true;
     }
 
     /**

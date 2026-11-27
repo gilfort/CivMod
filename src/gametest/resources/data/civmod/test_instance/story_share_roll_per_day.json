@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:story_share_roll_per_day",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

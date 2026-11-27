@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:story_share_all_told_never_rolls",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

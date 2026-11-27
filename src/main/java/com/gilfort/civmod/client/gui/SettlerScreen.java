@@ -57,6 +57,11 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
     /** Y of the job switcher's first Job button. */
     private static final int SWITCH_TOP = 34;
     private static final int SWITCH_ICON = 16;
+    /** Y of the top of the "Try again" button on a job tab: in the row of the job name, right-aligned. */
+    private static final int TRY_AGAIN_Y = 19;
+    private static final int TRY_AGAIN_HEIGHT = 14;
+    /** Space on both sides of the label of the "Try again" button. */
+    private static final int TRY_AGAIN_MARGIN = 12;
 
     /** The job whose switcher the Jobs tab shows, -1 for the priority list. */
     private int switching = -1;
@@ -123,6 +128,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
             addTabWidget(SettlerMenu.TAB_OVERVIEW, bottomButton("civmod.gui.settler.ask_stay", button -> clickButton(SettlerMenu.BUTTON_ASK_STAY)));
         }
         List<SettlerJob> jobs = info.jobs();
+        initTryAgain(info);
         int right = leftPos + imageWidth - CivGui.PADDING;
         if (switching >= 0 && switching < jobs.size()) {
             initSwitcher(info, switching);
@@ -144,6 +150,38 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
             Button down = jobButton("▼", "civmod.gui.settler.job.down", SettlerJobs.MOVE_DOWN + i, right - 2 * SMALL_BUTTON - 2, y);
             down.active = i < jobs.size() - 1;
             jobButton("✕", "civmod.gui.settler.job.remove", SettlerJobs.REMOVE + i, right - SMALL_BUTTON, y);
+        }
+    }
+
+    /** The "Try again" button on the tab of every job that waits on something. */
+    private void initTryAgain(SettlerInfo info) {
+        Component label = Component.translatable("civmod.gui.settler.try_again");
+        int width = minecraft.font.width(label) + TRY_AGAIN_MARGIN;
+        for (int i = 0; i < Math.min(info.jobs().size(), SettlerMenu.MAX_JOB_TABS); i++) {
+            int index = i;
+            if (waiting(info, i)) {
+                addTabWidget(SettlerMenu.FIRST_JOB_TAB + i, Button.builder(label, b -> tryAgain(index))
+                        .bounds(leftPos + imageWidth - CivGui.PADDING - width, topPos + TRY_AGAIN_Y, width, TRY_AGAIN_HEIGHT).build());
+            }
+        }
+    }
+
+    /** The click only goes to the server; the window shows the job state again when the server sends it. */
+    private void tryAgain(int index) {
+        ClientPacketDistributor.sendToServer(new SettlerMenu.TryAgain(menu.containerId, index));
+    }
+
+    /**
+     * Client handler of {@link SettlerMenu.Refresh}: the open settler window shows the job state the server read.
+     *
+     * @param payload the payload
+     * @param context the payload context
+     */
+    public static void handleRefresh(SettlerMenu.Refresh payload, IPayloadContext context) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player != null && minecraft.player.containerMenu instanceof SettlerMenu open && payload.applyTo(open)
+                && minecraft.gui.screen() instanceof SettlerScreen screen && screen.menu == open) {
+            screen.rebuildWidgets();
         }
     }
 
@@ -308,6 +346,11 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         return index >= 0 && index < info.jobStates().size() ? java.util.Optional.of(info.jobStates().get(index)) : java.util.Optional.empty();
     }
 
+    /** Whether the job at the index waits on something, so the tab offers "Try again". */
+    private static boolean waiting(SettlerInfo info, int index) {
+        return state(info, index).filter(state -> state.status().isWaiting()).isPresent();
+    }
+
     private boolean onStorageTab() {
         return menu.getActiveTab() == SettlerMenu.TAB_STORAGE;
     }
@@ -394,7 +437,9 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                     Component.translatable("civmod.gui.storage.help.shift"));
         }
         if (tab >= SettlerMenu.FIRST_JOB_TAB) {
-            return List.of(Component.translatable("civmod.gui.settler.help.cap"));
+            Component cap = Component.translatable("civmod.gui.settler.help.cap");
+            return waiting(menu.getInfo(), tab - SettlerMenu.FIRST_JOB_TAB) ? List.of(cap, Component.translatable("civmod.gui.settler.help.try_again"))
+                    : List.of(cap);
         }
         if (tab == SettlerMenu.TAB_JOBS) {
             return List.of(Component.translatable("civmod.gui.settler.help.switch"));

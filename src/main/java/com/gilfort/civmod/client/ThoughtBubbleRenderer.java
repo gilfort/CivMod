@@ -38,9 +38,9 @@ import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Draws thought bubbles above settlers (vault {@code Systems/Thought Bubbles.md}): a pixel bubble above the name tag
+ * Draws thought bubbles and speech bubbles above settlers (vault {@code Systems/Thought Bubbles.md}): a pixel bubble above the name tag
  * with an item icon, a red "!" in the corner for problems. Each bubble shows for {@value #SHOW_TICKS} ticks and shrinks
- * away at the end; bubbles that arrive meanwhile wait their turn. Problems repeat every {@value #REPEAT_TICKS} ticks
+ * away at the end; bubbles that arrive meanwhile wait their turn. Problems and the story bubble repeat every {@value #REPEAT_TICKS} ticks
  * while they are on. Only within {@value #DISTANCE} blocks, never while the settler sleeps (except the bed bubble, which
  * plays out) or is away (Mission), and as
  * the client option "Show thought bubbles" allows.
@@ -82,18 +82,20 @@ public final class ThoughtBubbleRenderer {
 
         Drawn drawn(Minecraft minecraft) {
             if (drawn == null) {
-                drawn = new Drawn(state(minecraft, new ItemStack(ModItems.THOUGHT_BUBBLE.get())), state(minecraft, new ItemStack(icon)),
+                Item bubbleSprite = type.speech() ? ModItems.SPEECH_BUBBLE.get() : ModItems.THOUGHT_BUBBLE.get();
+                drawn = new Drawn(state(minecraft, new ItemStack(bubbleSprite)),
+                        icon == ThoughtBubble.NO_ICON ? null : state(minecraft, new ItemStack(icon)),
                         type.problem() ? state(minecraft, new ItemStack(ModItems.PROBLEM_MARKER.get())) : null);
             }
             return drawn;
         }
     }
 
-    /** The render states of a bubble: the bubble itself, its icon and the problem marker. */
-    private record Drawn(ItemStackRenderState bubble, ItemStackRenderState icon, @Nullable ItemStackRenderState marker) {
+    /** The render states of a bubble: the bubble itself, its icon (none for a speech bubble with dots) and the problem marker. */
+    private record Drawn(ItemStackRenderState bubble, @Nullable ItemStackRenderState icon, @Nullable ItemStackRenderState marker) {
     }
 
-    /** A problem that is on: its icon and when it shows again. */
+    /** A bubble that repeats (a problem or the story bubble) and is on: its icon and when it shows again. */
     private static final class Problem {
         private final Item icon;
         /** Shown at once, then repeated from the tick loop. */
@@ -138,7 +140,7 @@ public final class ThoughtBubbleRenderer {
      */
     public static void handle(ThoughtBubble.Show payload, IPayloadContext context) {
         Thoughts thoughts = THOUGHTS.computeIfAbsent(payload.settlerId(), id -> new Thoughts());
-        if (!payload.bubble().problem()) {
+        if (!payload.bubble().repeats()) {
             thoughts.add(new Bubble(payload.bubble(), payload.icon()));
             return;
         }
@@ -252,7 +254,9 @@ public final class ThoughtBubbleRenderer {
             Drawn drawn = bubble.drawn();
             submit(poseStack, collector, drawn.bubble(), 0.0F, 0.0F, 0.0F, BUBBLE_SCALE);
             // The icon sits in the round part of the bubble, slightly in front of it.
-            submit(poseStack, collector, drawn.icon(), 0.0F, 0.04F, 0.02F, ICON_SCALE);
+            if (drawn.icon() != null) {
+                submit(poseStack, collector, drawn.icon(), 0.0F, 0.04F, 0.02F, ICON_SCALE);
+            }
             if (drawn.marker() != null) {
                 submit(poseStack, collector, drawn.marker(), 0.2F, 0.2F, 0.04F, MARKER_SCALE);
             }

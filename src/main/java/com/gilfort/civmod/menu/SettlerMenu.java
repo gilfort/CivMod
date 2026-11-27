@@ -8,6 +8,7 @@ import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.inn.Visitors;
+import com.gilfort.civmod.job.SettlerWork;
 import com.gilfort.civmod.mission.Missions;
 import com.gilfort.civmod.npc.Settler;
 
@@ -34,6 +35,7 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Menu of a settler: tabs Overview, Jobs (priority list), Inventory (tool belt, offhand, pockets), Needs and Mission
@@ -86,12 +88,19 @@ public class SettlerMenu extends CivMenu {
     /** Distance (squared) within which the window stays open: 8 blocks, like a container. */
     private static final double REACH_SQUARED = 64.0;
 
+    /** {@link #refreshAt} while no refresh is due. */
+    private static final long NO_REFRESH = -1L;
+    /** Ticks after a "Try again" click until the settler has decided again: one decision interval and a tick. */
+    private static final long REFRESH_DELAY_TICKS = SettlerWork.DECISION_INTERVAL + 1L;
+
     private final @Nullable Settler settler;
     /** The JobBlock the window was opened from (Workers tab), empty when opened at the settler. */
     private final Optional<BlockPos> anchor;
     private final Player player;
     private final StorageTerminal terminal;
     private SettlerInfo info;
+    /** The game time the window gets the job state again after a "Try again" click, {@link #NO_REFRESH} if none is due. */
+    private long refreshAt = NO_REFRESH;
 
     /**
      * Client constructor.
@@ -180,6 +189,7 @@ public class SettlerMenu extends CivMenu {
         if (settler != null && player instanceof ServerPlayer serverPlayer) {
             terminal.tick(serverPlayer, settler, getActiveTab() == TAB_STORAGE && stillValid(player), containerId,
                     DayClock.dayTime(serverPlayer.level()));
+            dueRefresh(serverPlayer.level().getGameTime()).ifPresent(refresh -> PacketDistributor.sendToPlayer(serverPlayer, refresh));
         }
     }
 
@@ -297,6 +307,111 @@ public class SettlerMenu extends CivMenu {
             if (player.containerMenu instanceof SettlerMenu menu && menu.containerId == containerId) {
                 menu.switchJob(player, index, job);
             }
+        }
+    }
+
+    /**
+     * The "Try again" button of a job tab (vault {@code Systems/GUI.md}): while the job waits on something, the settler
+     * forgets what it waits on and checks again at its next decision. The window reads the job state again, and sends
+     * it to the player once more after that decision ({@link #dueRefresh}). The client predicts nothing.
+     *
+     * @param player the player using the window
+     * @param index  the index of the job in the priority list
+     * @return whether the job waited and was cleared; false for a job that does not wait, and for a player out of reach
+     */
+    public boolean tryAgain(Player player, int index) {
+        if (settler == null || index < 0 || index >= info.jobs().size() || !(settler.level() instanceof ServerLevel level) || !stillValid(player)
+                || !settler.getWork().tryAgain(info.jobs().get(index).jobBlock())) {
+            return false;
+        }
+        info = SettlerInfo.of(settler);
+        refreshAt = level.getGameTime() + REFRESH_DELAY_TICKS;
+        return true;
+    }
+
+    /**
+     * Server: the job state to send once the settler has decided again after a "Try again" click; due once per click.
+     *
+     * @param gameTime the game time now
+     * @return the refresh, empty if none is due
+     */
+    public Optional<Refresh> dueRefresh(long gameTime) {
+        if (settler == null || refreshAt == NO_REFRESH || gameTime < refreshAt) {
+            return Optional.empty();
+        }
+        refreshAt = NO_REFRESH;
+        info = SettlerInfo.of(settler);
+        return Optional.of(new Refresh(containerId, info));
+    }
+
+    /**
+     * Client → server: a click on "Try again" of a job tab.
+     *
+     * @param containerId the settler window's container id
+     * @param index       the index of the job in the priority list
+     */
+    public record TryAgain(int containerId, int index) implements CustomPacketPayload {
+
+        /** Payload type. */
+        public static final Type<TryAgain> TYPE = new Type<>(CivMod.id("settler_try_again"));
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, TryAgain> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, TryAgain::containerId,
+                ByteBufCodecs.VAR_INT, TryAgain::index,
+                TryAgain::new);
+
+        @Override
+        public Type<TryAgain> type() {
+            return TYPE;
+        }
+
+        /**
+         * Applies the click to the player's open settler window.
+         *
+         * @param player the player
+         */
+        public void handle(ServerPlayer player) {
+            if (player.containerMenu instanceof SettlerMenu menu && menu.containerId == containerId) {
+                menu.tryAgain(player, index);
+            }
+        }
+    }
+
+    /**
+     * Server → client: the settler's state as the server reads it, after a "Try again" click.
+     *
+     * @param containerId the settler window's container id
+     * @param info        the settler's info now
+     */
+    public record Refresh(int containerId, SettlerInfo info) implements CustomPacketPayload {
+
+        /** Payload type. */
+        public static final Type<Refresh> TYPE = new Type<>(CivMod.id("settler_refresh"));
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, Refresh> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, Refresh::containerId,
+                SettlerInfo.STREAM_CODEC, Refresh::info,
+                Refresh::new);
+
+        @Override
+        public Type<Refresh> type() {
+            return TYPE;
+        }
+
+        /**
+         * Client: replaces the snapshot of the open settler window.
+         *
+         * @param menu the open settler window
+         * @return whether the payload was for that window
+         */
+        public boolean applyTo(SettlerMenu menu) {
+            if (menu.containerId != containerId) {
+                return false;
+            }
+            menu.info = info;
+            return true;
         }
     }
 

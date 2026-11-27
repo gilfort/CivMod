@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:story_share_mission_hides_bubble",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
