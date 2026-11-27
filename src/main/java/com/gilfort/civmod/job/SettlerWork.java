@@ -2299,6 +2299,23 @@ public final class SettlerWork {
     }
 
     /**
+     * "Try again" of the settler window (vault {@code Systems/GUI.md}): a job that waits on something ({@link
+     * JobStatus#isWaiting}) forgets its block timer, the requests and patterns it skips and the wait after a fruitless
+     * tool search, so the next decision checks it again.
+     *
+     * @param jobBlock the JobBlock of the job
+     * @return whether the job waited and was cleared; false (and nothing changed) for a job with another status
+     */
+    public boolean tryAgain(BlockPos jobBlock) {
+        if (!status(jobBlock).isWaiting()) {
+            return false;
+        }
+        existingWorkplace(jobBlock).ifPresent(Workplace::forgetWaits);
+        needs.tools().forgetSearch(jobBlock);
+        return true;
+    }
+
+    /**
      * @param job a job
      * @return the level of the JobBlock of that job (1 if unknown)
      */
