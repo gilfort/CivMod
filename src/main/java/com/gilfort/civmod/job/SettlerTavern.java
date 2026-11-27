@@ -22,6 +22,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * The Tavern evening of one settler (vault {@code Systems/Entertainment.md}, {@code Systems/Sitting.md}): books a seat at
@@ -31,6 +32,9 @@ import net.minecraft.world.entity.Entity;
  * The booking is the seat's reservation: it lasts for one evening, belongs to this settler alone and is checked against
  * the other settlers' bookings, so a seat is never shared. Nothing is saved: after a reload the settler books again at its
  * next decision. Nobody rides the seat; the settler sits in the pose of {@link Settler#sitDown}.
+ * <p>
+ * A guest that sits may fetch drinks at the counter of its Pantry and sip them at its seat ({@link SettlerDrinks}); this class
+ * sends it to the counter and back.
  */
 final class SettlerTavern {
 
@@ -51,14 +55,16 @@ final class SettlerTavern {
     }
 
     private final Settler settler;
+    private final SettlerDrinks drinks;
     private @Nullable Booking booking;
     /** The evening on which the settler lost its seat (taken, removed, host gone) and goes home instead. */
     private long lostDay = Long.MIN_VALUE;
     /** When the guest sat down this evening, as far as the Tavern count saw; not saved. */
     private @Nullable Sitting sitting;
 
-    SettlerTavern(Settler settler) {
-        this.settler = settler;
+    SettlerTavern(SettlerWork shell) {
+        this.settler = shell.settler();
+        this.drinks = new SettlerDrinks(shell);
     }
 
     /**
@@ -102,6 +108,7 @@ final class SettlerTavern {
                 return true;
             }
             booking = null;
+            drinks.drop();
             lostDay = day;
             return false;
         }
@@ -162,20 +169,63 @@ final class SettlerTavern {
     void leave() {
         booking = null;
         sitting = null;
+        drinks.drop();
+    }
+
+    /** The settler does not spend the evening in the Tavern (any more): a drink it holds is put down. */
+    void dropDrink() {
+        drinks.drop();
     }
 
     /**
-     * Walks to the booked seat; once the settler sits there it stays.
+     * @param level  the level
+     * @param pantry the Pantry of the missed evening
+     * @param day    the day of that evening
+     */
+    void drinkInCatchUp(ServerLevel level, BlockPos pantry, long day) {
+        drinks.catchUp(level, pantry, day);
+    }
+
+    /**
+     * @param activity the settler's activity
+     * @return the drink the settler carries to its seat or sips at it, empty if it holds none or is not in the Tavern
+     */
+    ItemStack drinkInHand(Activity activity) {
+        return activity == Activity.TAVERN || activity == Activity.ORDER_DRINK ? drinks.inHand() : ItemStack.EMPTY;
+    }
+
+    /**
+     * Walks to the booked seat; once the settler sits there it stays, or fetches a drink at the counter and comes back.
      *
      * @param level the level
-     * @return walk to the seat, stay when seated, or stand still if the seat is gone
+     * @return walk to the counter or to the seat, stay when seated, or stand still if the seat is gone
      */
     BodyStep evening(ServerLevel level) {
         Optional<TavernSeats.Seat> seat = heldSeat(level);
-        if (seat.isEmpty()) {
+        Booking current = booking;
+        if (seat.isEmpty() || current == null) {
+            drinks.drop();
             return BodyStep.STOP;
         }
-        return settler.isSitting() ? BodyStep.STAY : new BodyStep.Walk(Activity.TAVERN, seat.get().walkTo(), REACH);
+        Optional<BodyStep.Walk> toCounter = drinks.order(level, current.pantry());
+        return toCounter.isPresent() ? toCounter.get() : toSeat(seat.get());
+    }
+
+    private BodyStep toSeat(TavernSeats.Seat seat) {
+        return settler.isSitting() ? BodyStep.STAY : new BodyStep.Walk(Activity.TAVERN, seat.walkTo(), REACH);
+    }
+
+    /**
+     * The settler stands at the counter to fetch a drink: it waits for its turn, takes the drink and walks back to its seat.
+     *
+     * @param level the level
+     * @return stay while waiting, else the way back to the seat
+     */
+    BodyStep atCounter(ServerLevel level) {
+        if (drinks.atCounter(level) == SettlerDrinks.Counter.WAIT) {
+            return BodyStep.STAY;
+        }
+        return heldSeat(level).map(this::toSeat).orElse(BodyStep.STOP);
     }
 
     /**
@@ -192,6 +242,7 @@ final class SettlerTavern {
         if (!settler.isSitting()) {
             settler.sitDown(seat.get().position(), seat.get().facing());
         }
+        drinks.sip(level);
         return BodyStep.STAY;
     }
 

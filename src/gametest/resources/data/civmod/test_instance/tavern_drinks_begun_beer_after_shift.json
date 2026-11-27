@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:tavern_drinks_begun_beer",
+  "function": "civmod:tavern_drinks_begun_beer_after_shift",
+  "max_ticks": 3000,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -331,7 +331,7 @@ public final class VisitorDayGameTests {
         Settler second = TavernGameTests.settler(helper, inn.pantry(), new BlockPos(4, 1, 4));
         TavernGameTests.seat(helper, second);
         Tavern.countAt(level, inn.pantry(), day, EVENING_MEAL);
-        helper.assertTrue(value(host) == 3.0 && value(first) == 3.0 && value(second) == 3.0,
+        helper.assertTrue(value(host) == 2.0 && value(first) == 2.0 && value(second) == 2.0,
                 "The host, two guests and the visitor are four: " + value(host) + ", " + value(first) + ", " + value(second));
         helper.assertTrue(value(visitor) == 0.0 && !visitor.getWork().entertainment().tavernPaid(day), "The visitor gets no points");
         helper.assertTrue(first.getWork().holdsTavernSeat(inn.pantry(), day) && second.getWork().holdsTavernSeat(inn.pantry(), day),

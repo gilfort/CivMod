@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:after_work",
+  "function": "civmod:tavern_drinks_no_beer",
+  "max_ticks": 900,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

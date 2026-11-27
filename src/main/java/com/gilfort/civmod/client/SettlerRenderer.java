@@ -113,6 +113,9 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
             showCastRod(settler, state);
         }
         state.isPassenger |= settler.isSitting();
+        if (settler.isSipping()) {
+            raiseToMouth(settler, state);
+        }
         Direction bed = state.bedOrientation;
         if (!settler.hasPose(Pose.SLEEPING) || bed == null) {
             return;
@@ -126,6 +129,17 @@ public class SettlerRenderer extends HumanoidMobRenderer<Settler, AvatarRenderSt
         float angle = (float) Math.toRadians(pose == SleepingPose.LEFT_SIDE ? 90.0 : -90.0);
         settlerState.roll = new Quaternionf().rotationAxis(angle, bed.getStepX(), 0.0F, bed.getStepZ());
         settlerState.lift = (state.skin.model() == PlayerModelType.SLIM ? ARM_REACH_SLIM : ARM_REACH_WIDE) - HALF_DEPTH - ARM_SINK;
+    }
+
+    /**
+     * A sip: the arm that holds the drink goes up to the mouth, in the pose vanilla uses for a goat horn.
+     */
+    private static void raiseToMouth(Settler settler, AvatarRenderState state) {
+        if (settler.getMainArm() == HumanoidArm.RIGHT) {
+            state.rightArmPose = HumanoidModel.ArmPose.TOOT_HORN;
+        } else {
+            state.leftArmPose = HumanoidModel.ArmPose.TOOT_HORN;
+        }
     }
 
     /**

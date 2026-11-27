@@ -3,6 +3,7 @@ package com.gilfort.civmod.block;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.food.SettlerFood;
+import com.gilfort.civmod.food.TavernDrinks;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.menu.JobBlockInfo;
 import com.gilfort.civmod.menu.JobBlockMenu;
@@ -92,11 +93,11 @@ public class JobBlockEntity extends BaseContainerBlockEntity {
         }
     }
 
-    /** A Pantry takes food only (what settlers may eat), by hand and by hopper. */
+    /** A Pantry takes food (what settlers may eat), the drinks of the Tavern and the empty bowls and bottles of both, by hand and by hopper. */
     @Override
     public boolean canPlaceItem(int slot, ItemStack stack) {
         boolean pantry = getBlockState().getBlock() instanceof JobBlock jobBlock && jobBlock.getJobType() == ModJobs.TAVERN_HOST.get();
-        return !pantry || SettlerFood.isEdible(stack);
+        return !pantry || SettlerFood.isEdible(stack) || TavernDrinks.is(stack) || SettlerFood.isEmptyContainer(stack);
     }
 
     /**

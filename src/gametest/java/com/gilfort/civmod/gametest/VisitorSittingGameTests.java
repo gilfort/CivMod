@@ -358,8 +358,8 @@ public final class VisitorSittingGameTests {
         Settler second = TavernGameTests.settler(helper, inn.pantry(), new BlockPos(4, 1, 4));
         TavernGameTests.seat(helper, second);
         Tavern.countAt(level, inn.pantry(), day, VisitorDayGameTests.EVENING_MEAL);
-        helper.assertTrue(VisitorDayGameTests.value(host) == 3.0 && VisitorDayGameTests.value(first) == 3.0
-                && VisitorDayGameTests.value(second) == 3.0, "With the seated visitor the crowd is 4 and the others are paid");
+        helper.assertTrue(VisitorDayGameTests.value(host) == 2.0 && VisitorDayGameTests.value(first) == 2.0
+                && VisitorDayGameTests.value(second) == 2.0, "With the seated visitor the crowd is 4 and the others are paid");
         helper.assertTrue(VisitorDayGameTests.value(visitor) == 0.0 && !visitor.getWork().entertainment().tavernPaid(day),
                 "The seated visitor gets no points");
         helper.assertTrue(!visitor.getWork().holdsTavernSeat(inn.pantry(), day), "It holds no booked seat");

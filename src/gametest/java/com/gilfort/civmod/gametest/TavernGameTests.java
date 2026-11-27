@@ -170,9 +170,9 @@ public final class TavernGameTests {
         Settler c = settler(helper, pantry, new BlockPos(5, 1, 2));
         seat(helper, c);
         Tavern.countAt(level, pantry, day, EVENING);
-        helper.assertTrue(Math.abs(value(host) - 3.0) < EPSILON, "The Tavern Host counts and is paid: " + value(host));
-        helper.assertTrue(Math.abs(value(a) - 3.0) < EPSILON && Math.abs(value(b) - 3.0) < EPSILON && Math.abs(value(c) - 3.0) < EPSILON,
-                "Four present: +3 each");
+        helper.assertTrue(Math.abs(value(host) - 2.0) < EPSILON, "The Tavern Host counts and is paid: " + value(host));
+        helper.assertTrue(Math.abs(value(a) - 2.0) < EPSILON && Math.abs(value(b) - 2.0) < EPSILON && Math.abs(value(c) - 2.0) < EPSILON,
+                "Four present: +2 each");
         helper.assertTrue(value(far) == 0.0, "13 blocks away is not present");
         end(helper, pantry, List.of(host, a, b, c, far));
         helper.succeed();
@@ -196,14 +196,14 @@ public final class TavernGameTests {
         helper.assertTrue(value(guest) == 0.0, "A jukebox 9 blocks away is too far");
         helper.setBlock(new BlockPos(1 + 8, 1, 1), Blocks.JUKEBOX.defaultBlockState().setValue(JukeboxBlock.HAS_RECORD, true));
         Tavern.countAt(level, pantry, day, EVENING);
-        helper.assertTrue(Math.abs(value(guest) - 3.0) < EPSILON && Math.abs(value(host) - 3.0) < EPSILON,
-                "A jukebox with a disc within 8 blocks: +3 for two settlers, got " + value(guest));
+        helper.assertTrue(Math.abs(value(guest) - 2.0) < EPSILON && Math.abs(value(host) - 2.0) < EPSILON,
+                "A jukebox with a disc within 8 blocks: +2 for two settlers, got " + value(guest));
         helper.assertTrue(level.getBlockState(helper.absolutePos(new BlockPos(9, 1, 1))).is(Tavern.JUKEBOXES), "The jukebox is in the block tag");
         end(helper, pantry, List.of(host, guest));
         helper.succeed();
     }
 
-    /** Both conditions multiply the base points by the factor (3 × 1.5), a datapack value. */
+    /** Both conditions multiply the base points by the factor (2 × 1.5), a datapack value. */
     private static void bothConditions(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos pantry = pantry(helper);
@@ -217,12 +217,12 @@ public final class TavernGameTests {
         seat(helper, all.subList(1, 4).toArray(new Settler[0]));
         helper.setBlock(new BlockPos(5, 1, 4), Blocks.JUKEBOX.defaultBlockState().setValue(JukeboxBlock.HAS_RECORD, true));
         Tavern.countAt(level, pantry, day, EVENING);
-        helper.assertTrue(all.stream().allMatch(settler -> Math.abs(value(settler) - 4.5) < EPSILON), "Both conditions: 3 × 1.5 = 4.5");
+        helper.assertTrue(all.stream().allMatch(settler -> Math.abs(value(settler) - 3.0) < EPSILON), "Both conditions: 2 × 1.5 = 3");
 
         EntertainmentRules rules = EntertainmentRules.FALLBACK;
-        helper.assertTrue(rules.tavernPoints(3, false) == 0.0 && rules.tavernPoints(4, false) == 3.0 && rules.tavernPoints(1, true) == 3.0
-                && rules.tavernPoints(4, true) == 4.5, "The rule table");
-        EntertainmentRules other = new EntertainmentRules(1.0, 5.0, 8.0, 0.02, 2.0, 2.0, 2, 12, 8);
+        helper.assertTrue(rules.tavernPoints(3, false) == 0.0 && rules.tavernPoints(4, false) == 2.0 && rules.tavernPoints(1, true) == 2.0
+                && rules.tavernPoints(4, true) == 3.0, "The rule table");
+        EntertainmentRules other = new EntertainmentRules(1.0, 5.0, 8.0, 0.02, 2.0, 2.0, 2, 12, 8, EntertainmentRules.DrinkRules.FALLBACK);
         helper.assertTrue(other.tavernPoints(2, true) == 4.0 && other.tavernPoints(1, false) == 0.0, "The factor and the crowd are datapack values");
         end(helper, pantry, all);
         helper.succeed();
@@ -242,11 +242,11 @@ public final class TavernGameTests {
         seat(helper, all.subList(1, 4).toArray(new Settler[0]));
         Tavern.countAt(level, pantry, day, EVENING);
         Tavern.countAt(level, pantry, day, EVENING + 100);
-        helper.assertTrue(all.stream().allMatch(settler -> Math.abs(value(settler) - 3.0) < EPSILON), "Two counts, one payment");
+        helper.assertTrue(all.stream().allMatch(settler -> Math.abs(value(settler) - 2.0) < EPSILON), "Two counts, one payment");
         Settler newcomer = settler(helper, pantry, new BlockPos(2, 1, 4));
         seat(helper, newcomer);
         Tavern.countAt(level, pantry, day, EVENING + 200);
-        helper.assertTrue(Math.abs(value(newcomer) - 3.0) < EPSILON && Math.abs(value(host) - 3.0) < EPSILON,
+        helper.assertTrue(Math.abs(value(newcomer) - 2.0) < EPSILON && Math.abs(value(host) - 2.0) < EPSILON,
                 "A settler who comes later is paid at its first count, the others are not paid again");
         all.add(newcomer);
 
@@ -254,7 +254,7 @@ public final class TavernGameTests {
         long next = nextEvening(helper, guests);
         Tavern.countAt(level, pantry, next, EVENING);
         // The guests took the decay of the new day when they decided again (1 point); the Tavern Host did not decide.
-        helper.assertTrue(Math.abs(value(host) - 6.0) < EPSILON && all.subList(1, 5).stream().allMatch(settler -> Math.abs(value(settler) - 5.0) < EPSILON),
+        helper.assertTrue(Math.abs(value(host) - 4.0) < EPSILON && all.subList(1, 5).stream().allMatch(settler -> Math.abs(value(settler) - 3.0) < EPSILON),
                 "The next evening pays again: the host " + value(host) + ", a guest " + value(all.get(1)));
         all.get(1).getWork().setEntertainment(Entertainment.of(9.0));
         long third = nextEvening(helper, guests);
@@ -283,7 +283,7 @@ public final class TavernGameTests {
         Tavern.countAt(level, pantry, day, 11000L);
         helper.assertTrue(all.stream().allMatch(settler -> value(settler) == 0.0), "Before 17:30 it is not the evening: nothing");
         Tavern.countAt(level, pantry, day, EVENING);
-        helper.assertTrue(all.stream().allMatch(settler -> Math.abs(value(settler) - 3.0) < EPSILON), "On shift in the evening: paid");
+        helper.assertTrue(all.stream().allMatch(settler -> Math.abs(value(settler) - 2.0) < EPSILON), "On shift in the evening: paid");
         end(helper, pantry, all);
         helper.succeed();
     }
@@ -504,10 +504,10 @@ public final class TavernGameTests {
 
         host(helper, pantry, host);
         catchUpYesterday(helper, guestArray);
-        helper.assertTrue(guests.stream().allMatch(settler -> Math.abs(value(settler) - 3.0) < EPSILON && settler.getWork().entertainment().tavernPaid(missed)),
-                "Four members, the Tavern Host assigned: +3 each, got " + value(guests.get(0)));
+        helper.assertTrue(guests.stream().allMatch(settler -> Math.abs(value(settler) - 2.0) < EPSILON && settler.getWork().entertainment().tavernPaid(missed)),
+                "Four members, the Tavern Host assigned: +2 each, got " + value(guests.get(0)));
         catchUpYesterday(helper, guestArray);
-        helper.assertTrue(guests.stream().allMatch(settler -> Math.abs(value(settler) - 3.0) < EPSILON), "The same day is not paid twice");
+        helper.assertTrue(guests.stream().allMatch(settler -> Math.abs(value(settler) - 2.0) < EPSILON), "The same day is not paid twice");
         helper.assertTrue(value(host) == 0.0, "The Tavern Host was not caught up");
         end(helper, pantry, List.of(host));
         guests.forEach(Settler::discard);
@@ -523,12 +523,12 @@ public final class TavernGameTests {
         Settler guest = settler(helper, pantry, new BlockPos(3, 1, 2));
         helper.setBlock(new BlockPos(5, 1, 1), Blocks.JUKEBOX.defaultBlockState().setValue(JukeboxBlock.HAS_RECORD, true));
         catchUpYesterday(helper, guest);
-        helper.assertTrue(Math.abs(value(guest) - 3.0) < EPSILON, "Two members, a jukebox with a disc: +3, got " + value(guest));
+        helper.assertTrue(Math.abs(value(guest) - 2.0) < EPSILON, "Two members, a jukebox with a disc: +2, got " + value(guest));
 
         Settler a = settler(helper, pantry, new BlockPos(4, 1, 2));
         Settler b = settler(helper, pantry, new BlockPos(5, 1, 2));
         catchUpYesterday(helper, a);
-        helper.assertTrue(Math.abs(value(a) - 4.5) < EPSILON, "Four members and the jukebox: 3 × 1.5, got " + value(a));
+        helper.assertTrue(Math.abs(value(a) - 3.0) < EPSILON, "Four members and the jukebox: 2 × 1.5, got " + value(a));
         end(helper, pantry, List.of(host, guest, a, b));
         helper.succeed();
     }
@@ -571,7 +571,7 @@ public final class TavernGameTests {
         helper.assertTrue(a.getWork().tavernSeat(day).isPresent() && b.getWork().tavernSeat(day).isPresent() && resting.getWork().tavernSeat(day).isEmpty(),
                 "Two seats: two guests book, the third rests at home");
         Tavern.countAt(level, pantry, day, EVENING);
-        helper.assertTrue(Math.abs(value(host) - 3.0) < EPSILON && Math.abs(value(a) - 3.0) < EPSILON && Math.abs(value(b) - 3.0) < EPSILON,
+        helper.assertTrue(Math.abs(value(host) - 2.0) < EPSILON && Math.abs(value(a) - 2.0) < EPSILON && Math.abs(value(b) - 2.0) < EPSILON,
                 "The host and the booked guests are paid: four are present, the resting settler counts for the crowd");
         helper.assertTrue(value(resting) == 0.0 && !resting.getWork().entertainment().tavernPaid(day), "The resting settler is not paid");
         end(helper, pantry, all);
@@ -602,9 +602,11 @@ public final class TavernGameTests {
 
         TestAssignments.assign(data, far, UUID.randomUUID(), "Host", settlement.id(), List.of());
         catchUpYesterday(helper, guests);
-        helper.assertTrue(members.stream().allMatch(settler -> Math.abs(value(settler) - 3.0) < EPSILON && settler.getWork().entertainment().tavernPaid(missed)),
-                "The Pantry is not loaded, its host is assigned: four members, +3 each, got " + value(members.get(0)));
+        helper.assertTrue(members.stream().allMatch(settler -> Math.abs(value(settler) - 2.0) < EPSILON && settler.getWork().entertainment().tavernPaid(missed)),
+                "The Pantry is not loaded, its host is assigned: four members, +2 each, got " + value(members.get(0)));
         helper.assertFalse(level.hasChunkAt(far), "And the catch-up did not load it");
+        helper.assertTrue(members.stream().allMatch(settler -> settler.getWork().entertainment().drinks().on(missed) == 0),
+                "An unloaded Pantry has no stock to drink from: no beer in the catch-up");
         TestAssignments.unassign(data, far);
         members.forEach(Settler::discard);
         helper.succeed();
@@ -621,7 +623,7 @@ public final class TavernGameTests {
         }
         seat(helper, all.subList(1, 4).toArray(new Settler[0]));
         helper.succeedWhen(() -> {
-            helper.assertTrue(all.stream().allMatch(settler -> Math.abs(value(settler) - 3.0) < EPSILON), "Paid by the tick, day time " + DayClock.dayTime(helper.getLevel()) + ", host value " + value(host));
+            helper.assertTrue(all.stream().allMatch(settler -> Math.abs(value(settler) - 2.0) < EPSILON), "Paid by the tick, day time " + DayClock.dayTime(helper.getLevel()) + ", host value " + value(host));
             end(helper, pantry, all);
         });
     }

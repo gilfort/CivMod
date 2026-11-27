@@ -27,7 +27,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
 /**
  * Carries out the meal intents of the {@link Schedule} for the Settler Shell (vault {@code Systems/Needs.md}): eat from
@@ -170,6 +169,8 @@ final class SettlerMeals {
             key = "fetching_food";
         } else if (activity == Activity.WAIT_FOR_FOOD) {
             key = "waiting_for_food";
+        } else if (activity == Activity.ORDER_DRINK) {
+            key = "fetching_drink";
         } else if (hungryNoFood) {
             key = food.level() <= 0 ? "starving" : "hungry";
         }
@@ -601,11 +602,11 @@ final class SettlerMeals {
         return served ? 1.0 + MEAL_BONUS_PER_LEVEL * ClerkCounter.clerkSkill(level, point.clerk()) : 1.0;
     }
 
-    /** Bowls and bottles of earlier meals go back into the stock. */
-    private void returnContainers(Stock stock) {
+    /** Bowls and bottles of earlier meals and drinks go back into the stock. */
+    void returnContainers(Stock stock) {
         for (int i = Settler.POCKETS_START; i < Settler.POCKETS_START + Settler.POCKETS_SIZE; i++) {
             ItemStack stack = settler.getInventory().getItem(i);
-            if (stack.is(Items.BOWL) || stack.is(Items.GLASS_BOTTLE)) {
+            if (SettlerFood.isEmptyContainer(stack)) {
                 settler.getInventory().setItem(i, stock.insert(stack));
             }
         }
@@ -749,7 +750,7 @@ final class SettlerMeals {
      * @param stack a stack
      * @return what did not fit into the pockets
      */
-    private ItemStack addToPockets(ItemStack stack) {
+    ItemStack addToPockets(ItemStack stack) {
         ItemStack rest = stack.copy();
         for (int i = Settler.POCKETS_START; i < Settler.POCKETS_START + Settler.POCKETS_SIZE && !rest.isEmpty(); i++) {
             ItemStack slot = settler.getInventory().getItem(i);

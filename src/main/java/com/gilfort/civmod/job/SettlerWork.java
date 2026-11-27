@@ -201,7 +201,7 @@ public final class SettlerWork {
         thoughts = new SettlerThoughts(settler);
         meals = new SettlerMeals(this);
         resting = new SettlerRest(settler);
-        tavern = new SettlerTavern(settler);
+        tavern = new SettlerTavern(this);
         needs = new SettlerNeeds(this);
         social = new SettlerSocial(settler);
     }
@@ -1120,8 +1120,8 @@ public final class SettlerWork {
 
     // ---------------------------------------------------------------- thought bubbles and held item
 
-    /** What the held item depends on (the food while eating: a meal of several items shows each in turn). */
-    private record HandKey(Activity activity, @Nullable SettlerJob job, JobStatus status, Item food) {
+    /** What the held item depends on (the food while eating: a meal of several items shows each in turn; the drink of a Tavern guest). */
+    private record HandKey(Activity activity, @Nullable SettlerJob job, JobStatus status, Item carried) {
     }
 
     /**
@@ -1153,7 +1153,8 @@ public final class SettlerWork {
     void observe() {
         JobStatus status = activeJob == null ? JobStatus.IDLE : status(activeJob.jobBlock());
         thoughts.update(new SettlerThoughts.Now(activeJob, activityBubble(status), problems()), !quiet);
-        HandKey key = new HandKey(activity, activeJob, status, activity == Activity.EATING ? meals.eatingItem().getItem() : Items.AIR);
+        HandKey key = new HandKey(activity, activeJob, status,
+                activity == Activity.EATING ? meals.eatingItem().getItem() : tavern.drinkInHand(activity).getItem());
         if (!key.equals(handKey)) {
             handKey = key;
             ItemStack held = heldItem(status);
@@ -1245,6 +1246,10 @@ public final class SettlerWork {
         if (activity == Activity.EATING) {
             return meals.eatingItem();
         }
+        ItemStack drink = tavern.drinkInHand(activity);
+        if (!drink.isEmpty()) {
+            return drink;
+        }
         SettlerJob job = activeJob;
         if (job == null) {
             return ItemStack.EMPTY;
@@ -1283,6 +1288,9 @@ public final class SettlerWork {
             return;
         }
         meals.mark(decision, day, dayTime);
+        if (decision.intent() != Intent.GO_TO_TAVERN) {
+            tavern.dropDrink();
+        }
         if (decision.complain()) {
             meals.complain(level, day);
         }
@@ -2190,6 +2198,18 @@ public final class SettlerWork {
     }
 
     /**
+     * The drinks of a missed Tavern evening whose condition holds (vault {@code Systems/Entertainment.md}): from the stock of the
+     * Pantry, if it is loaded; the points are written.
+     *
+     * @param level  the level
+     * @param pantry the Pantry
+     * @param day    the day of the missed evening
+     */
+    public void drinkInCatchUp(ServerLevel level, BlockPos pantry, long day) {
+        tavern.drinkInCatchUp(level, pantry, day);
+    }
+
+    /**
      * Settles the record bubble of an evening: marks it (saved with the settler's Entertainment) and, if there is no music,
      * shows it. Nothing is sent while caught up.
      *
@@ -2685,6 +2705,15 @@ public final class SettlerWork {
         }
         if (activity == Activity.TAVERN) {
             go(level, tavern.arrived(level));
+            return;
+        }
+        if (activity == Activity.ORDER_DRINK) {
+            BodyStep step = tavern.atCounter(level);
+            go(level, step);
+            if (step instanceof BodyStep.Walk) {
+                // On the way back to the seat with the drink: it shows in the hand at once, not at the next decision.
+                observe();
+            }
             return;
         }
         if (activity == Activity.FORAGE) {

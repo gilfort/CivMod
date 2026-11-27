@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:tavern_drinks_last_hour",
+  "function": "civmod:tavern_drinks_last_hour",
+  "max_ticks": 2500,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
