@@ -159,7 +159,7 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         int width = minecraft.font.width(label) + TRY_AGAIN_MARGIN;
         for (int i = 0; i < Math.min(info.jobs().size(), SettlerMenu.MAX_JOB_TABS); i++) {
             int index = i;
-            if (state(info, i).filter(state -> state.status().isWaiting()).isPresent()) {
+            if (waiting(info, i)) {
                 addTabWidget(SettlerMenu.FIRST_JOB_TAB + i, Button.builder(label, b -> tryAgain(index))
                         .bounds(leftPos + imageWidth - CivGui.PADDING - width, topPos + TRY_AGAIN_Y, width, TRY_AGAIN_HEIGHT).build());
             }
@@ -346,6 +346,11 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
         return index >= 0 && index < info.jobStates().size() ? java.util.Optional.of(info.jobStates().get(index)) : java.util.Optional.empty();
     }
 
+    /** Whether the job at the index waits on something, so the tab offers "Try again". */
+    private static boolean waiting(SettlerInfo info, int index) {
+        return state(info, index).filter(state -> state.status().isWaiting()).isPresent();
+    }
+
     private boolean onStorageTab() {
         return menu.getActiveTab() == SettlerMenu.TAB_STORAGE;
     }
@@ -432,9 +437,9 @@ public class SettlerScreen extends CivContainerScreen<SettlerMenu> {
                     Component.translatable("civmod.gui.storage.help.shift"));
         }
         if (tab >= SettlerMenu.FIRST_JOB_TAB) {
-            boolean waiting = state(menu.getInfo(), tab - SettlerMenu.FIRST_JOB_TAB).filter(state -> state.status().isWaiting()).isPresent();
-            return waiting ? List.of(Component.translatable("civmod.gui.settler.help.cap"), Component.translatable("civmod.gui.settler.help.try_again"))
-                    : List.of(Component.translatable("civmod.gui.settler.help.cap"));
+            Component cap = Component.translatable("civmod.gui.settler.help.cap");
+            return waiting(menu.getInfo(), tab - SettlerMenu.FIRST_JOB_TAB) ? List.of(cap, Component.translatable("civmod.gui.settler.help.try_again"))
+                    : List.of(cap);
         }
         if (tab == SettlerMenu.TAB_JOBS) {
             return List.of(Component.translatable("civmod.gui.settler.help.switch"));
