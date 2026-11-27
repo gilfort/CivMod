@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:innate_tool_not_wanted",
+  "max_ticks": 400,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
