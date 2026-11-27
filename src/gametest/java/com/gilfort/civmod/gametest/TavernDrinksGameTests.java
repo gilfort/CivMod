@@ -1,5 +1,6 @@
 package com.gilfort.civmod.gametest;
 
+import java.lang.reflect.Field;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -13,6 +14,7 @@ import com.gilfort.civmod.registry.ModItems;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.DayClock;
 import com.gilfort.civmod.settlement.SettlementData;
+import com.google.gson.JsonParser;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -61,6 +63,7 @@ public final class TavernDrinksGameTests {
             register(helper, "tavern_drinks_begun_beer_after_shift", TavernDrinksGameTests::begunBeerAfterShift);
             register(helper, "tavern_drinks_catch_up", TavernDrinksGameTests::catchUp);
             register(helper, "tavern_drinks_catch_up_no_condition", TavernDrinksGameTests::catchUpNoCondition);
+            register(helper, "tavern_drinks_catch_up_no_tavern_points", TavernDrinksGameTests::catchUpNoTavernPoints);
         });
     }
 
@@ -333,6 +336,49 @@ public final class TavernDrinksGameTests {
         first.discard();
         second.discard();
         helper.succeed();
+    }
+
+    /**
+     * The Tavern condition holds in the missed evening (four members) but the datapack gives the Tavern 0 points: the settler
+     * still drinks, as in live play, where the drinks ask for the condition and not for the Tavern points.
+     */
+    private static void catchUpNoTavernPoints(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos pantry = TavernGameTests.pantry(helper);
+        long missed = DayClock.day(level) - 1;
+        Container stock = (Container) level.getBlockEntity(pantry);
+        stock.setItem(0, new ItemStack(ModItems.BEER.get(), 3));
+        Settler host = TavernGameTests.settler(helper, pantry, new BlockPos(2, 1, 2));
+        TavernGameTests.host(helper, pantry, host);
+        Settler first = TavernGameTests.settler(helper, pantry, new BlockPos(3, 1, 2));
+        Settler second = TavernGameTests.settler(helper, pantry, new BlockPos(4, 1, 2));
+        Settler third = TavernGameTests.settler(helper, pantry, new BlockPos(5, 1, 2));
+
+        EntertainmentRules saved = EntertainmentRules.get();
+        try {
+            useRules(EntertainmentRules.merge(List.of(JsonParser.parseString("{\"tavern_points\": 0}"))));
+            TavernGameTests.catchUpYesterday(helper, first);
+        } finally {
+            useRules(saved);
+        }
+        double gained = drinkPoints(first, missed);
+        helper.assertTrue(first.getWork().entertainment().drinks().on(missed) == 2 && count(stock, ModItems.BEER.get()) == 1,
+                "The settler drank 2 beers although the Tavern gives 0 points: " + first.getWork().entertainment().drinks());
+        helper.assertTrue(gained > 0.0 && near(first.getWork().entertainment().value(), gained),
+                "It has the points of its drinks only: " + first.getWork().entertainment());
+        TavernGameTests.end(helper, pantry, List.of(host, first, second, third));
+        helper.succeed();
+    }
+
+    /** Sets the loaded rules for a test; the rules have no setter, as only a reload changes them. */
+    private static void useRules(EntertainmentRules rules) {
+        try {
+            Field current = EntertainmentRules.class.getDeclaredField("current");
+            current.setAccessible(true);
+            current.set(null, rules);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Cannot set the Entertainment rules for the test", e);
+        }
     }
 
     /** No Tavern condition in the missed evening (three members, no jukebox): nobody drinks and the stock stays. */

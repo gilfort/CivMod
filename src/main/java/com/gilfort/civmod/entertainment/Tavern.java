@@ -191,10 +191,11 @@ public final class Tavern {
                 .min(Comparator.comparingDouble((SettlementBlock block) -> block.pos().distSqr(settler.blockPosition())))
                 .map(pantry -> new Hosted(settlement, pantry.pos()))).ifPresent(missed -> {
                     EntertainmentRules rules = EntertainmentRules.get();
-                    double points = rules.tavernPoints(membersOnPlace(level, missed.settlement()), jukeboxHoldsDisc(level, missed.pantry(), rules.jukeboxRadius()));
-                    pay(List.of(settler), points, day);
-                    if (points > 0.0) {
-                        // The Tavern condition holds: the settler has its drinks from the stock, if the Pantry is loaded.
+                    int members = membersOnPlace(level, missed.settlement());
+                    boolean jukebox = jukeboxHoldsDisc(level, missed.pantry(), rules.jukeboxRadius());
+                    pay(List.of(settler), rules.tavernPoints(members, jukebox), day);
+                    if (rules.conditionHolds(members, jukebox)) {
+                        // The Tavern condition holds, whatever the points are: the settler has its drinks from the stock, if the Pantry is loaded.
                         settler.getWork().drinkInCatchUp(level, missed.pantry(), day);
                     }
                 });

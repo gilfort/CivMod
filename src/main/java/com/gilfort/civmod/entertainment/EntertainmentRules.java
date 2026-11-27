@@ -212,6 +212,15 @@ public record EntertainmentRules(double decay, double tier2Threshold, double tie
         return present >= crowdSize;
     }
 
+    /**
+     * @param present settlers present at the Pantry, the Tavern Host included
+     * @param jukebox whether a jukebox that holds a disc stands near the Pantry
+     * @return whether the Tavern condition holds: the crowd (A) or the jukebox (B), whatever the points of the evening are
+     */
+    boolean conditionHolds(int present, boolean jukebox) {
+        return crowdHolds(present) || jukebox;
+    }
+
 
     /**
      * The points of one Tavern evening: the base points if the crowd (condition A) or the jukebox (condition B) holds,
