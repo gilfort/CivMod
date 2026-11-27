@@ -15,6 +15,7 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.Visit;
 
+import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
@@ -31,7 +32,6 @@ import net.minecraft.server.level.ServerLevel;
  */
 final class VisitorSitting {
 
-    private static final int TICKS_PER_SECOND = 20;
     private static final int STROLL_MIN_SECONDS = 30;
     private static final int STROLL_MAX_SECONDS = 90;
     private static final int SIT_MIN_SECONDS = 60;
@@ -195,7 +195,7 @@ final class VisitorSitting {
     }
 
     private static int steps(int seconds) {
-        return seconds * TICKS_PER_SECOND / SettlerWork.DECISION_INTERVAL;
+        return seconds * SharedConstants.TICKS_PER_SECOND / SettlerWork.DECISION_INTERVAL;
     }
 
     @Override
