@@ -217,8 +217,16 @@ A small icon bubble with thought dots above a settler's name tag, sent when it s
 _Avoid_: calling a speech bubble a thought bubble
 
 **Speech bubble**:
-A bubble with a tail above a settler for what it says, as against the thought bubble for what it does or misses. It is the bubble of a conversation (between two settlers or visitors, and above a settler that answers a player's talk): three dots drawn in the sprite, no item icon (`ThoughtBubble.NO_ICON` in the payload). `ThoughtBubble.speech()` tells the renderer to use the speech sprite (`ModItems.SPEECH_BUBBLE`) instead of the thought sprite. It is an activity bubble without the red "!", so "Problems only" and "Off" hide it. The Bard's note block bubble and every other bubble stay thought bubbles. Code: `ThoughtBubble.CONVERSATION`, `ThoughtBubbleRenderer`.
+A bubble with a tail above a settler for what it says, as against the thought bubble for what it does or misses. It is the bubble of a conversation (between two settlers or visitors, and above a settler that answers a player's talk): three dots drawn in the sprite, no item icon (`ThoughtBubble.NO_ICON` in the payload). `ThoughtBubble.speech()` tells the renderer to use the speech sprite (`ModItems.SPEECH_BUBBLE`) instead of the thought sprite. It is an activity bubble without the red "!", so "Problems only" and "Off" hide it. The Bard's note block bubble and every other bubble stay thought bubbles. The story bubble is the one speech bubble with an item icon. Code: `ThoughtBubble.CONVERSATION`, `ThoughtBubbleRenderer`.
 _Avoid_: a paper icon for a conversation; a speech bubble with an item icon for a conversation
+
+**Story bubble**:
+The speech bubble with a book and quill (`Items.WRITABLE_BOOK`) above a settler that has a story aspect to tell today (`ThoughtBubble.STORY`). It is an activity bubble without the red "!", so "Problems only" and "Off" hide it, but it repeats like a problem: the server sends one "on" and one "off" packet through the problem list of `SettlerThoughts` (`ThoughtBubble.repeats()`), the client shows it 3 s every 30 s. It is on from waking time to bedtime on a day the roll hit, until the aspect is told, and off while the settler is away on a Mission. The client does not draw it while the settler sleeps. Every player within 16 blocks sees it. Code: `SettlerWork.sharesStory`, `StoryShare.shares`.
+_Avoid_: calling it a problem bubble; a flag saved on the settler for it
+
+**Story aspect**:
+A part of a settler's story that a talk can tell: its place, its upbringing, its turning point or its favourite meal; small talk is none (`StoryShare.Aspect`: `PLACE`, `UPBRINGING`, `TURNING_POINT`, `FAVOURITE_MEAL`). A settler without an origin has the favourite meal only. A settler tells one untold aspect, picked at random, on 1 day in N (`CivModConfig.SETTLER_STORY_SHARE_ONE_IN`, config `settlerStoryShareOneIn`, default 3): the roll comes from the settler's UUID, the day and a salt (`StoryShare.hit`) and is never saved, so a reload cannot reroll it. The day a settler told one, or was hired as a visitor, is saved in the chronicle (`Chronicle.storySpentDay`) and ends the day's chance. Tests force the roll with `StoryShare.script`. A visitor of an inn is no part of this: it keeps telling its price and one origin part per talk.
+_Avoid_: story line, story flag; saving the roll
 
 **Bubble icon**:
 The typical item of a Job shown in its thought bubble (Lumberjack axe, Fisherman raw cod, …); separate from the Job's GUI icon, which stays the JobBlock.
@@ -544,14 +552,14 @@ The list of first-person entries a settler keeps, at most 20 (`Chronicle.CAP`), 
 _Avoid_: Journal, log
 
 **Chronicle**:
-The story of a settler: its diary plus the marks that must outlive the entries, which origin lines it has told and whether its talent is confirmed. Saved with the settler as one `Chronicle` value, so it can move to another settler as a whole. Shown in the Chronicle tab of the settler window (`ChronicleTabView`, `SettlerInfo.Person`). The settlement record at the Administrator is a different, later thing.
+The story of a settler: its diary plus the marks that must outlive the entries, which origin lines it has told, whether its talent is confirmed and the last day its story chance was used up. Saved with the settler as one `Chronicle` value, so it can move to another settler as a whole. Shown in the Chronicle tab of the settler window (`ChronicleTabView`, `SettlerInfo.Person`). The settlement record at the Administrator is a different, later thing.
 
 **Talent**:
 The Jobs a settler's upbringing favours: the upbringing's one or two Base Jobs and every Job under them through `parent`. A favoured Job gives extra EXP (`talent_bonus_percent` in `civmod_skill/levels.json`, default 25), the same live and in catch-up. The first level-up in a favoured Job confirms the talent: the flag in the `Chronicle`, a diary entry, a thought bubble; until then the window shows nothing. A disliked Job is text only. Every skill EXP goes through `Talent.gainExp`; the fraction the bonus leaves is kept per skill (`SettlerSkills.Skill.carry`). Automatic assignment prefers a talented settler among equal skill levels. Code: `Talent`.
 _Avoid_: Gift, aptitude
 
 **Talk**:
-A player's Shift + right-click with an empty hand on a settler (`PlayerTalk`): the settler turns its head, greets, shows the speech bubble and says one line in chat to that player only. The first three talks tell place, upbringing and turning point in random order, each once, and write each into the diary; after that it makes small talk about the weather (good or bad mood) or, from its own bed, fire and food needs, about the settlement. A sleeping settler does not talk: the click opens the window. The first talk of a day per settler gives 0.5 Entertainment (`Entertainment.talkedToPlayer`, own mark `playerTalkDay`). The told lines belong to the settler, not to a player.
+A player's Shift + right-click with an empty hand on a settler (`PlayerTalk`): the settler turns its head, greets, shows the speech bubble and says one line in chat to that player only. A settler that shows the story bubble tells one untold story aspect, picked at random, and writes it into the diary; every other talk, also a second one on the same day, is small talk about the weather (good or bad mood) or, from its own bed, fire and food needs, about the settlement. A visitor of an inn tells its price and one origin part in every talk. A sleeping settler does not talk: the click opens the window. The first talk of a day per settler gives 0.5 Entertainment (`Entertainment.talkedToPlayer`, own mark `playerTalkDay`). The told lines belong to the settler, not to a player.
 _Avoid_: Conversation (that is between two settlers)
 
 **Surname type**:
