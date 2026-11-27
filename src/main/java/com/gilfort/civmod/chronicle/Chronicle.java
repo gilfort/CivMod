@@ -18,26 +18,33 @@ import net.minecraft.resources.Identifier;
  * @param entries         the diary, oldest first, at most {@link #CAP}
  * @param told            the origin lines the settler has told in a talk, in the order told
  * @param talentConfirmed whether the first level-up in a favoured Job has confirmed the talent
+ * @param storySpentDay   the last day on which the settler's chance to share a story aspect is used up (it told one that day, or it was
+ *                        hired as a visitor that day), {@link #NO_DAY} if none
  */
-public record Chronicle(List<DiaryEntry> entries, List<OriginLine.Slot> told, boolean talentConfirmed) {
+public record Chronicle(List<DiaryEntry> entries, List<OriginLine.Slot> told, boolean talentConfirmed, long storySpentDay) {
 
     /** The most entries a diary holds. */
     public static final int CAP = 20;
 
+    /** The day mark of a settler whose story chance was never used up. */
+    public static final long NO_DAY = Long.MIN_VALUE;
+
     /** A settler that has no story yet. */
-    public static final Chronicle EMPTY = new Chronicle(List.of(), List.of(), false);
+    public static final Chronicle EMPTY = new Chronicle(List.of(), List.of(), false, NO_DAY);
 
     /** Save codec. */
     public static final Codec<Chronicle> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             DiaryEntry.CODEC.listOf().optionalFieldOf("entries", List.of()).forGetter(Chronicle::entries),
             OriginLine.Slot.CODEC.listOf().optionalFieldOf("told", List.of()).forGetter(Chronicle::told),
-            Codec.BOOL.optionalFieldOf("talent_confirmed", false).forGetter(Chronicle::talentConfirmed)
+            Codec.BOOL.optionalFieldOf("talent_confirmed", false).forGetter(Chronicle::talentConfirmed),
+            Codec.LONG.optionalFieldOf("story_spent_day", NO_DAY).forGetter(Chronicle::storySpentDay)
     ).apply(instance, Chronicle::new));
 
     /**
      * @param entries         the diary, oldest first
      * @param told            the origin lines told
      * @param talentConfirmed whether the talent is confirmed
+     * @param storySpentDay   the last day the story chance is used up
      */
     public Chronicle {
         entries = List.copyOf(entries);
@@ -62,7 +69,7 @@ public record Chronicle(List<DiaryEntry> entries, List<OriginLine.Slot> told, bo
             next.remove(droppable);
         }
         next.add(entry);
-        return new Chronicle(next, told, talentConfirmed);
+        return new Chronicle(next, told, talentConfirmed, storySpentDay);
     }
 
     private static int firstDroppable(List<DiaryEntry> diary, Predicate<Identifier> permanent) {
@@ -78,7 +85,7 @@ public record Chronicle(List<DiaryEntry> entries, List<OriginLine.Slot> told, bo
      * @return the chronicle with the talent confirmed
      */
     public Chronicle withTalentConfirmed() {
-        return new Chronicle(entries, told, true);
+        return new Chronicle(entries, told, true, storySpentDay);
     }
 
     /**
@@ -98,6 +105,14 @@ public record Chronicle(List<DiaryEntry> entries, List<OriginLine.Slot> told, bo
         if (!next.contains(slot)) {
             next.add(slot);
         }
-        return new Chronicle(entries, next, talentConfirmed);
+        return new Chronicle(entries, next, talentConfirmed, storySpentDay);
+    }
+
+    /**
+     * @param day the day on which the settler's chance to share a story aspect is used up
+     * @return the chronicle with that day marked
+     */
+    public Chronicle withStorySpent(long day) {
+        return new Chronicle(entries, told, talentConfirmed, day);
     }
 }
