@@ -159,7 +159,7 @@ public final class JobPointsDisplay {
                 boolean include = bound.map(block.pos()::equals)
                         .orElseGet(() -> SettlementRules.horizontalDistance(block.pos(), center) <= RANGE);
                 if (include) {
-                    result.add(new JobPoints(block.pos(), block.workPoints(), block.collect(), block.dropOff(), block.storage(),
+                    result.add(new JobPoints(block.pos(), block.workPositions(), block.collect(), block.dropOff(), block.storage(),
                             block.standSpots(), block.served(), block.soundCenter()));
                 }
             }

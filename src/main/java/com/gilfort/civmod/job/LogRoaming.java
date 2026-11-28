@@ -89,7 +89,7 @@ final class LogRoaming implements Roaming {
 
     private Optional<BlockPos> nextLog(RoamingContext context) {
         ServerLevel level = context.level();
-        List<BlockPos> points = context.site().block().workPoints();
+        List<BlockPos> points = context.site().block().workPositions();
         return points.stream().anyMatch(point -> profile.isWorkPlace(level, point)) ? nextPoint(points, context) : searchLog(context);
     }
 

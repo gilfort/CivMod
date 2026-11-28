@@ -7,24 +7,41 @@ import java.util.function.Consumer;
 
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.item.ScrollBinding;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
+import com.gilfort.civmod.registry.ModDataComponents;
+import com.gilfort.civmod.registry.ModItems;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.JobAssignments.AssignResult;
 import com.gilfort.civmod.settlement.JobAssignments.PointResult;
 import com.gilfort.civmod.settlement.JobAssignments;
+import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.TestAssignments;
 import com.gilfort.civmod.settlement.TestSettlements;
+import com.gilfort.civmod.settlement.WorkPoint;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.registries.RegisterEvent;
@@ -50,6 +67,9 @@ public final class ScrollGameTests {
             register(helper, "scroll_assignment_rules", ScrollGameTests::assignmentRules);
             register(helper, "scroll_unassign_and_removal", ScrollGameTests::unassignAndRemoval);
             register(helper, "scroll_points_persistence", ScrollGameTests::pointsPersistence);
+            register(helper, "scroll_work_point_facing", ScrollGameTests::workPointFacing);
+            register(helper, "scroll_work_point_facing_persistence", ScrollGameTests::workPointFacingPersistence);
+            register(helper, "scroll_work_point_click_facing", ScrollGameTests::workPointClickFacing);
         });
     }
 
@@ -89,9 +109,9 @@ public final class ScrollGameTests {
             helper.assertTrue(JobAssignments.cyclePoint(data, JOB_BLOCK, new BlockPos(1, 64 + i, 4), true, false) == PointResult.WORK, "Work " + i);
         }
         helper.assertTrue(JobAssignments.cyclePoint(data, JOB_BLOCK, new BlockPos(1, 80, 4), true, false) == PointResult.TOO_MANY, "Limit of 8");
-        helper.assertTrue(block(data, JOB_BLOCK).workPoints().get(0).equals(new BlockPos(1, 64, 4)), "First work place is primary");
+        helper.assertTrue(block(data, JOB_BLOCK).workPoints().get(0).pos().equals(new BlockPos(1, 64, 4)), "First work place is primary");
         JobAssignments.cyclePoint(data, JOB_BLOCK, new BlockPos(1, 64, 4), true, false);
-        helper.assertTrue(block(data, JOB_BLOCK).workPoints().get(0).equals(new BlockPos(1, 65, 4)), "Next work place becomes primary");
+        helper.assertTrue(block(data, JOB_BLOCK).workPoints().get(0).pos().equals(new BlockPos(1, 65, 4)), "Next work place becomes primary");
 
         helper.assertTrue(JobAssignments.cyclePoint(data, JOB_BLOCK, new BlockPos(40, 64, 0), true, true) == PointResult.OUTSIDE, "Outside border");
         helper.assertTrue(JobAssignments.cyclePoint(data, JOB_BLOCK, new BlockPos(0, 64, 5), false, false) == PointResult.INVALID, "Invalid target");
@@ -184,9 +204,79 @@ public final class ScrollGameTests {
         var ops = helper.getLevel().registryAccess().createSerializationContext(JsonOps.INSTANCE);
         SettlementData loaded = SettlementData.CODEC.parse(ops, SettlementData.CODEC.encodeStart(ops, data).getOrThrow()).getOrThrow();
         SettlementBlock copy = block(loaded, JOB_BLOCK);
-        helper.assertTrue(copy.workPoints().equals(List.of(new BlockPos(3, 64, 0))), "Work points lost");
+        helper.assertTrue(copy.workPositions().equals(List.of(new BlockPos(3, 64, 0))), "Work points lost");
         helper.assertTrue(copy.dropOff().filter(new BlockPos(2, 64, 2)::equals).isPresent() && copy.collect().isEmpty(), "Drop-off lost");
         helper.assertTrue(copy.isAssignee(ALICE), "Assignee lost");
+        helper.succeed();
+    }
+
+    /** Each work point keeps the facing of its click; a click without a facing stores the default one. */
+    private static void workPointFacing(GameTestHelper helper) {
+        SettlementData data = new SettlementData();
+        place(data, JOB_BLOCK, ModJobs.LUMBERJACK.get());
+        BlockPos east = new BlockPos(3, 64, 0);
+        BlockPos west = new BlockPos(-3, 64, 0);
+        BlockPos plain = new BlockPos(0, 64, 3);
+        helper.assertTrue(JobAssignments.cyclePoint(data, JOB_BLOCK, east, true, false, Direction.EAST) == PointResult.WORK, "East point added");
+        helper.assertTrue(JobAssignments.cyclePoint(data, JOB_BLOCK, west, true, false, Direction.WEST) == PointResult.WORK, "West point added");
+        helper.assertTrue(JobAssignments.cyclePoint(data, JOB_BLOCK, plain, true, false) == PointResult.WORK, "Point without a facing added");
+        List<WorkPoint> points = block(data, JOB_BLOCK).workPoints();
+        helper.assertTrue(points.equals(List.of(new WorkPoint(east, Direction.EAST), new WorkPoint(west, Direction.WEST),
+                new WorkPoint(plain, WorkPoint.DEFAULT_FACING))), "Points keep their facing in click order: " + points);
+        helper.assertTrue(block(data, JOB_BLOCK).workPositions().equals(List.of(east, west, plain)), "The positions come in the same order");
+        helper.assertTrue(JobAssignments.roleOf(block(data, JOB_BLOCK), west) == JobAssignments.Role.WORK, "The role is found by position");
+        helper.assertTrue(JobAssignments.cyclePoint(data, JOB_BLOCK, east, true, false, Direction.SOUTH) == PointResult.REMOVED,
+                "Clicking a point again removes it, whatever the facing of the second click");
+        helper.assertTrue(block(data, JOB_BLOCK).workPositions().equals(List.of(west, plain)), "Only the clicked point is gone");
+        helper.succeed();
+    }
+
+    /** The facing of a work point survives saving; a save from before the facing (plain positions) reads with the default one. */
+    private static void workPointFacingPersistence(GameTestHelper helper) {
+        SettlementData data = new SettlementData();
+        place(data, JOB_BLOCK, ModJobs.MINER.get());
+        BlockPos stone = new BlockPos(2, 64, 2);
+        JobAssignments.cyclePoint(data, JOB_BLOCK, stone, true, false, Direction.SOUTH);
+        var ops = helper.getLevel().registryAccess().createSerializationContext(JsonOps.INSTANCE);
+        JsonElement saved = SettlementBlock.CODEC.encodeStart(ops, block(data, JOB_BLOCK)).getOrThrow();
+        SettlementBlock copy = SettlementBlock.CODEC.parse(ops, saved).getOrThrow();
+        helper.assertTrue(copy.workPoints().equals(List.of(new WorkPoint(stone, Direction.SOUTH))), "Facing lost: " + copy.workPoints());
+
+        JsonObject legacy = saved.getAsJsonObject().deepCopy();
+        JsonArray oldPoint = new JsonArray();
+        oldPoint.add(stone.getX());
+        oldPoint.add(stone.getY());
+        oldPoint.add(stone.getZ());
+        JsonArray oldList = new JsonArray();
+        oldList.add(oldPoint);
+        legacy.add("work", oldList);
+        SettlementBlock old = SettlementBlock.CODEC.parse(ops, legacy).getOrThrow();
+        helper.assertTrue(old.workPoints().equals(List.of(new WorkPoint(stone, WorkPoint.DEFAULT_FACING))),
+                "An old save reads with the default facing: " + old.workPoints());
+        helper.succeed();
+    }
+
+    /** Clicking a block with the scroll stores the reverse of the player's look direction, as the Clerk's stand spots do. */
+    private static void workPointClickFacing(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos jobBlock = helper.absolutePos(new BlockPos(2, 1, 2));
+        BlockPos log = helper.absolutePos(new BlockPos(4, 1, 2));
+        helper.setBlock(new BlockPos(4, 1, 2), Blocks.OAK_LOG);
+        TestSettlements.place(helper, jobBlock, ModJobs.LUMBERJACK.get(), 1);
+        ServerPlayer player = TestPlayers.add(helper, Vec3.atBottomCenterOf(jobBlock).add(0.0, 0.0, 3.0));
+        try {
+            // Yaw 90 looks west, so a settler at the point faces east.
+            player.setYRot(90.0F);
+            ItemStack scroll = new ItemStack(ModItems.SCROLL_OF_ASSIGNMENT.get());
+            scroll.set(ModDataComponents.SCROLL_BINDING.get(), ScrollBinding.jobBlock(jobBlock, "Lumberjack"));
+            UseOnContext click = new UseOnContext(level, player, InteractionHand.MAIN_HAND, scroll,
+                    new BlockHitResult(Vec3.atCenterOf(log), Direction.UP, log, false));
+            helper.assertTrue(scroll.getItem().onItemUseFirst(scroll, click) == InteractionResult.SUCCESS, "The scroll handles the click");
+            List<WorkPoint> points = JobBlockSite.blockAt(level, jobBlock).orElseThrow().workPoints();
+            helper.assertTrue(points.equals(List.of(new WorkPoint(log, Direction.EAST))), "Facing is the reverse of the look direction: " + points);
+        } finally {
+            TestPlayers.remove(player);
+        }
         helper.succeed();
     }
 }

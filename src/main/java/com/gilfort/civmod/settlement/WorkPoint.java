@@ -25,6 +25,13 @@ public record WorkPoint(BlockPos pos, Direction facing) {
             Direction.CODEC.fieldOf("facing").forGetter(WorkPoint::facing)
     ).apply(instance, WorkPoint::new));
 
+    /** The facing of a point set without a click (a test or an add-on) and of a point saved before work points had one. */
+    public static final Direction DEFAULT_FACING = Direction.NORTH;
+
+    /** Save codec that also reads a point saved as a plain position, with the {@linkplain #DEFAULT_FACING default facing}. */
+    public static final Codec<WorkPoint> WITH_OLD_SAVES_CODEC = Codec.withAlternative(CODEC,
+            BlockPos.CODEC.xmap(pos -> new WorkPoint(pos, DEFAULT_FACING), WorkPoint::pos));
+
     /** Network codec. */
     public static final StreamCodec<ByteBuf, WorkPoint> STREAM_CODEC = StreamCodec.composite(
             BlockPos.STREAM_CODEC, WorkPoint::pos,

@@ -268,7 +268,8 @@ public class ScrollOfAssignmentItem extends Item {
         // A station of a Specialization offered here is a work point too; each Job then works only at its own stations.
         Optional<Job> workJob = workPlaceJob(level, block.get(), target);
         boolean container = isContainer(level, target);
-        JobAssignments.PointResult result = JobAssignments.cyclePoint(SettlementData.get(level), jobBlock, target, workJob.isPresent(), container);
+        JobAssignments.PointResult result = JobAssignments.cyclePoint(SettlementData.get(level), jobBlock, target, workJob.isPresent(), container,
+                clickFacing(player));
         Component message = switch (result) {
             case WORK -> workPointMessage(level, workJob.orElse(jobType), target);
             case COLLECT -> Component.translatable("civmod.scroll.point.collect");
@@ -327,11 +328,20 @@ public class ScrollOfAssignmentItem extends Item {
         player.sendOverlayMessage(message);
     }
 
+    /**
+     * @param player the player who clicked
+     * @return the facing a new work point or stand spot gets: the reverse of the player's look direction, so a settler
+     *         there looks at the player
+     */
+    static Direction clickFacing(ServerPlayer player) {
+        return player.getDirection().getOpposite();
+    }
+
     /** Clerk points: a container cycles storage → removed, any other block stand spot → removed. */
     private static void cycleClerkPoint(ServerPlayer player, BlockPos clerk, BlockPos target) {
         ServerLevel level = player.level();
         SettlementData data = SettlementData.get(level);
-        Direction facing = player.getDirection().getOpposite();
+        Direction facing = clickFacing(player);
         JobAssignments.PointResult result = JobAssignments.cycleClerkPoint(data, clerk, target, isContainer(level, target),
                 isStandable(level, target), facing);
         Component message = switch (result) {

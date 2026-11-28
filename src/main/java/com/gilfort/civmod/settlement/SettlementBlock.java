@@ -356,7 +356,7 @@ public final class SettlementBlock {
             Job.CODEC.fieldOf("job").forGetter(SettlementBlock::jobType),
             Codec.INT.fieldOf("level").forGetter(SettlementBlock::level),
             Codec.BOOL.fieldOf("connected").forGetter(SettlementBlock::connected),
-            BlockPos.CODEC.listOf().optionalFieldOf("work", List.of()).forGetter(SettlementBlock::workPoints),
+            WorkPoint.WITH_OLD_SAVES_CODEC.listOf().optionalFieldOf("work", List.of()).forGetter(SettlementBlock::workPoints),
             BlockPos.CODEC.optionalFieldOf("collect").forGetter(SettlementBlock::collect),
             BlockPos.CODEC.optionalFieldOf("drop_off").forGetter(SettlementBlock::dropOff),
             SavedAssignee.CODEC.listOf().optionalFieldOf("assignees", List.of())
@@ -380,7 +380,7 @@ public final class SettlementBlock {
     private Optional<Identifier> centerRace;
     /** The Sound center of a Stage (vault {@code Systems/Entertainment.md}); empty: the Stage block itself. */
     private Optional<BlockPos> soundCenter;
-    private final List<BlockPos> workPoints = new ArrayList<>();
+    private final List<WorkPoint> workPoints = new ArrayList<>();
     private Optional<BlockPos> collect;
     private Optional<BlockPos> dropOff;
     private final List<Assignee> assignees = new ArrayList<>();
@@ -427,7 +427,7 @@ public final class SettlementBlock {
         return block;
     }
 
-    private SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected, List<BlockPos> workPoints,
+    private SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected, List<WorkPoint> workPoints,
             Optional<BlockPos> collect, Optional<BlockPos> dropOff, List<SavedAssignee> assignees, Optional<UUID> legacyAssignee,
             Optional<String> legacyAssigneeName, boolean collectLeaves, MissionOffer missionOffer, ClerkFields clerk,
             ProducingFields producing, Optional<BlockPos> homeClerk, PlaceFields place) {
@@ -869,10 +869,17 @@ public final class SettlementBlock {
     }
 
     /**
-     * @return the work POIs; the first one is the primary POI (read-only)
+     * @return the work POIs with the facing of their click; the first one is the primary POI (read-only)
      */
-    public List<BlockPos> workPoints() {
+    public List<WorkPoint> workPoints() {
         return Collections.unmodifiableList(workPoints);
+    }
+
+    /**
+     * @return the positions of the work POIs, in the order of {@link #workPoints()}
+     */
+    public List<BlockPos> workPositions() {
+        return workPoints.stream().map(WorkPoint::pos).toList();
     }
 
     /**
@@ -935,7 +942,7 @@ public final class SettlementBlock {
         this.connected = connected;
     }
 
-    List<BlockPos> mutableWorkPoints() {
+    List<WorkPoint> mutableWorkPoints() {
         return workPoints;
     }
 
