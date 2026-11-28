@@ -86,27 +86,6 @@ public final class SettlementBlock {
     }
 
     /**
-     * A Clerk stand spot: the block the Clerk stands on and the direction it faces (vault {@code Jobs/Clerk.md}).
-     *
-     * @param pos    the block the Clerk stands on
-     * @param facing the direction the Clerk faces
-     */
-    public record StandSpot(BlockPos pos, Direction facing) {
-
-        /** Save codec. */
-        public static final Codec<StandSpot> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                BlockPos.CODEC.fieldOf("pos").forGetter(StandSpot::pos),
-                Direction.CODEC.fieldOf("facing").forGetter(StandSpot::facing)
-        ).apply(instance, StandSpot::new));
-
-        /** Network codec. */
-        public static final StreamCodec<ByteBuf, StandSpot> STREAM_CODEC = StreamCodec.composite(
-                BlockPos.STREAM_CODEC, StandSpot::pos,
-                Direction.STREAM_CODEC, StandSpot::facing,
-                StandSpot::new);
-    }
-
-    /**
      * The stand spot a Clerk uses in one half of a day.
      *
      * @param period the half day it was picked for ({@code day * 2}, {@code + 1} from 12:00)
@@ -136,12 +115,12 @@ public final class SettlementBlock {
      * @param orders     the Delivery Orders
      * @param autoSupply whether the settlers of the JobBlocks this Clerk belongs to get tools, food and clothing from the settlement
      */
-    private record ClerkFields(List<BlockPos> storage, List<StandSpot> standSpots, SpotOfDay spotOfDay, List<StockRule> stockRules,
+    private record ClerkFields(List<BlockPos> storage, List<WorkPoint> standSpots, SpotOfDay spotOfDay, List<StockRule> stockRules,
             List<BlockPos> served, int ledgers, DeliveryOrders.Saved orders, boolean autoSupply) {
 
         static final MapCodec<ClerkFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 BlockPos.CODEC.listOf().optionalFieldOf("storage", List.of()).forGetter(ClerkFields::storage),
-                StandSpot.CODEC.listOf().optionalFieldOf("stand_spots", List.of()).forGetter(ClerkFields::standSpots),
+                WorkPoint.CODEC.listOf().optionalFieldOf("stand_spots", List.of()).forGetter(ClerkFields::standSpots),
                 SpotOfDay.CODEC.optionalFieldOf("spot_of_day", SpotOfDay.NONE).forGetter(ClerkFields::spotOfDay),
                 StockRule.CODEC.listOf().optionalFieldOf("stock_rules", List.of()).forGetter(ClerkFields::stockRules),
                 BlockPos.CODEC.listOf().optionalFieldOf("served_clerks", List.of()).forGetter(ClerkFields::served),
@@ -409,7 +388,7 @@ public final class SettlementBlock {
     private boolean treasure = true;
     private MissionOffer missionOffer;
     private final List<BlockPos> storage = new ArrayList<>();
-    private final List<StandSpot> standSpots = new ArrayList<>();
+    private final List<WorkPoint> standSpots = new ArrayList<>();
     private SpotOfDay spotOfDay;
     private final List<StockRule> stockRules = new ArrayList<>();
     private int ledgers;
@@ -755,7 +734,7 @@ public final class SettlementBlock {
     /**
      * @return the Clerk stand spots, in setting order (read-only; Clerk only, else always empty)
      */
-    public List<StandSpot> standSpots() {
+    public List<WorkPoint> standSpots() {
         return Collections.unmodifiableList(standSpots);
     }
 
@@ -794,7 +773,7 @@ public final class SettlementBlock {
         return storage;
     }
 
-    List<StandSpot> mutableStandSpots() {
+    List<WorkPoint> mutableStandSpots() {
         return standSpots;
     }
 

@@ -30,6 +30,7 @@ import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementManager;
 import com.gilfort.civmod.settlement.TestAssignments;
 import com.gilfort.civmod.settlement.TestSettlements;
+import com.gilfort.civmod.settlement.WorkPoint;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
@@ -215,7 +216,7 @@ public final class ClerkGameTests {
             previous = afternoon;
         }
         SettlementBlock block = data.settlementAt(clerk).flatMap(s -> s.block(clerk)).orElseThrow();
-        helper.assertTrue(ClerkStorage.spotOfDay(block).map(SettlementBlock.StandSpot::pos).orElseThrow().equals(previous),
+        helper.assertTrue(ClerkStorage.spotOfDay(block).map(WorkPoint::pos).orElseThrow().equals(previous),
                 "Customers see the picked spot");
         helper.succeed();
     }

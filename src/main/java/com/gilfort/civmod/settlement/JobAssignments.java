@@ -235,7 +235,7 @@ public final class JobAssignments {
         if (block.standSpots().size() >= SettlementRules.MAX_STAND_SPOTS) {
             return PointResult.TOO_MANY_SPOTS;
         }
-        block.mutableStandSpots().add(new SettlementBlock.StandSpot(pos, facing));
+        block.mutableStandSpots().add(new WorkPoint(pos, facing));
         data.changed();
         return PointResult.STAND_SPOT;
     }
