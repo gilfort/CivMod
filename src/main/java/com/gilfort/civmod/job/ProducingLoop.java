@@ -1367,7 +1367,7 @@ final class ProducingLoop implements CategoryLoop {
         }
         long now = level.getGameTime();
         if (further.size() < wanted && workplace.parallelSearchDue(now)) {
-            List<BlockPos> points = site.block().workPoints().stream().filter(pos -> isStation(level, job, pos)).toList();
+            List<BlockPos> points = site.block().workPositions().stream().filter(pos -> isStation(level, job, pos)).toList();
             List<BlockPos> candidates = points.isEmpty() ? stationsAround(level, site, main) : points;
             for (BlockPos pos : candidates) {
                 if (further.size() >= wanted) {

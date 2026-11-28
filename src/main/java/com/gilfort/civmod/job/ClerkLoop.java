@@ -9,9 +9,9 @@ import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.ClerkSpots;
 import com.gilfort.civmod.settlement.JobBlockSite;
-import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.StockRules;
+import com.gilfort.civmod.settlement.WorkPoint;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -36,7 +36,7 @@ final class ClerkLoop implements CategoryLoop {
     private final Fatigue fatigue = new Fatigue();
 
     /** Today's stand spot of the active Clerk job (null: next to the JobBlock). */
-    private SettlementBlock.@Nullable StandSpot spot;
+    private @Nullable WorkPoint spot;
 
     /**
      * @param shell the Settler Shell driving this loop
@@ -51,7 +51,7 @@ final class ClerkLoop implements CategoryLoop {
         if (!ClerkStorage.inShift(settler.getUUID(), day, dayTime, job.jobType())) {
             return JobStep.skip();
         }
-        Optional<SettlementBlock.StandSpot> today = ClerkSpots.today(SettlementData.get(level), site.pos(), day, dayTime, level.getRandom());
+        Optional<WorkPoint> today = ClerkSpots.today(SettlementData.get(level), site.pos(), day, dayTime, level.getRandom());
         spot = today.orElse(null);
         BlockPos target = today.map(found -> found.pos().above()).orElse(site.pos());
         return JobStep.walk(target, spot != null ? SPOT_REACH : SettlerWork.REACH, fatigue.onBreak() ? JobStatus.PAUSING : JobStatus.SERVING);

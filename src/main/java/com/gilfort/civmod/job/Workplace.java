@@ -492,7 +492,7 @@ final class Workplace {
             dayState.noFreeWorkPlace = false;
             return current;
         }
-        List<BlockPos> points = site.block().workPoints().stream().filter(isWorkPlace).toList();
+        List<BlockPos> points = site.block().workPositions().stream().filter(isWorkPlace).toList();
         List<BlockPos> candidates = new ArrayList<>(points.stream().filter(free).toList());
         BlockPos chosen = points.isEmpty() ? autoSearch.apply(free)
                 : candidates.isEmpty() ? null : candidates.get(level.getRandom().nextInt(candidates.size()));
@@ -668,7 +668,7 @@ final class Workplace {
      * @param dayTime the time of day
      */
     void ensureScan(ServerLevel level, Job job, ResourceCollectionProfile profile, JobBlockSite site, BlockPos poi, long day, long dayTime) {
-        ScanKey key = new ScanKey(profile.scanCenter(site.pos(), site.block().workPoints(), poi), profile.scanRadius(site.level()),
+        ScanKey key = new ScanKey(profile.scanCenter(site.pos(), site.block().workPositions(), poi), profile.scanRadius(site.level()),
                 profile.rescanDaily() ? day : -1L);
         if (key.equals(scanKey) || scanning != null) {
             return;

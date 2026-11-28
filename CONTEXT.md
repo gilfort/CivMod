@@ -118,6 +118,10 @@ _Avoid_: A second production loop for catch-up; a "quiet" flag in the rules
 The block a Resource Collection settler works at today (a tree, a stone face, water), chosen each day among the JobBlock's work points or by the job's auto search; part of the Workplace, not the same thing. Code: `Workplace.workPlaceOfDay`, saved as `SettlerWork.WorkPlaceEntry` (`poi`).
 _Avoid_: Workplace (the whole per-job state), POI in prose
 
+**Work point**:
+A block a JobBlock's settlers work at or stand on, set with the Scroll of Assignment, together with the facing of the click (the reverse of the player's look direction). Up to 8 per JobBlock (`SettlementBlock.workPoints`); a Clerk's or Pantry's stand spots are their own list of the same record (`SettlementBlock.standSpots`). Code: `WorkPoint(pos, facing)`; jobs that only need the positions read `SettlementBlock.workPositions`.
+_Avoid_: POI in code (vault and issues say POI), a second record for stand spots
+
 **Biome bonus**:
 An effect a biome gives the Jobs a datapack file names: `speed`, `rare_chance` (the chance of a roll's **rare group**: the Miner's ores, the Fisherman's treasure) and `double_drop`. Read at the Job's **biome position** (work place / station of the day, JobBlock, or none for Mission Jobs) once per day. Code: files and combining rules in `BiomeBonuses` (`civmod_biome_bonuses/<name>.json`), the resolved effects `BiomeBonus` (addon API, with the source file of each effect), position `BiomePosition` / `CategoryProfile.biomePosition()`, rare group `ResourceCollectionProfile.rareGroup()`, cached per day in the `Workplace`, query `CivModApi.biomeBonus`.
 _Avoid_: Building bonus, biome boost

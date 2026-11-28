@@ -7,7 +7,7 @@ import java.util.Optional;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.registry.ModItems;
 import com.gilfort.civmod.settlement.JobPointsDisplay;
-import com.gilfort.civmod.settlement.SettlementBlock;
+import com.gilfort.civmod.settlement.WorkPoint;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 
@@ -115,7 +115,7 @@ public final class JobPointsRenderer {
             jobPoints.soundCenter().ifPresent(pos -> markers.add(marker(minecraft, pos, jobPoints.jobBlock(), SOUND_COLOR, dimmed,
                     new ItemStack(Items.NOTE_BLOCK))));
             for (int i = 0; i < jobPoints.standSpots().size(); i++) {
-                SettlementBlock.StandSpot spot = jobPoints.standSpots().get(i);
+                WorkPoint spot = jobPoints.standSpots().get(i);
                 markers.add(new Marker(spot.pos(), jobPoints.jobBlock(), WORK_COLOR, dimmed,
                         icon(minecraft, new ItemStack(ModItems.STAND_SPOT_MARKER.get(), i + 1)), Optional.of(spot.facing())));
             }

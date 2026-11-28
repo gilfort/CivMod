@@ -58,7 +58,7 @@ public final class JobPointsDisplay {
      * @param soundCenter the Sound center a Stage has set, empty if the Stage block itself is the center
      */
     public record JobPoints(BlockPos jobBlock, List<BlockPos> work, Optional<BlockPos> collect, Optional<BlockPos> dropOff,
-            List<BlockPos> storage, List<SettlementBlock.StandSpot> standSpots, List<BlockPos> served, Optional<BlockPos> soundCenter) {
+            List<BlockPos> storage, List<WorkPoint> standSpots, List<BlockPos> served, Optional<BlockPos> soundCenter) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, JobPoints> STREAM_CODEC = StreamCodec.composite(
@@ -67,7 +67,7 @@ public final class JobPointsDisplay {
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs::optional), JobPoints::collect,
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs::optional), JobPoints::dropOff,
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), JobPoints::storage,
-                SettlementBlock.StandSpot.STREAM_CODEC.apply(ByteBufCodecs.list()), JobPoints::standSpots,
+                WorkPoint.STREAM_CODEC.apply(ByteBufCodecs.list()), JobPoints::standSpots,
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), JobPoints::served,
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs::optional), JobPoints::soundCenter,
                 JobPoints::new);
@@ -159,7 +159,7 @@ public final class JobPointsDisplay {
                 boolean include = bound.map(block.pos()::equals)
                         .orElseGet(() -> SettlementRules.horizontalDistance(block.pos(), center) <= RANGE);
                 if (include) {
-                    result.add(new JobPoints(block.pos(), block.workPoints(), block.collect(), block.dropOff(), block.storage(),
+                    result.add(new JobPoints(block.pos(), block.workPositions(), block.collect(), block.dropOff(), block.storage(),
                             block.standSpots(), block.served(), block.soundCenter()));
                 }
             }
