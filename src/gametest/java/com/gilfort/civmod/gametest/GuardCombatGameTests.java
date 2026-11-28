@@ -327,7 +327,8 @@ public final class GuardCombatGameTests {
                     helper.assertTrue(far.getHealth() == far.getMaxHealth(), "A zombie past the limit is left alone: " + far.getHealth());
                     // A Guard past the limit lets a mob inside it go.
                     near[0] = spawn(helper, EntityTypes.ZOMBIE, new BlockPos(limit - 3, 1, 4));
-                    teleport(helper, guard, new BlockPos(limit + 1, 1, 4));
+                    // Far enough that its walk back to the post does not bring it inside before the first scan.
+                    teleport(helper, guard, new BlockPos(limit + 7, 1, 4));
                 })
                 // Within the 5 seconds the mob is left alone after the Guard let it go.
                 .thenIdle(PAST_LIMIT_CHECK_TICKS)
@@ -509,6 +510,8 @@ public final class GuardCombatGameTests {
         Settler guard = guard(scene);
         guard.setNoAi(true);
         BlockPos post = helper.absolutePos(POST);
+        // The tests of a batch share the clock: put it back where it was.
+        long startTime = DayClock.dayTime(level);
         long morning = 2000L;
         ServiceGameTests.setDayTime(level, morning);
         guard.getWork().decideNow(level);
@@ -530,7 +533,7 @@ public final class GuardCombatGameTests {
         ServiceGameTests.setDayTime(level, GuardPosts.EVENING + 200);
         guard.getWork().decideNow(level);
         helper.assertTrue(status(helper, guard) == JobStatus.DELIVERING, "At 80 % it delivers at once: " + status(helper, guard));
-        ServiceGameTests.setDayTime(level, morning);
+        ServiceGameTests.setDayTime(level, startTime);
         ServiceGameTests.cleanUp(level, scene);
         helper.succeed();
     }

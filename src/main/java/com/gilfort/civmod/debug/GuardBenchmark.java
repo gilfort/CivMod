@@ -64,9 +64,9 @@ public final class GuardBenchmark {
     /** Ground layers below the arena and air above it. */
     private static final int GROUND_DEPTH = 3;
     private static final int AIR_HEIGHT = 8;
-    /** Monsters appear at least this far from the middle of the arena (blocks) and at most this far. */
+    /** Monsters appear at least this far from a Guard (blocks) and at most this far: inside the 16 blocks the Guard looks. */
     private static final int MIN_SPAWN_RADIUS = 6;
-    private static final int MAX_SPAWN_RADIUS = 20;
+    private static final int MAX_SPAWN_RADIUS = 14;
     private static final int FLAGS = Block.UPDATE_CLIENTS;
     private static final int BREAD = 16;
 
@@ -170,7 +170,9 @@ public final class GuardBenchmark {
         for (int missing = scale.monsters() - alive; missing > 0; missing--) {
             double angle = level.getRandom().nextDouble() * 2.0 * Math.PI;
             double radius = MIN_SPAWN_RADIUS + level.getRandom().nextDouble() * (MAX_SPAWN_RADIUS - MIN_SPAWN_RADIUS);
-            BlockPos middle = origin.offset(edge() / 2 - MARGIN, 0, edge() / 2 - MARGIN);
+            // Around a Guard of the benchmark, so there is always something to fight (the arena's middle without Guards).
+            BlockPos middle = guards.isEmpty() ? origin.offset(edge() / 2 - MARGIN, 0, edge() / 2 - MARGIN)
+                    : guards.get(level.getRandom().nextInt(guards.size())).blockPosition().atY(origin.getY());
             Zombie zombie = EntityTypes.ZOMBIE.create(level, EntitySpawnReason.COMMAND);
             if (zombie == null) {
                 return;
