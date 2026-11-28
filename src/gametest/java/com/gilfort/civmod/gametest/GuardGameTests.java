@@ -477,13 +477,15 @@ public final class GuardGameTests {
         helper.assertTrue(usual.workEnd() < DAY && usual.bed() < DAY, "Another settler has: " + usual);
 
         guard.setNoAi(true);
+        // The tests of this batch share the clock: put it back where it was, not to the morning.
+        long startTime = DayClock.dayTime(level);
         for (long dayTime : new long[] {14_100L, 18_000L, 23_900L, 0L, 500L}) {
             ServiceGameTests.setDayTime(level, dayTime);
             guard.getWork().decideNow(level);
             helper.assertFalse(guard.isSleeping(), "Awake at day time " + dayTime);
             helper.assertTrue(guard.getWork().atWork(), "On duty at day time " + dayTime);
         }
-        ServiceGameTests.setDayTime(level, 2000L);
+        ServiceGameTests.setDayTime(level, startTime);
         ServiceGameTests.cleanUp(level, scene, plain);
         helper.succeed();
     }
