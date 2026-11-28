@@ -7,10 +7,13 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
+import com.gilfort.civmod.logistics.ClerkStorage;
+import com.gilfort.civmod.logistics.Stock;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.settlement.DayClock;
+import com.gilfort.civmod.settlement.GuardMode;
 import com.gilfort.civmod.settlement.GuardPosts;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementData;
@@ -19,6 +22,7 @@ import com.gilfort.civmod.settlement.WorkPoint;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.Vec3;
 
@@ -26,7 +30,9 @@ import net.minecraft.world.phys.Vec3;
  * Work loop of the Guard (vault {@code Jobs/Guard.md}): it holds a post around the clock. The Guard stands on the guard
  * point of the half day (picked at 06:00 and at 18:30, see {@link GuardPosts}) facing the way the player set it, or next to
  * its Guard Post without points. It never sleeps ({@link GuardDuty#dayTimes}); fatigue breaks sit it down on the spot. It
- * claims a bed of its own, which counts for the bed need, and never goes to it. This step has no combat.
+ * claims a bed of its own, which counts for the bed need, and never goes to it. Enemies are fought by its {@link GuardFight} goal,
+ * which outranks the work goal; the loop holds its decisions meanwhile. The loop sees to the weapon (fetching it, ordering one) and
+ * takes the loot of the kills to the drop-off point.
  * <p>
  * Duty EXP is the Job's base EXP times the level of the Guard Post for every in-game hour: live from the clock at each
  * decision, in catch-up for the whole missed time, nights included.
@@ -62,12 +68,22 @@ final class GuardLoop implements CategoryLoop {
         private long paidUntil = NOT_PAID;
         /** The clock value up to which duty is paid in the running catch-up. */
         private long catchUpPaidUntil = NOT_PAID;
+        /** The mode of the Guard Post as of the last decision outside a fight: the one the Guard acts on. */
+        private GuardMode mode = GuardMode.GUARD;
+        /** The half day of the last decision ({@link GuardPosts#period}), {@link #NOT_PAID} before the first. */
+        private long period = NOT_PAID;
+        /** Whether the half day changed since the buffer was last taken to the drop-off point. */
+        private boolean deliveryAtChange;
     }
 
     private final SettlerWork shell;
     private final Settler settler;
     private final Fatigue fatigue = new Fatigue();
     private final Map<BlockPos, Duty> duties = new HashMap<>();
+    private final GuardFight fight;
+    /** Whether the Guard walks to its collect inventory for a weapon. */
+    private boolean fetching;
+    private ClerkStorage.@Nullable Visit weaponVisit;
     private long nextBedCheck;
     /** The clock value at which the running catch-up started (the window's progress moves on while it runs). */
     private long catchUpStart = NOT_PAID;
@@ -78,6 +94,28 @@ final class GuardLoop implements CategoryLoop {
     GuardLoop(SettlerWork shell) {
         this.shell = shell;
         this.settler = shell.settler();
+        this.fight = new GuardFight(shell, this::endBreakAtOnce);
+    }
+
+    /**
+     * @return the goal of the settler that fights the enemies of this Guard
+     */
+    Goal fightGoal() {
+        return fight;
+    }
+
+    /**
+     * @param jobBlock the Guard Post of a Guard job
+     * @return the mode the Guard acts on: the one of its last decision outside a fight
+     */
+    Optional<GuardMode> appliedMode(BlockPos jobBlock) {
+        return Optional.ofNullable(duties.get(jobBlock)).map(duty -> duty.mode);
+    }
+
+    /** An enemy ends a break at once: the Guard is up and its next break is not owed. */
+    private void endBreakAtOnce() {
+        fatigue.endBreak();
+        shell.endBreak();
     }
 
     @Override
@@ -85,22 +123,42 @@ final class GuardLoop implements CategoryLoop {
         claimBed(level);
         Duty duty = duties.computeIfAbsent(job.jobBlock(), pos -> new Duty());
         payLiveDuty(level, job, duty);
+        fight.onDuty(job, level.getGameTime());
+        // The mode is read here, at a decision, and decisions are held during a fight: a change applies after it.
+        duty.mode = site.block().guard().mode();
         Optional<WorkPoint> point = pointToday(level, site, day, dayTime);
         duty.point = point.orElse(null);
         duty.target = point.map(found -> found.pos().above()).orElse(site.pos());
         duty.reach = point.isPresent() ? POINT_REACH : SettlerWork.REACH;
+        if (deliveryDue(job, duty, GuardPosts.period(day, dayTime))) {
+            return JobStep.DELIVER;
+        }
+        Stock collect = ClerkStorage.stock(level, site.collect(), dayTime, !shell.counterUnreachable(level, site.collect()));
+        Optional<WorkRules.MissingTool> missing = WorkRules.missingTool(level, settler, job, GuardWeapons.KIND, site, collect);
+        if (missing.isPresent() && missing.get().inCollect()) {
+            return fetchWeapon(level, site, dayTime);
+        }
+        fetching = false;
         if (point.isPresent()) {
             approach(duty.target);
         }
-        return JobStep.walk(duty.target, duty.reach, fatigue.onBreak() ? JobStatus.PAUSING : JobStatus.GUARDING);
+        JobStatus status = missing.isPresent() ? JobStatus.NO_TOOL : fatigue.onBreak() ? JobStatus.PAUSING : JobStatus.GUARDING;
+        return JobStep.walk(duty.target, duty.reach, status);
     }
 
-    /** A break holds the Guard where it is; it starts one only while it stands at its post. */
+    /**
+     * A fight holds the decisions of the shell, so the Guard does not leave its enemy for a delivery, a meal or a new post. A
+     * break holds the Guard where it is; it starts one only while it stands at its post.
+     */
     @Override
     public JobStep holdsDecision(ServerLevel level, SettlerJob job) {
         Duty duty = duties.get(job.jobBlock());
         if (duty != null) {
             payLiveDuty(level, job, duty);
+        }
+        fight.onDuty(job, level.getGameTime());
+        if (fight.active()) {
+            return new JobStep.Hold(JobStatus.FIGHTING);
         }
         if (fatigue.onBreak()) {
             boolean still = fatigue.advance(SettlerWork.DECISION_INTERVAL, level.getRandom());
@@ -114,6 +172,9 @@ final class GuardLoop implements CategoryLoop {
 
     @Override
     public JobStep tickAtTarget(ServerLevel level, SettlerJob job, BlockPos target) {
+        if (fetching) {
+            return fetchWeaponAt(level, job);
+        }
         Duty duty = duties.get(job.jobBlock());
         if (duty != null && duty.point != null) {
             Vec3 eye = settler.getEyePosition();
@@ -166,6 +227,62 @@ final class GuardLoop implements CategoryLoop {
     @Override
     public void forget(BlockPos jobBlock) {
         duties.remove(jobBlock);
+        fight.forget(jobBlock);
+    }
+
+    // ---------------------------------------------------------------- weapon and delivery
+
+    /**
+     * Whether the Guard takes its buffer to the drop-off point now: at about 80 % full, or once after the half day changed
+     * (the pick of its guard point at 06:00 and 18:30). A fight holds the decisions, so this is never asked during one.
+     */
+    private boolean deliveryDue(SettlerJob job, Duty duty, long period) {
+        if (duty.period != period) {
+            duty.period = period;
+            duty.deliveryAtChange = true;
+        }
+        if (!shell.deliverable(job)) {
+            duty.deliveryAtChange = false;
+            return false;
+        }
+        boolean due = shell.buffer(job.jobBlock()).shouldDeliver() || duty.deliveryAtChange;
+        duty.deliveryAtChange = false;
+        return due;
+    }
+
+    private JobStep fetchWeapon(ServerLevel level, JobBlockSite site, long dayTime) {
+        ClerkStorage.Visit visit = shell.reachableVisit(level, site.collect(), ClerkStorage.visit(level, site.collect(), dayTime));
+        // Walking on to the same place keeps how it is reached.
+        if (!fetching || weaponVisit == null || !weaponVisit.target().equals(visit.target())) {
+            fetching = true;
+            weaponVisit = visit;
+        }
+        return JobStep.walk(weaponVisit.target(), weaponVisit.reach(), JobStatus.FETCHING_TOOL);
+    }
+
+    /** At the collect inventory: takes the best weapon (at a working Clerk's counter after waiting for its turn). */
+    private JobStep fetchWeaponAt(ServerLevel level, SettlerJob job) {
+        Optional<JobBlockSite> site = JobBlockSite.at(level, job.jobBlock());
+        if (site.isPresent()) {
+            BlockPos collect = site.get().collect();
+            boolean counter = weaponVisit != null && weaponVisit.counter();
+            if (counter && !shell.waitAtCounter(level, collect)) {
+                return JobStep.STAY;
+            }
+            Stock stock = ClerkStorage.stock(level, collect, DayClock.dayTime(level), counter);
+            if (SettlerTools.swap(settler, stock, GuardWeapons::isWeapon, shell.toolRule(job, GuardWeapons.KIND))) {
+                ToolOrders.settled(level, settler, job, GuardWeapons.KIND);
+                if (stock.counter()) {
+                    ClerkCounter.handOut(level, collect, true);
+                }
+            } else {
+                // Nothing better after all: the next search waits an hour.
+                shell.toolNeeds().searched(job, level.getGameTime());
+            }
+        }
+        fetching = false;
+        weaponVisit = null;
+        return JobStep.DONE;
     }
 
     // ---------------------------------------------------------------- guard point

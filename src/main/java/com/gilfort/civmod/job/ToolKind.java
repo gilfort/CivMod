@@ -5,6 +5,7 @@ import java.util.function.IntFunction;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import com.gilfort.civmod.api.GuardProfile;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.npc.SettlerJob;
 
@@ -14,7 +15,8 @@ import net.minecraft.world.item.ItemStack;
 /**
  * What the tool of a Job is, as the tool supply sees it ({@link ToolOrders}, {@link WorkRules#missingTool},
  * {@link SettlerWork#tool}): which items count, the item the "tool missing" bubble shows, what a skill allows and requires
- * of it, and which one of several on the belt is the best. A Resource Collection Job's tool is declared by its profile.
+ * of it, and which one of several on the belt is the best. A Resource Collection Job's tool is declared by its profile; the
+ * Guard's tool is its weapon ({@link GuardWeapons}).
  *
  * @param isTool whether an item stack is a tool of the Job
  * @param icon   the item of the "tool missing" bubble (asked only when it shows)
@@ -46,10 +48,14 @@ record ToolKind(Predicate<ItemStack> isTool, Supplier<Item> icon, IntFunction<To
 
     /**
      * @param job a Job of a settler
-     * @return the kind of its tool, empty for a Job without one (every Resource Collection Job has one; bare-handed ones
-     *         find none of their items)
+     * @return the kind of its tool, empty for a Job without one (every Resource Collection Job has one, bare-handed ones
+     *         find none of their items, and the Guard has its weapon)
      */
     static Optional<ToolKind> of(SettlerJob job) {
-        return job.jobType().profile(ResourceCollectionProfile.class).map(ToolKind::of);
+        Optional<ResourceCollectionProfile> collecting = job.jobType().profile(ResourceCollectionProfile.class);
+        if (collecting.isPresent()) {
+            return collecting.map(ToolKind::of);
+        }
+        return job.jobType().profile(GuardProfile.class).map(profile -> GuardWeapons.KIND);
     }
 }

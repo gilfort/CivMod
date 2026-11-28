@@ -1025,6 +1025,7 @@
   "job.civmod.guard.description": "Holds a post around the clock and never sleeps",
   "civmod.scroll.work_place.guard": "a block to stand on",
   "civmod.job.status.guarding": "Guarding",
+  "civmod.job.status.fighting": "Fighting",
   "civmod.scroll.point.guard_point": "Guard point %s set, facing %s",
   "civmod.scroll.point.too_many_guard_points": "At most %s guard points per Guard Post",
   "civmod.scroll.point.guard_invalid": "Needs a container (storage) or a block with two blocks of air above (guard point)",

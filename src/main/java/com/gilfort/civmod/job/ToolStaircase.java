@@ -85,6 +85,17 @@ public final class ToolStaircase {
     }
 
     /**
+     * The ceiling of the staircase without its requirement: a tool above the allowed tier is ignored, but none is required
+     * (the Guard's weapons until the gear tiers of spec #349 judge them).
+     *
+     * @param skill a Job skill level (1-100)
+     * @return the rule for that skill that allows what the staircase allows and requires nothing
+     */
+    static Rule allowedOnly(int skill) {
+        return new Rule(ALLOWED[NeedState.tierOf(skill) - 1], NO_TIER, false);
+    }
+
+    /**
      * @param skill a Job skill level (1-100)
      * @return the rule for that skill
      */

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:night",
+  "function": "civmod:guard_mode_change_after_fight",
+  "max_ticks": 900,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

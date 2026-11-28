@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:night",
+  "function": "civmod:guard_ignores_zombie_behind_wall",
+  "max_ticks": 600,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

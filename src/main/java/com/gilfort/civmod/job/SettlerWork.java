@@ -42,6 +42,7 @@ import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.origin.Talent;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.DayClock;
+import com.gilfort.civmod.settlement.GuardMode;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.OccupiedPlaces;
 import com.gilfort.civmod.settlement.SettlementBlock;
@@ -129,6 +130,7 @@ public final class SettlerWork {
     private final Map<JobCategory, CategoryLoop> loops = new EnumMap<>(JobCategory.class);
     private final MissionLoop missions;
     private final ClerkLoop clerks;
+    private final GuardLoop guards;
     private final ProducingLoop producing;
     /** The Deliveryman's loop: a second Logistics loop beside the Clerk's. */
     private final DeliverymanLoop deliverymen;
@@ -198,7 +200,8 @@ public final class SettlerWork {
         priests = new PriestLoop(this);
         services = new ServiceLoop(this);
         loops.put(JobCategory.SERVICE, services);
-        loops.put(JobCategory.GUARD, new GuardLoop(this));
+        guards = new GuardLoop(this);
+        loops.put(JobCategory.GUARD, guards);
         laborer = new Laborer(this);
         thoughts = new SettlerThoughts(settler);
         meals = new SettlerMeals(this);
@@ -401,6 +404,29 @@ public final class SettlerWork {
      */
     public Goal goal() {
         return new WorkGoal();
+    }
+
+    /**
+     * @return the goal that fights the enemies of a Guard; it outranks {@link #goal()} while a fight lasts
+     */
+    public Goal guardGoal() {
+        return guards.fightGoal();
+    }
+
+    /**
+     * @param jobBlock the Guard Post of a Guard job
+     * @return the mode the Guard acts on: the one of its last decision outside a fight
+     */
+    public Optional<GuardMode> appliedGuardMode(BlockPos jobBlock) {
+        return guards.appliedMode(jobBlock);
+    }
+
+    /**
+     * @param job a job
+     * @return whether the settler is on a job step of that job, walking to its work or working
+     */
+    boolean isWorking(SettlerJob job) {
+        return activity == Activity.JOB && job.equals(activeJob);
     }
 
     // ---------------------------------------------------------------- persistence
@@ -770,7 +796,7 @@ public final class SettlerWork {
     }
 
     /** The work break is over (or never was): the settler stands up. */
-    private void endBreak() {
+    void endBreak() {
         breakStarted = false;
         settler.standUp();
     }

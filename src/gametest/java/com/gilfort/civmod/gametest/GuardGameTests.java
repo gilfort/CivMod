@@ -118,7 +118,10 @@ public final class GuardGameTests {
 
     /** A Guard Post at {@link #POST} on a stone floor and a Guard working it, with plenty of food. */
     private static ServiceGameTests.Scene scene(GameTestHelper helper) {
-        return ServiceGameTests.scene(helper, CivMod.id("guard_post"), CivMod.id("guard"));
+        ServiceGameTests.Scene scene = ServiceGameTests.scene(helper, CivMod.id("guard_post"), CivMod.id("guard"));
+        // Armed, as a Guard is after its first visit to the Guard Post: without a weapon its status is "No tool" (see GuardCombatGameTests).
+        scene.performer().getInventory().setItem(Settler.BELT_START, new ItemStack(Items.STONE_SWORD));
+        return scene;
     }
 
     /** A Guard Post in bare settlement data (no world), the place for the rules that need none. */

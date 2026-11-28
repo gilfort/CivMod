@@ -336,6 +336,23 @@ public final class JobAssignments {
     }
 
     /**
+     * @param settlement a settlement
+     * @param pos        a position
+     * @return how many blocks the position lies beyond the border: 0 or less inside it (the distance to the nearest border
+     *         is the smallest of the distances past the join radius of the connected JobBlocks), {@link Double#MAX_VALUE}
+     *         when no JobBlock is connected
+     */
+    public static double distancePastBorder(Settlement settlement, BlockPos pos) {
+        double past = Double.MAX_VALUE;
+        for (SettlementBlock block : settlement.blocks()) {
+            if (block.connected()) {
+                past = Math.min(past, SettlementRules.horizontalDistance(pos, block.pos()) - SettlementRules.joinRadius(block));
+            }
+        }
+        return past;
+    }
+
+    /**
      * Assigns the Base Job of a JobBlock to a settler ({@link #assign(SettlementData, BlockPos, UUID, String, int, Collection, Job)}).
      *
      * @param data         the dimension's settlement data

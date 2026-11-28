@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerJob;
@@ -78,6 +79,11 @@ public final class ToolNeeds {
         for (SettlerJob job : settler.getJobs()) {
             Optional<ResourceCollectionProfile> profile = toolProfile(job);
             if (profile.isEmpty()) {
+                if (job.jobType().category() == JobCategory.GUARD) {
+                    // The Guard's weapon is judged by no band yet, but its search of the collect inventory keeps its hour.
+                    current.add(job.jobBlock());
+                    entries.computeIfAbsent(job.jobBlock(), block -> new Entry());
+                }
                 continue;
             }
             current.add(job.jobBlock());

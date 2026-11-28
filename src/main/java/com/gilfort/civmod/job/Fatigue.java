@@ -63,6 +63,11 @@ public final class Fatigue {
         chance = chanceStep();
     }
 
+    /** Ends a running break at once (an enemy shows up); the guaranteed span without a break stays. */
+    void endBreak() {
+        breakTicks = 0;
+    }
+
     /**
      * @return whether the settler is on a break
      */

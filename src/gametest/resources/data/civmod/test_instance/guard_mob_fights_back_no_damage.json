@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:night",
+  "function": "civmod:guard_mob_fights_back_no_damage",
+  "max_ticks": 900,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

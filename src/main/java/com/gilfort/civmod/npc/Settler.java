@@ -159,6 +159,7 @@ public class Settler extends PathfinderMob {
         setPersistenceRequired();
         getNavigation().setCanOpenDoors(true);
         // Registered here, not in registerGoals(): that runs in the super constructor before fields exist.
+        goalSelector.addGoal(1, work.guardGoal());
         goalSelector.addGoal(2, work.goal());
         sittingLook.addGoal(0, new LookAtPlayerGoal(this, Player.class, 8.0F));
         sittingLook.addGoal(1, new RandomLookAroundGoal(this));

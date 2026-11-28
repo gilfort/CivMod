@@ -82,7 +82,9 @@ public enum JobStatus {
     /** A Bard playing a stop of its round or its stage act: it holds its instrument. */
     PLAYING("playing"),
     /** A Guard holding its post: walking to its guard point or standing there. */
-    GUARDING("guarding");
+    GUARDING("guarding"),
+    /** A Guard fighting an enemy: it walks to the mob and hits it. */
+    FIGHTING("fighting");
 
     /** Network codec. */
     public static final StreamCodec<ByteBuf, JobStatus> STREAM_CODEC = ByteBufCodecs.idMapper(i -> values()[i], JobStatus::ordinal);
