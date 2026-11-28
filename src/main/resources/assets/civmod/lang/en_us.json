@@ -1032,6 +1032,6 @@
   "civmod.gui.job_block.guard_mode.guard": "Mode: Guard",
   "civmod.gui.job_block.guard_mode.patrol": "Mode: Patrol",
   "civmod.gui.job_block.guard_mode.roam": "Mode: Roam",
-  "civmod.gui.job_block.help.guard_mode": "Click to switch the mode of all Guards here: Guard (each stands at a guard point), Patrol (walks the points in order), Roam (walks the whole settlement)",
+  "civmod.gui.job_block.help.guard_mode": "Click to switch the mode of all Guards here",
   "civmod.need.entertainment.guard": "On duty"
 }
