@@ -54,6 +54,8 @@ public final class JobPointsRenderer {
     private static final int STORAGE_COLOR = 0x9B59D0;
     private static final int SERVED_COLOR = 0xE0B020;
     private static final int SOUND_COLOR = 0xD94F8C;
+    /** Outline of a guard point no Guard can reach. */
+    private static final int UNREACHABLE_COLOR = 0xE02020;
 
     private static List<JobPointsDisplay.JobPoints> points = List.of();
     private static Optional<BlockPos> bound = Optional.empty();
@@ -119,6 +121,11 @@ public final class JobPointsRenderer {
                 markers.add(new Marker(spot.pos(), jobPoints.jobBlock(), WORK_COLOR, dimmed,
                         icon(minecraft, new ItemStack(ModItems.STAND_SPOT_MARKER.get(), i + 1)), Optional.of(spot.facing())));
             }
+            for (int i = 0; i < jobPoints.guardPoints().size(); i++) {
+                JobPointsDisplay.GuardPoint guardPoint = jobPoints.guardPoints().get(i);
+                markers.add(new Marker(guardPoint.point().pos(), jobPoints.jobBlock(), guardPoint.unreachable() ? UNREACHABLE_COLOR : WORK_COLOR,
+                        dimmed, icon(minecraft, new ItemStack(ModItems.STAND_SPOT_MARKER.get(), i + 1)), Optional.of(guardPoint.point().facing())));
+            }
         }
         for (BlockPos bed : beds) {
             boolean own = ownBed.filter(bed::equals).isPresent();
@@ -165,7 +172,7 @@ public final class JobPointsRenderer {
             }
             poseStack.popPose();
             if (marker.facing().isPresent() && !marker.dimmed()) {
-                // Where the Clerk looks when standing on the spot.
+                // Where the Clerk or the Guard looks when standing on the spot.
                 Vec3 eye = Vec3.atBottomCenterOf(marker.pos().above()).add(0.0, 1.6, 0.0);
                 Vec3 look = eye.add(Vec3.atLowerCornerOf(marker.facing().get().getUnitVec3i()));
                 submitLine(poseStack, collector, camera, eye, look, argb);

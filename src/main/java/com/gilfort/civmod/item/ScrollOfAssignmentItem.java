@@ -6,6 +6,7 @@ import java.util.UUID;
 import com.gilfort.civmod.api.BiomePosition;
 import com.gilfort.civmod.api.CivModApi;
 import com.gilfort.civmod.api.Job;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.block.JobBlock;
 import com.gilfort.civmod.config.CivModConfig;
 import com.gilfort.civmod.entertainment.EntertainmentRules;
@@ -18,6 +19,7 @@ import com.gilfort.civmod.menu.BiomeBonusText;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.npc.SettlerBeds;
 import com.gilfort.civmod.registry.ModDataComponents;
+import com.gilfort.civmod.settlement.GuardPosts;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.JobPlaces;
@@ -265,6 +267,10 @@ public class ScrollOfAssignmentItem extends Item {
             cycleSoundCenter(player, jobBlock, target);
             return;
         }
+        if (jobType.category() == JobCategory.GUARD && !isContainer(level, target)) {
+            toggleGuardPoint(player, jobBlock, target);
+            return;
+        }
         // A station of a Specialization offered here is a work point too; each Job then works only at its own stations.
         Optional<Job> workJob = workPlaceJob(level, block.get(), target);
         boolean container = isContainer(level, target);
@@ -361,6 +367,24 @@ public class ScrollOfAssignmentItem extends Item {
                     .map(ClerkStorage::name).orElse(Component.literal("?"))).withStyle(ChatFormatting.RED);
             case INVALID, WORK, COLLECT, DROP_OFF, TOO_MANY, SOUND_CENTER, TOO_FAR -> Component.translatable("civmod.scroll.point.clerk_invalid")
                     .withStyle(ChatFormatting.RED);
+        };
+        player.sendOverlayMessage(message);
+    }
+
+    /** Bound to a Guard Post: a click on a block that is no container sets a numbered guard point, a second click removes it. */
+    private static void toggleGuardPoint(ServerPlayer player, BlockPos post, BlockPos target) {
+        ServerLevel level = player.level();
+        SettlementData data = SettlementData.get(level);
+        GuardPosts.Toggle result = GuardPosts.togglePoint(data, post, target, isStandable(level, target), clickFacing(player));
+        Component message = switch (result) {
+            case ADDED -> Component.translatable("civmod.scroll.point.guard_point", JobBlockSite.blockAt(level, post)
+                    .map(block -> block.workPoints().size()).orElse(0), clickFacing(player).getName());
+            case REMOVED -> Component.translatable("civmod.scroll.point.removed");
+            case NO_POST -> Component.translatable("civmod.scroll.binding_lost").withStyle(ChatFormatting.RED);
+            case OUTSIDE -> Component.translatable("civmod.scroll.point.outside").withStyle(ChatFormatting.RED);
+            case TOO_MANY -> Component.translatable("civmod.scroll.point.too_many_guard_points", GuardPosts.MAX_POINTS)
+                    .withStyle(ChatFormatting.RED);
+            case NOT_STANDABLE -> Component.translatable("civmod.scroll.point.guard_invalid").withStyle(ChatFormatting.RED);
         };
         player.sendOverlayMessage(message);
     }

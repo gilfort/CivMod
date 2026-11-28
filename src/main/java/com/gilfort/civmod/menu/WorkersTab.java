@@ -8,6 +8,8 @@ import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.npc.Settler;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.AutoAssignment;
+import com.gilfort.civmod.settlement.GuardMode;
+import com.gilfort.civmod.settlement.GuardPosts;
 import com.gilfort.civmod.settlement.JobAssignments;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.SettlementBlock;
@@ -41,6 +43,8 @@ public final class WorkersTab extends JobBlockTab {
     private static final int TREASURE = LEAVES + 2;
     /** Buttons: set the Clerk's automatic supply off / on ({@link #supplyButtonId}). */
     private static final int SUPPLY = TREASURE + 2;
+    /** Buttons: set the mode of a Guard Post, one per {@link GuardMode} in its order ({@link #guardModeButtonId}). */
+    private static final int GUARD_MODE = SUPPLY + 2;
 
     private final TabData<WorkersTabData> data = new TabData<>(WorkersTabData.EMPTY,
             (menu, level, pos) -> WorkersTabData.of(level, pos, menu.getInfo().jobType(), menu.getInfo().level()), WorkersTabData.Sync::new);
@@ -74,7 +78,7 @@ public final class WorkersTab extends JobBlockTab {
 
     @Override
     int buttons() {
-        return SUPPLY + 2;
+        return GUARD_MODE + GuardMode.values().length;
     }
 
     /**
@@ -108,14 +112,27 @@ public final class WorkersTab extends JobBlockTab {
         return buttonId(SUPPLY + (on ? 1 : 0));
     }
 
+    /**
+     * Like {@link #leavesButtonId}, a mode button carries the wanted mode.
+     *
+     * @param mode the wanted mode of the Guard Post
+     * @return the menu button id that sets it
+     */
+    public int guardModeButtonId(GuardMode mode) {
+        return buttonId(GUARD_MODE + mode.ordinal());
+    }
+
     @Override
     boolean clickButton(Player player, int button) {
         if (button < TREASURE) {
             setLeaves(button - LEAVES == 1);
         } else if (button < SUPPLY) {
             setTreasure(button - TREASURE == 1);
-        } else {
+        } else if (button < GUARD_MODE) {
             menu().editSettlement((data, pos) -> JobAssignments.setAutoSupply(data, pos, button - SUPPLY == 1));
+        } else {
+            GuardMode mode = GuardMode.values()[button - GUARD_MODE];
+            menu().editSettlement((data, pos) -> GuardPosts.setMode(data, pos, mode));
         }
         return true;
     }

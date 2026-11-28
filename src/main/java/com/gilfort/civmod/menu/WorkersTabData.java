@@ -16,6 +16,7 @@ import com.gilfort.civmod.npc.SettlerJob;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.Bonuses;
 import com.gilfort.civmod.settlement.DayClock;
+import com.gilfort.civmod.settlement.GuardMode;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.gilfort.civmod.settlement.Settlement;
@@ -52,16 +53,15 @@ import net.minecraft.server.level.ServerLevel;
  * @param biome           today's biome and its effects
  * @param blessingEnd     at the Center Block: the clock value at which the settlement's work speed blessing ends, 0 = none
  * @param storageUnlinked whether this is a Clerk JobBlock without a linked container (the header asks to link one)
- * @param treasure        whether a Fisherman may catch treasure (the "Treasure" toggle of its JobBlock)
- * @param autoSupply      whether a Clerk gets missing tools, food and clothing made and delivered for its settlers (the "Auto supply" toggle)
+ * @param options         the options a JobBlock window switches: treasure, automatic supply, the mode of a Guard Post
  */
 public record WorkersTabData(Component settlementName, boolean inSettlement, boolean connected, int distance, int required, List<Worker> workers,
         List<JobPlaces.Line> places, boolean collectLeaves, boolean byDeliveryman, Biome biome, long blessingEnd, boolean storageUnlinked,
-        boolean treasure, boolean autoSupply) {
+        Options options) {
 
     /** Before the first sync, and for a block that is not registered. */
     public static final WorkersTabData EMPTY = new WorkersTabData(Component.empty(), false, false, 0, 0, List.of(), List.of(), false, false,
-            Biome.NONE, 0L, false, true, true);
+            Biome.NONE, 0L, false, Options.DEFAULT);
 
     /** Network codec. */
     public static final StreamCodec<RegistryFriendlyByteBuf, WorkersTabData> STREAM_CODEC = StreamCodec.composite(
@@ -77,8 +77,7 @@ public record WorkersTabData(Component settlementName, boolean inSettlement, boo
             Biome.STREAM_CODEC, WorkersTabData::biome,
             ByteBufCodecs.VAR_LONG, WorkersTabData::blessingEnd,
             ByteBufCodecs.BOOL, WorkersTabData::storageUnlinked,
-            ByteBufCodecs.BOOL, WorkersTabData::treasure,
-            ByteBufCodecs.BOOL, WorkersTabData::autoSupply,
+            Options.STREAM_CODEC, WorkersTabData::options,
             WorkersTabData::new);
 
     /**
@@ -94,12 +93,52 @@ public record WorkersTabData(Component settlementName, boolean inSettlement, boo
      * @param biome           today's biome
      * @param blessingEnd     the end of the blessing
      * @param storageUnlinked whether the Clerk has no linked container
-     * @param treasure        the treasure option
-     * @param autoSupply      the supply option
+     * @param options         the block options
      */
     public WorkersTabData {
         workers = List.copyOf(workers);
         places = List.copyOf(places);
+    }
+
+    /**
+     * The options a JobBlock window switches.
+     *
+     * @param treasure   whether a Fisherman may catch treasure (the "Treasure" toggle of its JobBlock)
+     * @param autoSupply whether a Clerk gets missing tools, food and clothing made and delivered for its settlers (the "Auto supply" toggle)
+     * @param guardMode  the mode of a Guard Post (the mode button of its window)
+     */
+    public record Options(boolean treasure, boolean autoSupply, GuardMode guardMode) {
+
+        /** The options of a block that has none set. */
+        public static final Options DEFAULT = new Options(true, true, GuardMode.GUARD);
+
+        /** Network codec. */
+        public static final StreamCodec<RegistryFriendlyByteBuf, Options> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.BOOL, Options::treasure,
+                ByteBufCodecs.BOOL, Options::autoSupply,
+                GuardMode.STREAM_CODEC, Options::guardMode,
+                Options::new);
+    }
+
+    /**
+     * @return whether a Fisherman may catch treasure
+     */
+    public boolean treasure() {
+        return options.treasure();
+    }
+
+    /**
+     * @return whether a Clerk's automatic supply is on
+     */
+    public boolean autoSupply() {
+        return options.autoSupply();
+    }
+
+    /**
+     * @return the mode of the Guard Post
+     */
+    public GuardMode guardMode() {
+        return options.guardMode();
     }
 
     /**
@@ -271,7 +310,8 @@ public record WorkersTabData(Component settlementName, boolean inSettlement, boo
                 Biome.of(level, pos, jobType, assignees),
                 blessingEnd(settlement, block, level.getOverworldClockTime()),
                 jobType == ModJobs.CLERK.get() && block.map(found -> found.storage().isEmpty()).orElse(false),
-                block.map(SettlementBlock::treasure).orElse(true), block.map(SettlementBlock::autoSupply).orElse(true));
+                new Options(block.map(SettlementBlock::treasure).orElse(true), block.map(SettlementBlock::autoSupply).orElse(true),
+                        block.map(found -> found.guard().mode()).orElse(GuardMode.GUARD)));
     }
 
     private static long blessingEnd(Optional<Settlement> settlement, Optional<SettlementBlock> block, long now) {
