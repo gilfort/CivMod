@@ -7,8 +7,9 @@ import org.jetbrains.annotations.ApiStatus;
  * runs for every Job of the Guard category; the Job's JobBlock is its Guard Post, and the mode and the points of the post
  * (set in the JobBlock window and with the Scroll of Assignment) decide where the Guard stands.
  * <p>
- * There is no hook yet: every Guard behaves the same. Hooks (weapons, enemies, gear tiers) come with the combat of the
- * Guard. Like every profile, the interface has {@code default} methods only, so a hook added later does not break an
+ * There is no hook yet: every Guard behaves the same. Its weapons are found by item tags and its enemies by the vanilla
+ * {@code Enemy} interface and the tag {@code civmod:guard_ignores}, so addons and packs need no hook for them; hooks for the
+ * gear tiers come with their step. Like every profile, the interface has {@code default} methods only, so a hook added later does not break an
  * existing implementation.
  */
 @ApiStatus.Experimental
