@@ -80,7 +80,9 @@ public enum JobStatus {
     /** The JobBlock is not connected to its settlement: the job waits until it connects again. */
     UNCONNECTED("unconnected"),
     /** A Bard playing a stop of its round or its stage act: it holds its instrument. */
-    PLAYING("playing");
+    PLAYING("playing"),
+    /** A Guard holding its post: walking to its guard point or standing there. */
+    GUARDING("guarding");
 
     /** Network codec. */
     public static final StreamCodec<ByteBuf, JobStatus> STREAM_CODEC = ByteBufCodecs.idMapper(i -> values()[i], JobStatus::ordinal);

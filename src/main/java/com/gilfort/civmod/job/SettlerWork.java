@@ -198,6 +198,7 @@ public final class SettlerWork {
         priests = new PriestLoop(this);
         services = new ServiceLoop(this);
         loops.put(JobCategory.SERVICE, services);
+        loops.put(JobCategory.GUARD, new GuardLoop(this));
         laborer = new Laborer(this);
         thoughts = new SettlerThoughts(settler);
         meals = new SettlerMeals(this);
@@ -317,7 +318,8 @@ public final class SettlerWork {
         if (returned.isPresent() && returned.getAsLong() < times.workEnd()) {
             times = times.withWorkEnd(returned.getAsLong());
         }
-        return times;
+        // Last, so nothing above ends the day of a Guard: it is on duty around the clock.
+        return GuardDuty.dayTimes(settler, times);
     }
 
     /**
@@ -778,7 +780,8 @@ public final class SettlerWork {
         Schedule.Moment moment = moment(clock);
         long dayTime = moment.dayTime();
         long day = moment.day();
-        boolean jumped = SettlerBeds.nightSkipped(lastClock, clock, DECISION_INTERVAL, WORK_END);
+        // A Guard never slept, so a skipped night does not put it to bed.
+        boolean jumped = !GuardDuty.holdsGuardJob(settler) && SettlerBeds.nightSkipped(lastClock, clock, DECISION_INTERVAL, WORK_END);
         lastClock = clock;
         if (missions.departed() && (window.pending() || !missions.returnIfDue(level, clock))) {
             if (missions.isAway()) {
@@ -1850,6 +1853,7 @@ public final class SettlerWork {
         CivMod.LOGGER.info("Catch-up {}: {} day(s), {} item(s), {} meal(s), skills {}", settler.getName().getString(),
                 String.format(java.util.Locale.ROOT, "%.1f", counters.days()), counters.items(), counters.meals(),
                 settler.getSkills().snapshot());
+        allLoops().forEach(loop -> loop.catchUpFinished(level));
         // Foraging that is over came back during the run (Schedule); one still going on continues live.
         window.clear();
         quiet = false;
@@ -1930,7 +1934,7 @@ public final class SettlerWork {
             // Work is over: the evening meal.
             decideCatchUp(level, day, Math.max(dayTime, workEndDayTime));
         }
-        if (to >= day * DayClock.DAY_TICKS + ClerkStorage.TAVERN_SHIFT_END) {
+        if (to >= day * DayClock.DAY_TICKS + ClerkStorage.TAVERN_SHIFT_END && !GuardDuty.holdsGuardJob(settler)) {
             // The whole Tavern evening was missed (one that is still going on is lived and counted live).
             Tavern.catchUp(level, settler, day);
             // The Bard's missed day: a flat point, nothing played.

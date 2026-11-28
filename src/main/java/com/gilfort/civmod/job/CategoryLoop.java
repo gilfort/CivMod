@@ -96,6 +96,14 @@ interface CategoryLoop {
     }
 
     /**
+     * Called when a catch-up run is complete, before the settler's missed time is cleared; nothing by default.
+     *
+     * @param level the level
+     */
+    default void catchUpFinished(ServerLevel level) {
+    }
+
+    /**
      * Simulates work of a job during catch-up. A job that cannot go on is ended with {@link SettlerWork#endCatchUpJob}.
      *
      * @param level     the level
