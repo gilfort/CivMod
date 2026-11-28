@@ -27,6 +27,7 @@ import com.gilfort.civmod.settlement.Settlement;
 import com.gilfort.civmod.settlement.SettlementBlock;
 import com.gilfort.civmod.settlement.SettlementData;
 import com.gilfort.civmod.settlement.SettlementRules;
+import com.gilfort.civmod.settlement.WorkPoint;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -343,7 +344,7 @@ public final class ClerkStorage {
      * @param clerk a Clerk JobBlock
      * @return the stand spot the Clerk uses now, as last picked (see {@code ClerkSpots})
      */
-    public static Optional<SettlementBlock.StandSpot> spotOfDay(SettlementBlock clerk) {
+    public static Optional<WorkPoint> spotOfDay(SettlementBlock clerk) {
         int index = clerk.spotOfDay().index();
         return index >= 0 && index < clerk.standSpots().size() ? Optional.of(clerk.standSpots().get(index)) : Optional.empty();
     }

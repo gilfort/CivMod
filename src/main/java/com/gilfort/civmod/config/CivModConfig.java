@@ -174,6 +174,12 @@ public final class CivModConfig {
                     "Cuts the cost of the check on large servers.")
             .define("socialLife", true);
 
+    /** Switches the block protection against mob explosions inside a settlement border. */
+    public static final ModConfigSpec.BooleanValue MOB_EXPLOSION_PROTECTION = BUILDER
+            .comment("If true, explosions caused by mobs (creeper, ghast, wither) break no blocks and light no fires inside a settlement border.",
+                    "The mob may stand outside the border. Entities still take damage; explosions caused by players stay unchanged.")
+            .define("mobExplosionProtection", true);
+
     /** Seconds a Delivery Slip rests after each visit of a Deliveryman. */
     public static final ModConfigSpec.IntValue SLIP_COOLDOWN_SECONDS = BUILDER
             .comment("Delivery Slips: seconds a slip rests after each visit of a Deliveryman.",

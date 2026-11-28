@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:night",
+  "function": "civmod:guard_hits_and_wear",
+  "max_ticks": 1200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

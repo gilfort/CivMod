@@ -388,7 +388,7 @@ public final class StageGameTests {
         SettlementBlock without = SettlementBlock.CODEC.parse(context, SettlementBlock.CODEC.encodeStart(context, block).getOrThrow()).getOrThrow();
         helper.assertTrue(without.soundCenter().isEmpty(), "Without one it loads without one (old saves)");
 
-        var points = new JobPointsDisplay.JobPoints(stage, List.of(), Optional.empty(), Optional.empty(), List.of(), List.of(), List.of(), Optional.of(kept));
+        var points = new JobPointsDisplay.JobPoints(stage, List.of(), Optional.empty(), Optional.empty(), List.of(), List.of(), List.of(), Optional.of(kept), List.of());
         RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), level.registryAccess());
         JobPointsDisplay.JobPoints.STREAM_CODEC.encode(buffer, points);
         helper.assertTrue(JobPointsDisplay.JobPoints.STREAM_CODEC.decode(buffer).equals(points), "The display sends the Sound center");

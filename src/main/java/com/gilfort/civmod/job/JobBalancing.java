@@ -54,18 +54,20 @@ import net.neoforged.neoforge.event.AddServerReloadListenersEvent;
  * @param recipeDeny   outputs the Job never crafts ({@code recipe_deny}: item ids and {@code #tags}); beats {@code recipe_allow}
  * @param serviceActs  the numbers of a Service Job's acts by act id ({@code service_acts}, see {@link ServiceActNumbers}); files
  *                     merge per act and field
+ * @param guard        the numbers of a Guard Job ({@code guard}, see {@link GuardNumbers}); files merge per field
  */
 @EventBusSubscriber(modid = CivMod.MOD_ID)
 public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> baseExp, Optional<Double> jobFactor, Optional<Item> unlockItem,
         Optional<List<Integer>> parallelStations, Optional<List<StationExtra>> stationExtras, Optional<FarmCurve> farmCurve, Optional<List<XpEntry>> xp,
         Optional<Double> domainInputShare, Optional<List<ExtraCodecs.TagOrElementLocation>> recipeAllow,
-        Optional<List<ExtraCodecs.TagOrElementLocation>> recipeDeny, Optional<Map<String, ServiceActNumbers>> serviceActs) {
+        Optional<List<ExtraCodecs.TagOrElementLocation>> recipeDeny, Optional<Map<String, ServiceActNumbers>> serviceActs,
+        Optional<GuardNumbers> guard) {
 
     /** Reload listener id. */
     public static final Identifier ID = CivMod.id("job_balancing");
     /** No override. */
     public static final JobBalancing NONE = new JobBalancing(Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
-            Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+            Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
 
     private static final Codec<JobBalancing> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.doubleRange(0.0, 10.0).optionalFieldOf("hunger_factor").forGetter(JobBalancing::hungerFactor),
@@ -79,7 +81,8 @@ public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> base
             Codec.doubleRange(0.0, 1.0).optionalFieldOf("domain_input_share").forGetter(JobBalancing::domainInputShare),
             BiomeBonuses.IDS_OR_TAGS.optionalFieldOf("recipe_allow").forGetter(JobBalancing::recipeAllow),
             BiomeBonuses.IDS_OR_TAGS.optionalFieldOf("recipe_deny").forGetter(JobBalancing::recipeDeny),
-            Codec.unboundedMap(Codec.STRING, ServiceActNumbers.CODEC).optionalFieldOf("service_acts").forGetter(JobBalancing::serviceActs)
+            Codec.unboundedMap(Codec.STRING, ServiceActNumbers.CODEC).optionalFieldOf("service_acts").forGetter(JobBalancing::serviceActs),
+            GuardNumbers.CODEC.optionalFieldOf("guard").forGetter(JobBalancing::guard)
     ).apply(instance, JobBalancing::new));
 
     private static final FileToIdConverter FILES = FileToIdConverter.json("civmod_jobs");
@@ -119,9 +122,14 @@ public record JobBalancing(Optional<Double> hungerFactor, Optional<Integer> base
                     part.parallelStations().or(merged::parallelStations), part.stationExtras().or(merged::stationExtras),
                     part.farmCurve().or(merged::farmCurve), part.xp().or(merged::xp),
                     part.domainInputShare().or(merged::domainInputShare), part.recipeAllow().or(merged::recipeAllow),
-                    part.recipeDeny().or(merged::recipeDeny), mergeActs(merged.serviceActs(), part.serviceActs()));
+                    part.recipeDeny().or(merged::recipeDeny), mergeActs(merged.serviceActs(), part.serviceActs()),
+                    mergeGuard(merged.guard(), part.guard()));
         }
         return merged;
+    }
+
+    private static Optional<GuardNumbers> mergeGuard(Optional<GuardNumbers> earlier, Optional<GuardNumbers> later) {
+        return later.map(now -> now.over(earlier.orElse(GuardNumbers.NONE))).or(() -> earlier);
     }
 
     private static Optional<Map<String, ServiceActNumbers>> mergeActs(Optional<Map<String, ServiceActNumbers>> earlier,

@@ -9,6 +9,7 @@
     "civmod:craftsperson_block",
     "civmod:smelter_block",
     "civmod:stage_block",
+    "civmod:guard_post",
     "civmod:gatherer_block",
     "civmod:scarecrow"
   ]

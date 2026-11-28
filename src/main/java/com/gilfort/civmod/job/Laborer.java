@@ -185,7 +185,7 @@ final class Laborer {
         BlockPos chosen = Laborers.sharedPlace(site.settlement(), site.pos(), day).filter(workPlace).orElse(null);
         long now = level.getGameTime();
         if (chosen == null && Laborers.placeSearchDue(site.settlement(), site.pos(), now)) {
-            List<BlockPos> points = site.block().workPoints().stream().filter(workPlace).toList();
+            List<BlockPos> points = site.block().workPositions().stream().filter(workPlace).toList();
             chosen = points.isEmpty() ? profile.autoSearch(level, site.pos(), pos -> true) : points.get(level.getRandom().nextInt(points.size()));
             if (chosen != null) {
                 Laborers.setPlace(site.settlement(), site.pos(), chosen, day);

@@ -103,7 +103,7 @@ public final class JobAssignments {
      * @return the role of the position for that JobBlock
      */
     public static Role roleOf(SettlementBlock block, BlockPos pos) {
-        if (block.workPoints().contains(pos)) {
+        if (block.workPoints().stream().anyMatch(point -> point.pos().equals(pos))) {
             return Role.WORK;
         }
         if (block.collect().filter(pos::equals).isPresent()) {
@@ -127,6 +127,23 @@ public final class JobAssignments {
      * @return the result
      */
     public static PointResult cyclePoint(SettlementData data, BlockPos jobBlock, BlockPos target, boolean validWork, boolean container) {
+        return cyclePoint(data, jobBlock, target, validWork, container, WorkPoint.DEFAULT_FACING);
+    }
+
+    /**
+     * Like {@link #cyclePoint(SettlementData, BlockPos, BlockPos, boolean, boolean)}, for a click with a facing: a new
+     * work POI keeps it.
+     *
+     * @param data       the dimension's settlement data
+     * @param jobBlock   the bound JobBlock
+     * @param target     the clicked position
+     * @param validWork  whether the target is a valid work place for the job
+     * @param container  whether the target is an item container
+     * @param facing     the direction a settler faces at a new work POI (reverse of the player's look direction)
+     * @return the result
+     */
+    public static PointResult cyclePoint(SettlementData data, BlockPos jobBlock, BlockPos target, boolean validWork, boolean container,
+            Direction facing) {
         Optional<JobBlockSite> site = JobBlockSite.at(data, jobBlock);
         if (site.isEmpty()) {
             return PointResult.NO_JOB_BLOCK;
@@ -148,15 +165,15 @@ public final class JobAssignments {
             return PointResult.INVALID;
         }
         if (next == Role.WORK && block.workPoints().size() >= SettlementBlock.MAX_WORK_POINTS) {
-            return container ? apply(data, block, target, current, Role.COLLECT) : PointResult.TOO_MANY;
+            return container ? apply(data, block, target, current, Role.COLLECT, facing) : PointResult.TOO_MANY;
         }
-        return apply(data, block, target, current, next);
+        return apply(data, block, target, current, next, facing);
     }
 
-    private static PointResult apply(SettlementData data, SettlementBlock block, BlockPos target, Role from, Role to) {
+    private static PointResult apply(SettlementData data, SettlementBlock block, BlockPos target, Role from, Role to, Direction facing) {
         BlockPos pos = target.immutable();
         switch (from) {
-            case WORK -> block.mutableWorkPoints().remove(pos);
+            case WORK -> block.mutableWorkPoints().removeIf(point -> point.pos().equals(pos));
             case COLLECT -> block.setCollect(Optional.empty());
             case DROP_OFF -> block.setDropOff(Optional.empty());
             case NONE -> {
@@ -164,7 +181,7 @@ public final class JobAssignments {
         }
         PointResult result = switch (to) {
             case WORK -> {
-                block.mutableWorkPoints().add(pos);
+                block.mutableWorkPoints().add(new WorkPoint(pos, facing));
                 yield PointResult.WORK;
             }
             case COLLECT -> {
@@ -235,7 +252,7 @@ public final class JobAssignments {
         if (block.standSpots().size() >= SettlementRules.MAX_STAND_SPOTS) {
             return PointResult.TOO_MANY_SPOTS;
         }
-        block.mutableStandSpots().add(new SettlementBlock.StandSpot(pos, facing));
+        block.mutableStandSpots().add(new WorkPoint(pos, facing));
         data.changed();
         return PointResult.STAND_SPOT;
     }
@@ -316,6 +333,23 @@ public final class JobAssignments {
     public static boolean insideBorder(Settlement settlement, BlockPos pos) {
         return settlement.blocks().stream().anyMatch(block -> block.connected()
                 && SettlementRules.horizontalDistance(pos, block.pos()) <= SettlementRules.joinRadius(block));
+    }
+
+    /**
+     * @param settlement a settlement
+     * @param pos        a position
+     * @return how many blocks the position lies beyond the border: 0 or less inside it (the distance to the nearest border
+     *         is the smallest of the distances past the join radius of the connected JobBlocks), {@link Double#MAX_VALUE}
+     *         when no JobBlock is connected
+     */
+    public static double distancePastBorder(Settlement settlement, BlockPos pos) {
+        double past = Double.MAX_VALUE;
+        for (SettlementBlock block : settlement.blocks()) {
+            if (block.connected()) {
+                past = Math.min(past, SettlementRules.horizontalDistance(pos, block.pos()) - SettlementRules.joinRadius(block));
+            }
+        }
+        return past;
     }
 
     /**

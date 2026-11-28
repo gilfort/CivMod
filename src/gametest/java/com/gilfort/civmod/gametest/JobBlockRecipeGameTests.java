@@ -57,7 +57,8 @@ public final class JobBlockRecipeGameTests {
                 ModItems.FISHERMAN_BLOCK.get(), Items.COD,
                 ModItems.GATHERER_BLOCK.get(), Items.WHEAT_SEEDS,
                 ModItems.SMELTER_BLOCK.get(), Items.FURNACE,
-                ModItems.MISSION_BOARD.get(), Items.LEATHER_BOOTS);
+                ModItems.MISSION_BOARD.get(), Items.LEATHER_BOOTS,
+                ModItems.GUARD_POST.get(), Items.STONE_SWORD);
         specials.forEach((block, special) -> helper.assertTrue(crafts(level, shape(special, Items.BARREL), block), "Crafts " + block));
 
         helper.assertFalse(crafts(level, shape(Items.MAP, Items.BARREL), ModItems.MISSION_BOARD.get()), "The map is replaced");

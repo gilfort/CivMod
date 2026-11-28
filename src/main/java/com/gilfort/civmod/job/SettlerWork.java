@@ -42,6 +42,7 @@ import com.gilfort.civmod.npc.ThoughtBubble;
 import com.gilfort.civmod.origin.Talent;
 import com.gilfort.civmod.registry.ModJobs;
 import com.gilfort.civmod.settlement.DayClock;
+import com.gilfort.civmod.settlement.GuardMode;
 import com.gilfort.civmod.settlement.JobBlockSite;
 import com.gilfort.civmod.settlement.OccupiedPlaces;
 import com.gilfort.civmod.settlement.SettlementBlock;
@@ -129,6 +130,7 @@ public final class SettlerWork {
     private final Map<JobCategory, CategoryLoop> loops = new EnumMap<>(JobCategory.class);
     private final MissionLoop missions;
     private final ClerkLoop clerks;
+    private final GuardLoop guards;
     private final ProducingLoop producing;
     /** The Deliveryman's loop: a second Logistics loop beside the Clerk's. */
     private final DeliverymanLoop deliverymen;
@@ -198,6 +200,8 @@ public final class SettlerWork {
         priests = new PriestLoop(this);
         services = new ServiceLoop(this);
         loops.put(JobCategory.SERVICE, services);
+        guards = new GuardLoop(this);
+        loops.put(JobCategory.GUARD, guards);
         laborer = new Laborer(this);
         thoughts = new SettlerThoughts(settler);
         meals = new SettlerMeals(this);
@@ -317,7 +321,8 @@ public final class SettlerWork {
         if (returned.isPresent() && returned.getAsLong() < times.workEnd()) {
             times = times.withWorkEnd(returned.getAsLong());
         }
-        return times;
+        // Last, so nothing above ends the day of a Guard: it is on duty around the clock.
+        return GuardDuty.dayTimes(settler, times);
     }
 
     /**
@@ -399,6 +404,29 @@ public final class SettlerWork {
      */
     public Goal goal() {
         return new WorkGoal();
+    }
+
+    /**
+     * @return the goal that fights the enemies of a Guard; it outranks {@link #goal()} while a fight lasts
+     */
+    public Goal guardGoal() {
+        return guards.fightGoal();
+    }
+
+    /**
+     * @param jobBlock the Guard Post of a Guard job
+     * @return the mode the Guard acts on: the one of its last decision outside a fight
+     */
+    public Optional<GuardMode> appliedGuardMode(BlockPos jobBlock) {
+        return guards.appliedMode(jobBlock);
+    }
+
+    /**
+     * @param job a job
+     * @return whether the settler is on a job step of that job, walking to its work or working
+     */
+    boolean isWorking(SettlerJob job) {
+        return activity == Activity.JOB && job.equals(activeJob);
     }
 
     // ---------------------------------------------------------------- persistence
@@ -768,7 +796,7 @@ public final class SettlerWork {
     }
 
     /** The work break is over (or never was): the settler stands up. */
-    private void endBreak() {
+    void endBreak() {
         breakStarted = false;
         settler.standUp();
     }
@@ -778,7 +806,8 @@ public final class SettlerWork {
         Schedule.Moment moment = moment(clock);
         long dayTime = moment.dayTime();
         long day = moment.day();
-        boolean jumped = SettlerBeds.nightSkipped(lastClock, clock, DECISION_INTERVAL, WORK_END);
+        // A Guard never slept, so a skipped night does not put it to bed.
+        boolean jumped = !GuardDuty.holdsGuardJob(settler) && SettlerBeds.nightSkipped(lastClock, clock, DECISION_INTERVAL, WORK_END);
         lastClock = clock;
         if (missions.departed() && (window.pending() || !missions.returnIfDue(level, clock))) {
             if (missions.isAway()) {
@@ -1210,7 +1239,7 @@ public final class SettlerWork {
             Job type = job.jobType();
             switch (status(job.jobBlock())) {
                 case NO_TOOL -> on.putIfAbsent(ThoughtBubble.NO_TOOL,
-                        type.profile(ResourceCollectionProfile.class).map(ResourceCollectionProfile::toolIcon).orElseGet(() -> type.bubbleIcon().getItem()));
+                        ToolKind.of(job).map(kind -> kind.icon().get()).orElseGet(() -> type.bubbleIcon().getItem()));
                 case NO_FOOD -> on.putIfAbsent(ThoughtBubble.NO_FOOD, SettlerThoughts.problemIcon(ThoughtBubble.NO_FOOD));
                 case DROP_OFF_FULL, STORAGE_FULL -> on.putIfAbsent(ThoughtBubble.DROP_OFF_FULL,
                         SettlerThoughts.problemIcon(ThoughtBubble.DROP_OFF_FULL));
@@ -1233,8 +1262,7 @@ public final class SettlerWork {
         needs.missingIcon().ifPresent(icon -> on.put(ThoughtBubble.NEED_UNMET, icon));
         if (activeJob != null && needs.tools().view(activeJob) == ToolNeeds.View.WEAK) {
             // The tool need of the worked Job: its tool, while the need is unmet.
-            activeJob.jobType().profile(ResourceCollectionProfile.class)
-                    .ifPresent(profile -> on.put(ThoughtBubble.NEED_UNMET, profile.toolIcon()));
+            ToolKind.of(activeJob).ifPresent(kind -> on.put(ThoughtBubble.NEED_UNMET, kind.icon().get()));
         }
         return on;
     }
@@ -1270,9 +1298,9 @@ public final class SettlerWork {
                 || status == JobStatus.DELIVERING) {
             return ItemStack.EMPTY;
         }
-        Optional<ResourceCollectionProfile> profile = type.profile(ResourceCollectionProfile.class);
-        if (profile.isPresent()) {
-            return tool(job, profile.get()).map(ItemStack::copy).orElse(ItemStack.EMPTY);
+        Optional<ToolKind> kind = ToolKind.of(job);
+        if (kind.isPresent()) {
+            return tool(job, kind.get()).map(ItemStack::copy).orElse(ItemStack.EMPTY);
         }
         if (type.category() == JobCategory.SERVICE && status != JobStatus.PLAYING) {
             // A performer holds its instrument only while it plays.
@@ -1850,6 +1878,7 @@ public final class SettlerWork {
         CivMod.LOGGER.info("Catch-up {}: {} day(s), {} item(s), {} meal(s), skills {}", settler.getName().getString(),
                 String.format(java.util.Locale.ROOT, "%.1f", counters.days()), counters.items(), counters.meals(),
                 settler.getSkills().snapshot());
+        allLoops().forEach(loop -> loop.catchUpFinished(level));
         // Foraging that is over came back during the run (Schedule); one still going on continues live.
         window.clear();
         quiet = false;
@@ -1930,7 +1959,7 @@ public final class SettlerWork {
             // Work is over: the evening meal.
             decideCatchUp(level, day, Math.max(dayTime, workEndDayTime));
         }
-        if (to >= day * DayClock.DAY_TICKS + ClerkStorage.TAVERN_SHIFT_END) {
+        if (to >= day * DayClock.DAY_TICKS + ClerkStorage.TAVERN_SHIFT_END && !GuardDuty.holdsGuardJob(settler)) {
             // The whole Tavern evening was missed (one that is still going on is lived and counted live).
             Tavern.catchUp(level, settler, day);
             // The Bard's missed day: a flat point, nothing played.
@@ -2337,7 +2366,7 @@ public final class SettlerWork {
     public Optional<ResourceCollectionProfile.Worker> worker(BlockPos jobBlock) {
         return settler.getJobs().stream().filter(job -> job.jobBlock().equals(jobBlock)).findFirst()
                 .flatMap(job -> job.jobType().profile(ResourceCollectionProfile.class).map(profile -> new ResourceCollectionProfile.Worker(
-                        tool(job, profile).map(ItemStack::copy).orElse(ItemStack.EMPTY), effectiveLevel(job))));
+                        tool(job, ToolKind.of(profile)).map(ItemStack::copy).orElse(ItemStack.EMPTY), effectiveLevel(job))));
     }
 
     /**
@@ -2397,13 +2426,13 @@ public final class SettlerWork {
     }
 
     /**
-     * @param job     a job
-     * @param profile the job's profile
+     * @param job  a job
+     * @param kind the kind of the job's tool
      * @return what the settler's skill in that job allows and requires of its tool ({@link ToolStaircase.Rule#NONE} for a
      *         job outside the staircase)
      */
-    ToolStaircase.Rule toolRule(SettlerJob job, ResourceCollectionProfile profile) {
-        return ToolStaircase.rule(profile, cappedLevel(job));
+    ToolStaircase.Rule toolRule(SettlerJob job, ToolKind kind) {
+        return kind.ruleOf().apply(cappedLevel(job));
     }
 
     /**
@@ -2412,16 +2441,16 @@ public final class SettlerWork {
      *         no such tool
      */
     public Optional<ItemStack> tool(SettlerJob job) {
-        return job.jobType().profile(ResourceCollectionProfile.class).flatMap(profile -> tool(job, profile));
+        return ToolKind.of(job).flatMap(kind -> tool(job, kind));
     }
 
     /**
-     * @param job     a job
-     * @param profile the job's profile
+     * @param job  a job
+     * @param kind the kind of the job's tool
      * @return the best tool on the belt that the settler's skill in that job allows
      */
-    Optional<ItemStack> tool(SettlerJob job, ResourceCollectionProfile profile) {
-        return SettlerTools.best(settler, profile::isTool, toolRule(job, profile));
+    Optional<ItemStack> tool(SettlerJob job, ToolKind kind) {
+        return kind.best().of(SettlerTools.belt(settler), toolRule(job, kind), kind.isTool());
     }
 
     /**

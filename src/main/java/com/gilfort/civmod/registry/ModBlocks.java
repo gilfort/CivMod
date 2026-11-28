@@ -51,6 +51,9 @@ public final class ModBlocks {
     /** JobBlock offering the Bard: the Stage the Bard plays on. */
     public static final DeferredBlock<JobBlock> STAGE_BLOCK = jobBlock("stage_block", ModJobs.BARD);
 
+    /** JobBlock offering the Guard: the Guard Post, the settlement's watch. */
+    public static final DeferredBlock<JobBlock> GUARD_POST = jobBlock("guard_post", ModJobs.GUARD);
+
     /** JobBlock offering the Craftsperson: the pattern library of the first Producing Job. */
     public static final DeferredBlock<JobBlock> CRAFTSPERSON_BLOCK = jobBlock("craftsperson_block", ModJobs.CRAFTSPERSON);
 

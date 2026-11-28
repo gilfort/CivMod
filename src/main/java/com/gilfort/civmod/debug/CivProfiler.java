@@ -27,6 +27,8 @@ public final class CivProfiler {
         SCANS("scans"),
         /** Catch-up simulation. */
         CATCH_UP("catch-up"),
+        /** Guards looking for enemies and fighting them (the scan every 20 ticks, the chase and the hits). */
+        GUARD("guard fights"),
         /** Settler entities in total, including vanilla AI, pathfinding and physics (contains decisions and work). */
         SETTLERS("settler entities total");
 
@@ -111,7 +113,7 @@ public final class CivProfiler {
         long ownMax = 0L;
         for (int tick = 0; tick < filled; tick++) {
             long own = 0L;
-            for (Section section : List.of(Section.DECISIONS, Section.WORK, Section.SCANS, Section.CATCH_UP)) {
+            for (Section section : List.of(Section.DECISIONS, Section.WORK, Section.SCANS, Section.CATCH_UP, Section.GUARD)) {
                 own += HISTORY[tick][section.ordinal()];
             }
             ownSum += own;

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:guard_break_sits_on_the_spot",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

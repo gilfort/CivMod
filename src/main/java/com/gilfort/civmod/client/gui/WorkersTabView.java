@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.client.SettlerRenderer;
 import com.gilfort.civmod.job.FishermanProfile;
 import com.gilfort.civmod.job.LumberjackProfile;
@@ -12,6 +13,7 @@ import com.gilfort.civmod.menu.JobBlockMenu;
 import com.gilfort.civmod.menu.JobBlockTab;
 import com.gilfort.civmod.menu.WorkersTab;
 import com.gilfort.civmod.registry.ModJobs;
+import com.gilfort.civmod.settlement.GuardMode;
 import com.gilfort.civmod.settlement.JobPlaces;
 import com.mojang.blaze3d.platform.InputConstants;
 
@@ -114,6 +116,11 @@ final class WorkersTabView implements JobBlockTabView {
         return menu.getInfo().jobType() == ModJobs.CLERK.get() && menu.workers().inSettlement();
     }
 
+    /** Whether the Guard Post's mode button is shown. */
+    private boolean guardModeToggle() {
+        return menu.getInfo().jobType().category() == JobCategory.GUARD && menu.workers().inSettlement();
+    }
+
     /** The toggle buttons of the bottom row: the leaf toggle, the treasure toggle, then the other views' toggles. */
     private List<WorkersToggle> toggles() {
         List<WorkersToggle> toggles = new ArrayList<>();
@@ -128,6 +135,11 @@ final class WorkersTabView implements JobBlockTabView {
         if (supplyToggle()) {
             toggles.add(new WorkersToggle(Component.translatable(menu.workers().autoSupply() ? "civmod.gui.job_block.supply.on"
                     : "civmod.gui.job_block.supply.off"), tab.supplyButtonId(!menu.workers().autoSupply())));
+        }
+        if (guardModeToggle()) {
+            GuardMode mode = menu.workers().guardMode();
+            // One button that goes through the modes: a click asks for the next one.
+            toggles.add(new WorkersToggle(mode.buttonLabel(), tab.guardModeButtonId(mode.next())));
         }
         screen.views().forEach(view -> view.workersToggle().ifPresent(toggles::add));
         return toggles;
@@ -247,6 +259,9 @@ final class WorkersTabView implements JobBlockTabView {
         }
         if (supplyToggle()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.supply"));
+        }
+        if (guardModeToggle()) {
+            lines.add(Component.translatable("civmod.gui.job_block.help.guard_mode"));
         }
         if (menu.getInfo().jobType() == ModJobs.DELIVERYMAN.get()) {
             lines.add(Component.translatable("civmod.gui.job_block.help.worker_auto"));

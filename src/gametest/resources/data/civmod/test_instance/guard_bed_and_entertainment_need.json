@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:guard_bed_and_entertainment_need",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:guard_point_pick_skips_unreachable",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

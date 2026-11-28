@@ -86,27 +86,6 @@ public final class SettlementBlock {
     }
 
     /**
-     * A Clerk stand spot: the block the Clerk stands on and the direction it faces (vault {@code Jobs/Clerk.md}).
-     *
-     * @param pos    the block the Clerk stands on
-     * @param facing the direction the Clerk faces
-     */
-    public record StandSpot(BlockPos pos, Direction facing) {
-
-        /** Save codec. */
-        public static final Codec<StandSpot> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                BlockPos.CODEC.fieldOf("pos").forGetter(StandSpot::pos),
-                Direction.CODEC.fieldOf("facing").forGetter(StandSpot::facing)
-        ).apply(instance, StandSpot::new));
-
-        /** Network codec. */
-        public static final StreamCodec<ByteBuf, StandSpot> STREAM_CODEC = StreamCodec.composite(
-                BlockPos.STREAM_CODEC, StandSpot::pos,
-                Direction.STREAM_CODEC, StandSpot::facing,
-                StandSpot::new);
-    }
-
-    /**
      * The stand spot a Clerk uses in one half of a day.
      *
      * @param period the half day it was picked for ({@code day * 2}, {@code + 1} from 12:00)
@@ -136,12 +115,12 @@ public final class SettlementBlock {
      * @param orders     the Delivery Orders
      * @param autoSupply whether the settlers of the JobBlocks this Clerk belongs to get tools, food and clothing from the settlement
      */
-    private record ClerkFields(List<BlockPos> storage, List<StandSpot> standSpots, SpotOfDay spotOfDay, List<StockRule> stockRules,
+    private record ClerkFields(List<BlockPos> storage, List<WorkPoint> standSpots, SpotOfDay spotOfDay, List<StockRule> stockRules,
             List<BlockPos> served, int ledgers, DeliveryOrders.Saved orders, boolean autoSupply) {
 
         static final MapCodec<ClerkFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 BlockPos.CODEC.listOf().optionalFieldOf("storage", List.of()).forGetter(ClerkFields::storage),
-                StandSpot.CODEC.listOf().optionalFieldOf("stand_spots", List.of()).forGetter(ClerkFields::standSpots),
+                WorkPoint.CODEC.listOf().optionalFieldOf("stand_spots", List.of()).forGetter(ClerkFields::standSpots),
                 SpotOfDay.CODEC.optionalFieldOf("spot_of_day", SpotOfDay.NONE).forGetter(ClerkFields::spotOfDay),
                 StockRule.CODEC.listOf().optionalFieldOf("stock_rules", List.of()).forGetter(ClerkFields::stockRules),
                 BlockPos.CODEC.listOf().optionalFieldOf("served_clerks", List.of()).forGetter(ClerkFields::served),
@@ -340,9 +319,10 @@ public final class SettlementBlock {
      * @param centerRace the race of a Center Block, empty for every other JobBlock
      * @param soundCenter the Sound center of a Stage, empty for every other JobBlock and while the Stage block is the center
      * @param treasure   whether a Fisherman may catch treasure
+     * @param guard      the mode and the picks of a Guard Post
      */
     private record PlaceFields(List<Job> autoAssign, List<Identifier> legacyExcluded, Optional<SavedScan> legacyScan, List<Item> stationTypes,
-            List<SavedFound> found, Optional<Identifier> centerRace, Optional<BlockPos> soundCenter, boolean treasure) {
+            List<SavedFound> found, Optional<Identifier> centerRace, Optional<BlockPos> soundCenter, boolean treasure, GuardPost.Saved guard) {
 
         static final MapCodec<PlaceFields> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Job.CODEC.listOf().optionalFieldOf("auto_assign", List.of()).forGetter(PlaceFields::autoAssign),
@@ -352,10 +332,12 @@ public final class SettlementBlock {
                 SavedFound.CODEC.listOf().lenientOptionalFieldOf("found", List.of()).forGetter(PlaceFields::found),
                 Identifier.CODEC.optionalFieldOf("center_race").forGetter(PlaceFields::centerRace),
                 BlockPos.CODEC.optionalFieldOf("sound_center").forGetter(PlaceFields::soundCenter),
-                Codec.BOOL.optionalFieldOf("treasure", true).forGetter(PlaceFields::treasure)
+                Codec.BOOL.optionalFieldOf("treasure", true).forGetter(PlaceFields::treasure),
+                GuardPost.Saved.CODEC.optionalFieldOf("guard", GuardPost.Saved.NONE).forGetter(PlaceFields::guard)
         ).apply(instance, PlaceFields::new));
 
-        static final PlaceFields NONE = new PlaceFields(List.of(), List.of(), Optional.empty(), List.of(), List.of(), Optional.empty(), Optional.empty(), true);
+        static final PlaceFields NONE = new PlaceFields(List.of(), List.of(), Optional.empty(), List.of(), List.of(), Optional.empty(), Optional.empty(), true,
+                GuardPost.Saved.NONE);
     }
 
     /**
@@ -377,7 +359,7 @@ public final class SettlementBlock {
             Job.CODEC.fieldOf("job").forGetter(SettlementBlock::jobType),
             Codec.INT.fieldOf("level").forGetter(SettlementBlock::level),
             Codec.BOOL.fieldOf("connected").forGetter(SettlementBlock::connected),
-            BlockPos.CODEC.listOf().optionalFieldOf("work", List.of()).forGetter(SettlementBlock::workPoints),
+            WorkPoint.WITH_OLD_SAVES_CODEC.listOf().optionalFieldOf("work", List.of()).forGetter(SettlementBlock::workPoints),
             BlockPos.CODEC.optionalFieldOf("collect").forGetter(SettlementBlock::collect),
             BlockPos.CODEC.optionalFieldOf("drop_off").forGetter(SettlementBlock::dropOff),
             SavedAssignee.CODEC.listOf().optionalFieldOf("assignees", List.of())
@@ -401,15 +383,17 @@ public final class SettlementBlock {
     private Optional<Identifier> centerRace;
     /** The Sound center of a Stage (vault {@code Systems/Entertainment.md}); empty: the Stage block itself. */
     private Optional<BlockPos> soundCenter;
-    private final List<BlockPos> workPoints = new ArrayList<>();
+    private final List<WorkPoint> workPoints = new ArrayList<>();
     private Optional<BlockPos> collect;
     private Optional<BlockPos> dropOff;
     private final List<Assignee> assignees = new ArrayList<>();
     private boolean collectLeaves;
     private boolean treasure = true;
+    /** The mode and the picks of a Guard Post (vault {@code Jobs/Guard.md}); plain defaults for every other JobBlock. */
+    private final GuardPost guard;
     private MissionOffer missionOffer;
     private final List<BlockPos> storage = new ArrayList<>();
-    private final List<StandSpot> standSpots = new ArrayList<>();
+    private final List<WorkPoint> standSpots = new ArrayList<>();
     private SpotOfDay spotOfDay;
     private final List<StockRule> stockRules = new ArrayList<>();
     private int ledgers;
@@ -448,7 +432,7 @@ public final class SettlementBlock {
         return block;
     }
 
-    private SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected, List<BlockPos> workPoints,
+    private SettlementBlock(BlockPos pos, Job jobType, int level, boolean connected, List<WorkPoint> workPoints,
             Optional<BlockPos> collect, Optional<BlockPos> dropOff, List<SavedAssignee> assignees, Optional<UUID> legacyAssignee,
             Optional<String> legacyAssigneeName, boolean collectLeaves, MissionOffer missionOffer, ClerkFields clerk,
             ProducingFields producing, Optional<BlockPos> homeClerk, PlaceFields place) {
@@ -488,6 +472,7 @@ public final class SettlementBlock {
         this.centerRace = place.centerRace();
         this.soundCenter = place.soundCenter();
         this.treasure = place.treasure();
+        this.guard = new GuardPost(place.guard());
         place.found().forEach(saved -> {
             FoundState state = foundState(saved.job());
             state.excluded.addAll(saved.excluded());
@@ -507,7 +492,8 @@ public final class SettlementBlock {
     private PlaceFields placeFields() {
         List<SavedFound> saved = found.entrySet().stream()
                 .map(entry -> new SavedFound(entry.getKey(), entry.getValue().excluded.stream().sorted().toList(), entry.getValue().scan)).toList();
-        return new PlaceFields(List.copyOf(autoAssign), List.of(), Optional.empty(), List.copyOf(stationTypes), saved, centerRace, soundCenter, treasure);
+        return new PlaceFields(List.copyOf(autoAssign), List.of(), Optional.empty(), List.copyOf(stationTypes), saved, centerRace, soundCenter, treasure,
+                guard.saved());
     }
 
     private FoundState foundState(Job job) {
@@ -755,7 +741,7 @@ public final class SettlementBlock {
     /**
      * @return the Clerk stand spots, in setting order (read-only; Clerk only, else always empty)
      */
-    public List<StandSpot> standSpots() {
+    public List<WorkPoint> standSpots() {
         return Collections.unmodifiableList(standSpots);
     }
 
@@ -794,7 +780,7 @@ public final class SettlementBlock {
         return storage;
     }
 
-    List<StandSpot> mutableStandSpots() {
+    List<WorkPoint> mutableStandSpots() {
         return standSpots;
     }
 
@@ -890,10 +876,24 @@ public final class SettlementBlock {
     }
 
     /**
-     * @return the work POIs; the first one is the primary POI (read-only)
+     * @return the work POIs with the facing of their click; the first one is the primary POI (read-only)
      */
-    public List<BlockPos> workPoints() {
+    public List<WorkPoint> workPoints() {
         return Collections.unmodifiableList(workPoints);
+    }
+
+    /**
+     * @return the mode and the picks of a Guard Post (the defaults for every other JobBlock)
+     */
+    public GuardPost guard() {
+        return guard;
+    }
+
+    /**
+     * @return the positions of the work POIs, in the order of {@link #workPoints()}
+     */
+    public List<BlockPos> workPositions() {
+        return workPoints.stream().map(WorkPoint::pos).toList();
     }
 
     /**
@@ -956,7 +956,7 @@ public final class SettlementBlock {
         this.connected = connected;
     }
 
-    List<BlockPos> mutableWorkPoints() {
+    List<WorkPoint> mutableWorkPoints() {
         return workPoints;
     }
 
@@ -997,6 +997,7 @@ public final class SettlementBlock {
      */
     boolean removeAssignee(UUID settler) {
         assignee(settler).ifPresent(assignee -> forgetWorker(assignee.job(), settler));
+        guard.forget(settler);
         return assignees.removeIf(assignee -> assignee.id().equals(settler));
     }
 

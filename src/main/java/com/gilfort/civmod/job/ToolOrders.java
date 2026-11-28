@@ -6,7 +6,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Predicate;
 
-import com.gilfort.civmod.api.ResourceCollectionProfile;
 import com.gilfort.civmod.logistics.ClerkStorage;
 import com.gilfort.civmod.logistics.InnateRecipes;
 import com.gilfort.civmod.logistics.ItemKey;
@@ -64,12 +63,12 @@ public final class ToolOrders {
      * @param level   the level
      * @param settler the settler without the tool
      * @param job     its tool Job
-     * @param profile the Job's profile
+     * @param tool    the kind of the Job's tool
      * @param site    the JobBlock of the Job
      * @return whether a held tool is free stock in the collect inventory now: the settler looks again at once
      */
-    static boolean supply(ServerLevel level, Settler settler, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site) {
-        ToolStaircase.Rule rule = settler.getWork().toolRule(job, profile);
+    static boolean supply(ServerLevel level, Settler settler, SettlerJob job, ToolKind tool, JobBlockSite site) {
+        ToolStaircase.Rule rule = settler.getWork().toolRule(job, tool);
         if (rule.enchanted()) {
             return false;
         }
@@ -79,10 +78,10 @@ public final class ToolOrders {
             return false;
         }
         ReservedFor me = ReservedFor.settler(settler.getUUID());
-        Predicate<Item> kind = kindOf(profile);
+        Predicate<Item> kind = kindOf(tool);
         // What the settler may still gain: a tool must rank above the best allowed one it carries, so it is never offered a
         // tool that is not better (and never moves down).
-        int floor = settler.getWork().tool(job, profile).map(ToolTiers::tier).orElse(NO_TOOL);
+        int floor = settler.getWork().tool(job, tool).map(ToolTiers::tier).orElse(NO_TOOL);
         Need need = new Need(level, settlement, site, job, me, kind, rule, home.get(), floor);
         HeldSupply.Held held = HeldSupply.handOver(need.want());
         if (held != HeldSupply.Held.NOTHING) {
@@ -99,7 +98,7 @@ public final class ToolOrders {
         if (reserveFromStore(need)) {
             return HeldSupply.handOver(need.want()) == HeldSupply.Held.IN_COLLECT;
         }
-        chooseTool(need).ifPresent(tool -> Requests.postReserved(SettlementData.get(level), settlement, ItemKey.of(tool), 1, home.get(), me));
+        chooseTool(need).ifPresent(item -> Requests.postReserved(SettlementData.get(level), settlement, ItemKey.of(item), 1, home.get(), me));
         return false;
     }
 
@@ -286,12 +285,12 @@ public final class ToolOrders {
      * @param level   the level
      * @param settler the settler
      * @param job     its tool Job
-     * @param profile the Job's profile
+     * @param tool    the kind of the Job's tool
      */
-    static void settled(ServerLevel level, Settler settler, SettlerJob job, ResourceCollectionProfile profile) {
-        Optional<ItemStack> belt = settler.getWork().tool(job, profile);
-        if (belt.isPresent() && settler.getWork().toolRule(job, profile).meets(belt.get())) {
-            cancel(level, settler.getUUID(), kindOf(profile));
+    static void settled(ServerLevel level, Settler settler, SettlerJob job, ToolKind tool) {
+        Optional<ItemStack> belt = settler.getWork().tool(job, tool);
+        if (belt.isPresent() && settler.getWork().toolRule(job, tool).meets(belt.get())) {
+            cancel(level, settler.getUUID(), kindOf(tool));
         }
     }
 
@@ -303,8 +302,7 @@ public final class ToolOrders {
      * @param job     the Job that goes away
      */
     public static void jobGone(ServerLevel level, Settler settler, SettlerJob job) {
-        job.jobType().profile(ResourceCollectionProfile.class).filter(ResourceCollectionProfile::needsTool)
-                .ifPresent(profile -> cancel(level, settler.getUUID(), kindOf(profile)));
+        ToolKind.of(job).ifPresent(tool -> cancel(level, settler.getUUID(), kindOf(tool)));
         // A farmer asks for nothing but what its Job needs (food, shears), and which items count as food is known only for
         // the animal types seen since the last start: so everything reserved for it goes.
         job.jobType().profile(ConsumablesProfile.class).ifPresent(profile -> cancel(level, settler.getUUID(), item -> true));
@@ -339,8 +337,8 @@ public final class ToolOrders {
         }
     }
 
-    static Predicate<Item> kindOf(ResourceCollectionProfile profile) {
-        return item -> profile.isTool(new ItemStack(item));
+    static Predicate<Item> kindOf(ToolKind tool) {
+        return item -> tool.isTool().test(new ItemStack(item));
     }
 
     private static Predicate<Item> kindOf(Ingredient tool) {

@@ -26,7 +26,7 @@ public final class ClerkSpots {
      * @param random  random source for a new pick
      * @return the stand spot for now, empty if the Clerk has none
      */
-    public static Optional<SettlementBlock.StandSpot> today(SettlementData data, BlockPos clerk, long day, long dayTime, RandomSource random) {
+    public static Optional<WorkPoint> today(SettlementData data, BlockPos clerk, long day, long dayTime, RandomSource random) {
         Optional<SettlementBlock> found = JobBlockSite.blockAt(data, clerk);
         if (found.isEmpty() || found.get().standSpots().isEmpty()) {
             return Optional.empty();

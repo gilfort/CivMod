@@ -125,6 +125,10 @@ final class Needs {
 
         @Override
         public Check check(Context context) {
+            if (GuardDuty.holdsGuardJob(context.settler())) {
+                // A Guard is on duty in the evening and never reaches the Tavern (vault Jobs/Guard.md).
+                return new Check(true, Component.translatable("civmod.need.entertainment.guard"));
+            }
             Entertainment entertainment = context.settler().getWork().entertainment();
             EntertainmentRules rules = EntertainmentRules.get();
             Component detail = Component.translatable("civmod.need.entertainment.detail", Entertainment.format(entertainment.value()), Entertainment.format(EntertainmentRules.MAX));

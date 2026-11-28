@@ -49,6 +49,8 @@ public final class ModItems {
     public static final DeferredItem<BlockItem> MINER_BLOCK = jobBlockItem(ModBlocks.MINER_BLOCK, Items.STONE_PICKAXE);
     /** Item of the {@link ModBlocks#FISHERMAN_BLOCK}. */
     public static final DeferredItem<BlockItem> FISHERMAN_BLOCK = jobBlockItem(ModBlocks.FISHERMAN_BLOCK, Items.FISHING_ROD);
+    /** Item of the {@link ModBlocks#GUARD_POST}; it comes with a stone sword in its inventory. */
+    public static final DeferredItem<BlockItem> GUARD_POST = jobBlockItem(ModBlocks.GUARD_POST, Items.STONE_SWORD);
     /** Item of the {@link ModBlocks#GATHERER_BLOCK}; no starter tool (the Gatherer works bare-handed). */
     public static final DeferredItem<BlockItem> GATHERER_BLOCK = jobBlockItem(ModBlocks.GATHERER_BLOCK);
     /** Item of the {@link ModBlocks#MISSION_BOARD}. */

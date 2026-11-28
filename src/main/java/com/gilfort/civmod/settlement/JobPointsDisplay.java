@@ -9,9 +9,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.gilfort.civmod.CivMod;
+import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.item.ScrollBinding;
 import com.gilfort.civmod.item.ScrollOfAssignmentItem;
 
+import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -56,9 +58,11 @@ public final class JobPointsDisplay {
      * @param standSpots Clerk stand spots (numbered in this order)
      * @param served     the Served Clerks of a Warehouse
      * @param soundCenter the Sound center a Stage has set, empty if the Stage block itself is the center
+     * @param guardPoints the guard points of a Guard Post (numbered in this order); its {@code work} list stays empty
      */
     public record JobPoints(BlockPos jobBlock, List<BlockPos> work, Optional<BlockPos> collect, Optional<BlockPos> dropOff,
-            List<BlockPos> storage, List<SettlementBlock.StandSpot> standSpots, List<BlockPos> served, Optional<BlockPos> soundCenter) {
+            List<BlockPos> storage, List<WorkPoint> standSpots, List<BlockPos> served, Optional<BlockPos> soundCenter,
+            List<GuardPoint> guardPoints) {
 
         /** Network codec. */
         public static final StreamCodec<RegistryFriendlyByteBuf, JobPoints> STREAM_CODEC = StreamCodec.composite(
@@ -67,10 +71,26 @@ public final class JobPointsDisplay {
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs::optional), JobPoints::collect,
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs::optional), JobPoints::dropOff,
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), JobPoints::storage,
-                SettlementBlock.StandSpot.STREAM_CODEC.apply(ByteBufCodecs.list()), JobPoints::standSpots,
+                WorkPoint.STREAM_CODEC.apply(ByteBufCodecs.list()), JobPoints::standSpots,
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), JobPoints::served,
                 BlockPos.STREAM_CODEC.apply(ByteBufCodecs::optional), JobPoints::soundCenter,
+                GuardPoint.STREAM_CODEC.apply(ByteBufCodecs.list()), JobPoints::guardPoints,
                 JobPoints::new);
+    }
+
+    /**
+     * A guard point as the scroll shows it: its position and facing, and whether a Guard found it out of reach (outlined red).
+     *
+     * @param point       the position and the facing
+     * @param unreachable whether a Guard's path search ended short of the point
+     */
+    public record GuardPoint(WorkPoint point, boolean unreachable) {
+
+        /** Network codec. */
+        public static final StreamCodec<ByteBuf, GuardPoint> STREAM_CODEC = StreamCodec.composite(
+                WorkPoint.STREAM_CODEC, GuardPoint::point,
+                ByteBufCodecs.BOOL, GuardPoint::unreachable,
+                GuardPoint::new);
     }
 
     /**
@@ -152,15 +172,19 @@ public final class JobPointsDisplay {
      * @param bound  the bound JobBlock
      * @return the points to display
      */
-    static List<JobPoints> collect(SettlementData data, BlockPos center, Optional<BlockPos> bound) {
+    public static List<JobPoints> collect(SettlementData data, BlockPos center, Optional<BlockPos> bound) {
         List<JobPoints> result = new ArrayList<>();
         for (Settlement settlement : data.settlements()) {
             for (SettlementBlock block : settlement.blocks()) {
                 boolean include = bound.map(block.pos()::equals)
                         .orElseGet(() -> SettlementRules.horizontalDistance(block.pos(), center) <= RANGE);
                 if (include) {
-                    result.add(new JobPoints(block.pos(), block.workPoints(), block.collect(), block.dropOff(), block.storage(),
-                            block.standSpots(), block.served(), block.soundCenter()));
+                    boolean guardPost = block.jobType().category() == JobCategory.GUARD;
+                    List<BlockPos> work = guardPost ? List.of() : block.workPositions();
+                    List<GuardPoint> guardPoints = guardPost ? block.workPoints().stream()
+                            .map(point -> new GuardPoint(point, block.guard().unreachable(point.pos()))).toList() : List.of();
+                    result.add(new JobPoints(block.pos(), work, block.collect(), block.dropOff(), block.storage(),
+                            block.standSpots(), block.served(), block.soundCenter(), guardPoints));
                 }
             }
         }

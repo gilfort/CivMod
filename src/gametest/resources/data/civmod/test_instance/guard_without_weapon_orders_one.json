@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:night",
+  "function": "civmod:guard_without_weapon_orders_one",
+  "max_ticks": 600,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

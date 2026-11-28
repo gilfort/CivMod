@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:guard_points_set_remove_renumber",
+  "max_ticks": 100,
+  "structure": "minecraft:empty",
+  "padding": 40
+}
