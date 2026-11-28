@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:night",
+  "function": "civmod:benchmark_guards",
+  "max_ticks": 2400,
+  "structure": "minecraft:empty",
+  "padding": 128
+}
