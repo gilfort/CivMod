@@ -55,12 +55,13 @@ public final class StarterToolGameTests {
         helper.register(ResourceKey.create(Registries.TEST_FUNCTION, CivMod.id(name)), test);
     }
 
-    /** A new Lumberjack, Miner and Fisherman Block puts its starter tool into its inventory when placed. */
+    /** A new Lumberjack, Miner, Fisherman Block and Guard Post puts its starter tool into its inventory when placed. */
     private static void firstPlacement(GameTestHelper helper) {
         expectToolAfterPlacement(helper, ModItems.LUMBERJACK_BLOCK.get(), new BlockPos(1, 1, 1), Items.STONE_AXE);
         expectToolAfterPlacement(helper, ModItems.MINER_BLOCK.get(), new BlockPos(3, 1, 1), Items.STONE_PICKAXE);
         expectToolAfterPlacement(helper, ModItems.FISHERMAN_BLOCK.get(), new BlockPos(5, 1, 1), Items.FISHING_ROD);
-        remove(helper, new BlockPos(1, 1, 1), new BlockPos(3, 1, 1), new BlockPos(5, 1, 1));
+        expectToolAfterPlacement(helper, ModItems.GUARD_POST.get(), new BlockPos(7, 1, 1), Items.STONE_SWORD);
+        remove(helper, new BlockPos(1, 1, 1), new BlockPos(3, 1, 1), new BlockPos(5, 1, 1), new BlockPos(7, 1, 1));
         helper.succeed();
     }
 

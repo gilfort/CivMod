@@ -23,6 +23,8 @@ public final class CivModJobs {
     public static final DeferredHolder<Job, Job> GATHERER = job("gatherer");
     /** Resource Collection: collects plantation plants with an axe; a Specialization of the Gatherer. */
     public static final DeferredHolder<Job, Job> PLANTATION_FARMER = job("plantation_farmer");
+    /** Guard: holds a post at the Guard Post around the clock. */
+    public static final DeferredHolder<Job, Job> GUARD = job("guard");
     /** Mission: the Base Job of the Mission Board and parent of every Mission Job. */
     public static final DeferredHolder<Job, Job> ADVENTURER = job("adventurer");
     /** Service: serves the food of a Pantry, the settlement's food point. */

@@ -3,6 +3,7 @@ package com.gilfort.civmod.registry;
 import com.gilfort.civmod.CivMod;
 import com.gilfort.civmod.api.CategoryProfile;
 import com.gilfort.civmod.api.CivModApi;
+import com.gilfort.civmod.api.GuardProfile;
 import com.gilfort.civmod.api.Job;
 import com.gilfort.civmod.api.JobCategory;
 import com.gilfort.civmod.job.AlchemistProfile;
@@ -58,6 +59,9 @@ public final class ModJobs {
     /** See vault {@code Jobs/Fisherman.md}. */
     public static final DeferredHolder<Job, Job> FISHERMAN = JOBS.register("fisherman", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
             .icon(ModItems.FISHERMAN_BLOCK).bubbleIcon(() -> Items.COD).hungerFactor(0.5).baseExp(5).profile(FishermanProfile::new).build());
+    /** See vault {@code Jobs/Guard.md}; holds a post around the clock and never sleeps; the Base Job of the Guard category. */
+    public static final DeferredHolder<Job, Job> GUARD = JOBS.register("guard", () -> Job.builder(JobCategory.GUARD)
+            .icon(ModItems.GUARD_POST).bubbleIcon(() -> Items.IRON_SWORD).hungerFactor(1.0).baseExp(1).profile(() -> GuardProfile.DEFAULT).build());
     /** See vault {@code Jobs/Gatherer.md}; collects what wild plants drop, bare-handed; the Base Job of the farming Specializations. */
     public static final DeferredHolder<Job, Job> GATHERER = JOBS.register("gatherer", () -> Job.builder(JobCategory.RESOURCE_COLLECTION)
             .icon(ModItems.GATHERER_BLOCK).bubbleIcon(() -> Items.SWEET_BERRIES).hungerFactor(1.0).baseExp(1).unlockItem(() -> Items.SWEET_BERRIES)
