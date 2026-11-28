@@ -96,7 +96,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
         ResourceCollectionProfile profile = found.get();
         Stock collect = ClerkStorage.stock(level, site.collect(), dayTime, !shell.counterUnreachable(level, site.collect()));
         Optional<WorkRules.MissingTool> missing = WorkRules.missingTool(level, settler, job, profile, site, collect);
-        if (missing.isPresent() && SettlerTools.takeFromBuffer(settler, workplace.buffer(), missing.get().kind(), settler.getWork().toolRule(job, profile))) {
+        if (missing.isPresent() && SettlerTools.takeFromBuffer(settler, workplace.buffer(), missing.get().kind(), settler.getWork().toolRule(job, ToolKind.of(profile)))) {
             // A tool the job collected itself goes straight onto the belt.
             missing = WorkRules.missingTool(level, settler, job, profile, site, collect);
         }
@@ -119,7 +119,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
         if (profile.needsResources() && workplace.noResources(profile)) {
             return JobStep.blocked(JobStatus.NO_RESOURCES);
         }
-        ItemStack tool = shell.tool(job, profile).orElse(ItemStack.EMPTY);
+        ItemStack tool = shell.tool(job, ToolKind.of(profile)).orElse(ItemStack.EMPTY);
         Set<Item> atMax = StockRules.atMax(level, site);
         List<CollectionRecipes.Offer> offered = CollectionRecipes.offered(level, job.jobType(), profile, workplace.scan());
         Optional<JobStatus> paused = WorkRules.pause(level, job.jobType(), profile, workplace, site, tool, atMax, offered).pauseStatus();
@@ -271,7 +271,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
                 // Nothing better after all: the next search waits an hour.
                 shell.toolNeeds().searched(job, level.getGameTime());
             } else {
-                ToolOrders.settled(level, settler, job, profile.get());
+                ToolOrders.settled(level, settler, job, ToolKind.of(profile.get()));
             }
             List<CollectionRecipes.Offer> offered = CollectionRecipes.offered(level, job.jobType(), profile.get(), shell.workplace(job.jobBlock()).scan());
             taken |= CollectionRecipes.refill(settler, CollectionRecipes.allowed(offered, site.get().block().excluded(job.jobType()),
@@ -286,7 +286,7 @@ final class ResourceCollectionLoop implements CategoryLoop {
 
     /** Shows the best tool of the job in the hand. */
     private void showTool(SettlerJob job, ResourceCollectionProfile profile) {
-        shell.hold(shell.tool(job, profile).map(ItemStack::copy).orElse(ItemStack.EMPTY));
+        shell.hold(shell.tool(job, ToolKind.of(profile)).map(ItemStack::copy).orElse(ItemStack.EMPTY));
     }
 
     /**

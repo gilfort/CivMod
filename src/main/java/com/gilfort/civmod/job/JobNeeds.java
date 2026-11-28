@@ -162,7 +162,7 @@ public record JobNeeds(Job job, Line station, Line tool, Line extra) {
         }
         Worker worker = strongestWorker(level, site, job, profile.get())
                 .orElseGet(() -> new Worker(ToolStaircase.rule(profile.get(), NEW_SETTLER_SKILL), false));
-        int tier = ToolStaircase.askedTier(ToolOrders.kindOf(profile.get()), worker.rule());
+        int tier = ToolStaircase.askedTier(ToolOrders.kindOf(ToolKind.of(profile.get())), worker.rule());
         String tierKey = tier == ToolStaircase.NO_TIER ? "civmod.gui.station_types.tier.none" : "civmod.gui.station_types.tier." + tier;
         return new Line(Component.translatable("civmod.gui.station_types.need.tool", Component.translatable(tierKey)),
                 new ItemStack(profile.get().toolIcon()), worker.carries() ? State.PRESENT : State.MISSING);
@@ -170,12 +170,13 @@ public record JobNeeds(Job job, Line station, Line tool, Line extra) {
 
     private static Optional<Worker> strongestWorker(ServerLevel level, JobBlockSite site, Job job, ResourceCollectionProfile profile) {
         Optional<Worker> strongest = Optional.empty();
+        ToolKind kind = ToolKind.of(profile);
         for (SettlementBlock.Assignee assignee : site.block().assignees()) {
             if (assignee.job() != job || !(level.getEntity(assignee.id()) instanceof Settler settler)) {
                 continue;
             }
             for (SettlerJob held : settler.getJobs()) {
-                ToolStaircase.Rule rule = settler.getWork().toolRule(held, profile);
+                ToolStaircase.Rule rule = settler.getWork().toolRule(held, kind);
                 boolean here = held.jobType() == job && held.jobBlock().equals(site.pos());
                 if (here && strongest.map(worker -> rule.allowed() > worker.rule().allowed()).orElse(true)) {
                     strongest = Optional.of(new Worker(rule, settler.getWork().tool(held).isPresent()));

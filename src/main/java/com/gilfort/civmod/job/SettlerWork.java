@@ -1213,7 +1213,7 @@ public final class SettlerWork {
             Job type = job.jobType();
             switch (status(job.jobBlock())) {
                 case NO_TOOL -> on.putIfAbsent(ThoughtBubble.NO_TOOL,
-                        type.profile(ResourceCollectionProfile.class).map(ResourceCollectionProfile::toolIcon).orElseGet(() -> type.bubbleIcon().getItem()));
+                        ToolKind.of(job).map(kind -> kind.icon().get()).orElseGet(() -> type.bubbleIcon().getItem()));
                 case NO_FOOD -> on.putIfAbsent(ThoughtBubble.NO_FOOD, SettlerThoughts.problemIcon(ThoughtBubble.NO_FOOD));
                 case DROP_OFF_FULL, STORAGE_FULL -> on.putIfAbsent(ThoughtBubble.DROP_OFF_FULL,
                         SettlerThoughts.problemIcon(ThoughtBubble.DROP_OFF_FULL));
@@ -1236,8 +1236,7 @@ public final class SettlerWork {
         needs.missingIcon().ifPresent(icon -> on.put(ThoughtBubble.NEED_UNMET, icon));
         if (activeJob != null && needs.tools().view(activeJob) == ToolNeeds.View.WEAK) {
             // The tool need of the worked Job: its tool, while the need is unmet.
-            activeJob.jobType().profile(ResourceCollectionProfile.class)
-                    .ifPresent(profile -> on.put(ThoughtBubble.NEED_UNMET, profile.toolIcon()));
+            ToolKind.of(activeJob).ifPresent(kind -> on.put(ThoughtBubble.NEED_UNMET, kind.icon().get()));
         }
         return on;
     }
@@ -1273,9 +1272,9 @@ public final class SettlerWork {
                 || status == JobStatus.DELIVERING) {
             return ItemStack.EMPTY;
         }
-        Optional<ResourceCollectionProfile> profile = type.profile(ResourceCollectionProfile.class);
-        if (profile.isPresent()) {
-            return tool(job, profile.get()).map(ItemStack::copy).orElse(ItemStack.EMPTY);
+        Optional<ToolKind> kind = ToolKind.of(job);
+        if (kind.isPresent()) {
+            return tool(job, kind.get()).map(ItemStack::copy).orElse(ItemStack.EMPTY);
         }
         if (type.category() == JobCategory.SERVICE && status != JobStatus.PLAYING) {
             // A performer holds its instrument only while it plays.
@@ -2341,7 +2340,7 @@ public final class SettlerWork {
     public Optional<ResourceCollectionProfile.Worker> worker(BlockPos jobBlock) {
         return settler.getJobs().stream().filter(job -> job.jobBlock().equals(jobBlock)).findFirst()
                 .flatMap(job -> job.jobType().profile(ResourceCollectionProfile.class).map(profile -> new ResourceCollectionProfile.Worker(
-                        tool(job, profile).map(ItemStack::copy).orElse(ItemStack.EMPTY), effectiveLevel(job))));
+                        tool(job, ToolKind.of(profile)).map(ItemStack::copy).orElse(ItemStack.EMPTY), effectiveLevel(job))));
     }
 
     /**
@@ -2401,13 +2400,13 @@ public final class SettlerWork {
     }
 
     /**
-     * @param job     a job
-     * @param profile the job's profile
+     * @param job  a job
+     * @param kind the kind of the job's tool
      * @return what the settler's skill in that job allows and requires of its tool ({@link ToolStaircase.Rule#NONE} for a
      *         job outside the staircase)
      */
-    ToolStaircase.Rule toolRule(SettlerJob job, ResourceCollectionProfile profile) {
-        return ToolStaircase.rule(profile, cappedLevel(job));
+    ToolStaircase.Rule toolRule(SettlerJob job, ToolKind kind) {
+        return kind.ruleOf().apply(cappedLevel(job));
     }
 
     /**
@@ -2416,16 +2415,16 @@ public final class SettlerWork {
      *         no such tool
      */
     public Optional<ItemStack> tool(SettlerJob job) {
-        return job.jobType().profile(ResourceCollectionProfile.class).flatMap(profile -> tool(job, profile));
+        return ToolKind.of(job).flatMap(kind -> tool(job, kind));
     }
 
     /**
-     * @param job     a job
-     * @param profile the job's profile
+     * @param job  a job
+     * @param kind the kind of the job's tool
      * @return the best tool on the belt that the settler's skill in that job allows
      */
-    Optional<ItemStack> tool(SettlerJob job, ResourceCollectionProfile profile) {
-        return SettlerTools.best(settler, profile::isTool, toolRule(job, profile));
+    Optional<ItemStack> tool(SettlerJob job, ToolKind kind) {
+        return kind.best().of(SettlerTools.belt(settler), toolRule(job, kind), kind.isTool());
     }
 
     /**

@@ -368,8 +368,9 @@ final class WorkRules {
         if (!profile.needsTool()) {
             return Optional.of(ItemStack.EMPTY);
         }
-        ToolStaircase.Rule rule = settler.getWork().toolRule(job, profile);
-        Optional<ItemStack> tool = settler.getWork().tool(job, profile);
+        ToolKind kind = ToolKind.of(profile);
+        ToolStaircase.Rule rule = settler.getWork().toolRule(job, kind);
+        Optional<ItemStack> tool = settler.getWork().tool(job, kind);
         // Catch-up: a tool that is missing or below the requirement is swapped for the collect inventory's best. The
         // inventory is searched when the batch starts (one simulated hour), after a roll only when no tool is left.
         if (supply.collect().isPresent() && (search || tool.isEmpty()) && (tool.isEmpty() || !rule.meets(tool.get()))) {
@@ -380,10 +381,10 @@ final class WorkRules {
                     supply.handedOut().run();
                 }
                 return taken;
-            }, () -> ToolOrders.supply(level, settler, job, profile, site));
+            }, () -> ToolOrders.supply(level, settler, job, kind, site));
             settler.getWork().toolNeeds().recheck(job);
-            ToolOrders.settled(level, settler, job, profile);
-            tool = settler.getWork().tool(job, profile);
+            ToolOrders.settled(level, settler, job, kind);
+            tool = settler.getWork().tool(job, kind);
         }
         return tool;
     }
@@ -408,24 +409,42 @@ final class WorkRules {
      */
     static Optional<MissingTool> missingTool(ServerLevel level, Settler settler, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site,
             Stock collect) {
-        if (profile.needsTool()) {
-            ToolStaircase.Rule rule = settler.getWork().toolRule(job, profile);
-            Optional<ItemStack> belt = settler.getWork().tool(job, profile);
-            Predicate<ItemStack> kind = profile::isTool;
-            ToolNeeds tools = settler.getWork().toolNeeds();
-            long time = level.getGameTime();
-            if (belt.isEmpty()) {
-                // "No tool" waits an hour between searches, too.
-                return Optional.of(new MissingTool(kind, tools.search(job, time, () -> SettlerTools.find(collect, kind, rule).isPresent(),
-                        () -> ToolOrders.supply(level, settler, job, profile, site))));
-            }
-            if (!rule.meets(belt.get()) && tools.search(job, time, () -> SettlerTools.better(collect, kind, rule, belt),
-                    () -> ToolOrders.supply(level, settler, job, profile, site))) {
-                return Optional.of(new MissingTool(kind, true));
-            }
+        Optional<MissingTool> main = profile.needsTool() ? missingTool(level, settler, job, ToolKind.of(profile), site, collect) : Optional.empty();
+        if (main.isPresent()) {
+            return main;
         }
         return secondaryTool(profile, site.block()).filter(kind -> SettlerTools.best(settler, kind).isEmpty()
                 && SettlerTools.find(collect, kind).isPresent()).map(kind -> new MissingTool(kind, true));
+    }
+
+    /**
+     * The job's tool when none on the belt meets the requirement: the search of the collect inventory and, after a fruitless
+     * one, the tool supply ({@link ToolOrders#supply}).
+     *
+     * @param level   the level
+     * @param settler the settler
+     * @param job     the job
+     * @param tool    the kind of the job's tool
+     * @param site    the job's JobBlock site
+     * @param collect what the settler reaches at its collect inventory
+     * @return the missing tool, empty if the belt meets the requirement
+     */
+    static Optional<MissingTool> missingTool(ServerLevel level, Settler settler, SettlerJob job, ToolKind tool, JobBlockSite site, Stock collect) {
+        ToolStaircase.Rule rule = settler.getWork().toolRule(job, tool);
+        Optional<ItemStack> belt = settler.getWork().tool(job, tool);
+        Predicate<ItemStack> kind = tool.isTool();
+        ToolNeeds tools = settler.getWork().toolNeeds();
+        long time = level.getGameTime();
+        if (belt.isEmpty()) {
+            // "No tool" waits an hour between searches, too.
+            return Optional.of(new MissingTool(kind, tools.search(job, time, () -> SettlerTools.find(collect, kind, rule).isPresent(),
+                    () -> ToolOrders.supply(level, settler, job, tool, site))));
+        }
+        if (!rule.meets(belt.get()) && tools.search(job, time, () -> SettlerTools.better(collect, kind, rule, belt),
+                () -> ToolOrders.supply(level, settler, job, tool, site))) {
+            return Optional.of(new MissingTool(kind, true));
+        }
+        return Optional.empty();
     }
 
     /**
@@ -463,7 +482,7 @@ final class WorkRules {
     static boolean refill(Settler settler, SettlerJob job, ResourceCollectionProfile profile, JobBlockSite site, Stock collect) {
         boolean taken = false;
         if (profile.needsTool()) {
-            taken |= SettlerTools.swap(settler, collect, profile::isTool, settler.getWork().toolRule(job, profile));
+            taken |= SettlerTools.swap(settler, collect, profile::isTool, settler.getWork().toolRule(job, ToolKind.of(profile)));
         }
         Optional<Predicate<ItemStack>> secondary = secondaryTool(profile, site.block());
         if (secondary.isPresent() && SettlerTools.best(settler, secondary.get()).isEmpty()) {
