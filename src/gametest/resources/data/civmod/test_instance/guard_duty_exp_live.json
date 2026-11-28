@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "civmod:day",
+  "function": "civmod:guard_duty_exp_live",
+  "max_ticks": 200,
+  "structure": "minecraft:empty",
+  "padding": 40
+}

@@ -119,7 +119,7 @@ The block a Resource Collection settler works at today (a tree, a stone face, wa
 _Avoid_: Workplace (the whole per-job state), POI in prose
 
 **Work point**:
-A block a JobBlock's settlers work at or stand on, set with the Scroll of Assignment, together with the facing of the click (the reverse of the player's look direction). Up to 8 per JobBlock (`SettlementBlock.workPoints`); a Clerk's or Pantry's stand spots are their own list of the same record (`SettlementBlock.standSpots`). Code: `WorkPoint(pos, facing)`; jobs that only need the positions read `SettlementBlock.workPositions`.
+A block a JobBlock's settlers work at or stand on, set with the Scroll of Assignment, together with the facing of the click (the reverse of the player's look direction). Up to 8 per JobBlock (`SettlementBlock.workPoints`); a Clerk's or Pantry's stand spots are their own list of the same record (`SettlementBlock.standSpots`). Code: `WorkPoint(pos, facing)`; jobs that only need the positions read `SettlementBlock.workPositions`. At a Guard Post the work points are the **Guard points**.
 _Avoid_: POI in code (vault and issues say POI), a second record for stand spots
 
 **Biome bonus**:
@@ -257,6 +257,22 @@ The JobBlock of the Bard: places `[1, 1, 1, 1, 1]`, recipe note block on top, ba
 
 **Stage act**:
 The Bard's stationary act from 18:30 to 20:00, its evening appointment: the Bard stands on its Stage block, one scan finds the awake settlers within 8 blocks of the **Sound center**, each gets +1 Entertainment times 1 + 1 % per Bard level, once per evening however many Bards reach it (`Entertain.Cap.STAGE_ACT`, saved as the day mark `Entertainment.stageDay`), and the Bard gets its EXP. Code: `BardProfile`, `ServiceLoop`, `Entertainment.addCapped`.
+
+**Guard**:
+The Base Job of the Guard category (`civmod:guard`) on the **Guard Post**: a settler that holds a post around the clock. It never sleeps and ends no work day (`GuardDuty.dayTimes`: no end of work, no bedtime, so the Schedule never sends it to the Tavern, to the rest place or to bed, and a skipped night does not put it to bed), takes fatigue breaks that sit it down where it stands, eats like every settler, claims a bed of its own for the bed need without ever lying in it, and has its Entertainment need counted as met. Work loop `GuardLoop` (status `GUARDING`; no combat before #353), public profile `GuardProfile` (no hook yet). Duty EXP: the Job's base EXP (1) times the Guard Post level for every in-game hour on duty, paid from the clock at each decision live and, in catch-up, for the whole missed time from the first missed tick to the end of the window, nights included (`GuardLoop.simulateWork` pays up to the end of each simulated hour, `catchUpFinished` the rest). Code: `ModJobs.GUARD`, `GuardLoop`, `GuardDuty`.
+_Avoid_: Soldier (a later Specialization), Guard Post for the job
+
+**Guard Post**:
+The JobBlock of the Guard: places `[1, 2, 2, 3, 3]`, recipe stone sword on top, barrel in the middle, planks around, default upgrade costs, a stone sword in its inventory when new, the Workers tab (with the mode button) and the Storage tab. Its level is the skill cap of its Guards. Code: `ModBlocks.GUARD_POST`, `SettlementBlock.guard()` (`GuardPost`).
+_Avoid_: Guard block
+
+**Guard point**:
+A **Work point** of a Guard Post, numbered by its place in the list (1 to 8, removing one closes the gap): the block a Guard stands on and the way it faces. Set with the Scroll of Assignment (any block that is no container; a container stays collect and drop-off inventory). A Guard that finds it out of reach (not a place to stand, or a path search ends short, once a day per point) skips it for that day, and the scroll outlines it red. Code: `GuardPosts.togglePoint`, `GuardPost.unreachable`, `JobPointsDisplay.GuardPoint`.
+_Avoid_: POI in code, stand spot (the Clerk's)
+
+**Guard mode**:
+How the Guards of a Guard Post hold their ground: Guard, Patrol or Roam, one setting for the whole block, chosen with the mode button of its Workers tab and saved with the block (`GuardMode`, `GuardPost.mode`). Only Guard mode has behaviour in #352: each Guard picks a Guard point at 06:00 and again at 18:30, one no other Guard of the block holds if there is one, else any, saved per Guard on the block (`GuardPosts.pointOf`, `GuardPosts.period`); Patrol and Roam come with #355 and behave like Guard until then. Without usable points the Guard stands next to the Guard Post.
+_Avoid_: Station type, shift
 
 **Round stop**:
 One stop of the Bard's day round (11:00 to 17:30). The Bard picks a random settler at work (not a Bard, awake, not away), walks to within 3 blocks of it and, if at least one settler is within 8 blocks of the Bard when it arrives, plays for 600 game ticks (30 seconds): one scan at the start, +1 Entertainment times 1 + 1 % per Bard level, once per day however many Bards reach a settler (`Entertain.Cap.ROUND_STOP`, `Entertainment.roundDay`), and the Bard's EXP. An arrival that finds nobody plays nothing and does not use up the stop; three such tries in a row, or no settler at work, send the Bard back to the Stage for 1200 ticks. The Stage level is the number of stops a day; a round in progress ends at 17:30. The state of a day is not saved. Code: `ServiceRound`, `ServiceLoop.planRound`, `BardShow`.
